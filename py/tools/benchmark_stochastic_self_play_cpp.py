@@ -14,10 +14,10 @@ import torch
 
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
+    ChessSelfPlaySearch,
+    ChessSelfPlaySearchParameters,
     InferenceClientParams,
     InferenceStatistics,
-    MCTS,
-    MCTSParams,
 )
 from src.self_play.SelfPlay import SelfPlay
 from src.self_play.SelfPlayDataset import SelfPlayDataset
@@ -36,7 +36,6 @@ class Arguments:
     searches: int
     fast_searches: int | None
     parallel_searches: int
-    threads: int
     maximum_batch_size: int
     inference_timeout_microseconds: int
     direct_inference_workers: int
@@ -69,7 +68,6 @@ class BenchmarkResult:
     target_full_searches_per_ply: int
     target_fast_searches_per_ply: int
     parallel_searches: int
-    mcts_threads: int
     elapsed_seconds: float
     searches_completed: int
     searches_per_second: float
@@ -129,7 +127,6 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--searches', type=int, default=600)
     parser.add_argument('--fast-searches', type=int)
     parser.add_argument('--parallel-searches', type=int, default=4)
-    parser.add_argument('--threads', type=int, default=3)
     parser.add_argument('--maximum-batch-size', type=int, default=256)
     parser.add_argument('--inference-timeout-microseconds', type=int, default=500)
     parser.add_argument('--direct-inference-workers', type=int, default=0)
@@ -157,7 +154,6 @@ def parse_arguments() -> Arguments:
         searches=namespace.searches,
         fast_searches=namespace.fast_searches,
         parallel_searches=namespace.parallel_searches,
-        threads=namespace.threads,
         maximum_batch_size=namespace.maximum_batch_size,
         inference_timeout_microseconds=namespace.inference_timeout_microseconds,
         direct_inference_workers=namespace.direct_inference_workers,
@@ -179,7 +175,6 @@ def validate_arguments(arguments: Arguments) -> None:
         ('games', arguments.games),
         ('searches', arguments.searches),
         ('parallel searches', arguments.parallel_searches),
-        ('threads', arguments.threads),
         ('maximum batch size', arguments.maximum_batch_size),
         ('inference timeout', arguments.inference_timeout_microseconds),
     )
@@ -190,8 +185,8 @@ def validate_arguments(arguments: Arguments) -> None:
         raise ValueError(f'device must be nonnegative, found {arguments.device}.')
     if arguments.warmup_steps < 0:
         raise ValueError(f'warmup steps cannot be negative, found {arguments.warmup_steps}.')
-    if arguments.direct_inference_workers < 0:
-        raise ValueError('direct inference workers cannot be negative.')
+    if arguments.direct_inference_workers < 1:
+        raise ValueError('direct inference workers must be positive.')
     if arguments.direct_inference_batch_size < 1:
         raise ValueError('direct inference batch size must be positive.')
     if arguments.direct_outstanding_batches_per_worker not in (1, 2):
@@ -223,7 +218,6 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
         update={
             'num_searches_per_turn': arguments.searches,
             'num_parallel_searches': arguments.parallel_searches,
-            'num_threads': arguments.threads,
         }
     )
     self_play_configuration = TRAINING_ARGS.self_play.validated_copy(update={'search': search.model_dump(mode='json')})
@@ -252,14 +246,14 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
         raise ValueError(
             f'Fast searches ({fast_searches}) must exceed parallel searches ({arguments.parallel_searches}).'
         )
-    self_play.mcts = MCTS(
+    self_play.search_engine = ChessSelfPlaySearch(
         InferenceClientParams(
             arguments.device,
             str(arguments.model.resolve()),
             arguments.maximum_batch_size,
             arguments.inference_timeout_microseconds,
         ),
-        MCTSParams(
+        ChessSelfPlaySearchParameters(
             arguments.parallel_searches,
             arguments.searches,
             fast_searches,
@@ -267,16 +261,11 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
             configuration.self_play.search.dirichlet_alpha,
             configuration.self_play.search.dirichlet_epsilon,
             configuration.self_play.search.min_visit_count,
-            arguments.threads,
         ),
-        inference_parameters=(
-            BatchedInferenceParameters(
-                arguments.direct_inference_workers,
-                arguments.direct_inference_batch_size,
-                arguments.direct_outstanding_batches_per_worker,
-            )
-            if arguments.direct_inference_workers > 0
-            else None
+        inference_parameters=BatchedInferenceParameters(
+            arguments.direct_inference_workers,
+            arguments.direct_inference_batch_size,
+            arguments.direct_outstanding_batches_per_worker,
         ),
         initial_model_version=arguments.iteration,
     )
@@ -351,7 +340,7 @@ def build_result(
     active_roots = [
         game.already_expanded_node for game in self_play.self_play_games if game.already_expanded_node is not None
     ]
-    assert self_play.mcts is not None
+    assert self_play.search_engine is not None
     searches_completed = self_play.completed_searches - initial_completed_searches
     assert searches_completed >= 0
     return BenchmarkResult(
@@ -372,7 +361,6 @@ def build_result(
             else int(arguments.searches * self_play.args.search.fast_searches_proportion_of_full_searches)
         ),
         parallel_searches=arguments.parallel_searches,
-        mcts_threads=arguments.threads,
         elapsed_seconds=elapsed_seconds,
         searches_completed=searches_completed,
         searches_per_second=searches_completed / elapsed_seconds,
@@ -386,7 +374,7 @@ def build_result(
         retained_sample_proportion=1.0,
         live_materialized_nodes=sum(root.live_nodes for root in active_roots),
         total_child_records=sum(root.total_child_records for root in active_roots),
-        arena_capacity_per_game=self_play.mcts.arena_capacity,
+        arena_capacity_per_game=self_play.search_engine.arena_capacity,
         process_cpu_percent=100 * process_seconds / elapsed_seconds,
         peak_rss_mib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
         inference_evaluations=evaluations,
@@ -422,8 +410,6 @@ def build_result(
         direct_inference_seconds=direct_inference_nanoseconds / 1e9,
         direct_worker_utilization_percent=(
             100 * direct_inference_nanoseconds / (elapsed_seconds * 1e9 * arguments.direct_inference_workers)
-            if arguments.direct_inference_workers > 0
-            else 0.0
         ),
     )
 
@@ -433,11 +419,11 @@ def main() -> None:
     validate_arguments(arguments)
     seed_python_libraries(arguments.seed, arguments.device)
     self_play = create_self_play(arguments)
-    assert self_play.mcts is not None
+    assert self_play.search_engine is not None
 
     run_warmup(self_play, arguments.warmup_steps)
     initial_completed_searches = self_play.completed_searches
-    initial_statistics, _ = self_play.mcts.get_inference_statistics()
+    initial_statistics, _ = self_play.search_engine.inference_statistics()
     wait_for_synchronized_start(arguments)
 
     process_started_at = time.process_time()
@@ -449,7 +435,7 @@ def main() -> None:
     elapsed_seconds = time.perf_counter() - started_at
     process_seconds = time.process_time() - process_started_at
 
-    final_statistics, _ = self_play.mcts.get_inference_statistics()
+    final_statistics, _ = self_play.search_engine.inference_statistics()
     result = build_result(
         arguments,
         self_play,

@@ -1,6 +1,4 @@
-"""
-pybind11 bindings for custom MCTS + inference client
-"""
+"""Native chess and Go search, inference, and game bindings."""
 
 from __future__ import annotations
 
@@ -10,6 +8,14 @@ __all__ = [
     'BatchedInferenceParameters',
     'BatchedSearchParameters',
     'CandidateAnalysis',
+    'ChessSearchChild',
+    'ChessSearchRoot',
+    'ChessSelfPlaySearch',
+    'ChessSelfPlaySearchBatch',
+    'ChessSelfPlaySearchParameters',
+    'ChessSelfPlaySearchRequest',
+    'ChessSelfPlaySearchResult',
+    'ChessSelfPlaySearchStatistics',
     'FunctionTimeInfo',
     'GameSearchResult',
     'GameSearchVisit',
@@ -29,14 +35,6 @@ __all__ = [
     'InferenceDimensions',
     'InferenceDevice',
     'InferenceStatistics',
-    'MCTS',
-    'MCTSBoard',
-    'MCTSChild',
-    'MCTSParams',
-    'MCTSResult',
-    'MCTSResults',
-    'MCTSRoot',
-    'MCTSStatistics',
     'InteractiveEngine',
     'InteractiveGame',
     'InteractiveSearchParams',
@@ -368,11 +366,11 @@ class InferenceStatistics:
     @property
     def modelInferencePositions(self) -> int: ...
 
-class MCTS:
+class ChessSelfPlaySearch:
     def __init__(
         self,
-        client_args: InferenceClientParams,
-        mcts_args: MCTSParams,
+        runtime_parameters: InferenceClientParams,
+        search_parameters: ChessSelfPlaySearchParameters,
         inference_parameters: BatchedInferenceParameters,
         initial_model_version: int = 0,
     ) -> None: ...
@@ -380,42 +378,39 @@ class MCTS:
     def arena_capacity(self) -> int: ...
     @property
     def model_version(self) -> int: ...
-    def get_inference_statistics(self) -> tuple[InferenceStatistics, TimeInfo]: ...
+    def inference_statistics(self) -> tuple[InferenceStatistics, TimeInfo]: ...
     def refresh_model(self, model_version: int, model_path: str) -> None: ...
-    def update_search_schedule(self, mcts_args: MCTSParams) -> bool: ...
+    def update_search_schedule(self, search_parameters: ChessSelfPlaySearchParameters) -> bool: ...
     def inference_with_history(
         self, histories: list[tuple[str, list[str]]]
     ) -> list[tuple[list[tuple[int, float]], float]]: ...
     def search(
         self,
-        boards: list[MCTSBoard],
+        requests: list[ChessSelfPlaySearchRequest],
         collect_statistics: bool = False,
-    ) -> MCTSResults:
+    ) -> ChessSelfPlaySearchBatch:
         """
-        Run MCTS search on a list of boards.
-        `boards` should be a list of MCTSBoard values.
-        Returns an `MCTSResults` object, whose `.results` is a list of `MCTSResult`:
-            - result: float
+        Run batched chess self-play search requests.
+        Returns a ChessSelfPlaySearchBatch whose results contain:
+            - root_value: float
             - visits: List of (encoded_move: int, visit_count: int)
-            - children: List of NodeId (uint32)
-        When `collect_statistics` is true, `.mctsStats` contains
-        depth/entropy/KL for one representative root.
+            - root: the retained ChessSearchRoot
         """
-    def new_root(self, fen: str) -> MCTSRoot: ...
+    def new_root(self, fen: str) -> ChessSearchRoot: ...
     def new_root_with_history(
         self,
         starting_fen: str,
         moves_uci: tuple[str, ...],
-    ) -> MCTSRoot: ...
+    ) -> ChessSearchRoot: ...
 
-class MCTSBoard:
-    def __init__(self, root: MCTSRoot, should_run_full_search: bool) -> None: ...
+class ChessSelfPlaySearchRequest:
+    def __init__(self, root: ChessSearchRoot, full_search: bool) -> None: ...
     @property
-    def root(self) -> MCTSRoot: ...
+    def root(self) -> ChessSearchRoot: ...
     @property
-    def should_run_full_search(self) -> bool: ...
+    def full_search(self) -> bool: ...
 
-class MCTSChild:
+class ChessSearchChild:
     @property
     def encoded_move(self) -> int: ...
     @property
@@ -431,14 +426,14 @@ class MCTSChild:
     @property
     def visits(self) -> int: ...
 
-class MCTSRoot:
+class ChessSearchRoot:
     def __repr__(self) -> str: ...
     def discount(self, percentage_of_node_visits_to_keep: float) -> None:
         """
         Discount the node's score and visits by a percentage.
         Descendant materializations are explicitly pruned when required by the fixed arena.
         """
-    def make_new_root(self, child_index: int) -> MCTSRoot:
+    def make_new_root(self, child_index: int) -> ChessSearchRoot:
         """
         Prune the old tree and return a new root node.
         `child_index` is the index of the child to make the new root.
@@ -446,7 +441,7 @@ class MCTSRoot:
     @property
     def arena_capacity(self) -> int: ...
     @property
-    def children(self) -> list[MCTSChild]: ...
+    def children(self) -> list[ChessSearchChild]: ...
     @property
     def fen(self) -> str: ...
     @property
@@ -470,50 +465,54 @@ class MCTSRoot:
     @property
     def visits(self) -> int: ...
 
-class MCTSParams:
-    c_param: float
+class ChessSelfPlaySearchParameters:
+    exploration_constant: float
     dirichlet_alpha: float
     dirichlet_epsilon: float
-    min_visit_count: int
-    num_fast_searches: int
-    num_full_searches: int
-    num_parallel_searches: int
-    num_threads: int
+    fast_searches: int
+    full_searches: int
+    minimum_root_visits: int
+    parallel_searches: int
     def __init__(
         self,
-        num_parallel_searches: int,
-        num_full_searches: int,
-        num_fast_searches: int,
-        c_param: float,
+        parallel_searches: int,
+        full_searches: int,
+        fast_searches: int,
+        exploration_constant: float,
         dirichlet_alpha: float,
         dirichlet_epsilon: float,
-        min_visit_count: int,
-        num_threads: int,
+        minimum_root_visits: int,
     ) -> None: ...
 
-class MCTSResult:
+class ChessSelfPlaySearchResult:
     @property
-    def result(self) -> float: ...
+    def root_value(self) -> float: ...
     @property
-    def root(self) -> MCTSRoot: ...
+    def root(self) -> ChessSearchRoot: ...
     @property
     def visits(self) -> list[tuple[int, int]]: ...
 
-class MCTSResults:
+class ChessSelfPlaySearchBatch:
     @property
-    def mctsStats(self) -> MCTSStatistics: ...
+    def statistics(self) -> ChessSelfPlaySearchStatistics: ...
     @property
-    def results(self) -> list[MCTSResult]: ...
+    def results(self) -> list[ChessSelfPlaySearchResult]: ...
     @property
-    def searchesCompleted(self) -> int: ...
+    def simulations_completed(self) -> int: ...
 
-class MCTSStatistics:
+class ChessSelfPlaySearchStatistics:
     @property
-    def averageDepth(self) -> float: ...
+    def average_depth(self) -> float: ...
     @property
-    def averageEntropy(self) -> float: ...
+    def average_entropy(self) -> float: ...
     @property
-    def averageKLDivergence(self) -> float: ...
+    def average_kl_divergence(self) -> float: ...
+    @property
+    def average_policy_search_kl_divergence(self) -> float: ...
+    @property
+    def top_action_disagreement(self) -> float: ...
+    @property
+    def selected_action_prior_rank(self) -> float: ...
 
 class TimeInfo:
     @property
@@ -523,7 +522,7 @@ class TimeInfo:
     @property
     def totalTime(self) -> float: ...
 
-def new_root(fen: str, arena_capacity: int) -> MCTSRoot:
+def new_root(fen: str, arena_capacity: int) -> ChessSearchRoot:
     """
     Create a self-play MCTS root with an explicit fixed arena capacity.
     """
@@ -532,5 +531,5 @@ def new_root_with_history(
     starting_fen: str,
     moves_uci: tuple[str, ...],
     arena_capacity: int,
-) -> MCTSRoot:
+) -> ChessSearchRoot:
     """Create a fixed-capacity MCTS root by replaying bounded UCI history."""

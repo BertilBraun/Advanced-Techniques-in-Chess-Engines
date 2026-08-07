@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import (
+        ChessSearchRoot,
+        ChessSelfPlaySearch,
+        ChessSelfPlaySearchBatch,
+        ChessSelfPlaySearchParameters,
+        ChessSelfPlaySearchRequest,
+        ChessSelfPlaySearchResult,
         InferenceStatistics,
-        MCTS,
-        MCTSBoard,
-        MCTSParams,
-        MCTSResult,
-        MCTSResults,
-        MCTSRoot,
         TimeInfo,
     )
 
@@ -82,7 +82,7 @@ class SelfPlayStatisticsSnapshot:
     completed_searches: int
 
 
-def policy_search_disagreement(root: MCTSRoot) -> float:
+def policy_search_disagreement(root: ChessSearchRoot) -> float:
     children = root.children
     total_visits = sum(child.visits for child in children)
     if total_visits <= 0:
@@ -109,7 +109,7 @@ class SelfPlayGame:
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[CurrentGameMove] = []
         self.encoded_moves: list[int] = []
-        self.already_expanded_node: MCTSRoot | None = None
+        self.already_expanded_node: ChessSearchRoot | None = None
         self.start_generation_time = time.time()
 
         self.game_id = game_id if game_id is not None else uuid.uuid4().hex
@@ -211,7 +211,7 @@ class SelfPlay:
         self.dataset = SelfPlayDataset()
         self.self_play_games: list[SelfPlayGame] = [self._new_game() for _ in range(self.num_parallel_games)]
 
-        self.mcts: MCTS | None = None  # MCTS instance for self-play, initialized in update_iteration
+        self.search_engine: ChessSelfPlaySearch | None = None
         self.num_searches_per_turn = 0
         self.endgame_shortcut_strength = 0.0
         self.completed_searches = 0
@@ -226,9 +226,9 @@ class SelfPlay:
         )
 
     def snapshot_statistics(self, tensorboard_step: int) -> SelfPlayStatisticsSnapshot | None:
-        if self.mcts is None:
+        if self.search_engine is None:
             return None
-        inference_stats, time_info = self.mcts.get_inference_statistics()
+        inference_stats, time_info = self.search_engine.inference_statistics()
         log_scalar(
             'self_play/disagreement_prefix_archive_size',
             len(self.disagreement_prefix_archive),
@@ -291,7 +291,7 @@ class SelfPlay:
         if schedule.num_fast_searches <= 0:
             raise ValueError('Fast-search budget must be positive.')
 
-        previous_arena_capacity = self.mcts.arena_capacity if self.mcts is not None else None
+        previous_arena_capacity = self.search_engine.arena_capacity if self.search_engine is not None else None
         self.num_searches_per_turn = schedule.num_full_searches
         self.endgame_shortcut_strength = schedule.endgame_shortcut_strength
         self.iteration = schedule.schedule_version
@@ -303,25 +303,24 @@ class SelfPlay:
             self.endgame_shortcut_strength,
             schedule.schedule_version,
         )
-        if self.mcts is not None:
-            arena_capacity_changed = self.mcts.update_search_schedule(self._native_mcts_params(schedule))
+        if self.search_engine is not None:
+            arena_capacity_changed = self.search_engine.update_search_schedule(self._native_mcts_params(schedule))
             if arena_capacity_changed:
                 assert previous_arena_capacity != schedule.arena_capacity
                 for game in self.self_play_games:
                     game.already_expanded_node = None
 
-    def _native_mcts_params(self, schedule: SearchScheduleState) -> MCTSParams:
-        from AlphaZeroCpp import MCTSParams
+    def _native_mcts_params(self, schedule: SearchScheduleState) -> ChessSelfPlaySearchParameters:
+        from AlphaZeroCpp import ChessSelfPlaySearchParameters
 
-        return MCTSParams(
-            num_parallel_searches=self.args.search.num_parallel_searches,
-            num_full_searches=schedule.num_full_searches,
-            num_fast_searches=schedule.num_fast_searches,
+        return ChessSelfPlaySearchParameters(
+            parallel_searches=self.args.search.num_parallel_searches,
+            full_searches=schedule.num_full_searches,
+            fast_searches=schedule.num_fast_searches,
             dirichlet_alpha=self.args.search.dirichlet_alpha,
             dirichlet_epsilon=self.args.search.dirichlet_epsilon,
-            c_param=self.args.search.c_param,
-            min_visit_count=self.args.search.min_visit_count,
-            num_threads=self.args.search.num_threads,
+            exploration_constant=self.args.search.c_param,
+            minimum_root_visits=self.args.search.min_visit_count,
         )
 
     def refresh_model(
@@ -336,8 +335,8 @@ class SelfPlay:
         schedule = self.search_schedule_state
         if schedule is None:
             raise RuntimeError('Search schedule must be initialized before loading a model.')
-        if self.mcts is None:
-            from AlphaZeroCpp import BatchedInferenceParameters, InferenceClientParams, MCTS
+        if self.search_engine is None:
+            from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceClientParams
 
             inference = self.args.inference
             inference_parameters = BatchedInferenceParameters(
@@ -351,14 +350,14 @@ class SelfPlay:
                 maxBatchSize=inference.inference_batch_size,
                 microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
             )
-            self.mcts = MCTS(
+            self.search_engine = ChessSelfPlaySearch(
                 client_args,
                 self._native_mcts_params(schedule),
                 inference_parameters=inference_parameters,
                 initial_model_version=model_version,
             )
         else:
-            self.mcts.refresh_model(model_version, str(model_path))
+            self.search_engine.refresh_model(model_version, str(model_path))
         self.model_version = model_version
         self.model_refresh_acknowledgements.append(model_version)
         log_scalar('inference/acknowledged_model_version', model_version)
@@ -374,18 +373,18 @@ class SelfPlay:
         )
 
     @timeit
-    def search(self, boards: list[MCTSBoard]) -> MCTSResults:
-        assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
+    def search(self, boards: list[ChessSelfPlaySearchRequest]) -> ChessSelfPlaySearchBatch:
+        assert self.search_engine is not None, 'Search must be initialized before self-play can run.'
 
-        results = self.mcts.search(boards, collect_statistics=is_tensorboard_writer_active())
-        self.completed_searches += results.searchesCompleted
+        results = self.search_engine.search(boards, collect_statistics=is_tensorboard_writer_active())
+        self.completed_searches += results.simulations_completed
         return results
 
     def self_play(self) -> None:
-        from AlphaZeroCpp import MCTSBoard
+        from AlphaZeroCpp import ChessSelfPlaySearchRequest
 
-        assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
-        boards: list[MCTSBoard] = []
+        assert self.search_engine is not None, 'Search must be initialized before self-play can run.'
+        boards: list[ChessSelfPlaySearchRequest] = []
         for spg in self.self_play_games:
             if self.model_version is None:
                 raise RuntimeError('A model must be refreshed before self-play starts.')
@@ -404,20 +403,20 @@ class SelfPlay:
                 # Instead - if we should run a full search, discount the visits
                 spg.already_expanded_node.discount(self.args.search.percentage_of_node_visits_to_keep)
 
-            boards.append(MCTSBoard(spg.already_expanded_node, should_run_full_search))
+            boards.append(ChessSelfPlaySearchRequest(spg.already_expanded_node, should_run_full_search))
 
         mcts_results = self.search(boards)
 
-        stats = mcts_results.mctsStats
-        log_scalar('mcts/average_search_depth', stats.averageDepth)
-        log_scalar('mcts/average_search_entropy', mcts_results.mctsStats.averageEntropy)
-        log_scalar('mcts/average_search_kl_divergence', stats.averageKLDivergence)
+        stats = mcts_results.statistics
+        log_scalar('mcts/average_search_depth', stats.average_depth)
+        log_scalar('mcts/average_search_entropy', stats.average_entropy)
+        log_scalar('mcts/average_search_kl_divergence', stats.average_kl_divergence)
         log_scalar(
             'mcts/average_policy_search_kl_divergence',
-            stats.averagePolicySearchKLDivergence,
+            stats.average_policy_search_kl_divergence,
         )
-        log_scalar('mcts/top_move_disagreement', stats.topMoveDisagreement)
-        log_scalar('mcts/search_selected_move_prior_rank', stats.selectedMovePriorRank)
+        log_scalar('mcts/top_move_disagreement', stats.top_action_disagreement)
+        log_scalar('mcts/search_selected_move_prior_rank', stats.selected_action_prior_rank)
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
             if not mcts_result.visits:
@@ -429,7 +428,7 @@ class SelfPlay:
                 self.self_play_games[i] = self._new_game()
                 continue
 
-            was_full_searched = boards[i].should_run_full_search
+            was_full_searched = boards[i].full_search
             search_schedule = self.search_schedule_state
             if search_schedule is None:
                 raise RuntimeError('Search schedule must be initialized during self-play.')
@@ -437,7 +436,7 @@ class SelfPlay:
                 SelfPlayGameMemory(
                     spg.board.copy(),
                     mcts_result.visits,
-                    mcts_result.result,
+                    mcts_result.root_value,
                     len(spg.played_moves),
                     self.model_version,
                     search_schedule.num_full_searches if was_full_searched else search_schedule.num_fast_searches,
@@ -474,7 +473,7 @@ class SelfPlay:
                 mcts_result.visits,
             )
 
-    def _finish_terminal_search_root(self, game: SelfPlayGame, root: MCTSRoot) -> SelfPlayGame:
+    def _finish_terminal_search_root(self, game: SelfPlayGame, root: ChessSearchRoot) -> SelfPlayGame:
         if not root.is_terminal:
             raise RuntimeError('MCTS returned no visit counts for a non-terminal root.')
         finished_game = self._finish_game_after_move(game, native_game_over=True)
@@ -482,17 +481,17 @@ class SelfPlay:
         return finished_game
 
     def _prepare_search_root(self, game: SelfPlayGame) -> None:
-        assert self.mcts is not None
+        assert self.search_engine is not None
         root = game.already_expanded_node
         if root is not None and (root.is_terminal or root.is_expanded):
             return
         history = bounded_repetition_history(game.board.board, REPETITION_HISTORY_PLIES)
-        game.already_expanded_node = self.mcts.new_root_with_history(
+        game.already_expanded_node = self.search_engine.new_root_with_history(
             history.starting_fen,
             history.moves_uci,
         )
 
-    def _record_resignation_observation(self, game: SelfPlayGame, result: MCTSResult) -> bool:
+    def _record_resignation_observation(self, game: SelfPlayGame, result: ChessSelfPlaySearchResult) -> bool:
         if (
             not game.is_resignation_audit
             and not game.production_resignation_enabled
@@ -508,7 +507,7 @@ class SelfPlay:
             model_version=self.iteration,
             ply=len(game.played_moves),
             side_to_move=game.board.current_player,
-            root_value=result.result,
+            root_value=result.root_value,
             best_child_value=best_child_value,
         )
         game.resignation_observations.append(observation)
@@ -553,7 +552,7 @@ class SelfPlay:
         game.identity = self.completed_game_publisher.reserve_identity()
         return game
 
-    def _archive_disagreement_prefix(self, game: SelfPlayGame, root: MCTSRoot) -> None:
+    def _archive_disagreement_prefix(self, game: SelfPlayGame, root: ChessSearchRoot) -> None:
         ply = len(game.encoded_moves)
         if not 1 <= ply <= self.args.disagreement_prefix_maximum_ply:
             return
@@ -655,7 +654,7 @@ class SelfPlay:
     def _sample_self_play_game(
         self,
         current: SelfPlayGame,
-        root: MCTSRoot,
+        root: ChessSearchRoot,
         visit_counts: list[tuple[int, int]],
     ) -> SelfPlayGame:
         # Sample a move from the action probabilities then create a new game state with that move
@@ -739,8 +738,6 @@ class SelfPlay:
         game_outcome: float,
         termination_reason: ResignationTerminationReason = ResignationTerminationReason.NATURAL,
     ) -> SelfPlayGame:
-        # assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
-        # self.mcts.get_inference_statistics()
         self._add_training_data(spg, game_outcome, _replay_termination_reason(termination_reason))
 
         if spg.is_resignation_audit:

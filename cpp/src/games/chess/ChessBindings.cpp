@@ -3,7 +3,7 @@
 #include "common.hpp"
 
 #include "InteractiveEngine.hpp"
-#include "MCTS/MCTS.hpp"
+#include "games/chess/ChessSelfPlaySearch.hpp"
 #include "games/chess/ChessAction.hpp"
 #include "games/chess/ChessEncoding.hpp"
 #include "games/chess/ChessGameContract.hpp"
@@ -25,7 +25,7 @@ EncodedInference encodeInference(const Board &board, const InferenceResult &infe
 }
 
 std::vector<EncodedInference> inferenceWithHistory(
-    MCTS &search,
+    ChessSelfPlaySearch &search,
     const std::vector<std::pair<std::string, std::vector<std::string>>> &histories) {
     std::vector<Board> boards;
     boards.reserve(histories.size());
@@ -37,7 +37,7 @@ std::vector<EncodedInference> inferenceWithHistory(
     for (const Board &board : boards) {
         boardPointers.push_back(&board);
     }
-    const std::vector<InferenceResult> inferenceResults = search.inferenceBatch(boardPointers);
+    const std::vector<InferenceResult> inferenceResults = search.evaluate(boardPointers);
     std::vector<EncodedInference> encodedResults;
     encodedResults.reserve(boards.size());
     for (std::size_t index = 0; index < boards.size(); ++index) {
@@ -50,55 +50,55 @@ std::vector<EncodedInference> inferenceWithHistory(
 // Bind everything with pybind11:
 void bind_chess_game(py::module_ &m) {
 
-    py::class_<MCTSChild>(m, "MCTSChild")
-        .def_readonly("move", &MCTSChild::move)
-        .def_readonly("encoded_move", &MCTSChild::encoded_move)
-        .def_readonly("raw_policy", &MCTSChild::raw_policy)
-        .def_readonly("policy", &MCTSChild::policy)
-        .def_readonly("visits", &MCTSChild::visits)
-        .def_readonly("result_sum", &MCTSChild::result_sum)
-        .def_readonly("virtual_loss", &MCTSChild::virtual_loss)
-        .def_readonly("is_materialized", &MCTSChild::is_materialized);
+    py::class_<ChessSearchChild>(m, "ChessSearchChild")
+        .def_readonly("move", &ChessSearchChild::move)
+        .def_readonly("encoded_move", &ChessSearchChild::encoded_move)
+        .def_readonly("raw_policy", &ChessSearchChild::raw_policy)
+        .def_readonly("policy", &ChessSearchChild::policy)
+        .def_readonly("visits", &ChessSearchChild::visits)
+        .def_readonly("result_sum", &ChessSearchChild::result_sum)
+        .def_readonly("virtual_loss", &ChessSearchChild::virtual_loss)
+        .def_readonly("is_materialized", &ChessSearchChild::is_materialized);
 
-    py::class_<MCTSRoot>(m, "MCTSRoot")
-        .def_property_readonly("fen", [](const MCTSRoot &root) { return root.board().fen(); })
-        .def_property_readonly("move", &MCTSRoot::move)
-        .def_property_readonly("visits", &MCTSRoot::visits)
-        .def_property_readonly("virtual_loss", &MCTSRoot::virtualLoss)
-        .def_property_readonly("result_sum", &MCTSRoot::resultSum)
-        .def_property_readonly("is_terminal", &MCTSRoot::isTerminal)
+    py::class_<ChessSearchRoot>(m, "ChessSearchRoot")
+        .def_property_readonly("fen", [](const ChessSearchRoot &root) { return root.board().fen(); })
+        .def_property_readonly("move", &ChessSearchRoot::move)
+        .def_property_readonly("visits", &ChessSearchRoot::visits)
+        .def_property_readonly("virtual_loss", &ChessSearchRoot::virtualLoss)
+        .def_property_readonly("result_sum", &ChessSearchRoot::resultSum)
+        .def_property_readonly("is_terminal", &ChessSearchRoot::isTerminal)
         .def_property_readonly("repetition_count",
-                               [](const MCTSRoot &root) { return root.board().repetitionCount(); })
-        .def_property_readonly("is_expanded", &MCTSRoot::isExpanded)
-        .def_property_readonly("max_depth", &MCTSRoot::maxDepth)
-        .def_property_readonly("children", &MCTSRoot::children)
-        .def_property_readonly("live_nodes", &MCTSRoot::liveNodeCount)
-        .def_property_readonly("total_child_records", &MCTSRoot::totalChildCount)
-        .def_property_readonly("arena_capacity", &MCTSRoot::arenaCapacity)
-        .def("make_new_root", &MCTSRoot::makeNewRoot, py::arg("child_index"),
+                               [](const ChessSearchRoot &root) { return root.board().repetitionCount(); })
+        .def_property_readonly("is_expanded", &ChessSearchRoot::isExpanded)
+        .def_property_readonly("max_depth", &ChessSearchRoot::maxDepth)
+        .def_property_readonly("children", &ChessSearchRoot::children)
+        .def_property_readonly("live_nodes", &ChessSearchRoot::liveNodeCount)
+        .def_property_readonly("total_child_records", &ChessSearchRoot::totalChildCount)
+        .def_property_readonly("arena_capacity", &ChessSearchRoot::arenaCapacity)
+        .def("make_new_root", &ChessSearchRoot::makeNewRoot, py::arg("child_index"),
              R"pbdoc(
             Prune the old tree and return a new root node.
             `child_index` is the index of the child to make the new root.
             )pbdoc")
         .def(
-            "reset", &MCTSRoot::reset,
+            "reset", &ChessSearchRoot::reset,
             R"pbdoc(Discard logical search state while retaining reusable arena allocations.)pbdoc")
-        .def("discount", &MCTSRoot::discount, py::arg("percentage_of_node_visits_to_keep"),
+        .def("discount", &ChessSearchRoot::discount, py::arg("percentage_of_node_visits_to_keep"),
              R"pbdoc(
             Discount the node's score and visits by a percentage.
             Descendant materializations are explicitly pruned when required by the fixed arena.
             )pbdoc")
-        .def("__repr__", &MCTSRoot::repr);
+        .def("__repr__", &ChessSearchRoot::repr);
 
-    py::class_<MCTSBoard>(m, "MCTSBoard")
-        .def(py::init<MCTSRoot, bool>(), py::arg("root"), py::arg("should_run_full_search"))
-        .def_readonly("root", &MCTSBoard::root)
-        .def_readonly("should_run_full_search", &MCTSBoard::should_run_full_search);
+    py::class_<ChessSelfPlaySearchRequest>(m, "ChessSelfPlaySearchRequest")
+        .def(py::init<ChessSearchRoot, bool>(), py::arg("root"), py::arg("full_search"))
+        .def_readonly("root", &ChessSelfPlaySearchRequest::root)
+        .def_readonly("full_search", &ChessSelfPlaySearchRequest::full_search);
 
     m.def(
         "new_root",
         [](const std::string &fen, const uint32 arenaCapacity) {
-            return MCTSRoot::create(fen, arenaCapacity);
+            return ChessSearchRoot::create(fen, arenaCapacity);
         },
         py::arg("fen"), py::arg("arena_capacity"),
         R"pbdoc(
@@ -108,8 +108,8 @@ void bind_chess_game(py::module_ &m) {
         "new_root_with_history",
         [](const std::string &startingFen, const std::vector<std::string> &movesUci,
            const uint32 arenaCapacity) {
-            return MCTSRoot::create(ChessGameContract::replayPosition(startingFen, movesUci),
-                                    arenaCapacity);
+            return ChessSearchRoot::create(
+                ChessGameContract::replayPosition(startingFen, movesUci), arenaCapacity);
         },
         py::arg("starting_fen"), py::arg("moves_uci"), py::arg("arena_capacity"),
         R"pbdoc(Create a fixed-capacity MCTS root by replaying bounded UCI history.)pbdoc");
@@ -127,20 +127,21 @@ void bind_chess_game(py::module_ &m) {
         py::arg("fen"),
         R"pbdoc(Encode a FEN into the canonical packed plane-major byte layout.)pbdoc");
 
-    // --- (2.1) MCTSParams ---
-    py::class_<MCTSParams>(m, "MCTSParams")
-        .def(py::init<int, uint32, uint32, float, float, float, uint8, uint8>(),
-             py::arg("num_parallel_searches"), py::arg("num_full_searches"),
-             py::arg("num_fast_searches"), py::arg("c_param"), py::arg("dirichlet_alpha"),
-             py::arg("dirichlet_epsilon"), py::arg("min_visit_count"), py::arg("num_threads"))
-        .def_readwrite("num_parallel_searches", &MCTSParams::num_parallel_searches)
-        .def_readwrite("num_full_searches", &MCTSParams::num_full_searches)
-        .def_readwrite("num_fast_searches", &MCTSParams::num_fast_searches)
-        .def_readwrite("c_param", &MCTSParams::c_param)
-        .def_readwrite("dirichlet_alpha", &MCTSParams::dirichlet_alpha)
-        .def_readwrite("dirichlet_epsilon", &MCTSParams::dirichlet_epsilon)
-        .def_readwrite("min_visit_count", &MCTSParams::min_visit_count)
-        .def_readwrite("num_threads", &MCTSParams::num_threads);
+    py::class_<ChessSelfPlaySearchParameters>(m, "ChessSelfPlaySearchParameters")
+        .def(py::init<int, uint32, uint32, float, float, float, uint8>(),
+             py::arg("parallel_searches"), py::arg("full_searches"),
+             py::arg("fast_searches"), py::arg("exploration_constant"),
+             py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"),
+             py::arg("minimum_root_visits"))
+        .def_readwrite("parallel_searches", &ChessSelfPlaySearchParameters::parallel_searches)
+        .def_readwrite("full_searches", &ChessSelfPlaySearchParameters::full_searches)
+        .def_readwrite("fast_searches", &ChessSelfPlaySearchParameters::fast_searches)
+        .def_readwrite("exploration_constant",
+                       &ChessSelfPlaySearchParameters::exploration_constant)
+        .def_readwrite("dirichlet_alpha", &ChessSelfPlaySearchParameters::dirichlet_alpha)
+        .def_readwrite("dirichlet_epsilon", &ChessSelfPlaySearchParameters::dirichlet_epsilon)
+        .def_readwrite("minimum_root_visits",
+                       &ChessSelfPlaySearchParameters::minimum_root_visits);
 
     // --- (2.2) InferenceClientParams ---
     py::enum_<InferenceDevice>(m, "InferenceDevice")
@@ -185,27 +186,28 @@ void bind_chess_game(py::module_ &m) {
                       &InferenceStatistics::directInferenceNanoseconds)
         .def_readonly("directWorkerUtilization", &InferenceStatistics::directWorkerUtilization);
 
-    // --- (2.4) MCTSResult ---
-    py::class_<MCTSResult>(m, "MCTSResult")
-        .def_readonly("result", &MCTSResult::result)
-        .def_readonly("visits", &MCTSResult::visits) // vector<tuple<string,int>>
-        .def_readonly("root", &MCTSResult::root);    // PyMCTSNode, the root node of the search tree
+    py::class_<ChessSelfPlaySearchResult>(m, "ChessSelfPlaySearchResult")
+        .def_readonly("root_value", &ChessSelfPlaySearchResult::root_value)
+        .def_readonly("visits", &ChessSelfPlaySearchResult::visits)
+        .def_readonly("root", &ChessSelfPlaySearchResult::root);
 
-    // --- (2.5) MCTSStatistics ---
-    py::class_<MCTSStatistics>(m, "MCTSStatistics")
-        .def_readonly("averageDepth", &MCTSStatistics::averageDepth)
-        .def_readonly("averageEntropy", &MCTSStatistics::averageEntropy)
-        .def_readonly("averageKLDivergence", &MCTSStatistics::averageKLDivergence)
-        .def_readonly("averagePolicySearchKLDivergence",
-                      &MCTSStatistics::averagePolicySearchKLDivergence)
-        .def_readonly("topMoveDisagreement", &MCTSStatistics::topMoveDisagreement)
-        .def_readonly("selectedMovePriorRank", &MCTSStatistics::selectedMovePriorRank);
+    py::class_<ChessSelfPlaySearchStatistics>(m, "ChessSelfPlaySearchStatistics")
+        .def_readonly("average_depth", &ChessSelfPlaySearchStatistics::average_depth)
+        .def_readonly("average_entropy", &ChessSelfPlaySearchStatistics::average_entropy)
+        .def_readonly("average_kl_divergence",
+                      &ChessSelfPlaySearchStatistics::average_kl_divergence)
+        .def_readonly("average_policy_search_kl_divergence",
+                      &ChessSelfPlaySearchStatistics::average_policy_search_kl_divergence)
+        .def_readonly("top_action_disagreement",
+                      &ChessSelfPlaySearchStatistics::top_action_disagreement)
+        .def_readonly("selected_action_prior_rank",
+                      &ChessSelfPlaySearchStatistics::selected_action_prior_rank);
 
-    // --- (2.6) MCTSResults ---
-    py::class_<MCTSResults>(m, "MCTSResults")
-        .def_readonly("results", &MCTSResults::results)     // vector<PyMCTSResult>
-        .def_readonly("mctsStats", &MCTSResults::mctsStats) // PyMCTSStatistics
-        .def_readonly("searchesCompleted", &MCTSResults::searchesCompleted);
+    py::class_<ChessSelfPlaySearchBatch>(m, "ChessSelfPlaySearchBatch")
+        .def_readonly("results", &ChessSelfPlaySearchBatch::results)
+        .def_readonly("statistics", &ChessSelfPlaySearchBatch::statistics)
+        .def_readonly("simulations_completed",
+                      &ChessSelfPlaySearchBatch::simulations_completed);
 
     py::class_<FunctionTimeInfo>(m, "FunctionTimeInfo")
         .def_readonly("name", &FunctionTimeInfo::name)
@@ -218,39 +220,41 @@ void bind_chess_game(py::module_ &m) {
         .def_readonly("percentRecorded", &TimeInfo::percentRecorded)
         .def_readonly("functionTimes", &TimeInfo::functionTimes);
 
-    // --- (4) MCTS class itself ---
-    py::class_<MCTS>(m, "MCTS")
-        .def(py::init<const InferenceClientParams &, const MCTSParams &,
+    py::class_<ChessSelfPlaySearch>(m, "ChessSelfPlaySearch")
+        .def(py::init<const InferenceClientParams &, const ChessSelfPlaySearchParameters &,
                       BatchedInferenceParameters, uint64>(),
-             py::arg("client_args"), py::arg("mcts_args"),
+             py::arg("runtime_parameters"), py::arg("search_parameters"),
              py::arg("inference_parameters"),
              py::arg("initial_model_version") = 0)
-        .def_property_readonly("arena_capacity", &MCTS::arenaCapacity)
-        .def_property_readonly("model_version", &MCTS::modelVersion)
+        .def_property_readonly("arena_capacity", &ChessSelfPlaySearch::arenaCapacity)
+        .def_property_readonly("model_version", &ChessSelfPlaySearch::modelVersion)
         .def(
-            "new_root", [](const MCTS &self, const std::string &fen) { return self.newRoot(fen); },
+            "new_root",
+            [](const ChessSelfPlaySearch &self, const std::string &fen) {
+                return self.newRoot(fen);
+            },
             py::arg("fen"))
         .def(
             "new_root_with_history",
-            [](const MCTS &self, const std::string &startingFen,
+            [](const ChessSelfPlaySearch &self, const std::string &startingFen,
                const std::vector<std::string> &movesUci) {
                 return self.newRoot(ChessGameContract::replayPosition(startingFen, movesUci));
             },
             py::arg("starting_fen"), py::arg("moves_uci"))
-        .def("get_inference_statistics", &MCTS::getInferenceStatistics)
-        .def("refresh_model", &MCTS::refreshModel, py::arg("model_version"), py::arg("model_path"),
+        .def("inference_statistics", &ChessSelfPlaySearch::inferenceStatistics)
+        .def("refresh_model", &ChessSelfPlaySearch::refreshModel, py::arg("model_version"),
+             py::arg("model_path"),
              py::call_guard<py::gil_scoped_release>())
-        .def("update_search_schedule", &MCTS::updateSearchSchedule, py::arg("mcts_args"))
-        .def("search", &MCTS::search, py::arg("boards"), py::arg("collect_statistics") = false,
+        .def("update_search_schedule", &ChessSelfPlaySearch::updateSearchSchedule,
+             py::arg("search_parameters"))
+        .def("search", &ChessSelfPlaySearch::search, py::arg("requests"),
+             py::arg("collect_statistics") = false,
              R"pbdoc(
-                 Run MCTS search on a list of boards.
-                 `boards` should be a list of MCTSBoard values.
-                 Returns an `MCTSResults` object, whose `.results` is a list of `MCTSResult`:
-                     - result: float
+                 Run batched chess self-play search requests.
+                 Returns a ChessSelfPlaySearchBatch whose results contain:
+                     - root_value: float
                      - visits: List of (encoded_move: int, visit_count: int)
-                     - children: List of NodeId (uint32)
-                 When `collect_statistics` is true, `.mctsStats` contains
-                 depth/entropy/KL for one representative root.
+                     - root: the retained ChessSearchRoot
              )pbdoc")
         .def("inference_with_history", &inferenceWithHistory, py::arg("histories"),
              py::call_guard<py::gil_scoped_release>());

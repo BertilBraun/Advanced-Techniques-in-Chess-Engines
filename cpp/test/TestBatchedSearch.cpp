@@ -1,4 +1,4 @@
-#include "MCTS/MCTS.hpp"
+#include "games/chess/ChessSelfPlaySearch.hpp"
 #include "position.h"
 
 namespace {
@@ -31,10 +31,10 @@ void require(const bool condition, const std::string &message) {
     }
 }
 
-float inferenceValue(MCTS &search) {
+float inferenceValue(ChessSelfPlaySearch &search) {
     Board board;
     const std::vector<const Board *> boards = {&board};
-    return search.inferenceBatch(boards).front().value();
+    return search.evaluate(boards).front().value();
 }
 
 } // namespace
@@ -50,24 +50,25 @@ int main() {
     try {
         const InferenceClientParams clientParameters(0, modelPath.string(), 4, 0,
                                                      InferenceDevice::Cpu);
-        const MCTSParams searchParameters(1, 16, 8, 1.5F, 0.3F, 0.25F, 0, 1);
+        const ChessSelfPlaySearchParameters searchParameters(1, 16, 8, 1.5F, 0.3F,
+                                                             0.25F, 0);
         const BatchedInferenceParameters inferenceParameters(2, 4, 1);
-        MCTS search(clientParameters, searchParameters, inferenceParameters, 7);
-        const std::vector<std::uintptr_t> workerIdentities = search.directWorkerIdentityTokens();
+        ChessSelfPlaySearch search(clientParameters, searchParameters, inferenceParameters, 7);
+        const std::vector<std::uintptr_t> workerIdentities = search.workerIdentityTokens();
         require(workerIdentities.size() == 2, "direct search created the wrong worker count");
         require(search.modelVersion() == 7, "direct search lost its initial model version");
         require(std::abs(inferenceValue(search)) < 0.001F,
                 "direct initial model returned the wrong value");
         const std::uint64_t evaluationsBeforeSearch =
-            search.getInferenceStatistics().first.evaluations;
+            search.inferenceStatistics().first.evaluations;
 
-        const std::vector<MCTSBoard> boards = {
-            MCTSBoard(search.newRoot(Board{}), true),
-            MCTSBoard(search.newRoot(Board{}), false),
+        const std::vector<ChessSelfPlaySearchRequest> boards = {
+            ChessSelfPlaySearchRequest(search.newRoot(Board{}), true),
+            ChessSelfPlaySearchRequest(search.newRoot(Board{}), false),
         };
-        const MCTSResults results = search.search(boards, true);
+        const ChessSelfPlaySearchBatch results = search.search(boards, true);
 
-        require(results.searchesCompleted == 24,
+        require(results.simulations_completed == 24,
                 "direct scheduler completed the wrong search count");
         require(results.results.size() == 2, "direct scheduler returned the wrong root count");
         require(results.results[0].root.visits() == 16, "full root missed its exact visit limit");
@@ -77,7 +78,7 @@ int main() {
         require(!results.results[0].visits.empty(), "full root did not expand legal moves");
         require(!results.results[1].visits.empty(), "fast root did not expand legal moves");
 
-        const auto [statistics, timing] = search.getInferenceStatistics();
+        const auto [statistics, timing] = search.inferenceStatistics();
         static_cast<void>(timing);
         require(statistics.evaluations == evaluationsBeforeSearch + 26,
                 "direct scheduler did not distinguish root initialization from searches");
@@ -85,25 +86,25 @@ int main() {
                 "direct model-position accounting diverged from evaluations");
         require(statistics.modelInferenceCalls > 0, "direct scheduler recorded no model calls");
 
-        const std::vector<MCTSBoard> completedBoards = {
-            MCTSBoard(results.results[0].root, true),
-            MCTSBoard(results.results[1].root, false),
+        const std::vector<ChessSelfPlaySearchRequest> completedBoards = {
+            ChessSelfPlaySearchRequest(results.results[0].root, true),
+            ChessSelfPlaySearchRequest(results.results[1].root, false),
         };
-        const MCTSResults completedResults = search.search(completedBoards, false);
-        require(completedResults.searchesCompleted == 0,
+        const ChessSelfPlaySearchBatch completedResults = search.search(completedBoards, false);
+        require(completedResults.simulations_completed == 0,
                 "completed roots unexpectedly performed additional searches");
 
-        const InferenceStatistics beforeRefresh = search.getInferenceStatistics().first;
+        const InferenceStatistics beforeRefresh = search.inferenceStatistics().first;
         search.refreshModel(8, updatedModelPath.string());
         require(search.modelVersion() == 8, "direct refresh did not publish its model version");
-        require(search.directWorkerIdentityTokens() == workerIdentities,
+        require(search.workerIdentityTokens() == workerIdentities,
                 "direct refresh reconstructed inference workers");
         require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
                 "direct refresh retained old model output");
-        require(search.getInferenceStatistics().first.evaluations > beforeRefresh.evaluations,
+        require(search.inferenceStatistics().first.evaluations > beforeRefresh.evaluations,
                 "direct refresh reset cumulative statistics");
-        const MCTSResults retainedResults = search.search(completedBoards, false);
-        require(retainedResults.searchesCompleted == 0,
+        const ChessSelfPlaySearchBatch retainedResults = search.search(completedBoards, false);
+        require(retainedResults.simulations_completed == 0,
                 "pure model refresh discarded retained search roots");
 
         try {
@@ -113,7 +114,7 @@ int main() {
         }
         require(search.modelVersion() == 8,
                 "failed direct refresh published an unvalidated model version");
-        require(search.directWorkerIdentityTokens() == workerIdentities,
+        require(search.workerIdentityTokens() == workerIdentities,
                 "failed direct refresh reconstructed inference workers");
         require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
                 "failed direct refresh changed active weights");
@@ -128,7 +129,7 @@ int main() {
         std::future<std::vector<InferenceResult>> concurrentInference =
             std::async(std::launch::async, [&] {
                 concurrentBatchStarted.store(true, std::memory_order_release);
-                return search.inferenceBatch(concurrentBoardPointers);
+                return search.evaluate(concurrentBoardPointers);
             });
         while (!concurrentBatchStarted.load(std::memory_order_acquire)) {
             std::this_thread::yield();
@@ -150,18 +151,20 @@ int main() {
             const std::filesystem::path &refreshPath =
                 version % 2 == 0 ? updatedModelPath : modelPath;
             search.refreshModel(version, refreshPath.string());
-            require(search.directWorkerIdentityTokens() == workerIdentities,
+            require(search.workerIdentityTokens() == workerIdentities,
                     "repeated direct refresh changed worker identity");
         }
         require(search.modelVersion() == 28, "repeated direct refresh lost model version");
 
-        const MCTSParams sameCapacitySchedule(1, 16, 7, 1.25F, 0.3F, 0.25F, 0, 1);
+        const ChessSelfPlaySearchParameters sameCapacitySchedule(1, 16, 7, 1.25F, 0.3F,
+                                                                 0.25F, 0);
         require(!search.updateSearchSchedule(sameCapacitySchedule),
                 "equal-capacity schedule incorrectly required root replacement");
-        const MCTSParams largerSchedule(1, 24, 8, 1.25F, 0.3F, 0.25F, 0, 1);
+        const ChessSelfPlaySearchParameters largerSchedule(1, 24, 8, 1.25F, 0.3F,
+                                                            0.25F, 0);
         require(search.updateSearchSchedule(largerSchedule),
                 "larger schedule did not report an arena-capacity change");
-        require(search.directWorkerIdentityTokens() == workerIdentities,
+        require(search.workerIdentityTokens() == workerIdentities,
                 "schedule update reconstructed direct inference workers");
 
     } catch (...) {

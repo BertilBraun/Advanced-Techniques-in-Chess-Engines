@@ -10,7 +10,12 @@ import chess.engine
 import numpy as np
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import MCTS, MCTSParams, MCTSResult, MCTSRoot
+    from AlphaZeroCpp import (
+        ChessSearchRoot,
+        ChessSelfPlaySearch,
+        ChessSelfPlaySearchParameters,
+        ChessSelfPlaySearchResult,
+    )
 
 
 import torch
@@ -44,7 +49,7 @@ from src.experiment.evaluation_protocol import (
 )
 
 
-def policy_evaluator(current_model: MCTS) -> EvaluationModel:
+def policy_evaluator(current_model: ChessSelfPlaySearch) -> EvaluationModel:
     def evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
         histories = [bounded_repetition_history(board.board, REPETITION_HISTORY_PLIES) for board in boards]
         results = current_model.inference_with_history(
@@ -62,9 +67,9 @@ def policy_evaluator(current_model: MCTS) -> EvaluationModel:
     return evaluator
 
 
-def history_aware_root(board: CurrentBoard, mcts: MCTS) -> MCTSRoot:
+def history_aware_root(board: CurrentBoard, search: ChessSelfPlaySearch) -> ChessSearchRoot:
     history = bounded_repetition_history(board.board, REPETITION_HISTORY_PLIES)
-    return mcts.new_root_with_history(history.starting_fen, history.moves_uci)
+    return search.new_root_with_history(history.starting_fen, history.moves_uci)
 
 
 def _encoded_policy_for_moves(boards: list[CurrentBoard], moves: list[chess.Move]) -> list[np.ndarray]:
@@ -110,22 +115,21 @@ class ModelEvaluation:
                 )
 
     @property
-    def mcts_args(self) -> MCTSParams:
-        from AlphaZeroCpp import MCTSParams
+    def self_play_search_parameters(self) -> ChessSelfPlaySearchParameters:
+        from AlphaZeroCpp import ChessSelfPlaySearchParameters
 
-        return MCTSParams(
-            num_parallel_searches=self.evaluation_args.parallel_searches,
-            c_param=self.evaluation_args.search_exploration_constant,
+        return ChessSelfPlaySearchParameters(
+            parallel_searches=self.evaluation_args.parallel_searches,
+            exploration_constant=self.evaluation_args.search_exploration_constant,
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
-            min_visit_count=0,
-            num_threads=self.evaluation_args.mcts_threads,
-            num_full_searches=self.num_searches_per_turn,
-            num_fast_searches=self.num_searches_per_turn,
+            minimum_root_visits=0,
+            full_searches=self.num_searches_per_turn,
+            fast_searches=self.num_searches_per_turn,
         )
 
-    def _create_mcts(self, inference_path: Path) -> MCTS:
-        from AlphaZeroCpp import BatchedInferenceParameters, InferenceClientParams, MCTS
+    def _create_search(self, inference_path: Path) -> ChessSelfPlaySearch:
+        from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceClientParams
 
         inference = self.evaluation_args.inference
         inference_parameters = BatchedInferenceParameters(
@@ -133,14 +137,14 @@ class ModelEvaluation:
             inference.inference_batch_size,
             inference.outstanding_batches_per_worker,
         )
-        return MCTS(
+        return ChessSelfPlaySearch(
             InferenceClientParams(
                 self.device_id,
                 str(inference_path),
                 inference.inference_batch_size,
                 500,
             ),
-            self.mcts_args,
+            self.self_play_search_parameters,
             inference_parameters=inference_parameters,
         )
 
@@ -227,7 +231,7 @@ class ModelEvaluation:
         self,
         model_path: str | PathLike,
     ) -> tuple[Results, tuple[GameRecord, ...]]:
-        from AlphaZeroCpp import MCTSBoard
+        from AlphaZeroCpp import ChessSelfPlaySearchRequest
 
         opponent_inference_path = inference_model_path(model_path)
         if not opponent_inference_path.is_file():
@@ -235,10 +239,12 @@ class ModelEvaluation:
         if self.paired_schedule is None:
             raise ValueError('A fixed paired opening suite is required for model evaluation.')
 
-        opponent = self._create_mcts(opponent_inference_path)
+        opponent = self._create_search(opponent_inference_path)
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
-            results = opponent.search([MCTSBoard(history_aware_root(board, opponent), False) for board in boards])
+            results = opponent.search(
+                [ChessSelfPlaySearchRequest(history_aware_root(board, opponent), False) for board in boards]
+            )
             return self._search_decisions(results.results)
 
         res = self.play_vs_evaluation_model_paired(
@@ -250,7 +256,7 @@ class ModelEvaluation:
 
     def play_policy_vs_random(self) -> Results:
         evaluation = self.evaluation_args
-        current_model = self._create_mcts(inference_model_path(model_save_path(self.iteration, self.args.save_path)))
+        current_model = self._create_search(inference_model_path(model_save_path(self.iteration, self.args.save_path)))
         policy_model = policy_evaluator(current_model)
 
         def paired_policy_model(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
@@ -353,7 +359,7 @@ class ModelEvaluation:
         eval_model: PairedEvaluationModel,
         name: str,
     ) -> tuple[Results, tuple[GameRecord, ...]]:
-        from AlphaZeroCpp import MCTSBoard
+        from AlphaZeroCpp import ChessSelfPlaySearchRequest
 
         if self.paired_schedule is None:
             raise ValueError('A fixed paired opening suite is required for model evaluation.')
@@ -361,10 +367,12 @@ class ModelEvaluation:
         current_inference_path = inference_model_path(model_save_path(self.iteration, self.args.save_path))
         if not current_inference_path.is_file():
             raise ValueError(f'Candidate inference model does not exist: {current_inference_path}')
-        current = self._create_mcts(current_inference_path)
+        current = self._create_search(current_inference_path)
 
         def current_model(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
-            results = current.search([MCTSBoard(history_aware_root(board, current), False) for board in boards])
+            results = current.search(
+                [ChessSelfPlaySearchRequest(history_aware_root(board, current), False) for board in boards]
+            )
             return self._search_decisions(results.results)
 
         results, records = play_paired_models(
@@ -408,7 +416,7 @@ class ModelEvaluation:
         return normalize_move_for_action_space(result.move, board)
 
     @staticmethod
-    def _search_decisions(results: list[MCTSResult]) -> list[PairedEvaluationDecision]:
+    def _search_decisions(results: list[ChessSelfPlaySearchResult]) -> list[PairedEvaluationDecision]:
         decisions: list[PairedEvaluationDecision] = []
         for result in results:
             if not result.visits:

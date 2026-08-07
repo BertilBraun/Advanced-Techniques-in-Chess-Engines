@@ -1,6 +1,6 @@
 #include "games/go/GoBindings.hpp"
 
-#include "MCTS/GameSearch.hpp"
+#include "search/BatchedSearch.hpp"
 #include "games/go/GoGameContract.hpp"
 
 #include <array>

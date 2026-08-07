@@ -347,7 +347,7 @@ add_executable(
         src/games/chess/ChessBoard.cpp
         src/games/chess/ChessEncoding.cpp
         src/DirectInference.cpp
-        src/MCTS/MCTS.cpp
+        src/games/chess/ChessSelfPlaySearch.cpp
         src/games/chess/ChessSearch.cpp
         src/games/chess/ChessAction.cpp
         src/util/Log.cpp

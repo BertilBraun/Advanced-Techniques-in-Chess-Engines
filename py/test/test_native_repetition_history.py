@@ -4,7 +4,7 @@ import pytest
 
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
 
-if not hasattr(AlphaZeroCpp.MCTSRoot, 'repetition_count'):
+if not hasattr(AlphaZeroCpp.ChessSearchRoot, 'repetition_count'):
     pytest.skip('AlphaZeroCpp must be rebuilt before native history tests run.', allow_module_level=True)
 
 STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'

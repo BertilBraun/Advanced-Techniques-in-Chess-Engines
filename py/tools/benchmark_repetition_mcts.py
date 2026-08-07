@@ -13,11 +13,11 @@ from pathlib import Path
 
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
+    ChessSearchRoot,
+    ChessSelfPlaySearch,
+    ChessSelfPlaySearchParameters,
+    ChessSelfPlaySearchRequest,
     InferenceClientParams,
-    MCTS,
-    MCTSBoard,
-    MCTSParams,
-    MCTSRoot,
 )
 
 
@@ -68,7 +68,6 @@ class Arguments:
     steps: int
     searches: int
     parallel_searches: int
-    threads: int
     maximum_batch_size: int
     inference_timeout_microseconds: int
     gpu_sampling_interval_seconds: float
@@ -78,7 +77,7 @@ class Arguments:
 
 @dataclass(frozen=True)
 class SearchStepsResult:
-    roots: list[MCTSRoot]
+    roots: list[ChessSearchRoot]
     terminal_roots: int
     searches_completed: int
 
@@ -123,7 +122,7 @@ def sample_gpu_until_stopped(
         samples.append(query_gpu(device_id))
 
 
-def choose_root(result_root: MCTSRoot, visits: list[tuple[int, int]]) -> MCTSRoot:
+def choose_root(result_root: ChessSearchRoot, visits: list[tuple[int, int]]) -> ChessSearchRoot:
     if not visits:
         raise ValueError('MCTS returned no visits for a nonterminal root.')
     child_index = max(range(len(visits)), key=lambda index: visits[index][1])
@@ -142,8 +141,8 @@ def wait_for_synchronized_start(args: Arguments) -> None:
 
 
 def run_search_steps(
-    mcts: MCTS,
-    roots: list[MCTSRoot],
+    search: ChessSelfPlaySearch,
+    roots: list[ChessSearchRoot],
     openings: tuple[str, ...],
     steps: int,
 ) -> SearchStepsResult:
@@ -151,15 +150,15 @@ def run_search_steps(
     searches_completed = 0
     for _ in range(steps):
         visits_before = sum(root.visits for root in roots)
-        search_results = mcts.search([MCTSBoard(root, False) for root in roots])
+        search_results = search.search([ChessSelfPlaySearchRequest(root, False) for root in roots])
         searches_completed += sum(result.root.visits for result in search_results.results) - visits_before
 
-        next_roots: list[MCTSRoot] = []
+        next_roots: list[ChessSearchRoot] = []
         for opening_index, result in enumerate(search_results.results):
             root = choose_root(result.root, result.visits)
             if root.is_terminal:
                 terminal_roots += 1
-                root = mcts.new_root(openings[opening_index])
+                root = search.new_root(openings[opening_index])
             next_roots.append(root)
         roots = next_roots
     return SearchStepsResult(
@@ -170,21 +169,21 @@ def run_search_steps(
 
 
 def run_benchmark(args: Arguments) -> BenchmarkResult:
-    if args.games < 1 or args.steps < 1 or args.searches < 1 or args.threads < 1:
-        raise ValueError('games, steps, searches, and threads must be positive.')
+    if args.games < 1 or args.steps < 1 or args.searches < 1:
+        raise ValueError('games, steps, and searches must be positive.')
     if args.warmup_steps < 0:
         raise ValueError('warmup steps cannot be negative.')
     if args.gpu_sampling_interval_seconds < 0:
         raise ValueError('GPU sampling interval cannot be negative.')
 
-    mcts = MCTS(
+    search = ChessSelfPlaySearch(
         InferenceClientParams(
             args.device,
             str(args.model),
             args.maximum_batch_size,
             args.inference_timeout_microseconds,
         ),
-        MCTSParams(
+        ChessSelfPlaySearchParameters(
             args.parallel_searches,
             args.searches,
             args.searches,
@@ -192,15 +191,14 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             0.3,
             0.0,
             0,
-            args.threads,
         ),
         BatchedInferenceParameters(1, args.maximum_batch_size, 1),
     )
     openings = load_openings(args.openings, args.games)
-    roots = [mcts.new_root(fen) for fen in openings]
-    warmup_result = run_search_steps(mcts, roots, openings, args.warmup_steps)
+    roots = [search.new_root(fen) for fen in openings]
+    warmup_result = run_search_steps(search, roots, openings, args.warmup_steps)
     roots = warmup_result.roots
-    warmup_inference_statistics, _ = mcts.get_inference_statistics()
+    warmup_inference_statistics, _ = search.inference_statistics()
     wait_for_synchronized_start(args)
 
     gpu_samples: list[GpuSample] = []
@@ -221,14 +219,14 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
 
     process_time_start = time.process_time()
     wall_time_start = time.perf_counter()
-    measurement_result = run_search_steps(mcts, roots, openings, args.steps)
+    measurement_result = run_search_steps(search, roots, openings, args.steps)
     elapsed_seconds = time.perf_counter() - wall_time_start
     process_seconds = time.process_time() - process_time_start
     stop_event.set()
     if sampler is not None:
         sampler.join()
 
-    inference_statistics, _ = mcts.get_inference_statistics()
+    inference_statistics, _ = search.inference_statistics()
     measurement_evaluations = inference_statistics.evaluations - warmup_inference_statistics.evaluations
     measurement_model_calls = inference_statistics.modelInferenceCalls - warmup_inference_statistics.modelInferenceCalls
     measurement_model_positions = (
@@ -283,7 +281,6 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--steps', type=int, default=10)
     parser.add_argument('--searches', type=int, default=600)
     parser.add_argument('--parallel-searches', type=int, default=4)
-    parser.add_argument('--threads', type=int, default=3)
     parser.add_argument('--maximum-batch-size', type=int, default=256)
     parser.add_argument('--inference-timeout-microseconds', type=int, default=500)
     parser.add_argument('--gpu-sampling-interval-seconds', type=float, default=1.0)
@@ -299,7 +296,6 @@ def parse_arguments() -> Arguments:
         steps=namespace.steps,
         searches=namespace.searches,
         parallel_searches=namespace.parallel_searches,
-        threads=namespace.threads,
         maximum_batch_size=namespace.maximum_batch_size,
         inference_timeout_microseconds=namespace.inference_timeout_microseconds,
         gpu_sampling_interval_seconds=namespace.gpu_sampling_interval_seconds,

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MCTS/GameSearch.hpp"
+#include "search/BatchedSearch.hpp"
 #include "games/chess/ChessGameContract.hpp"
 
 #include <memory>
@@ -14,9 +14,9 @@ inline constexpr NodeIndex INVALID_NODE_INDEX = std::numeric_limits<NodeIndex>::
 using ChessSearchTree = GameSearchTree<ChessGameContract>;
 using ChessSearchNode = GameSearchNode<ChessGameContract>;
 using ChessSearchEdge = GameSearchEdge<ChessAction>;
-using ChessSearchRoot = GameSearchRoot<ChessGameContract>;
+using ChessGameSearchRoot = GameSearchRoot<ChessGameContract>;
 
-struct MCTSChild {
+struct ChessSearchChild {
     std::string move;
     int encoded_move;
     float raw_policy;
@@ -27,12 +27,12 @@ struct MCTSChild {
     bool is_materialized;
 };
 
-class MCTSRoot {
+class ChessSearchRoot {
 public:
-    static MCTSRoot create(Board board, std::uint32_t arenaCapacity);
-    static MCTSRoot create(const std::string &fen, std::uint32_t arenaCapacity);
+    static ChessSearchRoot create(Board board, std::uint32_t arenaCapacity);
+    static ChessSearchRoot create(const std::string &fen, std::uint32_t arenaCapacity);
 
-    explicit MCTSRoot(ChessSearchRoot root) : m_root(std::move(root)) {}
+    explicit ChessSearchRoot(ChessGameSearchRoot root) : m_root(std::move(root)) {}
 
     [[nodiscard]] const Board &board() const { return m_root.position(); }
     [[nodiscard]] bool isTerminal() const { return m_root.isTerminal(); }
@@ -48,11 +48,11 @@ public:
     [[nodiscard]] std::uint32_t arenaCapacity() const {
         return static_cast<std::uint32_t>(tree().capacity());
     }
-    [[nodiscard]] std::vector<MCTSChild> children() const;
+    [[nodiscard]] std::vector<ChessSearchChild> children() const;
     [[nodiscard]] std::string move() const;
     [[nodiscard]] std::string repr() const;
 
-    [[nodiscard]] MCTSRoot makeNewRoot(std::uint32_t childIndex);
+    [[nodiscard]] ChessSearchRoot makeNewRoot(std::uint32_t childIndex);
     void reset();
     void discount(float percentageOfNodeVisitsToKeep) {
         tree().discount(percentageOfNodeVisitsToKeep);
@@ -61,9 +61,9 @@ public:
     [[nodiscard]] ChessSearchTree &tree() { return m_root.tree(); }
     [[nodiscard]] const ChessSearchTree &tree() const { return m_root.tree(); }
     [[nodiscard]] NodeIndex rootIndex() const { return tree().rootIndex(); }
-    [[nodiscard]] const ChessSearchRoot &gameRoot() const { return m_root; }
+    [[nodiscard]] const ChessGameSearchRoot &gameRoot() const { return m_root; }
 
 private:
-    ChessSearchRoot m_root;
+    ChessGameSearchRoot m_root;
     std::optional<ChessAction> m_move;
 };

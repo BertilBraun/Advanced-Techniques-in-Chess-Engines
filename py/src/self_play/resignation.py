@@ -138,13 +138,13 @@ class ExternalResignationSafetyApproval(FrozenModel):
     reason: str = Field(min_length=1)
 
 
-class MCTSChildStatistics(Protocol):
+class SearchChildStatistics(Protocol):
     visits: int
     result_sum: float
 
 
 def best_child_value_from_root_perspective(
-    children: Sequence[MCTSChildStatistics],
+    children: Sequence[SearchChildStatistics],
 ) -> float | None:
     visited_children = [child for child in children if child.visits > 0]
     if not visited_children:

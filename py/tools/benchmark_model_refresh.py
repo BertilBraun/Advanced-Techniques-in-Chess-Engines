@@ -14,11 +14,11 @@ import torch
 
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
+    ChessSearchRoot,
+    ChessSelfPlaySearch,
+    ChessSelfPlaySearchParameters,
+    ChessSelfPlaySearchRequest,
     InferenceClientParams,
-    MCTS,
-    MCTSBoard,
-    MCTSParams,
-    MCTSRoot,
 )
 
 
@@ -36,7 +36,6 @@ class Arguments:
     roots: int
     searches: int
     parallel_searches: int
-    threads: int
     direct_workers: int
     direct_batch_size: int
     direct_outstanding_batches: int
@@ -134,7 +133,6 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--roots', type=int, default=24)
     parser.add_argument('--searches', type=int, default=64)
     parser.add_argument('--parallel-searches', type=int, default=4)
-    parser.add_argument('--threads', type=int, default=4)
     parser.add_argument('--direct-workers', type=int, default=2)
     parser.add_argument('--direct-batch-size', type=int, default=64)
     parser.add_argument('--direct-outstanding-batches', type=int, default=1)
@@ -151,7 +149,6 @@ def parse_arguments() -> Arguments:
         roots=namespace.roots,
         searches=namespace.searches,
         parallel_searches=namespace.parallel_searches,
-        threads=namespace.threads,
         direct_workers=namespace.direct_workers,
         direct_batch_size=namespace.direct_batch_size,
         direct_outstanding_batches=namespace.direct_outstanding_batches,
@@ -208,29 +205,28 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def create_search(arguments: Arguments) -> MCTS:
+def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
     client_parameters = InferenceClientParams(
         arguments.device_id,
         currentModelPath=str(arguments.model_path),
         maxBatchSize=256,
         microsecondsTimeoutInferenceThread=500,
     )
-    search_parameters = MCTSParams(
-        num_parallel_searches=arguments.parallel_searches,
-        num_full_searches=arguments.searches,
-        num_fast_searches=arguments.searches,
-        c_param=2.0,
+    search_parameters = ChessSelfPlaySearchParameters(
+        parallel_searches=arguments.parallel_searches,
+        full_searches=arguments.searches,
+        fast_searches=arguments.searches,
+        exploration_constant=2.0,
         dirichlet_alpha=0.3,
         dirichlet_epsilon=0.25,
-        min_visit_count=0,
-        num_threads=arguments.threads,
+        minimum_root_visits=0,
     )
     inference_parameters = BatchedInferenceParameters(
         arguments.direct_workers,
         arguments.direct_batch_size,
         arguments.direct_outstanding_batches,
     )
-    return MCTS(
+    return ChessSelfPlaySearch(
         client_parameters,
         search_parameters,
         inference_parameters=inference_parameters,
@@ -238,19 +234,19 @@ def create_search(arguments: Arguments) -> MCTS:
     )
 
 
-def populate_roots(search: MCTS, root_count: int) -> list[MCTSRoot]:
+def populate_roots(search: ChessSelfPlaySearch, root_count: int) -> list[ChessSearchRoot]:
     roots = [search.new_root(INITIAL_FEN) for _ in range(root_count)]
-    results = search.search([MCTSBoard(root, False) for root in roots])
+    results = search.search([ChessSelfPlaySearchRequest(root, False) for root in roots])
     return [result.root for result in results.results]
 
 
-def retained_tree_state(roots: list[MCTSRoot]) -> tuple[tuple[int, int, int], ...]:
+def retained_tree_state(roots: list[ChessSearchRoot]) -> tuple[tuple[int, int, int], ...]:
     return tuple((root.visits, root.live_nodes, root.total_child_records) for root in roots)
 
 
 def verify_retained_roots(
     state_before_refresh: tuple[tuple[int, int, int], ...],
-    roots: list[MCTSRoot],
+    roots: list[ChessSearchRoot],
 ) -> None:
     if retained_tree_state(roots) != state_before_refresh:
         raise RuntimeError('A pure model refresh mutated retained search roots.')

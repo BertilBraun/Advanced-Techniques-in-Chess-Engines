@@ -113,7 +113,7 @@ def test_unexpanded_reused_root_is_rebuilt_with_history() -> None:
     root_factory = SimpleNamespace(
         new_root_with_history=lambda starting_fen, moves_uci: replacement,
     )
-    client.mcts = root_factory
+    client.search_engine = root_factory
     game = SelfPlayGame()
     game.already_expanded_node = SimpleNamespace(is_terminal=False, is_expanded=False)
 
@@ -131,7 +131,7 @@ def test_unexpanded_reused_root_is_rebuilt_with_history() -> None:
 )
 def test_terminal_or_expanded_reused_root_is_retained(retained_root: SimpleNamespace) -> None:
     client = self_play_client(iteration=50)
-    client.mcts = SimpleNamespace(
+    client.search_engine = SimpleNamespace(
         new_root_with_history=lambda *_: pytest.fail('Reusable root must not be rebuilt.'),
     )
     game = SelfPlayGame()

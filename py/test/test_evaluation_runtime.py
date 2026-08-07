@@ -59,9 +59,9 @@ class _FakeInferenceClientParameters:
 
 
 @dataclass(frozen=True)
-class _FakeMctsBoard:
+class _FakeChessSelfPlaySearchRequest:
     root: object
-    should_run_full_search: bool
+    full_search: bool
 
 
 @dataclass(frozen=True)
@@ -142,14 +142,14 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
 
     inference_clients: list[_FakeDirectInferenceParameters | None] = []
 
-    class FakeMcts:
+    class FakeChessSelfPlaySearch:
         def __init__(
             self,
             runtime_parameters: _FakeInferenceClientParameters,
-            mcts_parameters: str,
+            search_parameters: str,
             inference_parameters: _FakeDirectInferenceParameters | None,
         ) -> None:
-            assert mcts_parameters == 'mcts-parameters'
+            assert search_parameters == 'search-parameters'
             assert runtime_parameters.maximum_batch_size == 64
             inference_clients.append(inference_parameters)
 
@@ -170,16 +170,16 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
         assert name == opponent_model_path.name
         return Results(0, 0, 0), ()
 
-    def mcts_parameters(_: ModelEvaluation) -> str:
-        return 'mcts-parameters'
+    def search_parameters(_: ModelEvaluation) -> str:
+        return 'search-parameters'
 
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParameters
     fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeDirectInferenceParameters
-    fake_alpha_zero_cpp.MCTS = FakeMcts
-    fake_alpha_zero_cpp.MCTSBoard = _FakeMctsBoard
+    fake_alpha_zero_cpp.ChessSelfPlaySearch = FakeChessSelfPlaySearch
+    fake_alpha_zero_cpp.ChessSelfPlaySearchRequest = _FakeChessSelfPlaySearchRequest
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
-    monkeypatch.setattr(ModelEvaluation, 'mcts_args', property(mcts_parameters))
+    monkeypatch.setattr(ModelEvaluation, 'self_play_search_parameters', property(search_parameters))
     monkeypatch.setattr(evaluation_module, 'play_paired_models', fake_paired_match)
 
     model_evaluation = ModelEvaluation.__new__(ModelEvaluation)
@@ -275,7 +275,7 @@ def test_policy_evaluation_uses_native_batched_inference(
         assert name == 'policy_vs_random_paired'
         return Results(0, 0, 0), ()
 
-    monkeypatch.setattr(ModelEvaluation, '_create_mcts', create_native_search)
+    monkeypatch.setattr(ModelEvaluation, '_create_search', create_native_search)
     monkeypatch.setattr(evaluation_module, 'play_paired_models', finish_without_games)
 
     model_evaluation = ModelEvaluation.__new__(ModelEvaluation)

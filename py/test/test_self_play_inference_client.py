@@ -47,15 +47,14 @@ class _FakeInferenceClientParams:
 
 
 @dataclass(frozen=True)
-class _FakeMctsParams:
-    num_parallel_searches: int
-    num_full_searches: int
-    num_fast_searches: int
+class _FakeChessSelfPlaySearchParameters:
+    parallel_searches: int
+    full_searches: int
+    fast_searches: int
     dirichlet_alpha: float
     dirichlet_epsilon: float
-    c_param: float
-    min_visit_count: int
-    num_threads: int
+    exploration_constant: float
+    minimum_root_visits: int
 
 
 @dataclass(frozen=True)
@@ -65,31 +64,33 @@ class _FakeBatchedInferenceParameters:
     outstanding_batches_per_worker: int
 
 
-class _FakeMcts:
+class _FakeChessSelfPlaySearch:
     inference_parameters: _FakeBatchedInferenceParameters | None = None
 
     def __init__(
         self,
         client_args: _FakeInferenceClientParams,
-        mcts_args: _FakeMctsParams,
+        search_parameters: _FakeChessSelfPlaySearchParameters,
         inference_parameters: _FakeBatchedInferenceParameters | None,
         initial_model_version: int,
     ) -> None:
         assert client_args.maxBatchSize == 64
-        assert mcts_args.num_full_searches > mcts_args.num_parallel_searches
-        _FakeMcts.inference_parameters = inference_parameters
+        assert search_parameters.full_searches > search_parameters.parallel_searches
+        _FakeChessSelfPlaySearch.inference_parameters = inference_parameters
         assert initial_model_version >= 0
         self.arena_capacity = (
-            max(mcts_args.num_full_searches, mcts_args.num_fast_searches) + mcts_args.num_parallel_searches + 1
+            max(search_parameters.full_searches, search_parameters.fast_searches)
+            + search_parameters.parallel_searches
+            + 1
         )
 
 
-class _LifecycleMcts:
+class _LifecycleSearch:
     def __init__(self, events: list[str], arena_capacity: int) -> None:
         self.events = events
         self.arena_capacity = arena_capacity
 
-    def get_inference_statistics(self) -> tuple[SimpleNamespace, SimpleNamespace]:
+    def inference_statistics(self) -> tuple[SimpleNamespace, SimpleNamespace]:
         inference_statistics = SimpleNamespace(
             averageNumberOfPositionsInInferenceCall=0.0,
         )
@@ -98,12 +99,10 @@ class _LifecycleMcts:
     def refresh_model(self, model_version: int, model_path: str) -> None:
         self.events.append(f'refresh:{model_version}:{model_path}')
 
-    def update_search_schedule(self, parameters: _FakeMctsParams) -> bool:
+    def update_search_schedule(self, parameters: _FakeChessSelfPlaySearchParameters) -> bool:
         previous_capacity = self.arena_capacity
-        self.events.append(f'schedule:{parameters.num_full_searches}')
-        self.arena_capacity = (
-            max(parameters.num_full_searches, parameters.num_fast_searches) + parameters.num_parallel_searches + 1
-        )
+        self.events.append(f'schedule:{parameters.full_searches}')
+        self.arena_capacity = max(parameters.full_searches, parameters.fast_searches) + parameters.parallel_searches + 1
         return previous_capacity != self.arena_capacity
 
 
@@ -125,8 +124,8 @@ def test_self_play_constructs_direct_inference_client_during_search_warmup(
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParams
     fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeBatchedInferenceParameters
-    fake_alpha_zero_cpp.MCTS = _FakeMcts
-    fake_alpha_zero_cpp.MCTSParams = _FakeMctsParams
+    fake_alpha_zero_cpp.ChessSelfPlaySearch = _FakeChessSelfPlaySearch
+    fake_alpha_zero_cpp.ChessSelfPlaySearchParameters = _FakeChessSelfPlaySearchParameters
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
     search = TRAINING_ARGS.self_play.search.validated_copy(update={'num_searches_per_turn': 600})
@@ -148,7 +147,7 @@ def test_self_play_constructs_direct_inference_client_during_search_warmup(
 
     self_play._set_mcts(iteration=50)
 
-    assert _FakeMcts.inference_parameters == _FakeBatchedInferenceParameters(2, 64, 2)
+    assert _FakeChessSelfPlaySearch.inference_parameters == _FakeBatchedInferenceParameters(2, 64, 2)
     assert self_play.search_schedule(0).num_full_searches == 100
     assert self_play.search_schedule(1).num_full_searches == 105
     assert self_play.search_schedule(100).num_full_searches == 600
@@ -161,8 +160,8 @@ def test_self_play_constructs_direct_inference_pipeline(
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParams
     fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeBatchedInferenceParameters
-    fake_alpha_zero_cpp.MCTS = _FakeMcts
-    fake_alpha_zero_cpp.MCTSParams = _FakeMctsParams
+    fake_alpha_zero_cpp.ChessSelfPlaySearch = _FakeChessSelfPlaySearch
+    fake_alpha_zero_cpp.ChessSelfPlaySearchParameters = _FakeChessSelfPlaySearchParameters
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
     direct_inference = DirectInferenceParams(
@@ -184,7 +183,7 @@ def test_self_play_constructs_direct_inference_pipeline(
 
     self_play._set_mcts(iteration=50)
 
-    assert _FakeMcts.inference_parameters == _FakeBatchedInferenceParameters(2, 64, 1)
+    assert _FakeChessSelfPlaySearch.inference_parameters == _FakeBatchedInferenceParameters(2, 64, 1)
 
 
 def test_model_refresh_retains_game_state_and_resets_search_tree(
@@ -204,13 +203,13 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
     game = SimpleNamespace(already_expanded_node=root)
     self_play.self_play_games = [game]
     self_play.completed_searches = 19
-    self_play.mcts = _LifecycleMcts(events, self_play.search_schedule_state.arena_capacity)
-    previous_mcts = self_play.mcts
+    self_play.search_engine = _LifecycleSearch(events, self_play.search_schedule_state.arena_capacity)
+    previous_search = self_play.search_engine
     monkeypatch.setattr('src.self_play.SelfPlay.log_scalar', lambda *_args: None)
 
     self_play.refresh_model(1, 'updated.jit.pt')
 
-    assert self_play.mcts is previous_mcts
+    assert self_play.search_engine is previous_search
     assert game.already_expanded_node is root
     assert len(self_play.dataset) == 1
     assert self_play.completed_searches == 19
@@ -230,12 +229,12 @@ def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) 
     self_play.model_refresh_acknowledgements = [7]
     self_play.search_schedule_state = self_play.search_schedule(0)
     self_play.self_play_games = [SimpleNamespace(already_expanded_node=object())]
-    self_play.mcts = _LifecycleMcts([], self_play.search_schedule_state.arena_capacity)
+    self_play.search_engine = _LifecycleSearch([], self_play.search_schedule_state.arena_capacity)
 
     def fail_refresh(_model_version: int, _model_path: str) -> None:
         raise RuntimeError('invalid checkpoint')
 
-    monkeypatch.setattr(self_play.mcts, 'refresh_model', fail_refresh)
+    monkeypatch.setattr(self_play.search_engine, 'refresh_model', fail_refresh)
 
     with pytest.raises(RuntimeError, match='invalid checkpoint'):
         self_play.refresh_model(8, 'broken.jit.pt')

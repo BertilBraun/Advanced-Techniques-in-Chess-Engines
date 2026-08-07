@@ -11,7 +11,7 @@ from src.self_play.resignation import ResignationParams
 from src.util.frozen_model import FrozenModel
 
 
-class MCTSParams(FrozenModel):
+class SelfPlaySearchParams(FrozenModel):
     num_searches_per_turn: int = Field(gt=0)
     fast_searches_proportion_of_full_searches: float = Field(gt=0.0, le=1.0)
     playout_cap_randomization: float = Field(ge=0.0, le=1.0)
@@ -53,7 +53,7 @@ class NetworkParams(FrozenModel):
 
 
 class SelfPlayParams(FrozenModel):
-    search: MCTSParams
+    search: SelfPlaySearchParams
     inference: DirectInferenceParams
     num_moves_after_which_to_play_greedy: int = Field(gt=0)
     maximum_game_plies: int | None = Field(default=None, gt=0)

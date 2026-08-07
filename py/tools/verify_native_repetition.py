@@ -7,11 +7,11 @@ from pathlib import Path
 import chess
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
+    ChessSearchRoot,
+    ChessSelfPlaySearch,
+    ChessSelfPlaySearchParameters,
+    ChessSelfPlaySearchRequest,
     InferenceClientParams,
-    MCTS,
-    MCTSBoard,
-    MCTSParams,
-    MCTSRoot,
     new_root,
     new_root_with_history,
 )
@@ -31,7 +31,7 @@ class Arguments:
     device: int
 
 
-def repetition_child_index(root: MCTSRoot) -> int:
+def repetition_child_index(root: ChessSearchRoot) -> int:
     matching_indices = [index for index, child in enumerate(root.children) if child.move == 'f6g8']
     if len(matching_indices) != 1:
         raise ValueError(f'Expected one f6g8 child, found {len(matching_indices)}.')
@@ -66,14 +66,16 @@ def main() -> None:
     for move in moves_before_third_occurrence:
         board_before_third_occurrence.push_uci(move)
 
-    mcts = MCTS(
+    search = ChessSelfPlaySearch(
         InferenceClientParams(args.device, str(args.model), 16, 500),
-        MCTSParams(1, 8, 8, 1.0, 0.3, 0.0, 0, 1),
+        ChessSelfPlaySearchParameters(1, 8, 8, 1.0, 0.3, 0.0, 0),
         BatchedInferenceParameters(1, 16, 1),
     )
-    blind_parent = mcts.new_root(board_before_third_occurrence.fen())
-    aware_parent = mcts.new_root_with_history(chess.STARTING_FEN, moves_before_third_occurrence)
-    results = mcts.search([MCTSBoard(blind_parent, False), MCTSBoard(aware_parent, False)])
+    blind_parent = search.new_root(board_before_third_occurrence.fen())
+    aware_parent = search.new_root_with_history(chess.STARTING_FEN, moves_before_third_occurrence)
+    results = search.search(
+        [ChessSelfPlaySearchRequest(blind_parent, False), ChessSelfPlaySearchRequest(aware_parent, False)]
+    )
     blind_child = results.results[0].root.make_new_root(repetition_child_index(results.results[0].root))
     aware_child = results.results[1].root.make_new_root(repetition_child_index(results.results[1].root))
 
