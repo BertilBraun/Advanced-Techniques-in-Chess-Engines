@@ -53,16 +53,6 @@ from src.experiment.resource_telemetry import process_tree_open_file_counts
 from src.experiment.cost_accounting import estimated_cost
 
 
-def credit_training_progress_axis(
-    progress: CreditTrainingProgress,
-    global_batch_size: int,
-) -> int:
-    """Return trained position presentations, the primary credit-training axis."""
-    if global_batch_size <= 0:
-        raise ValueError('Global batch size must be positive.')
-    return progress.completed_optimizer_steps * global_batch_size
-
-
 @dataclass(frozen=True)
 class PublicationResult:
     manifest: CreditPublicationManifest

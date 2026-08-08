@@ -59,8 +59,7 @@ def training_parameters(
         local_batch_size=4,
         optimizer='adamw',
         learning_rate=ModelVersionLearningRate(
-            stages=(ModelVersionLearningRateStage(start_model_version=0, learning_rate=0.001),),
-            optimizer_steps_per_model_version=1,
+            stages=(ModelVersionLearningRateStage(start_optimizer_steps=0, learning_rate=0.001),),
         ),
         duplicate_multiplicity_weight_cap=duplicate_multiplicity_weight_cap,
     )

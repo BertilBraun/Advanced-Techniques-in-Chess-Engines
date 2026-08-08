@@ -5,37 +5,11 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from src.experiment.base_configuration import BaseExperimentConfiguration
-from src.games.chess.game import BINARY_CHANNELS, SCALAR_CHANNELS
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.neural_network import NetworkDimensions
 from src.games.chess.resignation import ResignationParams
 from src.training.configuration import BatchedInferenceParams, SelfPlayConfiguration
 from src.util.frozen_model import FrozenModel
-
-
-class ChessRulesConfiguration(FrozenModel):
-    variant: Literal['standard'] = 'standard'
-    chess960: bool = False
-    automatic_fifty_move_draw: bool = True
-    automatic_threefold_repetition_draw: bool = True
-
-
-class ChessRepresentationConfiguration(FrozenModel):
-    board_length: Literal[8] = 8
-    binary_channels: tuple[int, ...] = BINARY_CHANNELS
-    scalar_channels: tuple[int, ...] = SCALAR_CHANNELS
-    action_encoding: Literal['chess-move2index-v1'] = 'chess-move2index-v1'
-    canonical_player_perspective: bool = True
-
-    @model_validator(mode='after')
-    def validate_channels(self) -> ChessRepresentationConfiguration:
-        if set(self.binary_channels) & set(self.scalar_channels):
-            raise ValueError('Chess binary and scalar channels must be disjoint.')
-        expected_channels = tuple(range(len(self.binary_channels) + len(self.scalar_channels)))
-        actual_channels = tuple(sorted(self.binary_channels + self.scalar_channels))
-        if actual_channels != expected_channels:
-            raise ValueError('Chess representation channels must form one dense range starting at zero.')
-        return self
 
 
 class ChessEvaluationConfiguration(FrozenModel):
@@ -101,8 +75,6 @@ class ChessTrainingObjectiveConfiguration(FrozenModel):
 
 
 class ChessConfiguration(FrozenModel):
-    rules: ChessRulesConfiguration = ChessRulesConfiguration()
-    representation: ChessRepresentationConfiguration = ChessRepresentationConfiguration()
     self_play: ChessSelfPlayConfiguration
     objective: ChessTrainingObjectiveConfiguration = ChessTrainingObjectiveConfiguration()
     evaluation: ChessEvaluationConfiguration

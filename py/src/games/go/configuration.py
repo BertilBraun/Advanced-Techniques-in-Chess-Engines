@@ -11,7 +11,6 @@ from src.util.frozen_model import FrozenModel
 
 
 class GoRulesConfiguration(FrozenModel):
-    scoring: Literal['area'] = 'area'
     komi_half_points: int
     maximum_moves: int = Field(gt=0)
 
@@ -21,7 +20,6 @@ class GoRepresentationConfiguration(FrozenModel):
     history_length: Literal[8] = 8
     binary_channel_count: Literal[16] = 16
     scalar_channel_count: Literal[1] = 1
-    action_encoding: Literal['go-point-pass-v1'] = 'go-point-pass-v1'
     canonical_player_perspective: bool = True
 
     @property

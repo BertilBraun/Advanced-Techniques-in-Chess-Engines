@@ -101,11 +101,7 @@ class GoTrainingObjective(TrainingObjective):
 
 
 def create_go_model(configuration: GoExperimentConfiguration, device: torch.device) -> Network:
-    contract = GoStateContract(
-        configuration.go.representation.board_size,
-        configuration.go.representation.history_length,
-    )
-    return Network(configuration.training.network, device, contract.network_dimensions)
+    return Network(configuration.training.network, device, configuration.network_dimensions)
 
 
 def calculate_go_loss(
@@ -138,9 +134,9 @@ def calculate_go_loss_from_logits(
     sample_weights = sample_weights / sample_weights.mean()
     policy_rows = functional.cross_entropy(policy_logits, policy_targets, reduction='none')
     policy_loss = (policy_rows * sample_weights).mean()
-    outcome_scores = final_outcomes.eq(int(FinalOutcome.WIN)).to(value_logits.dtype) - final_outcomes.eq(
-        int(FinalOutcome.LOSS)
-    ).to(value_logits.dtype)
+    wins = final_outcomes.eq(int(FinalOutcome.WIN)).to(value_logits.dtype)
+    losses = final_outcomes.eq(int(FinalOutcome.LOSS)).to(value_logits.dtype)
+    outcome_scores = wins - losses
     target_scores = torch.lerp(outcome_scores, root_values, objective.root_value_loss_weight)
     value_targets = scalar_to_wdl(target_scores)
     value_rows = functional.cross_entropy(value_logits, value_targets, reduction='none')

@@ -52,8 +52,7 @@ def masked_value_gradient_rank(
             local_batch_size=2,
             optimizer='sgd',
             learning_rate=ModelVersionLearningRate(
-                stages=(ModelVersionLearningRateStage(start_model_version=0, learning_rate=0.001),),
-                optimizer_steps_per_model_version=1,
+                stages=(ModelVersionLearningRateStage(start_optimizer_steps=0, learning_rate=0.001),),
             ),
         )
         trainer = Trainer(

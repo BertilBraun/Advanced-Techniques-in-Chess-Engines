@@ -3,11 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from src.training.commander import CommanderProcess, credit_training_progress_axis
+from src.training.commander import CommanderProcess
 from test_helpers.chess_configuration import CHESS_TRAINING
 from src.training.ledger import (
     CreditTrainingLedger,
-    CreditTrainingProgress,
     PreparedTrainingQuantum,
 )
 from src.training.configuration import CreditTrainingParams, TrainingArgs
@@ -43,19 +42,6 @@ def _credit_training_arguments() -> TrainingArgs:
             'lifecycle': lifecycle.model_dump(mode='json'),
         }
     )
-
-
-def test_credit_progress_axis_is_trained_position_presentations() -> None:
-    progress = CreditTrainingProgress.initial().model_copy(
-        update={
-            'completed_optimizer_steps': 50,
-            'completed_training_quanta': 1,
-            'model_version': 1,
-            'sampler_global_step': 50,
-        }
-    )
-
-    assert credit_training_progress_axis(progress, 1_024) == 51_200
 
 
 def test_model_acknowledgement_rejects_wrong_immutable_jit_hash(tmp_path: Path) -> None:

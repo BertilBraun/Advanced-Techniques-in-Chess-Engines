@@ -22,7 +22,7 @@ training:
     global_batch_size: 256
     local_batch_size: 256
     optimizer: adamw
-    learning_rate: {stages: [{start_model_version: 0, learning_rate: 0.002}], optimizer_steps_per_model_version: 100}
+    learning_rate: {stages: [{start_optimizer_steps: 0, learning_rate: 0.002}]}
   topology:
     trainer: {device_type: cpu, process_group_backend: gloo, rank_zero_device_id: 0, ddp_device_ids: [0], cpu_threads: 1, interop_threads: 1}
     self_play: {device_ids: [0], parallel_games_per_process: 8, tensorboard_processes: 1, node_ids_to_pause_during_training: []}
@@ -40,7 +40,7 @@ go:
     num_moves_after_which_to_play_greedy: 40
     starting_temperature: 1.0
     final_temperature: 0.1
-  rules: {scoring: area, komi_half_points: 15, maximum_moves: 196}
-  representation: {board_size: 7, history_length: 8, binary_channel_count: 16, scalar_channel_count: 1, action_encoding: go-point-pass-v1, canonical_player_perspective: true}
+  rules: {komi_half_points: 15, maximum_moves: 196}
+  representation: {board_size: 7, history_length: 8, binary_channel_count: 16, scalar_channel_count: 1, canonical_player_perspective: true}
   objective: {policy_loss_weight: 1.0, outcome_value_loss_weight: 1.0, root_value_loss_weight: 0.0}
   evaluation: {num_searches_per_turn: 64, num_games: 40, every_n_model_versions: 1, max_concurrent_tasks: 1, inference_workers: 1, inference_batch_size: 64, previous_model_offsets: [5, 10], historical_model_versions: [10, 20], evaluate_random: true}

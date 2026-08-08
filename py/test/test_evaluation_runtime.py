@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
@@ -17,7 +18,12 @@ from src.games.chess.evaluation.process import (
     _terminate_evaluation_tasks,
 )
 from src.games.chess.evaluation.model import ModelEvaluation
-from src.games.chess.evaluation.types import EvaluationModel, EvaluationMove, PairedEvaluationModel, Results
+from src.games.chess.evaluation.types import (
+    EvaluationModel,
+    EvaluationMove,
+    PairedEvaluationModel,
+    Results,
+)
 from src.experiment.evaluation_protocol import GameRecord, ScheduledGame
 from src.games.chess.visit_policy import action_probabilities
 from src.games.chess.board import ChessBoard
@@ -299,6 +305,8 @@ def test_policy_evaluation_uses_native_batched_inference(
 
     assert model_evaluation.play_policy_vs_random() == Results(0, 0, 0)
     assert inference_paths == [Path('training-output/model_7.jit.pt')]
+
+    os.rmdir('training-output')
 
 
 class _FakeStockfish:

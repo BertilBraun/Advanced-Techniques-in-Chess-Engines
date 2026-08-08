@@ -152,8 +152,7 @@ def production_training_parameters(global_batch_size: int, local_batch_size: int
         local_batch_size=local_batch_size,
         optimizer='adamw',
         learning_rate=ModelVersionLearningRate(
-            stages=(ModelVersionLearningRateStage(start_model_version=0, learning_rate=0.0035),),
-            optimizer_steps_per_model_version=1,
+            stages=(ModelVersionLearningRateStage(start_optimizer_steps=0, learning_rate=0.0035),),
         ),
     )
 

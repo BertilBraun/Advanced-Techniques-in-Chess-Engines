@@ -82,13 +82,13 @@ class GoSelfPlayPolicy(
         search = configuration.go.self_play.search
         inference = configuration.go.self_play.inference
         dimensions = self.search_type.inference_dimensions()
-        representation = configuration.go.representation
+        representation = configuration.network_dimensions
         expected_dimensions = (
-            representation.channel_count,
-            representation.board_size,
-            representation.board_size,
-            representation.action_count,
-            3,
+            representation.channels,
+            representation.rows,
+            representation.columns,
+            representation.actions,
+            representation.outcomes,
         )
         actual_dimensions = (
             dimensions.channels,

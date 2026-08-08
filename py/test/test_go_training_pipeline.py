@@ -347,9 +347,6 @@ def _smoke_configuration(tmp_path: Path) -> GoExperimentConfiguration:
         update={
             'global_batch_size': 2,
             'local_batch_size': 2,
-            'learning_rate': configuration.training.trainer.learning_rate.validated_copy(
-                update={'optimizer_steps_per_model_version': 1}
-            ).model_dump(mode='json'),
         }
     )
     topology = configuration.training.topology.validated_copy(

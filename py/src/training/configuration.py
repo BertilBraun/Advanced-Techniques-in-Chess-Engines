@@ -118,9 +118,6 @@ class InferenceRetentionParams(FrozenModel):
     milestone_interval: int = Field(gt=0)
 
 
-OptimizerType = Literal['adamw', 'sgd']
-
-
 class EvaluationScheduleParams(FrozenModel):
     interval_optimizer_steps: int = Field(gt=0)
     full_interval_optimizer_steps: int = Field(gt=0)
@@ -179,29 +176,30 @@ class CreditTrainingParams(FrozenModel):
 
 
 class ModelVersionLearningRateStage(FrozenModel):
-    start_model_version: int = Field(ge=0)
+    start_optimizer_steps: int = Field(ge=0)
     learning_rate: float = Field(gt=0.0)
 
 
 class ModelVersionLearningRate(FrozenModel):
     stages: tuple[ModelVersionLearningRateStage, ...] = Field(min_length=1)
-    optimizer_steps_per_model_version: int = Field(gt=0)
 
     @model_validator(mode='after')
     def validate_stages(self) -> ModelVersionLearningRate:
-        model_versions = tuple(stage.start_model_version for stage in self.stages)
-        if model_versions[0] != 0 or tuple(sorted(set(model_versions))) != model_versions:
-            raise ValueError('Learning-rate stages must start at model version zero and increase uniquely.')
+        start_optimizer_steps = tuple(stage.start_optimizer_steps for stage in self.stages)
+        if start_optimizer_steps[0] != 0 or tuple(sorted(set(start_optimizer_steps))) != start_optimizer_steps:
+            raise ValueError('Learning-rate stages must start at optimizer step zero and increase uniquely.')
         return self
 
     def __call__(self, optimizer_step: int, _: OptimizerType) -> float:
-        model_version = optimizer_step // self.optimizer_steps_per_model_version
         selected_stage = self.stages[0]
         for stage in self.stages[1:]:
-            if stage.start_model_version > model_version:
+            if stage.start_optimizer_steps > optimizer_step:
                 break
             selected_stage = stage
         return selected_stage.learning_rate
+
+
+OptimizerType = Literal['adamw', 'sgd']
 
 
 class TrainingParams(FrozenModel):
@@ -210,7 +208,7 @@ class TrainingParams(FrozenModel):
     optimizer: OptimizerType
     learning_rate: ModelVersionLearningRate
     max_grad_norm: float = Field(default=0.5, gt=0.0)
-    duplicate_multiplicity_weight_cap: float | None = Field(default=4.0, ge=1.0)
+    duplicate_multiplicity_weight_cap: float | None = Field(default=None, ge=1.0)
 
 
 class TrainingLifecycleParams(FrozenModel):
