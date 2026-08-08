@@ -17,9 +17,11 @@ from src.experiment.base_configuration import (
     WeightsOnlyResumeConfiguration,
 )
 from src.experiment.configuration import ExperimentConfiguration
-from src.experiment.evaluation_protocol import load_opening_suite
+from src.evaluation.artifacts import file_sha256
+from src.evaluation.preparation import prepare_evaluation_artifacts
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.chess.configuration import ChessExperimentConfiguration
+from src.games.composition import create_game_implementation
 from src.games.go.configuration import GoExperimentConfiguration
 from src.training.targets import build_training_target_layout
 from src.util.atomic_file import write_text_atomically
@@ -37,8 +39,10 @@ class ExperimentRunManifest(FrozenModel):
     source_revision: str
     source_worktree_clean: bool
     initial_model_sha256: str
-    evaluation_dataset_sha256: str | None
-    stockfish_binary_sha256: str | None
+    evaluation_dataset_sha256: str
+    evaluation_dataset_manifest_sha256: str
+    opening_suite_manifest_sha256: str
+    evaluation_engine_artifact_sha256: tuple[str, ...]
     open_file_soft_limit: int
     torch_version: str
     cuda_version: str | None
@@ -166,7 +170,6 @@ def prepare_experiment_training_run(
 
     run = experiment.run
     training = experiment.training
-    evaluation = experiment.chess.evaluation if isinstance(experiment, ChessExperimentConfiguration) else None
     if run.hardware.provider_name.casefold() == 'unconfirmed' or run.hardware.offer_id.casefold() == 'unconfirmed':
         raise ValueError('Hardware provider and offer ID must be confirmed before training.')
     dependency_lock_path = _resolve_source_path(run.environment.dependency_lock_path)
@@ -185,31 +188,15 @@ def prepare_experiment_training_run(
     if training.limits.maximum_open_file_count >= open_file_soft_limit:
         raise ValueError('Open-file safety stop must be lower than the process soft limit.')
 
-    opening_suite_path = (
-        _resolve_source_path(evaluation.opening_suite_path)
-        if evaluation is not None and evaluation.opening_suite_path
-        else None
-    )
-    if (
-        opening_suite_path is not None
-        and evaluation is not None
-        and evaluation.num_games != len(load_opening_suite(opening_suite_path)) * 2
-    ):
-        raise ValueError('Evaluation game count must cover every opening with both colors.')
-    dataset_path = (
-        _resolve_source_path(evaluation.dataset_path) if evaluation is not None and evaluation.dataset_path else None
-    )
-    if dataset_path is not None and not dataset_path.is_file():
-        raise ValueError(f'Evaluation dataset does not exist: {dataset_path}')
-    stockfish_path = (
-        Path(evaluation.stockfish_binary_path) if evaluation is not None and evaluation.stockfish_binary_path else None
-    )
-    if stockfish_path is not None and not stockfish_path.is_file():
-        raise ValueError(f'Stockfish binary does not exist: {stockfish_path}')
-
     source_worktree_clean = not bool(_git_output(['status', '--short']))
     if not source_worktree_clean:
         raise ValueError('Refusing to start training from a dirty source working tree.')
+    evaluation_artifacts = prepare_evaluation_artifacts(
+        experiment,
+        create_game_implementation(experiment),
+        SOURCE_ROOT,
+        source_revision,
+    )
     output_path = Path(training.save_path)
     manifest_path = output_path / 'run_manifest.json'
     initial_checkpoint_path = model_save_path(0, output_path)
@@ -255,8 +242,10 @@ def prepare_experiment_training_run(
         source_revision=source_revision,
         source_worktree_clean=source_worktree_clean,
         initial_model_sha256=_sha256(initial_checkpoint_path),
-        evaluation_dataset_sha256=_sha256(dataset_path) if dataset_path else None,
-        stockfish_binary_sha256=_sha256(stockfish_path) if stockfish_path else None,
+        evaluation_dataset_sha256=file_sha256(evaluation_artifacts.dataset_path),
+        evaluation_dataset_manifest_sha256=file_sha256(evaluation_artifacts.dataset_manifest_path),
+        opening_suite_manifest_sha256=file_sha256(evaluation_artifacts.opening_manifest_path),
+        evaluation_engine_artifact_sha256=evaluation_artifacts.dataset_manifest.engine_artifact_sha256,
         open_file_soft_limit=open_file_soft_limit,
         torch_version=torch.__version__,
         cuda_version=torch.version.cuda,

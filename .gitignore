@@ -33,3 +33,6 @@ cpp/libtorch**/**
 
 !documentation/**
 /py/training_data/
+/py/reference/*-evaluation-v*.bin
+/py/reference/*-evaluation-v*.bin.manifest.json
+/py/reference/*-openings-v*.json

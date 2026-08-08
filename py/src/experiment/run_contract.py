@@ -33,7 +33,6 @@ class EnvironmentConfiguration(FrozenModel):
     cuda_version: str
     dependency_lock_path: str
     dependency_lock_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
-    stockfish_revision: str = Field(pattern=r'^[0-9a-f]{40}$')
     minimum_open_file_soft_limit: int = Field(gt=0)
 
 

@@ -126,7 +126,13 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
     store.close()
     trainer_group = TrainerGroup(configuration, game, starting_checkpoint)
 
-    result = trainer_group.train_quantum(description, TrainingProgress(completed_optimizer_steps=0))
+    result = trainer_group.train_quantum(
+        description,
+        TrainingProgress(
+            completed_optimizer_steps=0,
+            optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
+        ),
+    )
     trainer_group.close()
 
     assert result.completed_optimizer_steps == 1

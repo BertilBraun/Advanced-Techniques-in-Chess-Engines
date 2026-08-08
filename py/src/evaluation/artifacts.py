@@ -70,7 +70,22 @@ def build_opening_suite(
     builder_source_revision: str,
 ) -> OpeningSuiteManifest:
     if path.exists():
-        return OpeningSuiteManifest.model_validate_json(path.read_text(encoding='utf-8'))
+        manifest = OpeningSuiteManifest.model_validate_json(path.read_text(encoding='utf-8'))
+        expected = (
+            manifest.game == engine.game_name
+            and manifest.rules_digest == engine.rules_digest
+            and manifest.representation_digest == engine.representation_digest
+            and manifest.random_seed == configuration.random_seed
+            and manifest.engine_identity == engine.engine_identity
+            and manifest.engine_artifact_sha256 == engine.engine_artifact_sha256
+            and manifest.label_search_limit == engine.label_search_limit
+            and manifest.expanded_actions_per_position == configuration.expanded_actions_per_position
+            and manifest.beam_width == configuration.beam_width
+            and len(manifest.openings) == configuration.opening_count
+        )
+        if not expected:
+            raise ValueError('Existing opening suite does not match its configured immutable provenance.')
+        return manifest
     frontier = (_OpeningCandidate(state.initial_position(), (), 0.0),)
     for _ in range(OPENING_EXPANSION_PLIES):
         candidates_by_position: dict[str, _OpeningCandidate[PositionT]] = {}
@@ -199,6 +214,19 @@ def build_evaluation_dataset(
         manifest = EvaluationDatasetManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
         if file_sha256(path) != manifest.data_sha256:
             raise ValueError('Evaluation dataset hash does not match its manifest.')
+        expected = (
+            manifest.game == engine.game_name
+            and manifest.rules_digest == engine.rules_digest
+            and manifest.representation_digest == engine.representation_digest
+            and manifest.random_seed == configuration.random_seed
+            and manifest.move_sampling_temperature == configuration.move_sampling_temperature
+            and manifest.engine_identity == engine.engine_identity
+            and manifest.engine_artifact_sha256 == engine.engine_artifact_sha256
+            and manifest.label_search_limit == engine.label_search_limit
+            and manifest.packed_payload_bytes == state.packed_plane_layout.payload_bytes
+        )
+        if not expected:
+            raise ValueError('Existing evaluation dataset does not match its configured immutable provenance.')
         return manifest
     if path.exists() or manifest_path.exists():
         raise ValueError('Evaluation dataset data and manifest must either both exist or both be absent.')

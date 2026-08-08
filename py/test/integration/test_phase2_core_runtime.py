@@ -202,7 +202,13 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
     assert batch.states.shape[0] == 1
 
     trainer_group = TrainerGroup(configuration, game, checkpoint)
-    result = trainer_group.train_quantum(description, TrainingProgress(completed_optimizer_steps=0))
+    result = trainer_group.train_quantum(
+        description,
+        TrainingProgress(
+            completed_optimizer_steps=0,
+            optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
+        ),
+    )
     trainer_group.close()
     worker.refresh_published_model(result.checkpoint)
 
