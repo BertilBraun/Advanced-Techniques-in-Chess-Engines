@@ -372,12 +372,12 @@ process group and records the resulting status.
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
 | R8 | Go pipeline integration | accepted |
-| R9 | Go evaluation and elapsed checkpoint scheduling | in_progress |
+| R9 | Go evaluation and elapsed checkpoint scheduling | awaiting_user_review |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R1 through R8 are accepted. R9 is authorized and in progress. No later task is authorized.
+Current authorization: R1 through R8 are accepted. R9 is awaiting user review. No later task is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -757,16 +757,17 @@ Deliverables:
   480 to 520 positions;
 - define fixed 7x7 and 9x9 opponent ladders;
 - produce common result records, summaries, uncertainty, and TensorBoard data;
-- attach elapsed time, completed games, optimizer steps, and model generation
-  to each evaluated checkpoint;
-- retain chess-specific Stockfish configuration in the chess variant.
+- record the requested elapsed boundary and canonical checkpoint reference for every job;
+- keep one shared discriminated external-engine configuration, with chess and Go variants validating Stockfish and
+  KataGo respectively.
 
 Review evidence:
 
 - deterministic match fixtures verify colors, results, seeds, and summaries;
 - protocol tests cover Go board setup, rules, komi, moves, pass, and result
   handling;
-- a short scheduled smoke run publishes complete checkpoint artifacts.
+- opt-in real Stockfish/KataGo smoke tests and a short scheduled target-hardware run verify provisioned external
+  artifacts and measured device contention before R9 acceptance.
 
 ### R10 — Resource-aware experiment queue
 
@@ -832,6 +833,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-09 | R9 | Implementation handoff | The elapsed evaluation replacement is implemented on `master`: canonical shared contracts and artifact builders, Stockfish UCI and KataGo JSON clients, raw fixed-dataset metrics, one paired match path, coordinator-owned asynchronous scheduling, boundary-time checkpoint selection and reporting, restart/failure/shutdown handling, and game-specific search/protocol composition. The complete superseded chess evaluation, HDF5 dataset, plateau, builder/tool, test, and TSV graph is deleted. | Return R9 to `awaiting_user_review`. Commits `02b04c70`, `47428d2c`, `871e7c0f`, `8d5bdba8`, `d3bcc596`, `f1d7888f`, and `b0addbc1` implement and validate the replacement. Ruff passes; Windows passes 163 tests with 12 infrastructure skips; the freshly built extension-backed Linux suite passes 190 tests with 4 real-infrastructure skips; native CTest passes. Real Stockfish/KataGo smoke tests remain opt-in because their external artifacts are not configured locally. |
 | 2026-08-08 | R9 | Authorization and evaluation simplification | The user accepted R8 and authorized Phase 3/R9. Evaluation should keep device assignment as a simple cycle, expand generated openings to four plies, retain every third engine-game position until the dataset contains 480 to 520 positions, keep external engines private to one job, and log at the requested elapsed boundary using the checkpoint available at that boundary. | Mark R8 accepted and R9 in progress. Implement the complete replacement architecture in `PYTHON_ARCHITECTURE_REWORK.md` with these simplified policies; do not begin R10 or later work. |
 | 2026-08-08 | R8 | Python ownership review | User review found game-specific configuration, completed-game records, replay materialization, self-play, objectives, chess evaluation, interactive analysis, and UCI spread across shared root packages. The high-level training-game contract also required each game to provide a complete worker despite both games using the same active-game and model-refresh lifecycle; `cluster` and `train` split one training subsystem, and obsolete Python `Board`/`Game` ABCs competed with the typed state contracts. | Move every concrete game concern under `games/chess` or `games/go`; put chess evaluation, interactive analysis, and UCI below chess; make one shared `SelfPlayWorker` own active pools, batched turns, refresh, and statistics while game policies provide search/move/publication semantics; require the shared trainer to consume an explicit game-owned objective; move chess/Go self-play configuration into their experiment variants; merge shared replay, optimization, and processes under `training`; remove the single-implementation ABCs and four orphan utilities. Commits `50c7953`, `b7a57fb`, `a0316c3`, and `b088635` pass Ruff and the exact Windows suite with 314 tests passing and 5 native-dependent skips. Return R8 to `awaiting_user_review`. |
 | 2026-08-08 | R8 | Shared Python boundary correction | User review found that root settings still installed chess as a process-global current game, model creation and loading silently defaulted to chess dimensions, root encoding was chess-only, shared experiment/run ownership remained in chess-named modules, and eight files in the live configuration directory used an obsolete pre-R8 schema. | Delete the root game settings and current-game aliases; load the selected experiment directly in `train.py`; require explicit `NetworkDimensions` at every model boundary; move chess encoding under the chess implementation; rename shared experiment and run modules; make hardware validation accept the full experiment union; move shared telemetry/runtime imports off chess configuration; remove obsolete configuration documents and dead regression/settings helpers; retain three explicitly named, approval-required templates whose dependency hashes and chess/7x7/9x9 dimensions are validated together. The exact Windows suite passes 313 tests with 5 native-dependent skips, the fresh-extension suite passes all 351 tests, and Ruff passes. Return R8 to `awaiting_user_review`. |

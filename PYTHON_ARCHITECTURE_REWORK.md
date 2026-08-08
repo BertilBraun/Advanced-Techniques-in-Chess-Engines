@@ -4,7 +4,7 @@
 
 This document defines the target Python architecture for the experiment runtime. It is an implementation plan, not a compatibility specification for the current Python structure.
 
-Implementation status: Phases 1 and 2 are `accepted`. Phase 3 is `in_progress` and authorized. Phase 4 remains
+Implementation status: Phases 1 and 2 are `accepted`. Phase 3 is `awaiting_user_review`. Phase 4 remains
 `pending` and is not authorized.
 
 The rework should replace the current mixture of file mailboxes, commander-owned component details, trainer-owned replay maintenance, copied Python replay snapshots, and exact recovery machinery with a small synchronous coordinator and explicit process boundaries.
@@ -842,9 +842,9 @@ scheduled by generation or optimizer step because experiments with different mod
 costs may advance those axes at materially different rates. Hardware and the evaluation ladder are fixed for a
 comparison set, so elapsed training time is the comparison axis.
 
-### Current stack being replaced
+### Replaced stack audit
 
-The current repository does not have a coordinator-integrated evaluation lifecycle. `experiment/run.py` validates
+Before Phase 3, the repository had no coordinator-integrated evaluation lifecycle. `experiment/run.py` validated
 chess evaluation paths and hashes, but `training/coordinator.py` never launches evaluation. The only production-like
 entry into `games/chess/evaluation/process.py` is the standalone `benchmark_evaluation_suite.py` tool. Its
 `EvaluationProcess` then creates another layer of multiprocessing tasks, selects devices through a round-robin
@@ -901,8 +901,7 @@ class EvaluationManager:
     def schedule_due_jobs(
         self,
         checkpoint: CheckpointReference,
-        elapsed_seconds: float,
-    ) -> None:
+    ) -> tuple[EvaluationJob, ...]:
         ...
 
     def collect_completed_jobs(self) -> tuple[EvaluationResult, ...]:
@@ -925,7 +924,6 @@ while not self.ledger.training_complete:
     self.evaluation_manager.collect_completed_jobs()
     self.evaluation_manager.schedule_due_jobs(
         self.ledger.state.active_checkpoint,
-        self._elapsed_seconds(),
     )
     self._ensure_self_play_workers_are_running()
     self._ingest_available_games()
@@ -948,7 +946,7 @@ Each chess or Go experiment owns one evaluation configuration composed from the 
 contains:
 
 - the elapsed cadence, initially 1,200 seconds;
-- a nonempty tuple of evaluation device IDs;
+- a nonempty tuple of evaluation device IDs owned by the shared training topology;
 - one fixed deadline and shutdown grace period;
 - a tuple of uniquely named evaluation definitions;
 - game-specific Stockfish or KataGo artifact configuration where used.
@@ -958,12 +956,11 @@ The definition union contains only genuine job variants:
 ```text
 EvaluationDefinition
 ├── FixedDatasetEvaluationDefinition
-└── MatchEvaluationDefinition
-    └── opponent:
-        ├── RandomOpponentDefinition
-        ├── CheckpointOpponentDefinition
-        ├── StockfishOpponentDefinition
-        └── KataGoOpponentDefinition
+├── RandomOpponentEvaluationDefinition
+├── PreviousCheckpointEvaluationDefinition
+├── FixedCheckpointEvaluationDefinition
+├── StockfishEvaluationDefinition
+└── KataGoEvaluationDefinition
 ```
 
 Checkpoint opponents select either a positive previous-evaluation-boundary offset or one fixed retained checkpoint.
@@ -977,26 +974,27 @@ Every resolved job records:
 
 - its deterministic identity and definition ID;
 - requested boundary seconds, which are also the reporting step;
-- the candidate `CheckpointReference` and optimizer progress;
+- the candidate `CheckpointReference`;
 - its deterministic seed and deadline;
 - the assigned evaluation device ID;
 - fixed model search and inference parameters;
-- the exact dataset, opening-suite, checkpoint, executable, external model, and external configuration references
-  required by that variant.
+- the exact dataset or opening-suite reference and any resolved opponent checkpoint required by that variant. The
+  frozen experiment supplied to the child remains the canonical owner of external executable, model, and protocol
+  configuration.
 
 ### Parallelism and device assignment
 
 All definitions due at one boundary launch as independent processes without a slot scheduler. The manager assigns
 device IDs by cycling through the configured nonempty evaluation-device tuple in stable job order. If there are more
 jobs than devices, several jobs intentionally share a device. The child activates its assigned device before Torch
-or the native extension initializes. This is the complete Phase 3 assignment policy.
+initializes CUDA models or the native extension constructs a search. This is the complete Phase 3 assignment policy.
 
 Dataset, random, and external-engine matches load one project inference model. Checkpoint matches load two and must
 be sized accordingly during target-hardware validation. Stockfish consumes additional CPU. A GPU-backed KataGo
 process also consumes the configured accelerator. Its device therefore belongs in the same explicit evaluation
-device tuple and may contend with project inference jobs assigned there by the simple cycle. On one-GPU training
-hardware, CPU evaluation is the safe default unless measurements show that small-batch evaluation can share the
-trainer device without memory or throughput problems.
+device tuple and may contend with project inference jobs assigned there by the simple cycle. The KataGo subprocess
+sees only its assigned device through its private environment. Evaluation uses the training topology's CPU/CUDA
+device type; Phase 3 does not add a second placement policy.
 
 ### Shared match execution
 
@@ -1007,10 +1005,9 @@ temperature, and ascending action ID as the deterministic tie break.
 
 Within one job, all candidate turns are submitted together to one native C++ search and all checkpoint-opponent
 turns are submitted together to the opponent's separate native search. Model-versus-model therefore owns two
-inference models but retains batching within each model. Random play uses a job-local generator. An external-engine
-job may own several configured engine subprocesses and distribute active games among them while continuing to batch
-candidate turns. An external engine process is reused for the full job rather than restarted for every move or game.
-No external-engine process is shared between evaluation jobs; every job creates and closes only its own engines.
+inference models but retains batching within each model. Random play uses a job-local generator. Each external-engine
+job owns exactly one engine subprocess. That process is reused for the full job rather than restarted for every move
+or game. No external-engine process is shared between evaluation jobs.
 
 Every opening produces two games with candidate player order swapped. Seeds are derived from the run seed,
 definition ID, requested boundary, pair index, and player stream. Results store the job seed and pair seed; they do
@@ -1029,8 +1026,8 @@ requires a new version or output path.
 
 The runtime representation is an action-ID sequence from the game's configured initial position. The manifest also
 stores the engine/build configuration, source revision, rules, representation identity, path probability, final
-packed-position digest, and a human-readable rendering. Chess writes a companion PGN or SAN rendering and Go writes
-a companion SGF or coordinate rendering so the selected openings can be inspected without decoding action IDs.
+packed-position digest, and a human-readable rendering. The manifest embeds PGN for chess and SGF for Go so the
+selected openings can be inspected without decoding action IDs.
 
 The initial builder uses deterministic engine-guided beam expansion:
 
@@ -1086,7 +1083,7 @@ calibration metrics, and symmetry-consistency datasets are optional later resear
 initial Phase 3 dataset.
 
 The immutable dataset manifest contains schema and dataset version, game and exact rules, packed representation,
-position count, maximum count, source game records, engine executable/model/configuration hashes, search limits,
+position count, complete inspectable source-game records, engine executable/model/configuration hashes, search limits,
 deterministic seed, builder source revision, row-layout digest, and data-file hash. Dataset data uses one small
 fixed-width memory-mappable file. Each row stores a target count plus bounded action-ID and probability arrays, so
 the semantic target remains sparse without a variable-size row format. It does not reuse the training replay layout
@@ -1095,11 +1092,11 @@ or the obsolete HDF5 `SelfPlayDataset`.
 ### External engines
 
 Stockfish uses a clean UCI boundary through `python-chess`, following the
-[official integration documentation](https://official-stockfish.github.io/docs/stockfish-wiki/Developers.html). One job reuses its configured UCI subprocesses, verifies
-their reported identity and options, disables pondering and resignation, and applies fixed nodes, threads, hash,
-MultiPV, and optional strength settings. The executable and external NNUE artifact, when present, are pinned and
-hashed. Protocol failure fails the job; there is no per-move engine restart. Deployment treats Stockfish as an
-external GPLv3 executable: setup pins its source or official binary and preserves the
+[official integration documentation](https://official-stockfish.github.io/docs/stockfish-wiki/Developers.html). One job reuses its configured UCI subprocess, verifies
+its reported identity and options, disables pondering and resignation, and applies fixed nodes, threads, hash,
+MultiPV, and optional strength settings. The configured executable is hashed. Protocol failure fails the job; there
+is no per-move engine restart. Deployment treats Stockfish as an external GPLv3 executable: node provisioning must
+place the explicitly configured binary and preserve the
 [corresponding license and source-offer obligations](https://github.com/official-stockfish/Stockfish/blob/master/Copying.txt)
 when the binary is redistributed.
 
@@ -1110,11 +1107,11 @@ alive, submits several active positions with stable request IDs, and accepts out
 supplies the complete move history, board size, exact rules, komi, fixed maximum visits, and the requested policy
 fields. This boundary supports batched match play and the offline dataset/opening builders without implementing a
 second protocol. The executable, network, backend, and analysis configuration are pinned and hashed. Go coordinate
-translation and exact rule composition are the only game-specific protocol concerns. Setup installs the KataGo
-executable, a compatible network, and an analysis configuration explicitly rather than downloading them from an
-evaluation child. KataGo's repository code uses a
+translation and exact rule composition are the only game-specific protocol concerns. Node provisioning installs the KataGo
+executable, a compatible network, and an analysis configuration outside the evaluation child; run preparation only
+validates and hashes those configured files. KataGo's repository code uses a
 [permissive license with separately licensed bundled dependencies](https://github.com/lightvector/KataGo/blob/master/LICENSE);
-the selected network artifact's terms are recorded and checked separately before redistribution.
+the selected network artifact's terms must be reviewed separately before redistribution.
 
 ### Results, reporting, and statistics
 
@@ -1188,10 +1185,10 @@ currently scheduled suites. At startup it reads that snapshot and existing valid
 result is relaunched only when all referenced artifacts still exist; otherwise it is recorded as failed. There is no
 event journal, attempt history, or reconstruction beyond that snapshot and result scan.
 
-On shutdown the manager stops launching queued work, waits for the configured short grace period, terminates
+On shutdown the manager stops launching work, waits for the configured short grace period, terminates
 remaining evaluation children, and writes cancelled failures. Successful and failed evaluation artifacts are kept
-for the run. Checkpoint retention must not remove a generation referenced by a pending or running evaluation job;
-the manager exposes those protected generations to the checkpoint-retention owner.
+for the run. The current runtime retains every checkpoint artifact, so pending jobs are protected without another
+retention interface. Any future checkpoint deletion policy must first account for references in manager state.
 
 ## Target source ownership
 
@@ -1231,13 +1228,15 @@ training/
     statistics.py
 
 evaluation/
+    artifacts.py
     configuration.py
     contracts.py
     dataset.py
+    engine.py
     manager.py
     match.py
+    preparation.py
     process.py
-    reporting.py
     statistics.py
 
 games/
@@ -1874,7 +1873,7 @@ The phase ends with current runtime behavior intact but configuration, progress,
 
 The phase is complete only when the old replay container, trainer-owned maintainer, replay-object broadcast, file mailbox, old commander lifecycle, and duplicated chess/Go orchestration are deleted. Both games must complete CPU self-play, replay ingestion, mapped batch construction, a DDP quantum, checkpoint activation, and a generation transition through the authoritative path. Projected and actual replay file size, ingestion throughput, mmap batch-read throughput, and DDP throughput are review evidence.
 
-Phase 2 implementation evidence, pending user acceptance:
+Accepted Phase 2 implementation evidence:
 
 - the old replay container, trainer-owned replay maintainer, replay broadcast, generic mailbox, commander lifecycle,
   publisher, separate game self-play loops, and superseded trainer runtime are deleted;
@@ -1893,8 +1892,7 @@ Phase 2 implementation evidence, pending user acceptance:
 
 ### Phase 3: concurrent evaluation jobs
 
-- replace generation-based evaluation settings with the fixed elapsed-time cadence and record requested and actual
-  scheduling times;
+- replace generation-based evaluation settings with the fixed elapsed-time cadence and record the requested boundary;
 - introduce the canonical definition, resolved job, opponent, dataset, opening-suite, per-game, aggregate, and
   result unions described above;
 - add the coordinator-owned `EvaluationManager` and call its nonblocking collection and scheduling operations on
@@ -1907,7 +1905,7 @@ Phase 2 implementation evidence, pending user acceptance:
   matches, without adding another C++ search implementation;
 - implement one shared paired-match loop, deterministic seeds, player-order swaps, cap policy, raw game records,
   paired-bootstrap aggregation, and TensorBoard/console reporting;
-- implement immutable engine-guided opening-suite generation, including the six-ply bounded beam, transposition
+- implement immutable engine-guided opening-suite generation, including the four-ply bounded beam, transposition
   deduplication, 50 selected sequences, typed manifests, and inspectable chess/Go renderings;
 - implement immutable engine-self-play fixed-dataset generation that retains every third position until reaching
   480 to 520 unique positions, with atomic reuse, packed rows, sparse policy labels, top-action accuracy, and policy
@@ -1916,7 +1914,7 @@ Phase 2 implementation evidence, pending user acceptance:
   pinned and hashed executables, models, configurations, rules, and search limits;
 - write one atomic typed artifact for every success, failure, timeout, or shutdown cancellation and implement the
   small manager-state-snapshot and result-scan restart behavior;
-- protect checkpoints referenced by pending and running jobs, retain evaluation results, and remove retries,
+- rely on the current retain-all checkpoint policy for pending and running jobs, retain evaluation results, and remove retries,
   backoff, suite tiers, historical rotation, and plateau automation;
 - delete the old chess `ModelEvaluation`, `EvaluationProcess`, paired-match adapters, chess-named shared protocol,
   HDF5 evaluation dataset/database/loader/statistics graph, preparation and benchmark tools, obsolete opening TSVs,
@@ -1929,20 +1927,20 @@ reporting path; all configured jobs for one due suite launch concurrently across
 artifacts are reproducible and inspectable; and the complete superseded evaluation graph is deleted rather than
 retained beside the replacement.
 
-Implement Phase 3 as four feature-sized commits after Phase 2 is accepted:
+Phase 3 was implemented as feature-sized ownership commits:
 
-1. **Canonical contracts and immutable inputs:** add shared configuration/contracts, Stockfish UCI and KataGo JSON
+1. **Canonical contracts and immutable inputs:** shared configuration/contracts, Stockfish UCI and KataGo JSON
    clients, opening and dataset manifests/builders, preparation wiring, and protocol/builder tests.
-2. **Shared evaluation execution:** add raw fixed-dataset inference, the asynchronous paired-match runner, random,
+2. **Shared evaluation execution:** raw fixed-dataset inference, the asynchronous paired-match runner, random,
    checkpoint, Stockfish, and KataGo opponents, typed results, aggregation, and focused chess/Go composition hooks.
-3. **Elapsed asynchronous lifecycle:** add the manager state snapshot, simple device cycling, short-lived job processes,
-   elapsed scheduling, collection/reporting, failure/shutdown behavior, checkpoint protection, and coordinator/run
+3. **Elapsed asynchronous lifecycle:** the manager state snapshot, simple device cycling, short-lived job processes,
+   elapsed scheduling, collection/reporting, failure/shutdown behavior, retain-all checkpoint compatibility, and coordinator/run
    integration.
-4. **Migration and deletion:** migrate all checked-in chess/Go configurations, delete the complete superseded graph
-   listed above, replace obsolete documentation and tests, and run the full native and Python validation matrix.
+4. **Migration and deletion:** all checked-in chess/Go configurations migrated, the complete superseded graph listed
+   above deleted, obsolete documentation and tests replaced, and the full native and Python validation matrix run.
 
-Each commit must leave its introduced package internally tested and formatted. Temporary one-for-one adapters are
-not commits in this sequence; the final migration changes controlled callers directly.
+Each commit leaves its introduced package internally tested and formatted. Temporary one-for-one adapters are not
+part of this sequence; the final migration changes controlled callers directly.
 
 The initial implementation therefore has five deliberate policy defaults: 20-minute elapsed boundaries evaluated
 with the checkpoint available at each boundary; one concurrent process per enabled definition assigned by cycling
@@ -1951,6 +1949,23 @@ evaluation devices; the immediately preceding evaluated checkpoint as the histor
 480 to 520 positions per game/ruleset. Search limits, Stockfish WDL
 temperature, sampling temperature, game counts, and the concrete evaluation-device tuple are benchmarked configuration
 values, not new architecture decisions.
+
+Phase 3 implementation evidence, awaiting user review:
+
+- chess, Go 7x7, and Go 9x9 load the same evaluation definitions and use the same manager, job process, match,
+  dataset, statistics, and reporting path;
+- all due definitions launch concurrently, device assignment is a stable cycle, historical jobs require an actually
+  older boundary checkpoint, and TensorBoard uses the requested elapsed boundary as its step;
+- generated openings contain exactly four plies and 50 distinct positions; generated datasets retain every third
+  position until 480 to 520 positions exist and retain inspectable complete source-game records;
+- the old chess evaluation package, HDF5 dataset/database/loader/statistics graph, plateau automation, standalone
+  preparation/benchmark tools, and TSV opening suites are deleted. From authorization through the final code commit,
+  Phase 3 changes 75 files, adds 3,422 lines, and deletes 4,601 lines for a net reduction of 1,179 lines;
+- Ruff passes. The Windows suite passes 163 tests with 12 intentional native/real-engine skips. The freshly built
+  extension-backed Linux suite passes 190 tests with 4 real-infrastructure skips. The native CTest target passes;
+- opt-in Stockfish and KataGo smoke tests are present but were not run because local executable/model/configuration
+  artifacts were not configured. Those real-engine and target-hardware contention measurements remain review-time
+  deployment validation, not a second implementation path.
 
 ### Phase 4: integrated validation and cleanup
 
@@ -1996,7 +2011,7 @@ The implementation is complete only when tests cover:
 - deterministic missing-or-reused fixed-dataset preparation, every-third-position sampling, the 480-to-520 range,
   packed rows, and policy metrics;
 - Stockfish UCI and KataGo asynchronous JSON transcript fixtures, plus opt-in real-engine smoke tests;
-- evaluation process failure, missing artifact, deadline, restart scan, protected checkpoint, and shutdown behavior;
+- evaluation process failure, missing artifact, deadline, restart scan, retain-all checkpoint compatibility, and shutdown behavior;
 - repository searches proving removal of the legacy chess evaluation, HDF5 dataset, and plateau graphs;
 - complete native and Python regression suites.
 
