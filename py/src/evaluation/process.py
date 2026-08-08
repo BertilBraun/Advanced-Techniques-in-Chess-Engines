@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import signal
 import time
 import traceback
+from types import FrameType
 from typing import TYPE_CHECKING
 
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
@@ -28,6 +30,14 @@ if TYPE_CHECKING:
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
+class EvaluationTermination(Exception):
+    pass
+
+
+def _terminate_evaluation(signum: int, frame: FrameType | None) -> None:
+    raise EvaluationTermination(f'Evaluation process received signal {signum}.')
+
+
 def resolve_project_path(path: str) -> Path:
     candidate = Path(path)
     return candidate if candidate.is_absolute() else PROJECT_ROOT / candidate
@@ -39,6 +49,7 @@ def write_evaluation_result(result: EvaluationResult, path: Path) -> None:
 
 def run_evaluation_job(experiment: ExperimentConfiguration, job: EvaluationJob) -> None:
     started_at = time.monotonic()
+    signal.signal(signal.SIGTERM, _terminate_evaluation)
     try:
         import torch
 

@@ -11,7 +11,7 @@ import pytest
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
 from src.games.chess.stockfish import StockfishClient
 from src.games.go.contract import GoStateContract
-from src.games.go.katago import KataGoClient, action_id_to_gtp, gtp_to_action_id
+from src.games.go.katago import KataGoClient, action_id_to_gtp, action_id_to_sgf, gtp_to_action_id
 
 
 class FakeChessPosition:
@@ -78,6 +78,12 @@ def test_stockfish_multipv_scores_form_normalized_policy(monkeypatch: pytest.Mon
 def test_go_gtp_coordinates_round_trip(board_size: int) -> None:
     for action_id in range(board_size * board_size + 1):
         assert gtp_to_action_id(action_id_to_gtp(action_id, board_size), board_size) == action_id
+
+
+def test_go_sgf_coordinates_use_sgf_not_gtp_notation() -> None:
+    assert action_id_to_sgf(0, 7) == 'aa'
+    assert action_id_to_sgf(48, 7) == 'gg'
+    assert action_id_to_sgf(49, 7) == ''
 
 
 class FakeKataGoProcess:

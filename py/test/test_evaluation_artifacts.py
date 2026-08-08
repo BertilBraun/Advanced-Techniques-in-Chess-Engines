@@ -2,19 +2,30 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+from math import log
 from pathlib import Path
+
+import pytest
+import torch
 
 from src.evaluation.artifacts import (
     build_evaluation_dataset,
     build_opening_suite,
     load_evaluation_dataset,
 )
-from src.evaluation.configuration import EvaluationDatasetConfiguration, OpeningSuiteConfiguration
+from src.evaluation.configuration import (
+    EvaluationDatasetConfiguration,
+    FixedDatasetEvaluationDefinition,
+    OpeningSuiteConfiguration,
+)
+from src.evaluation.contracts import FixedDatasetEvaluationJob
+from src.evaluation.dataset import evaluate_fixed_dataset
 from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
 from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
 from src.packed_planes import PackedPlaneLayout, PackedPlanePayload
 from src.replay.contracts import ReplaySample
 from src.self_play.completed_game import TerminationReason
+from src.training.checkpoint import CheckpointReference
 
 
 @dataclass(frozen=True)
@@ -33,8 +44,8 @@ class FakeState(GameStateContract[FakePosition]):
 
     @property
     def representation(self) -> RepresentationDimensions:
-        layout = PackedPlaneLayout(1, 1, 0)
-        return RepresentationDimensions(1, 1, 1, (0,), (), layout)
+        layout = PackedPlaneLayout(8, 1, 0)
+        return RepresentationDimensions(1, 8, 8, (0,), (), layout)
 
     def initial_position(self) -> FakePosition:
         return FakePosition(())
@@ -97,6 +108,13 @@ class FakeEngine:
         pass
 
 
+class FixedPolicyModel(torch.nn.Module):
+    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        policy = torch.tensor((0.4, 0.3, 0.2, 0.1), device=inputs.device).expand(inputs.shape[0], 4)
+        value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
+        return policy, value
+
+
 def test_opening_builder_expands_four_plies_and_reuses_manifest(tmp_path: Path) -> None:
     path = tmp_path / 'openings.json'
     configuration = OpeningSuiteConfiguration(
@@ -128,7 +146,51 @@ def test_dataset_builder_retains_every_third_position_in_requested_range(tmp_pat
     data = load_evaluation_dataset(path, manifest)
 
     assert 480 <= manifest.position_count <= 520
+    assert tuple(game.source_game_id for game in manifest.source_games) == tuple(range(len(manifest.source_games)))
+    assert all(game.action_ids and game.human_readable for game in manifest.source_games)
     assert manifest.retained_ply_interval == 3
     assert all(int(row['ply']) % 3 == manifest.retained_ply_offset for row in data)
     assert all(int(row['policy_count']) == 4 for row in data)
     assert build_evaluation_dataset(path, configuration, FakeState(), FakeEngine(), 'revision') == manifest
+
+
+def test_fixed_dataset_evaluates_raw_policy_metrics(tmp_path: Path) -> None:
+    dataset_path = tmp_path / 'evaluation.bin'
+    manifest = build_evaluation_dataset(
+        dataset_path,
+        EvaluationDatasetConfiguration(
+            path=str(dataset_path),
+            random_seed=7,
+            move_sampling_temperature=1.0,
+        ),
+        FakeState(),
+        FakeEngine(),
+        'revision',
+    )
+    inference_path = tmp_path / 'inference.pt'
+    torch.jit.script(FixedPolicyModel()).save(str(inference_path))
+    checkpoint = CheckpointReference(
+        generation=1,
+        manifest_path=tmp_path / 'checkpoint.json',
+        model_path=tmp_path / 'model.pt',
+        optimizer_path=tmp_path / 'optimizer.pt',
+        inference_model_path=inference_path,
+        inference_model_sha256='0' * 64,
+    )
+    job = FixedDatasetEvaluationJob(
+        kind='fixed_dataset',
+        job_id='fixed-dataset',
+        definition=FixedDatasetEvaluationDefinition(kind='fixed_dataset', definition_id='fixed-dataset'),
+        boundary_seconds=1200,
+        candidate=checkpoint,
+        device_id=0,
+        deadline_seconds=60,
+        random_seed=7,
+        result_path=tmp_path / 'result.json',
+    )
+
+    result = evaluate_fixed_dataset(job, FakeState(), dataset_path, 'cpu')
+
+    assert result.position_count == manifest.position_count
+    assert result.top_action_accuracy == 1.0
+    assert result.policy_cross_entropy == pytest.approx(-sum(log(value) for value in (0.4, 0.3, 0.2, 0.1)) / 4)

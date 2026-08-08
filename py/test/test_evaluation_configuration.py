@@ -4,7 +4,8 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from src.evaluation.configuration import EvaluationConfiguration
-from src.evaluation.contracts import OpeningLine
+from src.evaluation.contracts import MatchEvaluationJob, OpeningLine, RandomOpponent
+from src.training.checkpoint import CheckpointReference
 from src.experiment.configuration import load_experiment_configuration
 
 
@@ -44,3 +45,30 @@ def test_opening_line_requires_exactly_four_plies() -> None:
 
     with pytest.raises(ValidationError, match='at least 4'):
         TypeAdapter(OpeningLine).validate_python(payload)
+
+
+def test_resolved_match_opponent_must_match_its_definition() -> None:
+    experiment = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    stockfish_definition = experiment.evaluation.definitions[-1]
+    checkpoint = CheckpointReference(
+        generation=1,
+        manifest_path=Path('checkpoint.json'),
+        model_path=Path('model.pt'),
+        optimizer_path=Path('optimizer.pt'),
+        inference_model_path=Path('inference.pt'),
+        inference_model_sha256='0' * 64,
+    )
+
+    with pytest.raises(ValidationError, match='do not match'):
+        MatchEvaluationJob(
+            kind='match',
+            job_id='invalid',
+            definition=stockfish_definition,
+            boundary_seconds=1200,
+            candidate=checkpoint,
+            opponent=RandomOpponent(kind='random'),
+            device_id=0,
+            deadline_seconds=60,
+            random_seed=0,
+            result_path=Path('result.json'),
+        )

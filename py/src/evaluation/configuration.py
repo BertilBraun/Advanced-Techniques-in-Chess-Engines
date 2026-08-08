@@ -120,6 +120,15 @@ EvaluationDefinition: TypeAlias = Annotated[
     Field(discriminator='kind'),
 ]
 
+MatchEvaluationDefinition: TypeAlias = Annotated[
+    RandomOpponentEvaluationDefinition
+    | PreviousCheckpointEvaluationDefinition
+    | FixedCheckpointEvaluationDefinition
+    | StockfishEvaluationDefinition
+    | KataGoEvaluationDefinition,
+    Field(discriminator='kind'),
+]
+
 
 class EvaluationConfiguration(FrozenModel):
     cadence_seconds: int = Field(default=1200, gt=0)

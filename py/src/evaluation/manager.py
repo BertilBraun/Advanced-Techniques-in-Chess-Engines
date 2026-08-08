@@ -246,7 +246,7 @@ class EvaluationManager:
                         ),
                         None,
                     )
-                    if previous is None:
+                    if previous is None or previous.generation >= suite.checkpoint.generation:
                         continue
                     kind = 'match'
                     opponent = CheckpointOpponent(kind='checkpoint', checkpoint=previous)

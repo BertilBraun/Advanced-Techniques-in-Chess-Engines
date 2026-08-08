@@ -4,11 +4,20 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
-from src.evaluation.configuration import EvaluationDefinition
+from src.evaluation.configuration import (
+    FixedDatasetEvaluationDefinition,
+    MatchEvaluationDefinition,
+)
 from src.training.checkpoint import CheckpointReference
 from src.util.frozen_model import FrozenModel
+
+
+class EvaluationSourceGame(FrozenModel):
+    source_game_id: int = Field(ge=0)
+    action_ids: tuple[int, ...] = Field(min_length=1)
+    human_readable: str = Field(min_length=1)
 
 
 class EvaluationDatasetManifest(FrozenModel):
@@ -17,7 +26,7 @@ class EvaluationDatasetManifest(FrozenModel):
     rules_digest: str = Field(min_length=64, max_length=64)
     representation_digest: str = Field(min_length=64, max_length=64)
     position_count: int = Field(ge=480, le=520)
-    source_game_count: int = Field(gt=0)
+    source_games: tuple[EvaluationSourceGame, ...] = Field(min_length=1)
     retained_ply_interval: Literal[3] = 3
     retained_ply_offset: int = Field(ge=0, le=2)
     random_seed: int = Field(ge=0)
@@ -82,7 +91,7 @@ EvaluationOpponent: TypeAlias = Annotated[
 class FixedDatasetEvaluationJob(FrozenModel):
     kind: Literal['fixed_dataset']
     job_id: str = Field(min_length=1)
-    definition: EvaluationDefinition
+    definition: FixedDatasetEvaluationDefinition
     boundary_seconds: int = Field(gt=0)
     candidate: CheckpointReference
     device_id: int = Field(ge=0)
@@ -94,7 +103,7 @@ class FixedDatasetEvaluationJob(FrozenModel):
 class MatchEvaluationJob(FrozenModel):
     kind: Literal['match']
     job_id: str = Field(min_length=1)
-    definition: EvaluationDefinition
+    definition: MatchEvaluationDefinition
     boundary_seconds: int = Field(gt=0)
     candidate: CheckpointReference
     opponent: EvaluationOpponent
@@ -102,6 +111,19 @@ class MatchEvaluationJob(FrozenModel):
     deadline_seconds: float = Field(gt=0.0)
     random_seed: int = Field(ge=0)
     result_path: Path
+
+    @model_validator(mode='after')
+    def validate_opponent(self) -> MatchEvaluationJob:
+        expected_opponent = {
+            'random': 'random',
+            'previous_checkpoint': 'checkpoint',
+            'fixed_checkpoint': 'checkpoint',
+            'stockfish': 'stockfish',
+            'katago': 'katago',
+        }[self.definition.kind]
+        if self.opponent.kind != expected_opponent:
+            raise ValueError('Evaluation definition and resolved opponent kinds do not match.')
+        return self
 
 
 EvaluationJob: TypeAlias = Annotated[

@@ -12,7 +12,12 @@ import numpy as np
 import numpy.typing as npt
 
 from src.evaluation.configuration import EvaluationDatasetConfiguration, OpeningSuiteConfiguration
-from src.evaluation.contracts import EvaluationDatasetManifest, OpeningLine, OpeningSuiteManifest
+from src.evaluation.contracts import (
+    EvaluationDatasetManifest,
+    EvaluationSourceGame,
+    OpeningLine,
+    OpeningSuiteManifest,
+)
 from src.evaluation.engine import EnginePolicy, EnginePolicyProvider
 from src.games.contracts import GameStateContract
 from src.util.atomic_file import write_text_atomically
@@ -233,6 +238,7 @@ def build_evaluation_dataset(
     generator = random.Random(configuration.random_seed)
     retained_offset = configuration.random_seed % RETAINED_PLY_INTERVAL
     rows: list[EvaluationDatasetRow] = []
+    source_games: list[EvaluationSourceGame] = []
     position_digests: set[str] = set()
     source_game_count = 0
     while len(rows) < MINIMUM_DATASET_POSITIONS:
@@ -272,6 +278,13 @@ def build_evaluation_dataset(
             position = state.child_position(position, selected_action)
             action_ids = (*action_ids, selected_action)
             ply += 1
+        source_games.append(
+            EvaluationSourceGame(
+                source_game_id=source_game_count,
+                action_ids=action_ids,
+                human_readable=engine.render_game(action_ids),
+            )
+        )
         source_game_count += 1
     maximum_policy_entries = max(len(row.action_ids) for row in rows)
     if maximum_policy_entries > 255:
@@ -284,7 +297,7 @@ def build_evaluation_dataset(
         rules_digest=engine.rules_digest,
         representation_digest=engine.representation_digest,
         position_count=len(resolved_rows),
-        source_game_count=source_game_count,
+        source_games=tuple(source_games),
         retained_ply_offset=retained_offset,
         random_seed=configuration.random_seed,
         move_sampling_temperature=configuration.move_sampling_temperature,

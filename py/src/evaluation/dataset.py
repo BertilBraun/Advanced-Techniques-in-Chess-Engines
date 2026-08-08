@@ -69,7 +69,7 @@ def evaluate_fixed_dataset(
         kind='fixed_dataset',
         job=job,
         position_count=manifest.position_count,
-        source_game_count=manifest.source_game_count,
+        source_game_count=len(manifest.source_games),
         top_action_accuracy=correct / manifest.position_count,
         policy_cross_entropy=cross_entropy / manifest.position_count,
         duration_seconds=time.monotonic() - started_at,
