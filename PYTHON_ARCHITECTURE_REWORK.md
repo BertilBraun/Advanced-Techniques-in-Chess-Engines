@@ -17,7 +17,7 @@ The design priorities, in order, are:
 
 Small replay or credit discrepancies after an unclean exit are acceptable. The runtime must not add complicated transactional recovery to prevent the loss or duplication of a negligible number of samples.
 
-Implementation starts from cleanup checkpoint `66a0a8b`, which removes unused invariant experiment fields, routes Go through canonical network dimensions, removes an unused commander progress helper, and leaves the complete Windows Python suite passing. Later work must preserve that cleanup and must not restore unused configuration or production concepts merely to ease migration.
+Implementation starts from cleanup checkpoint `66a0a8b`.
 
 ## Replacement policy
 
@@ -67,8 +67,7 @@ There is no:
 Completed optimizer steps are the only persisted training-progress axis.
 
 ```python
-@dataclass(frozen=True)
-class TrainingProgress:
+class TrainingProgress(FrozenModel):
     completed_optimizer_steps: int
 ```
 
@@ -249,6 +248,7 @@ Learning rate, objective weights, and other trainer parameters remain fixed for 
 Static values that affect artifact or process compatibility cannot be scheduled. These include:
 
 - network architecture and dimensions;
+- auxiliary target definitions, head shapes, and mmap layouts;
 - game representation layout;
 - mmap slot layout and maximum capacity;
 - action-ID and visit-count widths;
@@ -291,7 +291,7 @@ def run(self) -> None:
         self._ensure_self_play_workers_are_running()
         self._ingest_available_games()
 
-        if self.ledger.can_train_quantum:
+        if self.ledger.can_train_quantum(self.replay_manager.live_samples):
             self._train_next_generation()
         else:
             self._wait_for_self_play()
@@ -316,7 +316,8 @@ def _ingest_available_games(self) -> None:
 
 ```python
 def _train_next_generation(self) -> None:
-    self._pause_required_self_play_workers()
+    self._pause_all_self_play_workers()
+    self._ingest_available_games()
 
     result = self.trainer_group.train_quantum(
         self.replay_manager.description(),
@@ -330,7 +331,43 @@ def _train_next_generation(self) -> None:
     self._launch_due_evaluations(result.checkpoint)
 ```
 
+The second ingestion after every worker has acknowledged `paused` is required. Workers may finish and publish games
+while completing their final native search batch, so replay is not known to be current until those files have also
+been drained. Training starts only after all workers are paused and this final drain has completed.
+
 `TrainerGroup.train_quantum()` is deliberately blocking. The coordinator does not poll self-play, ingest replay, or launch evaluations until the quantum returns. Evaluation processes already running may continue independently.
+
+### Startup, failure, and shutdown
+
+Startup is ordered:
+
+1. load and validate the immutable resolved run configuration;
+2. open or create the replay mmap;
+3. load the atomic ledger and select its latest complete checkpoint, adopting a newer complete manifest only when
+   its optimizer-step generation is the unique next valid quantum;
+4. create `TrainerGroup`, whose ranks load the complete training model and optimizer checkpoint;
+5. start self-play workers and send a running desired state with the active checkpoint and no statistics request;
+6. wait for every worker to acknowledge the exact generation and inference hash;
+7. create the local evaluation manager and enter the public loop.
+
+Generation zero is created through the normal checkpoint writer before the run begins and contains the random
+training-model state, optimizer state, trimmed inference artifact, and manifest. There is no special checkpoint shape
+for generation zero. Run preparation invokes that shared writer once because no trainer rank exists yet; rank zero is
+the sole writer for every trained checkpoint thereafter.
+
+Failure handling stays small:
+
+- an unexpectedly exited self-play worker is restarted at the ledger's active checkpoint; its in-memory games and
+  unpublished samples may be lost;
+- a DDP-rank failure terminates the complete trainer group, leaves the quantum uncommitted, ignores artifacts without
+  a final manifest, and ends the run for explicit restart rather than attempting an in-process distributed retry;
+- a malformed completed-game file is a fatal boundary error and remains available for inspection;
+- an evaluation failure is written as a typed failed result and does not stop training;
+- connection EOF is treated as process failure; no heartbeat message or generic liveness protocol is added.
+
+Shutdown sends the stopped desired state to self-play workers and joins them, closes or terminates outstanding
+evaluation jobs according to evaluation configuration, closes all trainer ranks, flushes and closes replay, saves
+the ledger, and then exits. Process termination is reserved for children that do not honor the ordinary close path.
 
 ## ReplayManager
 
@@ -345,8 +382,7 @@ class ReplayIngestion:
     evicted_samples: int
 
 
-@dataclass(frozen=True)
-class ReplayDescription:
+class ReplayDescription(FrozenModel):
     path: Path
     head: int
     size: int
@@ -356,6 +392,10 @@ class ReplayDescription:
 
 
 class ReplayManager:
+    @property
+    def live_samples(self) -> int:
+        ...
+
     def ingest_available_games(self, model_generation: int) -> ReplayIngestion:
         ...
 
@@ -373,8 +413,9 @@ class ReplayManager:
 3. validates and materializes each game;
 4. appends its eligible samples to the mmap FIFO;
 5. evicts old rows when required;
-6. removes the consumed inbox file;
-7. returns aggregate ingestion counts.
+6. removes each consumed inbox file only after its rows have been written;
+7. writes the final header values and flushes the mmap once after the complete drain;
+8. returns aggregate ingestion counts.
 
 There is no game-count or time limit. Replay ingestion is required to be materially faster than self-play production. If draining the inbox becomes slow, that is a performance defect to measure and fix rather than a reason to leave the replay stale.
 
@@ -423,8 +464,8 @@ encoded state
 policy entry count
 padded action IDs
 padded visit counts
-value and auxiliary targets
-eligibility fields
+WDL target
+fixed-layout auxiliary targets and eligibility masks
 sample weight
 source model generation
 source timestamp
@@ -436,14 +477,61 @@ All games use:
 policy_entry_count                        : uint8
 action_ids[maximum_policy_entries]        : uint16
 visit_counts[maximum_policy_entries]      : uint16
+wdl_target[3]                             : float32
+root_value                                : float32
+sample_weight                             : float32
+source_model_generation                   : uint32
+source_timestamp                          : float64
 ```
+
+The row dtype uses explicit little-endian numeric fields with no platform-dependent implicit padding. The layout
+computes and persists its exact row byte count and a digest of the ordered field definitions. Auxiliary variants add
+their own fixed columns; `next_policy` adds another uint8 count, padded uint16 action IDs/counts, and one uint8
+eligibility flag.
 
 Configuration validation requires:
 
 - `maximum_policy_entries` between 1 and 255;
 - action count representable by `uint16`;
 - configured search visits representable by `uint16`;
+- maximum derived model generation representable by `uint32`;
+- one fixed auxiliary-target layout for the complete run, including zero-width layouts;
 - a replay layout compatible with the selected game representation.
+
+Auxiliary targets are fixed by the resolved experiment, not chosen independently per sample. A run may, for
+example, define an auxiliary policy head trained against the next player's search visits. The target layout fixes
+the tensor shape, dtype, and eligibility-mask shape for every mmap row and training batch. The game-owned training
+objective interprets these values; replay storage and DDP transport do not.
+
+Auxiliary target definitions are a discriminated configuration union, not untyped names or arbitrary dictionaries.
+Every implemented variant defines its replay storage, batch tensor, augmentation behavior, network head, loss, and
+eligibility semantics. The first required variant is `next_policy`: it predicts the search policy at a configured
+positive ply offset, initially one ply. Its mmap representation uses the same padded sparse uint16 action/count
+layout as the primary policy, while the shared batch builder expands it into an action-sized probability tensor.
+The terminal tail has an ineligible mask and contributes no auxiliary cross-entropy. This avoids storing an
+action-sized float vector in every replay row, especially for chess.
+
+```python
+class NextPolicyTargetConfiguration(FrozenModel):
+    kind: Literal['next_policy']
+    ply_offset: int
+    loss_weight: FloatGenerationSchedule
+```
+
+`ply_offset` is static and positive because it affects target meaning but not row width. `loss_weight` is resolved
+once per training quantum and may vary by generation without changing the stored target or network head.
+
+Targets may depend on the complete game trajectory. Position encoding is therefore only a mechanical operation
+used by materialization, never the materialization boundary itself. The materializer receives the complete validated
+game, reconstructs its ordered positions and search observations, and can derive a sample from earlier or later
+trajectory elements. A configured next-policy target, for example, reads the search observation at the following
+ply. Completed-game records retain every observation required by the run's target layout even when an observation
+is not itself eligible to become a primary replay sample.
+
+The primary WDL target is three float32 values ordered `(win, draw, loss)` from the player-to-move perspective of
+the encoded position. A natural categorical result is one-hot; an adjudicated target may be the explicitly defined
+soft WDL above. Any configured blend with a search root value is resolved by the generation-specific training
+objective, using the separately stored root value; materialization does not silently alter the final game result.
 
 ### Configurable policy retention
 
@@ -464,14 +552,8 @@ This permits, for example:
 - Go with all board points plus pass retained;
 - experiments that intentionally test tighter policy retention.
 
-Policy truncation telemetry records:
-
-- samples whose policy was truncated;
-- retained and discarded visit counts;
-- discarded visit-mass fraction;
-- largest discarded individual visit count.
-
-Truncation is intentional and never silently removes entries without telemetry.
+Ingestion reports the number of truncated policies and aggregate retained and discarded visit mass for both primary
+and auxiliary policies. This telemetry is aggregate only and does not add per-row diagnostic columns.
 
 ## CreditLedger
 
@@ -497,8 +579,7 @@ class CreditLedger:
     def model_generation(self) -> int:
         ...
 
-    @property
-    def can_train_quantum(self) -> bool:
+    def can_train_quantum(self, live_samples: int) -> bool:
         ...
 
     def add_samples(self, sample_count: int, model_generation: int) -> None:
@@ -511,7 +592,7 @@ class CreditLedger:
         ...
 ```
 
-New samples earn credits according to the credit schedule at their ingestion generation. Previously earned credits are not retroactively revalued when the schedule changes. A quantum consumes the amount configured for its source generation. Surplus credits carry forward.
+New samples earn credits according to the credit schedule at their ingestion generation. Previously earned credits are not retroactively revalued when the schedule changes. A quantum consumes the amount configured for its source generation. Surplus credits carry forward. Training permission requires both sufficient available credits and at least one global batch of live replay rows. Configuration requires every scheduled logical replay capacity to be at least the global batch size.
 
 The ledger is atomically saved after each nonempty replay ingestion and completed quantum. Small discrepancies between replay contents and ledger credit after an unclean exit are accepted.
 
@@ -547,7 +628,7 @@ After a coordinator restart, a new `TrainerGroup` starts new rank processes and 
 class TrainerGroup:
     def __init__(
         self,
-        configuration: TrainerConfiguration,
+        configuration: ExperimentConfiguration,
         starting_checkpoint: CheckpointReference,
     ) -> None:
         ...
@@ -562,6 +643,29 @@ class TrainerGroup:
     def close(self) -> None:
         ...
 ```
+
+Trainer-rank transport is another focused duplex `multiprocessing.Connection` per rank, not the self-play protocol
+and not a generic communication module. Its command union contains only `TrainQuantumCommand` and
+`StopTrainerCommand`; its response union contains `RankTrainingResult`, `RankTrainingFailure`, and
+`TrainerStopped`. Exactly one command is outstanding per rank.
+
+```python
+class ResolvedTrainingParameters(FrozenModel):
+    learning_rate: float
+    objective: ResolvedTrainingObjective
+
+
+class TrainQuantumCommand(FrozenModel):
+    replay: ReplayDescription
+    source_progress: TrainingProgress
+    target_progress: TrainingProgress
+    parameters: ResolvedTrainingParameters
+```
+
+`ResolvedTrainingParameters` contains the learning rate and one `ResolvedTrainingObjective` resolved for the source
+generation. The latter is a discriminated union of frozen Pydantic chess/Go objective values with loss-construction
+methods; it is not a dictionary, schedule container, or duplicate transport model. Every rank receives and uses that
+same canonical value before entering the hot loop.
 
 `train_quantum()`:
 
@@ -585,20 +689,21 @@ Every rank:
 
 Rank zero additionally writes:
 
-- model state;
+- complete training-model state, including auxiliary heads;
 - optimizer state;
-- JIT inference model;
+- trimmed policy-and-WDL-only JIT inference model;
 - checkpoint manifest, written last.
 
-Rank zero is the sole checkpoint writer because the live model and optimizer exist inside rank processes. `TrainerGroup` owns the aggregate orchestration and validates the single-writer result.
+Rank zero is the sole trained-checkpoint writer because the live model and optimizer exist inside rank processes.
+`TrainerGroup` owns the aggregate orchestration and validates the single-writer result. Generation-zero run
+preparation is the only ownership exception and uses the identical artifact writer and manifest schema.
 
 ### Training result
 
 Results contain file references, not loaded models:
 
 ```python
-@dataclass(frozen=True)
-class CheckpointReference:
+class CheckpointReference(FrozenModel):
     generation: int
     manifest_path: Path
     model_path: Path
@@ -620,21 +725,38 @@ Self-play workers remain persistent processes and communicate with the coordinat
 
 The generic file-mailbox implementation and all file command identifiers are deleted.
 
-The coordinator sends desired state, not transition commands:
+The coordinator sends desired state, not incremental transition commands. Genuine variants are represented as a
+discriminated union so a stopped state cannot accidentally carry a checkpoint:
 
 ```python
-class SelfPlayMode(StrEnum):
-    RUNNING = 'running'
-    PAUSED = 'paused'
-    STOPPED = 'stopped'
+class StatisticsLevel(StrEnum):
+    BASIC = 'basic'
+    DETAILED = 'detailed'
 
 
-@dataclass(frozen=True)
-class SelfPlayDesiredState:
-    mode: SelfPlayMode
+class RunningSelfPlayState(FrozenModel):
+    kind: Literal['running']
     checkpoint: CheckpointReference
-    collect_completed_generation_statistics: bool
+    completed_generation_statistics: StatisticsLevel | None
+
+
+class PausedSelfPlayState(FrozenModel):
+    kind: Literal['paused']
+    checkpoint: CheckpointReference
+
+
+class StoppedSelfPlayState(FrozenModel):
+    kind: Literal['stopped']
+
+
+SelfPlayDesiredState: TypeAlias = (
+    RunningSelfPlayState | PausedSelfPlayState | StoppedSelfPlayState
+)
 ```
+
+Running and paused desired states always name the exact checkpoint that must be loaded before acknowledgement.
+Re-sending the already loaded checkpoint is idempotent and does not reset games or statistics. Only a running state
+requests completed-generation statistics, making invalid paused/statistics combinations unrepresentable.
 
 Only one command is outstanding per worker, and the coordinator waits for acknowledgement before sending another. A separate sequence number is unnecessary. A restarted worker receives a fresh connection.
 
@@ -649,19 +771,43 @@ On a model transition, each worker:
 7. applies new search and game-policy parameters;
 8. resets native search trees;
 9. acknowledges the exact generation and JIT hash;
-10. resumes only if desired mode is `running`.
+10. resumes only for a running desired state.
 
 ```python
-@dataclass(frozen=True)
-class SelfPlayStateApplied:
+class RunningSelfPlayStateApplied(FrozenModel):
+    kind: Literal['running']
     worker_id: int
-    mode: SelfPlayMode
     loaded_generation: int
     loaded_inference_model_sha256: str
     completed_generation_statistics: SelfPlayStatistics | None
+
+
+class PausedSelfPlayStateApplied(FrozenModel):
+    kind: Literal['paused']
+    worker_id: int
+    loaded_generation: int
+    loaded_inference_model_sha256: str
+
+
+class StoppedSelfPlayStateApplied(FrozenModel):
+    kind: Literal['stopped']
+    worker_id: int
+
+
+SelfPlayStateApplied: TypeAlias = (
+    RunningSelfPlayStateApplied
+    | PausedSelfPlayStateApplied
+    | StoppedSelfPlayStateApplied
+)
 ```
 
-All workers may return cheap counters. Only one or two configured workers collect expensive distributions and native diagnostics. Reports identify worker ID, generation, and statistics level so sampled detailed results are not interpreted as global totals.
+Before training, the coordinator sends every worker a paused desired state naming the current checkpoint, then waits
+for every acknowledgement. After training, it sends a running state naming the target checkpoint. Every worker
+returns its cheap completed-generation counters; only one or two configured workers
+receive `DETAILED` and collect expensive distributions and native diagnostics. Statistics are captured before old
+counters are reset, but returned only after the new model is loaded, trees are reset, and the exact generation and
+inference hash have been acknowledged. Reports identify worker ID, completed generation, and statistics level so
+sampled detailed results are not interpreted as global totals.
 
 Completed games continue to cross the self-play/replay boundary as atomic files. Self-play never writes directly into the mmap.
 
@@ -686,6 +832,10 @@ Restart is intentionally simple:
 - incomplete checkpoint artifacts without a manifest are ignored.
 
 Exact replay/archive reconstruction, two-phase quantum publication, and exact credit reconciliation are not required.
+
+Adoption is allowed only for the single next generation with the expected optimizer-step count. The coordinator
+applies the same ledger quantum commit, including configured source-generation credit consumption, before saving the
+adopted checkpoint as active. It never skips multiple generations or guesses progress from loose artifact files.
 
 ## Evaluation jobs
 
@@ -740,12 +890,15 @@ replay/
     store.py
     layout.py
     materialization.py
+    targets.py
 
 training/
     group.py
     rank.py
     protocol.py
     trainer.py
+    model.py
+    inference_export.py
     batch.py
     statistics.py
 
@@ -755,20 +908,26 @@ evaluation/
     result.py
 
 games/
-    training_contract.py
+    implementation.py
+    state.py
     chess/
+        configuration.py
+        implementation.py
+        objective.py
+        state.py
     go/
+        configuration.py
+        implementation.py
+        objective.py
+        state.py
 ```
 
 Concrete game implementations own:
 
-- completed-game schema and validation;
-- transformation from a completed game into fixed replay rows;
-- state and target decoding;
-- data augmentation;
-- batch construction;
+- native position construction, rules, transitions, terminal results, and adjudication;
+- position encoding into the shared packed-plane layout;
+- the actual state, primary-policy, and auxiliary-target symmetry transformations;
 - training objective schedules;
-- self-play schedule semantics;
 - game-specific evaluation jobs.
 
 Shared infrastructure owns:
@@ -776,26 +935,34 @@ Shared infrastructure owns:
 - schedule mechanics;
 - mmap FIFO mechanics;
 - configurable top-policy retention mechanics;
+- completed-game schema, atomic publication, parsing, trajectory validation, and materialization orchestration;
 - credit accounting;
 - deterministic rank sampling;
+- augmentation selection and transformation orchestration;
+- packed-state decoding and canonical batch construction;
 - DDP process orchestration;
+- shared training-model construction and trimmed inference export;
 - checkpoint references;
 - self-play desired-state transport;
 - evaluation process management.
 
 ## Concrete game composition
 
-The runtime constructs one concrete chess or Go implementation at the experiment boundary. After construction, shared orchestration does not branch on the game name.
+Each process that needs game behavior constructs one concrete chess or Go implementation once from the resolved
+experiment union at its process entry point. The frozen configuration, not a live implementation object or native
+handle, crosses spawn boundaries. After that single construction match, shared orchestration does not branch on the
+game name.
 
-The root composition owns the concrete objects consumed by shared self-play, replay, training, and evaluation infrastructure:
+The root composition owns the concrete state, native template instantiation, and training objective consumed by
+shared infrastructure. It does not construct a game-specific self-play loop, completed-game implementation,
+materializer, or batch builder:
 
 ```python
 class GameImplementation(
     ABC,
     Generic[
-        CompletedGameT,
-        ActiveGameT,
-        SearchStatisticsT,
+        PositionT,
+        NativeSearchT,
     ],
 ):
     @property
@@ -810,25 +977,23 @@ class GameImplementation(
 
     @property
     @abstractmethod
-    def replay(self) -> ReplayGameImplementation[CompletedGameT]:
+    def state(self) -> GameStateContract[PositionT]:
         ...
 
     @abstractmethod
-    def create_self_play_policy(
+    def create_native_search(
         self,
         device_id: int,
-    ) -> GameSelfPlayPolicy[
-        ActiveGameT,
-        CompletedGameT,
-        SearchStatisticsT,
-    ]:
+        checkpoint: CheckpointReference,
+        parameters: ResolvedSelfPlayParameters,
+    ) -> NativeSearchT:
         ...
 
     @abstractmethod
     def training_objective_at(
         self,
         model_generation: int,
-    ) -> TrainingObjective:
+    ) -> ResolvedTrainingObjective:
         ...
 ```
 
@@ -836,109 +1001,444 @@ Evaluation job construction can be added to this composition during the evaluati
 
 The composition is not an adapter between duplicate chess/Go types and shared types. It is the canonical place where each concrete game supplies the behavior that genuinely differs.
 
+The network architecture is constructed by the shared trainer from the resolved network dimensions, network
+configuration, and run-fixed target/head layout. A game does not manufacture another model wrapper. Evaluation may
+add a game-owned job factory during the evaluation phase because opponent and result semantics genuinely differ.
+
+### Game state contract
+
+Python self-play and materialization operate in encoded action-ID space. Native move objects, move encoding,
+move decoding, explicit copying, and hashing are not requirements of shared training infrastructure.
+
+```python
+class Player(IntEnum):
+    FIRST = 1
+    SECOND = -1
+
+
+class WdlTarget(FrozenModel):
+    win: float
+    draw: float
+    loss: float
+
+
+class GameStateContract(ABC, Generic[PositionT]):
+    @property
+    @abstractmethod
+    def action_size(self) -> int:
+        ...
+
+    @property
+    @abstractmethod
+    def packed_plane_layout(self) -> PackedPlaneLayout:
+        ...
+
+    @abstractmethod
+    def initial_position(self) -> PositionT:
+        ...
+
+    @abstractmethod
+    def legal_action_ids(self, position: PositionT) -> tuple[int, ...]:
+        ...
+
+    @abstractmethod
+    def child_position(self, position: PositionT, action_id: int) -> PositionT:
+        ...
+
+    @abstractmethod
+    def current_player(self, position: PositionT) -> Player:
+        ...
+
+    @abstractmethod
+    def terminal_wdl(self, position: PositionT) -> WdlTarget | None:
+        ...
+
+    @abstractmethod
+    def adjudicated_wdl(
+        self,
+        position: PositionT,
+        reason: TerminationReason,
+    ) -> WdlTarget:
+        ...
+
+    @abstractmethod
+    def encode_network_input(self, position: PositionT) -> PackedPlanePayload:
+        ...
+
+    @property
+    @abstractmethod
+    def augmentation_count(self) -> int:
+        ...
+
+    @abstractmethod
+    def transform_replay_targets(
+        self,
+        sample: ReplaySample,
+        augmentation_index: int,
+    ) -> ReplaySample:
+        ...
+```
+
+`encode_network_input()` encodes only one network input. It does not construct value or auxiliary targets.
+Trajectory-level materialization calls it for the sampled position after inspecting the complete game.
+
+`child_position()` exposes an immutable logical transition. A concrete implementation backed by a mutable board
+library may copy internally. The shared caller never needs a `copy()` operation.
+
+`WdlTarget` validates finite nonnegative values summing to one in fixed `(win, draw, loss)` order. Perspective
+reversal swaps win and loss. `terminal_wdl()` returns a one-hot WDL result from the current player's perspective for
+a naturally terminal position and `None` otherwise. `adjudicated_wdl()` is used only for configured non-natural
+endings such as the generation-scheduled maximum ply cap. Go applies its configured scoring rule and returns one-hot
+WDL. Chess computes the native material score from the current-player perspective using pawn 1, knight 3, bishop 3,
+rook 5, queen 9, king 0, normalized by the 39-point starting material maximum. A scalar score `s` is converted to
+soft WDL with remainder `r = 1 - abs(s)`:
+
+```text
+win  = max(s, 0)  + r / 3
+draw =               r / 3
+loss = max(-s, 0) + r / 3
+```
+
+Resignation, when later enabled, has a directly known one-hot result and does not require this hook.
+
+The augmentation hook transforms the state, primary policy, and every auxiliary target whose meaning changes under
+the selected symmetry. This is necessary for targets such as a later search policy: its action IDs must receive the
+same action permutation as the primary policy. Shared batch code chooses the deterministic augmentation index and
+orchestrates application; only the game knows the actual transformation.
+
+The native C++ position is authoritative for both chess and Go self-play, completed-game reconstruction, legal
+actions, terminal detection, player-to-move, adjudication inputs, and network encoding. Python-chess is not used as a
+second rules engine to approve or reject native games. Before cutover, native chess fixtures must lock down the
+intended behavior for checkmate, stalemate, castling, en passant, promotion, insufficient material, repetition, and
+move-count draws. The training rule set makes the third occurrence an automatic repetition draw and makes 100
+half-moves without a pawn move or capture an automatic draw, with checkmate taking precedence; it does not model a
+player's choice to claim. Insufficient-material behavior is the native Stockfish-backed implementation fixed by the
+fixtures. Any other discovered Stockfish/FIDE difference is either corrected before acceptance or added explicitly
+to these documented training rules; Python and C++ must never silently apply different answers to the same run.
+
+### Native search boundary
+
+There is no separate game-owned Python search policy. The native implementation already has one authoritative
+`GameSelfPlaySearch<Game>` template with shared request, result, batch, schedule, inference, refresh, and statistics
+semantics. Chess, Go 7x7, and Go 9x9 are compile-time instantiations of that implementation.
+
+Python may declare one structural typing protocol that mirrors the bound surface so the shared worker is precisely
+typed. It has no implementation, state, adapter, or runtime dispatch; each pybind class satisfies it directly.
+
+The Python bindings must expose the same coarse surface for every instantiation:
+
+```text
+NativeSearch
+    new_root(position) -> NativeRoot
+    search(requests, collect_statistics) -> NativeSearchBatch
+    refresh_model(model_generation, model_path)
+    update_search_schedule(parameters) -> bool
+    inference_statistics() -> statistics
+    arena_capacity
+    model_generation
+
+NativeRoot
+    position
+    is_terminal
+    play(action_id)
+    reset()
+    discount(retained_fraction)
+
+NativeSearchRequest
+    root
+    full_search
+
+NativeSearchResult
+    root_value
+    visits
+    root
+```
+
+The current C++ search algorithm does not require duplication or a new abstraction. The binding presentation does
+require normalization: chess currently creates roots from FEN/history and reroots by child index, while Go exposes
+its native position and reroots by action ID; Go also omits some schedule/root operations exposed for chess. The
+rework binds native chess positions at the same coarse level as Go positions, makes action-ID `play()` canonical,
+and uses one templated binding helper to generate the common search/root/request/result surface for every template
+instantiation. Bound visits use the shared `action_id`/`visit_count` value rather than chess tuples and Go objects
+with different Python representations. Game-specific binding code is limited to naming the concrete classes,
+constructing the configured initial position, and selecting the native template instantiation.
+
 ### Shared self-play worker
 
-Process control, active-game ownership, completed-game publication, desired-state handling, model transitions, and basic statistics are shared.
+Process control, active-game ownership, batched native search, move selection, search-memory collection,
+completed-game publication, desired-state handling, model transitions, and basic statistics are shared.
 
-The game-specific policy has a narrow contract:
+The shared active game contains only typed data, not game-owned orchestration:
 
 ```python
-class GameSelfPlayPolicy(
-    ABC,
-    Generic[ActiveGameT, CompletedGameT, SearchStatisticsT],
-):
-    @abstractmethod
-    def new_game(self) -> ActiveGameT:
-        ...
+class SearchObservation(FrozenModel):
+    ply: int
+    model_generation: int
+    visits: tuple[SparseSearchVisit, ...]
+    root_value: float
+    selected_action_id: int
+    full_search: bool
+    sample_weight: float
+    search_budget: int
+    minimum_root_visits: int
 
-    @abstractmethod
-    def play_turn(
-        self,
-        games: tuple[ActiveGameT, ...],
-    ) -> tuple[GameTurnResult[ActiveGameT, CompletedGameT], ...]:
-        ...
 
-    @abstractmethod
-    def load_model(
-        self,
-        checkpoint: CheckpointReference,
-        active_games: tuple[ActiveGameT, ...],
-    ) -> None:
-        ...
-
-    @abstractmethod
-    def snapshot_statistics(self) -> SearchStatisticsT:
-        ...
+@dataclass
+class ActiveSelfPlayGame(Generic[NativeRootT]):
+    root: NativeRootT
+    action_ids: list[int]
+    observations: list[SearchObservation]
+    started_at_seconds: float
 ```
 
-Each turn returns exactly one typed result per input slot:
+The same frozen `SearchObservation` value is retained in memory and serialized at completion; there is no duplicate
+transport model with renamed fields. Every played search ply is recorded. `full_search` directly determines primary
+sample eligibility; fast-search observations remain available to configured trajectory targets. The oldest and
+newest model generations are derived from observations rather than stored separately.
+
+The worker resolves one immutable parameter value when it loads a model generation. It contains:
 
 ```python
 @dataclass(frozen=True)
-class OngoingGame(Generic[ActiveGameT]):
-    game: ActiveGameT
-
-
-@dataclass(frozen=True)
-class FinishedGame(Generic[CompletedGameT]):
-    completed_game: CompletedGameT
-
-
-GameTurnResult: TypeAlias = (
-    OngoingGame[ActiveGameT]
-    | FinishedGame[CompletedGameT]
-)
+class ResolvedSelfPlayParameters:
+    random_opening_plies: int
+    full_search_probability: float
+    parallel_searches: int
+    full_searches: int
+    fast_searches: int
+    minimum_root_visits: int
+    exploration_constant: float
+    dirichlet_alpha: float
+    dirichlet_epsilon: float
+    retained_root_visit_fraction: float
+    starting_temperature: float
+    final_temperature: float
+    greedy_after_ply: int
+    maximum_game_plies: int | None
+    primary_sample_weight: float
 ```
+
+Every corresponding authored field is either static or a generation schedule in self-play configuration. Resolution
+validates counts, positive temperatures and weights, full-search probability in `(0, 1]`, other probability/fraction
+ranges, and that full and fast budgets are
+compatible with parallel search. When a maximum ply cap exists, random opening plies must be below it. Values remain
+fixed until the next model load.
 
 The shared worker:
 
-1. owns the fixed-size active-game slots;
-2. passes the current games to `play_turn()`;
-3. retains returned ongoing games;
-4. publishes every returned completed-game record through the shared atomic publisher;
-5. replaces finished slots through `new_game()`;
-6. owns cheap game/process counters;
-7. asks only selected workers for expensive game search statistics;
-8. applies the shared desired-state transition order around `snapshot_statistics()` and `load_model()`.
+1. owns the fixed-size active-game slots and native search instance;
+2. constructs one shared request per root and performs one batched native search;
+3. records every search observation required by the configured primary and auxiliary targets;
+4. marks primary-sample eligibility independently from observation retention;
+5. applies the common visit-based temperature or greedy move-selection policy;
+6. advances the retained native root by the selected action ID, leaving `root.position` as the sole live position;
+7. detects completion by applying the state contract to `root.position` and constructs the typed completed
+   trajectory;
+8. publishes completed records and replaces finished slots;
+9. owns cheap game/process counters and asks only selected workers for expensive native statistics;
+10. applies the shared desired-state transition order around statistics, model refresh, schedules, and tree reset.
 
-Concrete chess and Go policies own only their state, native search requests/results, move selection, terminal/adjudication semantics, completed-game construction, game-specific schedules, and native search statistics. They do not own process communication, publication files, active-pool replacement, or model-transition orchestration.
+The ordinary turn algorithm is fully specified:
+
+1. a new game starts from `state.initial_position()`;
+2. if configured, a generation-scheduled number of uniformly sampled legal opening actions is applied without
+   search and retained in the action sequence; zero is valid and is the default, and a terminal random opening is
+   discarded and restarted because it contains no training observation;
+3. the native search root is created from the resulting position;
+4. each ply independently selects a full search with the configured randomized-playout-cap probability and a fast
+   search otherwise;
+5. a full-search position is primary-sample eligible; a fast-search position is not, but its observation is retained;
+6. before a full search, retained root visits are discounted by the configured retained fraction; fast searches may
+   reuse their retained root unchanged;
+7. the native batch returns positive sparse visit counts and a scalar root value for every nonterminal root;
+8. before the configured greedy ply, the action is sampled from raw visit counts raised to inverse temperature; the
+   temperature interpolates from the resolved starting value to the resolved final value over that ply range;
+9. at and after the greedy ply, the greatest visit count wins with ascending action ID as the deterministic tie
+   break;
+10. repeated-move penalties and other chess-only sampling modifications are not part of the base algorithm;
+11. the selected action advances the retained root through `root.play(action_id)`;
+12. a natural terminal position uses `state.terminal_wdl()`; a configured maximum-ply ending uses
+    `state.adjudicated_wdl()` and records that termination reason;
+13. a nonterminal search result without a positive visit is an invariant failure, not a silently discarded game;
+14. loading a new generation keeps action and observation history but resets every retained tree before play resumes.
+
+All random choices use one worker-local generator seeded from the run seed and worker ID. Search observations record
+the actual model generation, budget, and minimum-root-visit setting used at that ply, so a game spanning a model
+transition remains unambiguous during materialization. Visit-count preprocessing subtracts that observation's
+minimum root visits, removes nonpositive results, and applies deterministic top-N retention independently to every
+primary or auxiliary sparse policy.
+
+Resignation calibration, material adjudication, disagreement-prefix starts, and other future research policies do not
+expand the base state or search boundary. They are added only when scheduled experiments require them and must be
+modeled as explicit configured policies around the shared turn algorithm.
 
 ### Shared replay and training boundary
 
-The game-specific replay implementation supplies only semantics that cannot be shared:
+Completed-game persistence is shared. It is not a game implementation component or retained legacy replay logic.
+The run configuration already selects the game, rules, representation, action mapping, and source revision, so each
+file stores only the trajectory and its production metadata:
 
 ```python
-class ReplayGameImplementation(ABC, Generic[CompletedGameT]):
-    @property
-    @abstractmethod
-    def layout(self) -> ReplayLayout:
-        ...
+class TerminationReason(StrEnum):
+    NATURAL = 'natural'
+    MAXIMUM_PLIES = 'maximum_plies'
+    RESIGNATION = 'resignation'
+    ADJUDICATION = 'adjudication'
 
-    @abstractmethod
-    def parse_completed_game(self, path: Path) -> CompletedGameT:
-        ...
 
-    @abstractmethod
-    def materialize(
-        self,
-        game: CompletedGameT,
-        maximum_policy_entries: int,
-    ) -> Iterator[ReplaySample]:
-        ...
-
-    @abstractmethod
-    def build_batch(
-        self,
-        replay: MappedReplayView,
-        sample_indices: Sequence[int],
-        augmentation_seed: int,
-    ) -> TrainingBatch:
-        ...
+class CompletedSelfPlayGame(FrozenModel):
+    schema_version: Literal[1]
+    identity: GameIdentity
+    created_at_seconds: float
+    generation_seconds: float
+    action_ids: tuple[int, ...]
+    observations: tuple[SearchObservation, ...]
+    final_wdl: WdlTarget
+    termination_reason: TerminationReason
 ```
 
-Shared replay infrastructure owns inbox enumeration, configurable top-policy selection, mmap row storage, FIFO mechanics, capacity, eviction, mapped views, deterministic rank sampling, and replay telemetry. The concrete implementation owns completed-game validation, encoded-state bytes, game targets, augmentation, and decoding selected rows into the canonical training batch.
+`final_wdl` is from the player-to-move perspective of the final position. Observations are sorted by unique ply,
+each selected action agrees with `action_ids[ply]`, and unsearched configured opening plies simply have no
+observation. `GameIdentity` contains the worker ID, a process-instance UUID created on worker start, and a
+process-local monotonically increasing game number. This avoids persistent publisher state and cannot collide with
+files left by an earlier worker process. The shared worker writes JSON to a sibling temporary file, flushes and
+closes it, then atomically renames it to the identity-derived final name. Shared ingestion parses the frozen model
+directly. There is no publisher object or game-specific completed-game codec.
 
-The shared trainer owns the optimizer hot loop, transfer overlap, gradient handling, DDP reductions, and common statistics. The game-owned `TrainingObjective` owns only model forward interpretation and loss construction for a resolved generation.
+Shared materialization reconstructs the complete trajectory through the selected `GameStateContract` and validates:
+
+1. every action is legal at its reconstructed position;
+2. every observed visit action and selected action is legal;
+3. observation plies are unique, ordered, and agree with the played action;
+4. the reconstructed final current player and terminal/adjudication result agree with the record;
+5. natural and maximum-ply termination reasons agree with the reconstructed state and configured limit.
+
+For each primary-eligible observation, shared materialization then:
+
+1. encodes that reconstructed position through `encode_network_input()`;
+2. converts `final_wdl` into the sampled position's player-to-move perspective;
+3. preprocesses and retains the primary sparse policy;
+4. evaluates each configured auxiliary target definition against the complete reconstructed trajectory;
+5. records target eligibility explicitly when the required future observation does not exist;
+6. emits the fixed replay row using the observation's weight, model generation, and game timestamp.
+
+For `next_policy(offset=1)`, sample `i` reads the visits from the observation at ply `i + 1`, independently of that
+later observation's primary eligibility. The final searched ply therefore has an ineligible auxiliary mask unless a
+later searched observation exists. Position encoding happens only after all trajectory-dependent targets have been
+resolved. Its action IDs retain the future position's own player-to-move canonical action space; they are not
+reinterpreted as moves by the player at sample `i`. The head is explicitly defined to predict that future canonical
+policy, and augmentation applies the selected symmetry in that future action space as well.
+
+Every materialized row has one canonical shared shape:
+
+```python
+@dataclass(frozen=True)
+class ReplaySample:
+    encoded_state: PackedPlanePayload
+    policy: SparsePolicyTarget
+    wdl_target: WdlTarget
+    root_value: float
+    auxiliary_targets: tuple[AuxiliaryReplayTarget, ...]
+    sample_weight: float
+    source_model_generation: int
+    source_created_at_seconds: float
+```
+
+The auxiliary tuple order is exactly the immutable configuration order. Each discriminated target variant has one
+canonical typed replay value; `next_policy` contains a sparse policy plus an eligibility bit. `ReplayLayout` lowers
+that static tuple to fixed mmap columns exactly once. A run with no auxiliary heads uses an empty tuple and no
+auxiliary columns. The shared batch contains auxiliary tensors and masks in the same canonical order, and the
+resolved objective is their sole semantic interpreter.
+
+The canonical batch and training-model output contain no chess-named fields:
+
+```python
+@dataclass(frozen=True)
+class TrainingBatch:
+    states: torch.Tensor
+    policy_targets: torch.Tensor
+    wdl_targets: torch.Tensor
+    root_values: torch.Tensor
+    auxiliary_targets: tuple[torch.Tensor, ...]
+    auxiliary_eligibility: tuple[torch.Tensor, ...]
+    sample_weights: torch.Tensor
+
+
+@dataclass(frozen=True)
+class TrainingModelOutput:
+    policy_logits: torch.Tensor
+    wdl_logits: torch.Tensor
+    auxiliary_logits: tuple[torch.Tensor, ...]
+```
+
+Tensor tuple order is the configured auxiliary-head order and lengths must match exactly. The primary policy and WDL
+losses are soft-target cross-entropies. A configured root-value blend is applied by the resolved objective using the
+stored observation root value, the same scalar-to-WDL formula defined above, and its generation-resolved weight; the
+stored final WDL remains unchanged in replay. Each auxiliary head supplies its configured masked loss and generation-resolved weight. Sample weights are
+normalized to mean one for the selected batch and multiply all eligible per-sample loss contributions.
+
+Shared replay infrastructure owns inbox enumeration, configurable top-policy selection, mmap row storage, FIFO
+mechanics, capacity, eviction, mapped views, deterministic rank sampling, and replay telemetry. Shared batch code
+selects augmentations, asks the state contract to transform each selected row, decodes packed states, expands and
+normalizes sparse policies, copies WDL and fixed auxiliary buffers, pins memory, and transfers batches. There are no
+separate chess and Go batch builders.
+
+The shared trainer owns the optimizer hot loop, transfer overlap, gradient handling, DDP reductions, and common
+statistics. The game-owned `ResolvedTrainingObjective` owns only model-output interpretation and loss construction
+for one resolved generation.
+
+### Network and inference outputs
+
+The training model has a run-fixed output layout: policy logits, three WDL logits, and zero or more configured
+auxiliary heads. A next-player-policy experiment adds an action-sized auxiliary policy head and its objective adds
+the corresponding masked cross-entropy term.
+
+The training checkpoint and inference artifact are intentionally different models:
+
+- the raw training checkpoint contains the backbone, primary policy head, WDL head, every configured auxiliary
+  head, and optimizer state required to resume training;
+- the inference artifact contains a copied backbone, primary policy head, and WDL head only;
+- auxiliary modules are absent from the inference module, not merely ignored by its `forward()` method;
+- the inference module's ordinary `forward()` returns exactly normalized `(policy_probabilities,
+  wdl_probabilities)`, preserving the existing C++ contract;
+- inference export never removes heads from or otherwise mutates the live DDP training model.
+
+Rank zero constructs the dedicated inference model, copies the backbone and primary-head parameters from the
+unwrapped training model, switches it to evaluation mode, applies supported inference fusion, scripts and freezes
+it, and writes it atomically. Before writing the checkpoint manifest, export validation compares the inference
+model's policy and WDL outputs against the training model's primary outputs on a deterministic sample input within
+a small fixed numerical tolerance, applying softmax to training logits for that comparison. The manifest is written only
+after the raw model, optimizer, and trimmed inference
+artifact are complete and hashed.
+
+This removes auxiliary-head storage and computation from self-play and evaluation and requires no auxiliary-output
+change in the C++ inference loader. The same export path is used for runs without auxiliary heads so there is one
+checkpoint implementation.
+
+### End-to-end authoritative data path
+
+There is exactly one production path:
+
+1. the selected native C++ position and shared native search produce action-ID visits and root values;
+2. the shared Python worker makes the configured move decision and accumulates shared `SearchObservation` values;
+3. completion writes one atomic shared `CompletedSelfPlayGame` trajectory file;
+4. coordinator-owned `ReplayManager` reconstructs and validates the trajectory through the selected native state
+   contract, builds primary and configured auxiliary targets, and appends fixed mmap rows;
+5. after all workers pause, the final inbox drain and mmap flush establish the immutable quantum description;
+6. every DDP rank maps that file read-only, selects deterministic disjoint indices, applies deterministic game-owned
+   symmetries through shared orchestration, and constructs the canonical batch;
+7. the shared trainer executes the resolved objective on the complete training model, including auxiliary heads;
+8. rank zero writes raw training state, optimizer state, and the trimmed policy/WDL inference artifact, then writes
+   the manifest last;
+9. the coordinator commits progress and credits, workers load the trimmed artifact and reset trees, completed old-
+   generation statistics return with their acknowledgements, and evaluation jobs receive the same inference artifact;
+10. games produced after workers resume return to step 1 while files accumulated during blocking training are
+    ingested on the next loop iteration.
+
+No loaded model, native position, replay object, dense dataset, or training batch crosses a process boundary. Process
+messages carry only typed commands, acknowledgements, statistics, failures, progress, replay descriptions, and file
+references. Bulk model and replay data cross through checkpoint and mmap files respectively; completed trajectories
+cross from self-play to replay as atomic files.
 
 ### No game-specific orchestration forks
 
@@ -967,7 +1467,10 @@ The phases are deliberately broad because replay representation, coordinator own
 - validate static optimizer steps per quantum and aligned run limits;
 - remove optimizer-step and separately persisted model-generation schedule axes;
 - make the root `GameImplementation` the only concrete-game composition used by the runtime;
-- establish the narrow shared self-play, replay, batch, and objective contracts above;
+- establish the action-ID `GameStateContract`, completed-trajectory materialization, fixed target-layout, shared
+  self-play, shared batch, and objective contracts above;
+- remove move encoding/decoding, copying, and hashing from the shared training requirements;
+- define run-fixed auxiliary target/head layouts and their symmetry and eligibility semantics;
 - trace both chess and Go through those contracts before accepting them;
 - remove duplicate or unused game abstractions instead of adapting them.
 
@@ -979,8 +1482,19 @@ The phase ends with current runtime behavior intact but configuration, progress,
 - add experiment-configured `maximum_policy_entries`;
 - implement deterministic top-policy retention and telemetry;
 - implement the single-file fixed-slot circular mmap;
-- convert chess, Go 7x7, and Go 9x9 materialization;
-- build training batches directly from mapped rows;
+- normalize the C++ pybind surface for chess, Go 7x7, and Go 9x9 native search instantiations;
+- bind native positions through common action-ID legal-action, child, terminal, player, and packed-input operations;
+- make `NativeRoot.play(action_id)` canonical and remove chess child-index rerooting from self-play;
+- expose common search schedule, root reset/discount, model refresh, and statistics operations for every instantiation;
+- make the native C++ state authoritative for chess and add rule fixtures for every supported terminal/draw rule;
+- replace chess/Go completed-game variants with the shared `CompletedSelfPlayGame` record;
+- implement shared complete-trajectory validation and materialization through each state contract;
+- retain all search observations required by configured later-position auxiliary targets independently of primary
+  sample eligibility;
+- build training batches directly from mapped rows through one shared builder;
+- transform primary and auxiliary action-space targets consistently under game-defined symmetries;
+- add run-fixed auxiliary training heads and discriminated target definitions, beginning with `next_policy`;
+- export a separate trimmed policy-and-WDL inference model and preserve the existing two-output C++ model contract;
 - move replay ingestion into `ReplayManager` in the coordinator process;
 - make each call drain the full inbox;
 - apply capacity schedules inside ingestion;
@@ -999,7 +1513,9 @@ The phase ends with current runtime behavior intact but configuration, progress,
 - remove `broadcast_object_list` replay distribution and the single-rank training branch;
 - replace file mailboxes with duplex multiprocessing connections;
 - implement desired running, paused, and stopped states;
-- replace both concrete active-game loops with the shared self-play worker contract;
+- replace both concrete active-game loops and game-specific self-play policies with the shared action-ID worker;
+- implement the specified opening, full/fast search, eligibility, temperature, greedy, root-reuse, terminal, and
+  generation-transition decisions in that worker;
 - make the shared worker publish completed records and replace finished slots;
 - combine generation statistics, model loading, tree reset, and acknowledgement into one transition;
 - configure basic versus detailed statistics workers;
@@ -1041,15 +1557,22 @@ The implementation is complete only when tests cover:
 - optimizer-step progress and derived generations;
 - configuration round trips for chess and both Go board sizes;
 - fixed replay layout and file-size validation;
+- native chess rule fixtures and identical chess/Go bound state/search surfaces;
 - FIFO insertion, capacity changes, wraparound, and eviction;
 - deterministic policy top-N selection and discarded-mass telemetry;
+- shared completed-game round trips, trajectory reconstruction, legality validation, and perspective-correct WDL;
+- natural one-hot WDL, Go scored adjudication, chess material-to-soft-WDL adjudication, and perspective reversal;
+- next-policy target construction, terminal-tail masking, sparse mmap storage, and dense batch expansion;
+- consistent augmentation of state, primary policy, and next-policy targets;
 - concurrent read-only mmap access from multiple spawned ranks;
 - deterministic disjoint DDP sampling;
 - DDP world size one and multi-rank training;
 - persistent model and optimizer state across quanta;
+- trimmed inference export without auxiliary modules and numerical agreement with training primary outputs;
 - rank failure propagation and rank-zero checkpoint writing;
-- self-play desired-state pause, model transition, statistics, and resume;
-- complete inbox draining and queued-game ingestion after training;
+- deterministic full/fast eligibility, temperature/greedy selection, root reuse, and worker-local random seeding;
+- self-play desired-state pause, model transition, tree reset, statistics, and resume;
+- complete inbox draining after acknowledged pause and queued-game ingestion after training;
 - approximate restart from mmap, ledger, and complete checkpoint;
 - concurrent evaluation launch and finished-result collection;
 - complete native and Python regression suites.
@@ -1070,6 +1593,11 @@ Native extension and native tests must also run for phases that change bound rep
 - Replay policy entries below the configured top-N cutoff are discarded and the retained visits are renormalized during batch construction.
 - The coordinator does not supervise unrelated work while blocked in a training quantum.
 - World-size-one DDP overhead is accepted to retain one training path.
+- Native C++ chess rules are authoritative for training once their supported draw and terminal semantics are fixed by
+  tests; Python-chess is not a runtime cross-check.
+- Active games may span model generations; every observation retains its actual producing generation and trees are
+  reset on transition.
+- Completed-game files are consumed after mmap ingestion rather than retained as an exact replay-rebuild archive.
 - Evaluation details may mature after the core runtime boundaries are implemented.
 - Replay file size is less important than fixed-width simplicity and shared mmap access, but it remains measured experiment evidence.
 
