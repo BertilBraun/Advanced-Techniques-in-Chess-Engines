@@ -21,7 +21,7 @@ from src.replay.batch_loader import MappedReplayBatchLoader
 from src.replay.manager import ReplayDescription
 from src.training.batch import TrainingModelOutput
 from src.training.checkpoint import CheckpointReference
-from src.training.ledger import TrainingProgress
+from src.training.progress import TrainingProgress
 from src.training.objective import ResolvedTrainingObjective
 from src.util.frozen_model import FrozenModel
 from src.util.save_paths import load_model_and_optimizer, save_model_and_optimizer
