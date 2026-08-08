@@ -312,17 +312,17 @@ measurements determine any later representation or loader optimization.
 ### Evaluation
 
 Evaluation runs concurrently with self-play and training on an elapsed
-20-minute cadence. The evaluation worker waits for the first cadence boundary,
-selects the newest completely published model checkpoint, evaluates it, and
-then waits for the remainder of the time until the next cadence boundary. A
-six-hour screening run therefore produces approximately 18 strength
+20-minute cadence through the coordinator-owned asynchronous manager specified
+in `PYTHON_ARCHITECTURE_REWORK.md`. At each boundary it evaluates the newest
+checkpoint that was completely published at that boundary and reports the
+result at the boundary time, even when a blocking training quantum delays job
+launch. A six-hour screening run therefore produces approximately 18 strength
 measurements and can be inspected or stopped early.
 
 The configured ladder includes:
 
 - MCTS against random play;
-- policy-only play against random play;
-- previous and selected milestone models;
+- the previously evaluated and selected fixed checkpoints;
 - fixed external engine levels appropriate to the selected game.
 
 Chess uses its Stockfish opponents. Go adds an external engine adapter and a
@@ -371,14 +371,13 @@ process group and records the resulting status.
 | R5 | Chess game-contract and configuration extraction | accepted |
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
-| R8 | Go pipeline integration | awaiting_user_review |
-| R9 | Go evaluation and elapsed checkpoint scheduling | pending |
+| R8 | Go pipeline integration | accepted |
+| R9 | Go evaluation and elapsed checkpoint scheduling | in_progress |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R8 is awaiting user review after the Python ownership and shared self-play revision.
-R1 through R7 are accepted. No later phase is authorized.
+Current authorization: R1 through R8 are accepted. R9 is authorized and in progress. No later task is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -746,10 +745,16 @@ self-play, inference, and training.
 
 Deliverables:
 
-- add the elapsed 20-minute evaluation loop to the experiment lifecycle, using
-  the newest completely published model at each cadence boundary;
+- add the elapsed 20-minute evaluation manager to the experiment lifecycle, using
+  the newest completely published model available at each cadence boundary and reporting at that boundary;
+- launch every due evaluation definition as a concurrent short-lived process and assign devices by cycling over the
+  configured evaluation device tuple;
 - integrate Go match execution with the shared search and inference path;
-- implement and verify the external Go engine protocol adapter;
+- implement and verify Stockfish UCI and KataGo asynchronous JSON protocol clients, with engine processes owned by
+  one evaluation job only;
+- generate immutable four-ply, 50-position engine-guided opening suites for chess and Go;
+- generate immutable engine-labelled datasets by retaining every third position from complete games until reaching
+  480 to 520 positions;
 - define fixed 7x7 and 9x9 opponent ladders;
 - produce common result records, summaries, uncertainty, and TensorBoard data;
 - attach elapsed time, completed games, optimizer steps, and model generation
@@ -827,6 +832,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-08 | R9 | Authorization and evaluation simplification | The user accepted R8 and authorized Phase 3/R9. Evaluation should keep device assignment as a simple cycle, expand generated openings to four plies, retain every third engine-game position until the dataset contains 480 to 520 positions, keep external engines private to one job, and log at the requested elapsed boundary using the checkpoint available at that boundary. | Mark R8 accepted and R9 in progress. Implement the complete replacement architecture in `PYTHON_ARCHITECTURE_REWORK.md` with these simplified policies; do not begin R10 or later work. |
 | 2026-08-08 | R8 | Python ownership review | User review found game-specific configuration, completed-game records, replay materialization, self-play, objectives, chess evaluation, interactive analysis, and UCI spread across shared root packages. The high-level training-game contract also required each game to provide a complete worker despite both games using the same active-game and model-refresh lifecycle; `cluster` and `train` split one training subsystem, and obsolete Python `Board`/`Game` ABCs competed with the typed state contracts. | Move every concrete game concern under `games/chess` or `games/go`; put chess evaluation, interactive analysis, and UCI below chess; make one shared `SelfPlayWorker` own active pools, batched turns, refresh, and statistics while game policies provide search/move/publication semantics; require the shared trainer to consume an explicit game-owned objective; move chess/Go self-play configuration into their experiment variants; merge shared replay, optimization, and processes under `training`; remove the single-implementation ABCs and four orphan utilities. Commits `50c7953`, `b7a57fb`, `a0316c3`, and `b088635` pass Ruff and the exact Windows suite with 314 tests passing and 5 native-dependent skips. Return R8 to `awaiting_user_review`. |
 | 2026-08-08 | R8 | Shared Python boundary correction | User review found that root settings still installed chess as a process-global current game, model creation and loading silently defaulted to chess dimensions, root encoding was chess-only, shared experiment/run ownership remained in chess-named modules, and eight files in the live configuration directory used an obsolete pre-R8 schema. | Delete the root game settings and current-game aliases; load the selected experiment directly in `train.py`; require explicit `NetworkDimensions` at every model boundary; move chess encoding under the chess implementation; rename shared experiment and run modules; make hardware validation accept the full experiment union; move shared telemetry/runtime imports off chess configuration; remove obsolete configuration documents and dead regression/settings helpers; retain three explicitly named, approval-required templates whose dependency hashes and chess/7x7/9x9 dimensions are validated together. The exact Windows suite passes 313 tests with 5 native-dependent skips, the fresh-extension suite passes all 351 tests, and Ruff passes. Return R8 to `awaiting_user_review`. |
 | 2026-08-07 | R8 | Desktop visualization cleanup | The retained Pygame grid, chess and Go visual strategies, mutable native-Go board adapter, font asset, and standalone Go inspector had no production training, evaluation, UCI, or deployment consumer after removal of the legacy human-play graph. | Remove the complete desktop presentation graph and its visualization-only tests, delete `CurrentGameVisuals`, and regenerate the locked training environment without Pygame. Preserve typed game/search/analysis boundaries for future web presentation. The exact Windows suite passes 313 tests with 5 native-dependent skips, the fresh-extension suite passes all 351 tests, and Ruff passes. Return R8 to `awaiting_user_review`. |
