@@ -50,6 +50,14 @@ def gtp_to_action_id(coordinate: str, board_size: int) -> int:
     return action_id
 
 
+def action_id_to_sgf(action_id: int, board_size: int) -> str:
+    if action_id == board_size * board_size:
+        return ''
+    if not 0 <= action_id < board_size * board_size:
+        raise ValueError('Go action ID is outside the board action space.')
+    return f'{chr(ord("a") + action_id % board_size)}{chr(ord("a") + action_id // board_size)}'
+
+
 class KataGoClient:
     def __init__(
         self,
@@ -83,7 +91,7 @@ class KataGoClient:
             ],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=None,
             text=True,
             encoding='utf-8',
             bufsize=1,
@@ -221,7 +229,7 @@ class KataGoClient:
 
     def render_game(self, action_ids: tuple[int, ...]) -> str:
         moves = ''.join(
-            f';{"B" if ply % 2 == 0 else "W"}[{action_id_to_gtp(action_id, self.state.board_size)}]'
+            f';{"B" if ply % 2 == 0 else "W"}[{action_id_to_sgf(action_id, self.state.board_size)}]'
             for ply, action_id in enumerate(action_ids)
         )
         return f'(;GM[1]FF[4]SZ[{self.state.board_size}]KM[{self.state.komi_half_points / 2.0}]{moves})'

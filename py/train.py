@@ -102,7 +102,8 @@ if __name__ == '__main__':
     commander = Coordinator(game, run_started_at)
     outcome_path = Path(training.save_path) / 'run-outcome.json'
     try:
-        commander.run()
+        with TensorboardWriter(run_id, 'coordinator', postfix_pid=False):
+            commander.run()
     except Exception as error:
         write_run_outcome(
             outcome_path,

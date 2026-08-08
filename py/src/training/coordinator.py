@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import time
 
+from src.evaluation.manager import EvaluationManager
 from src.games.implementation import GameImplementation
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayManager
@@ -49,6 +50,7 @@ class Coordinator:
         )
         self.trainer_group = TrainerGroup(self.configuration, game, self.ledger.state.active_checkpoint)
         self.self_play_group = SelfPlayGroup(game)
+        self.evaluation_manager = EvaluationManager(self.configuration, self.ledger.state.active_checkpoint)
         self.latest_completed_model_version = self.ledger.model_generation
         self.final_stop_reason: str | None = None
 
@@ -56,6 +58,8 @@ class Coordinator:
         try:
             self._start_self_play()
             while not self.ledger.training_complete:
+                self.evaluation_manager.collect_completed_jobs()
+                self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
                 restarted_workers = self.self_play_group.restart_exited_workers(self.ledger.state.active_checkpoint)
                 for worker_id in restarted_workers:
                     log(f'Restarted self-play worker {worker_id} at generation {self.ledger.model_generation}.')
@@ -64,10 +68,11 @@ class Coordinator:
                     break
                 self._ingest_available_games()
                 if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
-                    time.sleep(0.1)
+                    time.sleep(min(0.1, self.evaluation_manager.seconds_until_next_boundary()))
                     continue
                 self._train_quantum()
         finally:
+            self.evaluation_manager.close()
             self.self_play_group.close()
             self.trainer_group.close()
             self.replay_manager.close()
