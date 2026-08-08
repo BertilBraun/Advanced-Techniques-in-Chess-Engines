@@ -209,3 +209,8 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
     assert result.checkpoint.generation == 1
     assert worker.model_generation == 1
     assert result.statistics.training_samples_per_second > 0.0
+    print(
+        f'{configuration.game}: ingestion={ingestion.samples_per_second:.0f} samples/s, '
+        f'replay={result.statistics.replay_rows_per_second:.0f} rows/s, '
+        f'ddp={result.statistics.training_samples_per_second:.1f} samples/s'
+    )

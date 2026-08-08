@@ -56,6 +56,9 @@ class Coordinator:
         try:
             self._start_self_play()
             while not self.ledger.training_complete:
+                restarted_workers = self.self_play_group.restart_exited_workers(self.ledger.state.active_checkpoint)
+                for worker_id in restarted_workers:
+                    log(f'Restarted self-play worker {worker_id} at generation {self.ledger.model_generation}.')
                 self.final_stop_reason = self.run_limit_monitor.stop_reason()
                 if self.final_stop_reason is not None:
                     break

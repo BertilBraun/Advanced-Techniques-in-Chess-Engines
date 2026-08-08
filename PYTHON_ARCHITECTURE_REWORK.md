@@ -4,7 +4,7 @@
 
 This document defines the target Python architecture for the experiment runtime. It is an implementation plan, not a compatibility specification for the current Python structure.
 
-Implementation status: Phase 1 is `accepted`. Phase 2 is `in_progress`. Phases 3 and 4 remain `pending` and are not authorized.
+Implementation status: Phase 1 is `accepted`. Phase 2 is `implemented_awaiting_user_acceptance`. Phases 3 and 4 remain `pending` and are not authorized.
 
 The rework should replace the current mixture of file mailboxes, commander-owned component details, trainer-owned replay maintenance, copied Python replay snapshots, and exact recovery machinery with a small synchronous coordinator and explicit process boundaries.
 
@@ -1523,6 +1523,23 @@ The phase ends with current runtime behavior intact but configuration, progress,
 - verify restart from mmap, ledger, and latest complete checkpoint.
 
 The phase is complete only when the old replay container, trainer-owned maintainer, replay-object broadcast, file mailbox, old commander lifecycle, and duplicated chess/Go orchestration are deleted. Both games must complete CPU self-play, replay ingestion, mapped batch construction, a DDP quantum, checkpoint activation, and a generation transition through the authoritative path. Projected and actual replay file size, ingestion throughput, mmap batch-read throughput, and DDP throughput are review evidence.
+
+Phase 2 implementation evidence, pending user acceptance:
+
+- the old replay container, trainer-owned replay maintainer, replay broadcast, generic mailbox, commander lifecycle,
+  publisher, separate game self-play loops, and superseded trainer runtime are deleted;
+- relative to the accepted Phase 1 commit, the implementation changes 109 files, adds 4,233 lines, and deletes
+  13,311 lines, for a net reduction of 9,078 lines;
+- the configured 2.5-million-row replay files are exactly projected and allocated from one layout: chess uses
+  456-byte rows and 1,140,000,118 bytes (1.062 GiB), Go 7x7 uses 362-byte rows and 905,000,118 bytes
+  (0.843 GiB), and Go 9x9 uses 618-byte rows and 1,545,000,118 bytes (1.439 GiB);
+- the opt-in real-runtime CPU smoke completes self-play, publication, ingestion, mapped loading, one-rank DDP,
+  checkpoint activation, and generation transition for both games. On the local tiny validation models it measured
+  chess at 565 ingested samples/s, 24 mapped rows/s, and 4.8 DDP samples/s, and Go 7x7 at 5,748 ingested
+  samples/s, 2,238 mapped rows/s, and 7.8 DDP samples/s. These tiny-model figures validate instrumentation and
+  end-to-end operation; they are not production performance claims;
+- the ordinary Python suite passes with 186 tests and 10 intentional skips, the opt-in Phase 2 integration suite
+  passes both games, and the compiled native suite passes all 11 suites.
 
 ### Phase 3: concurrent evaluation jobs
 

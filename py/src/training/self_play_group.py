@@ -25,29 +25,22 @@ from src.self_play.protocol import (
     StoppedSelfPlayStateApplied,
 )
 from src.self_play.worker import SelfPlayWorker
+from src.training.checkpoint import CheckpointReference
 
 
 class SelfPlayGroup:
     def __init__(self, game: GameImplementation) -> None:
         self.game = game
         self._closed = False
-        context = multiprocessing.get_context('spawn')
+        self._context = multiprocessing.get_context('spawn')
         topology = game.training.topology.self_play
+        self._device_ids = topology.device_ids
         self._connections: list[Connection] = []
         self._processes: list[BaseProcess] = []
-        worker_id = 0
-        for device_id in topology.device_ids:
-            parent, child = context.Pipe(duplex=True)
-            process = context.Process(
-                target=_self_play_worker_main,
-                args=(child, worker_id, device_id, game.configuration),
-                name=f'self-play-worker-{worker_id}',
-            )
-            process.start()
-            child.close()
+        for worker_id, device_id in enumerate(self._device_ids):
+            parent, process = self._start_worker(worker_id, device_id)
             self._connections.append(parent)
             self._processes.append(process)
-            worker_id += 1
 
     @property
     def worker_count(self) -> int:
@@ -61,6 +54,25 @@ class SelfPlayGroup:
         for connection, desired_state in zip(self._connections, desired_states):
             connection.send(desired_state)
         return tuple(self._receive(connection) for connection in self._connections)
+
+    def restart_exited_workers(self, checkpoint: CheckpointReference) -> tuple[int, ...]:
+        if self._closed:
+            raise RuntimeError('Self-play group is closed.')
+        restarted_worker_ids: list[int] = []
+        for worker_id, process in enumerate(self._processes):
+            if process.is_alive():
+                continue
+            process.join()
+            self._connections[worker_id].close()
+            connection, replacement = self._start_worker(worker_id, self._device_ids[worker_id])
+            self._connections[worker_id] = connection
+            self._processes[worker_id] = replacement
+            connection.send(RunningSelfPlayState(checkpoint=checkpoint))
+            response = self._receive(connection)
+            if response.kind != 'running':
+                raise RuntimeError(f'Restarted self-play worker {worker_id} did not enter the running state.')
+            restarted_worker_ids.append(worker_id)
+        return tuple(restarted_worker_ids)
 
     def close(self) -> None:
         if self._closed:
@@ -83,6 +95,17 @@ class SelfPlayGroup:
         except EOFError as error:
             raise RuntimeError('Self-play worker connection closed unexpectedly.') from error
         return response
+
+    def _start_worker(self, worker_id: int, device_id: int) -> tuple[Connection, BaseProcess]:
+        parent, child = self._context.Pipe(duplex=True)
+        process = self._context.Process(
+            target=_self_play_worker_main,
+            args=(child, worker_id, device_id, self.game.configuration),
+            name=f'self-play-worker-{worker_id}',
+        )
+        process.start()
+        child.close()
+        return parent, process
 
 
 def _self_play_worker_main(

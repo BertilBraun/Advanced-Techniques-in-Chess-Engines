@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 import hashlib
 import multiprocessing
+from multiprocessing.connection import Connection
+from multiprocessing.process import BaseProcess
 from pathlib import Path
 from threading import Thread
 from typing import cast
@@ -19,7 +21,7 @@ from src.self_play.protocol import (
     StoppedSelfPlayStateApplied,
 )
 from src.training.checkpoint import CheckpointReference
-from src.training.self_play_group import _self_play_worker_main
+from src.training.self_play_group import SelfPlayGroup, _self_play_worker_main
 import src.training.self_play_group as self_play_group_module
 
 
@@ -71,6 +73,35 @@ class _Worker:
 
     def snapshot_statistics(self) -> None:
         assert self.generation == 0
+
+
+class _Connection:
+    def __init__(self, response: RunningSelfPlayStateApplied | None = None) -> None:
+        self.response = response
+        self.sent: list[RunningSelfPlayState] = []
+        self.closed = False
+
+    def send(self, desired_state: RunningSelfPlayState) -> None:
+        self.sent.append(desired_state)
+
+    def recv(self) -> RunningSelfPlayStateApplied:
+        assert self.response is not None
+        return self.response
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _Process:
+    def __init__(self, alive: bool) -> None:
+        self.alive = alive
+        self.joined = False
+
+    def is_alive(self) -> bool:
+        return self.alive
+
+    def join(self) -> None:
+        self.joined = True
 
 
 def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:
@@ -134,3 +165,39 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     parent.close()
 
     assert not process.is_alive()
+
+
+def test_group_restarts_only_exited_workers_at_active_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint(tmp_path, 3)
+    healthy_connection = _Connection()
+    exited_connection = _Connection()
+    replacement_connection = _Connection(
+        RunningSelfPlayStateApplied(
+            worker_id=1,
+            loaded_generation=checkpoint.generation,
+            loaded_inference_model_sha256=checkpoint.inference_model_sha256,
+            completed_generation_statistics=None,
+        )
+    )
+    healthy_process = _Process(alive=True)
+    exited_process = _Process(alive=False)
+    replacement_process = _Process(alive=True)
+    group = SelfPlayGroup.__new__(SelfPlayGroup)
+    group._closed = False
+    group._device_ids = (0, 1)
+    group._connections = [cast(Connection, healthy_connection), cast(Connection, exited_connection)]
+    group._processes = [cast(BaseProcess, healthy_process), cast(BaseProcess, exited_process)]
+
+    def start_worker(worker_id: int, device_id: int) -> tuple[Connection, BaseProcess]:
+        assert (worker_id, device_id) == (1, 1)
+        return cast(Connection, replacement_connection), cast(BaseProcess, replacement_process)
+
+    monkeypatch.setattr(group, '_start_worker', start_worker)
+
+    assert group.restart_exited_workers(checkpoint) == (1,)
+    assert exited_process.joined
+    assert exited_connection.closed
+    assert replacement_connection.sent == [RunningSelfPlayState(checkpoint=checkpoint)]
