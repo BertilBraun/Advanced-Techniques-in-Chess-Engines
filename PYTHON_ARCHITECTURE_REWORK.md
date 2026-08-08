@@ -317,7 +317,6 @@ def _ingest_available_games(self) -> None:
 ```python
 def _train_next_generation(self) -> None:
     self._pause_all_self_play_workers()
-    self._ingest_available_games()
 
     result = self.trainer_group.train_quantum(
         self.replay_manager.description(),
@@ -330,10 +329,6 @@ def _train_next_generation(self) -> None:
     self._transition_self_play_workers(result.checkpoint)
     self._launch_due_evaluations(result.checkpoint)
 ```
-
-The second ingestion after every worker has acknowledged `paused` is required. Workers may finish and publish games
-while completing their final native search batch, so replay is not known to be current until those files have also
-been drained. Training starts only after all workers are paused and this final drain has completed.
 
 `TrainerGroup.train_quantum()` is deliberately blocking. The coordinator does not poll self-play, ingest replay, or launch evaluations until the quantum returns. Evaluation processes already running may continue independently.
 
@@ -550,7 +545,7 @@ This permits, for example:
 
 - chess with 60 retained entries despite its 1,880-action encoded space;
 - Go with all board points plus pass retained;
-- experiments that intentionally test tighter policy retention.
+- experiments that intentionally test tighter/looser policy retention.
 
 Ingestion reports the number of truncated policies and aggregate retained and discarded visit mass for both primary
 and auxiliary policies. This telemetry is aggregate only and does not add per-row diagnostic columns.
@@ -742,7 +737,6 @@ class RunningSelfPlayState(FrozenModel):
 
 class PausedSelfPlayState(FrozenModel):
     kind: Literal['paused']
-    checkpoint: CheckpointReference
 
 
 class StoppedSelfPlayState(FrozenModel):
@@ -754,7 +748,7 @@ SelfPlayDesiredState: TypeAlias = (
 )
 ```
 
-Running and paused desired states always name the exact checkpoint that must be loaded before acknowledgement.
+Running desired state always names the exact checkpoint that must be loaded before acknowledgement.
 Re-sending the already loaded checkpoint is idempotent and does not reset games or statistics. Only a running state
 requests completed-generation statistics, making invalid paused/statistics combinations unrepresentable.
 
@@ -785,8 +779,6 @@ class RunningSelfPlayStateApplied(FrozenModel):
 class PausedSelfPlayStateApplied(FrozenModel):
     kind: Literal['paused']
     worker_id: int
-    loaded_generation: int
-    loaded_inference_model_sha256: str
 
 
 class StoppedSelfPlayStateApplied(FrozenModel):
@@ -801,7 +793,7 @@ SelfPlayStateApplied: TypeAlias = (
 )
 ```
 
-Before training, the coordinator sends every worker a paused desired state naming the current checkpoint, then waits
+Before training, the coordinator sends every worker a paused desired state, then waits
 for every acknowledgement. After training, it sends a running state naming the target checkpoint. Every worker
 returns its cheap completed-generation counters; only one or two configured workers
 receive `DETAILED` and collect expensive distributions and native diagnostics. Statistics are captured before old
