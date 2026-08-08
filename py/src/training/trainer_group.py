@@ -147,17 +147,16 @@ class TrainerGroup:
         progress: TrainingProgress,
     ) -> TrainingQuantumResult:
         self._ensure_open()
-        parameters = self.configuration.training.lifecycle.credit
-        source_generation = _generation_for(progress, parameters.optimizer_steps_per_quantum)
-        target_progress = TrainingProgress(
-            completed_optimizer_steps=progress.completed_optimizer_steps + parameters.optimizer_steps_per_quantum
-        )
+        source_generation = progress.model_generation
+        target_progress = progress.next_generation
         command = TrainQuantumCommand(
             replay=replay,
             source_progress=progress,
             target_progress=target_progress,
             parameters=ResolvedTrainingParameters(
-                learning_rate=self.configuration.training.trainer.learning_rate.value_at(source_generation),
+                learning_rate=self.configuration.training.trainer.learning_rate.value_at(
+                    source_generation
+                ),
                 objective=self.game.training_objective_at(source_generation),
             ),
         )
@@ -239,7 +238,9 @@ class TrainerGroup:
                         results.append(response)
                     case RankTrainingFailure():
                         self._terminate_after_rank_failure()
-                        raise RuntimeError(f'DDP training quantum failed on rank {response.rank}: {response.error}')
+                        raise RuntimeError(
+                            f'DDP training quantum failed on rank {response.rank}: {response.error}'
+                        )
                     case TrainerStopped():
                         self._terminate_after_rank_failure()
                         raise RuntimeError('Trainer rank stopped during a training quantum.')
@@ -282,7 +283,11 @@ def _trainer_rank_main(
         torch.set_num_threads(topology.cpu_threads)
         torch.set_num_interop_threads(topology.interop_threads)
         device_id = topology.ddp_device_ids[rank]
-        device = torch.device('cpu') if topology.device_type == 'cpu' else torch.device('cuda', device_id)
+        device = (
+            torch.device('cpu')
+            if topology.device_type == 'cpu'
+            else torch.device('cuda', device_id)
+        )
         if topology.device_type == 'cuda':
             torch.cuda.set_device(device)
         distributed.init_process_group(
@@ -328,7 +333,9 @@ def _trainer_rank_main(
                     )
     except BaseException as error:
         try:
-            connection.send(RankTrainingFailure(rank=rank, error=f'{type(error).__name__}: {error}'))
+            connection.send(
+                RankTrainingFailure(rank=rank, error=f'{type(error).__name__}: {error}')
+            )
         except (BrokenPipeError, EOFError):
             pass
     finally:
@@ -352,7 +359,8 @@ def _train_rank_quantum(
     for group in optimizer.param_groups:
         group['lr'] = command.parameters.learning_rate
     optimizer_steps = (
-        command.target_progress.completed_optimizer_steps - command.source_progress.completed_optimizer_steps
+        command.target_progress.completed_optimizer_steps
+        - command.source_progress.completed_optimizer_steps
     )
     loader = MappedReplayBatchLoader(
         replay=command.replay,
@@ -389,10 +397,7 @@ def _train_rank_quantum(
             auxiliary_losses[index] += float(auxiliary.detach())
     checkpoint = None
     if rank == 0:
-        generation = _generation_for(
-            command.target_progress,
-            configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
-        )
+        generation = command.target_progress.model_generation
         save_model_and_optimizer(model, optimizer, generation, configuration.training.save_path)
         checkpoint = CheckpointReference.load(Path(configuration.training.save_path), generation)
     distributed.barrier()
@@ -414,12 +419,6 @@ def _train_rank_quantum(
 
 def topology_uses_cuda(configuration: ExperimentConfiguration) -> bool:
     return configuration.training.topology.trainer.device_type == 'cuda'
-
-
-def _generation_for(progress: TrainingProgress, optimizer_steps_per_quantum: int) -> int:
-    if progress.completed_optimizer_steps % optimizer_steps_per_quantum:
-        raise ValueError('Optimizer progress must align with complete training quanta.')
-    return progress.completed_optimizer_steps // optimizer_steps_per_quantum
 
 
 def _available_tcp_port() -> int:

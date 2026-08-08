@@ -44,7 +44,9 @@ class CreditLedger:
         self.parameters = parameters
         self.global_batch_size = global_batch_size
         if self.path.exists():
-            self._state = CreditLedgerState.model_validate_json(self.path.read_text(encoding='utf-8'))
+            self._state = CreditLedgerState.model_validate_json(
+                self.path.read_text(encoding='utf-8')
+            )
         else:
             self._state = CreditLedgerState(
                 completed_optimizer_steps=0,
@@ -54,7 +56,9 @@ class CreditLedger:
             )
             self.save()
         if self._state.active_checkpoint.generation != self.model_generation:
-            raise ValueError('Active checkpoint generation disagrees with completed optimizer progress.')
+            raise ValueError(
+                'Active checkpoint generation disagrees with completed optimizer progress.'
+            )
         self._adopt_completed_quantum(run_path)
 
     @property
@@ -63,7 +67,10 @@ class CreditLedger:
 
     @property
     def progress(self) -> TrainingProgress:
-        return TrainingProgress(completed_optimizer_steps=self._state.completed_optimizer_steps)
+        return TrainingProgress(
+            completed_optimizer_steps=self._state.completed_optimizer_steps,
+            optimizer_steps_per_generation=self.parameters.optimizer_steps_per_quantum,
+        )
 
     @property
     def model_generation(self) -> int:
@@ -93,12 +100,17 @@ class CreditLedger:
         if sample_count == 0:
             return
         self._state = self._state.model_copy(
-            update={'earned_credits': self._state.earned_credits + Decimal(sample_count) * self.parameters.replay_ratio}
+            update={
+                'earned_credits': self._state.earned_credits
+                + Decimal(sample_count) * self.parameters.replay_ratio
+            }
         )
         self.save()
 
     def commit_quantum(self, result: TrainingQuantumResult) -> None:
-        expected_steps = self._state.completed_optimizer_steps + self.parameters.optimizer_steps_per_quantum
+        expected_steps = (
+            self._state.completed_optimizer_steps + self.parameters.optimizer_steps_per_quantum
+        )
         if result.completed_optimizer_steps != expected_steps:
             raise ValueError('Training result does not advance exactly one configured quantum.')
         expected_generation = self.model_generation + 1
@@ -130,7 +142,9 @@ class CreditLedger:
             return
         expected_generation = self.model_generation + 1
         if newer_generations != [expected_generation]:
-            raise ValueError('Checkpoint manifests do not contain exactly the next uncommitted quantum.')
+            raise ValueError(
+                'Checkpoint manifests do not contain exactly the next uncommitted quantum.'
+            )
         required = Decimal(self.parameters.presentation_credits_per_quantum(self.global_batch_size))
         if self._state.available_credits < required:
             raise ValueError('Completed checkpoint cannot be adopted without its training credits.')
@@ -138,7 +152,8 @@ class CreditLedger:
         self._state = self._state.model_copy(
             update={
                 'completed_optimizer_steps': (
-                    self._state.completed_optimizer_steps + self.parameters.optimizer_steps_per_quantum
+                    self._state.completed_optimizer_steps
+                    + self.parameters.optimizer_steps_per_quantum
                 ),
                 'consumed_credits': self._state.consumed_credits + required,
                 'active_checkpoint': checkpoint,
