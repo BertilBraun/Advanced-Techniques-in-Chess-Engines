@@ -13,7 +13,7 @@ from src.training.configuration import CreditTrainingParams
 from src.util.atomic_file import write_text_atomically
 
 
-CREDIT_LEDGER_SCHEMA_VERSION = 1
+CREDIT_LEDGER_SCHEMA_VERSION = 2
 
 
 def _sha256(path: Path) -> str:
@@ -24,16 +24,16 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-class CreditTrainingProgress(FrozenModel):
+class TrainingProgress(FrozenModel):
+    completed_optimizer_steps: int = Field(ge=0)
+
+
+class CreditTrainingProgress(TrainingProgress):
     schema_version: int = CREDIT_LEDGER_SCHEMA_VERSION
     credited_unique_samples: int = Field(ge=0)
     earned_position_credits: Decimal = Field(ge=0)
     consumed_position_credits: Decimal = Field(ge=0)
     available_position_credits: Decimal = Field(ge=0)
-    completed_optimizer_steps: int = Field(ge=0)
-    completed_training_quanta: int = Field(ge=0)
-    model_version: int = Field(ge=0)
-    sampler_global_step: int = Field(ge=0)
 
     @model_validator(mode='after')
     def validate_counters(self) -> CreditTrainingProgress:
@@ -41,8 +41,6 @@ class CreditTrainingProgress(FrozenModel):
             raise ValueError(f'Unsupported credit-ledger schema {self.schema_version}.')
         if self.available_position_credits != self.earned_position_credits - self.consumed_position_credits:
             raise ValueError('Available credits must equal earned credits minus consumed credits.')
-        if self.model_version != self.completed_training_quanta:
-            raise ValueError('Model version must equal the number of committed training quanta.')
         return self
 
     @classmethod
@@ -53,9 +51,6 @@ class CreditTrainingProgress(FrozenModel):
             consumed_position_credits=Decimal(0),
             available_position_credits=Decimal(0),
             completed_optimizer_steps=0,
-            completed_training_quanta=0,
-            model_version=0,
-            sampler_global_step=0,
         )
 
     def reconcile_credited_samples(
@@ -98,9 +93,6 @@ class CreditTrainingProgress(FrozenModel):
                 'consumed_position_credits': consumed_position_credits,
                 'available_position_credits': self.earned_position_credits - consumed_position_credits,
                 'completed_optimizer_steps': completed_optimizer_steps,
-                'completed_training_quanta': self.completed_training_quanta + 1,
-                'model_version': self.model_version + 1,
-                'sampler_global_step': completed_optimizer_steps,
             }
         )
 
@@ -117,10 +109,8 @@ class PreparedTrainingQuantum(FrozenModel):
     def validate_transition(self) -> PreparedTrainingQuantum:
         if self.schema_version != CREDIT_LEDGER_SCHEMA_VERSION:
             raise ValueError(f'Unsupported prepared-quantum schema {self.schema_version}.')
-        if self.prepared_progress.completed_training_quanta != self.previous_progress.completed_training_quanta + 1:
-            raise ValueError('A prepared quantum must advance exactly one training quantum.')
-        if self.prepared_progress.model_version != self.previous_progress.model_version + 1:
-            raise ValueError('A prepared quantum must advance exactly one model version.')
+        if self.prepared_progress.completed_optimizer_steps <= self.previous_progress.completed_optimizer_steps:
+            raise ValueError('A prepared quantum must advance optimizer progress.')
         return self
 
 
@@ -156,6 +146,16 @@ class CreditTrainingLedger:
         return self._progress
 
     @property
+    def model_generation(self) -> int:
+        return self.generation_for(self._progress)
+
+    def generation_for(self, progress: TrainingProgress) -> int:
+        completed_steps = progress.completed_optimizer_steps
+        if completed_steps % self.parameters.optimizer_steps_per_quantum:
+            raise ValueError('Optimizer progress must align with complete training quanta.')
+        return completed_steps // self.parameters.optimizer_steps_per_quantum
+
+    @property
     def prepared_quantum(self) -> PreparedTrainingQuantum | None:
         if not self.prepared_path.exists():
             return None
@@ -163,7 +163,7 @@ class CreditTrainingLedger:
         checkpoint_manifest = self.run_path / prepared.checkpoint_manifest_path
         if not checkpoint_manifest.is_file() or _sha256(checkpoint_manifest) != prepared.checkpoint_manifest_sha256:
             raise ValueError('Prepared training quantum references an invalid checkpoint manifest.')
-        if prepared.previous_progress.completed_training_quanta != self._progress.completed_training_quanta:
+        if prepared.previous_progress.completed_optimizer_steps != self._progress.completed_optimizer_steps:
             raise ValueError('Prepared training quantum does not follow the last committed quantum.')
         self._validate_quantum_transition(prepared.previous_progress, prepared.prepared_progress)
         return prepared
@@ -205,7 +205,7 @@ class CreditTrainingLedger:
             checkpoint_manifest_sha256=prepared.checkpoint_manifest_sha256,
             committed_at_seconds=time.time(),
         )
-        commit_path = self._commit_path(prepared.prepared_progress.completed_training_quanta)
+        commit_path = self._commit_path(self.generation_for(prepared.prepared_progress))
         if commit_path.exists():
             raise RuntimeError(f'Training quantum is already committed: {commit_path}')
         write_text_atomically(commit_path, committed.model_dump_json(indent=2) + '\n')
@@ -225,7 +225,7 @@ class CreditTrainingLedger:
             return CreditTrainingProgress.initial()
         previous_progress = CreditTrainingProgress.initial()
         for expected_quantum, committed in enumerate(committed_quanta, start=1):
-            if committed.progress.completed_training_quanta != expected_quantum:
+            if self.generation_for(committed.progress) != expected_quantum:
                 raise ValueError('Committed training-quantum sequence is not contiguous.')
             self._validate_quantum_transition(previous_progress, committed.progress)
             checkpoint_manifest = self.run_path / committed.checkpoint_manifest_path
@@ -248,9 +248,6 @@ class CreditTrainingLedger:
         committed_counters_match = (
             prepared.previous_progress.consumed_position_credits == self._progress.consumed_position_credits
             and prepared.previous_progress.completed_optimizer_steps == self._progress.completed_optimizer_steps
-            and prepared.previous_progress.completed_training_quanta == self._progress.completed_training_quanta
-            and prepared.previous_progress.model_version == self._progress.model_version
-            and prepared.previous_progress.sampler_global_step == self._progress.sampler_global_step
         )
         if not committed_counters_match:
             raise ValueError('Prepared training quantum does not follow the last committed quantum.')
@@ -266,12 +263,8 @@ class CreditTrainingLedger:
             self.parameters.optimizer_steps_per_quantum
         ):
             raise ValueError('Training quantum does not advance the configured optimizer-step count.')
-        if current.completed_training_quanta != previous.completed_training_quanta + 1:
-            raise ValueError('Training quantum does not advance exactly one quantum.')
-        if current.model_version != previous.model_version + 1:
-            raise ValueError('Training quantum does not advance exactly one model version.')
-        if current.sampler_global_step != current.completed_optimizer_steps:
-            raise ValueError('Replay sampler step must equal the completed optimizer-step count.')
+        if self.generation_for(current) != self.generation_for(previous) + 1:
+            raise ValueError('Training quantum does not advance exactly one model generation.')
         if current.credited_unique_samples < previous.credited_unique_samples:
             raise ValueError('Training quantum cannot reduce credited unique samples.')
         if current.earned_position_credits < previous.earned_position_credits:

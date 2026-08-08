@@ -119,7 +119,7 @@ def test_publication_failure_leaves_prepared_quantum_and_credits_uncommitted(
     commander = object.__new__(CommanderProcess)
 
     def fail_publication(prepared: PreparedTrainingQuantum) -> None:
-        raise RuntimeError(f'publication failed for {prepared.prepared_progress.model_version}')
+        raise RuntimeError(f'publication failed for {prepared.prepared_progress.completed_optimizer_steps}')
 
     monkeypatch.setattr(commander, '_publish_prepared_quantum', fail_publication)
     monkeypatch.setattr(commander, '_validate_credit_recovery_checkpoint', lambda model_version, run_path: None)
@@ -147,7 +147,7 @@ def test_prepared_restart_publishes_and_commits_without_retraining(
     monkeypatch.setattr(
         commander,
         '_publish_prepared_quantum',
-        lambda prepared: published_versions.append(prepared.prepared_progress.model_version),
+        lambda prepared: published_versions.append(prepared.prepared_progress.completed_optimizer_steps),
     )
     monkeypatch.setattr(commander, '_validate_credit_recovery_checkpoint', lambda model_version, run_path: None)
     monkeypatch.setattr(commander, '_prune_nonretained_credit_checkpoint', pruned_versions.append)
@@ -159,6 +159,6 @@ def test_prepared_restart_publishes_and_commits_without_retraining(
     assert published_versions == [1]
     assert pruned_versions == [0]
     assert ledger.progress.completed_optimizer_steps == 1
-    assert ledger.progress.completed_training_quanta == 1
+    assert ledger.model_generation == 1
     assert ledger.prepared_quantum is None
     assert commander.latest_completed_model_version == 1

@@ -85,20 +85,26 @@ def create_credit_publication_manifest(
     run_path: Path,
     progress: CreditTrainingProgress,
     global_batch_size: int,
+    optimizer_steps_per_quantum: int,
 ) -> CreditPublicationManifest:
     if global_batch_size <= 0:
         raise ValueError('Global batch size must be positive.')
-    checkpoint = load_checkpoint_manifest(progress.model_version, run_path)
+    if optimizer_steps_per_quantum <= 0:
+        raise ValueError('Optimizer steps per quantum must be positive.')
+    if progress.completed_optimizer_steps % optimizer_steps_per_quantum:
+        raise ValueError('Optimizer progress must align with complete training quanta.')
+    model_generation = progress.completed_optimizer_steps // optimizer_steps_per_quantum
+    checkpoint = load_checkpoint_manifest(model_generation, run_path)
     run_manifest_path = run_path / 'run_manifest.json'
     if not run_manifest_path.is_file():
         raise ValueError(f'Run manifest does not exist: {run_manifest_path}')
     run_manifest = ExperimentRunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
-    checkpoint_path = run_path / f'checkpoint_{progress.model_version}.json'
+    checkpoint_path = run_path / f'checkpoint_{model_generation}.json'
     expected_presentations = progress.completed_optimizer_steps * global_batch_size
     if Decimal(expected_presentations) != progress.consumed_position_credits:
         raise ValueError('Credit progress does not match optimizer-step presentations.')
     return CreditPublicationManifest(
-        model_version=progress.model_version,
+        model_version=model_generation,
         completed_optimizer_steps=progress.completed_optimizer_steps,
         trained_position_presentations=expected_presentations,
         global_batch_size=global_batch_size,

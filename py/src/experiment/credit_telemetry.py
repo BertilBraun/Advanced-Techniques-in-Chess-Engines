@@ -214,6 +214,7 @@ def build_credit_training_telemetry(
     global_batch_size: int,
     evaluation_source_model_version: int | None,
     evaluation_status: CreditEvaluationTelemetryStatus,
+    optimizer_steps_per_quantum: int,
 ) -> CreditTrainingTelemetry:
     if previous_credited_completed_searches < 0:
         raise ValueError('Previous credited completed searches must be nonnegative.')
@@ -224,8 +225,13 @@ def build_credit_training_telemetry(
         replay_newest_source_model_version,
         replay_weighted_mean_source_model_version_midpoint,
     )
+    if optimizer_steps_per_quantum <= 0:
+        raise ValueError('Optimizer steps per quantum must be positive.')
+    if progress.completed_optimizer_steps % optimizer_steps_per_quantum:
+        raise ValueError('Optimizer progress must align with complete training quanta.')
+    model_generation = progress.completed_optimizer_steps // optimizer_steps_per_quantum
     if any(
-        source_model_version is not None and source_model_version > progress.model_version
+        source_model_version is not None and source_model_version > model_generation
         for source_model_version in replay_source_model_versions
     ):
         raise ValueError('Replay source model version cannot be newer than the trained model version.')
@@ -242,8 +248,8 @@ def build_credit_training_telemetry(
     return CreditTrainingTelemetry(
         trained_position_presentations=presentations,
         optimizer_step=progress.completed_optimizer_steps,
-        training_quantum=progress.completed_training_quanta,
-        model_version=progress.model_version,
+        training_quantum=model_generation,
+        model_version=model_generation,
         generated_unique_positions=progress.credited_unique_samples,
         credited_unique_positions=progress.credited_unique_samples,
         credited_completed_searches=credited_completed_searches,
@@ -277,17 +283,17 @@ def build_credit_training_telemetry(
         replay_newest_source_model_version=replay_newest_source_model_version,
         replay_weighted_mean_source_model_version_midpoint=replay_weighted_mean_source_model_version_midpoint,
         replay_oldest_source_model_staleness=(
-            progress.model_version - replay_oldest_source_model_version
+            model_generation - replay_oldest_source_model_version
             if replay_oldest_source_model_version is not None
             else None
         ),
         replay_newest_source_model_staleness=(
-            progress.model_version - replay_newest_source_model_version
+            model_generation - replay_newest_source_model_version
             if replay_newest_source_model_version is not None
             else None
         ),
         replay_weighted_mean_source_model_staleness=(
-            progress.model_version - replay_weighted_mean_source_model_version_midpoint
+            model_generation - replay_weighted_mean_source_model_version_midpoint
             if replay_weighted_mean_source_model_version_midpoint is not None
             else None
         ),

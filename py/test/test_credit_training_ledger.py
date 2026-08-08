@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from src.training.ledger import CreditTrainingLedger, CreditTrainingProgress
+from src.training.ledger import CreditTrainingLedger, CreditTrainingProgress, TrainingProgress
 from src.training.configuration import CreditTrainingParams
 
 
@@ -35,6 +35,14 @@ def test_exactly_12_800_unique_samples_enable_one_quantum() -> None:
 
     assert not insufficient.can_train(51_200)
     assert sufficient.can_train(51_200)
+
+
+def test_model_generation_is_derived_from_aligned_optimizer_progress(tmp_path: Path) -> None:
+    ledger = CreditTrainingLedger(tmp_path, _parameters(), global_batch_size=1_024)
+
+    assert ledger.model_generation == 0
+    with pytest.raises(ValueError, match='align'):
+        ledger.generation_for(TrainingProgress(completed_optimizer_steps=49))
 
 
 def test_fractional_and_surplus_credits_carry_forward() -> None:
@@ -84,7 +92,7 @@ def test_restart_recovers_commit_written_before_prepared_cleanup(tmp_path: Path)
 
     restarted = CreditTrainingLedger(tmp_path, _parameters(), global_batch_size=1_024)
 
-    assert restarted.progress.completed_training_quanta == 1
+    assert restarted.model_generation == 1
     assert not restarted.prepared_path.exists()
 
 

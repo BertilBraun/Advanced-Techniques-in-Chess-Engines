@@ -94,9 +94,6 @@ def _progress() -> CreditTrainingProgress:
         consumed_position_credits=Decimal(51_200),
         available_position_credits=Decimal(0),
         completed_optimizer_steps=50,
-        completed_training_quanta=1,
-        model_version=1,
-        sampler_global_step=50,
     )
 
 
@@ -104,7 +101,7 @@ def test_immutable_publication_binds_artifacts_configuration_and_source(tmp_path
     run_manifest = _write_run_manifest(tmp_path)
     _write_checkpoint(tmp_path, 1)
 
-    publication = create_credit_publication_manifest(tmp_path, _progress(), 1_024)
+    publication = create_credit_publication_manifest(tmp_path, _progress(), 1_024, 50)
     pointer = write_credit_publication_manifest(tmp_path, publication)
     loaded_pointer, loaded = load_credit_publication_pointer(tmp_path, pointer.model_dump_json())
 
@@ -121,7 +118,7 @@ def test_self_play_scope_validates_exact_jit_but_not_pruned_recovery_artifacts(
 ) -> None:
     _write_run_manifest(tmp_path)
     _write_checkpoint(tmp_path, 1)
-    publication = create_credit_publication_manifest(tmp_path, _progress(), 1_024)
+    publication = create_credit_publication_manifest(tmp_path, _progress(), 1_024, 50)
     pointer = write_credit_publication_manifest(tmp_path, publication)
     (tmp_path / publication.model.path).unlink()
     (tmp_path / publication.optimizer.path).unlink()
@@ -145,7 +142,7 @@ def test_self_play_scope_validates_exact_jit_but_not_pruned_recovery_artifacts(
 def test_publication_rejects_run_manifest_provenance_change(tmp_path: Path) -> None:
     _write_run_manifest(tmp_path)
     _write_checkpoint(tmp_path, 1)
-    publication = create_credit_publication_manifest(tmp_path, _progress(), 1_024)
+    publication = create_credit_publication_manifest(tmp_path, _progress(), 1_024, 50)
     pointer = write_credit_publication_manifest(tmp_path, publication)
     _write_run_manifest(tmp_path, source_revision='c' * 40)
 

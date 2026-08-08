@@ -174,14 +174,15 @@ class CommanderProcess:
             parameters,
             self.args.trainer.global_batch_size,
         )
-        self._validate_credit_recovery_checkpoint(ledger.progress.model_version, ledger.run_path)
-        self.latest_completed_model_version = ledger.progress.model_version
+        self._validate_credit_recovery_checkpoint(ledger.model_generation, ledger.run_path)
+        self.latest_completed_model_version = ledger.model_generation
         self._setup_connections()
         self.communication.send_to_id('START USAGE LOGGER', node_id=0)
         initial_manifest = create_credit_publication_manifest(
             ledger.run_path,
             ledger.progress,
             self.args.trainer.global_batch_size,
+            self.args.lifecycle.credit.optimizer_steps_per_quantum,
         )
         initial_pointer = write_credit_publication_manifest(ledger.run_path, initial_manifest)
         self._publish_credit_manifest(initial_manifest, initial_pointer)
@@ -198,13 +199,14 @@ class CommanderProcess:
                 ledger.run_path,
                 ledger.progress,
                 self.args.trainer.global_batch_size,
+                self.args.lifecycle.credit.optimizer_steps_per_quantum,
             )
         )
         evaluation_scheduler.poll()
         previous_telemetry = load_last_credit_training_telemetry(ledger.run_path / 'credit-training-telemetry.jsonl')
         started_at = monotonic()
         try:
-            trainer = TrainerProcess(self.game, self.run_id, ledger.progress.model_version)
+            trainer = TrainerProcess(self.game, self.run_id, ledger.model_generation)
         except BaseException:
             evaluation_scheduler.close()
             raise
@@ -225,7 +227,7 @@ class CommanderProcess:
         lifecycle: TrainingLifecycle,
         parameters: CreditTrainingParams,
     ) -> CreditObservation | None:
-        replay_capacity = parameters.replay_capacity_for_model_version(lifecycle.ledger.progress.model_version)
+        replay_capacity = parameters.replay_capacity_for_model_version(lifecycle.ledger.model_generation)
         replay_state = lifecycle.trainer.maintain_replay(replay_capacity)
         progress = lifecycle.ledger.reconcile_credited_samples(replay_state.credited_unique_samples)
         required_credits = parameters.presentation_credits_per_quantum(self.args.trainer.global_batch_size)
@@ -248,8 +250,8 @@ class CommanderProcess:
     ) -> CompletedQuantum:
         result = self._train_quantum_with_self_play_cleanup(
             lifecycle.trainer,
-            global_step=observation.progress.sampler_global_step,
-            model_version=observation.progress.model_version + 1,
+            global_step=observation.progress.completed_optimizer_steps,
+            model_version=lifecycle.ledger.generation_for(observation.progress) + 1,
         )
         prepared = lifecycle.ledger.prepare_quantum(result.checkpoint_manifest)
         publication = self._publish_prepared_quantum(prepared)
@@ -267,7 +269,8 @@ class CommanderProcess:
         scheduler.poll()
         for model_version in scheduler.completed_unpinned_model_versions:
             self._prune_nonretained_credit_checkpoint(model_version)
-        self._prune_nonretained_credit_checkpoint(progress.model_version - 1, scheduler.pinned_model_versions)
+        model_generation = progress.completed_optimizer_steps // self.args.lifecycle.credit.optimizer_steps_per_quantum
+        self._prune_nonretained_credit_checkpoint(model_generation - 1, scheduler.pinned_model_versions)
 
     def _record_quantum_telemetry(
         self,
@@ -307,6 +310,7 @@ class CommanderProcess:
             global_batch_size=self.args.trainer.global_batch_size,
             evaluation_source_model_version=scheduler.current_source_version,
             evaluation_status=scheduler.current_status,
+            optimizer_steps_per_quantum=self.args.lifecycle.credit.optimizer_steps_per_quantum,
         )
         append_credit_training_telemetry(
             Path(self.args.save_path) / 'credit-training-telemetry.jsonl',
@@ -321,7 +325,7 @@ class CommanderProcess:
         observation: CreditObservation,
         progress: CreditTrainingProgress,
     ) -> None:
-        self.latest_completed_model_version = progress.model_version
+        self.latest_completed_model_version = lifecycle.ledger.generation_for(progress)
         lifecycle.previous_progress = progress
         lifecycle.previous_credited_completed_searches = observation.replay_state.credited_completed_searches
         lifecycle.credit_wait_started_at = monotonic()
@@ -333,17 +337,18 @@ class CommanderProcess:
         prepared: PreparedTrainingQuantum,
     ) -> PublicationResult:
         self._validate_credit_recovery_checkpoint(
-            prepared.prepared_progress.model_version,
+            ledger.generation_for(prepared.prepared_progress),
             ledger.run_path,
         )
         log(
             f'Retrying publication of prepared model version '
-            f'{prepared.prepared_progress.model_version} without retraining.'
+            f'{ledger.generation_for(prepared.prepared_progress)} without retraining.'
         )
         publication = self._publish_prepared_quantum(prepared)
         committed = ledger.commit_prepared_quantum()
-        self._prune_nonretained_credit_checkpoint(committed.model_version - 1)
-        self.latest_completed_model_version = committed.model_version
+        committed_generation = ledger.generation_for(committed)
+        self._prune_nonretained_credit_checkpoint(committed_generation - 1)
+        self.latest_completed_model_version = committed_generation
         return publication
 
     def _validate_credit_recovery_checkpoint(
@@ -364,6 +369,7 @@ class CommanderProcess:
             Path(self.args.save_path),
             prepared.prepared_progress,
             self.args.trainer.global_batch_size,
+            self.args.lifecycle.credit.optimizer_steps_per_quantum,
         )
         pointer = write_credit_publication_manifest(Path(self.args.save_path), manifest)
         publication_seconds = monotonic() - started_at

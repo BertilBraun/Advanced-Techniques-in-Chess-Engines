@@ -32,9 +32,6 @@ def _progress(
         consumed_position_credits=Decimal(consumed_credits),
         available_position_credits=earned - Decimal(consumed_credits),
         completed_optimizer_steps=optimizer_steps,
-        completed_training_quanta=quanta,
-        model_version=quanta,
-        sampler_global_step=optimizer_steps,
     )
 
 
@@ -72,6 +69,7 @@ def _telemetry(
         global_batch_size=1_024,
         evaluation_source_model_version=20,
         evaluation_status=CreditEvaluationTelemetryStatus.ACTIVE,
+        optimizer_steps_per_quantum=50,
     )
 
 
