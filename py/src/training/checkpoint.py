@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from src.util.frozen_model import FrozenModel
@@ -13,6 +14,16 @@ class CheckpointReference(FrozenModel):
     optimizer_path: Path
     inference_model_path: Path
     inference_model_sha256: str
+
+    def validate_inference_model(self) -> None:
+        if not self.inference_model_path.is_file():
+            raise ValueError(f'Inference model does not exist: {self.inference_model_path}')
+        digest = hashlib.sha256()
+        with self.inference_model_path.open('rb') as model_file:
+            while chunk := model_file.read(1024 * 1024):
+                digest.update(chunk)
+        if digest.hexdigest() != self.inference_model_sha256:
+            raise ValueError(f'Inference model hash does not match: {self.inference_model_path}')
 
     @classmethod
     def load(cls, run_path: Path, generation: int) -> CheckpointReference:
