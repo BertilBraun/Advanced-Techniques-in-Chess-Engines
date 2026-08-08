@@ -57,6 +57,8 @@ class RankTrainingResult(FrozenModel):
     auxiliary_losses: tuple[float, ...]
     total_loss: float
     gradient_norm: float
+    replay_rows_read: int
+    replay_read_seconds: float
     elapsed_seconds: float
     checkpoint: CheckpointReference | None
 
@@ -82,6 +84,8 @@ class TrainingStatistics:
     auxiliary_losses: tuple[float, ...]
     total_loss: float
     gradient_norm: float
+    replay_rows_per_second: float
+    training_samples_per_second: float
     elapsed_seconds: float
 
 
@@ -186,6 +190,15 @@ class TrainerGroup:
                 ),
                 total_loss=_mean(tuple(result.total_loss for result in results)),
                 gradient_norm=_mean(tuple(result.gradient_norm for result in results)),
+                replay_rows_per_second=(
+                    sum(result.replay_rows_read for result in results)
+                    / max(result.replay_read_seconds for result in results)
+                ),
+                training_samples_per_second=(
+                    self.configuration.training.trainer.global_batch_size
+                    * self.configuration.training.lifecycle.credit.optimizer_steps_per_quantum
+                    / max(result.elapsed_seconds for result in results)
+                ),
                 elapsed_seconds=max(result.elapsed_seconds for result in results),
             ),
         )
@@ -392,6 +405,8 @@ def _train_rank_quantum(
         auxiliary_losses=tuple(value / divisor for value in auxiliary_losses),
         total_loss=total_losses / divisor,
         gradient_norm=gradient_norms / divisor,
+        replay_rows_read=loader.rows_read,
+        replay_read_seconds=loader.read_seconds,
         elapsed_seconds=time.perf_counter() - started_at,
         checkpoint=checkpoint,
     )

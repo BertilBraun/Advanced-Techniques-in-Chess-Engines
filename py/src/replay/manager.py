@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import time
 from typing import Generic, TypeVar
 
 from src.games.contracts import GameStateContract
@@ -25,6 +26,11 @@ class ReplayIngestion:
     policies_truncated: int
     retained_visit_mass: int
     discarded_visit_mass: int
+    elapsed_seconds: float
+
+    @property
+    def samples_per_second(self) -> float:
+        return self.samples_added / self.elapsed_seconds if self.elapsed_seconds > 0.0 else 0.0
 
 
 class ReplayDescription(FrozenModel):
@@ -83,6 +89,7 @@ class ReplayManager(Generic[PositionT]):
         return self.store.state.size
 
     def ingest_available_games(self, model_generation: int) -> ReplayIngestion:
+        started_at = time.perf_counter()
         before = self.store.state
         self.store.set_logical_capacity(self.configuration.capacity_at(model_generation))
         games_ingested = 0
@@ -118,6 +125,7 @@ class ReplayManager(Generic[PositionT]):
             policies_truncated=policies_truncated,
             retained_visit_mass=retained_visit_mass,
             discarded_visit_mass=discarded_visit_mass,
+            elapsed_seconds=time.perf_counter() - started_at,
         )
 
     def description(self) -> ReplayDescription:

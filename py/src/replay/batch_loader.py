@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
 from typing import Generic, TypeVar
+import time
 
 import numpy as np
 import numpy.typing as npt
@@ -51,6 +52,12 @@ class MappedReplayBatchLoader(Generic[PositionT]):
         self.rank = rank
         self.sampler_seed = sampler_seed
         self.pin_memory = pin_memory
+        self.rows_read = 0
+        self.read_seconds = 0.0
+
+    @property
+    def rows_per_second(self) -> float:
+        return self.rows_read / self.read_seconds if self.read_seconds > 0.0 else 0.0
 
     def __iter__(self) -> Iterator[TrainingBatch]:
         store = ReplayStore.open(self.replay.path, self.replay.layout, writable=False)
@@ -78,13 +85,17 @@ class MappedReplayBatchLoader(Generic[PositionT]):
                 local_stop = local_start + self.local_batch_size
                 sample_indices = global_sample_indices[local_start:local_stop]
                 augmentation_indices = global_augmentation_indices[local_start:local_stop]
+                started_at = time.perf_counter()
                 batch = build_training_batch(
                     store,
                     self.state,
                     tuple(int(index) for index in sample_indices),
                     tuple(int(index) for index in augmentation_indices),
                 )
-                yield batch.pin_memory() if self.pin_memory else batch
+                prepared = batch.pin_memory() if self.pin_memory else batch
+                self.rows_read += len(sample_indices)
+                self.read_seconds += time.perf_counter() - started_at
+                yield prepared
         finally:
             store.close()
 

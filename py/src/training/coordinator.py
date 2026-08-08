@@ -14,8 +14,10 @@ from src.self_play.protocol import (
 from src.training.checkpoint import CheckpointReference
 from src.training.credit_ledger import CreditLedger
 from src.training.self_play_group import SelfPlayGroup
-from src.training.trainer_group import TrainerGroup
+from src.training.trainer_group import TrainerGroup, TrainingQuantumResult
 from src.training.run_limits import RunLimitMonitor
+from src.util.log import log
+from src.util.tensorboard import log_scalar
 
 
 class Coordinator:
@@ -94,6 +96,7 @@ class Coordinator:
         result = self.trainer_group.train_quantum(self.replay_manager.description(), self.ledger.progress)
         self.ledger.commit_quantum(result)
         self.latest_completed_model_version = self.ledger.model_generation
+        self._record_training_statistics(result)
         detailed_workers = self._detailed_statistics_workers()
         desired_states = tuple(
             RunningSelfPlayState(
@@ -111,3 +114,18 @@ class Coordinator:
     def _detailed_statistics_workers(self) -> int:
         configured = self.game.self_play_configuration.detailed_statistics_workers
         return min(configured, self.self_play_group.worker_count)
+
+    def _record_training_statistics(self, result: TrainingQuantumResult) -> None:
+        generation = result.checkpoint.generation
+        statistics = result.statistics
+        log_scalar('training/policy_loss', statistics.policy_loss, generation)
+        log_scalar('training/wdl_loss', statistics.wdl_loss, generation)
+        log_scalar('training/total_loss', statistics.total_loss, generation)
+        log_scalar('training/gradient_norm', statistics.gradient_norm, generation)
+        log_scalar('throughput/replay_rows_per_second', statistics.replay_rows_per_second, generation)
+        log_scalar('throughput/training_samples_per_second', statistics.training_samples_per_second, generation)
+        log(
+            f'Completed generation {generation}: loss={statistics.total_loss:.4f}, '
+            f'replay={statistics.replay_rows_per_second:.0f} rows/s, '
+            f'training={statistics.training_samples_per_second:.0f} samples/s'
+        )

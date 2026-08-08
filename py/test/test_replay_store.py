@@ -52,6 +52,7 @@ def test_replay_store_persists_fixed_rows_and_fifo_state(tmp_path: Path) -> None
     layout = _layout()
     path = tmp_path / 'replay.bin'
     store = ReplayStore.create(path, layout, maximum_capacity=5, logical_capacity=3)
+    assert store.allocated_file_size == ReplayStore.projected_file_size(layout, 5)
     samples = tuple(
         _sample(layout, action_id, action_id, auxiliary_eligible=action_id % 2 == 0) for action_id in range(5)
     )

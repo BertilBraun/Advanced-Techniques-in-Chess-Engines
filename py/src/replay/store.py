@@ -68,6 +68,12 @@ class ReplayStore:
         self._closed = False
 
     @classmethod
+    def projected_file_size(cls, layout: ReplayLayout, maximum_capacity: int) -> int:
+        if maximum_capacity <= 0:
+            raise ValueError('Replay maximum capacity must be positive.')
+        return _HEADER_DTYPE.itemsize + maximum_capacity * layout.row_bytes
+
+    @classmethod
     def create(
         cls,
         path: Path,
@@ -79,7 +85,7 @@ class ReplayStore:
         if path.exists():
             raise ValueError(f'Replay store already exists: {path}')
         path.parent.mkdir(parents=True, exist_ok=True)
-        file_size = _HEADER_DTYPE.itemsize + maximum_capacity * layout.row_bytes
+        file_size = cls.projected_file_size(layout, maximum_capacity)
         with path.open('wb') as new_file:
             new_file.truncate(file_size)
         store = cls._map(path, layout, writable=True, maximum_capacity=maximum_capacity)
@@ -94,6 +100,10 @@ class ReplayStore:
         store._header[0]['evicted_rows'] = 0
         store.flush()
         return store
+
+    @property
+    def allocated_file_size(self) -> int:
+        return self.path.stat().st_size
 
     @classmethod
     def open(cls, path: Path, layout: ReplayLayout, writable: bool = True) -> ReplayStore:
