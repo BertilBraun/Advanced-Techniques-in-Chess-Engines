@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 from typing import TextIO
+from types import TracebackType
+
+from pydantic import JsonValue, TypeAdapter
 
 from src.evaluation.configuration import KataGoEngineConfiguration
 from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
 from src.games.go.contract import GoStateContract, NativeGoPosition
+
+
+JSON_VALUE_ADAPTER = TypeAdapter(JsonValue)
 
 
 def _file_sha256(path: Path) -> str:
@@ -66,6 +73,7 @@ class KataGoClient:
         executable_path: Path,
         model_path: Path,
         analysis_configuration_path: Path,
+        visible_cuda_device: int | None = None,
     ) -> None:
         for name, path in (
             ('KataGo executable', executable_path),
@@ -80,6 +88,9 @@ class KataGoClient:
         self.model_path = model_path
         self.analysis_configuration_path = analysis_configuration_path
         self._next_request_id = 0
+        process_environment = (
+            None if visible_cuda_device is None else {**os.environ, 'CUDA_VISIBLE_DEVICES': str(visible_cuda_device)}
+        )
         self._process = subprocess.Popen(
             [
                 str(executable_path),
@@ -95,6 +106,7 @@ class KataGoClient:
             text=True,
             encoding='utf-8',
             bufsize=1,
+            env=process_environment,
         )
         if self._process.stdin is None or self._process.stdout is None:
             raise RuntimeError('KataGo analysis process did not expose text pipes.')
@@ -171,13 +183,13 @@ class KataGoClient:
         self._input.flush()
         return request_id
 
-    def _receive(self, expected_ids: set[str]) -> dict[str, dict[str, object]]:
-        responses: dict[str, dict[str, object]] = {}
+    def _receive(self, expected_ids: set[str]) -> dict[str, EnginePolicy]:
+        responses: dict[str, EnginePolicy] = {}
         while responses.keys() != expected_ids:
             line = self._output.readline()
             if not line:
                 raise RuntimeError(f'KataGo analysis process exited with code {self._process.poll()}.')
-            response = json.loads(line)
+            response = JSON_VALUE_ADAPTER.validate_json(line)
             if not isinstance(response, dict):
                 raise ValueError('KataGo response must be a JSON object.')
             request_id = response.get('id')
@@ -185,7 +197,29 @@ class KataGoClient:
                 raise ValueError('KataGo response has an unexpected request ID.')
             if 'error' in response:
                 raise RuntimeError(f'KataGo analysis failed: {response["error"]}')
-            responses[request_id] = response
+            move_infos = response.get('moveInfos')
+            if not isinstance(move_infos, list) or not move_infos:
+                raise ValueError('KataGo response omitted moveInfos.')
+            weighted_actions: list[tuple[int, float]] = []
+            for move_info in move_infos:
+                if not isinstance(move_info, dict):
+                    raise ValueError('KataGo moveInfos entries must be objects.')
+                move = move_info.get('move')
+                weight = move_info.get('weight')
+                if (
+                    not isinstance(move, str)
+                    or not isinstance(weight, int | float)
+                    or isinstance(weight, bool)
+                    or weight <= 0
+                ):
+                    continue
+                weighted_actions.append((gtp_to_action_id(move, self.state.board_size), float(weight)))
+            if not weighted_actions:
+                raise ValueError('KataGo response contained no positive move weights.')
+            total = sum(weight for _, weight in weighted_actions)
+            responses[request_id] = EnginePolicy(
+                tuple(EnginePolicyEntry(action_id, weight / total) for action_id, weight in weighted_actions)
+            )
         return responses
 
     def analyze_many(
@@ -195,29 +229,7 @@ class KataGoClient:
     ) -> tuple[EnginePolicy, ...]:
         request_ids = tuple(self._submit(action_ids, maximum_visits) for action_ids in action_sequences)
         responses = self._receive(set(request_ids))
-        policies = []
-        for request_id in request_ids:
-            move_infos = responses[request_id].get('moveInfos')
-            if not isinstance(move_infos, list) or not move_infos:
-                raise ValueError('KataGo response omitted moveInfos.')
-            weighted_actions: list[tuple[int, float]] = []
-            for move_info in move_infos:
-                if not isinstance(move_info, dict):
-                    raise ValueError('KataGo moveInfos entries must be objects.')
-                move = move_info.get('move')
-                weight = move_info.get('weight')
-                if not isinstance(move, str) or not isinstance(weight, int | float) or weight <= 0:
-                    continue
-                weighted_actions.append((gtp_to_action_id(move, self.state.board_size), float(weight)))
-            if not weighted_actions:
-                raise ValueError('KataGo response contained no positive move weights.')
-            total = sum(weight for _, weight in weighted_actions)
-            policies.append(
-                EnginePolicy(
-                    tuple(EnginePolicyEntry(action_id, weight / total) for action_id, weight in weighted_actions)
-                )
-            )
-        return tuple(policies)
+        return tuple(responses[request_id] for request_id in request_ids)
 
     def policy(self, position: NativeGoPosition, action_ids: tuple[int, ...]) -> EnginePolicy:
         return self.analyze_many((action_ids,), self.configuration.label_max_visits)[0]
@@ -247,6 +259,9 @@ class KataGoClient:
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: object
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         self.close()

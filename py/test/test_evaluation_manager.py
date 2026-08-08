@@ -2,9 +2,13 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from pydantic import TypeAdapter
 
 from src.evaluation.contracts import (
     CheckpointOpponent,
+    EvaluationFailurePhase,
+    EvaluationResult,
+    FailedEvaluationResult,
     FixedDatasetEvaluationJob,
     FixedDatasetEvaluationResult,
     MatchEvaluationJob,
@@ -12,6 +16,7 @@ from src.evaluation.contracts import (
 from src.evaluation.manager import EvaluationManager
 from src.evaluation.process import write_evaluation_result
 from src.experiment.configuration import load_experiment_configuration
+from src.games.chess.configuration import ChessExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
 
 
@@ -76,25 +81,40 @@ def checkpoint(run_path: Path, generation: int) -> CheckpointReference:
     )
 
 
-def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def experiment_configuration(
+    run_path: Path,
+    job_timeout_seconds: float = 10.0,
+    shutdown_grace_seconds: float = 0.1,
+) -> ChessExperimentConfiguration:
     loaded = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    assert isinstance(loaded, ChessExperimentConfiguration)
     training = loaded.training.model_copy(
         update={
-            'save_path': str(tmp_path),
+            'save_path': str(run_path),
             'topology': loaded.training.topology.model_copy(
                 update={'evaluation': loaded.training.topology.evaluation.model_copy(update={'device_cycle': (2, 5)})}
             ),
         }
     )
-    experiment = loaded.model_copy(
+    return loaded.model_copy(
         update={
             'training': training,
-            'evaluation': loaded.evaluation.model_copy(update={'cadence_seconds': 20}),
+            'evaluation': loaded.evaluation.model_copy(
+                update={
+                    'cadence_seconds': 20,
+                    'job_timeout_seconds': job_timeout_seconds,
+                    'shutdown_grace_seconds': shutdown_grace_seconds,
+                }
+            ),
         }
     )
+
+
+def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = experiment_configuration(tmp_path)
     clock = FakeClock()
     context = FakeProcessContext()
     manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
@@ -142,3 +162,87 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     )
     assert len(previous_jobs) == 1
     assert previous_jobs[0].opponent.checkpoint.generation == 1
+
+
+def test_manager_publishes_missing_artifact_and_deadline_failures(tmp_path: Path) -> None:
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(
+        experiment_configuration(tmp_path),
+        checkpoint(tmp_path, 0),
+        clock,
+        context,
+    )
+    clock.now = 21.0
+    jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 1))
+    context.processes[0].exitcode = 3
+
+    missing = manager.collect_completed_jobs()
+
+    assert len(missing) == 1
+    assert isinstance(missing[0], FailedEvaluationResult)
+    assert missing[0].phase is EvaluationFailurePhase.MISSING_ARTIFACT
+
+    clock.now = 32.0
+    deadline_failures = manager.collect_completed_jobs()
+    assert len(deadline_failures) == len(jobs) - 1
+    assert all(
+        isinstance(result, FailedEvaluationResult) and result.phase is EvaluationFailurePhase.DEADLINE
+        for result in deadline_failures
+    )
+
+
+def test_manager_cancels_running_jobs_on_shutdown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(
+        experiment_configuration(tmp_path),
+        checkpoint(tmp_path, 0),
+        clock,
+        context,
+    )
+    clock.now = 21.0
+    jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 1))
+    monkeypatch.setattr('src.evaluation.manager.time.sleep', lambda seconds: setattr(clock, 'now', clock.now + seconds))
+
+    manager.close()
+
+    assert all(job.result_path.exists() for job in jobs)
+    assert all(process.exitcode == -15 for process in context.processes)
+    results = tuple(
+        TypeAdapter(EvaluationResult).validate_json(job.result_path.read_text(encoding='utf-8')) for job in jobs
+    )
+    assert all(
+        isinstance(result, FailedEvaluationResult) and result.phase is EvaluationFailurePhase.CANCELLED
+        for result in results
+    )
+
+
+def test_manager_relaunches_unfinished_jobs_after_restart(tmp_path: Path) -> None:
+    first_clock = FakeClock()
+    first_context = FakeProcessContext()
+    first_manager = EvaluationManager(
+        experiment_configuration(tmp_path),
+        checkpoint(tmp_path, 0),
+        first_clock,
+        first_context,
+    )
+    first_clock.now = 21.0
+    jobs = first_manager.schedule_due_jobs(checkpoint(tmp_path, 1))
+    candidate = checkpoint(tmp_path, 0)
+    candidate.manifest_path.write_text('{}', encoding='utf-8')
+    candidate.inference_model_path.write_bytes(b'model')
+
+    restarted_context = FakeProcessContext()
+    EvaluationManager(
+        experiment_configuration(tmp_path),
+        candidate,
+        FakeClock(),
+        restarted_context,
+    )
+
+    assert len(restarted_context.processes) == len(jobs)
+    assert all(process.started for process in restarted_context.processes)

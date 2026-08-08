@@ -99,10 +99,11 @@ if __name__ == '__main__':
     from src.games.composition import create_game_implementation
 
     game = create_game_implementation(experiment)
-    commander = Coordinator(game, run_started_at)
     outcome_path = Path(training.save_path) / 'run-outcome.json'
+    commander: Coordinator | None = None
     try:
         with TensorboardWriter(run_id, 'coordinator', postfix_pid=False):
+            commander = Coordinator(game, run_started_at)
             commander.run()
     except Exception as error:
         write_run_outcome(
@@ -112,13 +113,14 @@ if __name__ == '__main__':
             run_started_at,
             training.limits.cost_currency,
             training.limits.hourly_price,
-            commander.latest_completed_model_version,
+            0 if commander is None else commander.latest_completed_model_version,
         )
         raise
     finally:
         gpu_usage_logger.stop()
         resource_telemetry.stop()
 
+    assert commander is not None
     outcome_status = RunOutcomeStatus.STOPPED if commander.final_stop_reason is not None else RunOutcomeStatus.COMPLETED
     write_run_outcome(
         outcome_path,

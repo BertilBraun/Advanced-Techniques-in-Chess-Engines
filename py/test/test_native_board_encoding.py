@@ -8,7 +8,7 @@ import pytest
 
 from src.games.chess.encoding import decode_board_state, encode_board_state
 from src.games.chess.board import ChessBoard
-from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.games.chess.game import ChessGame
 
 
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
@@ -26,7 +26,7 @@ def test_native_and_python_packed_layout_match_shared_fixture(fixture: dict[str,
     fen = fixture['fen']
     expected_payload = bytes.fromhex(fixture['packed_hex'])
     board = ChessBoard.from_fen(fen)
-    canonical_state = CHESS_STATE_CONTRACT.canonical_board(board).astype(np.int8, copy=False)
+    canonical_state = ChessGame().get_canonical_board(board).astype(np.int8, copy=False)
 
     python_encoded = encode_board_state(canonical_state)
     native_payload = AlphaZeroCpp.encode_board_packed_bytes(fen)

@@ -4,6 +4,7 @@ import hashlib
 import json
 from math import exp
 from pathlib import Path
+from types import TracebackType
 
 import chess
 import chess.engine
@@ -139,6 +140,9 @@ class StockfishClient:
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: object
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         self.close()

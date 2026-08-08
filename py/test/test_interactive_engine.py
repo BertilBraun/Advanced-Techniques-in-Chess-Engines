@@ -52,7 +52,8 @@ class _InvalidOutcomeModel(_UniformModel):
 
 @pytest.fixture
 def model_path(tmp_path: Path) -> Path:
-    channels, rows, columns = CHESS_STATE_CONTRACT.game.representation_shape
+    representation = CHESS_STATE_CONTRACT.representation
+    channels, rows, columns = representation.channels, representation.rows, representation.columns
     model = _UniformModel(CHESS_STATE_CONTRACT.action_size).eval()
     traced = torch.jit.trace(model, torch.zeros((1, channels, rows, columns)))
     path = tmp_path / 'interactive.jit.pt'
@@ -77,7 +78,8 @@ def engine(model_path: Path) -> InteractiveEngine:
 
 @pytest.fixture
 def invalid_engine(tmp_path: Path) -> InteractiveEngine:
-    channels, rows, columns = CHESS_STATE_CONTRACT.game.representation_shape
+    representation = CHESS_STATE_CONTRACT.representation
+    channels, rows, columns = representation.channels, representation.rows, representation.columns
     model = _InvalidOutcomeModel(CHESS_STATE_CONTRACT.action_size).eval()
     traced = torch.jit.trace(model, torch.zeros((1, channels, rows, columns)))
     path = tmp_path / 'invalid-outcome.jit.pt'

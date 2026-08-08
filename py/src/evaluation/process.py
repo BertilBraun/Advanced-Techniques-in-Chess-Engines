@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import signal
 import time
@@ -131,12 +130,12 @@ def _create_external_match_engine(
             engine_configuration = experiment.evaluation.engine
             if not isinstance(engine_configuration, KataGoEngineConfiguration):
                 raise ValueError('KataGo job requires KataGo engine configuration.')
-            os.environ['CUDA_VISIBLE_DEVICES'] = str(job.device_id)
             client = KataGoClient(
                 engine_configuration,
                 game.state,
                 resolve_project_path(engine_configuration.executable_path),
                 resolve_project_path(engine_configuration.model_path),
                 resolve_project_path(engine_configuration.analysis_configuration_path),
+                visible_cuda_device=job.device_id,
             )
             return KataGoMatchEngine(client)

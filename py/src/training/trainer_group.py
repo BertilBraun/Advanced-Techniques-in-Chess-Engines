@@ -154,9 +154,7 @@ class TrainerGroup:
             source_progress=progress,
             target_progress=target_progress,
             parameters=ResolvedTrainingParameters(
-                learning_rate=self.configuration.training.trainer.learning_rate.value_at(
-                    source_generation
-                ),
+                learning_rate=self.configuration.training.trainer.learning_rate.value_at(source_generation),
                 objective=self.game.training_objective_at(source_generation),
             ),
         )
@@ -238,9 +236,7 @@ class TrainerGroup:
                         results.append(response)
                     case RankTrainingFailure():
                         self._terminate_after_rank_failure()
-                        raise RuntimeError(
-                            f'DDP training quantum failed on rank {response.rank}: {response.error}'
-                        )
+                        raise RuntimeError(f'DDP training quantum failed on rank {response.rank}: {response.error}')
                     case TrainerStopped():
                         self._terminate_after_rank_failure()
                         raise RuntimeError('Trainer rank stopped during a training quantum.')
@@ -283,11 +279,7 @@ def _trainer_rank_main(
         torch.set_num_threads(topology.cpu_threads)
         torch.set_num_interop_threads(topology.interop_threads)
         device_id = topology.ddp_device_ids[rank]
-        device = (
-            torch.device('cpu')
-            if topology.device_type == 'cpu'
-            else torch.device('cuda', device_id)
-        )
+        device = torch.device('cpu') if topology.device_type == 'cpu' else torch.device('cuda', device_id)
         if topology.device_type == 'cuda':
             torch.cuda.set_device(device)
         distributed.init_process_group(
@@ -333,9 +325,7 @@ def _trainer_rank_main(
                     )
     except BaseException as error:
         try:
-            connection.send(
-                RankTrainingFailure(rank=rank, error=f'{type(error).__name__}: {error}')
-            )
+            connection.send(RankTrainingFailure(rank=rank, error=f'{type(error).__name__}: {error}'))
         except (BrokenPipeError, EOFError):
             pass
     finally:
@@ -359,8 +349,7 @@ def _train_rank_quantum(
     for group in optimizer.param_groups:
         group['lr'] = command.parameters.learning_rate
     optimizer_steps = (
-        command.target_progress.completed_optimizer_steps
-        - command.source_progress.completed_optimizer_steps
+        command.target_progress.completed_optimizer_steps - command.source_progress.completed_optimizer_steps
     )
     loader = MappedReplayBatchLoader(
         replay=command.replay,

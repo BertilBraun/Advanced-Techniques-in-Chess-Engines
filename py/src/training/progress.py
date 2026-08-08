@@ -17,7 +17,6 @@ class TrainingProgress(FrozenModel):
     @property
     def next_generation(self) -> 'TrainingProgress':
         return TrainingProgress(
-            completed_optimizer_steps=self.completed_optimizer_steps
-            + self.optimizer_steps_per_generation,
+            completed_optimizer_steps=self.completed_optimizer_steps + self.optimizer_steps_per_generation,
             optimizer_steps_per_generation=self.optimizer_steps_per_generation,
         )

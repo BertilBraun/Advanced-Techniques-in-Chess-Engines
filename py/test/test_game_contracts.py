@@ -39,6 +39,7 @@ def test_chess_state_contract_operates_in_action_id_space() -> None:
     child = CHESS_STATE_CONTRACT.child_position(initial, legal_actions[0])
 
     assert legal_actions
+    assert all(initial.action_id_from_uci(initial.action_uci(action_id)) == action_id for action_id in legal_actions)
     assert initial.fen.startswith('rnbqkbnr/pppppppp/')
     assert child.fen != initial.fen
     assert CHESS_STATE_CONTRACT.current_player(initial) is Player.FIRST

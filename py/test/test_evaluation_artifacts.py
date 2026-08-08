@@ -168,7 +168,8 @@ def test_fixed_dataset_evaluates_raw_policy_metrics(tmp_path: Path) -> None:
         'revision',
     )
     inference_path = tmp_path / 'inference.pt'
-    torch.jit.script(FixedPolicyModel()).save(str(inference_path))
+    traced = torch.jit.trace(FixedPolicyModel(), torch.zeros((1, 1, 8, 8)))
+    traced.save(str(inference_path))
     checkpoint = CheckpointReference(
         generation=1,
         manifest_path=tmp_path / 'checkpoint.json',
