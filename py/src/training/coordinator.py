@@ -15,6 +15,7 @@ from src.training.checkpoint import CheckpointReference
 from src.training.credit_ledger import CreditLedger
 from src.training.self_play_group import SelfPlayGroup
 from src.training.trainer_group import TrainerGroup
+from src.training.run_limits import RunLimitMonitor
 
 
 class Coordinator:
@@ -24,6 +25,7 @@ class Coordinator:
         self.run_started_at = run_started_at
         training = game.training
         run_path = Path(training.save_path)
+        self.run_limit_monitor = RunLimitMonitor(training.limits, run_path, run_started_at)
         generation_zero = CheckpointReference.load(run_path, 0)
         self.ledger = CreditLedger(
             run_path,
@@ -52,8 +54,8 @@ class Coordinator:
         try:
             self._start_self_play()
             while not self.ledger.training_complete:
-                if self._wall_time_limit_reached():
-                    self.final_stop_reason = 'maximum wall time reached'
+                self.final_stop_reason = self.run_limit_monitor.stop_reason()
+                if self.final_stop_reason is not None:
                     break
                 self._ingest_available_games()
                 if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
@@ -109,7 +111,3 @@ class Coordinator:
     def _detailed_statistics_workers(self) -> int:
         configured = self.game.self_play_configuration.detailed_statistics_workers
         return min(configured, self.self_play_group.worker_count)
-
-    def _wall_time_limit_reached(self) -> bool:
-        elapsed = time.monotonic() - self.run_started_at
-        return elapsed >= self.game.training.limits.maximum_wall_time_seconds
