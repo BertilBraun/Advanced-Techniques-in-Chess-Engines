@@ -26,6 +26,35 @@ class TrainingBatch:
         if len(self.auxiliary_targets) != len(self.auxiliary_eligibility):
             raise ValueError('Auxiliary targets and eligibility masks must have equal lengths.')
 
+    def __len__(self) -> int:
+        return int(self.states.shape[0])
+
+    def pin_memory(self) -> TrainingBatch:
+        return TrainingBatch(
+            states=self.states.pin_memory(),
+            policy_targets=self.policy_targets.pin_memory(),
+            wdl_targets=self.wdl_targets.pin_memory(),
+            root_values=self.root_values.pin_memory(),
+            auxiliary_targets=tuple(target.pin_memory() for target in self.auxiliary_targets),
+            auxiliary_eligibility=tuple(mask.pin_memory() for mask in self.auxiliary_eligibility),
+            sample_weights=self.sample_weights.pin_memory(),
+        )
+
+    def to_device(self, device: torch.device, non_blocking: bool) -> TrainingBatch:
+        return TrainingBatch(
+            states=self.states.to(device=device, non_blocking=non_blocking),
+            policy_targets=self.policy_targets.to(device=device, non_blocking=non_blocking),
+            wdl_targets=self.wdl_targets.to(device=device, non_blocking=non_blocking),
+            root_values=self.root_values.to(device=device, non_blocking=non_blocking),
+            auxiliary_targets=tuple(
+                target.to(device=device, non_blocking=non_blocking) for target in self.auxiliary_targets
+            ),
+            auxiliary_eligibility=tuple(
+                mask.to(device=device, non_blocking=non_blocking) for mask in self.auxiliary_eligibility
+            ),
+            sample_weights=self.sample_weights.to(device=device, non_blocking=non_blocking),
+        )
+
 
 @dataclass(frozen=True)
 class RuntimeTrainingBatch:
