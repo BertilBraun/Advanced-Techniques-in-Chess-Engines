@@ -10,7 +10,6 @@ import numpy as np
 import torch
 
 from src.games.implementation import GameImplementation
-from src.self_play.completed_game import RuntimeCompletedGamePublisher
 from src.self_play.protocol import (
     PausedSelfPlayState,
     PausedSelfPlayStateApplied,
@@ -97,9 +96,14 @@ def _self_play_worker_main(
     torch.manual_seed(seed)
     if game.training.topology.trainer.device_type == 'cuda':
         torch.cuda.set_device(device_id)
-    publisher = RuntimeCompletedGamePublisher(Path(game.training.save_path), run_id, worker_id)
-    policy = game.create_self_play_policy(device_id, publisher)
-    worker = SelfPlayWorker(policy, game.training.topology.self_play.parallel_games_per_process)
+    del run_id
+    policy = game.create_self_play_policy(device_id, worker_id)
+    worker = SelfPlayWorker(
+        policy,
+        game.training.topology.self_play.parallel_games_per_process,
+        worker_id,
+        Path(game.training.save_path) / 'completed-games' / 'inbox',
+    )
     loaded_generation: int | None = None
     loaded_sha256: str | None = None
     completed_search_batches = 0

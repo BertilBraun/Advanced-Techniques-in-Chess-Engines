@@ -23,7 +23,6 @@ from src.games.implementation import GameImplementation
 from src.training.publication import PublicationValidationScope, load_credit_publication_pointer
 from src.util.profiler import start_cpu_usage_logger
 from src.util.background_worker import BackgroundWorker
-from src.self_play.completed_game import RuntimeCompletedGamePublisher
 from src.self_play.worker import SelfPlayWorker
 
 
@@ -76,18 +75,15 @@ class SelfPlayProcess:
     ) -> None:
         args = game.training
         self.args = args
-        self.completed_game_publisher = RuntimeCompletedGamePublisher(
-            Path(args.save_path),
-            run_id,
-            node_id,
-        )
         policy = game.create_self_play_policy(
             device_id,
-            self.completed_game_publisher,
+            node_id,
         )
         self.self_play = SelfPlayWorker(
             policy,
             args.topology.self_play.parallel_games_per_process,
+            node_id,
+            Path(args.save_path) / 'completed-games' / 'inbox',
         )
         self.communication = Communication(communication_folder)
         self.node_id = node_id

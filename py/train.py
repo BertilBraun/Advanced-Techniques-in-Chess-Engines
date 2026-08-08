@@ -40,7 +40,7 @@ if __name__ == '__main__':
     from src.runtime import USE_GPU
     from src.util.log import log
     from src.util.profiler import start_gpu_usage_logger
-    from src.training.commander import CommanderProcess
+    from src.training.coordinator import Coordinator
     from src.util.tensorboard import (
         TensorboardWriter,
         configure_tensorboard_run_directory,
@@ -104,7 +104,7 @@ if __name__ == '__main__':
         from src.games.go.training import GoImplementation
 
         game = GoImplementation(experiment)
-    commander = CommanderProcess(run_id, game, run_started_at)
+    commander = Coordinator(run_id, game, run_started_at)
     outcome_path = Path(training.save_path) / 'run-outcome.json'
     try:
         commander.run()

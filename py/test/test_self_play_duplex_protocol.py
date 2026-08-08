@@ -6,7 +6,8 @@ from threading import Thread
 from typing import cast
 
 from src.games.implementation import GameImplementation
-from src.self_play.completed_game import RuntimeCompletedGamePublisher
+from src.self_play.active_game import ContinuingGame
+from src.self_play.completed_game import GameIdentity
 from src.self_play.protocol import (
     PausedSelfPlayState,
     PausedSelfPlayStateApplied,
@@ -55,7 +56,8 @@ class _Policy(GameSelfPlayPolicy[int, int, int, None]):
     def snapshot_statistics(self, tensorboard_step: int) -> None:
         assert tensorboard_step == self.generation
 
-    def new_game(self) -> int:
+    def new_game(self, identity: GameIdentity) -> int:
+        del identity
         return 0
 
     def build_search_request(self, game: int) -> int:
@@ -64,17 +66,17 @@ class _Policy(GameSelfPlayPolicy[int, int, int, None]):
     def search_active_games(self, requests: tuple[int, ...]) -> tuple[int, ...]:
         return requests
 
-    def advance_game(self, game: int, request: int, result: int) -> int:
+    def advance_game(self, game: int, request: int, result: int) -> ContinuingGame[int]:
         del request, result
-        return game + 1
+        return ContinuingGame(game + 1)
 
 
 class _Game:
     def __init__(self, run_path: Path) -> None:
         self.training = _Training(save_path=str(run_path))
 
-    def create_self_play_policy(self, device_id: int, publisher: RuntimeCompletedGamePublisher) -> _Policy:
-        del device_id, publisher
+    def create_self_play_policy(self, device_id: int, worker_id: int) -> _Policy:
+        del device_id, worker_id
         return _Policy()
 
 

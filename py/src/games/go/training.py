@@ -20,12 +20,11 @@ from src.games.go.self_play import (
     NativeGoSearchRequest,
     NativeGoSearchResult,
 )
-from src.self_play.completed_game import RuntimeCompletedGamePublisher
 from src.training.batch import RuntimeTrainingBatch
 from src.training.replay import ReplayGameImplementation
 from src.training.objective import ResolvedTrainingObjective
 from src.training.trainer import LossResult, RuntimeTrainingObjective
-from src.training.configuration import TrainingObjectiveConfiguration
+from src.training.configuration import SelfPlayConfiguration, TrainingObjectiveConfiguration
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 from src.self_play.value_target import FinalOutcome
 from src.value import scalar_to_wdl
@@ -197,6 +196,10 @@ class GoImplementation(
         return self._state
 
     @property
+    def self_play_configuration(self) -> SelfPlayConfiguration:
+        return self.configuration.go.self_play
+
+    @property
     def target_layout(self) -> TrainingTargetLayout:
         return build_training_target_layout(
             self.network_dimensions.actions,
@@ -224,6 +227,6 @@ class GoImplementation(
     def create_self_play_policy(
         self,
         device_id: int,
-        publisher: RuntimeCompletedGamePublisher,
+        worker_id: int,
     ) -> GoSelfPlayPolicy:
-        return GoSelfPlayPolicy(self.configuration, publisher, device_id)
+        return GoSelfPlayPolicy(self.configuration, worker_id, device_id)

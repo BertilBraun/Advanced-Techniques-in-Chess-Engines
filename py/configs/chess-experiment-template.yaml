@@ -116,39 +116,9 @@ chess:
     retained_root_visit_fraction: {kind: constant, value: 0.6}
     greedy_after_ply: {kind: constant, value: 50}
     maximum_game_plies:
-    endgame_continuation_start_plies:
-    low_material_termination_minimum_plies: 0
-    low_material_termination_piece_threshold_per_player: 0
-    low_material_termination_probability: 0.0
     starting_temperature: {kind: constant, value: 1.3}
     final_temperature: {kind: constant, value: 0.1}
     primary_sample_weight: {kind: constant, value: 1.0}
-    resignation:
-      audit_enabled: false
-      production_enabled: false
-      audit_game_probability: 0.1
-      audit_cutoff_threshold:
-      audit_cutoff_increase_per_model: 0.0
-      minimum_eligible_ply: 0
-      minimum_published_model_version: 30
-      minimum_completed_audit_triggers: 100
-      false_non_loss_upper_bound: 0.03
-      confidence_level: 0.95
-      calibration_window_size: 2000
-      calibration_interval: 100
-      threshold_candidate_minimum: -0.99
-      threshold_candidate_maximum: -0.8
-      threshold_candidate_resolution: 0.01
-      maximum_threshold_change_per_calibration: 0.01
-      production_resignation_enable_fraction: 1.0
-      production_resignation_fade_versions: 30
-      require_external_safety_approval: true
-    disagreement_prefix_start_probability: 0.15
-    disagreement_prefix_maximum_ply: 10
-    disagreement_prefix_archive_capacity: 2000
-    disagreement_prefix_weight_smoothing: 0.05
-    disagreement_prefix_weight_cap: 4.0
-    endgame_shortcut_probability: {kind: linear, start_generation: 0, end_generation: 50, start_value: 1.0, end_value: 0.0, rounding: none}
   objective:
     policy_loss_weight: {kind: constant, value: 1.0}
     value_loss_weight: {kind: constant, value: 0.5}

@@ -156,8 +156,8 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
     assert all(head.action_size == 1_880 for head in layout.auxiliary_heads)
 
     chess_configuration = configuration.chess.validated_copy(update={'objective': objective.model_dump(mode='json')})
-    with pytest.raises(ValidationError, match='become executable in Phase 2'):
-        configuration.validated_copy(update={'chess': chess_configuration.model_dump(mode='json')})
+    resolved = configuration.validated_copy(update={'chess': chess_configuration.model_dump(mode='json')})
+    assert resolved.chess.objective.auxiliary_targets == objective.auxiliary_targets
 
 
 def test_next_policy_eligibility_is_explicit_and_uses_future_action_space() -> None:

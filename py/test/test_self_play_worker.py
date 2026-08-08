@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 
 from src.self_play.worker import GameSelfPlayPolicy, SelfPlayWorker
+from src.self_play.active_game import ContinuingGame
+from src.self_play.completed_game import GameIdentity
 
 
 @dataclass(frozen=True)
@@ -35,7 +37,8 @@ class FakeSelfPlayPolicy(GameSelfPlayPolicy[int, FakeSearchRequest, FakeSearchRe
     def snapshot_statistics(self, tensorboard_step: int) -> int:
         return tensorboard_step
 
-    def new_game(self) -> int:
+    def new_game(self, identity: GameIdentity) -> int:
+        del identity
         return 0
 
     def build_search_request(self, game: int) -> FakeSearchRequest:
@@ -53,14 +56,14 @@ class FakeSelfPlayPolicy(GameSelfPlayPolicy[int, FakeSearchRequest, FakeSearchRe
         game: int,
         request: FakeSearchRequest,
         result: FakeSearchResult,
-    ) -> int:
+    ) -> ContinuingGame[int]:
         assert request.value == game
-        return result.value
+        return ContinuingGame(result.value)
 
 
-def test_worker_owns_pool_turns_refresh_and_statistics() -> None:
+def test_worker_owns_pool_turns_refresh_and_statistics(tmp_path: Path) -> None:
     policy = FakeSelfPlayPolicy()
-    worker = SelfPlayWorker(policy, parallel_game_count=3)
+    worker = SelfPlayWorker(policy, parallel_game_count=3, worker_id=2, inbox_path=tmp_path)
 
     with pytest.raises(RuntimeError, match='model must be loaded'):
         worker.run_batch()

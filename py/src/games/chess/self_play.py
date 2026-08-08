@@ -1,192 +1,66 @@
 from __future__ import annotations
 
-import random
-import time
+from dataclasses import dataclass, field
 from pathlib import Path
-import uuid
-
-from dataclasses import dataclass
+import time
 from typing import TYPE_CHECKING
+
+import numpy as np
+
+from src.games.chess.board import ChessBoard
+from src.games.chess.configuration import ChessSelfPlayConfiguration
+from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
+from src.games.contracts import WdlTarget
+from src.self_play.active_game import CompletedGame, ContinuingGame
+from src.self_play.completed_game import (
+    CompletedSelfPlayGame,
+    GameIdentity,
+    SearchObservation,
+    SparseSearchVisit,
+    TerminationReason,
+)
+from src.self_play.parameters import ResolvedSelfPlayParameters
+from src.self_play.worker import GameSelfPlayPolicy
+from src.util.tensorboard import log_scalar
+
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import (
         ChessSearchRoot,
         ChessSelfPlaySearch,
-        ChessSelfPlaySearchBatch,
-        SelfPlaySearchParameters,
         ChessSelfPlaySearchRequest,
         ChessSelfPlaySearchResult,
         InferenceStatistics,
+        SelfPlaySearchParameters,
         TimeInfo,
     )
 
 
-import chess
-import numpy as np
-
-from src.games.chess.board import Player
-from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.games.chess.board import ChessBoard, ChessMove
-from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
-from src.games.chess.completed_game import (
-    ChessCompletedGame,
-    ChessMoveSelectionMode,
-    ChessRepresentationMetadata,
-    ChessRulesMetadata,
-    ChessSearchObservation,
-)
-from src.self_play.completed_game import RuntimeCompletedGamePublisher, RuntimeGameIdentity, SparseSearchVisit
-from src.self_play.parameters import ResolvedSelfPlayParameters
-from src.self_play.worker import GameSelfPlayPolicy
-from src.games.chess.dataset_statistics import SelfPlayDatasetStats
-from src.games.chess.search_schedule import SearchScheduleState
-from src.games.chess.resignation import (
-    CompletedResignationAudit,
-    ResignationCalibrationState,
-    ResignationManager,
-    ResignationObservation,
-    ResignationTerminationReason,
-    best_child_value_from_root_perspective,
-)
-from src.util import lerp
-from src.games.chess.self_play_statistics import SelfPlayStatistics
-from src.self_play.value_target import TerminationReason
-from src.games.chess.encoding import get_board_result_score
-from src.games.chess.configuration import ChessSelfPlayConfiguration
-from src.util.log import log
-from src.util.tensorboard import is_tensorboard_writer_active, log_scalar, log_text
-from src.util.timing import timeit
-
-
-ENDGAME_PIECE_THRESHOLD = 8
-
-
-@dataclass(frozen=True)
-class SelfPlayGameMemory:
+@dataclass
+class ChessSelfPlayGame:
+    identity: GameIdentity
     board: ChessBoard
-    visit_counts: list[tuple[int, int]]
-    result_score: float
-    ply: int
-    model_generation: int
-    search_budget: int
-    sample_eligible: bool
+    started_at_seconds: float
+    action_ids: list[int] = field(default_factory=list)
+    observations: list[SearchObservation] = field(default_factory=list)
+    root: ChessSearchRoot | None = None
+
+
+SelfPlayGame = ChessSelfPlayGame
 
 
 @dataclass(frozen=True)
 class SelfPlayStatisticsSnapshot:
-    model_version: int | None
+    model_version: int
     inference: InferenceStatistics
     timing: TimeInfo
     completed_searches: int
 
 
-def policy_search_disagreement(root: ChessSearchRoot) -> float:
-    children = root.children
-    total_visits = sum(child.visits for child in children)
-    if total_visits <= 0:
-        return 0.0
-    return float(
-        sum(
-            (child.visits / total_visits) * np.log2((child.visits / total_visits) / max(child.raw_policy, 1e-12))
-            for child in children
-            if child.visits > 0
-        )
-    )
-
-
-class SelfPlayGame:
-    def __init__(
-        self,
-        game_id: str | None = None,
-        is_resignation_audit: bool = False,
-        production_resignation_enabled: bool = False,
-        resignation_threshold: float | None = None,
-        identity: RuntimeGameIdentity | None = None,
-    ) -> None:
-        self.board = CHESS_STATE_CONTRACT.initial_position()
-        self.memory: list[SelfPlayGameMemory] = []
-        self.played_moves: list[ChessMove] = []
-        self.encoded_moves: list[int] = []
-        self.already_expanded_node: ChessSearchRoot | None = None
-        self.start_generation_time = time.time()
-
-        self.game_id = game_id if game_id is not None else uuid.uuid4().hex
-        self.is_resignation_audit = is_resignation_audit
-        self.production_resignation_enabled = production_resignation_enabled
-        self.resignation_threshold = resignation_threshold
-        self.identity = identity
-        self.resignation_observations: list[ResignationObservation] = []
-        self.resignation_trigger_ply: int | None = None
-        self.resignee: Player | None = None
-        self.low_material_termination_evaluated = False
-        self.oldest_model_version: int | None = None
-        self.newest_model_version: int | None = None
-
-    def acknowledge_model_version(self, model_version: int) -> None:
-        if model_version < 0:
-            raise ValueError('Model version must be nonnegative.')
-        if self.newest_model_version is not None and model_version < self.newest_model_version:
-            raise ValueError('Game model versions cannot move backwards.')
-        if self.oldest_model_version is None:
-            self.oldest_model_version = model_version
-        self.newest_model_version = model_version
-
-    def expand(self, move: ChessMove) -> SelfPlayGame:
-        new_game = self.copy()
-        new_game.encoded_moves.append(CHESS_STATE_CONTRACT.encode_move(move, new_game.board))
-        new_game.board.make_move(move)
-        new_game.played_moves.append(move)
-        return new_game
-
-    def copy(self) -> SelfPlayGame:
-        game = SelfPlayGame(
-            game_id=self.game_id,
-            is_resignation_audit=self.is_resignation_audit,
-            production_resignation_enabled=self.production_resignation_enabled,
-            resignation_threshold=self.resignation_threshold,
-            identity=self.identity,
-        )
-        game.board = self.board.copy()
-        game.memory = self.memory.copy()
-        game.played_moves = self.played_moves.copy()
-        game.encoded_moves = self.encoded_moves.copy()
-        game.already_expanded_node = self.already_expanded_node
-        game.start_generation_time = self.start_generation_time
-        game.resignation_observations = self.resignation_observations.copy()
-        game.resignation_trigger_ply = self.resignation_trigger_ply
-        game.resignee = self.resignee
-        game.low_material_termination_evaluated = self.low_material_termination_evaluated
-        game.oldest_model_version = self.oldest_model_version
-        game.newest_model_version = self.newest_model_version
-        return game
-
-    def __hash__(self) -> int:
-        return self.board.quick_hash()
-
-
-def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: ChessBoard) -> np.ndarray:
-    """Convert visit counts to probabilities."""
-    if not has_positive_visit_counts(visit_counts):
-        raise ValueError(f'Visit counts must contain a positive visit for board: {board.board.fen()}')
-
-    probabilities = np.zeros(len(visit_counts), dtype=np.float32)
-    for i, (_, count) in enumerate(visit_counts):
-        probabilities[i] = count
-
-    return probabilities / np.sum(probabilities)
-
-
-def has_positive_visit_counts(visit_counts: list[tuple[int, int]]) -> bool:
-    return (
-        bool(visit_counts)
-        and all(count >= 0 for _, count in visit_counts)
-        and sum(count for _, count in visit_counts) > 0
-    )
-
-
 class ChessSelfPlayPolicy(
     GameSelfPlayPolicy[
-        SelfPlayGame,
+        ChessSelfPlayGame,
         'ChessSelfPlaySearchRequest',
         'ChessSelfPlaySearchResult',
         SelfPlayStatisticsSnapshot | None,
@@ -196,740 +70,209 @@ class ChessSelfPlayPolicy(
         self,
         device_id: int,
         configuration: ChessSelfPlayConfiguration,
-        save_path: str,
-        completed_game_publisher: RuntimeCompletedGamePublisher,
+        worker_id: int,
+        random_seed: int,
     ) -> None:
         self.device_id = device_id
-        self.args = configuration
+        self.configuration = configuration
+        self.random = np.random.default_rng(random_seed + worker_id)
+        self.model_generation: int | None = None
         self.resolved_parameters = self._resolve_parameters(0)
-        self.save_path = save_path
-        self.completed_game_publisher = completed_game_publisher
-        self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
-        self.disagreement_prefix_archive: dict[tuple[int, ...], float] = {}
-        self.disagreement_prefix_games_started = 0
-
-        self.iteration = 0
-        self.model_version: int | None = None
-        self.model_refresh_acknowledgements: list[int] = []
-        self.search_schedule_state: SearchScheduleState | None = None
-        self.statistics = SelfPlayStatistics()
-        self.search_engine: ChessSelfPlaySearch | None = None
-        self.num_searches_per_turn = 0
-        self.endgame_shortcut_strength = 0.0
+        self.search: ChessSelfPlaySearch | None = None
         self.completed_searches = 0
-
-    def snapshot_statistics(self, tensorboard_step: int) -> SelfPlayStatisticsSnapshot | None:
-        if self.search_engine is None:
-            return None
-        inference_stats, time_info = self.search_engine.inference_statistics()
-        log_scalar(
-            'self_play/disagreement_prefix_archive_size',
-            len(self.disagreement_prefix_archive),
-            tensorboard_step,
-        )
-        log_scalar(
-            'self_play/disagreement_prefix_games_started',
-            self.disagreement_prefix_games_started,
-            tensorboard_step,
-        )
-        log_scalar(
-            'inference/average_number_of_positions_in_inference_call',
-            inference_stats.averageNumberOfPositionsInInferenceCall,
-            tensorboard_step,
-        )
-
-        if time_info.functionTimes:
-            for element in time_info.functionTimes:
-                log_scalar(f'timing/{element.name}_percent_of_execution_time', element.percent)
-                log_scalar(f'timing/{element.name}_total_time', element.total)
-                log_scalar(f'timing/{element.name}_total_invocations', element.invocations)
-
-            log_scalar('timing/total_traced_percent_cpp', time_info.percentRecorded)
-            log_scalar('timing/total_time_cpp', time_info.totalTime)
-
-        return SelfPlayStatisticsSnapshot(
-            model_version=self.model_version,
-            inference=inference_stats,
-            timing=time_info,
-            completed_searches=self.completed_searches,
-        )
-
-    def search_schedule(self, schedule_version: int) -> SearchScheduleState:
-        if schedule_version < 0:
-            raise ValueError('Search schedule version must be nonnegative.')
-        resolved = self._resolve_parameters(schedule_version)
-        return SearchScheduleState(
-            schedule_version=schedule_version,
-            num_parallel_searches=resolved.parallel_searches,
-            num_full_searches=resolved.full_searches,
-            num_fast_searches=resolved.fast_searches,
-            endgame_shortcut_strength=self.args.endgame_shortcut_probability.value_at(schedule_version),
-        )
-
-    def update_search_schedule(self, schedule: SearchScheduleState) -> None:
-        if schedule.num_full_searches <= self.resolved_parameters.parallel_searches:
-            raise ValueError('Full-search budget must exceed the parallel-search count.')
-        if schedule.num_fast_searches <= 0:
-            raise ValueError('Fast-search budget must be positive.')
-
-        previous_arena_capacity = self.search_engine.arena_capacity if self.search_engine is not None else None
-        self.num_searches_per_turn = schedule.num_full_searches
-        self.endgame_shortcut_strength = schedule.endgame_shortcut_strength
-        self.iteration = schedule.schedule_version
-        self.search_schedule_state = schedule
-
-        log_scalar('training/num_searches_per_turn', self.num_searches_per_turn, schedule.schedule_version)
-        log_scalar(
-            'training/endgame_shortcut_strength',
-            self.endgame_shortcut_strength,
-            schedule.schedule_version,
-        )
-        if self.search_engine is not None:
-            arena_capacity_changed = self.search_engine.update_search_schedule(self._native_mcts_params(schedule))
-            if arena_capacity_changed:
-                assert previous_arena_capacity != schedule.arena_capacity
-
-    def _native_mcts_params(self, schedule: SearchScheduleState) -> SelfPlaySearchParameters:
-        from AlphaZeroCpp import SelfPlaySearchParameters
-
-        return SelfPlaySearchParameters(
-            parallel_searches=self.resolved_parameters.parallel_searches,
-            full_searches=schedule.num_full_searches,
-            fast_searches=schedule.num_fast_searches,
-            dirichlet_alpha=self.resolved_parameters.dirichlet_alpha,
-            dirichlet_epsilon=self.resolved_parameters.dirichlet_epsilon,
-            exploration_constant=self.resolved_parameters.exploration_constant,
-            minimum_root_visits=self.resolved_parameters.minimum_root_visits,
-        )
 
     def refresh_model(
         self,
-        model_version: int,
+        model_generation: int,
         model_path: Path,
-        active_games: tuple[SelfPlayGame, ...],
+        active_games: tuple[ChessSelfPlayGame, ...],
     ) -> None:
-        if model_version < 0:
-            raise ValueError('Model version must be nonnegative.')
-        if self.model_version is not None and model_version <= self.model_version:
-            raise ValueError('Model version must increase on every refresh.')
-        self.resolved_parameters = self._resolve_parameters(model_version)
-        self.update_search_schedule(self.search_schedule(model_version))
-        schedule = self.search_schedule_state
-        assert schedule is not None
-        if self.search_engine is None:
-            from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceConfiguration
+        if self.model_generation is not None and model_generation <= self.model_generation:
+            raise ValueError('Chess model generation must increase on refresh.')
+        self.resolved_parameters = self._resolve_parameters(model_generation)
+        native_parameters = self._native_search_parameters()
+        if self.search is None:
+            from AlphaZeroCpp import (
+                BatchedInferenceParameters,
+                ChessSelfPlaySearch,
+                InferenceConfiguration,
+            )
 
-            inference = self.args.inference
-            inference_parameters = BatchedInferenceParameters(
-                inference.inference_workers,
-                inference.inference_batch_size,
-                inference.outstanding_batches_per_worker,
-            )
-            runtime_parameters = InferenceConfiguration(
-                device_id=self.device_id,
-                model_path=str(model_path),
-            )
-            self.search_engine = ChessSelfPlaySearch(
-                runtime_parameters,
-                self._native_mcts_params(schedule),
-                inference_parameters=inference_parameters,
-                initial_model_version=model_version,
+            inference = self.configuration.inference
+            self.search = ChessSelfPlaySearch(
+                InferenceConfiguration(device_id=self.device_id, model_path=str(model_path)),
+                native_parameters,
+                inference_parameters=BatchedInferenceParameters(
+                    inference.inference_workers,
+                    inference.inference_batch_size,
+                    inference.outstanding_batches_per_worker,
+                ),
+                initial_model_version=model_generation,
             )
         else:
-            self.search_engine.refresh_model(model_version, str(model_path))
-        self.model_version = model_version
-        self.model_refresh_acknowledgements.append(model_version)
-        log_scalar('inference/acknowledged_model_version', model_version)
+            self.search.refresh_model(model_generation, str(model_path))
+            self.search.update_search_schedule(native_parameters)
+        self.model_generation = model_generation
         for game in active_games:
-            if game.already_expanded_node is not None:
-                game.already_expanded_node.reset()
+            if game.root is not None:
+                game.root.reset()
 
-    @timeit
-    def search(self, boards: list[ChessSelfPlaySearchRequest]) -> ChessSelfPlaySearchBatch:
-        assert self.search_engine is not None, 'Search must be initialized before self-play can run.'
+    def snapshot_statistics(self, tensorboard_step: int) -> SelfPlayStatisticsSnapshot | None:
+        if self.search is None or self.model_generation is None:
+            return None
+        inference, timing = self.search.inference_statistics()
+        log_scalar(
+            'inference/average_number_of_positions_in_inference_call',
+            inference.averageNumberOfPositionsInInferenceCall,
+            tensorboard_step,
+        )
+        log_scalar('timing/total_time_cpp', timing.totalTime, tensorboard_step)
+        return SelfPlayStatisticsSnapshot(
+            model_version=self.model_generation,
+            inference=inference,
+            timing=timing,
+            completed_searches=self.completed_searches,
+        )
 
-        results = self.search_engine.search(boards, collect_statistics=is_tensorboard_writer_active())
-        self.completed_searches += results.simulations_completed
-        return results
+    def new_game(self, identity: GameIdentity) -> ChessSelfPlayGame:
+        if self.search is None:
+            raise RuntimeError('A model must be loaded before creating a chess game.')
+        while True:
+            board = CHESS_STATE_CONTRACT.initial_position()
+            action_ids: list[int] = []
+            for _ in range(self.resolved_parameters.random_opening_plies):
+                legal_actions = CHESS_STATE_CONTRACT.legal_action_ids(board)
+                action_id = int(self.random.choice(legal_actions))
+                action_ids.append(action_id)
+                board = CHESS_STATE_CONTRACT.child_position(board, action_id)
+                if CHESS_STATE_CONTRACT.terminal_wdl(board) is not None:
+                    break
+            if CHESS_STATE_CONTRACT.terminal_wdl(board) is None:
+                return ChessSelfPlayGame(identity, board, time.time(), action_ids=action_ids)
 
-    def new_game(self) -> SelfPlayGame:
-        return self._new_game()
-
-    def build_search_request(self, game: SelfPlayGame) -> ChessSelfPlaySearchRequest:
+    def build_search_request(self, game: ChessSelfPlayGame) -> ChessSelfPlaySearchRequest:
         from AlphaZeroCpp import ChessSelfPlaySearchRequest
 
-        if self.model_version is None:
-            raise RuntimeError('A model must be refreshed before self-play starts.')
-        game.acknowledge_model_version(self.model_version)
-        force_fast_endgame_playout = self._should_force_fast_endgame_playout(game)
-        should_run_full_search = self._should_run_full_search(game, force_fast_endgame_playout)
-        self._prepare_search_root(game)
-        if should_run_full_search:
-            game.already_expanded_node.discount(self.resolved_parameters.retained_root_visit_fraction)
-        return ChessSelfPlaySearchRequest(game.already_expanded_node, should_run_full_search)
+        if self.search is None:
+            raise RuntimeError('A model must be loaded before chess search starts.')
+        if game.root is None:
+            history = bounded_repetition_history(game.board.board, REPETITION_HISTORY_PLIES)
+            game.root = self.search.new_root_with_history(history.starting_fen, history.moves_uci)
+        full_search = self.random.random() < self.resolved_parameters.full_search_probability
+        if full_search:
+            game.root.discount(self.resolved_parameters.retained_root_visit_fraction)
+        return ChessSelfPlaySearchRequest(game.root, full_search)
 
     def search_active_games(
         self,
         requests: tuple[ChessSelfPlaySearchRequest, ...],
     ) -> tuple[ChessSelfPlaySearchResult, ...]:
-        mcts_results = self.search(list(requests))
-
-        stats = mcts_results.statistics
-        log_scalar('mcts/average_search_depth', stats.average_depth)
-        log_scalar('mcts/average_search_entropy', stats.average_entropy)
-        log_scalar('mcts/average_search_kl_divergence', stats.average_kl_divergence)
-        log_scalar(
-            'mcts/average_policy_search_kl_divergence',
-            stats.average_policy_search_kl_divergence,
-        )
-        log_scalar('mcts/top_move_disagreement', stats.top_action_disagreement)
-        log_scalar('mcts/search_selected_move_prior_rank', stats.selected_action_prior_rank)
-        return tuple(mcts_results.results)
+        if self.search is None:
+            raise RuntimeError('A model must be loaded before chess search starts.')
+        batch = self.search.search(list(requests), collect_statistics=False)
+        self.completed_searches += batch.simulations_completed
+        return tuple(batch.results)
 
     def advance_game(
         self,
-        game: SelfPlayGame,
+        game: ChessSelfPlayGame,
         request: ChessSelfPlaySearchRequest,
         result: ChessSelfPlaySearchResult,
-    ) -> SelfPlayGame:
-        if not result.visits:
-            return self._finish_terminal_search_root(game, result.root)
-        if not has_positive_visit_counts(result.visits):
-            log(f'Discarding self-play game after zero-visit MCTS root: {game.board.board.fen()}')
-            return self._new_game()
-        search_schedule = self.search_schedule_state
-        if search_schedule is None or self.model_version is None:
-            raise RuntimeError('Search schedule and model must be initialized during self-play.')
-        game.memory.append(
-            SelfPlayGameMemory(
-                game.board.copy(),
-                result.visits,
-                result.root_value,
-                len(game.played_moves),
-                self.model_version,
-                search_schedule.num_full_searches if request.full_search else search_schedule.num_fast_searches,
-                request.full_search,
-            )
+    ) -> ContinuingGame[ChessSelfPlayGame] | CompletedGame:
+        if self.model_generation is None:
+            raise RuntimeError('A model must be loaded before recording a chess move.')
+        indexed_positive_visits = tuple(
+            (native_index, SparseSearchVisit(action_id=action_id, visit_count=visit_count))
+            for native_index, (action_id, visit_count) in enumerate(result.visits)
+            if visit_count > 0
         )
-        if request.full_search:
-            self._archive_disagreement_prefix(game, result.root)
-            if self._record_resignation_observation(game, result):
-                if game.is_resignation_audit:
-                    self.statistics.add(SelfPlayDatasetStats(hypothetical_resignations=1))
-                else:
-                    self.statistics.add(SelfPlayDatasetStats(actual_resignations=1))
-                    return self._handle_resignation(game)
-        if self._should_terminate_low_material_game(game):
-            approximate_result = game.board.get_approximate_result_score() * game.board.current_player
-            self.statistics.add(
-                SelfPlayDatasetStats(
-                    low_material_termination_evaluations=1,
-                    low_material_terminations=1,
-                    low_material_termination_material_scores=[approximate_result],
-                )
-            )
-            return self._handle_end_of_game(
-                game,
-                approximate_result,
-                ResignationTerminationReason.LOW_MATERIAL,
-            )
-        return self._sample_self_play_game(game, result.root, result.visits)
-
-    def _finish_terminal_search_root(self, game: SelfPlayGame, root: ChessSearchRoot) -> SelfPlayGame:
-        if not root.is_terminal:
-            raise RuntimeError('MCTS returned no visit counts for a non-terminal root.')
-        finished_game = self._finish_game_after_move(game, native_game_over=True)
-        assert finished_game is not None
-        return finished_game
-
-    def _prepare_search_root(self, game: SelfPlayGame) -> None:
-        assert self.search_engine is not None
-        root = game.already_expanded_node
-        if root is not None and (root.is_terminal or root.is_expanded):
-            return
-        history = bounded_repetition_history(game.board.board, REPETITION_HISTORY_PLIES)
-        game.already_expanded_node = self.search_engine.new_root_with_history(
-            history.starting_fen,
-            history.moves_uci,
-        )
-
-    def _record_resignation_observation(self, game: SelfPlayGame, result: ChessSelfPlaySearchResult) -> bool:
-        if (
-            not game.is_resignation_audit
-            and not game.production_resignation_enabled
-            or len(game.played_moves) < self.args.resignation.minimum_eligible_ply
-            or game.resignation_trigger_ply is not None
-        ):
-            return False
-
-        best_child_value = best_child_value_from_root_perspective(result.root.children)
-        if best_child_value is None:
-            return False
-        observation = ResignationObservation(
-            model_version=self.iteration,
-            ply=len(game.played_moves),
-            side_to_move=game.board.current_player,
-            root_value=result.root_value,
-            best_child_value=best_child_value,
-        )
-        game.resignation_observations.append(observation)
-        threshold = game.resignation_threshold
-        if threshold is None or observation.root_value >= threshold or observation.best_child_value >= threshold:
-            return False
-
-        game.resignation_trigger_ply = observation.ply
-        game.resignee = game.board.current_player
-        return True
-
-    def _new_game(self) -> SelfPlayGame:
-        assignment = self.resignation_manager.assignment(self.iteration)
-        if self.disagreement_prefix_archive and random.random() < self.args.disagreement_prefix_start_probability:
-            prefixes = tuple(self.disagreement_prefix_archive)
-            weights = np.asarray(
-                tuple(
-                    min(
-                        self.args.disagreement_prefix_weight_cap,
-                        self.args.disagreement_prefix_weight_smoothing + self.disagreement_prefix_archive[prefix],
-                    )
-                    for prefix in prefixes
+        if not indexed_positive_visits:
+            raise RuntimeError('Native chess search returned no visited action for a nonterminal root.')
+        positive_visits = tuple(visit for _, visit in indexed_positive_visits)
+        ply = len(game.action_ids)
+        selected_visit_index = self._select_visit_index(positive_visits, ply)
+        native_child_index, selected_visit = indexed_positive_visits[selected_visit_index]
+        selected_action = selected_visit.action_id
+        game.observations.append(
+            SearchObservation(
+                ply=ply,
+                model_generation=self.model_generation,
+                visits=positive_visits,
+                root_value=result.root_value,
+                selected_action_id=selected_action,
+                full_search=request.full_search,
+                sample_weight=self.resolved_parameters.primary_sample_weight,
+                search_budget=(
+                    self.resolved_parameters.full_searches
+                    if request.full_search
+                    else self.resolved_parameters.fast_searches
                 ),
-                dtype=np.float64,
-            )
-            selected_prefix = prefixes[int(np.random.choice(len(prefixes), p=weights / weights.sum()))]
-            game = new_game_from_encoded_prefix(
-                selected_prefix,
-                is_resignation_audit=assignment.is_audit_game,
-                production_resignation_enabled=assignment.production_resignation_enabled,
-                resignation_threshold=assignment.governing_threshold,
-            )
-            self.disagreement_prefix_games_started += 1
-        else:
-            game = new_game(
-                is_resignation_audit=assignment.is_audit_game,
-                production_resignation_enabled=assignment.production_resignation_enabled,
-                resignation_threshold=assignment.governing_threshold,
-            )
-        if game.is_resignation_audit:
-            self.statistics.add(SelfPlayDatasetStats(resignation_audit_games_started=1))
-        game.identity = self.completed_game_publisher.reserve_identity()
-        return game
-
-    def _archive_disagreement_prefix(self, game: SelfPlayGame, root: ChessSearchRoot) -> None:
-        ply = len(game.encoded_moves)
-        if not 1 <= ply <= self.args.disagreement_prefix_maximum_ply:
-            return
-        prefix = tuple(game.encoded_moves)
-        disagreement = policy_search_disagreement(root)
-        previous = self.disagreement_prefix_archive.get(prefix)
-        self.disagreement_prefix_archive[prefix] = (
-            disagreement if previous is None else 0.8 * previous + 0.2 * disagreement
-        )
-        capacity = self.args.disagreement_prefix_archive_capacity
-        if len(self.disagreement_prefix_archive) > capacity:
-            lowest_prefix = min(
-                self.disagreement_prefix_archive,
-                key=self.disagreement_prefix_archive.__getitem__,
-            )
-            del self.disagreement_prefix_archive[lowest_prefix]
-
-    def _handle_resignation(self, game: SelfPlayGame) -> SelfPlayGame:
-        return self._handle_end_of_game(
-            game,
-            -1.0,
-            ResignationTerminationReason.RESIGNATION,
-        )
-
-    def _log_resignation_state(self, state: ResignationCalibrationState) -> None:
-        log_scalar(
-            'resignation/calibrated_threshold',
-            state.selected_threshold if state.selected_threshold is not None else -1.0,
-        )
-        log_scalar(
-            'resignation/calibration_safe',
-            float(state.selected_threshold_is_safe),
-        )
-        for statistics in state.threshold_statistics:
-            threshold_name = f'{abs(statistics.threshold):.2f}'
-            log_scalar(
-                f'resignation/candidates/{threshold_name}/completed_triggers',
-                statistics.completed_triggers,
-            )
-            log_scalar(
-                f'resignation/candidates/{threshold_name}/false_non_loss_rate',
-                statistics.false_non_loss_rate,
-            )
-            log_scalar(
-                f'resignation/candidates/{threshold_name}/upper_confidence',
-                statistics.false_non_loss_upper_confidence,
-            )
-
-    def _should_force_fast_endgame_playout(self, game: SelfPlayGame) -> bool:
-        continuation_start = self.args.endgame_continuation_start_plies
-        if continuation_start is not None and len(game.played_moves) >= continuation_start:
-            return True
-        if self.endgame_shortcut_strength <= 0.0:
-            return False
-        if len(game.played_moves) < self.resolved_parameters.greedy_after_ply:
-            return False
-        if len(game.board.board.piece_map()) > ENDGAME_PIECE_THRESHOLD:
-            return False
-        return random.random() < self.endgame_shortcut_strength
-
-    def _should_run_full_search(
-        self,
-        game: SelfPlayGame,
-        force_fast_endgame_playout: bool,
-    ) -> bool:
-        return (
-            not force_fast_endgame_playout
-            and game.resignation_trigger_ply is None
-            and random.random() < self.resolved_parameters.full_search_probability
-        )
-
-    def _should_terminate_low_material_game(self, game: SelfPlayGame) -> bool:
-        if game.low_material_termination_evaluated:
-            return False
-        if len(game.played_moves) < self.args.low_material_termination_minimum_plies:
-            return False
-        if self.args.low_material_termination_probability <= 0.0:
-            return False
-
-        pieces = game.board.board.piece_map().values()
-        white_piece_count = sum(piece.color == chess.WHITE for piece in pieces)
-        black_piece_count = sum(piece.color == chess.BLACK for piece in pieces)
-        if (
-            white_piece_count >= self.args.low_material_termination_piece_threshold_per_player
-            and black_piece_count >= self.args.low_material_termination_piece_threshold_per_player
-        ):
-            return False
-
-        game.low_material_termination_evaluated = True
-        if random.random() < self.args.low_material_termination_probability:
-            return True
-        self.statistics.add(
-            SelfPlayDatasetStats(
-                low_material_termination_evaluations=1,
-                low_material_termination_declines=1,
+                minimum_root_visits=self.resolved_parameters.minimum_root_visits,
             )
         )
-        return False
+        game.action_ids.append(selected_action)
+        game.board = CHESS_STATE_CONTRACT.child_position(game.board, selected_action)
+        game.root = result.root.make_new_root(native_child_index)
 
-    @timeit
-    def _sample_self_play_game(
-        self,
-        current: SelfPlayGame,
-        root: ChessSearchRoot,
-        visit_counts: list[tuple[int, int]],
-    ) -> SelfPlayGame:
-        # Sample a move from the action probabilities then create a new game state with that move
-        # If the game is over, add the game to the dataset and return a new game state, thereby initializing a new game
+        natural_wdl = CHESS_STATE_CONTRACT.terminal_wdl(game.board)
+        if natural_wdl is not None:
+            return CompletedGame(self._complete(game, natural_wdl, TerminationReason.NATURAL))
+        maximum_plies = self.resolved_parameters.maximum_game_plies
+        if maximum_plies is not None and len(game.action_ids) >= maximum_plies:
+            wdl = CHESS_STATE_CONTRACT.adjudicated_wdl(game.board, TerminationReason.MAXIMUM_PLIES)
+            return CompletedGame(self._complete(game, wdl, TerminationReason.MAXIMUM_PLIES))
+        return ContinuingGame(game)
 
-        children_probabilities = visit_count_probabilities(visit_counts, current.board)
-        children_encoded_moves = [move for move, _ in visit_counts]
-
-        # discourage moves which were only recently played
-        for i, move in enumerate(current.encoded_moves[-10:]):
-            for j, child_move in enumerate(children_encoded_moves):
-                if move == child_move:
-                    children_probabilities[j] /= i + 1  # discourage moves which were played recently
-        children_probabilities /= np.sum(children_probabilities)  # normalize probabilities
-
-        # only use temperature for the first X moves, then simply use the most likely move
-        # Keep exploration high for the first X moves, then play out as well as possible to reduce noise in the backpropagated final game results
-        if len(current.played_moves) >= self.resolved_parameters.greedy_after_ply:
-            child_index = np.argmax(children_probabilities).item()
-        else:
-            # Scale down temperature from self.args.temperature to 0.1 as we approach num_moves_after_which_to_play_greedy
-            game_progress = len(current.played_moves) / self.resolved_parameters.greedy_after_ply
-            temperature = lerp(
-                self.resolved_parameters.starting_temperature,
-                self.resolved_parameters.final_temperature,
-                game_progress,
+    def _select_visit_index(self, visits: tuple[SparseSearchVisit, ...], ply: int) -> int:
+        counts = np.asarray([visit.visit_count for visit in visits], dtype=np.float64)
+        if ply >= self.resolved_parameters.greedy_after_ply:
+            return min(
+                range(len(visits)),
+                key=lambda index: (-visits[index].visit_count, visits[index].action_id),
             )
-            child_index = _sample_from_probabilities(children_probabilities, temperature)
+        progress = ply / self.resolved_parameters.greedy_after_ply
+        temperature = (
+            self.resolved_parameters.starting_temperature
+            + (self.resolved_parameters.final_temperature - self.resolved_parameters.starting_temperature) * progress
+        )
+        probabilities = np.power(counts, 1.0 / temperature)
+        probabilities /= probabilities.sum()
+        return int(self.random.choice(len(visits), p=probabilities))
 
-        move = CHESS_STATE_CONTRACT.decode_move(children_encoded_moves[child_index], current.board)
-        new_spg = current.expand(move)
-        new_spg.already_expanded_node = root.make_new_root(child_index)
-
-        native_game_over = new_spg.already_expanded_node.is_terminal
-        finished_game = self._finish_game_after_move(new_spg, native_game_over)
-        if finished_game is None:
-            return new_spg
-        return finished_game
-
-    def _finish_game_after_move(self, game: SelfPlayGame, native_game_over: bool) -> SelfPlayGame | None:
-        if native_game_over or game.board.is_game_over():
-            result = get_board_result_score(game.board)
-            if result is None:
-                assert native_game_over, 'Python reported a terminal game without a result.'
-                result = 0.0
-            return self._handle_end_of_game(game, result, ResignationTerminationReason.NATURAL)
-
-        maximum_game_plies = self._maximum_game_plies()
-        if maximum_game_plies is not None and len(game.played_moves) >= maximum_game_plies:
-            capped_game_outcome = game.board.get_approximate_result_score() * game.board.current_player
-            termination_reason = (
-                ResignationTerminationReason.MATERIAL_ADJUDICATION
-                if self.args.endgame_continuation_start_plies is not None
-                else ResignationTerminationReason.PLY_CAP
-            )
-            self.statistics.add(
-                SelfPlayDatasetStats(
-                    num_too_long_games=1,
-                    capped_game_material_scores=[capped_game_outcome],
-                )
-            )
-            return self._handle_end_of_game(
-                game,
-                capped_game_outcome,
-                termination_reason,
-            )
-        return None
-
-    def _maximum_game_plies(self) -> int | None:
-        return self.resolved_parameters.maximum_game_plies
+    @staticmethod
+    def _complete(
+        game: ChessSelfPlayGame,
+        final_wdl: WdlTarget,
+        reason: TerminationReason,
+    ) -> CompletedSelfPlayGame:
+        return CompletedSelfPlayGame(
+            identity=game.identity,
+            created_at_seconds=time.time(),
+            generation_seconds=time.time() - game.started_at_seconds,
+            action_ids=tuple(game.action_ids),
+            observations=tuple(game.observations),
+            final_wdl=final_wdl,
+            termination_reason=reason,
+        )
 
     def _resolve_parameters(self, model_generation: int) -> ResolvedSelfPlayParameters:
         maximum_game_plies = (
-            None if self.args.maximum_game_plies is None else self.args.maximum_game_plies.value_at(model_generation)
+            None
+            if self.configuration.maximum_game_plies is None
+            else self.configuration.maximum_game_plies.value_at(model_generation)
         )
-        return self.args.resolve(model_generation, maximum_game_plies)
+        return self.configuration.resolve(model_generation, maximum_game_plies)
 
-    def _handle_end_of_game(
-        self,
-        spg: SelfPlayGame,
-        game_outcome: float,
-        termination_reason: ResignationTerminationReason = ResignationTerminationReason.NATURAL,
-    ) -> SelfPlayGame:
-        self._add_training_data(spg, game_outcome, _replay_termination_reason(termination_reason))
+    def _native_search_parameters(self) -> SelfPlaySearchParameters:
+        from AlphaZeroCpp import SelfPlaySearchParameters
 
-        if spg.is_resignation_audit:
-            audit = CompletedResignationAudit(
-                game_id=spg.game_id,
-                observations=tuple(spg.resignation_observations),
-                audit_cutoff_threshold=spg.resignation_threshold,
-                audit_cutoff_ply=spg.resignation_trigger_ply,
-                final_current_player=spg.board.current_player,
-                game_outcome=game_outcome,
-                termination_reason=termination_reason,
-            )
-            state = self.resignation_manager.record_completed_audit(audit)
-            self._log_resignation_state(state)
-            audit_trigger = next(
-                (
-                    observation
-                    for observation in spg.resignation_observations
-                    if spg.resignation_threshold is not None
-                    and observation.root_value < spg.resignation_threshold
-                    and observation.best_child_value < spg.resignation_threshold
-                ),
-                None,
-            )
-            recovered_outcome = (
-                game_outcome
-                if audit_trigger is not None and audit_trigger.side_to_move == spg.board.current_player
-                else -game_outcome
-            )
-            is_natural_trigger = (
-                audit_trigger is not None and termination_reason is ResignationTerminationReason.NATURAL
-            )
-            is_false_non_loss = is_natural_trigger and recovered_outcome >= 0.0
-            continuation_plies = len(spg.played_moves) - audit_trigger.ply if audit_trigger is not None else 0
-            fast_searches = self.resolved_parameters.fast_searches
-            self.statistics.add(
-                SelfPlayDatasetStats(
-                    resignation_audit_games_completed=1,
-                    resignation_audit_natural_triggers=int(is_natural_trigger),
-                    resignation_audit_capped_triggers=int(
-                        audit_trigger is not None and termination_reason is not ResignationTerminationReason.NATURAL
-                    ),
-                    resignation_audit_recovered_wins=int(is_natural_trigger and recovered_outcome == 1.0),
-                    resignation_audit_recovered_draws=int(is_natural_trigger and recovered_outcome == 0.0),
-                    resignation_audit_recovered_losses=int(is_natural_trigger and recovered_outcome == -1.0),
-                    resignation_audit_white_triggers=int(is_natural_trigger and audit_trigger.side_to_move == 1),
-                    resignation_audit_black_triggers=int(is_natural_trigger and audit_trigger.side_to_move == -1),
-                    resignation_audit_white_false_non_losses=int(is_false_non_loss and audit_trigger.side_to_move == 1),
-                    resignation_audit_black_false_non_losses=int(
-                        is_false_non_loss and audit_trigger.side_to_move == -1
-                    ),
-                    resignation_audit_root_value_abs_sum=sum(
-                        abs(observation.root_value) for observation in spg.resignation_observations
-                    ),
-                    resignation_audit_root_value_count=len(spg.resignation_observations),
-                    resignation_audit_continuation_plies=continuation_plies,
-                    resignation_audit_estimated_searches_saved=continuation_plies * fast_searches,
-                )
-            )
-
-        return self._new_game()
-
-    @timeit
-    def _add_training_data(
-        self,
-        spg: SelfPlayGame,
-        game_outcome: float,
-        termination_reason: TerminationReason,
-    ) -> None:
-        # result: 1 if current player won, -1 if current player lost, 0 if draw
-
-        self._log_game(spg, game_outcome)
-        if spg.oldest_model_version is None or spg.newest_model_version is None:
-            raise RuntimeError('Completed game has no acknowledged inference model.')
-        self.statistics.add(
-            SelfPlayDatasetStats(
-                game_model_version_ranges=[(spg.oldest_model_version, spg.newest_model_version)],
-            )
+        parameters = self.resolved_parameters
+        return SelfPlaySearchParameters(
+            parallel_searches=parameters.parallel_searches,
+            full_searches=parameters.full_searches,
+            fast_searches=parameters.fast_searches,
+            dirichlet_alpha=parameters.dirichlet_alpha,
+            dirichlet_epsilon=parameters.dirichlet_epsilon,
+            exploration_constant=parameters.exploration_constant,
+            minimum_root_visits=parameters.minimum_root_visits,
         )
-
-        self.statistics.record_completed_game(
-            game_length=len(spg.played_moves),
-            generation_time=time.time() - spg.start_generation_time,
-        )
-
-        if spg.identity is None:
-            raise RuntimeError('Completed game has no reserved publication identity.')
-        moves_uci = tuple(move.uci() for move in spg.played_moves)
-        observations = tuple(
-            ChessSearchObservation(
-                ply=memory.ply,
-                model_generation=memory.model_generation,
-                legal_action_ids=tuple(
-                    sorted(
-                        CHESS_STATE_CONTRACT.encode_move(move, memory.board) for move in memory.board.get_valid_moves()
-                    )
-                ),
-                visits=tuple(
-                    SparseSearchVisit(action_id=action_id, visit_count=visit_count)
-                    for action_id, visit_count in memory.visit_counts
-                ),
-                root_value=memory.result_score,
-                selected_action_id=(spg.encoded_moves[memory.ply] if memory.ply < len(spg.encoded_moves) else None),
-                move_selection_mode=(
-                    ChessMoveSelectionMode.TERMINAL
-                    if memory.ply == len(spg.encoded_moves)
-                    else (
-                        ChessMoveSelectionMode.GREEDY
-                        if memory.ply >= self.resolved_parameters.greedy_after_ply
-                        else ChessMoveSelectionMode.TEMPERATURE
-                    )
-                ),
-                search_budget=memory.search_budget,
-                minimum_visit_count=self.resolved_parameters.minimum_root_visits,
-                sample_eligible=memory.sample_eligible,
-            )
-            for memory in spg.memory
-        )
-        self.completed_game_publisher.publish(
-            ChessCompletedGame(
-                identity=spg.identity,
-                rules=ChessRulesMetadata(),
-                representation=ChessRepresentationMetadata(),
-                model_generation=spg.newest_model_version,
-                minimum_model_generation=spg.oldest_model_version,
-                created_at_seconds=time.time(),
-                generation_seconds=time.time() - spg.start_generation_time,
-                initial_fen=chess.STARTING_FEN,
-                moves_uci=moves_uci,
-                final_current_player=spg.board.current_player,
-                final_score=game_outcome,
-                termination_reason=termination_reason,
-                resignation_audit=spg.is_resignation_audit,
-                resignation_threshold=spg.resignation_threshold,
-                resignation_trigger_ply=spg.resignation_trigger_ply,
-                observations=observations,
-            )
-        )
-
-    def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
-        # Remove moves which were only visited exactly as many times as required, never more
-        visit_counts = [
-            (move, count - self.resolved_parameters.minimum_root_visits)
-            for move, count in visit_counts
-            if count > self.resolved_parameters.minimum_root_visits
-        ]
-
-        return visit_counts
-
-    def _log_game(self, spg: SelfPlayGame, result: float) -> None:
-        moves: list[str] = []
-        board = CHESS_STATE_CONTRACT.initial_position()
-        for move in spg.played_moves:
-            encoded_move = CHESS_STATE_CONTRACT.encode_move(move, board)
-            moves.append(str(encoded_move))
-            board.make_move(move)
-
-        log_text('starting_line', ','.join(moves[:7]))
-
-        if random.random() < 0.01:  # log about 1% of games
-            moves_str = ','.join(moves)
-            log_text(f'moves/{self.iteration}/{hash(moves_str)}', f'{result}:{moves_str}')
-
-
-def _sample_from_probabilities(action_probabilities: np.ndarray, temperature: float = 1.0) -> int:
-    assert temperature > 0, 'Temperature must be greater than 0'
-
-    temperature_action_probabilities = action_probabilities ** (1 / temperature)
-    temperature_action_probabilities /= np.sum(temperature_action_probabilities)
-
-    action_index = np.random.choice(len(action_probabilities), p=temperature_action_probabilities)
-
-    return action_index
-
-
-def _replay_termination_reason(reason: ResignationTerminationReason) -> TerminationReason:
-    match reason:
-        case ResignationTerminationReason.NATURAL:
-            return TerminationReason.NATURAL
-        case ResignationTerminationReason.RESIGNATION:
-            return TerminationReason.RESIGNATION
-        case ResignationTerminationReason.PLY_CAP:
-            return TerminationReason.PLY_CAP
-        case ResignationTerminationReason.LOW_MATERIAL:
-            return TerminationReason.MATERIAL_ADJUDICATION
-        case ResignationTerminationReason.MATERIAL_ADJUDICATION:
-            return TerminationReason.MATERIAL_ADJUDICATION
-
-
-def new_game(
-    is_resignation_audit: bool = False,
-    production_resignation_enabled: bool = False,
-    resignation_threshold: float | None = None,
-) -> SelfPlayGame:
-    # Create a new game instance
-    game = SelfPlayGame(
-        is_resignation_audit=is_resignation_audit,
-        production_resignation_enabled=production_resignation_enabled,
-        resignation_threshold=resignation_threshold,
-    )
-
-    # Play a random moves to start the game in different states
-    random_moves_to_play = 2 + int(random.random() * 2)  # Play 2-4 random moves to start the game
-    for _ in range(random_moves_to_play):
-        game = game.expand(random.choice(game.board.get_valid_moves()))
-        if game.board.is_game_over():
-            # If the game is over, start a new game
-            return new_game(
-                is_resignation_audit=is_resignation_audit,
-                production_resignation_enabled=production_resignation_enabled,
-                resignation_threshold=resignation_threshold,
-            )
-
-    return game
-
-
-def new_game_from_encoded_prefix(
-    encoded_moves: tuple[int, ...],
-    is_resignation_audit: bool = False,
-    production_resignation_enabled: bool = False,
-    resignation_threshold: float | None = None,
-) -> SelfPlayGame:
-    game = SelfPlayGame(
-        is_resignation_audit=is_resignation_audit,
-        production_resignation_enabled=production_resignation_enabled,
-        resignation_threshold=resignation_threshold,
-    )
-    for encoded_move in encoded_moves:
-        move = CHESS_STATE_CONTRACT.decode_move(encoded_move, game.board)
-        game = game.expand(move)
-    return game

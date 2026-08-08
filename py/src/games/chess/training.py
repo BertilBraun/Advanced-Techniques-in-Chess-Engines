@@ -7,6 +7,7 @@ from src.games.chess.board import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessStateContract
 from src.games.chess.configuration import (
     ChessExperimentConfiguration,
+    ChessSelfPlayConfiguration,
 )
 from src.games.implementation import GameImplementation
 from src.games.chess.self_play import (
@@ -15,7 +16,6 @@ from src.games.chess.self_play import (
     SelfPlayStatisticsSnapshot,
 )
 from src.games.chess.completed_game import ChessCompletedGame
-from src.self_play.completed_game import RuntimeCompletedGamePublisher
 from src.games.chess.replay import CHESS_REPLAY_IMPLEMENTATION
 from src.training.replay import ReplayGameImplementation
 from src.training.batch import RuntimeTrainingBatch
@@ -147,6 +147,10 @@ class ChessImplementation(
         return CHESS_STATE_CONTRACT
 
     @property
+    def self_play_configuration(self) -> ChessSelfPlayConfiguration:
+        return self.configuration.chess.self_play
+
+    @property
     def target_layout(self) -> TrainingTargetLayout:
         return build_training_target_layout(
             self.network_dimensions.actions,
@@ -178,11 +182,11 @@ class ChessImplementation(
     def create_self_play_policy(
         self,
         device_id: int,
-        publisher: RuntimeCompletedGamePublisher,
+        worker_id: int,
     ) -> ChessSelfPlayPolicy:
         return ChessSelfPlayPolicy(
             device_id,
             self.configuration.chess.self_play,
-            self.training.save_path,
-            publisher,
+            worker_id,
+            self.training.random_seed,
         )

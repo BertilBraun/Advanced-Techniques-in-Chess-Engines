@@ -6,9 +6,9 @@ from typing import Generic, TypeVar
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract
 from src.neural_network import NetworkDimensions
-from src.self_play.completed_game import RuntimeCompletedGamePublisher, RuntimeCompletedGameRecord
+from src.self_play.completed_game import RuntimeCompletedGameRecord
 from src.self_play.worker import GameSelfPlayPolicy
-from src.training.configuration import TrainingArgs
+from src.training.configuration import SelfPlayConfiguration, TrainingArgs
 from src.training.replay import ReplayGameImplementation
 from src.training.targets import TrainingTargetLayout
 from src.training.objective import ResolvedTrainingObjective
@@ -57,6 +57,11 @@ class GameImplementation(
 
     @property
     @abstractmethod
+    def self_play_configuration(self) -> SelfPlayConfiguration:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
     def target_layout(self) -> TrainingTargetLayout:
         raise NotImplementedError
 
@@ -79,7 +84,7 @@ class GameImplementation(
     def create_self_play_policy(
         self,
         device_id: int,
-        publisher: RuntimeCompletedGamePublisher,
+        worker_id: int,
     ) -> GameSelfPlayPolicy[ActiveGameT, SearchRequestT, SearchResultT, StatisticsT]:
         """Current worker boundary, replaced as one unit in Phase 2."""
         raise NotImplementedError

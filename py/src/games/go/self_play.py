@@ -13,7 +13,6 @@ from AlphaZeroCpp import (
     GoSelfPlaySearchRequest9,
     GoSelfPlaySearchResult7,
     GoSelfPlaySearchResult9,
-    GoPlayer,
     GoRules,
     GoSearchRoot7,
     GoSearchRoot9,
@@ -24,17 +23,17 @@ from AlphaZeroCpp import (
 
 from src.games.go.configuration import GoExperimentConfiguration
 from src.util.tensorboard import log_scalar
-from src.self_play.completed_game import RuntimeCompletedGamePublisher, SparseSearchVisit
+from src.games.contracts import WdlTarget
+from src.self_play.active_game import CompletedGame, ContinuingGame
+from src.self_play.completed_game import (
+    CompletedSelfPlayGame,
+    GameIdentity,
+    SearchObservation,
+    SparseSearchVisit,
+    TerminationReason,
+)
 from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.self_play.worker import GameSelfPlayPolicy
-from src.games.go.completed_game import (
-    GoCompletedGame,
-    GoMoveSelectionMode,
-    GoRepresentationMetadata,
-    GoRulesMetadata,
-    GoSearchObservation,
-    GoTerminationReason,
-)
 
 
 NativeGoSearch = GoSelfPlaySearch7 | GoSelfPlaySearch9
@@ -45,10 +44,11 @@ NativeGoSearchResult = GoSelfPlaySearchResult7 | GoSelfPlaySearchResult9
 
 @dataclass
 class GoSelfPlayGame:
+    identity: GameIdentity
     root: NativeGoSearchRoot
     started_at_seconds: float
     actions: list[int] = field(default_factory=list)
-    observations: list[GoSearchObservation] = field(default_factory=list)
+    observations: list[SearchObservation] = field(default_factory=list)
 
 
 class GoSelfPlayPolicy(
@@ -62,11 +62,10 @@ class GoSelfPlayPolicy(
     def __init__(
         self,
         configuration: GoExperimentConfiguration,
-        publisher: RuntimeCompletedGamePublisher,
+        worker_id: int,
         device_id: int,
     ) -> None:
         self.configuration = configuration
-        self.publisher = publisher
         self.model_generation: int | None = None
         self.rules = GoRules(
             configuration.go.rules.komi_half_points,
@@ -108,7 +107,7 @@ class GoSelfPlayPolicy(
             inference.outstanding_batches_per_worker,
         )
         self.search: NativeGoSearch | None = None
-        self.random = np.random.default_rng(configuration.training.random_seed + publisher.worker_id)
+        self.random = np.random.default_rng(configuration.training.random_seed + worker_id)
 
     def refresh_model(
         self,
@@ -141,10 +140,10 @@ class GoSelfPlayPolicy(
         )
         log_scalar('timing/total_time_cpp', timing.totalTime, tensorboard_step)
 
-    def new_game(self) -> GoSelfPlayGame:
+    def new_game(self, identity: GameIdentity) -> GoSelfPlayGame:
         if self.search is None:
             raise RuntimeError('A model must be loaded before creating a Go game.')
-        return GoSelfPlayGame(self.search.new_root(self.rules), time.time())
+        return GoSelfPlayGame(identity, self.search.new_root(self.rules), time.time())
 
     def build_search_request(self, game: GoSelfPlayGame) -> NativeGoSearchRequest:
         full_search = self.random.random() < self.resolved_parameters.full_search_probability
@@ -162,12 +161,11 @@ class GoSelfPlayPolicy(
         game: GoSelfPlayGame,
         request: NativeGoSearchRequest,
         result: NativeGoSearchResult,
-    ) -> GoSelfPlayGame:
+    ) -> ContinuingGame[GoSelfPlayGame] | CompletedGame:
         self._play_move(game, request, result)
         if not game.root.is_terminal:
-            return game
-        self._publish(game)
-        return self.new_game()
+            return ContinuingGame(game)
+        return CompletedGame(self._complete(game))
 
     def _play_move(
         self,
@@ -186,7 +184,6 @@ class GoSelfPlayPolicy(
         greedy_after = self.resolved_parameters.greedy_after_ply
         if ply >= greedy_after:
             selected_action = max(positive_visits, key=lambda visit: (visit[1], -visit[0]))[0]
-            selection_mode = GoMoveSelectionMode.GREEDY
         else:
             counts = np.asarray([visit_count for _, visit_count in positive_visits], dtype=np.float64)
             game_progress = ply / greedy_after
@@ -198,57 +195,44 @@ class GoSelfPlayPolicy(
             probabilities = np.power(counts, 1.0 / temperature)
             probabilities /= probabilities.sum()
             selected_action = positive_visits[int(self.random.choice(len(positive_visits), p=probabilities))][0]
-            selection_mode = GoMoveSelectionMode.TEMPERATURE
         game.observations.append(
-            GoSearchObservation(
+            SearchObservation(
                 ply=ply,
                 model_generation=self.model_generation,
-                legal_action_ids=tuple(sorted(game.root.position.legal_actions())),
                 visits=tuple(
                     SparseSearchVisit(action_id=action_id, visit_count=visit_count)
                     for action_id, visit_count in positive_visits
                 ),
                 root_value=result.root_value,
                 selected_action_id=selected_action,
-                move_selection_mode=selection_mode,
+                full_search=request.full_search,
                 search_budget=(
                     self.resolved_parameters.full_searches
                     if request.full_search
                     else self.resolved_parameters.fast_searches
                 ),
-                minimum_visit_count=self.resolved_parameters.minimum_root_visits,
-                sample_eligible=request.full_search,
+                minimum_root_visits=self.resolved_parameters.minimum_root_visits,
                 sample_weight=self.resolved_parameters.primary_sample_weight,
             )
         )
         game.actions.append(selected_action)
         game.root.play(selected_action)
 
-    def _publish(self, game: GoSelfPlayGame) -> Path:
+    def _complete(self, game: GoSelfPlayGame) -> CompletedSelfPlayGame:
         if self.model_generation is None:
             raise RuntimeError('A model must be loaded before publishing a Go game.')
         terminal = game.root.position.terminal_result()
         safety_cap = terminal.reason.name == 'MAXIMUM_MOVES'
-        observations = tuple(game.observations)
         final_score = game.root.position.terminal_value()
-        completed = GoCompletedGame(
-            identity=self.publisher.reserve_identity(),
-            rules=GoRulesMetadata(
-                komi_half_points=self.configuration.go.rules.komi_half_points,
-                maximum_moves=self.configuration.go.rules.maximum_moves,
-            ),
-            representation=GoRepresentationMetadata(board_size=self.configuration.go.representation.board_size),
-            model_generation=self.model_generation,
-            minimum_model_generation=min(observation.model_generation for observation in observations),
+        return CompletedSelfPlayGame(
+            identity=game.identity,
             created_at_seconds=time.time(),
             generation_seconds=time.time() - game.started_at_seconds,
-            actions=tuple(game.actions),
-            final_current_player=1 if game.root.position.player == GoPlayer.BLACK else -1,
-            final_score=final_score,
-            termination_reason=(GoTerminationReason.MAXIMUM_MOVES if safety_cap else GoTerminationReason.TWO_PASSES),
-            observations=observations,
+            action_ids=tuple(game.actions),
+            observations=tuple(game.observations),
+            final_wdl=WdlTarget.from_scalar(final_score),
+            termination_reason=(TerminationReason.MAXIMUM_PLIES if safety_cap else TerminationReason.NATURAL),
         )
-        return self.publisher.publish(completed)
 
     def _resolve_parameters(self, model_generation: int) -> ResolvedSelfPlayParameters:
         return self.configuration.go.self_play.resolve(

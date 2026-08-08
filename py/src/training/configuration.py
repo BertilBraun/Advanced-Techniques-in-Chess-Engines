@@ -81,6 +81,7 @@ class SelfPlayConfiguration(FrozenModel):
     starting_temperature: FloatGenerationSchedule
     final_temperature: FloatGenerationSchedule
     primary_sample_weight: FloatGenerationSchedule
+    detailed_statistics_workers: int = Field(default=1, ge=0)
 
     @model_validator(mode='after')
     def validate_temperatures(self) -> SelfPlayConfiguration:

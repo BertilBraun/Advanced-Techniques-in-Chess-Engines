@@ -5,10 +5,9 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from src.experiment.base_configuration import BaseExperimentConfiguration
-from src.experiment.generation_schedule import FloatGenerationSchedule, IntegerGenerationSchedule
+from src.experiment.generation_schedule import IntegerGenerationSchedule
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.neural_network import NetworkDimensions
-from src.games.chess.resignation import ResignationParams
 from src.training.configuration import (
     BatchedInferenceParams,
     SelfPlayConfiguration,
@@ -47,17 +46,6 @@ class ChessEvaluationConfiguration(FrozenModel):
 
 class ChessSelfPlayConfiguration(SelfPlayConfiguration):
     maximum_game_plies: IntegerGenerationSchedule | None = None
-    endgame_continuation_start_plies: int | None = Field(default=None, ge=0)
-    low_material_termination_minimum_plies: int = Field(default=0, ge=0)
-    low_material_termination_piece_threshold_per_player: int = Field(default=0, ge=0)
-    low_material_termination_probability: float = Field(default=0.0, ge=0.0, le=1.0)
-    resignation: ResignationParams = ResignationParams()
-    disagreement_prefix_start_probability: float = Field(default=0.15, ge=0.0, le=1.0)
-    disagreement_prefix_maximum_ply: int = Field(default=10, ge=0)
-    disagreement_prefix_archive_capacity: int = Field(default=2_000, gt=0)
-    disagreement_prefix_weight_smoothing: float = Field(default=0.05, gt=0.0)
-    disagreement_prefix_weight_cap: float = Field(default=4.0, ge=1.0)
-    endgame_shortcut_probability: FloatGenerationSchedule
 
 
 class ChessConfiguration(FrozenModel):
@@ -76,8 +64,6 @@ class ChessExperimentConfiguration(BaseExperimentConfiguration):
 
     @model_validator(mode='after')
     def validate_experiment(self) -> ChessExperimentConfiguration:
-        if self.chess.objective.auxiliary_targets:
-            raise ValueError('Auxiliary targets are defined by Phase 1 but become executable in Phase 2.')
         self.training.validate_game(self.network_dimensions.actions, self.chess.self_play)
         evaluation = self.chess.evaluation
         retention = self.training.lifecycle.inference_retention

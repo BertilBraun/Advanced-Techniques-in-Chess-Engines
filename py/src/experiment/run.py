@@ -20,6 +20,8 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.experiment.evaluation_protocol import load_opening_suite
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.chess.configuration import ChessExperimentConfiguration
+from src.games.go.configuration import GoExperimentConfiguration
+from src.training.targets import build_training_target_layout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.save_paths import create_model, create_optimizer, load_model, model_save_path, save_model_and_optimizer
@@ -218,19 +220,32 @@ def prepare_experiment_training_run(
         else torch.device('cuda', training.topology.trainer.rank_zero_device_id)
     )
     dimensions = experiment.network_dimensions
+    match experiment:
+        case ChessExperimentConfiguration():
+            objective = experiment.chess.objective
+        case GoExperimentConfiguration():
+            objective = experiment.go.objective
+    target_layout = build_training_target_layout(dimensions.actions, objective.auxiliary_targets)
+    auxiliary_action_sizes = tuple(head.action_size for head in target_layout.auxiliary_heads)
     match run.resume:
         case WeightsOnlyResumeConfiguration(model_path=model_path):
             initial_model_path = _resolve_source_path(model_path)
             if not initial_model_path.is_file():
                 raise ValueError(f'Initial model does not exist: {initial_model_path}')
             if not initial_checkpoint_path.exists():
-                model = load_model(initial_model_path, training.network, device, dimensions)
+                model = load_model(
+                    initial_model_path,
+                    training.network,
+                    device,
+                    dimensions,
+                    auxiliary_action_sizes,
+                )
                 save_model_and_optimizer(model, create_optimizer(model, optimizer_type), 0, output_path)
         case RandomInitializationResumeConfiguration():
             if initial_checkpoint_path.exists() and not manifest_path.exists():
                 raise ValueError(f'Random checkpoint exists without a run manifest: {initial_checkpoint_path}')
             if not initial_checkpoint_path.exists():
-                model = create_model(training.network, device, dimensions)
+                model = create_model(training.network, device, dimensions, auxiliary_action_sizes)
                 save_model_and_optimizer(model, create_optimizer(model, optimizer_type), 0, output_path)
 
     manifest = ExperimentRunManifest(
