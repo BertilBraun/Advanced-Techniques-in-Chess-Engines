@@ -29,6 +29,19 @@ void bind_chess_game(py::module_ &module) {
         .def_property_readonly("is_terminal", &Board::isGameOver)
         .def_property_readonly("fen", &Board::fen)
         .def(
+            "action_uci",
+            [](const Board &position, const int actionId) {
+                return ChessEncoding::decodeAction(actionId, position).toUci();
+            },
+            py::arg("action_id"))
+        .def(
+            "action_id_from_uci",
+            [](const Board &position, const std::string &moveUci) {
+                return ChessEncoding::actionId(
+                    ChessAction(position.legalMoveFromUci(moveUci)), position);
+            },
+            py::arg("move_uci"))
+        .def(
             "legal_actions",
             [](const Board &position) {
                 std::vector<int> actionIds;
