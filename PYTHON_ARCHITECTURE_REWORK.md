@@ -4,6 +4,8 @@
 
 This document defines the target Python architecture for the experiment runtime. It is an implementation plan, not a compatibility specification for the current Python structure.
 
+Implementation status: Phase 1 is `awaiting_user_review`. Phases 2 through 4 remain `pending` and are not authorized.
+
 The rework should replace the current mixture of file mailboxes, commander-owned component details, trainer-owned replay maintenance, copied Python replay snapshots, and exact recovery machinery with a small synchronous coordinator and explicit process boundaries.
 
 The design priorities, in order, are:
