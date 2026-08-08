@@ -7,12 +7,11 @@ import torch.nn.functional as functional
 from torch import nn
 
 from src.neural_network import Network, NetworkDimensions
-from src.games.training_contract import GameImplementation
+from src.games.implementation import GameImplementation
 from src.games.go.configuration import (
     GoExperimentConfiguration,
-    GoTrainingObjectiveConfiguration,
 )
-from src.games.go.contract import GoStateContract
+from src.games.go.contract import GoStateContract, NativeGoPosition
 from src.games.go.completed_game import GoCompletedGame
 from src.games.go.replay import GoReplayImplementation
 from src.games.go.self_play import (
@@ -25,6 +24,8 @@ from src.self_play.completed_game import CompletedGamePublisher
 from src.training.batch import TrainingBatch
 from src.training.replay import ReplayGameImplementation
 from src.training.trainer import LossResult, TrainingObjective
+from src.training.configuration import TrainingObjectiveConfiguration
+from src.training.targets import TrainingTargetLayout, build_training_target_layout
 from src.self_play.value_target import FinalOutcome
 from src.value import scalar_to_wdl
 
@@ -37,19 +38,24 @@ class GoLoss:
 
 
 class GoTrainingObjective(TrainingObjective):
-    def __init__(self, configuration: GoTrainingObjectiveConfiguration) -> None:
+    def __init__(self, configuration: TrainingObjectiveConfiguration, model_generation: int) -> None:
         self.configuration = configuration
+        self.model_generation = model_generation
+        self._policy_loss_weight = configuration.policy_loss_weight.value_at(model_generation)
+        self._value_loss_weight = configuration.value_loss_weight.value_at(model_generation)
+        self._root_value_blend = configuration.root_value_blend.value_at(model_generation)
 
     @property
     def policy_loss_weight(self) -> float:
-        return self.configuration.policy_loss_weight
+        return self._policy_loss_weight
 
     @property
     def value_loss_weight(self) -> float:
-        return 1.0
+        return self._value_loss_weight
 
-    def value_target_weight(self, optimizer_step: int) -> float:
-        return self.configuration.root_value_loss_weight
+    @property
+    def root_value_blend(self) -> float:
+        return self._root_value_blend
 
     def calculate_loss(
         self,
@@ -75,7 +81,7 @@ class GoTrainingObjective(TrainingObjective):
         target_expected_scores = torch.lerp(
             outcome_scores,
             mcts_root_values,
-            self.configuration.root_value_loss_weight,
+            self.root_value_blend,
         )
         value_rows = functional.cross_entropy(
             value_logits,
@@ -84,7 +90,7 @@ class GoTrainingObjective(TrainingObjective):
         )
         value_loss_contributions = value_rows * sample_weights
         value_loss = value_loss_contributions.mean()
-        total_loss = self.policy_loss_weight * policy_loss + value_loss
+        total_loss = self.policy_loss_weight * policy_loss + self.value_loss_weight * value_loss
         return LossResult(
             policy_loss=policy_loss,
             value_loss=value_loss,
@@ -107,7 +113,8 @@ def create_go_model(configuration: GoExperimentConfiguration, device: torch.devi
 def calculate_go_loss(
     model: Network,
     batch: TrainingBatch,
-    objective: GoTrainingObjectiveConfiguration,
+    objective: TrainingObjectiveConfiguration,
+    model_generation: int = 0,
 ) -> GoLoss:
     states = batch.states.to(model.device)
     policy_logits, value_logits = model.logit_forward(states)
@@ -116,6 +123,7 @@ def calculate_go_loss(
         value_logits,
         batch,
         objective,
+        model_generation,
         model.device,
     )
 
@@ -124,7 +132,8 @@ def calculate_go_loss_from_logits(
     policy_logits: torch.Tensor,
     value_logits: torch.Tensor,
     batch: TrainingBatch,
-    objective: GoTrainingObjectiveConfiguration,
+    objective: TrainingObjectiveConfiguration,
+    model_generation: int,
     device: torch.device,
 ) -> GoLoss:
     policy_targets = batch.policy_targets.to(device)
@@ -137,16 +146,20 @@ def calculate_go_loss_from_logits(
     wins = final_outcomes.eq(int(FinalOutcome.WIN)).to(value_logits.dtype)
     losses = final_outcomes.eq(int(FinalOutcome.LOSS)).to(value_logits.dtype)
     outcome_scores = wins - losses
-    target_scores = torch.lerp(outcome_scores, root_values, objective.root_value_loss_weight)
+    target_scores = torch.lerp(outcome_scores, root_values, objective.root_value_blend.value_at(model_generation))
     value_targets = scalar_to_wdl(target_scores)
     value_rows = functional.cross_entropy(value_logits, value_targets, reduction='none')
     value_loss = (value_rows * sample_weights).mean()
-    total = objective.policy_loss_weight * policy_loss + value_loss
+    total = (
+        objective.policy_loss_weight.value_at(model_generation) * policy_loss
+        + objective.value_loss_weight.value_at(model_generation) * value_loss
+    )
     return GoLoss(policy=policy_loss, value=value_loss, total=total)
 
 
 class GoImplementation(
     GameImplementation[
+        NativeGoPosition,
         GoCompletedGame,
         GoSelfPlayGame,
         NativeGoSearchRequest,
@@ -156,11 +169,13 @@ class GoImplementation(
 ):
     def __init__(self, configuration: GoExperimentConfiguration) -> None:
         self._configuration = configuration
-        self.state = GoStateContract(
+        self._state = GoStateContract(
             configuration.go.representation.board_size,
             configuration.go.representation.history_length,
+            configuration.go.rules.komi_half_points,
+            configuration.go.rules.maximum_moves,
         )
-        self._replay = GoReplayImplementation(self.state)
+        self._replay = GoReplayImplementation(self._state)
 
     @property
     def configuration(self) -> GoExperimentConfiguration:
@@ -171,11 +186,22 @@ class GoImplementation(
         return self.configuration.network_dimensions
 
     @property
+    def state(self) -> GoStateContract:
+        return self._state
+
+    @property
+    def target_layout(self) -> TrainingTargetLayout:
+        return build_training_target_layout(
+            self.network_dimensions.actions,
+            self.configuration.go.objective.auxiliary_targets,
+        )
+
+    @property
     def replay(self) -> ReplayGameImplementation[GoCompletedGame]:
         return self._replay
 
-    def objective(self, optimizer_step: int) -> TrainingObjective:
-        return GoTrainingObjective(self.configuration.go.objective)
+    def training_objective_at(self, model_generation: int) -> TrainingObjective:
+        return GoTrainingObjective(self.configuration.go.objective, model_generation)
 
     def create_self_play_policy(
         self,

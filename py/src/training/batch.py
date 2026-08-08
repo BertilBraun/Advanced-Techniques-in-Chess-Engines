@@ -6,6 +6,13 @@ import torch
 
 
 @dataclass(frozen=True)
+class TrainingModelOutput:
+    policy_logits: torch.Tensor
+    wdl_logits: torch.Tensor
+    auxiliary_logits: tuple[torch.Tensor, ...]
+
+
+@dataclass(frozen=True)
 class TrainingBatch:
     states: torch.Tensor
     policy_targets: torch.Tensor

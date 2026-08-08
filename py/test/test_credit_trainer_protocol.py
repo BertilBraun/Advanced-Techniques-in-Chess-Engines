@@ -19,9 +19,8 @@ def _credit_training_arguments() -> TrainingArgs:
         replay_ratio=Decimal(4),
         optimizer_steps_per_quantum=50,
         maximum_optimizer_steps=500_000,
-        initial_replay_capacity_unique_positions=100_000,
+        replay_capacity_unique_positions={'kind': 'constant', 'value': 100_000},
         maximum_replay_capacity_unique_positions=2_500_000,
-        replay_capacity_ramp_model_versions=1_000,
         retained_checkpoint_interval_steps=1_000,
     )
     trainer = CHESS_TRAINING.trainer.validated_copy(update={'global_batch_size': 1_024, 'local_batch_size': 256})
@@ -97,9 +96,8 @@ def _prepared_ledger(run_path: Path) -> CreditTrainingLedger:
             replay_ratio=Decimal(4),
             optimizer_steps_per_quantum=1,
             maximum_optimizer_steps=10,
-            initial_replay_capacity_unique_positions=1,
+            replay_capacity_unique_positions={'kind': 'constant', 'value': 1},
             maximum_replay_capacity_unique_positions=10,
-            replay_capacity_ramp_model_versions=10,
             retained_checkpoint_interval_steps=1,
         ),
         global_batch_size=1,

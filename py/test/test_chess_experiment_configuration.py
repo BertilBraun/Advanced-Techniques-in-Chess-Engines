@@ -65,9 +65,9 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
     assert isinstance(configuration, ChessExperimentConfiguration)
     assert configuration.game == 'chess'
     assert configuration.training.network.hidden_size == 112
-    assert configuration.chess.self_play.search.c_param == pytest.approx(1.5)
+    assert configuration.chess.self_play.search.exploration_constant.value_at(0) == pytest.approx(1.5)
     assert configuration.training.topology.trainer.ddp_device_ids == (0,)
-    assert configuration.chess.self_play.search.num_parallel_searches == 2
+    assert configuration.chess.self_play.search.parallel_searches == 2
     assert configuration.chess.self_play.inference.inference_workers == 2
     assert configuration.chess.self_play.inference.inference_batch_size == 64
     assert configuration.chess.self_play.inference.outstanding_batches_per_worker == 2
@@ -123,7 +123,11 @@ def test_queue_validation_supports_both_games() -> None:
     (
         (('go', 'representation', 'board_size'), 8, 'Input should be 7 or 9'),
         (('go', 'rules', 'maximum_moves'), 10, 'twice the board point count'),
-        (('go', 'objective', 'root_value_loss_weight'), 0.5, 'must sum to 1'),
+        (
+            ('go', 'objective', 'root_value_blend'),
+            {'kind': 'constant', 'value': 1.5},
+            'must remain in',
+        ),
         (('go', 'self_play', 'maximum_game_plies'), 200, 'Extra inputs are not permitted'),
     ),
 )

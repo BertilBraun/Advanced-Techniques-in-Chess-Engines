@@ -87,18 +87,18 @@ def _two_pass_game(identity: GameIdentity = GameIdentity(run_id=1, worker_id=2, 
 def test_go_encoding_targets_and_symmetries_match_deterministic_fixture() -> None:
     game = _two_pass_game()
     samples = materialize_go_game(game)
-    contract = GoStateContract(7)
+    contract = GoStateContract(7, komi_half_points=15, maximum_moves=196)
 
     assert len(samples) == 2
     assert samples[0].metadata.ply == 1
     assert samples[0].value_target.final_outcome is FinalOutcome.WIN
     assert samples[1].value_target.final_outcome is FinalOutcome.LOSS
     assert len(samples[1].encoded_state) == contract.packed_planes.payload_bytes
-    assert contract.transform_action(0, GoSymmetryIndex.ROTATE_90) == 6
-    assert contract.transform_action(0, GoSymmetryIndex.REFLECT_ROTATE_270) == 0
-    assert contract.transform_action(contract.pass_action, GoSymmetryIndex.ROTATE_90) == contract.pass_action
+    assert contract.transform_action_id(0, GoSymmetryIndex.ROTATE_90) == 6
+    assert contract.transform_action_id(0, GoSymmetryIndex.REFLECT_ROTATE_270) == 0
+    assert contract.transform_action_id(contract.pass_action, GoSymmetryIndex.ROTATE_90) == contract.pass_action
 
-    rotated = contract.transform_state(samples[1].encoded_state, GoSymmetryIndex.ROTATE_90)
+    rotated = contract.transform_encoded_state(samples[1].encoded_state, GoSymmetryIndex.ROTATE_90)
     assert rotated == samples[1].encoded_state
 
 
@@ -108,8 +108,7 @@ def test_go_batch_applies_one_selected_symmetry_to_state_and_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     contract = GoStateContract(7)
-    rules = AlphaZeroCpp.GoRules(komi_half_points=15, maximum_moves=196)
-    encoded_state = contract.packed_position(contract.initial_position(rules).child(0))
+    encoded_state = contract.packed_position(contract.initial_position().child(0))
     sample = replace(
         materialize_go_game(_two_pass_game())[0],
         encoded_state=encoded_state,
@@ -280,10 +279,14 @@ def test_go_uses_shared_policy_and_counted_analysis(tmp_path: Path) -> None:
 def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) -> None:
     configuration = _configuration()
     search = configuration.go.self_play.search.validated_copy(
-        update={'num_searches_per_turn': 4, 'num_parallel_searches': 1}
+        update={
+            'full_searches': {'kind': 'constant', 'value': 4},
+            'fast_searches': {'kind': 'constant', 'value': 1},
+            'parallel_searches': 1,
+        }
     )
     self_play_parameters = configuration.go.self_play.validated_copy(
-        update={'search': search.model_dump(mode='json'), 'num_moves_after_which_to_play_greedy': 1}
+        update={'search': search.model_dump(mode='json'), 'greedy_after_ply': {'kind': 'constant', 'value': 1}}
     )
     topology = configuration.training.topology.validated_copy(
         update={
@@ -333,14 +336,18 @@ def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) ->
 def _smoke_configuration(tmp_path: Path) -> GoExperimentConfiguration:
     configuration = _configuration()
     search = configuration.go.self_play.search.validated_copy(
-        update={'num_searches_per_turn': 4, 'num_parallel_searches': 1}
+        update={
+            'full_searches': {'kind': 'constant', 'value': 4},
+            'fast_searches': {'kind': 'constant', 'value': 1},
+            'parallel_searches': 1,
+        }
     )
     inference = configuration.go.self_play.inference.validated_copy(update={'inference_batch_size': 2})
     self_play_parameters = configuration.go.self_play.validated_copy(
         update={
             'search': search.model_dump(mode='json'),
             'inference': inference.model_dump(mode='json'),
-            'num_moves_after_which_to_play_greedy': 1,
+            'greedy_after_ply': {'kind': 'constant', 'value': 1},
         }
     )
     trainer = configuration.training.trainer.validated_copy(
@@ -361,9 +368,8 @@ def _smoke_configuration(tmp_path: Path) -> GoExperimentConfiguration:
             'replay_ratio': 1,
             'optimizer_steps_per_quantum': 1,
             'maximum_optimizer_steps': 1,
-            'initial_replay_capacity_unique_positions': 10,
+            'replay_capacity_unique_positions': {'kind': 'constant', 'value': 10},
             'maximum_replay_capacity_unique_positions': 10,
-            'replay_capacity_ramp_model_versions': 1,
             'retained_checkpoint_interval_steps': 1,
         }
     )

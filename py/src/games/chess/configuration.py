@@ -5,10 +5,15 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from src.experiment.base_configuration import BaseExperimentConfiguration
+from src.experiment.generation_schedule import FloatGenerationSchedule, IntegerGenerationSchedule
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.neural_network import NetworkDimensions
 from src.games.chess.resignation import ResignationParams
-from src.training.configuration import BatchedInferenceParams, SelfPlayConfiguration
+from src.training.configuration import (
+    BatchedInferenceParams,
+    SelfPlayConfiguration,
+    TrainingObjectiveConfiguration,
+)
 from src.util.frozen_model import FrozenModel
 
 
@@ -41,10 +46,7 @@ class ChessEvaluationConfiguration(FrozenModel):
 
 
 class ChessSelfPlayConfiguration(SelfPlayConfiguration):
-    maximum_game_plies: int | None = Field(default=None, gt=0)
-    maximum_game_plies_until_model_version: int = Field(default=0, ge=0)
-    maximum_game_plies_hold_until_model_version: int = Field(default=0, ge=0)
-    final_maximum_game_plies: int | None = Field(default=None, gt=0)
+    maximum_game_plies: IntegerGenerationSchedule | None = None
     endgame_continuation_start_plies: int | None = Field(default=None, ge=0)
     low_material_termination_minimum_plies: int = Field(default=0, ge=0)
     low_material_termination_piece_threshold_per_player: int = Field(default=0, ge=0)
@@ -55,28 +57,12 @@ class ChessSelfPlayConfiguration(SelfPlayConfiguration):
     disagreement_prefix_archive_capacity: int = Field(default=2_000, gt=0)
     disagreement_prefix_weight_smoothing: float = Field(default=0.05, gt=0.0)
     disagreement_prefix_weight_cap: float = Field(default=4.0, ge=1.0)
-    initial_num_searches_per_turn: int | None = Field(default=None, gt=0)
-    search_warmup_model_versions: int = Field(default=0, ge=0)
-    endgame_shortcut_fade_model_versions: int = Field(default=0, ge=0)
-
-
-class ChessTrainingObjectiveConfiguration(FrozenModel):
-    policy_loss_weight: float = Field(default=1.0, ge=0.0)
-    value_loss_weight: float = Field(default=0.5, ge=0.0)
-    outcome_value_loss_weight: float = Field(default=0.85, ge=0.0)
-    mcts_value_loss_weight: float = Field(default=0.15, ge=0.0)
-    mcts_value_target_warmup_optimizer_steps: int = Field(default=0, ge=0)
-
-    @model_validator(mode='after')
-    def validate_value_weights(self) -> ChessTrainingObjectiveConfiguration:
-        if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
-            raise ValueError('Chess value-objective component weights must sum to 1.')
-        return self
+    endgame_shortcut_probability: FloatGenerationSchedule
 
 
 class ChessConfiguration(FrozenModel):
     self_play: ChessSelfPlayConfiguration
-    objective: ChessTrainingObjectiveConfiguration = ChessTrainingObjectiveConfiguration()
+    objective: TrainingObjectiveConfiguration
     evaluation: ChessEvaluationConfiguration
 
 

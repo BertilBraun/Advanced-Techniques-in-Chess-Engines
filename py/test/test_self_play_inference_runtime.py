@@ -139,14 +139,20 @@ def test_self_play_constructs_batched_inference_runtime_during_search_warmup(
     fake_alpha_zero_cpp.SelfPlaySearchParameters = _FakeSelfPlaySearchParameters
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
-    search = CHESS_SELF_PLAY.search.validated_copy(update={'num_searches_per_turn': 600})
-    self_play_args = CHESS_SELF_PLAY.validated_copy(
+    search = CHESS_SELF_PLAY.search.validated_copy(
         update={
-            'initial_num_searches_per_turn': 100,
-            'search': search.model_dump(mode='json'),
-            'search_warmup_model_versions': 100,
+            'full_searches': {
+                'kind': 'linear',
+                'start_generation': 0,
+                'end_generation': 100,
+                'start_value': 100,
+                'end_value': 600,
+                'rounding': 'nearest',
+            },
+            'fast_searches': {'kind': 'constant', 'value': 25},
         }
     )
+    self_play_args = CHESS_SELF_PLAY.validated_copy(update={'search': search.model_dump(mode='json')})
     self_play = ChessSelfPlayPolicy(
         device_id=0,
         configuration=self_play_args,
@@ -197,8 +203,7 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
     events: list[str] = []
     self_play = object.__new__(ChessSelfPlayPolicy)
     self_play.args = copy.deepcopy(CHESS_SELF_PLAY)
-    self_play.search_warmup_iterations = CHESS_SELF_PLAY.search_warmup_model_versions
-    self_play.endgame_shortcut_fade_iterations = CHESS_SELF_PLAY.endgame_shortcut_fade_model_versions
+    self_play.resolved_parameters = self_play._resolve_parameters(0)
     self_play.dataset = [object()]
     self_play.iteration = 0
     self_play.model_version = 0
@@ -231,8 +236,7 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
 def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) -> None:
     self_play = object.__new__(ChessSelfPlayPolicy)
     self_play.args = copy.deepcopy(CHESS_SELF_PLAY)
-    self_play.search_warmup_iterations = CHESS_SELF_PLAY.search_warmup_model_versions
-    self_play.endgame_shortcut_fade_iterations = CHESS_SELF_PLAY.endgame_shortcut_fade_model_versions
+    self_play.resolved_parameters = self_play._resolve_parameters(0)
     self_play.iteration = 0
     self_play.model_version = 7
     self_play.model_refresh_acknowledgements = [7]

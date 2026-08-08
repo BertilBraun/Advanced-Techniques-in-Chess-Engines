@@ -3,11 +3,12 @@ import torch.nn.functional as functional
 from torch import nn
 
 from src.neural_network import NetworkDimensions
+from src.games.chess.board import ChessBoard
+from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessStateContract
 from src.games.chess.configuration import (
     ChessExperimentConfiguration,
-    ChessTrainingObjectiveConfiguration,
 )
-from src.games.training_contract import GameImplementation
+from src.games.implementation import GameImplementation
 from src.games.chess.self_play import (
     ChessSelfPlayPolicy,
     SelfPlayGame,
@@ -18,8 +19,9 @@ from src.self_play.completed_game import CompletedGamePublisher
 from src.games.chess.replay import CHESS_REPLAY_IMPLEMENTATION
 from src.training.replay import ReplayGameImplementation
 from src.training.batch import TrainingBatch
-from src.training.configuration import TrainingParams
+from src.training.configuration import TrainingObjectiveConfiguration, TrainingParams
 from src.training.trainer import LossResult, TrainingObjective
+from src.training.targets import TrainingTargetLayout, build_training_target_layout
 from src.self_play.value_target import FinalOutcome
 from src.value import scalar_to_wdl
 
@@ -28,29 +30,31 @@ class ChessTrainingObjective(TrainingObjective):
     def __init__(
         self,
         parameters: TrainingParams,
-        configuration: ChessTrainingObjectiveConfiguration,
-        optimizer_step: int,
+        configuration: TrainingObjectiveConfiguration,
+        model_generation: int,
         value_target_weight_override: float | None = None,
     ) -> None:
         self.parameters = parameters
         self.configuration = configuration
-        self.optimizer_step = optimizer_step
+        self.model_generation = model_generation
+        self._policy_loss_weight = configuration.policy_loss_weight.value_at(model_generation)
+        self._value_loss_weight = configuration.value_loss_weight.value_at(model_generation)
+        self._root_value_blend = configuration.root_value_blend.value_at(model_generation)
         self.value_target_weight_override = value_target_weight_override
 
     @property
     def policy_loss_weight(self) -> float:
-        return self.configuration.policy_loss_weight
+        return self._policy_loss_weight
 
     @property
     def value_loss_weight(self) -> float:
-        return self.configuration.value_loss_weight
+        return self._value_loss_weight
 
-    def value_target_weight(self, optimizer_step: int) -> float:
+    @property
+    def root_value_blend(self) -> float:
         if self.value_target_weight_override is not None:
             return self.value_target_weight_override
-        warmup_steps = self.configuration.mcts_value_target_warmup_optimizer_steps
-        warmup_progress = 1.0 if warmup_steps == 0 else min(1.0, optimizer_step / warmup_steps)
-        return self.configuration.mcts_value_loss_weight * warmup_progress
+        return self._root_value_blend
 
     def calculate_loss(
         self,
@@ -58,7 +62,7 @@ class ChessTrainingObjective(TrainingObjective):
         batch: TrainingBatch,
         device: torch.device,
     ) -> LossResult:
-        mcts_value_target_weight = self.value_target_weight(self.optimizer_step)
+        mcts_value_target_weight = self.root_value_blend
         states = batch.states.to(device=device)
         policy_targets = batch.policy_targets.to(device=device)
         final_outcomes = batch.final_outcomes.to(device=device)
@@ -112,6 +116,7 @@ class ChessTrainingObjective(TrainingObjective):
 
 class ChessImplementation(
     GameImplementation[
+        ChessBoard,
         ChessCompletedGame,
         SelfPlayGame,
         'ChessSelfPlaySearchRequest',
@@ -131,14 +136,25 @@ class ChessImplementation(
         return self.configuration.network_dimensions
 
     @property
+    def state(self) -> ChessStateContract:
+        return CHESS_STATE_CONTRACT
+
+    @property
+    def target_layout(self) -> TrainingTargetLayout:
+        return build_training_target_layout(
+            self.network_dimensions.actions,
+            self.configuration.chess.objective.auxiliary_targets,
+        )
+
+    @property
     def replay(self) -> ReplayGameImplementation[ChessCompletedGame]:
         return CHESS_REPLAY_IMPLEMENTATION
 
-    def objective(self, optimizer_step: int) -> TrainingObjective:
+    def training_objective_at(self, model_generation: int) -> TrainingObjective:
         return ChessTrainingObjective(
             self.training.trainer,
             self.configuration.chess.objective,
-            optimizer_step,
+            model_generation,
         )
 
     def create_self_play_policy(

@@ -13,12 +13,12 @@ from src.games.chess.self_play_statistics import SelfPlayStatistics
 def self_play_client(shortcut_strength: float) -> ChessSelfPlayPolicy:
     client = object.__new__(ChessSelfPlayPolicy)
     client.args = SimpleNamespace(
-        num_moves_after_which_to_play_greedy=50,
         endgame_continuation_start_plies=None,
         low_material_termination_minimum_plies=120,
         low_material_termination_piece_threshold_per_player=4,
         low_material_termination_probability=0.7,
     )
+    client.resolved_parameters = SimpleNamespace(greedy_after_ply=50)
     client.statistics = SelfPlayStatistics()
     client.endgame_shortcut_strength = shortcut_strength
     client.iteration = 0

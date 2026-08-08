@@ -136,8 +136,9 @@ class TrainingObjective(ABC):
     def value_loss_weight(self) -> float:
         raise NotImplementedError
 
+    @property
     @abstractmethod
-    def value_target_weight(self, optimizer_step: int) -> float:
+    def root_value_blend(self) -> float:
         raise NotImplementedError
 
     @abstractmethod
@@ -347,7 +348,7 @@ class Trainer:
             gradient_norm_sum=float(reduction_values[4].item()),
             gradient_norm_count=int(reduction_values[5].item()),
             num_batches=int(reduction_values[6].item()),
-            mcts_value_target_weight=self.objective.value_target_weight(optimizer_step),
+            mcts_value_target_weight=self.objective.root_value_blend,
             policy_loss_weight=self.objective.policy_loss_weight,
             value_loss_weight=self.objective.value_loss_weight,
             ply_value_metrics=tuple(
@@ -529,9 +530,10 @@ class Trainer:
         self,
         dataloader: TrainingBatchLoader,
         optimizer_step: int,
+        model_generation: int,
     ) -> TrainingStats:
         """Train policy and the blended soft-WDL value target."""
-        base_lr: float = self.args.learning_rate(optimizer_step, self.args.optimizer)
+        base_lr = self.args.learning_rate.value_at(model_generation)
         if self.rank == 0:
             log_scalar('training/learning_rate', base_lr, optimizer_step)
             log(f'Setting learning rate to {base_lr} at optimizer step {optimizer_step}')

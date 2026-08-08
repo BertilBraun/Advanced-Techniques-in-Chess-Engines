@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 import torch
-from AlphaZeroCpp import GoPlayer, GoRules
+from AlphaZeroCpp import GoPlayer
 
 from src.games.go.contract import GoStateContract, GoSymmetryIndex, NativeGoPosition
 from src.packed_planes import PackedPlanePayload
@@ -68,9 +68,13 @@ def _go_archive_counts(game: GoCompletedGame) -> tuple[int, int]:
 
 
 def materialize_go_game(game: GoCompletedGame) -> tuple[PackedReplaySample, ...]:
-    contract = GoStateContract(game.representation.board_size, game.representation.history_length)
-    rules = GoRules(game.rules.komi_half_points, game.rules.maximum_moves)
-    position: NativeGoPosition = contract.initial_position(rules)
+    contract = GoStateContract(
+        game.representation.board_size,
+        game.representation.history_length,
+        game.rules.komi_half_points,
+        game.rules.maximum_moves,
+    )
+    position: NativeGoPosition = contract.initial_position()
     observations = {observation.ply: observation for observation in game.observations}
     samples: list[PackedReplaySample] = []
     for ply, action in enumerate(game.actions):
@@ -152,8 +156,8 @@ def build_go_training_batch(
     transformed_states: list[PackedPlanePayload] = []
     for row, sample in enumerate(samples):
         symmetry = _symmetry_index(snapshot.sampler_seed, global_step, rank, sample_position_offset + row)
-        transformed_states.append(contract.transform_state(sample.encoded_state, symmetry))
-        actions = tuple(contract.transform_action(int(action), symmetry) for action in sample.visits[:, 0])
+        transformed_states.append(contract.transform_encoded_state(sample.encoded_state, int(symmetry)))
+        actions = tuple(contract.transform_action_id(int(action), int(symmetry)) for action in sample.visits[:, 0])
         counts = sample.visits[:, 1].astype(np.float32, copy=False)
         policies[row, actions] = counts / counts.sum()
     contract.decode_batch_into(tuple(transformed_states), states)

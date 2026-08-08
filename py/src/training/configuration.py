@@ -7,19 +7,40 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from src.experiment.cost_accounting import CostCurrency
+from src.experiment.generation_schedule import (
+    FloatGenerationSchedule,
+    IntegerGenerationSchedule,
+    defined_schedule_values,
+)
+from src.self_play.parameters import ResolvedSelfPlayParameters
+from src.training.targets import AuxiliaryTargetConfiguration
 from src.util.frozen_model import FrozenModel
 
 
 class SelfPlaySearchParams(FrozenModel):
-    num_searches_per_turn: int = Field(gt=0)
-    fast_searches_proportion_of_full_searches: float = Field(gt=0.0, le=1.0)
-    playout_cap_randomization: float = Field(ge=0.0, le=1.0)
-    num_parallel_searches: int = Field(gt=0)
-    dirichlet_epsilon: float = Field(ge=0.0, le=1.0)
-    dirichlet_alpha: float = Field(gt=0.0)
-    c_param: float = Field(gt=0.0)
-    percentage_of_node_visits_to_keep: float = Field(ge=0.0, le=1.0)
-    min_visit_count: int = Field(default=0, ge=0)
+    full_searches: IntegerGenerationSchedule
+    fast_searches: IntegerGenerationSchedule
+    parallel_searches: int = Field(gt=0)
+    dirichlet_epsilon: FloatGenerationSchedule
+    dirichlet_alpha: FloatGenerationSchedule
+    exploration_constant: FloatGenerationSchedule
+    minimum_root_visits: IntegerGenerationSchedule
+
+    @model_validator(mode='after')
+    def validate_scheduled_values(self) -> SelfPlaySearchParams:
+        if any(value <= self.parallel_searches for value in defined_schedule_values(self.full_searches)):
+            raise ValueError('Every full-search budget must exceed the parallel-search count.')
+        if any(value <= 0 for value in defined_schedule_values(self.fast_searches)):
+            raise ValueError('Every fast-search budget must be positive.')
+        if any(not 0.0 <= value <= 1.0 for value in defined_schedule_values(self.dirichlet_epsilon)):
+            raise ValueError('Dirichlet epsilon must remain in [0, 1].')
+        if any(value <= 0.0 for value in defined_schedule_values(self.dirichlet_alpha)):
+            raise ValueError('Dirichlet alpha must remain positive.')
+        if any(value <= 0.0 for value in defined_schedule_values(self.exploration_constant)):
+            raise ValueError('Exploration constant must remain positive.')
+        if any(value < 0 for value in defined_schedule_values(self.minimum_root_visits)):
+            raise ValueError('Minimum root visits must remain nonnegative.')
+        return self
 
 
 class BatchedInferenceParams(FrozenModel):
@@ -53,15 +74,57 @@ class NetworkParams(FrozenModel):
 class SelfPlayConfiguration(FrozenModel):
     search: SelfPlaySearchParams
     inference: BatchedInferenceParams
-    num_moves_after_which_to_play_greedy: int = Field(gt=0)
-    starting_temperature: float = Field(default=1.25, gt=0.0)
-    final_temperature: float = Field(default=0.1, gt=0.0)
+    random_opening_plies: IntegerGenerationSchedule
+    full_search_probability: FloatGenerationSchedule
+    retained_root_visit_fraction: FloatGenerationSchedule
+    greedy_after_ply: IntegerGenerationSchedule
+    starting_temperature: FloatGenerationSchedule
+    final_temperature: FloatGenerationSchedule
+    primary_sample_weight: FloatGenerationSchedule
 
     @model_validator(mode='after')
     def validate_temperatures(self) -> SelfPlayConfiguration:
-        if self.final_temperature > self.starting_temperature:
-            raise ValueError('Final self-play temperature cannot exceed the starting temperature.')
+        for schedule, name in (
+            (self.starting_temperature, 'Starting temperature'),
+            (self.final_temperature, 'Final temperature'),
+        ):
+            if any(value <= 0.0 for value in defined_schedule_values(schedule)):
+                raise ValueError(f'{name} must remain positive.')
+        if any(value < 0 for value in defined_schedule_values(self.random_opening_plies)):
+            raise ValueError('Random opening plies must remain nonnegative.')
+        if any(value <= 0 for value in defined_schedule_values(self.greedy_after_ply)):
+            raise ValueError('Greedy ply must remain positive.')
+        if any(not 0.0 < value <= 1.0 for value in defined_schedule_values(self.full_search_probability)):
+            raise ValueError('Full-search probability must remain in (0, 1].')
+        if any(not 0.0 <= value <= 1.0 for value in defined_schedule_values(self.retained_root_visit_fraction)):
+            raise ValueError('Retained-root fraction must remain in [0, 1].')
+        if any(value <= 0.0 for value in defined_schedule_values(self.primary_sample_weight)):
+            raise ValueError('Primary sample weight must remain positive.')
         return self
+
+    def resolve(
+        self,
+        model_generation: int,
+        maximum_game_plies: int | None,
+    ) -> ResolvedSelfPlayParameters:
+        search = self.search
+        return ResolvedSelfPlayParameters(
+            random_opening_plies=self.random_opening_plies.value_at(model_generation),
+            full_search_probability=self.full_search_probability.value_at(model_generation),
+            parallel_searches=search.parallel_searches,
+            full_searches=search.full_searches.value_at(model_generation),
+            fast_searches=search.fast_searches.value_at(model_generation),
+            minimum_root_visits=search.minimum_root_visits.value_at(model_generation),
+            exploration_constant=search.exploration_constant.value_at(model_generation),
+            dirichlet_alpha=search.dirichlet_alpha.value_at(model_generation),
+            dirichlet_epsilon=search.dirichlet_epsilon.value_at(model_generation),
+            retained_root_visit_fraction=self.retained_root_visit_fraction.value_at(model_generation),
+            starting_temperature=self.starting_temperature.value_at(model_generation),
+            final_temperature=self.final_temperature.value_at(model_generation),
+            greedy_after_ply=self.greedy_after_ply.value_at(model_generation),
+            maximum_game_plies=maximum_game_plies,
+            primary_sample_weight=self.primary_sample_weight.value_at(model_generation),
+        )
 
 
 class TrainerTopologyParams(FrozenModel):
@@ -139,17 +202,19 @@ class CreditTrainingParams(FrozenModel):
     replay_ratio: Decimal = Field(gt=0)
     optimizer_steps_per_quantum: int = Field(gt=0)
     maximum_optimizer_steps: int = Field(gt=0)
-    initial_replay_capacity_unique_positions: int = Field(gt=0)
+    replay_capacity_unique_positions: IntegerGenerationSchedule
     maximum_replay_capacity_unique_positions: int = Field(gt=0)
-    replay_capacity_ramp_model_versions: int = Field(gt=0)
     retained_checkpoint_interval_steps: int = Field(gt=0)
 
     @model_validator(mode='after')
     def validate_schedule(self) -> CreditTrainingParams:
         if self.maximum_optimizer_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Maximum optimizer steps must contain complete training quanta.')
-        if self.maximum_replay_capacity_unique_positions < self.initial_replay_capacity_unique_positions:
-            raise ValueError('Maximum replay capacity must not be smaller than its initial capacity.')
+        capacities = defined_schedule_values(self.replay_capacity_unique_positions)
+        if any(capacity <= 0 for capacity in capacities):
+            raise ValueError('Replay capacity must remain positive.')
+        if any(capacity > self.maximum_replay_capacity_unique_positions for capacity in capacities):
+            raise ValueError('Scheduled replay capacity cannot exceed its static maximum capacity.')
         if self.retained_checkpoint_interval_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Retained checkpoint interval must align with training quanta.')
         return self
@@ -159,44 +224,14 @@ class CreditTrainingParams(FrozenModel):
             raise ValueError('Global batch size must be positive.')
         return global_batch_size * self.optimizer_steps_per_quantum
 
-    def replay_capacity_for_model_version(self, model_version: int) -> int:
-        if model_version < 0:
-            raise ValueError('Model version must be nonnegative.')
-        completed_ramp_versions = min(model_version, self.replay_capacity_ramp_model_versions)
-        capacity_range = self.maximum_replay_capacity_unique_positions - self.initial_replay_capacity_unique_positions
-        return self.initial_replay_capacity_unique_positions + (
-            capacity_range * completed_ramp_versions // self.replay_capacity_ramp_model_versions
-        )
+    def replay_capacity_for_model_generation(self, model_generation: int) -> int:
+        return self.replay_capacity_unique_positions.value_at(model_generation)
 
     def unique_samples_per_quantum(self, global_batch_size: int) -> int:
         required_samples = Decimal(self.presentation_credits_per_quantum(global_batch_size)) / self.replay_ratio
         if required_samples != required_samples.to_integral_value():
             raise ValueError('Replay ratio must produce an integral unique-sample quantum.')
         return int(required_samples)
-
-
-class ModelVersionLearningRateStage(FrozenModel):
-    start_optimizer_steps: int = Field(ge=0)
-    learning_rate: float = Field(gt=0.0)
-
-
-class ModelVersionLearningRate(FrozenModel):
-    stages: tuple[ModelVersionLearningRateStage, ...] = Field(min_length=1)
-
-    @model_validator(mode='after')
-    def validate_stages(self) -> ModelVersionLearningRate:
-        start_optimizer_steps = tuple(stage.start_optimizer_steps for stage in self.stages)
-        if start_optimizer_steps[0] != 0 or tuple(sorted(set(start_optimizer_steps))) != start_optimizer_steps:
-            raise ValueError('Learning-rate stages must start at optimizer step zero and increase uniquely.')
-        return self
-
-    def __call__(self, optimizer_step: int, _: OptimizerType) -> float:
-        selected_stage = self.stages[0]
-        for stage in self.stages[1:]:
-            if stage.start_optimizer_steps > optimizer_step:
-                break
-            selected_stage = stage
-        return selected_stage.learning_rate
 
 
 OptimizerType = Literal['adamw', 'sgd']
@@ -206,9 +241,28 @@ class TrainingParams(FrozenModel):
     global_batch_size: int = Field(gt=0)
     local_batch_size: int = Field(gt=0)
     optimizer: OptimizerType
-    learning_rate: ModelVersionLearningRate
+    learning_rate: FloatGenerationSchedule
     max_grad_norm: float = Field(default=0.5, gt=0.0)
     duplicate_multiplicity_weight_cap: float | None = Field(default=None, ge=1.0)
+
+
+class TrainingObjectiveConfiguration(FrozenModel):
+    policy_loss_weight: FloatGenerationSchedule
+    value_loss_weight: FloatGenerationSchedule
+    root_value_blend: FloatGenerationSchedule
+    auxiliary_targets: tuple[AuxiliaryTargetConfiguration, ...] = ()
+
+    @model_validator(mode='after')
+    def validate_scheduled_weights(self) -> TrainingObjectiveConfiguration:
+        for schedule, name in (
+            (self.policy_loss_weight, 'Policy loss weight'),
+            (self.value_loss_weight, 'Value loss weight'),
+        ):
+            if any(value < 0.0 for value in defined_schedule_values(schedule)):
+                raise ValueError(f'{name} must remain nonnegative.')
+        if any(not 0.0 <= value <= 1.0 for value in defined_schedule_values(self.root_value_blend)):
+            raise ValueError('Root-value blend must remain in [0, 1].')
+        return self
 
 
 class TrainingLifecycleParams(FrozenModel):
@@ -234,5 +288,12 @@ class TrainingArgs(FrozenModel):
         credit = self.lifecycle.credit
         credit.presentation_credits_per_quantum(self.trainer.global_batch_size)
         credit.unique_samples_per_quantum(self.trainer.global_batch_size)
+        if any(
+            capacity < self.trainer.global_batch_size
+            for capacity in defined_schedule_values(credit.replay_capacity_unique_positions)
+        ):
+            raise ValueError('Every scheduled replay capacity must contain at least one global batch.')
+        if any(value <= 0.0 for value in defined_schedule_values(self.trainer.learning_rate)):
+            raise ValueError('Learning rate must remain positive.')
         self.lifecycle.evaluation.validate_for_optimizer_quantum(credit.optimizer_steps_per_quantum)
         return self

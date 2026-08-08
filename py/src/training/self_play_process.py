@@ -19,7 +19,7 @@ from src.util.communication import (
 )
 from src.util.log import log
 from src.util.exceptions import log_exceptions
-from src.games.training_contract import GameImplementation
+from src.games.implementation import GameImplementation
 from src.training.publication import PublicationValidationScope, load_credit_publication_pointer
 from src.util.profiler import start_cpu_usage_logger
 from src.util.background_worker import BackgroundWorker

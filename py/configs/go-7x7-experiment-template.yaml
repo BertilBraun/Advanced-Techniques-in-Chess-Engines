@@ -22,25 +22,29 @@ training:
     global_batch_size: 256
     local_batch_size: 256
     optimizer: adamw
-    learning_rate: {stages: [{start_optimizer_steps: 0, learning_rate: 0.002}]}
+    learning_rate: {kind: constant, value: 0.002}
   topology:
     trainer: {device_type: cpu, process_group_backend: gloo, rank_zero_device_id: 0, ddp_device_ids: [0], cpu_threads: 1, interop_threads: 1}
     self_play: {device_ids: [0], parallel_games_per_process: 8, tensorboard_processes: 1, node_ids_to_pause_during_training: []}
     evaluation: {device_cycle: [0]}
   lifecycle:
-    credit: {replay_ratio: 8, optimizer_steps_per_quantum: 100, maximum_optimizer_steps: 100000, initial_replay_capacity_unique_positions: 100000, maximum_replay_capacity_unique_positions: 2500000, replay_capacity_ramp_model_versions: 200, retained_checkpoint_interval_steps: 100}
+    credit: {replay_ratio: 8, optimizer_steps_per_quantum: 100, maximum_optimizer_steps: 100000, replay_capacity_unique_positions: {kind: linear, start_generation: 0, end_generation: 200, start_value: 100000, end_value: 2500000, rounding: nearest}, maximum_replay_capacity_unique_positions: 2500000, retained_checkpoint_interval_steps: 100}
     evaluation: {interval_optimizer_steps: 100, full_interval_optimizer_steps: 200, timeout_seconds: 3600, maximum_attempts: 3, retry_backoff_seconds: 60}
     inference_retention: {recent_checkpoint_count: 11, milestone_interval: 10}
   limits: {cost_currency: EUR, hourly_price: 1.0, maximum_wall_time_seconds: 21600, maximum_open_file_count: 32768, maximum_host_ram_percent: 95.0, minimum_free_disk_gib: 0.1, resource_telemetry_interval_seconds: 5.0}
   random_seed: 0
 go:
   self_play:
-    search: {num_searches_per_turn: 128, fast_searches_proportion_of_full_searches: 0.25, playout_cap_randomization: 0.25, num_parallel_searches: 2, dirichlet_epsilon: 0.25, dirichlet_alpha: 0.3, c_param: 1.5, percentage_of_node_visits_to_keep: 0.0, min_visit_count: 0}
+    search: {full_searches: {kind: constant, value: 128}, fast_searches: {kind: constant, value: 32}, parallel_searches: 2, dirichlet_epsilon: {kind: constant, value: 0.25}, dirichlet_alpha: {kind: constant, value: 0.3}, exploration_constant: {kind: constant, value: 1.5}, minimum_root_visits: {kind: constant, value: 0}}
     inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 2}
-    num_moves_after_which_to_play_greedy: 40
-    starting_temperature: 1.0
-    final_temperature: 0.1
+    random_opening_plies: {kind: constant, value: 0}
+    full_search_probability: {kind: constant, value: 1.0}
+    retained_root_visit_fraction: {kind: constant, value: 0.0}
+    greedy_after_ply: {kind: constant, value: 40}
+    starting_temperature: {kind: constant, value: 1.0}
+    final_temperature: {kind: constant, value: 0.1}
+    primary_sample_weight: {kind: constant, value: 1.0}
   rules: {komi_half_points: 15, maximum_moves: 196}
   representation: {board_size: 7, history_length: 8, binary_channel_count: 16, scalar_channel_count: 1, canonical_player_perspective: true}
-  objective: {policy_loss_weight: 1.0, outcome_value_loss_weight: 1.0, root_value_loss_weight: 0.0}
+  objective: {policy_loss_weight: {kind: constant, value: 1.0}, value_loss_weight: {kind: constant, value: 1.0}, root_value_blend: {kind: constant, value: 0.0}, auxiliary_targets: []}
   evaluation: {num_searches_per_turn: 64, num_games: 40, every_n_model_versions: 1, max_concurrent_tasks: 1, inference_workers: 1, inference_batch_size: 64, previous_model_offsets: [5, 10], historical_model_versions: [10, 20], evaluate_random: true}

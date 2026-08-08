@@ -13,7 +13,7 @@ from src.games.chess.evaluation.scheduler import CreditEvaluationScheduler
 from src.training.cuda import start_process_on_cuda_device
 from src.training.trainer_process import QuantumResult, ReplayState, TrainerProcess
 from src.games.chess.configuration import ChessExperimentConfiguration
-from src.games.training_contract import GameImplementation
+from src.games.implementation import GameImplementation
 from src.training.configuration import CreditTrainingParams
 from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
@@ -227,7 +227,7 @@ class CommanderProcess:
         lifecycle: TrainingLifecycle,
         parameters: CreditTrainingParams,
     ) -> CreditObservation | None:
-        replay_capacity = parameters.replay_capacity_for_model_version(lifecycle.ledger.model_generation)
+        replay_capacity = parameters.replay_capacity_for_model_generation(lifecycle.ledger.model_generation)
         replay_state = lifecycle.trainer.maintain_replay(replay_capacity)
         progress = lifecycle.ledger.reconcile_credited_samples(replay_state.credited_unique_samples)
         required_credits = parameters.presentation_credits_per_quantum(self.args.trainer.global_batch_size)

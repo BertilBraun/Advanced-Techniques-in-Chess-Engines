@@ -7,7 +7,7 @@ from src.games.chess.contract import CHESS_STATE_CONTRACT
 
 
 def test_encoded_prefix_restores_complete_legal_move_history() -> None:
-    board = CHESS_STATE_CONTRACT.create_initial_board()
+    board = CHESS_STATE_CONTRACT.initial_position()
     first_move = board.get_valid_moves()[0]
     first_encoded = CHESS_STATE_CONTRACT.encode_move(first_move, board)
     board.make_move(first_move)

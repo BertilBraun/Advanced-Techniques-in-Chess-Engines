@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+from enum import Enum
+from math import isfinite
 from typing import Literal
 
 from pydantic import Field
 
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.games.contracts import WdlTarget
 
 
 _GAME_FILE_PATTERN = re.compile(r'run-(?P<run>\d+)-worker-(?P<worker>\d+)-game-(?P<game>\d+)\.json')
@@ -34,6 +37,54 @@ class SparseSearchVisit(FrozenModel):
 
 class CompletedGameRecord(FrozenModel):
     identity: GameIdentity
+
+
+class TerminationReason(str, Enum):
+    NATURAL = 'natural'
+    MAXIMUM_PLIES = 'maximum_plies'
+    RESIGNATION = 'resignation'
+    ADJUDICATION = 'adjudication'
+
+
+class SearchObservation(FrozenModel):
+    ply: int = Field(ge=0)
+    model_generation: int = Field(ge=0)
+    visits: tuple[SparseSearchVisit, ...] = Field(min_length=1)
+    root_value: float
+    selected_action_id: int = Field(ge=0)
+    full_search: bool
+    sample_weight: float = Field(gt=0.0)
+    search_budget: int = Field(gt=0)
+    minimum_root_visits: int = Field(ge=0)
+
+    def model_post_init(self, __context: object) -> None:
+        if not isfinite(self.root_value) or not -1.0 <= self.root_value <= 1.0:
+            raise ValueError('Search root value must be finite and lie in [-1, 1].')
+        action_ids = tuple(visit.action_id for visit in self.visits)
+        if len(set(action_ids)) != len(action_ids):
+            raise ValueError('Search visits must use unique action IDs.')
+        if sum(visit.visit_count for visit in self.visits) <= 0:
+            raise ValueError('Search visits must contain positive total visits.')
+
+
+class CompletedSelfPlayGame(CompletedGameRecord):
+    schema_version: Literal[1] = 1
+    identity: GameIdentity
+    created_at_seconds: float = Field(ge=0.0)
+    generation_seconds: float = Field(ge=0.0)
+    action_ids: tuple[int, ...]
+    observations: tuple[SearchObservation, ...]
+    final_wdl: WdlTarget
+    termination_reason: TerminationReason
+
+    def model_post_init(self, __context: object) -> None:
+        plies = tuple(observation.ply for observation in self.observations)
+        if plies != tuple(sorted(set(plies))):
+            raise ValueError('Search observations must use unique ordered plies.')
+        if any(observation.ply >= len(self.action_ids) for observation in self.observations):
+            raise ValueError('Every search observation must precede a played action.')
+        if any(observation.selected_action_id != self.action_ids[observation.ply] for observation in self.observations):
+            raise ValueError('Observed selected actions must agree with the played trajectory.')
 
 
 class CompletedGamePublisherState(FrozenModel):

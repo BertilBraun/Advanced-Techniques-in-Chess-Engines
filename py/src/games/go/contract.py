@@ -9,7 +9,7 @@ import numpy.typing as npt
 from AlphaZeroCpp import GoPlayer, GoPosition7, GoPosition9, GoRules
 
 from src.neural_network import NetworkDimensions
-from src.games.contracts import GameStateContract, RepresentationDimensions
+from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
 from src.packed_planes import (
     PackedPlaneLayout,
     PackedPlanePayload,
@@ -34,9 +34,11 @@ class GoSymmetryIndex(IntEnum):
 
 
 @dataclass(frozen=True)
-class GoStateContract(GameStateContract):
+class GoStateContract(GameStateContract[NativeGoPosition]):
     board_size: int
     history_length: int = 8
+    komi_half_points: int = 0
+    maximum_moves: int | None = None
 
     def __post_init__(self) -> None:
         if self.board_size not in (7, 9):
@@ -87,15 +89,53 @@ class GoStateContract(GameStateContract):
             packed_planes=self.packed_planes,
         )
 
-    def initial_position(self, rules: GoRules) -> NativeGoPosition:
+    def initial_position(self) -> NativeGoPosition:
+        maximum_moves = self.board_size * self.board_size * 4 if self.maximum_moves is None else self.maximum_moves
+        rules = GoRules(self.komi_half_points, maximum_moves)
         return GoPosition7(rules) if self.board_size == 7 else GoPosition9(rules)
+
+    def legal_action_ids(self, position: NativeGoPosition) -> tuple[int, ...]:
+        return tuple(sorted(position.legal_actions()))
+
+    def child_position(self, position: NativeGoPosition, action_id: int) -> NativeGoPosition:
+        return position.child(action_id)
+
+    def current_player(self, position: NativeGoPosition) -> Player:
+        return Player.FIRST if position.player == GoPlayer.BLACK else Player.SECOND
+
+    def terminal_wdl(self, position: NativeGoPosition) -> WdlTarget | None:
+        if not position.is_terminal:
+            return None
+        value = position.terminal_value()
+        if value > 0.0:
+            return WdlTarget(win=1.0, draw=0.0, loss=0.0)
+        if value < 0.0:
+            return WdlTarget(win=0.0, draw=0.0, loss=1.0)
+        return WdlTarget(win=0.0, draw=1.0, loss=0.0)
+
+    def adjudicated_wdl(self, position: NativeGoPosition) -> WdlTarget:
+        target = self.terminal_wdl(position)
+        if target is None:
+            raise ValueError('Go adjudication requires a scored terminal position.')
+        return target
+
+    def encode_network_input(self, position: NativeGoPosition) -> PackedPlanePayload:
+        return self.packed_position(position)
+
+    @property
+    def augmentation_count(self) -> int:
+        return 8
 
     def packed_position(self, position: NativeGoPosition) -> PackedPlanePayload:
         if position.board_size != self.board_size:
             raise ValueError('Native Go position board size disagrees with its Python contract.')
         return self.packed_planes.value(bytes(position.packed_encoding()))
 
-    def transform_action(self, action_id: int, symmetry: GoSymmetryIndex) -> int:
+    def transform_action_id(self, action_id: int, augmentation_index: int) -> int:
+        try:
+            symmetry = GoSymmetryIndex(augmentation_index)
+        except ValueError as error:
+            raise ValueError('Go augmentation index is outside the fixed layout.') from error
         if not 0 <= action_id < self.action_size:
             raise ValueError('Go action lies outside the action space.')
         if action_id == self.pass_action:
@@ -122,7 +162,15 @@ class GoStateContract(GameStateContract):
                 transformed_x, transformed_y = y, x
         return transformed_y * self.board_size + transformed_x
 
-    def transform_state(self, encoded_state: PackedPlanePayload, symmetry: GoSymmetryIndex) -> PackedPlanePayload:
+    def transform_encoded_state(
+        self,
+        encoded_state: PackedPlanePayload,
+        augmentation_index: int,
+    ) -> PackedPlanePayload:
+        try:
+            symmetry = GoSymmetryIndex(augmentation_index)
+        except ValueError as error:
+            raise ValueError('Go augmentation index is outside the fixed layout.') from error
         state = decode_packed_planes(
             encoded_state,
             self.packed_planes,

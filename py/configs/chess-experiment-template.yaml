@@ -37,13 +37,14 @@ training:
     local_batch_size: 1024
     optimizer: adamw
     learning_rate:
+      kind: staged
       stages:
-        - start_optimizer_steps: 0
-          learning_rate: 0.005
-        - start_optimizer_steps: 30000
-          learning_rate: 0.002
-        - start_optimizer_steps: 125000
-          learning_rate: 0.001
+        - start_generation: 0
+          value: 0.005
+        - start_generation: 60
+          value: 0.002
+        - start_generation: 250
+          value: 0.001
     max_grad_norm: 0.5
     duplicate_multiplicity_weight_cap: 4.0
   topology:
@@ -66,9 +67,14 @@ training:
       replay_ratio: 8
       optimizer_steps_per_quantum: 500
       maximum_optimizer_steps: 500000
-      initial_replay_capacity_unique_positions: 200000
+      replay_capacity_unique_positions:
+        kind: linear
+        start_generation: 0
+        end_generation: 200
+        start_value: 200000
+        end_value: 2500000
+        rounding: nearest
       maximum_replay_capacity_unique_positions: 2500000
-      replay_capacity_ramp_model_versions: 200
       retained_checkpoint_interval_steps: 1000
     evaluation:
       interval_optimizer_steps: 1000
@@ -92,30 +98,29 @@ training:
 chess:
   self_play:
     search:
-      num_searches_per_turn: 600
-      fast_searches_proportion_of_full_searches: 0.25
-      playout_cap_randomization: 0.25
-      num_parallel_searches: 2
-      dirichlet_epsilon: 0.25
-      dirichlet_alpha: 0.3
-      c_param: 1.5
-      percentage_of_node_visits_to_keep: 0.6
-      min_visit_count: 0
+      full_searches: {kind: linear, start_generation: 0, end_generation: 15, start_value: 300, end_value: 600, rounding: nearest}
+      fast_searches: {kind: linear, start_generation: 0, end_generation: 15, start_value: 75, end_value: 150, rounding: nearest}
+      parallel_searches: 2
+      dirichlet_epsilon: {kind: constant, value: 0.25}
+      dirichlet_alpha: {kind: constant, value: 0.3}
+      exploration_constant: {kind: constant, value: 1.5}
+      minimum_root_visits: {kind: constant, value: 0}
     inference:
       inference_workers: 2
       inference_batch_size: 64
       outstanding_batches_per_worker: 2
-    num_moves_after_which_to_play_greedy: 50
+    random_opening_plies: {kind: constant, value: 0}
+    full_search_probability: {kind: constant, value: 0.25}
+    retained_root_visit_fraction: {kind: constant, value: 0.6}
+    greedy_after_ply: {kind: constant, value: 50}
     maximum_game_plies:
-    maximum_game_plies_until_model_version: 0
-    maximum_game_plies_hold_until_model_version: 0
-    final_maximum_game_plies:
     endgame_continuation_start_plies:
     low_material_termination_minimum_plies: 0
     low_material_termination_piece_threshold_per_player: 0
     low_material_termination_probability: 0.0
-    starting_temperature: 1.3
-    final_temperature: 0.1
+    starting_temperature: {kind: constant, value: 1.3}
+    final_temperature: {kind: constant, value: 0.1}
+    primary_sample_weight: {kind: constant, value: 1.0}
     resignation:
       audit_enabled: false
       production_enabled: false
@@ -141,15 +146,12 @@ chess:
     disagreement_prefix_archive_capacity: 2000
     disagreement_prefix_weight_smoothing: 0.05
     disagreement_prefix_weight_cap: 4.0
-    initial_num_searches_per_turn: 300
-    search_warmup_model_versions: 15
-    endgame_shortcut_fade_model_versions: 50
+    endgame_shortcut_probability: {kind: linear, start_generation: 0, end_generation: 50, start_value: 1.0, end_value: 0.0, rounding: none}
   objective:
-    policy_loss_weight: 1.0
-    value_loss_weight: 0.5
-    outcome_value_loss_weight: 0.85
-    mcts_value_loss_weight: 0.15
-    mcts_value_target_warmup_optimizer_steps: 0
+    policy_loss_weight: {kind: constant, value: 1.0}
+    value_loss_weight: {kind: constant, value: 0.5}
+    root_value_blend: {kind: constant, value: 0.15}
+    auxiliary_targets: []
   evaluation:
     num_searches_per_turn: 64
     num_games: 100

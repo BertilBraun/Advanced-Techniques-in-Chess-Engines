@@ -17,7 +17,7 @@ from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 
 from src.training.cuda import start_process_on_cuda_device
-from src.games.training_contract import GameImplementation
+from src.games.implementation import GameImplementation
 from src.neural_network import Network
 from src.training.replay import ReplayMaintainer, ReplaySnapshot, ReplayTrainingBatchLoader
 from src.training.trainer import Trainer, _LogitForward
@@ -568,12 +568,12 @@ def _train_quantum(
         args.trainer,
         training_model=training_model,
         rank=rank,
-        objective=game.objective(command.global_step),
+        objective=game.training_objective_at(command.model_version - 1),
     )
     if model.device.type == 'cuda':
         torch.cuda.synchronize(model.device)
     optimizer_started_at = time.perf_counter()
-    training_stats = trainer.train(batches, command.global_step)
+    training_stats = trainer.train(batches, command.global_step, command.model_version - 1)
     decode_seconds = torch.tensor(
         batches.preparation_seconds,
         device=model.device,

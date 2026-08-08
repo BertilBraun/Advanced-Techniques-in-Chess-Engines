@@ -11,7 +11,6 @@ import torch
 from src.games.chess.encoding import decode_board_states_into, encode_board_state, get_board_result_score
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.board import ChessBoard
-from src.games.chess.game import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
 from src.training.batch import ReplaySampleMetadata, TrainingBatch
 from src.games.chess.completed_game import ChessCompletedGame
 from src.self_play.completed_game_record import completed_game_from_path
@@ -297,18 +296,14 @@ def sample_is_mirrored(sampler_seed: int, global_step: int, rank: int, sample_po
 
 
 def _chess_mirror_action_map() -> np.ndarray:
-    game = ChessGame()
-    mapping = np.empty(game.action_size, dtype=np.int64)
-    for action, move in game.index2move.items():
-        from_row, from_column = square_to_index(move.from_square)
-        to_row, to_column = square_to_index(move.to_square)
-        mirrored_move = DictMove(
-            from_square=index_to_square(from_row, BOARD_LENGTH - 1 - from_column),
-            to_square=index_to_square(to_row, BOARD_LENGTH - 1 - to_column),
-            promotion=move.promotion,
-        )
-        mapping[action] = game.move2index[mirrored_move]
-    return mapping
+    return np.fromiter(
+        (
+            CHESS_STATE_CONTRACT.transform_action_id(action_id, 1)
+            for action_id in range(CHESS_STATE_CONTRACT.action_size)
+        ),
+        dtype=np.int64,
+        count=CHESS_STATE_CONTRACT.action_size,
+    )
 
 
 CHESS_MIRROR_ACTION_MAP = _chess_mirror_action_map()

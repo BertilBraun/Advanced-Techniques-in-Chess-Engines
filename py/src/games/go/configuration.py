@@ -6,7 +6,7 @@ from pydantic import Field, model_validator
 
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.neural_network import NetworkDimensions
-from src.training.configuration import SelfPlayConfiguration
+from src.training.configuration import SelfPlayConfiguration, TrainingObjectiveConfiguration
 from src.util.frozen_model import FrozenModel
 
 
@@ -31,18 +31,6 @@ class GoRepresentationConfiguration(FrozenModel):
         return self.board_size * self.board_size + 1
 
 
-class GoTrainingObjectiveConfiguration(FrozenModel):
-    policy_loss_weight: float = Field(default=1.0, ge=0.0)
-    outcome_value_loss_weight: float = Field(default=1.0, ge=0.0)
-    root_value_loss_weight: float = Field(default=0.0, ge=0.0)
-
-    @model_validator(mode='after')
-    def validate_value_weights(self) -> GoTrainingObjectiveConfiguration:
-        if abs(self.outcome_value_loss_weight + self.root_value_loss_weight - 1.0) > 1e-9:
-            raise ValueError('Go value-objective component weights must sum to 1.')
-        return self
-
-
 class GoEvaluationConfiguration(FrozenModel):
     num_searches_per_turn: int = Field(gt=0)
     num_games: int = Field(gt=0)
@@ -59,7 +47,7 @@ class GoConfiguration(FrozenModel):
     rules: GoRulesConfiguration
     representation: GoRepresentationConfiguration
     self_play: SelfPlayConfiguration
-    objective: GoTrainingObjectiveConfiguration = GoTrainingObjectiveConfiguration()
+    objective: TrainingObjectiveConfiguration
     evaluation: GoEvaluationConfiguration
 
     @model_validator(mode='after')

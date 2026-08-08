@@ -73,9 +73,8 @@ def test_credit_runtime_rebuilds_fifo_and_rank_batches_after_restart(tmp_path: P
         replay_ratio=Decimal(4),
         optimizer_steps_per_quantum=1,
         maximum_optimizer_steps=2,
-        initial_replay_capacity_unique_positions=10,
+        replay_capacity_unique_positions={'kind': 'constant', 'value': 10},
         maximum_replay_capacity_unique_positions=10,
-        replay_capacity_ramp_model_versions=1,
         retained_checkpoint_interval_steps=1,
     )
     ledger = CreditTrainingLedger(tmp_path, parameters, global_batch_size=8)

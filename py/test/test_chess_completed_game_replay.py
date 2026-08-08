@@ -115,10 +115,8 @@ def test_concurrent_publishers_create_complete_unique_game_files(tmp_path: Path)
 def test_self_play_completion_publishes_game_instead_of_writing_samples(tmp_path: Path) -> None:
     publisher = CompletedGamePublisher(tmp_path, 18, 2)
     self_play = object.__new__(ChessSelfPlayPolicy)
-    self_play.args = SimpleNamespace(
-        num_moves_after_which_to_play_greedy=30,
-        search=SimpleNamespace(min_visit_count=0),
-    )
+    self_play.args = SimpleNamespace()
+    self_play.resolved_parameters = SimpleNamespace(greedy_after_ply=30, minimum_root_visits=0)
     self_play.completed_game_publisher = publisher
     self_play.statistics = SelfPlayStatistics()
     self_play.iteration = 0

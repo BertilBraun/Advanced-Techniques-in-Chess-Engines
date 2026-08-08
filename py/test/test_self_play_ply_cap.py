@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import chess
 import pytest
 
+from src.experiment.generation_schedule import LinearSchedule, ScheduleRounding
 from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame
 from src.games.chess.self_play_statistics import SelfPlayStatistics
 
@@ -12,15 +13,21 @@ from src.games.chess.self_play_statistics import SelfPlayStatistics
 def self_play_client(iteration: int, final_maximum_game_plies: int | None = None) -> ChessSelfPlayPolicy:
     client = object.__new__(ChessSelfPlayPolicy)
     client.args = SimpleNamespace(
-        maximum_game_plies=200,
-        maximum_game_plies_hold_until_model_version=0,
-        maximum_game_plies_until_model_version=50,
-        final_maximum_game_plies=final_maximum_game_plies,
         endgame_continuation_start_plies=None,
         low_material_termination_minimum_plies=0,
         low_material_termination_piece_threshold_per_player=0,
         low_material_termination_probability=0.0,
     )
+    maximum_game_plies = 200
+    if final_maximum_game_plies is not None:
+        maximum_game_plies = LinearSchedule[int](
+            start_generation=0,
+            end_generation=50,
+            start_value=200,
+            end_value=final_maximum_game_plies,
+            rounding=ScheduleRounding.FLOOR,
+        ).value_at(iteration)
+    client.resolved_parameters = SimpleNamespace(maximum_game_plies=maximum_game_plies)
     client.iteration = iteration
     client.statistics = SelfPlayStatistics()
     return client
@@ -79,7 +86,7 @@ def test_cap_uses_material_result(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_iteration_50_does_not_cap_game_at_200_plies(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = self_play_client(iteration=50)
+    client = self_play_client(iteration=50, final_maximum_game_plies=300)
     game = game_at_200_plies()
 
     def unexpected_end_of_game(_: SelfPlayGame, __: float) -> SelfPlayGame:
@@ -157,6 +164,12 @@ def test_maximum_game_plies_increases_from_200_to_250(
     expected_maximum: int,
 ) -> None:
     client = self_play_client(iteration, final_maximum_game_plies=250)
-    client.args.maximum_game_plies_until_model_version = 80
+    client.resolved_parameters.maximum_game_plies = LinearSchedule[int](
+        start_generation=0,
+        end_generation=80,
+        start_value=200,
+        end_value=250,
+        rounding=ScheduleRounding.FLOOR,
+    ).value_at(iteration)
 
     assert client._maximum_game_plies() == expected_maximum

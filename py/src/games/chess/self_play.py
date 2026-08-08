@@ -36,6 +36,7 @@ from src.games.chess.completed_game import (
     ChessSearchObservation,
 )
 from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
+from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.self_play.worker import GameSelfPlayPolicy
 from src.games.chess.dataset_statistics import SelfPlayDatasetStats
 from src.games.chess.search_schedule import SearchScheduleState
@@ -50,7 +51,6 @@ from src.games.chess.resignation import (
 from src.util import lerp
 from src.games.chess.self_play_statistics import SelfPlayStatistics
 from src.self_play.value_target import TerminationReason
-from src.games.chess.curriculum import curriculum_fade, curriculum_progress
 from src.games.chess.encoding import get_board_result_score
 from src.games.chess.configuration import ChessSelfPlayConfiguration
 from src.util.log import log
@@ -103,7 +103,7 @@ class SelfPlayGame:
         resignation_threshold: float | None = None,
         identity: GameIdentity | None = None,
     ) -> None:
-        self.board = CHESS_STATE_CONTRACT.create_initial_board()
+        self.board = CHESS_STATE_CONTRACT.initial_position()
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[ChessMove] = []
         self.encoded_moves: list[int] = []
@@ -201,8 +201,7 @@ class ChessSelfPlayPolicy(
     ) -> None:
         self.device_id = device_id
         self.args = configuration
-        self.search_warmup_iterations = self.args.search_warmup_model_versions
-        self.endgame_shortcut_fade_iterations = self.args.endgame_shortcut_fade_model_versions
+        self.resolved_parameters = self._resolve_parameters(0)
         self.save_path = save_path
         self.completed_game_publisher = completed_game_publisher
         self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
@@ -258,29 +257,17 @@ class ChessSelfPlayPolicy(
     def search_schedule(self, schedule_version: int) -> SearchScheduleState:
         if schedule_version < 0:
             raise ValueError('Search schedule version must be nonnegative.')
-        num_full_searches = int(
-            lerp(
-                self.args.initial_num_searches_per_turn or self.args.search.num_searches_per_turn / 2,
-                self.args.search.num_searches_per_turn,
-                curriculum_progress(
-                    schedule_version,
-                    self.search_warmup_iterations,
-                ),
-            )
-        )
+        resolved = self._resolve_parameters(schedule_version)
         return SearchScheduleState(
             schedule_version=schedule_version,
-            num_parallel_searches=self.args.search.num_parallel_searches,
-            num_full_searches=num_full_searches,
-            num_fast_searches=int(num_full_searches * self.args.search.fast_searches_proportion_of_full_searches),
-            endgame_shortcut_strength=curriculum_fade(
-                schedule_version,
-                self.endgame_shortcut_fade_iterations,
-            ),
+            num_parallel_searches=resolved.parallel_searches,
+            num_full_searches=resolved.full_searches,
+            num_fast_searches=resolved.fast_searches,
+            endgame_shortcut_strength=self.args.endgame_shortcut_probability.value_at(schedule_version),
         )
 
     def update_search_schedule(self, schedule: SearchScheduleState) -> None:
-        if schedule.num_full_searches <= self.args.search.num_parallel_searches:
+        if schedule.num_full_searches <= self.resolved_parameters.parallel_searches:
             raise ValueError('Full-search budget must exceed the parallel-search count.')
         if schedule.num_fast_searches <= 0:
             raise ValueError('Fast-search budget must be positive.')
@@ -306,13 +293,13 @@ class ChessSelfPlayPolicy(
         from AlphaZeroCpp import SelfPlaySearchParameters
 
         return SelfPlaySearchParameters(
-            parallel_searches=self.args.search.num_parallel_searches,
+            parallel_searches=self.resolved_parameters.parallel_searches,
             full_searches=schedule.num_full_searches,
             fast_searches=schedule.num_fast_searches,
-            dirichlet_alpha=self.args.search.dirichlet_alpha,
-            dirichlet_epsilon=self.args.search.dirichlet_epsilon,
-            exploration_constant=self.args.search.c_param,
-            minimum_root_visits=self.args.search.min_visit_count,
+            dirichlet_alpha=self.resolved_parameters.dirichlet_alpha,
+            dirichlet_epsilon=self.resolved_parameters.dirichlet_epsilon,
+            exploration_constant=self.resolved_parameters.exploration_constant,
+            minimum_root_visits=self.resolved_parameters.minimum_root_visits,
         )
 
     def refresh_model(
@@ -325,6 +312,7 @@ class ChessSelfPlayPolicy(
             raise ValueError('Model version must be nonnegative.')
         if self.model_version is not None and model_version <= self.model_version:
             raise ValueError('Model version must increase on every refresh.')
+        self.resolved_parameters = self._resolve_parameters(model_version)
         self.update_search_schedule(self.search_schedule(model_version))
         schedule = self.search_schedule_state
         assert schedule is not None
@@ -377,7 +365,7 @@ class ChessSelfPlayPolicy(
         should_run_full_search = self._should_run_full_search(game, force_fast_endgame_playout)
         self._prepare_search_root(game)
         if should_run_full_search:
-            game.already_expanded_node.discount(self.args.search.percentage_of_node_visits_to_keep)
+            game.already_expanded_node.discount(self.resolved_parameters.retained_root_visit_fraction)
         return ChessSelfPlaySearchRequest(game.already_expanded_node, should_run_full_search)
 
     def search_active_games(
@@ -581,7 +569,7 @@ class ChessSelfPlayPolicy(
             return True
         if self.endgame_shortcut_strength <= 0.0:
             return False
-        if len(game.played_moves) < self.args.num_moves_after_which_to_play_greedy:
+        if len(game.played_moves) < self.resolved_parameters.greedy_after_ply:
             return False
         if len(game.board.board.piece_map()) > ENDGAME_PIECE_THRESHOLD:
             return False
@@ -595,7 +583,7 @@ class ChessSelfPlayPolicy(
         return (
             not force_fast_endgame_playout
             and game.resignation_trigger_ply is None
-            and random.random() < self.args.search.playout_cap_randomization
+            and random.random() < self.resolved_parameters.full_search_probability
         )
 
     def _should_terminate_low_material_game(self, game: SelfPlayGame) -> bool:
@@ -648,12 +636,16 @@ class ChessSelfPlayPolicy(
 
         # only use temperature for the first X moves, then simply use the most likely move
         # Keep exploration high for the first X moves, then play out as well as possible to reduce noise in the backpropagated final game results
-        if len(current.played_moves) >= self.args.num_moves_after_which_to_play_greedy:
+        if len(current.played_moves) >= self.resolved_parameters.greedy_after_ply:
             child_index = np.argmax(children_probabilities).item()
         else:
             # Scale down temperature from self.args.temperature to 0.1 as we approach num_moves_after_which_to_play_greedy
-            game_progress = len(current.played_moves) / self.args.num_moves_after_which_to_play_greedy
-            temperature = lerp(self.args.starting_temperature, self.args.final_temperature, game_progress)
+            game_progress = len(current.played_moves) / self.resolved_parameters.greedy_after_ply
+            temperature = lerp(
+                self.resolved_parameters.starting_temperature,
+                self.resolved_parameters.final_temperature,
+                game_progress,
+            )
             child_index = _sample_from_probabilities(children_probabilities, temperature)
 
         move = CHESS_STATE_CONTRACT.decode_move(children_encoded_moves[child_index], current.board)
@@ -696,19 +688,13 @@ class ChessSelfPlayPolicy(
         return None
 
     def _maximum_game_plies(self) -> int | None:
-        initial_maximum = self.args.maximum_game_plies
-        if initial_maximum is None:
-            return None
-        if self.iteration < self.args.maximum_game_plies_hold_until_model_version:
-            return initial_maximum
-        schedule_end = self.args.maximum_game_plies_until_model_version
-        final_maximum = self.args.final_maximum_game_plies
-        if self.iteration >= schedule_end:
-            return final_maximum
-        if final_maximum is None:
-            return initial_maximum
-        increase = final_maximum - initial_maximum
-        return initial_maximum + increase * self.iteration // schedule_end
+        return self.resolved_parameters.maximum_game_plies
+
+    def _resolve_parameters(self, model_generation: int) -> ResolvedSelfPlayParameters:
+        maximum_game_plies = (
+            None if self.args.maximum_game_plies is None else self.args.maximum_game_plies.value_at(model_generation)
+        )
+        return self.args.resolve(model_generation, maximum_game_plies)
 
     def _handle_end_of_game(
         self,
@@ -750,7 +736,7 @@ class ChessSelfPlayPolicy(
             )
             is_false_non_loss = is_natural_trigger and recovered_outcome >= 0.0
             continuation_plies = len(spg.played_moves) - audit_trigger.ply if audit_trigger is not None else 0
-            fast_searches = int(self.num_searches_per_turn * self.args.search.fast_searches_proportion_of_full_searches)
+            fast_searches = self.resolved_parameters.fast_searches
             self.statistics.add(
                 SelfPlayDatasetStats(
                     resignation_audit_games_completed=1,
@@ -824,12 +810,12 @@ class ChessSelfPlayPolicy(
                     if memory.ply == len(spg.encoded_moves)
                     else (
                         ChessMoveSelectionMode.GREEDY
-                        if memory.ply >= self.args.num_moves_after_which_to_play_greedy
+                        if memory.ply >= self.resolved_parameters.greedy_after_ply
                         else ChessMoveSelectionMode.TEMPERATURE
                     )
                 ),
                 search_budget=memory.search_budget,
-                minimum_visit_count=self.args.search.min_visit_count,
+                minimum_visit_count=self.resolved_parameters.minimum_root_visits,
                 sample_eligible=memory.sample_eligible,
             )
             for memory in spg.memory
@@ -858,16 +844,16 @@ class ChessSelfPlayPolicy(
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         # Remove moves which were only visited exactly as many times as required, never more
         visit_counts = [
-            (move, count - self.args.search.min_visit_count)
+            (move, count - self.resolved_parameters.minimum_root_visits)
             for move, count in visit_counts
-            if count > self.args.search.min_visit_count
+            if count > self.resolved_parameters.minimum_root_visits
         ]
 
         return visit_counts
 
     def _log_game(self, spg: SelfPlayGame, result: float) -> None:
         moves: list[str] = []
-        board = CHESS_STATE_CONTRACT.create_initial_board()
+        board = CHESS_STATE_CONTRACT.initial_position()
         for move in spg.played_moves:
             encoded_move = CHESS_STATE_CONTRACT.encode_move(move, board)
             moves.append(str(encoded_move))

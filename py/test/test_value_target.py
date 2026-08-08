@@ -10,7 +10,7 @@ from torch.nn import functional as F
 
 from src.neural_network import Network
 from src.games.chess.training import ChessTrainingObjective
-from src.games.chess.configuration import ChessTrainingObjectiveConfiguration
+from src.experiment.generation_schedule import ConstantSchedule, LinearSchedule, ScheduleRounding
 from src.training.batch import TrainingBatch
 from src.self_play.value_target import (
     FinalOutcome,
@@ -19,7 +19,7 @@ from src.self_play.value_target import (
     outcome_from_sample_perspective,
 )
 from src.training.trainer import Trainer
-from src.training.configuration import ModelVersionLearningRate, ModelVersionLearningRateStage, TrainingParams
+from src.training.configuration import TrainingObjectiveConfiguration, TrainingParams
 from src.value import scalar_to_wdl
 
 
@@ -58,9 +58,7 @@ def training_parameters(
         global_batch_size=4,
         local_batch_size=4,
         optimizer='adamw',
-        learning_rate=ModelVersionLearningRate(
-            stages=(ModelVersionLearningRateStage(start_optimizer_steps=0, learning_rate=0.001),),
-        ),
+        learning_rate=ConstantSchedule[float](value=0.001),
         duplicate_multiplicity_weight_cap=duplicate_multiplicity_weight_cap,
     )
 
@@ -102,11 +100,19 @@ def trainer(
     parameters = training_parameters()
     objective = ChessTrainingObjective(
         parameters,
-        ChessTrainingObjectiveConfiguration(),
-        optimizer_step=0,
+        objective_configuration(),
+        model_generation=0,
         value_target_weight_override=mcts_value_target_weight,
     )
     return Trainer(model, optimizer, parameters, objective)
+
+
+def objective_configuration() -> TrainingObjectiveConfiguration:
+    return TrainingObjectiveConfiguration(
+        policy_loss_weight=ConstantSchedule[float](value=1.0),
+        value_loss_weight=ConstantSchedule[float](value=0.5),
+        root_value_blend=ConstantSchedule[float](value=0.15),
+    )
 
 
 def test_wdl_order_is_win_draw_loss_in_python_and_torchscript() -> None:
@@ -254,7 +260,7 @@ def test_mcts_huber_diagnostic_does_not_change_backward_gradient() -> None:
     torch.testing.assert_close(gradients[0], gradients[1])
 
 
-def test_mcts_target_weight_warms_up_over_optimizer_steps() -> None:
+def test_root_value_blend_resolves_once_per_generation() -> None:
     batch = training_batch(
         (FinalOutcome.WIN, FinalOutcome.DRAW),
         (0.2, -0.4),
@@ -264,15 +270,25 @@ def test_mcts_target_weight_warms_up_over_optimizer_steps() -> None:
     model = FixedValueNetwork((0.0, 0.0, 0.0))
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
     parameters = training_parameters()
-    objective_configuration = ChessTrainingObjectiveConfiguration(mcts_value_target_warmup_optimizer_steps=100)
+    scheduled_objective = objective_configuration().validated_copy(
+        update={
+            'root_value_blend': LinearSchedule[float](
+                start_generation=0,
+                end_generation=2,
+                start_value=0.0,
+                end_value=0.15,
+                rounding=ScheduleRounding.NONE,
+            ).model_dump(mode='json')
+        }
+    )
     warmup_trainer = Trainer(
         model,
         optimizer,
         parameters,
-        ChessTrainingObjective(parameters, objective_configuration, optimizer_step=50),
+        ChessTrainingObjective(parameters, scheduled_objective, model_generation=1),
     )
 
-    stats = warmup_trainer.train(FixedBatchLoader(batch), optimizer_step=50)
+    stats = warmup_trainer.train(FixedBatchLoader(batch), optimizer_step=50, model_generation=1)
 
     assert stats.mcts_value_target_weight == pytest.approx(0.075)
 
@@ -299,8 +315,8 @@ def test_occurrence_count_weight_uses_uncapped_square_root() -> None:
         parameters,
         ChessTrainingObjective(
             parameters,
-            ChessTrainingObjectiveConfiguration(),
-            optimizer_step=0,
+            objective_configuration(),
+            model_generation=0,
             value_target_weight_override=0.0,
         ),
     )
