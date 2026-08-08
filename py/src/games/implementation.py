@@ -12,6 +12,7 @@ from src.training.configuration import TrainingArgs
 from src.training.replay import ReplayGameImplementation
 from src.training.targets import TrainingTargetLayout
 from src.training.objective import ResolvedTrainingObjective
+from src.training.trainer import RuntimeTrainingObjective
 
 
 PositionT = TypeVar('PositionT')
@@ -61,6 +62,11 @@ class GameImplementation(
 
     @abstractmethod
     def training_objective_at(self, model_generation: int) -> ResolvedTrainingObjective:
+        raise NotImplementedError
+
+    @abstractmethod
+    def runtime_training_objective_at(self, model_generation: int) -> RuntimeTrainingObjective:
+        """Transitional objective consumed only by the pre-Phase-2 trainer."""
         raise NotImplementedError
 
     @property

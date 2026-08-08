@@ -568,7 +568,7 @@ def _train_quantum(
         args.trainer,
         training_model=training_model,
         rank=rank,
-        objective=game.training_objective_at(command.model_version - 1),
+        objective=game.runtime_training_objective_at(command.model_version - 1),
     )
     if model.device.type == 'cuda':
         torch.cuda.synchronize(model.device)

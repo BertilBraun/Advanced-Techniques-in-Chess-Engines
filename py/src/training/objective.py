@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import torch
@@ -8,6 +7,7 @@ import torch.nn.functional as functional
 
 from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.value import scalar_to_wdl
+from src.util.frozen_model import FrozenModel
 
 
 @dataclass(frozen=True)
@@ -18,28 +18,11 @@ class ObjectiveLoss:
     total: torch.Tensor
 
 
-class ResolvedTrainingObjective(ABC):
-    """Canonical objective boundary resolved once for one model generation."""
-
-    @property
-    @abstractmethod
-    def policy_loss_weight(self) -> float:
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def value_loss_weight(self) -> float:
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def root_value_blend(self) -> float:
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def auxiliary_loss_weights(self) -> tuple[float, ...]:
-        raise NotImplementedError
+class ResolvedTrainingObjective(FrozenModel):
+    policy_loss_weight: float
+    value_loss_weight: float
+    root_value_blend: float
+    auxiliary_loss_weights: tuple[float, ...]
 
     def calculate_loss(self, output: TrainingModelOutput, batch: TrainingBatch) -> ObjectiveLoss:
         auxiliary_count = len(self.auxiliary_loss_weights)

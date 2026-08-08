@@ -38,7 +38,7 @@ class GoLoss:
     total: torch.Tensor
 
 
-class GoTrainingObjective(RuntimeTrainingObjective, ResolvedTrainingObjective):
+class GoTrainingObjective(RuntimeTrainingObjective):
     def __init__(self, configuration: TrainingObjectiveConfiguration, model_generation: int) -> None:
         self.configuration = configuration
         self.model_generation = model_generation
@@ -208,6 +208,17 @@ class GoImplementation(
         return self._replay
 
     def training_objective_at(self, model_generation: int) -> ResolvedTrainingObjective:
+        configuration = self.configuration.go.objective
+        return ResolvedTrainingObjective(
+            policy_loss_weight=configuration.policy_loss_weight.value_at(model_generation),
+            value_loss_weight=configuration.value_loss_weight.value_at(model_generation),
+            root_value_blend=configuration.root_value_blend.value_at(model_generation),
+            auxiliary_loss_weights=tuple(
+                target.loss_weight.value_at(model_generation) for target in configuration.auxiliary_targets
+            ),
+        )
+
+    def runtime_training_objective_at(self, model_generation: int) -> RuntimeTrainingObjective:
         return GoTrainingObjective(self.configuration.go.objective, model_generation)
 
     def create_self_play_policy(

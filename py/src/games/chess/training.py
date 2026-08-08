@@ -27,7 +27,7 @@ from src.self_play.value_target import FinalOutcome
 from src.value import scalar_to_wdl
 
 
-class ChessTrainingObjective(RuntimeTrainingObjective, ResolvedTrainingObjective):
+class ChessTrainingObjective(RuntimeTrainingObjective):
     def __init__(
         self,
         parameters: TrainingParams,
@@ -158,6 +158,17 @@ class ChessImplementation(
         return CHESS_REPLAY_IMPLEMENTATION
 
     def training_objective_at(self, model_generation: int) -> ResolvedTrainingObjective:
+        configuration = self.configuration.chess.objective
+        return ResolvedTrainingObjective(
+            policy_loss_weight=configuration.policy_loss_weight.value_at(model_generation),
+            value_loss_weight=configuration.value_loss_weight.value_at(model_generation),
+            root_value_blend=configuration.root_value_blend.value_at(model_generation),
+            auxiliary_loss_weights=tuple(
+                target.loss_weight.value_at(model_generation) for target in configuration.auxiliary_targets
+            ),
+        )
+
+    def runtime_training_objective_at(self, model_generation: int) -> RuntimeTrainingObjective:
         return ChessTrainingObjective(
             self.training.trainer,
             self.configuration.chess.objective,
