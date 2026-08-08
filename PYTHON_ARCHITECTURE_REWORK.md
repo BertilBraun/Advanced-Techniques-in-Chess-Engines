@@ -17,6 +17,22 @@ The design priorities, in order, are:
 
 Small replay or credit discrepancies after an unclean exit are acceptable. The runtime must not add complicated transactional recovery to prevent the loss or duplication of a negligible number of samples.
 
+Implementation starts from cleanup checkpoint `66a0a8b`, which removes unused invariant experiment fields, routes Go through canonical network dimensions, removes an unused commander progress helper, and leaves the complete Windows Python suite passing. Later work must preserve that cleanup and must not restore unused configuration or production concepts merely to ease migration.
+
+## Replacement policy
+
+This rework replaces the production runtime in place. It must not add a second mmap replay beside the existing replay, a second trainer beside the existing trainer, or Go-only orchestration beside chess orchestration.
+
+The implementation may temporarily make the end-to-end pipeline unavailable inside an authorized phase, but the phase cannot finish until:
+
+- both chess and Go use the same shared orchestration path;
+- the superseded production path is deleted;
+- tests target the authoritative implementation rather than duplicate old/new modes;
+- configuration exposes only the authoritative design;
+- no `legacy`, `native`, `optimized`, `mmap`, or similar implementation selector remains when there is only one implementation.
+
+Feature-sized commits remain required within a large phase. They should move complete ownership slices toward the final design rather than preserve two runnable architectures.
+
 ## Final runtime topology
 
 The coordinator is the main process. Cheap synchronous orchestration components are ordinary objects owned by it. Separate processes are reserved for genuinely parallel work.
@@ -767,11 +783,181 @@ Shared infrastructure owns:
 - self-play desired-state transport;
 - evaluation process management.
 
+## Concrete game composition
+
+The runtime constructs one concrete chess or Go implementation at the experiment boundary. After construction, shared orchestration does not branch on the game name.
+
+The root composition owns the concrete objects consumed by shared self-play, replay, training, and evaluation infrastructure:
+
+```python
+class GameImplementation(
+    ABC,
+    Generic[
+        CompletedGameT,
+        ActiveGameT,
+        SearchStatisticsT,
+    ],
+):
+    @property
+    @abstractmethod
+    def configuration(self) -> ExperimentConfiguration:
+        ...
+
+    @property
+    @abstractmethod
+    def network_dimensions(self) -> NetworkDimensions:
+        ...
+
+    @property
+    @abstractmethod
+    def replay(self) -> ReplayGameImplementation[CompletedGameT]:
+        ...
+
+    @abstractmethod
+    def create_self_play_policy(
+        self,
+        device_id: int,
+    ) -> GameSelfPlayPolicy[
+        ActiveGameT,
+        CompletedGameT,
+        SearchStatisticsT,
+    ]:
+        ...
+
+    @abstractmethod
+    def training_objective_at(
+        self,
+        model_generation: int,
+    ) -> TrainingObjective:
+        ...
+```
+
+Evaluation job construction can be added to this composition during the evaluation phase once the common job contract is concrete. It should not be guessed in the core runtime phase.
+
+The composition is not an adapter between duplicate chess/Go types and shared types. It is the canonical place where each concrete game supplies the behavior that genuinely differs.
+
+### Shared self-play worker
+
+Process control, active-game ownership, completed-game publication, desired-state handling, model transitions, and basic statistics are shared.
+
+The game-specific policy has a narrow contract:
+
+```python
+class GameSelfPlayPolicy(
+    ABC,
+    Generic[ActiveGameT, CompletedGameT, SearchStatisticsT],
+):
+    @abstractmethod
+    def new_game(self) -> ActiveGameT:
+        ...
+
+    @abstractmethod
+    def play_turn(
+        self,
+        games: tuple[ActiveGameT, ...],
+    ) -> tuple[GameTurnResult[ActiveGameT, CompletedGameT], ...]:
+        ...
+
+    @abstractmethod
+    def load_model(
+        self,
+        checkpoint: CheckpointReference,
+        active_games: tuple[ActiveGameT, ...],
+    ) -> None:
+        ...
+
+    @abstractmethod
+    def snapshot_statistics(self) -> SearchStatisticsT:
+        ...
+```
+
+Each turn returns exactly one typed result per input slot:
+
+```python
+@dataclass(frozen=True)
+class OngoingGame(Generic[ActiveGameT]):
+    game: ActiveGameT
+
+
+@dataclass(frozen=True)
+class FinishedGame(Generic[CompletedGameT]):
+    completed_game: CompletedGameT
+
+
+GameTurnResult: TypeAlias = (
+    OngoingGame[ActiveGameT]
+    | FinishedGame[CompletedGameT]
+)
+```
+
+The shared worker:
+
+1. owns the fixed-size active-game slots;
+2. passes the current games to `play_turn()`;
+3. retains returned ongoing games;
+4. publishes every returned completed-game record through the shared atomic publisher;
+5. replaces finished slots through `new_game()`;
+6. owns cheap game/process counters;
+7. asks only selected workers for expensive game search statistics;
+8. applies the shared desired-state transition order around `snapshot_statistics()` and `load_model()`.
+
+Concrete chess and Go policies own only their state, native search requests/results, move selection, terminal/adjudication semantics, completed-game construction, game-specific schedules, and native search statistics. They do not own process communication, publication files, active-pool replacement, or model-transition orchestration.
+
+### Shared replay and training boundary
+
+The game-specific replay implementation supplies only semantics that cannot be shared:
+
+```python
+class ReplayGameImplementation(ABC, Generic[CompletedGameT]):
+    @property
+    @abstractmethod
+    def layout(self) -> ReplayLayout:
+        ...
+
+    @abstractmethod
+    def parse_completed_game(self, path: Path) -> CompletedGameT:
+        ...
+
+    @abstractmethod
+    def materialize(
+        self,
+        game: CompletedGameT,
+        maximum_policy_entries: int,
+    ) -> Iterator[ReplaySample]:
+        ...
+
+    @abstractmethod
+    def build_batch(
+        self,
+        replay: MappedReplayView,
+        sample_indices: Sequence[int],
+        augmentation_seed: int,
+    ) -> TrainingBatch:
+        ...
+```
+
+Shared replay infrastructure owns inbox enumeration, configurable top-policy selection, mmap row storage, FIFO mechanics, capacity, eviction, mapped views, deterministic rank sampling, and replay telemetry. The concrete implementation owns completed-game validation, encoded-state bytes, game targets, augmentation, and decoding selected rows into the canonical training batch.
+
+The shared trainer owns the optimizer hot loop, transfer overlap, gradient handling, DDP reductions, and common statistics. The game-owned `TrainingObjective` owns only model forward interpretation and loss construction for a resolved generation.
+
+### No game-specific orchestration forks
+
+The following are prohibited:
+
+- a Go coordinator or Go training lifecycle beside the shared coordinator;
+- a chess replay manager and Go replay manager with duplicated FIFO or persistence logic;
+- separate chess and Go active-game/process loops;
+- game-name branching inside shared replay, trainer, or coordinator code after root construction;
+- identical configuration models copied into both concrete variants;
+- wrapper conversions that copy fields between equivalent shared and game-specific models.
+
+The first implementation of a new shared boundary must migrate both chess and Go before it becomes authoritative. A feature that is intended for later chess experiments cannot be implemented as permanent Go-only infrastructure.
+
 ## Implementation phases
 
-Each phase should remove the path it replaces rather than leave compatibility layers.
+The phases are deliberately broad because replay representation, coordinator ownership, DDP access, and game composition are interdependent. Each phase should remove the path it replaces rather than leave compatibility layers.
 
-### Phase 1: canonical schedules and progress
+### Phase 1: canonical configuration, progress, and game contracts
 
 - add generic constant, staged, and linear generation schedules;
 - add rounding validation and deterministic interpolation tests;
@@ -779,29 +965,28 @@ Each phase should remove the path it replaces rather than leave compatibility la
 - make optimizer steps the only persisted progress field;
 - derive model generation everywhere;
 - validate static optimizer steps per quantum and aligned run limits;
-- remove optimizer-step and separately persisted model-generation schedule axes.
+- remove optimizer-step and separately persisted model-generation schedule axes;
+- make the root `GameImplementation` the only concrete-game composition used by the runtime;
+- establish the narrow shared self-play, replay, batch, and objective contracts above;
+- trace both chess and Go through those contracts before accepting them;
+- remove duplicate or unused game abstractions instead of adapting them.
 
-### Phase 2: fixed-width mmap replay
+The phase ends with current runtime behavior intact but configuration, progress, and concrete ownership ready for one integrated runtime replacement.
 
-- define typed replay layout metadata;
+### Phase 2: integrated core runtime replacement
+
+- define typed replay layout metadata shared by both games;
 - add experiment-configured `maximum_policy_entries`;
 - implement deterministic top-policy retention and telemetry;
 - implement the single-file fixed-slot circular mmap;
 - convert chess, Go 7x7, and Go 9x9 materialization;
 - build training batches directly from mapped rows;
-- measure projected and actual replay file size and batch-read throughput.
-
-### Phase 3: coordinator-owned replay and ledger
-
 - move replay ingestion into `ReplayManager` in the coordinator process;
 - make each call drain the full inbox;
 - apply capacity schedules inside ingestion;
 - simplify the ledger to atomic progress, credit, and checkpoint state;
 - remove trainer-rank replay ownership;
-- remove exact archive rebuild and prepared-publication recovery machinery that no longer has an owner.
-
-### Phase 4: TrainerGroup and mmap DDP
-
+- remove exact archive rebuild and prepared-publication recovery machinery that no longer has an owner;
 - introduce the coordinator-owned `TrainerGroup` facade;
 - make all ranks persistent symmetric child processes;
 - always initialize DDP, including world size one;
@@ -811,19 +996,15 @@ Each phase should remove the path it replaces rather than leave compatibility la
 - retain model and optimizer across quanta;
 - make rank zero the sole checkpoint writer;
 - aggregate statistics and failures in `TrainerGroup`;
-- remove `broadcast_object_list` replay distribution and the single-rank training branch.
-
-### Phase 5: self-play desired-state connections
-
+- remove `broadcast_object_list` replay distribution and the single-rank training branch;
 - replace file mailboxes with duplex multiprocessing connections;
 - implement desired running, paused, and stopped states;
+- replace both concrete active-game loops with the shared self-play worker contract;
+- make the shared worker publish completed records and replace finished slots;
 - combine generation statistics, model loading, tree reset, and acknowledgement into one transition;
 - configure basic versus detailed statistics workers;
 - delete the generic communication module and its tests;
-- retain atomic completed-game files as the durable data boundary.
-
-### Phase 6: simple coordinator lifecycle
-
+- retain atomic completed-game files as the durable data boundary;
 - rewrite the public loop at one level of abstraction;
 - implement focused ingestion, training, transition, evaluation, and shutdown helpers;
 - keep training synchronous and blocking at the coordinator boundary;
@@ -831,7 +1012,9 @@ Each phase should remove the path it replaces rather than leave compatibility la
 - enforce run limits between ingestion/training iterations;
 - verify restart from mmap, ledger, and latest complete checkpoint.
 
-### Phase 7: concurrent evaluation jobs
+The phase is complete only when the old replay container, trainer-owned maintainer, replay-object broadcast, file mailbox, old commander lifecycle, and duplicated chess/Go orchestration are deleted. Both games must complete CPU self-play, replay ingestion, mapped batch construction, a DDP quantum, checkpoint activation, and a generation transition through the authoritative path. Projected and actual replay file size, ingestion throughput, mmap batch-read throughput, and DDP throughput are review evidence.
+
+### Phase 3: concurrent evaluation jobs
 
 - introduce focused evaluation job and result types;
 - launch multiple short-lived evaluation processes after due checkpoints;
@@ -840,7 +1023,7 @@ Each phase should remove the path it replaces rather than leave compatibility la
 - log completed results to TensorBoard and the console;
 - complete concurrency, device assignment, timeout, opponent, and retention behavior.
 
-### Phase 8: integration and cleanup
+### Phase 4: integrated validation and cleanup
 
 - remove superseded modules, names, settings, tests, and documentation;
 - validate clean startup, quantum transitions, worker restart, coordinator restart, and shutdown;
