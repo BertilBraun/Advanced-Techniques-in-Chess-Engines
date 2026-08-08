@@ -2,7 +2,7 @@ from pathlib import Path
 
 import torch
 
-from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessStateContract
 from src.games.contracts import WdlTarget
 from src.replay.batch_loader import MappedReplayBatchLoader
 from src.replay.contracts import EligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
@@ -11,6 +11,20 @@ from src.replay.manager import ReplayDescription
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import SparseSearchVisit
 from src.training.targets import NextPolicyHeadLayout, TrainingTargetLayout
+
+
+class IdentityAugmentationChessStateContract(ChessStateContract):
+    @property
+    def augmentation_count(self) -> int:
+        return 1
+
+    def transform_action_id(self, action_id: int, augmentation_index: int) -> int:
+        if augmentation_index != 0:
+            raise ValueError('Test contract supports only identity augmentation.')
+        return action_id
+
+
+IDENTITY_CHESS_STATE_CONTRACT = IdentityAugmentationChessStateContract()
 
 
 def _layout() -> ReplayLayout:
@@ -27,16 +41,16 @@ def _layout() -> ReplayLayout:
 
 
 def _sample(weight: float) -> ReplaySample:
-    position = CHESS_STATE_CONTRACT.initial_position()
-    first, second = CHESS_STATE_CONTRACT.legal_action_ids(position)[:2]
     primary = SparsePolicyTarget(
         visits=(
-            SparseSearchVisit(action_id=first, visit_count=3),
-            SparseSearchVisit(action_id=second, visit_count=1),
+            SparseSearchVisit(action_id=0, visit_count=3),
+            SparseSearchVisit(action_id=1, visit_count=1),
         )
     )
     return ReplaySample(
-        encoded_state=CHESS_STATE_CONTRACT.encode_network_input(position),
+        encoded_state=CHESS_STATE_CONTRACT.packed_plane_layout.value(
+            bytes(CHESS_STATE_CONTRACT.packed_plane_layout.payload_bytes)
+        ),
         policy=primary,
         wdl_target=WdlTarget(win=0.25, draw=0.5, loss=0.25),
         root_value=0.125,
@@ -70,7 +84,7 @@ def test_mapped_loader_builds_canonical_batches_and_disjoint_rank_slices(tmp_pat
 
     common = {
         'replay': description,
-        'state': CHESS_STATE_CONTRACT,
+        'state': IDENTITY_CHESS_STATE_CONTRACT,
         'source_optimizer_step': 20,
         'optimizer_steps': 1,
         'global_batch_size': 4,

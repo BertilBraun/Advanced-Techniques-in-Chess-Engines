@@ -72,6 +72,7 @@ def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
     training = configuration.training.validated_copy(
         update={
             'save_path': str(tmp_path),
+            'random_seed': 2,
             'network': network.model_dump(mode='json'),
             'trainer': trainer.model_dump(mode='json'),
             'topology': topology.model_dump(mode='json'),
@@ -94,16 +95,14 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
     )
     replay_path = tmp_path / 'replay.bin'
     store = ReplayStore.create(replay_path, layout, maximum_capacity=2, logical_capacity=2)
-    position = game.state.initial_position()
-    first, second = game.state.legal_action_ids(position)[:2]
     for weight in (1.0, 2.0):
         store.append(
             ReplaySample(
-                encoded_state=game.state.encode_network_input(position),
+                encoded_state=game.state.packed_plane_layout.value(bytes(game.state.packed_plane_layout.payload_bytes)),
                 policy=SparsePolicyTarget(
                     visits=(
-                        SparseSearchVisit(action_id=first, visit_count=3),
-                        SparseSearchVisit(action_id=second, visit_count=1),
+                        SparseSearchVisit(action_id=0, visit_count=3),
+                        SparseSearchVisit(action_id=1, visit_count=1),
                     )
                 ),
                 wdl_target=WdlTarget(win=0.0, draw=1.0, loss=0.0),

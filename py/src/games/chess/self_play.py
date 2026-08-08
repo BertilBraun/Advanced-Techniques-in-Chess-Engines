@@ -7,10 +7,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from src.games.chess.board import ChessBoard
 from src.games.chess.configuration import ChessSelfPlayConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.games.contracts import WdlTarget
 from src.self_play.active_game import CompletedGame, ContinuingGame
 from src.self_play.completed_game import (
@@ -40,11 +38,10 @@ if TYPE_CHECKING:
 @dataclass
 class ChessSelfPlayGame:
     identity: GameIdentity
-    board: ChessBoard
+    root: ChessSearchRoot
     started_at_seconds: float
     action_ids: list[int] = field(default_factory=list)
     observations: list[SearchObservation] = field(default_factory=list)
-    root: ChessSearchRoot | None = None
 
 
 SelfPlayGame = ChessSelfPlayGame
@@ -114,8 +111,7 @@ class ChessSelfPlayPolicy(
             self.search.update_search_schedule(native_parameters)
         self.model_generation = model_generation
         for game in active_games:
-            if game.root is not None:
-                game.root.reset()
+            game.root.reset()
 
     def snapshot_statistics(self, tensorboard_step: int) -> SelfPlayStatisticsSnapshot | None:
         if self.search is None or self.model_generation is None:
@@ -138,26 +134,23 @@ class ChessSelfPlayPolicy(
         if self.search is None:
             raise RuntimeError('A model must be loaded before creating a chess game.')
         while True:
-            board = CHESS_STATE_CONTRACT.initial_position()
+            position = CHESS_STATE_CONTRACT.initial_position()
             action_ids: list[int] = []
             for _ in range(self.resolved_parameters.random_opening_plies):
-                legal_actions = CHESS_STATE_CONTRACT.legal_action_ids(board)
+                legal_actions = CHESS_STATE_CONTRACT.legal_action_ids(position)
                 action_id = int(self.random.choice(legal_actions))
                 action_ids.append(action_id)
-                board = CHESS_STATE_CONTRACT.child_position(board, action_id)
-                if CHESS_STATE_CONTRACT.terminal_wdl(board) is not None:
+                position = CHESS_STATE_CONTRACT.child_position(position, action_id)
+                if CHESS_STATE_CONTRACT.terminal_wdl(position) is not None:
                     break
-            if CHESS_STATE_CONTRACT.terminal_wdl(board) is None:
-                return ChessSelfPlayGame(identity, board, time.time(), action_ids=action_ids)
+            if CHESS_STATE_CONTRACT.terminal_wdl(position) is None:
+                return ChessSelfPlayGame(identity, self.search.new_root(position), time.time(), action_ids=action_ids)
 
     def build_search_request(self, game: ChessSelfPlayGame) -> ChessSelfPlaySearchRequest:
         from AlphaZeroCpp import ChessSelfPlaySearchRequest
 
         if self.search is None:
             raise RuntimeError('A model must be loaded before chess search starts.')
-        if game.root is None:
-            history = bounded_repetition_history(game.board.board, REPETITION_HISTORY_PLIES)
-            game.root = self.search.new_root_with_history(history.starting_fen, history.moves_uci)
         full_search = self.random.random() < self.resolved_parameters.full_search_probability
         if full_search:
             game.root.discount(self.resolved_parameters.retained_root_visit_fraction)
@@ -191,7 +184,7 @@ class ChessSelfPlayPolicy(
         positive_visits = tuple(visit for _, visit in indexed_positive_visits)
         ply = len(game.action_ids)
         selected_visit_index = self._select_visit_index(positive_visits, ply)
-        native_child_index, selected_visit = indexed_positive_visits[selected_visit_index]
+        _, selected_visit = indexed_positive_visits[selected_visit_index]
         selected_action = selected_visit.action_id
         game.observations.append(
             SearchObservation(
@@ -211,15 +204,15 @@ class ChessSelfPlayPolicy(
             )
         )
         game.action_ids.append(selected_action)
-        game.board = CHESS_STATE_CONTRACT.child_position(game.board, selected_action)
-        game.root = result.root.make_new_root(native_child_index)
+        game.root = result.root
+        game.root.play(selected_action)
 
-        natural_wdl = CHESS_STATE_CONTRACT.terminal_wdl(game.board)
+        natural_wdl = CHESS_STATE_CONTRACT.terminal_wdl(game.root.position)
         if natural_wdl is not None:
             return CompletedGame(self._complete(game, natural_wdl, TerminationReason.NATURAL))
         maximum_plies = self.resolved_parameters.maximum_game_plies
         if maximum_plies is not None and len(game.action_ids) >= maximum_plies:
-            wdl = CHESS_STATE_CONTRACT.adjudicated_wdl(game.board, TerminationReason.MAXIMUM_PLIES)
+            wdl = CHESS_STATE_CONTRACT.adjudicated_wdl(game.root.position, TerminationReason.MAXIMUM_PLIES)
             return CompletedGame(self._complete(game, wdl, TerminationReason.MAXIMUM_PLIES))
         return ContinuingGame(game)
 

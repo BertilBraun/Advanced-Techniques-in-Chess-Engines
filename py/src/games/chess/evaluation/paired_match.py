@@ -14,7 +14,7 @@ from src.games.chess.evaluation.types import (
 from src.experiment.evaluation_protocol import GameOutcome, GameRecord, PlayerColor, ScheduledGame
 from src.games.chess.board import Player
 from src.games.chess.board import ChessBoard
-from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.games.chess.game import ChessGame
 from src.util.tensorboard import log_text
 
 
@@ -50,6 +50,7 @@ def play_paired_models(
     maximum_game_plies: int | None,
     name: str,
 ) -> tuple[Results, tuple[GameRecord, ...]]:
+    game = ChessGame()
     if not schedule:
         raise ValueError('A paired opening schedule is required.')
     if maximum_game_plies is not None and maximum_game_plies < 1:
@@ -117,7 +118,7 @@ def play_paired_models(
             if not np.all(np.isfinite(policy)) or float(np.sum(policy)) <= 0:
                 raise ValueError('Evaluation move policy must be finite and have positive mass.')
             encoded_move = int(np.argmax(policy).item())
-            move = CHESS_STATE_CONTRACT.decode_move(encoded_move, active_game.board)
+            move = game.decode_move(encoded_move, active_game.board)
             active_game.board.make_move(move)
             active_game.moves_uci.append(str(move))
 

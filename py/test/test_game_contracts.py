@@ -1,13 +1,11 @@
 from pathlib import Path
 from uuid import UUID
 
-import chess
 import pytest
 import torch
 from pydantic import ValidationError
 
 from src.experiment.configuration import load_experiment_configuration
-from src.games.chess.board import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.training import ChessImplementation
 from src.games.contracts import Player, WdlTarget
@@ -35,13 +33,14 @@ def test_wdl_target_validates_and_reverses_perspective() -> None:
 
 
 def test_chess_state_contract_operates_in_action_id_space() -> None:
+    pytest.importorskip('AlphaZeroCpp')
     initial = CHESS_STATE_CONTRACT.initial_position()
     legal_actions = CHESS_STATE_CONTRACT.legal_action_ids(initial)
     child = CHESS_STATE_CONTRACT.child_position(initial, legal_actions[0])
 
     assert legal_actions
-    assert initial.board == chess.Board()
-    assert child.board != initial.board
+    assert initial.fen.startswith('rnbqkbnr/pppppppp/')
+    assert child.fen != initial.fen
     assert CHESS_STATE_CONTRACT.current_player(initial) is Player.FIRST
     assert CHESS_STATE_CONTRACT.current_player(child) is Player.SECOND
     assert CHESS_STATE_CONTRACT.terminal_wdl(initial) is None
@@ -52,7 +51,8 @@ def test_chess_state_contract_operates_in_action_id_space() -> None:
 
 
 def test_chess_adjudication_uses_fixed_starting_material_normalization() -> None:
-    position = ChessBoard.from_fen('4k3/8/8/8/8/8/8/3QK3 w - - 0 1')
+    native = pytest.importorskip('AlphaZeroCpp')
+    position = native.ChessPosition('4k3/8/8/8/8/8/8/3QK3 w - - 0 1')
 
     target = CHESS_STATE_CONTRACT.adjudicated_wdl(position, TerminationReason.MAXIMUM_PLIES)
 
@@ -177,6 +177,7 @@ def test_search_observation_rejects_zero_visit_entries() -> None:
 
 
 def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_together() -> None:
+    pytest.importorskip('AlphaZeroCpp')
     position = CHESS_STATE_CONTRACT.initial_position()
     action_id = CHESS_STATE_CONTRACT.legal_action_ids(position)[0]
     policy = SparsePolicyTarget(visits=(SparseSearchVisit(action_id=action_id, visit_count=3),))

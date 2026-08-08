@@ -1,6 +1,5 @@
-from src.games.chess.board import ChessBoard
 from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
-from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessStateContract
+from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.chess.self_play import ChessSelfPlayGame, ChessSelfPlayPolicy, SelfPlayStatisticsSnapshot
 from src.games.implementation import GameImplementation
 from src.neural_network import NetworkDimensions
@@ -10,7 +9,7 @@ from src.training.targets import TrainingTargetLayout, build_training_target_lay
 
 class ChessImplementation(
     GameImplementation[
-        ChessBoard,
+        ChessPosition,
         ChessSelfPlayGame,
         'ChessSelfPlaySearchRequest',
         'ChessSelfPlaySearchResult',

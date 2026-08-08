@@ -38,6 +38,7 @@ struct ChessEncoding {
 
     [[nodiscard]] static int actionId(ChessAction action, const Board &state);
     [[nodiscard]] static ChessAction decodeAction(int actionId, const Board &state);
+    [[nodiscard]] static int mirrorActionId(int actionId);
     static void encodeInputInto(const Board &state, std::int8_t *destination);
 };
 

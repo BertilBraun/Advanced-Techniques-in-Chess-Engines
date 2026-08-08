@@ -35,6 +35,9 @@ int runChessGameTests() {
             "Chess contract action id is outside the configured action space");
     require(ChessEncoding::decodeAction(actionId, initial) == firstAction,
             "Chess action decode did not invert encoding");
+    const int mirroredActionId = ChessEncoding::mirrorActionId(actionId);
+    require(ChessEncoding::mirrorActionId(mirroredActionId) == actionId,
+            "Mirroring a chess action twice did not restore it");
 
     const Board child = ChessGame::childState(initial, firstAction);
     require(child.fen() != initial.fen(), "Chess child position must differ from its parent");
@@ -43,6 +46,21 @@ int runChessGameTests() {
     require(ChessGame::isTerminal(terminal), "Checkmate sequence must produce a terminal position");
     require(ChessGame::terminalValue(terminal) == -1.0F,
             "Terminal chess value must preserve the existing result");
+
+    const Board stalemate("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1");
+    require(ChessGame::isTerminal(stalemate), "Stalemate must be terminal");
+    require(ChessGame::terminalValue(stalemate) == 0.0F, "Stalemate must be a draw");
+
+    const Board fiftyMoveDraw("8/8/8/8/8/8/6k1/K5R1 w - - 100 75");
+    require(ChessGame::isTerminal(fiftyMoveDraw), "The fifty-move boundary must be terminal");
+    require(ChessGame::terminalValue(fiftyMoveDraw) == 0.0F,
+            "The fifty-move boundary must be a draw");
+
+    const Board insufficientMaterial("8/8/8/8/8/8/6k1/K7 w - - 0 1");
+    require(ChessGame::isTerminal(insufficientMaterial),
+            "Insufficient material must be terminal");
+    require(ChessGame::terminalValue(insufficientMaterial) == 0.0F,
+            "Insufficient material must be a draw");
     std::cout << "Chess game tests passed\n";
     return 0;
 }

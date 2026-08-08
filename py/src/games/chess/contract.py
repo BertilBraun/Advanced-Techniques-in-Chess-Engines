@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
-import numpy.typing as npt
+from typing import Protocol
 
-from src.games.chess.board import MAX_MATERIAL_VALUE, PIECE_VALUE, ChessBoard, ChessMove
-from src.games.chess.game import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
+import numpy as np
+
 from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
 from src.neural_network import NetworkDimensions
 from src.packed_planes import PackedPlaneLayout, PackedPlanePayload, decode_packed_planes, encode_packed_planes
@@ -12,20 +11,36 @@ from src.replay.contracts import EligibleNextPolicyTarget, ReplaySample, SparseP
 from src.self_play.completed_game import SparseSearchVisit, TerminationReason
 
 
-class ChessStateContract(GameStateContract[ChessBoard]):
+class ChessPosition(Protocol):
+    @property
+    def current_player(self) -> int: ...
+
+    @property
+    def is_terminal(self) -> bool: ...
+
+    def legal_actions(self) -> list[int]: ...
+
+    def child(self, action_id: int) -> ChessPosition: ...
+
+    def terminal_value(self) -> float: ...
+
+    def approximate_result_score(self) -> float: ...
+
+    def packed_encoding(self) -> bytes: ...
+
+
+class ChessStateContract(GameStateContract[ChessPosition]):
     def __init__(self) -> None:
-        self.game = ChessGame()
-        shape = self.game.representation_shape
         self._representation = RepresentationDimensions(
-            channels=shape[0],
-            rows=shape[1],
-            columns=shape[2],
-            binary_channels=self.game.binary_channels,
-            scalar_channels=self.game.scalar_channels,
+            channels=29,
+            rows=8,
+            columns=8,
+            binary_channels=tuple(range(22)),
+            scalar_channels=tuple(range(22, 29)),
             packed_planes=PackedPlaneLayout(
-                board_size=shape[1],
-                binary_plane_count=len(self.game.binary_channels),
-                scalar_count=len(self.game.scalar_channels),
+                board_size=8,
+                binary_plane_count=22,
+                scalar_count=7,
             ),
         )
 
@@ -35,53 +50,39 @@ class ChessStateContract(GameStateContract[ChessBoard]):
 
     @property
     def action_size(self) -> int:
-        return self.game.action_size
+        return 1880
 
     @property
     def representation(self) -> RepresentationDimensions:
         return self._representation
 
-    def initial_position(self) -> ChessBoard:
-        return self.game.get_initial_board()
+    def initial_position(self) -> ChessPosition:
+        from AlphaZeroCpp import ChessPosition
 
-    def legal_action_ids(self, position: ChessBoard) -> tuple[int, ...]:
-        return tuple(sorted(self.game.encode_move(move, position) for move in position.get_valid_moves()))
+        return ChessPosition()
 
-    def child_position(self, position: ChessBoard, action_id: int) -> ChessBoard:
-        child = position.copy()
-        child.make_move(self.game.decode_move(action_id, position))
-        return child
+    def legal_action_ids(self, position: ChessPosition) -> tuple[int, ...]:
+        return tuple(sorted(position.legal_actions()))
 
-    def current_player(self, position: ChessBoard) -> Player:
+    def child_position(self, position: ChessPosition, action_id: int) -> ChessPosition:
+        return position.child(action_id)
+
+    def current_player(self, position: ChessPosition) -> Player:
         return Player(position.current_player)
 
-    def terminal_wdl(self, position: ChessBoard) -> WdlTarget | None:
-        if not position.is_game_over():
+    def terminal_wdl(self, position: ChessPosition) -> WdlTarget | None:
+        if not position.is_terminal:
             return None
-        winner = position.check_winner()
-        if winner is None:
-            return WdlTarget(win=0.0, draw=1.0, loss=0.0)
-        if winner == position.current_player:
-            return WdlTarget(win=1.0, draw=0.0, loss=0.0)
-        return WdlTarget(win=0.0, draw=0.0, loss=1.0)
+        return WdlTarget.from_scalar(position.terminal_value())
 
-    def adjudicated_wdl(self, position: ChessBoard, reason: TerminationReason) -> WdlTarget:
+    def adjudicated_wdl(self, position: ChessPosition, reason: TerminationReason) -> WdlTarget:
         if reason not in {TerminationReason.MAXIMUM_PLIES, TerminationReason.ADJUDICATION}:
             raise ValueError(f'Chess cannot adjudicate termination reason {reason.value}.')
-        material_score = 0
-        for piece_type, value in PIECE_VALUE.items():
-            material_score += value * len(position.board.pieces(piece_type, position.board.turn))
-            material_score -= value * len(position.board.pieces(piece_type, not position.board.turn))
-        return WdlTarget.from_scalar(material_score / MAX_MATERIAL_VALUE)
+        score = position.approximate_result_score() * position.current_player
+        return WdlTarget.from_scalar(score)
 
-    def encode_network_input(self, position: ChessBoard) -> PackedPlanePayload:
-        state = self.canonical_board(position).astype(np.int8, copy=False)
-        return encode_packed_planes(
-            state,
-            self.representation.packed_planes,
-            self.representation.binary_channels,
-            self.representation.scalar_channels,
-        )
+    def encode_network_input(self, position: ChessPosition) -> PackedPlanePayload:
+        return self.packed_plane_layout.value(bytes(position.packed_encoding()))
 
     @property
     def augmentation_count(self) -> int:
@@ -92,15 +93,9 @@ class ChessStateContract(GameStateContract[ChessBoard]):
             raise ValueError('Chess augmentation index is outside the fixed layout.')
         if augmentation_index == 0:
             return action_id
-        move = self.game.index2move[action_id]
-        from_row, from_column = square_to_index(move.from_square)
-        to_row, to_column = square_to_index(move.to_square)
-        mirrored = DictMove(
-            from_square=index_to_square(from_row, BOARD_LENGTH - 1 - from_column),
-            to_square=index_to_square(to_row, BOARD_LENGTH - 1 - to_column),
-            promotion=move.promotion,
-        )
-        return self.game.move2index[mirrored]
+        from AlphaZeroCpp import mirror_chess_action_id
+
+        return mirror_chess_action_id(action_id)
 
     def transform_encoded_state(
         self,
@@ -154,18 +149,6 @@ class ChessStateContract(GameStateContract[ChessBoard]):
             source_model_generation=sample.source_model_generation,
             source_created_at_seconds=sample.source_created_at_seconds,
         )
-
-    def canonical_board(self, board: ChessBoard) -> npt.NDArray[np.int8]:
-        return self.game.get_canonical_board(board)
-
-    def encode_move(self, move: ChessMove, board: ChessBoard) -> int:
-        return self.game.encode_move(move, board)
-
-    def decode_move(self, action: int, board: ChessBoard) -> ChessMove:
-        return self.game.decode_move(action, board)
-
-    def replay_piece_counts(self, state: npt.NDArray[np.int8]) -> tuple[int, int]:
-        return self.game.replay_piece_counts(state)
 
 
 CHESS_STATE_CONTRACT = ChessStateContract()

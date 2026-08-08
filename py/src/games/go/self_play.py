@@ -13,6 +13,8 @@ from AlphaZeroCpp import (
     GoSelfPlaySearchRequest9,
     GoSelfPlaySearchResult7,
     GoSelfPlaySearchResult9,
+    GoPosition7,
+    GoPosition9,
     GoRules,
     GoSearchRoot7,
     GoSearchRoot9,
@@ -74,6 +76,7 @@ class GoSelfPlayPolicy(
         seven_by_seven = configuration.go.representation.board_size == 7
         self.search_type = GoSelfPlaySearch7 if seven_by_seven else GoSelfPlaySearch9
         self.search_request_type = GoSelfPlaySearchRequest7 if seven_by_seven else GoSelfPlaySearchRequest9
+        self.position_type = GoPosition7 if seven_by_seven else GoPosition9
         self.device = (
             InferenceDevice.CPU
             if configuration.training.topology.trainer.device_type == 'cpu'
@@ -128,6 +131,8 @@ class GoSelfPlayPolicy(
             self.search.refresh_model(model_generation, str(model_path))
             self.search.update_search_schedule(self.search_parameters)
         self.model_generation = model_generation
+        for game in active_games:
+            game.root.reset()
 
     def snapshot_statistics(self, tensorboard_step: int) -> None:
         if self.search is None:
@@ -143,7 +148,7 @@ class GoSelfPlayPolicy(
     def new_game(self, identity: GameIdentity) -> GoSelfPlayGame:
         if self.search is None:
             raise RuntimeError('A model must be loaded before creating a Go game.')
-        return GoSelfPlayGame(identity, self.search.new_root(self.rules), time.time())
+        return GoSelfPlayGame(identity, self.search.new_root(self.position_type(self.rules)), time.time())
 
     def build_search_request(self, game: GoSelfPlayGame) -> NativeGoSearchRequest:
         full_search = self.random.random() < self.resolved_parameters.full_search_probability

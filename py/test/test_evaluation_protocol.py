@@ -15,6 +15,7 @@ from src.games.chess.evaluation.types import EvaluationMove, EvaluationTerminal,
 from src.games.chess.evaluation.paired_match import play_paired_models
 from src.games.chess.board import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.games.chess.game import ChessGame
 
 
 OPENING_SUITE_PATH = Path('reference/pilot-openings.tsv')
@@ -101,10 +102,11 @@ def test_match_summary_rejects_unpaired_opening() -> None:
 
 
 def first_legal_move(boards: list[ChessBoard]) -> list[EvaluationMove]:
+    game = ChessGame()
     decisions: list[EvaluationMove] = []
     for board in boards:
         policy = np.zeros(CHESS_STATE_CONTRACT.action_size, dtype=np.float32)
-        policy[CHESS_STATE_CONTRACT.encode_move(board.get_valid_moves()[0], board)] = 1.0
+        policy[game.encode_move(board.get_valid_moves()[0], board)] = 1.0
         decisions.append(EvaluationMove(policy))
     return decisions
 

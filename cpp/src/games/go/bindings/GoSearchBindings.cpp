@@ -44,7 +44,14 @@ void bindGoSearch(py::module_ &module, const char *rootName, const char *searchN
                 }
                 return children;
             })
-        .def("play", &Root::play, py::arg("action_id"));
+        .def("play", &Root::play, py::arg("action_id"))
+        .def("reset", &Root::reset)
+        .def(
+            "discount",
+            [](Root &root, const float retainedFraction) {
+                root.tree().discount(retainedFraction);
+            },
+            py::arg("retained_fraction"));
 
     py::class_<Request>(module, requestName)
         .def(py::init<Root, bool>(), py::arg("root"), py::arg("full_search"))
@@ -65,14 +72,15 @@ void bindGoSearch(py::module_ &module, const char *rootName, const char *searchN
              py::arg("runtime_parameters"), py::arg("search_parameters"),
              py::arg("inference_parameters"), py::arg("initial_model_generation") = 0)
         .def_static("inference_dimensions", []() { return dimensions; })
-        .def(
-            "new_root",
-            [](Search &search, const GoRules rules) { return search.newRoot(Position(rules)); },
-            py::arg("rules"))
+        .def("new_root", [](Search &search, const Position &position) {
+            return search.newRoot(position);
+        }, py::arg("position"))
         .def("search", &Search::search, py::arg("requests"), py::arg("collect_statistics") = false,
              py::call_guard<py::gil_scoped_release>())
         .def("refresh_model", &Search::refreshModel, py::arg("model_generation"),
              py::arg("model_path"), py::call_guard<py::gil_scoped_release>())
+        .def("update_search_schedule", &Search::updateSearchSchedule,
+             py::arg("search_parameters"))
         .def_property_readonly("model_generation", &Search::modelGeneration)
         .def("inference_statistics", &Search::inferenceStatistics);
 

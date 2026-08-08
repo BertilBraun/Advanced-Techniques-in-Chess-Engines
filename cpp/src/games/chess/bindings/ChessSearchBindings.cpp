@@ -64,6 +64,7 @@ void bind_chess_search(py::module_ &module) {
         .def_readonly("is_materialized", &ChessSearchChild::is_materialized);
 
     py::class_<ChessSearchRoot>(module, "ChessSearchRoot")
+        .def_property_readonly("position", &ChessSearchRoot::position)
         .def_property_readonly("fen",
                                [](const ChessSearchRoot &root) { return root.position().fen(); })
         .def_property_readonly("visits", &ChessSearchRoot::visits)
@@ -89,6 +90,7 @@ void bind_chess_search(py::module_ &module) {
         .def_property_readonly("arena_capacity",
                                [](const ChessSearchRoot &root) { return root.tree().capacity(); })
         .def("make_new_root", &rerootChessSearch, py::arg("child_index"))
+        .def("play", &ChessSearchRoot::play, py::arg("action_id"))
         .def("reset", &ChessSearchRoot::reset)
         .def(
             "discount",
@@ -145,8 +147,8 @@ void bind_chess_search(py::module_ &module) {
         .def_property_readonly("model_version", &Search::modelGeneration)
         .def(
             "new_root",
-            [](const Search &search, const std::string &fen) { return search.newRoot(Board(fen)); },
-            py::arg("fen"))
+            [](const Search &search, const Board &position) { return search.newRoot(position); },
+            py::arg("position"))
         .def(
             "new_root_with_history",
             [](const Search &search, const std::string &startingFen,

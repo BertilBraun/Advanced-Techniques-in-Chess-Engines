@@ -36,7 +36,7 @@ from src.games.chess.evaluation.paired_match import play_paired_models
 from src.games.chess.dataset import SelfPlayDataset, preserve_prebatched_samples
 from src.games.chess.configuration import ChessEvaluationConfiguration
 from src.training.configuration import TrainingArgs
-from src.games.chess.game import normalize_move_for_action_space
+from src.games.chess.game import ChessGame, normalize_move_for_action_space
 from src.games.chess.board import ChessBoard
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.games.chess.visit_policy import action_probabilities
@@ -73,10 +73,11 @@ def history_aware_root(board: ChessBoard, search: ChessSelfPlaySearch) -> ChessS
 
 
 def _encoded_policy_for_moves(boards: list[ChessBoard], moves: list[chess.Move]) -> list[np.ndarray]:
+    game = ChessGame()
     policies: list[np.ndarray] = []
     for board, move in zip(boards, moves):
         policy = np.zeros(CHESS_STATE_CONTRACT.action_size, dtype=np.float32)
-        policy[CHESS_STATE_CONTRACT.encode_move(move, board)] = 1.0
+        policy[game.encode_move(move, board)] = 1.0
         policies.append(policy)
     return policies
 

@@ -142,3 +142,15 @@ ChessAction ChessEncoding::decodeAction(const int actionId, const Board &state) 
     assert(legal != legalMoves.end());
     return ChessAction(*legal);
 }
+
+int ChessEncoding::mirrorActionId(const int actionId) {
+    assert(0 <= actionId && actionId < action_count);
+    const auto [fromSquare, toSquare, promotionType] = reverseMoveMappings[actionId];
+    const auto [fromRow, fromColumn] = squareCoordinates(fromSquare);
+    const auto [toRow, toColumn] = squareCoordinates(toSquare);
+    const int mirroredFrom = square(boardLength - 1 - fromColumn, fromRow);
+    const int mirroredTo = square(boardLength - 1 - toColumn, toRow);
+    const int mirrored = moveMappings[mirroredFrom][mirroredTo][promotionType];
+    assert(0 <= mirrored && mirrored < action_count);
+    return mirrored;
+}
