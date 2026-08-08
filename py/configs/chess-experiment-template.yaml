@@ -75,10 +75,10 @@ training:
         end_value: 2500000
         rounding: nearest
       maximum_replay_capacity_unique_positions: 2500000
-      retained_checkpoint_interval_steps: 1000
+      retained_checkpoint_interval_generations: 10
     evaluation:
-      interval_optimizer_steps: 1000
-      full_interval_optimizer_steps: 2000
+      interval_generations: 10
+      full_interval_generations: 20
       timeout_seconds: 7200
       maximum_attempts: 3
       retry_backoff_seconds: 60

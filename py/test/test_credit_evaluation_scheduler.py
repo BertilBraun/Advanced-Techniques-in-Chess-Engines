@@ -75,13 +75,13 @@ def _arguments(
         maximum_optimizer_steps=500_000,
         replay_capacity_unique_positions={'kind': 'constant', 'value': 100_000},
         maximum_replay_capacity_unique_positions=2_500_000,
-        retained_checkpoint_interval_steps=1_000,
+        retained_checkpoint_interval_generations=10,
     )
     trainer = CHESS_TRAINING.trainer.validated_copy(update={'global_batch_size': 1_024, 'local_batch_size': 1_024})
     schedule = CHESS_TRAINING.lifecycle.evaluation.validated_copy(
         update={
-            'interval_optimizer_steps': 1_000,
-            'full_interval_optimizer_steps': 2_000,
+            'interval_generations': 10,
+            'full_interval_generations': 20,
             'timeout_seconds': 60,
             'maximum_attempts': maximum_attempts,
             'retry_backoff_seconds': retry_backoff_seconds,
@@ -312,9 +312,9 @@ def test_scheduler_rejects_tampered_evaluation_artifact_before_launch(tmp_path: 
 
 def test_credit_evaluation_offsets_are_evaluation_checkpoint_ordinals(tmp_path: Path) -> None:
     arguments = _arguments(tmp_path)
-    translated, evaluation = credit_evaluation_arguments(arguments, _evaluation(), 2_000)
+    translated, evaluation = credit_evaluation_arguments(arguments, _evaluation(), 20)
 
-    assert evaluation.previous_model_offsets == (20, 40)
-    assert evaluation.historical_model_versions == (20, 40, 60)
-    assert evaluation.every_n_model_versions == 20
-    assert translated.lifecycle.inference_retention.milestone_interval == 20
+    assert evaluation.previous_model_offsets == (10, 20)
+    assert evaluation.historical_model_versions == (10, 20, 30)
+    assert evaluation.every_n_model_versions == 10
+    assert translated.lifecycle.inference_retention.milestone_interval == 10

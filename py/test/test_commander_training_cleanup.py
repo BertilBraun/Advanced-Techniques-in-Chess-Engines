@@ -94,7 +94,7 @@ def _parameters() -> CreditTrainingParams:
         maximum_optimizer_steps=10,
         replay_capacity_unique_positions={'kind': 'constant', 'value': 10},
         maximum_replay_capacity_unique_positions=10,
-        retained_checkpoint_interval_steps=1,
+        retained_checkpoint_interval_generations=1,
     )
 
 

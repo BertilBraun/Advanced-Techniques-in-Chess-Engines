@@ -109,8 +109,8 @@ class CreditEvaluationScheduler:
         self.timeout_seconds = parameters.timeout_seconds
         self.maximum_attempts = parameters.maximum_attempts
         self.retry_backoff_seconds = parameters.retry_backoff_seconds
-        self.evaluation_interval_optimizer_steps = parameters.interval_optimizer_steps
-        self.full_evaluation_interval_optimizer_steps = parameters.full_interval_optimizer_steps
+        self.evaluation_interval_generations = parameters.interval_generations
+        self.full_evaluation_interval_generations = parameters.full_interval_generations
         self.state_path = Path(args.save_path) / 'credit-evaluation-state.json'
         self._process: EvaluationProcessHandle | None = None
         self._state = self._load_state()
@@ -169,7 +169,7 @@ class CreditEvaluationScheduler:
         return CreditEvaluationTelemetryStatus.IDLE
 
     def offer(self, publication: CreditPublicationManifest) -> None:
-        if publication.completed_optimizer_steps % self.evaluation_interval_optimizer_steps:
+        if publication.model_version % self.evaluation_interval_generations:
             return
         source = self._source(publication)
         active_version = self._state.active.source.model_version if self._state.active is not None else -1
@@ -277,7 +277,7 @@ class CreditEvaluationScheduler:
         training_args, evaluation_args = credit_evaluation_arguments(
             self.args,
             self.evaluation_args,
-            pending.source.completed_optimizer_steps,
+            pending.source.model_version,
         )
         tier = self._tier(pending.source)
         process = Process(
@@ -451,7 +451,7 @@ class CreditEvaluationScheduler:
         )
 
     def _tier(self, source: CreditEvaluationSource) -> EvaluationTier:
-        if source.completed_optimizer_steps % self.full_evaluation_interval_optimizer_steps == 0:
+        if source.model_version % self.full_evaluation_interval_generations == 0:
             return EvaluationTier.FULL
         return EvaluationTier.INSPECTION
 
@@ -467,27 +467,26 @@ class CreditEvaluationScheduler:
 def credit_evaluation_arguments(
     args: TrainingArgs,
     evaluation: ChessEvaluationConfiguration,
-    completed_optimizer_steps: int,
+    model_generation: int,
 ) -> tuple[TrainingArgs, ChessEvaluationConfiguration]:
-    parameters = args.lifecycle.credit
     schedule = args.lifecycle.evaluation
-    if completed_optimizer_steps % schedule.interval_optimizer_steps:
+    if model_generation % schedule.interval_generations:
         raise ValueError('Credit evaluation must use a complete evaluation-checkpoint boundary.')
-    versions_per_evaluation = schedule.interval_optimizer_steps // parameters.optimizer_steps_per_quantum
+    generations_per_evaluation = schedule.interval_generations
     translated_evaluation = evaluation.validated_copy(
         update={
             'previous_model_offsets': [
-                offset * versions_per_evaluation for offset in evaluation.previous_model_offsets
+                offset * generations_per_evaluation for offset in evaluation.previous_model_offsets
             ],
             'historical_model_versions': [
-                checkpoint_ordinal * versions_per_evaluation
+                checkpoint_ordinal * generations_per_evaluation
                 for checkpoint_ordinal in evaluation.historical_model_versions
             ],
-            'every_n_model_versions': versions_per_evaluation,
+            'every_n_model_versions': generations_per_evaluation,
         }
     )
     retention = args.lifecycle.inference_retention.validated_copy(
-        update={'milestone_interval': versions_per_evaluation}
+        update={'milestone_interval': generations_per_evaluation}
     )
     lifecycle = args.lifecycle.validated_copy(update={'inference_retention': retention.model_dump(mode='json')})
     translated_args = args.validated_copy(update={'lifecycle': lifecycle.model_dump(mode='json')})

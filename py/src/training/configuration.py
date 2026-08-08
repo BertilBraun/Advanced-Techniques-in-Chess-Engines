@@ -182,18 +182,16 @@ class InferenceRetentionParams(FrozenModel):
 
 
 class EvaluationScheduleParams(FrozenModel):
-    interval_optimizer_steps: int = Field(gt=0)
-    full_interval_optimizer_steps: int = Field(gt=0)
+    interval_generations: int = Field(gt=0)
+    full_interval_generations: int = Field(gt=0)
     timeout_seconds: float = Field(gt=0.0)
     maximum_attempts: int = Field(gt=0)
     retry_backoff_seconds: float = Field(ge=0.0)
 
-    def validate_for_optimizer_quantum(self, optimizer_steps_per_quantum: int) -> None:
-        if self.interval_optimizer_steps % optimizer_steps_per_quantum:
-            raise ValueError('Evaluation interval must align with training quanta.')
+    def model_post_init(self, __context: object) -> None:
         if (
-            self.full_interval_optimizer_steps < self.interval_optimizer_steps
-            or self.full_interval_optimizer_steps % self.interval_optimizer_steps
+            self.full_interval_generations < self.interval_generations
+            or self.full_interval_generations % self.interval_generations
         ):
             raise ValueError('Full evaluation interval must be a multiple of the inspection interval.')
 
@@ -204,7 +202,7 @@ class CreditTrainingParams(FrozenModel):
     maximum_optimizer_steps: int = Field(gt=0)
     replay_capacity_unique_positions: IntegerGenerationSchedule
     maximum_replay_capacity_unique_positions: int = Field(gt=0)
-    retained_checkpoint_interval_steps: int = Field(gt=0)
+    retained_checkpoint_interval_generations: int = Field(gt=0)
 
     @model_validator(mode='after')
     def validate_schedule(self) -> CreditTrainingParams:
@@ -215,8 +213,6 @@ class CreditTrainingParams(FrozenModel):
             raise ValueError('Replay capacity must remain positive.')
         if any(capacity > self.maximum_replay_capacity_unique_positions for capacity in capacities):
             raise ValueError('Scheduled replay capacity cannot exceed its static maximum capacity.')
-        if self.retained_checkpoint_interval_steps % self.optimizer_steps_per_quantum:
-            raise ValueError('Retained checkpoint interval must align with training quanta.')
         return self
 
     def presentation_credits_per_quantum(self, global_batch_size: int) -> int:
@@ -295,5 +291,4 @@ class TrainingArgs(FrozenModel):
             raise ValueError('Every scheduled replay capacity must contain at least one global batch.')
         if any(value <= 0.0 for value in defined_schedule_values(self.trainer.learning_rate)):
             raise ValueError('Learning rate must remain positive.')
-        self.lifecycle.evaluation.validate_for_optimizer_quantum(credit.optimizer_steps_per_quantum)
         return self

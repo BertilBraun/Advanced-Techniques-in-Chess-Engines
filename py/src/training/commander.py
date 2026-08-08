@@ -446,15 +446,14 @@ class CommanderProcess:
         if model_version in pinned_model_versions:
             return
         parameters = self.args.lifecycle.credit
-        optimizer_step = model_version * parameters.optimizer_steps_per_quantum
-        if optimizer_step % parameters.retained_checkpoint_interval_steps == 0:
+        if model_version % parameters.retained_checkpoint_interval_generations == 0:
             return
         root = Path(self.args.save_path)
         manifest_path = checkpoint_manifest_path(model_version, root)
         if not manifest_path.exists():
             return
         checkpoint = CheckpointManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
-        transient_evaluation_checkpoint = optimizer_step % self.args.lifecycle.evaluation.interval_optimizer_steps == 0
+        transient_evaluation_checkpoint = model_version % self.args.lifecycle.evaluation.interval_generations == 0
         file_names = [checkpoint.model_path, checkpoint.optimizer_path]
         if not transient_evaluation_checkpoint:
             file_names.append(checkpoint.jit_model_path)

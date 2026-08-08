@@ -21,7 +21,7 @@ def _credit_training_arguments() -> TrainingArgs:
         maximum_optimizer_steps=500_000,
         replay_capacity_unique_positions={'kind': 'constant', 'value': 100_000},
         maximum_replay_capacity_unique_positions=2_500_000,
-        retained_checkpoint_interval_steps=1_000,
+        retained_checkpoint_interval_generations=10,
     )
     trainer = CHESS_TRAINING.trainer.validated_copy(update={'global_batch_size': 1_024, 'local_batch_size': 256})
     trainer_topology = CHESS_TRAINING.topology.trainer.validated_copy(
@@ -60,8 +60,11 @@ def test_model_acknowledgement_rejects_wrong_immutable_jit_hash(tmp_path: Path) 
 
 def test_transient_evaluation_checkpoint_keeps_only_jit_artifact(tmp_path: Path) -> None:
     arguments = _credit_training_arguments()
-    schedule = arguments.lifecycle.evaluation.validated_copy(update={'interval_optimizer_steps': 500})
-    lifecycle = arguments.lifecycle.validated_copy(update={'evaluation': schedule.model_dump(mode='json')})
+    schedule = arguments.lifecycle.evaluation.validated_copy(update={'interval_generations': 5})
+    credit = arguments.lifecycle.credit.validated_copy(update={'retained_checkpoint_interval_generations': 20})
+    lifecycle = arguments.lifecycle.validated_copy(
+        update={'credit': credit.model_dump(mode='json'), 'evaluation': schedule.model_dump(mode='json')}
+    )
     arguments = arguments.validated_copy(
         update={'save_path': str(tmp_path), 'lifecycle': lifecycle.model_dump(mode='json')}
     )
@@ -98,7 +101,7 @@ def _prepared_ledger(run_path: Path) -> CreditTrainingLedger:
             maximum_optimizer_steps=10,
             replay_capacity_unique_positions={'kind': 'constant', 'value': 1},
             maximum_replay_capacity_unique_positions=10,
-            retained_checkpoint_interval_steps=1,
+            retained_checkpoint_interval_generations=1,
         ),
         global_batch_size=1,
     )
