@@ -6,6 +6,7 @@ from torch import nn, Tensor
 
 from src.self_play.value_target import FinalOutcome
 from src.training.configuration import NetworkParams
+from src.training.batch import TrainingModelOutput
 from src.util.log import log
 
 
@@ -38,12 +39,14 @@ class Network(nn.Module):
         args: NetworkParams,
         device: torch.device,
         dimensions: NetworkDimensions,
+        auxiliary_action_sizes: tuple[int, ...] = (),
     ) -> None:
         super().__init__()
 
         self.device = device
         self.network_args = args
         self.dimensions = dimensions
+        self.auxiliary_action_sizes = auxiliary_action_sizes
 
         encoding_channels = dimensions.channels
         row_count = dimensions.rows
@@ -83,6 +86,18 @@ class Network(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(args.value_fc_size, dimensions.outcomes),
         )
+        self.auxiliaryHeads = nn.ModuleList(
+            (
+                nn.Sequential(
+                    nn.Conv2d(args.hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
+                    nn.BatchNorm2d(args.num_policy_channels),
+                    nn.ReLU(inplace=True),
+                    nn.Flatten(),
+                    nn.Linear(args.num_policy_channels * row_count * column_count, auxiliary_action_size),
+                )
+                for auxiliary_action_size in auxiliary_action_sizes
+            )
+        )
 
         # init weights
         for m in self.modules():
@@ -95,9 +110,7 @@ class Network(nn.Module):
         self.to(device=self.device, dtype=torch.float32)
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
-        x = self.startBlock(x)
-        for block in self.backBone:
-            x = block(x)
+        x = self._features(x)
         policy_logits = self.policyHead(x)
         value_logits = self.valueHead(x)
 
@@ -105,14 +118,26 @@ class Network(nn.Module):
         value = torch.softmax(value_logits, dim=1)
         return policy, value
 
-    def logit_forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+    def _features(self, x: Tensor) -> Tensor:
         x = self.startBlock(x)
         for block in self.backBone:
             x = block(x)
+        return x
+
+    def logit_forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        x = self._features(x)
         policy_logits = self.policyHead(x)
         value_logits = self.valueHead(x)
 
         return policy_logits, value_logits
+
+    def training_output(self, x: Tensor) -> TrainingModelOutput:
+        features = self._features(x)
+        return TrainingModelOutput(
+            policy_logits=self.policyHead(features),
+            wdl_logits=self.valueHead(features),
+            auxiliary_logits=tuple(head(features) for head in self.auxiliaryHeads),
+        )
 
     def fuse_model(self):
         for m in self.modules():
