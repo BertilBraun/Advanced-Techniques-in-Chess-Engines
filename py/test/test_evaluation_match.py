@@ -1,0 +1,192 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from src.evaluation.configuration import EvaluationSearchConfiguration, RandomOpponentEvaluationDefinition
+from src.evaluation.contracts import (
+    CandidateOutcome,
+    MatchEvaluationJob,
+    OpeningLine,
+    OpeningSuiteManifest,
+    RandomOpponent,
+)
+from src.evaluation.match import run_match
+from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
+from src.packed_planes import PackedPlaneLayout, PackedPlanePayload
+from src.replay.contracts import ReplaySample
+from src.self_play.completed_game import TerminationReason
+from src.training.checkpoint import CheckpointReference
+from src.training.configuration import BatchedInferenceParams
+
+
+@dataclass(frozen=True)
+class FakePosition:
+    actions: tuple[int, ...]
+
+
+class FakeState(GameStateContract[FakePosition]):
+    @property
+    def name(self) -> str:
+        return 'chess'
+
+    @property
+    def action_size(self) -> int:
+        return 2
+
+    @property
+    def representation(self) -> RepresentationDimensions:
+        return RepresentationDimensions(1, 1, 1, (), (0,), PackedPlaneLayout(1, 0, 1))
+
+    def initial_position(self) -> FakePosition:
+        return FakePosition(())
+
+    def legal_action_ids(self, position: FakePosition) -> tuple[int, ...]:
+        return () if len(position.actions) == 6 else (0, 1)
+
+    def child_position(self, position: FakePosition, action_id: int) -> FakePosition:
+        return FakePosition((*position.actions, action_id))
+
+    def current_player(self, position: FakePosition) -> Player:
+        return Player.FIRST if len(position.actions) % 2 == 0 else Player.SECOND
+
+    def natural_terminal_wdl(self, position: FakePosition) -> WdlTarget | None:
+        return WdlTarget(win=0.0, draw=1.0, loss=0.0) if len(position.actions) == 6 else None
+
+    def adjudicated_wdl(self, position: FakePosition, reason: TerminationReason) -> WdlTarget:
+        return WdlTarget(win=0.0, draw=1.0, loss=0.0)
+
+    def encode_network_input(self, position: FakePosition) -> PackedPlanePayload:
+        return self.packed_plane_layout.value(bytes((len(position.actions),)))
+
+    @property
+    def augmentation_count(self) -> int:
+        return 1
+
+    def transform_action_id(self, action_id: int, augmentation_index: int) -> int:
+        return action_id
+
+    def transform_encoded_state(
+        self,
+        encoded_state: PackedPlanePayload,
+        augmentation_index: int,
+    ) -> PackedPlanePayload:
+        return encoded_state
+
+    def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
+        return sample
+
+
+@dataclass
+class FakeRoot:
+    position: FakePosition
+
+
+@dataclass(frozen=True)
+class FakeVisit:
+    action_id: int
+    visit_count: int
+
+
+@dataclass(frozen=True)
+class FakeResult:
+    visits: tuple[FakeVisit, ...]
+
+
+@dataclass(frozen=True)
+class FakeBatch:
+    results: tuple[FakeResult, ...]
+
+
+class FakeSearch:
+    def new_root(self, position: FakePosition) -> FakeRoot:
+        return FakeRoot(position)
+
+    def request(self, root: FakeRoot, full_search: bool) -> FakeRoot:
+        assert full_search
+        return root
+
+    def search(self, requests: list[FakeRoot]) -> FakeBatch:
+        return FakeBatch(tuple(FakeResult((FakeVisit(0, 10), FakeVisit(1, 5))) for _ in requests))
+
+
+class FakeGame:
+    state = FakeState()
+
+    def create_evaluation_search(
+        self,
+        device_id: int,
+        checkpoint: CheckpointReference,
+        configuration: EvaluationSearchConfiguration,
+    ) -> FakeSearch:
+        return FakeSearch()
+
+
+def _checkpoint() -> CheckpointReference:
+    return CheckpointReference(
+        generation=1,
+        manifest_path=Path('checkpoint.json'),
+        model_path=Path('model.pt'),
+        optimizer_path=Path('optimizer.pt'),
+        inference_model_path=Path('inference.pt'),
+        inference_model_sha256='0' * 64,
+    )
+
+
+def test_shared_match_swaps_players_and_aggregates_pairs() -> None:
+    search = EvaluationSearchConfiguration(
+        searches_per_move=8,
+        parallel_searches=1,
+        exploration_constant=1.0,
+        inference=BatchedInferenceParams(
+            inference_workers=1,
+            inference_batch_size=8,
+            outstanding_batches_per_worker=1,
+        ),
+    )
+    definition = RandomOpponentEvaluationDefinition(
+        kind='random',
+        definition_id='random',
+        search=search,
+        maximum_game_plies=6,
+    )
+    job = MatchEvaluationJob(
+        kind='match',
+        job_id='job',
+        definition=definition,
+        boundary_seconds=1200,
+        candidate=_checkpoint(),
+        opponent=RandomOpponent(kind='random'),
+        device_id=0,
+        deadline_seconds=3600,
+        random_seed=7,
+        result_path=Path('result.json'),
+    )
+    opening = OpeningLine(
+        opening_id='opening',
+        action_ids=(0, 0, 0, 0),
+        path_probability=0.5,
+        final_position_digest='0' * 64,
+        human_readable='opening',
+    )
+    openings = OpeningSuiteManifest(
+        game='chess',
+        rules_digest='1' * 64,
+        representation_digest='2' * 64,
+        random_seed=0,
+        engine_identity='fake',
+        engine_artifact_sha256=('3' * 64,),
+        label_search_limit=10,
+        expanded_actions_per_position=2,
+        beam_width=2,
+        openings=(opening,),
+        builder_source_revision='revision',
+    )
+
+    result = run_match(job, FakeGame(), openings, 100, None)
+
+    assert tuple(game.candidate_player for game in result.games) == ('first', 'second')
+    assert all(game.outcome is CandidateOutcome.DRAW for game in result.games)
+    assert result.aggregate.draws == 2
+    assert result.aggregate.pair_count == 1
+    assert result.aggregate.score == 0.5

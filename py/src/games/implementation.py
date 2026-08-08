@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from AlphaZeroCpp import SelfPlaySearchParameters
 
     from src.self_play.worker import NativeSelfPlaySearch
+    from src.evaluation.configuration import EvaluationSearchConfiguration
     from src.training.checkpoint import CheckpointReference
 
 
@@ -76,6 +77,15 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
         device_id: int,
         checkpoint: CheckpointReference,
         parameters: ResolvedSelfPlayParameters,
+    ) -> NativeSearchT:
+        raise NotImplementedError
+
+    @abstractmethod
+    def create_evaluation_search(
+        self,
+        device_id: int,
+        checkpoint: CheckpointReference,
+        configuration: EvaluationSearchConfiguration,
     ) -> NativeSearchT:
         raise NotImplementedError
 

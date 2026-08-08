@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
+from src.evaluation.configuration import EvaluationSearchConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.implementation import GameImplementation
 from src.neural_network import NetworkDimensions
@@ -11,6 +13,7 @@ from src.self_play.worker import NativeSelfPlaySearch
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
+from src.training.configuration import BatchedInferenceParams
 
 
 if TYPE_CHECKING:
@@ -59,6 +62,33 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         checkpoint: CheckpointReference,
         parameters: ResolvedSelfPlayParameters,
     ) -> ChessSelfPlaySearch:
+        return self._create_search(device_id, checkpoint, parameters, self.self_play_configuration.inference)
+
+    def create_evaluation_search(
+        self,
+        device_id: int,
+        checkpoint: CheckpointReference,
+        configuration: EvaluationSearchConfiguration,
+    ) -> ChessSelfPlaySearch:
+        parameters = replace(
+            self.self_play_parameters_at(checkpoint.generation),
+            parallel_searches=configuration.parallel_searches,
+            full_searches=configuration.searches_per_move,
+            fast_searches=configuration.searches_per_move,
+            minimum_root_visits=0,
+            exploration_constant=configuration.exploration_constant,
+            dirichlet_alpha=1.0,
+            dirichlet_epsilon=0.0,
+        )
+        return self._create_search(device_id, checkpoint, parameters, configuration.inference)
+
+    def _create_search(
+        self,
+        device_id: int,
+        checkpoint: CheckpointReference,
+        parameters: ResolvedSelfPlayParameters,
+        inference: BatchedInferenceParams,
+    ) -> ChessSelfPlaySearch:
         from AlphaZeroCpp import (
             BatchedInferenceParameters,
             ChessSelfPlaySearch,
@@ -66,7 +96,6 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             InferenceDevice,
         )
 
-        inference = self.self_play_configuration.inference
         device = InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA
         return ChessSelfPlaySearch(
             InferenceConfiguration(device_id, str(checkpoint.inference_model_path), device),

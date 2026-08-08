@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from src.evaluation.configuration import EvaluationSearchConfiguration
 from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.contract import GoStateContract, NativeGoPosition
 from src.games.implementation import GameImplementation
@@ -7,7 +9,7 @@ from src.neural_network import NetworkDimensions
 from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.self_play.worker import NativeSelfPlaySearch
 from src.training.checkpoint import CheckpointReference
-from src.training.configuration import SelfPlayConfiguration
+from src.training.configuration import BatchedInferenceParams, SelfPlayConfiguration
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 
@@ -57,6 +59,33 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
         checkpoint: CheckpointReference,
         parameters: ResolvedSelfPlayParameters,
     ) -> NativeSelfPlaySearch:
+        return self._create_search(device_id, checkpoint, parameters, self.self_play_configuration.inference)
+
+    def create_evaluation_search(
+        self,
+        device_id: int,
+        checkpoint: CheckpointReference,
+        configuration: EvaluationSearchConfiguration,
+    ) -> NativeSelfPlaySearch:
+        parameters = replace(
+            self.self_play_parameters_at(checkpoint.generation),
+            parallel_searches=configuration.parallel_searches,
+            full_searches=configuration.searches_per_move,
+            fast_searches=configuration.searches_per_move,
+            minimum_root_visits=0,
+            exploration_constant=configuration.exploration_constant,
+            dirichlet_alpha=1.0,
+            dirichlet_epsilon=0.0,
+        )
+        return self._create_search(device_id, checkpoint, parameters, configuration.inference)
+
+    def _create_search(
+        self,
+        device_id: int,
+        checkpoint: CheckpointReference,
+        parameters: ResolvedSelfPlayParameters,
+        inference: BatchedInferenceParams,
+    ) -> NativeSelfPlaySearch:
         from AlphaZeroCpp import (
             BatchedInferenceParameters,
             GoSelfPlaySearch7,
@@ -76,7 +105,6 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
             expected.outcomes,
         ):
             raise ValueError('Resolved Go representation disagrees with the native template dimensions.')
-        inference = self.self_play_configuration.inference
         device = InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA
         return search_type(
             InferenceConfiguration(device_id, str(checkpoint.inference_model_path), device),
