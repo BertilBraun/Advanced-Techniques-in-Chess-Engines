@@ -182,21 +182,6 @@ class InferenceRetentionParams(FrozenModel):
     milestone_interval: int = Field(gt=0)
 
 
-class EvaluationScheduleParams(FrozenModel):
-    interval_generations: int = Field(gt=0)
-    full_interval_generations: int = Field(gt=0)
-    timeout_seconds: float = Field(gt=0.0)
-    maximum_attempts: int = Field(gt=0)
-    retry_backoff_seconds: float = Field(ge=0.0)
-
-    def model_post_init(self, __context: object) -> None:
-        if (
-            self.full_interval_generations < self.interval_generations
-            or self.full_interval_generations % self.interval_generations
-        ):
-            raise ValueError('Full evaluation interval must be a multiple of the inspection interval.')
-
-
 class ReplayConfiguration(FrozenModel):
     capacity: IntegerGenerationSchedule
     maximum_capacity: int = Field(gt=0)
@@ -273,7 +258,6 @@ class TrainingObjectiveConfiguration(FrozenModel):
 class TrainingLifecycleParams(FrozenModel):
     replay: ReplayConfiguration
     credit: CreditTrainingParams
-    evaluation: EvaluationScheduleParams
     inference_retention: InferenceRetentionParams
 
 

@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
+from src.evaluation.configuration import EvaluationConfiguration
 from src.experiment.run_contract import (
     EnvironmentConfiguration,
     HardwareConfiguration,
@@ -41,3 +42,4 @@ class ExperimentRunConfiguration(FrozenModel):
 class BaseExperimentConfiguration(FrozenModel):
     run: ExperimentRunConfiguration
     training: TrainingArgs
+    evaluation: EvaluationConfiguration

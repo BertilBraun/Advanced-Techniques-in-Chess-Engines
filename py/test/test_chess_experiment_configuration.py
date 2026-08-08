@@ -36,7 +36,7 @@ def test_every_checked_in_experiment_uses_the_current_contract_and_dependency_lo
 
 
 def test_game_experiments_extend_the_shared_run_and_training_configuration() -> None:
-    assert set(BaseExperimentConfiguration.model_fields) == {'run', 'training'}
+    assert set(BaseExperimentConfiguration.model_fields) == {'run', 'training', 'evaluation'}
     assert issubclass(ChessExperimentConfiguration, BaseExperimentConfiguration)
     assert issubclass(GoExperimentConfiguration, BaseExperimentConfiguration)
 
@@ -71,12 +71,16 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
     assert configuration.chess.self_play.inference.inference_workers == 2
     assert configuration.chess.self_play.inference.inference_batch_size == 64
     assert configuration.chess.self_play.inference.outstanding_batches_per_worker == 2
-    assert configuration.chess.evaluation.inference.inference_workers == 1
-    assert configuration.chess.evaluation.inference.inference_batch_size == 64
-    assert configuration.chess.evaluation.inference.outstanding_batches_per_worker == 1
-    assert configuration.chess.evaluation.dataset_path is not None
-    assert configuration.chess.evaluation.dataset_path.endswith('memory_0_chess_database.hdf5')
-    assert configuration.chess.evaluation.stockfish_skill_levels == (0, 1, 2, 3)
+    assert configuration.evaluation.cadence_seconds == 1200
+    assert configuration.evaluation.dataset.path.endswith('chess-evaluation-v1.bin')
+    assert configuration.evaluation.openings.opening_count == 50
+    assert configuration.evaluation.engine.kind == 'stockfish'
+    assert tuple(definition.kind for definition in configuration.evaluation.definitions) == (
+        'fixed_dataset',
+        'random',
+        'previous_checkpoint',
+        'stockfish',
+    )
 
 
 def test_experiment_owns_training_configuration_without_an_adapter() -> None:
@@ -167,6 +171,24 @@ def test_chess_evaluation_fields_are_rejected_from_shared_training() -> None:
         ChessExperimentConfiguration.model_validate(candidate)
 
 
+def test_game_specific_external_engines_are_validated() -> None:
+    chess_candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
+    chess_candidate['evaluation']['engine'] = {
+        'kind': 'katago',
+        'executable_path': 'katago',
+        'model_path': 'model.bin.gz',
+        'analysis_configuration_path': 'analysis.cfg',
+        'label_max_visits': 64,
+        'match_max_visits': 32,
+    }
+    chess_candidate['evaluation']['definitions'] = [
+        definition for definition in chess_candidate['evaluation']['definitions'] if definition['kind'] != 'stockfish'
+    ]
+
+    with pytest.raises(ValidationError, match='KataGo|Stockfish'):
+        ChessExperimentConfiguration.model_validate(chess_candidate)
+
+
 def test_network_rejects_unknown_parameters() -> None:
     candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
     candidate['training']['network']['experimental_width'] = 256
@@ -194,7 +216,7 @@ def test_validated_copy_reruns_field_validation() -> None:
     (
         (('training', 'trainer'), 'num_workers', 2),
         (('training', 'topology'), 'max_concurrent_evaluations', 1),
-        (('chess', 'evaluation'), 'evaluate_initial_checkpoint', True),
+        (('evaluation',), 'evaluate_initial_checkpoint', True),
         (('chess', 'self_play'), 'use_inference_cache', True),
         (('chess', 'self_play'), 'inference_cache_capacity', 250_000),
         (('chess', 'self_play', 'inference'), 'mode', 'cached'),

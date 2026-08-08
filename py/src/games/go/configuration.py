@@ -31,24 +31,11 @@ class GoRepresentationConfiguration(FrozenModel):
         return self.board_size * self.board_size + 1
 
 
-class GoEvaluationConfiguration(FrozenModel):
-    num_searches_per_turn: int = Field(gt=0)
-    num_games: int = Field(gt=0)
-    every_n_model_versions: int = Field(gt=0)
-    max_concurrent_tasks: int = Field(gt=0)
-    inference_workers: int = Field(gt=0)
-    inference_batch_size: int = Field(gt=0)
-    previous_model_offsets: tuple[int, ...]
-    historical_model_versions: tuple[int, ...]
-    evaluate_random: bool = True
-
-
 class GoConfiguration(FrozenModel):
     rules: GoRulesConfiguration
     representation: GoRepresentationConfiguration
     self_play: SelfPlayConfiguration
     objective: TrainingObjectiveConfiguration
-    evaluation: GoEvaluationConfiguration
 
     @model_validator(mode='after')
     def validate_board_dependent_rules(self) -> GoConfiguration:
@@ -77,16 +64,6 @@ class GoExperimentConfiguration(BaseExperimentConfiguration):
     @model_validator(mode='after')
     def validate_experiment(self) -> GoExperimentConfiguration:
         self.training.validate_game(self.network_dimensions.actions, self.go.self_play)
-        evaluation = self.go.evaluation
-        retention = self.training.lifecycle.inference_retention
-        if (
-            evaluation.previous_model_offsets
-            and max(evaluation.previous_model_offsets) >= retention.recent_checkpoint_count
-        ):
-            raise ValueError('Recent inference-checkpoint retention must exceed every previous-model offset.')
-        if any(
-            model_generation % retention.milestone_interval != 0
-            for model_generation in evaluation.historical_model_versions
-        ):
-            raise ValueError('Historical model generations must align with retained milestone checkpoints.')
+        if self.evaluation.engine.kind != 'katago':
+            raise ValueError('Go evaluation requires the KataGo engine configuration.')
         return self
