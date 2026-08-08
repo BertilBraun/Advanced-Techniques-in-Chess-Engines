@@ -63,18 +63,20 @@ training:
     evaluation:
       device_cycle: [0]
   lifecycle:
-    credit:
-      replay_ratio: 8
-      optimizer_steps_per_quantum: 500
-      maximum_optimizer_steps: 500000
-      replay_capacity_unique_positions:
+    replay:
+      capacity:
         kind: linear
         start_generation: 0
         end_generation: 200
         start_value: 200000
         end_value: 2500000
         rounding: nearest
-      maximum_replay_capacity_unique_positions: 2500000
+      maximum_capacity: 2500000
+      maximum_policy_entries: 60
+    credit:
+      replay_ratio: 8
+      optimizer_steps_per_quantum: 500
+      maximum_optimizer_steps: 500000
       retained_checkpoint_interval_generations: 10
     evaluation:
       interval_generations: 10

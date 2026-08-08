@@ -78,6 +78,7 @@ class GoExperimentConfiguration(BaseExperimentConfiguration):
     def validate_experiment(self) -> GoExperimentConfiguration:
         if self.go.objective.auxiliary_targets:
             raise ValueError('Auxiliary targets are defined by Phase 1 but become executable in Phase 2.')
+        self.training.validate_game(self.network_dimensions.actions, self.go.self_play)
         evaluation = self.go.evaluation
         retention = self.training.lifecycle.inference_retention
         if (

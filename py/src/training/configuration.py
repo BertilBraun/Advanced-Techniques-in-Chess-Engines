@@ -196,32 +196,40 @@ class EvaluationScheduleParams(FrozenModel):
             raise ValueError('Full evaluation interval must be a multiple of the inspection interval.')
 
 
+class ReplayConfiguration(FrozenModel):
+    capacity: IntegerGenerationSchedule
+    maximum_capacity: int = Field(gt=0)
+    maximum_policy_entries: int = Field(ge=1, le=255)
+
+    @model_validator(mode='after')
+    def validate_capacity(self) -> ReplayConfiguration:
+        capacities = defined_schedule_values(self.capacity)
+        if any(capacity <= 0 for capacity in capacities):
+            raise ValueError('Replay capacity must remain positive.')
+        if any(capacity > self.maximum_capacity for capacity in capacities):
+            raise ValueError('Scheduled replay capacity cannot exceed its static maximum capacity.')
+        return self
+
+    def capacity_at(self, model_generation: int) -> int:
+        return self.capacity.value_at(model_generation)
+
+
 class CreditTrainingParams(FrozenModel):
     replay_ratio: Decimal = Field(gt=0)
     optimizer_steps_per_quantum: int = Field(gt=0)
     maximum_optimizer_steps: int = Field(gt=0)
-    replay_capacity_unique_positions: IntegerGenerationSchedule
-    maximum_replay_capacity_unique_positions: int = Field(gt=0)
     retained_checkpoint_interval_generations: int = Field(gt=0)
 
     @model_validator(mode='after')
     def validate_schedule(self) -> CreditTrainingParams:
         if self.maximum_optimizer_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Maximum optimizer steps must contain complete training quanta.')
-        capacities = defined_schedule_values(self.replay_capacity_unique_positions)
-        if any(capacity <= 0 for capacity in capacities):
-            raise ValueError('Replay capacity must remain positive.')
-        if any(capacity > self.maximum_replay_capacity_unique_positions for capacity in capacities):
-            raise ValueError('Scheduled replay capacity cannot exceed its static maximum capacity.')
         return self
 
     def presentation_credits_per_quantum(self, global_batch_size: int) -> int:
         if global_batch_size <= 0:
             raise ValueError('Global batch size must be positive.')
         return global_batch_size * self.optimizer_steps_per_quantum
-
-    def replay_capacity_for_model_generation(self, model_generation: int) -> int:
-        return self.replay_capacity_unique_positions.value_at(model_generation)
 
     def unique_samples_per_quantum(self, global_batch_size: int) -> int:
         required_samples = Decimal(self.presentation_credits_per_quantum(global_batch_size)) / self.replay_ratio
@@ -262,6 +270,7 @@ class TrainingObjectiveConfiguration(FrozenModel):
 
 
 class TrainingLifecycleParams(FrozenModel):
+    replay: ReplayConfiguration
     credit: CreditTrainingParams
     evaluation: EvaluationScheduleParams
     inference_retention: InferenceRetentionParams
@@ -286,9 +295,25 @@ class TrainingArgs(FrozenModel):
         credit.unique_samples_per_quantum(self.trainer.global_batch_size)
         if any(
             capacity < self.trainer.global_batch_size
-            for capacity in defined_schedule_values(credit.replay_capacity_unique_positions)
+            for capacity in defined_schedule_values(self.lifecycle.replay.capacity)
         ):
             raise ValueError('Every scheduled replay capacity must contain at least one global batch.')
         if any(value <= 0.0 for value in defined_schedule_values(self.trainer.learning_rate)):
             raise ValueError('Learning rate must remain positive.')
+        maximum_generation = credit.maximum_optimizer_steps // credit.optimizer_steps_per_quantum
+        if maximum_generation > 4_294_967_295:
+            raise ValueError('Maximum model generation must fit uint32 replay metadata.')
         return self
+
+    def validate_game(self, action_size: int, self_play: SelfPlayConfiguration) -> None:
+        if action_size > 65_536:
+            raise ValueError('Game action IDs must fit uint16 replay storage.')
+        if self.lifecycle.replay.maximum_policy_entries > action_size:
+            raise ValueError('Maximum retained policy entries cannot exceed the game action count.')
+        search = self_play.search
+        search_budgets = (
+            *defined_schedule_values(search.full_searches),
+            *defined_schedule_values(search.fast_searches),
+        )
+        if any(search_budget > 65_535 for search_budget in search_budgets):
+            raise ValueError('Configured search visits must fit uint16 replay storage.')

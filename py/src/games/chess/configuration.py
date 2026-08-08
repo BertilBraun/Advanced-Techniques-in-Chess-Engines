@@ -78,6 +78,7 @@ class ChessExperimentConfiguration(BaseExperimentConfiguration):
     def validate_experiment(self) -> ChessExperimentConfiguration:
         if self.chess.objective.auxiliary_targets:
             raise ValueError('Auxiliary targets are defined by Phase 1 but become executable in Phase 2.')
+        self.training.validate_game(self.network_dimensions.actions, self.chess.self_play)
         evaluation = self.chess.evaluation
         retention = self.training.lifecycle.inference_retention
         if evaluation.previous_model_offsets and (

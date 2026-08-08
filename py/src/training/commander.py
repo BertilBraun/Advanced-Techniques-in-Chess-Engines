@@ -227,7 +227,7 @@ class CommanderProcess:
         lifecycle: TrainingLifecycle,
         parameters: CreditTrainingParams,
     ) -> CreditObservation | None:
-        replay_capacity = parameters.replay_capacity_for_model_generation(lifecycle.ledger.model_generation)
+        replay_capacity = self.args.lifecycle.replay.capacity_at(lifecycle.ledger.model_generation)
         replay_state = lifecycle.trainer.maintain_replay(replay_capacity)
         progress = lifecycle.ledger.reconcile_credited_samples(replay_state.credited_unique_samples)
         required_credits = parameters.presentation_credits_per_quantum(self.args.trainer.global_batch_size)

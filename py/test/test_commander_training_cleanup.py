@@ -16,7 +16,7 @@ from src.training.commander import CommanderProcess, TrainingLifecycle
 from src.games.chess.evaluation.scheduler import CreditEvaluationScheduler
 from src.training.trainer_process import QuantumResult, ReplayState, TrainerProcess
 from src.training.ledger import CreditTrainingLedger
-from src.training.configuration import CreditTrainingParams, TrainingArgs
+from src.training.configuration import CreditTrainingParams, ReplayConfiguration, TrainingArgs
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,12 @@ class _ClusterArguments:
 class _TrainingArguments:
     topology: _TopologyArguments
     trainer: _TrainingConfiguration
+    lifecycle: _LifecycleArguments
+
+
+@dataclass(frozen=True)
+class _LifecycleArguments:
+    replay: ReplayConfiguration
 
 
 @dataclass(frozen=True)
@@ -81,6 +87,13 @@ def commander() -> CommanderProcess:
         _TrainingArguments(
             topology=_TopologyArguments(self_play=_ClusterArguments((1, 4))),
             trainer=_TrainingConfiguration(global_batch_size=1),
+            lifecycle=_LifecycleArguments(
+                replay=ReplayConfiguration(
+                    capacity={'kind': 'constant', 'value': 10},
+                    maximum_capacity=10,
+                    maximum_policy_entries=10,
+                )
+            ),
         ),
     )
     result.communication = cast(commander_module.Communication, object())
@@ -92,8 +105,6 @@ def _parameters() -> CreditTrainingParams:
         replay_ratio=Decimal(4),
         optimizer_steps_per_quantum=1,
         maximum_optimizer_steps=10,
-        replay_capacity_unique_positions={'kind': 'constant', 'value': 10},
-        maximum_replay_capacity_unique_positions=10,
         retained_checkpoint_interval_generations=1,
     )
 

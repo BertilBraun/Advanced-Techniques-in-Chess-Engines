@@ -73,8 +73,6 @@ def _arguments(
         replay_ratio=Decimal(4),
         optimizer_steps_per_quantum=50,
         maximum_optimizer_steps=500_000,
-        replay_capacity_unique_positions={'kind': 'constant', 'value': 100_000},
-        maximum_replay_capacity_unique_positions=2_500_000,
         retained_checkpoint_interval_generations=10,
     )
     trainer = CHESS_TRAINING.trainer.validated_copy(update={'global_batch_size': 1_024, 'local_batch_size': 1_024})

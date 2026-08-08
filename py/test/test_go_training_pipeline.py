@@ -395,9 +395,13 @@ def _smoke_configuration(tmp_path: Path) -> GoExperimentConfiguration:
             'replay_ratio': 1,
             'optimizer_steps_per_quantum': 1,
             'maximum_optimizer_steps': 1,
-            'replay_capacity_unique_positions': {'kind': 'constant', 'value': 10},
-            'maximum_replay_capacity_unique_positions': 10,
             'retained_checkpoint_interval_generations': 1,
+        }
+    )
+    replay = configuration.training.lifecycle.replay.validated_copy(
+        update={
+            'capacity': {'kind': 'constant', 'value': 10},
+            'maximum_capacity': 10,
         }
     )
     evaluation = configuration.training.lifecycle.evaluation.validated_copy(
@@ -406,6 +410,7 @@ def _smoke_configuration(tmp_path: Path) -> GoExperimentConfiguration:
     lifecycle = configuration.training.lifecycle.validated_copy(
         update={
             'credit': credit.model_dump(mode='json'),
+            'replay': replay.model_dump(mode='json'),
             'evaluation': evaluation.model_dump(mode='json'),
         }
     )

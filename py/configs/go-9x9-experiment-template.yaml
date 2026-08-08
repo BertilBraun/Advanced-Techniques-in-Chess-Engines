@@ -28,7 +28,8 @@ training:
     self_play: {device_ids: [0], parallel_games_per_process: 8, tensorboard_processes: 1, node_ids_to_pause_during_training: []}
     evaluation: {device_cycle: [0]}
   lifecycle:
-    credit: {replay_ratio: 8, optimizer_steps_per_quantum: 100, maximum_optimizer_steps: 100000, replay_capacity_unique_positions: {kind: linear, start_generation: 0, end_generation: 200, start_value: 100000, end_value: 2500000, rounding: nearest}, maximum_replay_capacity_unique_positions: 2500000, retained_checkpoint_interval_generations: 1}
+    replay: {capacity: {kind: linear, start_generation: 0, end_generation: 200, start_value: 100000, end_value: 2500000, rounding: nearest}, maximum_capacity: 2500000, maximum_policy_entries: 82}
+    credit: {replay_ratio: 8, optimizer_steps_per_quantum: 100, maximum_optimizer_steps: 100000, retained_checkpoint_interval_generations: 1}
     evaluation: {interval_generations: 1, full_interval_generations: 2, timeout_seconds: 3600, maximum_attempts: 3, retry_backoff_seconds: 60}
     inference_retention: {recent_checkpoint_count: 11, milestone_interval: 10}
   limits: {cost_currency: EUR, hourly_price: 1.0, maximum_wall_time_seconds: 21600, maximum_open_file_count: 32768, maximum_host_ram_percent: 95.0, minimum_free_disk_gib: 0.1, resource_telemetry_interval_seconds: 5.0}
