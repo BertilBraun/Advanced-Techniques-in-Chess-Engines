@@ -8,11 +8,6 @@ WIN_INDEX = int(FinalOutcome.WIN)
 LOSS_INDEX = int(FinalOutcome.LOSS)
 
 
-def wdl_to_scalar(probabilities: Tensor) -> Tensor:
-    """Return the expected score P(win) - P(loss) from WDL probabilities."""
-    return probabilities[..., WIN_INDEX] - probabilities[..., LOSS_INDEX]
-
-
 def scalar_to_wdl(scores: Tensor) -> Tensor:
     """Represent scores in [-1, 1] with residual probability shared across WDL."""
     wins = torch.clamp(scores, min=0.0)

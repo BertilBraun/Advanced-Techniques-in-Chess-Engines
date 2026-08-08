@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as functional
 
 from src.training.batch import TrainingBatch, TrainingModelOutput
-from src.value import scalar_to_wdl
+from src.training.value import scalar_to_wdl
 from src.util.frozen_model import FrozenModel
 
 
@@ -32,9 +32,13 @@ class ResolvedTrainingObjective(FrozenModel):
             == len(batch.auxiliary_eligibility)
             == auxiliary_count
         ):
-            raise ValueError('Model outputs, batch targets, eligibility masks, and objective layout must agree.')
+            raise ValueError(
+                'Model outputs, batch targets, eligibility masks, and objective layout must agree.'
+            )
         sample_weights = batch.sample_weights / batch.sample_weights.mean()
-        policy_rows = functional.cross_entropy(output.policy_logits, batch.policy_targets, reduction='none')
+        policy_rows = functional.cross_entropy(
+            output.policy_logits, batch.policy_targets, reduction='none'
+        )
         policy_loss = (policy_rows * sample_weights).mean()
         blended_wdl = torch.lerp(
             batch.wdl_targets,
@@ -54,7 +58,9 @@ class ResolvedTrainingObjective(FrozenModel):
         total = self.policy_loss_weight * policy_loss + self.value_loss_weight * wdl_loss
         for weight, loss in zip(self.auxiliary_loss_weights, auxiliary_losses):
             total = total + weight * loss
-        return ObjectiveLoss(policy=policy_loss, wdl=wdl_loss, auxiliary=auxiliary_losses, total=total)
+        return ObjectiveLoss(
+            policy=policy_loss, wdl=wdl_loss, auxiliary=auxiliary_losses, total=total
+        )
 
     @staticmethod
     def _masked_auxiliary_loss(
