@@ -43,7 +43,7 @@ def test_chess_state_contract_operates_in_action_id_space() -> None:
     assert child.fen != initial.fen
     assert CHESS_STATE_CONTRACT.current_player(initial) is Player.FIRST
     assert CHESS_STATE_CONTRACT.current_player(child) is Player.SECOND
-    assert CHESS_STATE_CONTRACT.terminal_wdl(initial) is None
+    assert CHESS_STATE_CONTRACT.natural_terminal_wdl(initial) is None
     assert (
         len(CHESS_STATE_CONTRACT.encode_network_input(initial))
         == CHESS_STATE_CONTRACT.packed_plane_layout.payload_bytes

@@ -96,7 +96,7 @@ class GameStateContract(ABC, Generic[PositionT]):
         raise NotImplementedError
 
     @abstractmethod
-    def terminal_wdl(self, position: PositionT) -> WdlTarget | None:
+    def natural_terminal_wdl(self, position: PositionT) -> WdlTarget | None:
         raise NotImplementedError
 
     @abstractmethod

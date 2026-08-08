@@ -72,6 +72,9 @@ void bindGoSearch(py::module_ &module, const char *rootName, const char *searchN
              py::arg("runtime_parameters"), py::arg("search_parameters"),
              py::arg("inference_parameters"), py::arg("initial_model_generation") = 0)
         .def_static("inference_dimensions", []() { return dimensions; })
+        .def("request", [](const Search &, Root root, const bool fullSearch) {
+            return Request(std::move(root), fullSearch);
+        }, py::arg("root"), py::arg("full_search"))
         .def("new_root", [](Search &search, const Position &position) {
             return search.newRoot(position);
         }, py::arg("position"))

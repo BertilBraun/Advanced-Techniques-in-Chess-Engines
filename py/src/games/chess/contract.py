@@ -70,7 +70,7 @@ class ChessStateContract(GameStateContract[ChessPosition]):
     def current_player(self, position: ChessPosition) -> Player:
         return Player(position.current_player)
 
-    def terminal_wdl(self, position: ChessPosition) -> WdlTarget | None:
+    def natural_terminal_wdl(self, position: ChessPosition) -> WdlTarget | None:
         if not position.is_terminal:
             return None
         return WdlTarget.from_scalar(position.terminal_value())

@@ -18,7 +18,7 @@ from src.training.trainer_group import TrainerGroup
 
 
 class Coordinator:
-    def __init__(self, run_id: int, game: GameImplementation, run_started_at: float) -> None:
+    def __init__(self, game: GameImplementation, run_started_at: float) -> None:
         self.game = game
         self.configuration = game.configuration
         self.run_started_at = run_started_at
@@ -44,7 +44,7 @@ class Coordinator:
             self.ledger.model_generation,
         )
         self.trainer_group = TrainerGroup(self.configuration, game, self.ledger.state.active_checkpoint)
-        self.self_play_group = SelfPlayGroup(run_id, game)
+        self.self_play_group = SelfPlayGroup(game)
         self.latest_completed_model_version = self.ledger.model_generation
         self.final_stop_reason: str | None = None
 

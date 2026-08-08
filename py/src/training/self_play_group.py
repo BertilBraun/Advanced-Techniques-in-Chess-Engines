@@ -26,7 +26,7 @@ from src.self_play.worker import SelfPlayWorker
 
 
 class SelfPlayGroup:
-    def __init__(self, run_id: int, game: GameImplementation) -> None:
+    def __init__(self, game: GameImplementation) -> None:
         self.game = game
         self._closed = False
         context = multiprocessing.get_context('spawn')
@@ -38,7 +38,7 @@ class SelfPlayGroup:
             parent, child = context.Pipe(duplex=True)
             process = context.Process(
                 target=_self_play_worker_main,
-                args=(child, run_id, worker_id, device_id, game),
+                args=(child, worker_id, device_id, game),
                 name=f'self-play-worker-{worker_id}',
             )
             process.start()
@@ -85,7 +85,6 @@ class SelfPlayGroup:
 
 def _self_play_worker_main(
     connection: Connection,
-    run_id: int,
     worker_id: int,
     device_id: int,
     game: GameImplementation,
@@ -96,12 +95,11 @@ def _self_play_worker_main(
     torch.manual_seed(seed)
     if game.training.topology.trainer.device_type == 'cuda':
         torch.cuda.set_device(device_id)
-    del run_id
-    policy = game.create_self_play_policy(device_id, worker_id)
     worker = SelfPlayWorker(
-        policy,
+        game,
         game.training.topology.self_play.parallel_games_per_process,
         worker_id,
+        device_id,
         Path(game.training.save_path) / 'completed-games' / 'inbox',
     )
     loaded_generation: int | None = None
@@ -133,7 +131,7 @@ def _self_play_worker_main(
                         if checkpoint.generation <= loaded_generation:
                             raise ValueError('Completed-generation statistics require a newer checkpoint.')
                         if desired_state.completed_generation_statistics is StatisticsLevel.DETAILED:
-                            worker.snapshot_statistics(loaded_generation)
+                            worker.snapshot_statistics()
                         statistics = SelfPlayStatistics(
                             completed_generation=loaded_generation,
                             level=desired_state.completed_generation_statistics,
@@ -142,7 +140,7 @@ def _self_play_worker_main(
                         completed_search_batches = 0
                     if loaded_generation != checkpoint.generation:
                         checkpoint.validate_inference_model()
-                        worker.refresh_published_model(checkpoint.generation, checkpoint.inference_model_path)
+                        worker.refresh_published_model(checkpoint)
                         loaded_generation = checkpoint.generation
                         loaded_sha256 = checkpoint.inference_model_sha256
                     elif loaded_sha256 != checkpoint.inference_model_sha256:

@@ -148,13 +148,13 @@ def _validate_result(
 ) -> None:
     match game.termination_reason:
         case TerminationReason.NATURAL:
-            expected = state.terminal_wdl(final_position)
+            expected = state.natural_terminal_wdl(final_position)
             if expected is None:
                 raise ValueError('Naturally terminated game does not end in a terminal position.')
         case TerminationReason.MAXIMUM_PLIES | TerminationReason.ADJUDICATION:
             expected = state.adjudicated_wdl(final_position, game.termination_reason)
         case TerminationReason.RESIGNATION:
-            if state.terminal_wdl(final_position) is not None:
+            if state.natural_terminal_wdl(final_position) is not None:
                 raise ValueError('Resigned game should have been recorded as a natural terminal result.')
             return
     if not _same_wdl(expected, game.final_wdl):

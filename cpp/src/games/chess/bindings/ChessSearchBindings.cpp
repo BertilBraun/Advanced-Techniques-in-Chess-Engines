@@ -121,16 +121,7 @@ void bind_chess_search(py::module_ &module) {
 
     py::class_<Result>(module, "ChessSelfPlaySearchResult")
         .def_readonly("root_value", &Result::root_value)
-        .def_property_readonly("visits",
-                               [](const Result &result) {
-                                   std::vector<std::pair<int, int>> visits;
-                                   visits.reserve(result.visits.size());
-                                   for (const GameSearchVisit &visit : result.visits) {
-                                       visits.emplace_back(visit.action_id,
-                                                           static_cast<int>(visit.visit_count));
-                                   }
-                                   return visits;
-                               })
+        .def_readonly("visits", &Result::visits)
         .def_readonly("root", &Result::root);
 
     py::class_<Batch>(module, "ChessSelfPlaySearchBatch")
@@ -145,6 +136,10 @@ void bind_chess_search(py::module_ &module) {
              py::arg("inference_parameters"), py::arg("initial_model_version") = 0)
         .def_property_readonly("arena_capacity", &Search::arenaCapacity)
         .def_property_readonly("model_version", &Search::modelGeneration)
+        .def_property_readonly("model_generation", &Search::modelGeneration)
+        .def("request", [](const Search &, ChessSearchRoot root, const bool fullSearch) {
+            return Request(std::move(root), fullSearch);
+        }, py::arg("root"), py::arg("full_search"))
         .def(
             "new_root",
             [](const Search &search, const Board &position) { return search.newRoot(position); },

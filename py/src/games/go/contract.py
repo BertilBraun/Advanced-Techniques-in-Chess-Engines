@@ -105,8 +105,10 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
     def current_player(self, position: NativeGoPosition) -> Player:
         return Player.FIRST if position.player == GoPlayer.BLACK else Player.SECOND
 
-    def terminal_wdl(self, position: NativeGoPosition) -> WdlTarget | None:
+    def natural_terminal_wdl(self, position: NativeGoPosition) -> WdlTarget | None:
         if not position.is_terminal:
+            return None
+        if position.termination_reason.name == 'MAXIMUM_MOVES':
             return None
         value = position.terminal_value()
         if value > 0.0:
@@ -118,10 +120,9 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
     def adjudicated_wdl(self, position: NativeGoPosition, reason: TerminationReason) -> WdlTarget:
         if reason not in {TerminationReason.MAXIMUM_PLIES, TerminationReason.ADJUDICATION}:
             raise ValueError(f'Go cannot adjudicate termination reason {reason.value}.')
-        target = self.terminal_wdl(position)
-        if target is None:
+        if not position.is_terminal:
             raise ValueError('Go adjudication requires a scored terminal position.')
-        return target
+        return WdlTarget.from_scalar(position.terminal_value())
 
     def encode_network_input(self, position: NativeGoPosition) -> PackedPlanePayload:
         return self.packed_position(position)

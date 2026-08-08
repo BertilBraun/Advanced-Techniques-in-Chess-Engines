@@ -1,21 +1,23 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
-from src.games.chess.self_play import ChessSelfPlayGame, ChessSelfPlayPolicy, SelfPlayStatisticsSnapshot
 from src.games.implementation import GameImplementation
 from src.neural_network import NetworkDimensions
+from src.self_play.parameters import ResolvedSelfPlayParameters
+from src.self_play.worker import NativeSelfPlaySearch
+from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 
 
-class ChessImplementation(
-    GameImplementation[
-        ChessPosition,
-        ChessSelfPlayGame,
-        'ChessSelfPlaySearchRequest',
-        'ChessSelfPlaySearchResult',
-        SelfPlayStatisticsSnapshot | None,
-    ]
-):
+if TYPE_CHECKING:
+    from AlphaZeroCpp import ChessSelfPlaySearch
+
+
+class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch]):
     def __init__(self, configuration: ChessExperimentConfiguration) -> None:
         self._configuration = configuration
 
@@ -42,6 +44,41 @@ class ChessImplementation(
             self.configuration.chess.objective.auxiliary_targets,
         )
 
+    def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
+        configuration = self.self_play_configuration
+        maximum_game_plies = (
+            None
+            if configuration.maximum_game_plies is None
+            else configuration.maximum_game_plies.value_at(model_generation)
+        )
+        return configuration.resolve(model_generation, maximum_game_plies)
+
+    def create_native_search(
+        self,
+        device_id: int,
+        checkpoint: CheckpointReference,
+        parameters: ResolvedSelfPlayParameters,
+    ) -> ChessSelfPlaySearch:
+        from AlphaZeroCpp import (
+            BatchedInferenceParameters,
+            ChessSelfPlaySearch,
+            InferenceConfiguration,
+            InferenceDevice,
+        )
+
+        inference = self.self_play_configuration.inference
+        device = InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA
+        return ChessSelfPlaySearch(
+            InferenceConfiguration(device_id, str(checkpoint.inference_model_path), device),
+            self.native_search_parameters(parameters),
+            BatchedInferenceParameters(
+                inference.inference_workers,
+                inference.inference_batch_size,
+                inference.outstanding_batches_per_worker,
+            ),
+            checkpoint.generation,
+        )
+
     def training_objective_at(self, model_generation: int) -> ResolvedTrainingObjective:
         configuration = self.configuration.chess.objective
         return ResolvedTrainingObjective(
@@ -51,12 +88,4 @@ class ChessImplementation(
             auxiliary_loss_weights=tuple(
                 target.loss_weight.value_at(model_generation) for target in configuration.auxiliary_targets
             ),
-        )
-
-    def create_self_play_policy(self, device_id: int, worker_id: int) -> ChessSelfPlayPolicy:
-        return ChessSelfPlayPolicy(
-            device_id,
-            self.configuration.chess.self_play,
-            worker_id,
-            self.training.random_seed,
         )

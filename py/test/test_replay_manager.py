@@ -44,7 +44,7 @@ class PythonChessStateContract(ChessStateContract):
     def current_player(self, position: ChessBoard) -> Player:
         return Player(position.current_player)
 
-    def terminal_wdl(self, position: ChessBoard) -> WdlTarget | None:
+    def natural_terminal_wdl(self, position: ChessBoard) -> WdlTarget | None:
         if not position.is_game_over():
             return None
         winner = position.check_winner()

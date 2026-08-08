@@ -104,7 +104,7 @@ if __name__ == '__main__':
         from src.games.go.training import GoImplementation
 
         game = GoImplementation(experiment)
-    commander = Coordinator(run_id, game, run_started_at)
+    commander = Coordinator(game, run_started_at)
     outcome_path = Path(training.save_path) / 'run-outcome.json'
     try:
         commander.run()
