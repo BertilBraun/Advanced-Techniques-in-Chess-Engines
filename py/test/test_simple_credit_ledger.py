@@ -1,6 +1,8 @@
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedger
@@ -54,3 +56,31 @@ def test_credit_ledger_persists_only_approximate_counters_and_active_checkpoint(
     assert restarted.model_generation == 1
     assert restarted.state.available_credits == 0
     assert restarted.state.active_checkpoint == result.checkpoint
+
+
+def test_credit_ledger_adopts_one_complete_checkpoint_after_interrupted_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
+    ledger.add_samples(16, model_generation=0)
+    completed = _checkpoint(tmp_path, 1)
+    completed.manifest_path.write_text('{}', encoding='utf-8')
+
+    def load_checkpoint(
+        cls: type[CheckpointReference],
+        run_path: Path,
+        generation: int,
+    ) -> CheckpointReference:
+        del cls
+        assert run_path == tmp_path
+        assert generation == 1
+        return completed
+
+    monkeypatch.setattr(CheckpointReference, 'load', classmethod(load_checkpoint))
+
+    restarted = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
+
+    assert restarted.model_generation == 1
+    assert restarted.state.active_checkpoint == completed
+    assert restarted.state.available_credits == 0

@@ -55,6 +55,7 @@ class CreditLedger:
             self.save()
         if self._state.active_checkpoint.generation != self.model_generation:
             raise ValueError('Active checkpoint generation disagrees with completed optimizer progress.')
+        self._adopt_completed_quantum(run_path)
 
     @property
     def state(self) -> CreditLedgerState:
@@ -117,3 +118,30 @@ class CreditLedger:
 
     def save(self) -> None:
         write_text_atomically(self.path, self._state.model_dump_json(indent=2) + '\n')
+
+    def _adopt_completed_quantum(self, run_path: Path) -> None:
+        newer_generations = sorted(
+            int(path.stem.removeprefix('checkpoint_'))
+            for path in run_path.glob('checkpoint_*.json')
+            if path.stem.removeprefix('checkpoint_').isdigit()
+            and int(path.stem.removeprefix('checkpoint_')) > self.model_generation
+        )
+        if not newer_generations:
+            return
+        expected_generation = self.model_generation + 1
+        if newer_generations != [expected_generation]:
+            raise ValueError('Checkpoint manifests do not contain exactly the next uncommitted quantum.')
+        required = Decimal(self.parameters.presentation_credits_per_quantum(self.global_batch_size))
+        if self._state.available_credits < required:
+            raise ValueError('Completed checkpoint cannot be adopted without its training credits.')
+        checkpoint = CheckpointReference.load(run_path, expected_generation)
+        self._state = self._state.model_copy(
+            update={
+                'completed_optimizer_steps': (
+                    self._state.completed_optimizer_steps + self.parameters.optimizer_steps_per_quantum
+                ),
+                'consumed_credits': self._state.consumed_credits + required,
+                'active_checkpoint': checkpoint,
+            }
+        )
+        self.save()
