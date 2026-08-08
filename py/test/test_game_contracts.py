@@ -1,7 +1,9 @@
 from pathlib import Path
+from uuid import UUID
 
 import chess
 import pytest
+import torch
 from pydantic import ValidationError
 
 from src.experiment.configuration import load_experiment_configuration
@@ -9,14 +11,17 @@ from src.games.chess.board import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.training import ChessImplementation
 from src.games.contracts import Player, WdlTarget
-from src.replay.contracts import EligibleNextPolicyTarget, IneligibleNextPolicyTarget, SparsePolicyTarget
+from src.replay.contracts import EligibleNextPolicyTarget, IneligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
     SparseSearchVisit,
     TerminationReason,
+    publish_completed_self_play_game,
 )
+from src.training.targets import build_training_target_layout
+from src.training.batch import TrainingBatch, TrainingModelOutput
 
 
 def test_wdl_target_validates_and_reverses_perspective() -> None:
@@ -49,7 +54,7 @@ def test_chess_state_contract_operates_in_action_id_space() -> None:
 def test_chess_adjudication_uses_fixed_starting_material_normalization() -> None:
     position = ChessBoard.from_fen('4k3/8/8/8/8/8/8/3QK3 w - - 0 1')
 
-    target = CHESS_STATE_CONTRACT.adjudicated_wdl(position)
+    target = CHESS_STATE_CONTRACT.adjudicated_wdl(position, TerminationReason.MAXIMUM_PLIES)
 
     assert target == WdlTarget.from_scalar(9 / 39)
 
@@ -87,7 +92,11 @@ def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> 
         minimum_root_visits=0,
     )
     game = CompletedSelfPlayGame(
-        identity=GameIdentity(run_id=1, worker_id=2, game_number=3),
+        identity=GameIdentity(
+            worker_id=2,
+            process_instance_id=UUID('12345678-1234-5678-1234-567812345678'),
+            game_number=3,
+        ),
         created_at_seconds=4.0,
         generation_seconds=5.0,
         action_ids=(7,),
@@ -99,6 +108,27 @@ def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> 
     assert CompletedSelfPlayGame.model_validate_json(game.model_dump_json()) == game
     with pytest.raises(ValidationError, match='selected actions'):
         game.validated_copy(update={'action_ids': [8]})
+
+
+def test_canonical_completed_game_publication_needs_no_publisher_state(tmp_path: Path) -> None:
+    game = CompletedSelfPlayGame(
+        identity=GameIdentity(
+            worker_id=4,
+            process_instance_id=UUID('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),
+            game_number=12,
+        ),
+        created_at_seconds=1.0,
+        generation_seconds=2.0,
+        action_ids=(),
+        observations=(),
+        final_wdl=WdlTarget(win=0.0, draw=1.0, loss=0.0),
+        termination_reason=TerminationReason.NATURAL,
+    )
+
+    path = publish_completed_self_play_game(tmp_path, game)
+
+    assert path.name == 'worker-4-process-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee-game-00000000000000000012.json'
+    assert CompletedSelfPlayGame.model_validate_json(path.read_text(encoding='utf-8')) == game
 
 
 def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
@@ -120,13 +150,14 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
             ]
         }
     )
-    chess_configuration = configuration.chess.validated_copy(update={'objective': objective.model_dump(mode='json')})
-    configured = configuration.validated_copy(update={'chess': chess_configuration.model_dump(mode='json')})
-
-    layout = ChessImplementation(configured).target_layout
+    layout = build_training_target_layout(CHESS_STATE_CONTRACT.action_size, objective.auxiliary_targets)
 
     assert tuple(head.ply_offset for head in layout.auxiliary_heads) == (1, 3)
     assert all(head.action_size == 1_880 for head in layout.auxiliary_heads)
+
+    chess_configuration = configuration.chess.validated_copy(update={'objective': objective.model_dump(mode='json')})
+    with pytest.raises(ValidationError, match='become executable in Phase 2'):
+        configuration.validated_copy(update={'chess': chess_configuration.model_dump(mode='json')})
 
 
 def test_next_policy_eligibility_is_explicit_and_uses_future_action_space() -> None:
@@ -138,3 +169,59 @@ def test_next_policy_eligibility_is_explicit_and_uses_future_action_space() -> N
     assert eligible.eligible
     assert eligible.policy.visits[0].action_id == 42
     assert not terminal_tail.eligible
+
+
+def test_search_observation_rejects_zero_visit_entries() -> None:
+    with pytest.raises(ValidationError, match='greater than 0'):
+        SparseSearchVisit(action_id=1, visit_count=0)
+
+
+def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_together() -> None:
+    position = CHESS_STATE_CONTRACT.initial_position()
+    action_id = CHESS_STATE_CONTRACT.legal_action_ids(position)[0]
+    policy = SparsePolicyTarget(visits=(SparseSearchVisit(action_id=action_id, visit_count=3),))
+    sample = ReplaySample(
+        encoded_state=CHESS_STATE_CONTRACT.encode_network_input(position),
+        policy=policy,
+        wdl_target=WdlTarget(win=0.0, draw=1.0, loss=0.0),
+        root_value=0.0,
+        auxiliary_targets=(EligibleNextPolicyTarget(policy=policy), IneligibleNextPolicyTarget()),
+        sample_weight=1.0,
+        source_model_generation=0,
+        source_created_at_seconds=1.0,
+    )
+
+    transformed = CHESS_STATE_CONTRACT.transform_replay_targets(sample, augmentation_index=1)
+    transformed_action = CHESS_STATE_CONTRACT.transform_action_id(action_id, augmentation_index=1)
+
+    assert transformed.policy.visits[0].action_id == transformed_action
+    auxiliary = transformed.auxiliary_targets[0]
+    assert isinstance(auxiliary, EligibleNextPolicyTarget)
+    assert auxiliary.policy.visits[0].action_id == transformed_action
+    assert transformed.auxiliary_targets[1] == IneligibleNextPolicyTarget()
+    assert transformed.encoded_state == CHESS_STATE_CONTRACT.transform_encoded_state(sample.encoded_state, 1)
+
+
+def test_canonical_batch_and_model_output_are_the_objective_boundary() -> None:
+    configuration = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    assert configuration.game == 'chess'
+    objective = ChessImplementation(configuration).training_objective_at(0)
+    batch = TrainingBatch(
+        states=torch.zeros((2, 1)),
+        policy_targets=torch.tensor(((1.0, 0.0), (0.0, 1.0))),
+        wdl_targets=torch.tensor(((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))),
+        root_values=torch.tensor((0.5, -0.5)),
+        auxiliary_targets=(),
+        auxiliary_eligibility=(),
+        sample_weights=torch.ones(2),
+    )
+    output = TrainingModelOutput(
+        policy_logits=torch.tensor(((2.0, 0.0), (0.0, 2.0))),
+        wdl_logits=torch.tensor(((2.0, 0.0, 0.0), (0.0, 2.0, 0.0))),
+        auxiliary_logits=(),
+    )
+
+    loss = objective.calculate_loss(output, batch)
+
+    assert loss.total.isfinite()
+    assert loss.auxiliary == ()

@@ -11,7 +11,7 @@ from src.games.chess.completed_game import (
     ChessRulesMetadata,
     ChessSearchObservation,
 )
-from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
+from src.self_play.completed_game import RuntimeCompletedGamePublisher, SparseSearchVisit
 from src.self_play.value_target import TerminationReason
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.replay import CHESS_REPLAY_IMPLEMENTATION, training_batch_loader
@@ -20,7 +20,7 @@ from src.training.ledger import CreditTrainingLedger
 from src.training.configuration import CreditTrainingParams
 
 
-def _completed_game(publisher: CompletedGamePublisher) -> ChessCompletedGame:
+def _completed_game(publisher: RuntimeCompletedGamePublisher) -> ChessCompletedGame:
     moves_uci = ('f2f3', 'e7e5', 'g2g4', 'd8h4')
     board = ChessBoard()
     observations: list[ChessSearchObservation] = []
@@ -64,7 +64,7 @@ def _completed_game(publisher: CompletedGamePublisher) -> ChessCompletedGame:
 
 
 def test_credit_runtime_rebuilds_fifo_and_rank_batches_after_restart(tmp_path: Path) -> None:
-    publisher = CompletedGamePublisher(tmp_path, run_id=9, worker_id=0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, run_id=9, worker_id=0)
     for _ in range(3):
         publisher.publish(_completed_game(publisher))
     maintainer = ReplayMaintainer(tmp_path, CHESS_REPLAY_IMPLEMENTATION, capacity=10, sampler_seed=51)
@@ -75,7 +75,7 @@ def test_credit_runtime_rebuilds_fifo_and_rank_batches_after_restart(tmp_path: P
         maximum_optimizer_steps=2,
         replay_capacity_unique_positions={'kind': 'constant', 'value': 10},
         maximum_replay_capacity_unique_positions=10,
-        retained_checkpoint_interval_steps=1,
+        retained_checkpoint_interval_generations=1,
     )
     ledger = CreditTrainingLedger(tmp_path, parameters, global_batch_size=8)
 

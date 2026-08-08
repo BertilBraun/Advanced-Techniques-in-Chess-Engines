@@ -11,7 +11,7 @@ from torch import nn
 from torch.amp import GradScaler, autocast
 
 from src.neural_network import Network
-from src.training.batch import TrainingBatch
+from src.training.batch import RuntimeTrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.util.tensorboard import log_scalar
 from src.training.configuration import TrainingParams
@@ -99,7 +99,7 @@ class _ValueMetricInputs:
 
 
 class TrainingBatchLoader(Protocol):
-    def __iter__(self) -> Iterator[TrainingBatch]: ...
+    def __iter__(self) -> Iterator[RuntimeTrainingBatch]: ...
 
     def __len__(self) -> int: ...
 
@@ -125,7 +125,7 @@ class _LogitForward(nn.Module):
         return self.model.logit_forward(state)
 
 
-class TrainingObjective(ABC):
+class RuntimeTrainingObjective(ABC):
     @property
     @abstractmethod
     def policy_loss_weight(self) -> float:
@@ -142,16 +142,16 @@ class TrainingObjective(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def calculate_loss(
+    def calculate_runtime_loss(
         self,
         training_model: nn.Module,
-        batch: TrainingBatch,
+        batch: RuntimeTrainingBatch,
         device: torch.device,
     ) -> LossResult:
         raise NotImplementedError
 
 
-def prefetch_training_batches(batches: TrainingBatchLoader) -> Iterator[TrainingBatch]:
+def prefetch_training_batches(batches: TrainingBatchLoader) -> Iterator[RuntimeTrainingBatch]:
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix='training-batch') as executor:
         iterator = iter(batches)
         pending_batch = executor.submit(next, iterator)
@@ -168,7 +168,7 @@ def prefetch_device_training_batches(
     batches: TrainingBatchLoader,
     device: torch.device,
     transfer_tracker: DeviceTransferTracker,
-) -> Iterator[TrainingBatch]:
+) -> Iterator[RuntimeTrainingBatch]:
     cpu_batches = iter(prefetch_training_batches(batches))
     if device.type != 'cuda':
         yield from cpu_batches
@@ -210,7 +210,7 @@ class Trainer:
         model: Network,
         optimizer: torch.optim.Optimizer,
         args: TrainingParams,
-        objective: TrainingObjective,
+        objective: RuntimeTrainingObjective,
         training_model: nn.Module | None = None,
         rank: int = 0,
     ) -> None:
@@ -222,8 +222,8 @@ class Trainer:
         self.objective = objective
         self.last_transfer_seconds = 0.0
 
-    def _calculate_loss_for_batch(self, batch: TrainingBatch) -> LossResult:
-        return self.objective.calculate_loss(self.training_model, batch, self.model.device)
+    def _calculate_loss_for_batch(self, batch: RuntimeTrainingBatch) -> LossResult:
+        return self.objective.calculate_runtime_loss(self.training_model, batch, self.model.device)
 
     def _train_epoch(
         self,
@@ -250,7 +250,7 @@ class Trainer:
             sample_count = batch.states.shape[0]
 
             with autocast(self.model.device.type, dtype=torch.bfloat16):
-                loss_result = self.objective.calculate_loss(
+                loss_result = self.objective.calculate_runtime_loss(
                     self.training_model,
                     batch,
                     self.model.device,
@@ -370,7 +370,7 @@ class Trainer:
     def _detach_metric_batch(
         self,
         loss_result: LossResult,
-        batch: TrainingBatch,
+        batch: RuntimeTrainingBatch,
     ) -> _DetachedMetricBatch:
         return _DetachedMetricBatch(
             value_logits=loss_result.value_logits.detach(),

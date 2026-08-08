@@ -27,7 +27,7 @@ from src.self_play.value_target import (
     ReplayValueTarget,
     TerminationReason,
 )
-from src.training.batch import ReplaySampleMetadata, TrainingBatch
+from src.training.batch import ReplaySampleMetadata, RuntimeTrainingBatch
 
 
 class ReplaySchemaVersionError(ValueError):
@@ -98,7 +98,7 @@ def training_batch_from_raw_samples(
     visit_counts: Sequence[npt.NDArray[np.uint16]],
     value_targets: Sequence[ReplayValueTarget],
     sample_metadata: Sequence[ReplaySampleMetadata],
-) -> TrainingBatch:
+) -> RuntimeTrainingBatch:
     batch_size = len(encoded_states)
     if len(visit_counts) != batch_size or len(value_targets) != batch_size or len(sample_metadata) != batch_size:
         raise ValueError('Training batch inputs must contain the same number of samples.')
@@ -117,7 +117,7 @@ def training_batch_from_raw_samples(
         raise ValueError('Visit counts must contain a positive total.')
     policies /= policy_totals
 
-    return TrainingBatch(
+    return RuntimeTrainingBatch(
         states=states,
         policy_targets=torch.from_numpy(policies),
         final_outcomes=torch.from_numpy(
@@ -154,7 +154,7 @@ def training_batch_from_raw_samples(
     )
 
 
-def preserve_prebatched_samples(batch: TrainingBatch) -> TrainingBatch:
+def preserve_prebatched_samples(batch: RuntimeTrainingBatch) -> RuntimeTrainingBatch:
     return batch
 
 
@@ -233,7 +233,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             sample_weight=torch.sqrt(torch.tensor(self.sample_metadata[idx].occurrence_count, dtype=torch.float32)),
         )
 
-    def __getitems__(self, indices: list[int]) -> TrainingBatch:
+    def __getitems__(self, indices: list[int]) -> RuntimeTrainingBatch:
         return training_batch_from_raw_samples(
             [self.encoded_states[index] for index in indices],
             [self.visit_counts[index] for index in indices],

@@ -23,7 +23,7 @@ from src.games.implementation import GameImplementation
 from src.training.publication import PublicationValidationScope, load_credit_publication_pointer
 from src.util.profiler import start_cpu_usage_logger
 from src.util.background_worker import BackgroundWorker
-from src.self_play.completed_game import CompletedGamePublisher
+from src.self_play.completed_game import RuntimeCompletedGamePublisher
 from src.self_play.worker import SelfPlayWorker
 
 
@@ -76,7 +76,7 @@ class SelfPlayProcess:
     ) -> None:
         args = game.training
         self.args = args
-        self.completed_game_publisher = CompletedGamePublisher(
+        self.completed_game_publisher = RuntimeCompletedGamePublisher(
             Path(args.save_path),
             run_id,
             node_id,

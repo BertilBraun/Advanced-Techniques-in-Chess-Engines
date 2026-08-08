@@ -6,16 +6,16 @@ from typing import Generic, TypeVar
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract
 from src.neural_network import NetworkDimensions
-from src.self_play.completed_game import CompletedGamePublisher, CompletedGameRecord
+from src.self_play.completed_game import RuntimeCompletedGamePublisher, RuntimeCompletedGameRecord
 from src.self_play.worker import GameSelfPlayPolicy
 from src.training.configuration import TrainingArgs
 from src.training.replay import ReplayGameImplementation
 from src.training.targets import TrainingTargetLayout
-from src.training.trainer import TrainingObjective
+from src.training.objective import ResolvedTrainingObjective
 
 
 PositionT = TypeVar('PositionT')
-CompletedGameT = TypeVar('CompletedGameT', bound=CompletedGameRecord)
+CompletedGameT = TypeVar('CompletedGameT', bound=RuntimeCompletedGameRecord)
 ActiveGameT = TypeVar('ActiveGameT')
 SearchRequestT = TypeVar('SearchRequestT')
 SearchResultT = TypeVar('SearchResultT')
@@ -60,7 +60,7 @@ class GameImplementation(
         raise NotImplementedError
 
     @abstractmethod
-    def training_objective_at(self, model_generation: int) -> TrainingObjective:
+    def training_objective_at(self, model_generation: int) -> ResolvedTrainingObjective:
         raise NotImplementedError
 
     @property
@@ -73,7 +73,7 @@ class GameImplementation(
     def create_self_play_policy(
         self,
         device_id: int,
-        publisher: CompletedGamePublisher,
+        publisher: RuntimeCompletedGamePublisher,
     ) -> GameSelfPlayPolicy[ActiveGameT, SearchRequestT, SearchResultT, StatisticsT]:
         """Current worker boundary, replaced as one unit in Phase 2."""
         raise NotImplementedError

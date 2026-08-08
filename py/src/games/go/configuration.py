@@ -76,6 +76,8 @@ class GoExperimentConfiguration(BaseExperimentConfiguration):
 
     @model_validator(mode='after')
     def validate_experiment(self) -> GoExperimentConfiguration:
+        if self.go.objective.auxiliary_targets:
+            raise ValueError('Auxiliary targets are defined by Phase 1 but become executable in Phase 2.')
         evaluation = self.go.evaluation
         retention = self.training.lifecycle.inference_retention
         if (

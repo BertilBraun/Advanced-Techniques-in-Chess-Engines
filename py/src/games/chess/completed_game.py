@@ -8,8 +8,8 @@ from pydantic import Field, model_validator
 
 from src.self_play.value_target import TerminationReason
 from src.self_play.completed_game import (
-    CompletedGameRecord,
-    GameIdentity,
+    RuntimeCompletedGameRecord,
+    RuntimeGameIdentity,
     SparseSearchVisit,
 )
 from src.util.frozen_model import FrozenModel
@@ -70,10 +70,10 @@ class ChessSearchObservation(FrozenModel):
         return self
 
 
-class ChessCompletedGame(CompletedGameRecord):
+class ChessCompletedGame(RuntimeCompletedGameRecord):
     schema_version: Literal[1] = CHESS_COMPLETED_GAME_SCHEMA_VERSION
     game: Literal['chess'] = 'chess'
-    identity: GameIdentity
+    identity: RuntimeGameIdentity
     rules: ChessRulesMetadata
     representation: ChessRepresentationMetadata
     model_generation: int = Field(ge=0)

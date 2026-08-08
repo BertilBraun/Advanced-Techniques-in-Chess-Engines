@@ -4,10 +4,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum
 from math import isfinite
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from src.packed_planes import PackedPlaneLayout, PackedPlanePayload
 from src.util.frozen_model import FrozenModel
+
+if TYPE_CHECKING:
+    from src.replay.contracts import ReplaySample
+    from src.self_play.completed_game import TerminationReason
 
 
 PositionT = TypeVar('PositionT')
@@ -96,7 +100,7 @@ class GameStateContract(ABC, Generic[PositionT]):
         raise NotImplementedError
 
     @abstractmethod
-    def adjudicated_wdl(self, position: PositionT) -> WdlTarget:
+    def adjudicated_wdl(self, position: PositionT, reason: TerminationReason) -> WdlTarget:
         raise NotImplementedError
 
     @abstractmethod
@@ -118,4 +122,12 @@ class GameStateContract(ABC, Generic[PositionT]):
         encoded_state: PackedPlanePayload,
         augmentation_index: int,
     ) -> PackedPlanePayload:
+        raise NotImplementedError
+
+    @abstractmethod
+    def transform_replay_targets(
+        self,
+        sample: ReplaySample,
+        augmentation_index: int,
+    ) -> ReplaySample:
         raise NotImplementedError

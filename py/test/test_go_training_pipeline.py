@@ -23,7 +23,9 @@ from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
 from src.games.go.contract import GoStateContract, GoSymmetryIndex
 from src.games.go.training import GoImplementation, calculate_go_loss, create_go_model
 from src.training.trainer_process import TrainerProcess
-from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
+from src.self_play.completed_game import RuntimeCompletedGamePublisher, RuntimeGameIdentity, SparseSearchVisit
+from src.games.contracts import WdlTarget
+from src.replay.contracts import EligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
 from src.self_play.completed_game_record import completed_game_from_path
 from src.games.go.completed_game import (
     GoCompletedGame,
@@ -53,7 +55,9 @@ def _configuration() -> GoExperimentConfiguration:
     return configuration
 
 
-def _two_pass_game(identity: GameIdentity = GameIdentity(run_id=1, worker_id=2, game_number=0)) -> GoCompletedGame:
+def _two_pass_game(
+    identity: RuntimeGameIdentity = RuntimeGameIdentity(run_id=1, worker_id=2, game_number=0),
+) -> GoCompletedGame:
     legal_actions = tuple(range(50))
     observations = tuple(
         GoSearchObservation(
@@ -102,6 +106,29 @@ def test_go_encoding_targets_and_symmetries_match_deterministic_fixture() -> Non
     assert rotated == samples[1].encoded_state
 
 
+def test_go_state_contract_transforms_complete_replay_target_boundary() -> None:
+    contract = GoStateContract(7, komi_half_points=15, maximum_moves=196)
+    policy = SparsePolicyTarget(visits=(SparseSearchVisit(action_id=0, visit_count=4),))
+    sample = ReplaySample(
+        encoded_state=contract.encode_network_input(contract.initial_position().child(0)),
+        policy=policy,
+        wdl_target=WdlTarget(win=1.0, draw=0.0, loss=0.0),
+        root_value=0.5,
+        auxiliary_targets=(EligibleNextPolicyTarget(policy=policy),),
+        sample_weight=1.0,
+        source_model_generation=2,
+        source_created_at_seconds=3.0,
+    )
+
+    transformed = contract.transform_replay_targets(sample, GoSymmetryIndex.ROTATE_90)
+
+    expected_action = contract.transform_action_id(0, GoSymmetryIndex.ROTATE_90)
+    assert transformed.policy.visits[0].action_id == expected_action
+    auxiliary = transformed.auxiliary_targets[0]
+    assert isinstance(auxiliary, EligibleNextPolicyTarget)
+    assert auxiliary.policy.visits[0].action_id == expected_action
+
+
 @pytest.mark.parametrize('symmetry', tuple(GoSymmetryIndex))
 def test_go_batch_applies_one_selected_symmetry_to_state_and_policy(
     symmetry: GoSymmetryIndex,
@@ -146,7 +173,7 @@ def test_go_batch_applies_one_selected_symmetry_to_state_and_policy(
 
 
 def test_go_archive_rebuild_matches_live_ingestion(tmp_path: Path) -> None:
-    publisher = CompletedGamePublisher(tmp_path, run_id=1, worker_id=2)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, run_id=1, worker_id=2)
     publisher.publish(_two_pass_game(publisher.reserve_identity()))
     contract = GoStateContract(7)
     live, _ = ReplayMaintainer(
@@ -166,7 +193,7 @@ def test_go_archive_restart_materializes_only_capacity_tail(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publisher = CompletedGamePublisher(tmp_path, run_id=3, worker_id=0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, run_id=3, worker_id=0)
     for _ in range(5):
         publisher.publish(_two_pass_game(publisher.reserve_identity()))
     contract = GoStateContract(7)
@@ -311,7 +338,7 @@ def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) ->
     refreshed_model = tmp_path / 'model-1.jit.pt'
     _write_pass_model(initial_model, (0.2, 0.6, 0.2))
     _write_pass_model(refreshed_model, (0.6, 0.2, 0.2))
-    publisher = CompletedGamePublisher(tmp_path, run_id=5, worker_id=0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, run_id=5, worker_id=0)
     policy = GoSelfPlayPolicy(configuration, publisher, device_id=0)
     self_play = SelfPlayWorker(policy, parallel_game_count=1)
     self_play.refresh_published_model(0, initial_model)
@@ -370,11 +397,11 @@ def _smoke_configuration(tmp_path: Path) -> GoExperimentConfiguration:
             'maximum_optimizer_steps': 1,
             'replay_capacity_unique_positions': {'kind': 'constant', 'value': 10},
             'maximum_replay_capacity_unique_positions': 10,
-            'retained_checkpoint_interval_steps': 1,
+            'retained_checkpoint_interval_generations': 1,
         }
     )
     evaluation = configuration.training.lifecycle.evaluation.validated_copy(
-        update={'interval_optimizer_steps': 1, 'full_interval_optimizer_steps': 1}
+        update={'interval_generations': 1, 'full_interval_generations': 1}
     )
     lifecycle = configuration.training.lifecycle.validated_copy(
         update={
@@ -447,7 +474,7 @@ def test_go_shared_trainer_process_publishes_checkpoint(tmp_path: Path) -> None:
     save_model_and_optimizer(model, optimizer, 0, tmp_path)
     _write_go_run_manifest(tmp_path, configuration)
 
-    publisher = CompletedGamePublisher(tmp_path, run_id=9, worker_id=0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, run_id=9, worker_id=0)
     publisher.publish(_two_pass_game(publisher.reserve_identity()))
     trainer = TrainerProcess(GoImplementation(configuration), run_id=9, starting_model_version=0)
     try:

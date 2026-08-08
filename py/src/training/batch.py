@@ -16,6 +16,23 @@ class TrainingModelOutput:
 class TrainingBatch:
     states: torch.Tensor
     policy_targets: torch.Tensor
+    wdl_targets: torch.Tensor
+    root_values: torch.Tensor
+    auxiliary_targets: tuple[torch.Tensor, ...]
+    auxiliary_eligibility: tuple[torch.Tensor, ...]
+    sample_weights: torch.Tensor
+
+    def __post_init__(self) -> None:
+        if len(self.auxiliary_targets) != len(self.auxiliary_eligibility):
+            raise ValueError('Auxiliary targets and eligibility masks must have equal lengths.')
+
+
+@dataclass(frozen=True)
+class RuntimeTrainingBatch:
+    """Transitional batch consumed only by the pre-Phase-2 training runtime."""
+
+    states: torch.Tensor
+    policy_targets: torch.Tensor
     final_outcomes: torch.Tensor
     mcts_root_values: torch.Tensor
     outcome_target_eligible: torch.Tensor
@@ -31,11 +48,11 @@ class TrainingBatch:
     def __len__(self) -> int:
         return int(self.states.shape[0])
 
-    def row_view(self, start: int, stop: int) -> TrainingBatch:
+    def row_view(self, start: int, stop: int) -> RuntimeTrainingBatch:
         if not 0 <= start < stop <= len(self):
             raise ValueError(f'Batch row view [{start}, {stop}) is outside [0, {len(self)}).')
         rows = slice(start, stop)
-        return TrainingBatch(
+        return RuntimeTrainingBatch(
             states=self.states[rows],
             policy_targets=self.policy_targets[rows],
             final_outcomes=self.final_outcomes[rows],
@@ -51,8 +68,8 @@ class TrainingBatch:
             sample_weights=self.sample_weights[rows],
         )
 
-    def pin_memory(self) -> TrainingBatch:
-        return TrainingBatch(
+    def pin_memory(self) -> RuntimeTrainingBatch:
+        return RuntimeTrainingBatch(
             states=self.states.pin_memory(),
             policy_targets=self.policy_targets.pin_memory(),
             final_outcomes=self.final_outcomes.pin_memory(),
@@ -68,8 +85,8 @@ class TrainingBatch:
             sample_weights=self.sample_weights.pin_memory(),
         )
 
-    def to_device(self, device: torch.device, non_blocking: bool) -> TrainingBatch:
-        return TrainingBatch(
+    def to_device(self, device: torch.device, non_blocking: bool) -> RuntimeTrainingBatch:
+        return RuntimeTrainingBatch(
             states=self.states.to(device=device, non_blocking=non_blocking),
             policy_targets=self.policy_targets.to(device=device, non_blocking=non_blocking),
             final_outcomes=self.final_outcomes.to(device=device, non_blocking=non_blocking),

@@ -20,7 +20,7 @@ from src.games.chess.dataset import (
     ReplaySchemaVersionError,
     ReplaySampleMetadata,
     SelfPlayDataset,
-    TrainingBatch,
+    RuntimeTrainingBatch,
     preserve_prebatched_samples,
 )
 from src.self_play.value_target import ReplayValueTarget, TerminationReason
@@ -28,17 +28,17 @@ from src.training.trainer import prefetch_training_batches
 
 
 class FixedBatchLoader:
-    def __init__(self, batches: tuple[TrainingBatch, ...]) -> None:
+    def __init__(self, batches: tuple[RuntimeTrainingBatch, ...]) -> None:
         self.batches = batches
 
-    def __iter__(self) -> Iterator[TrainingBatch]:
+    def __iter__(self) -> Iterator[RuntimeTrainingBatch]:
         return iter(self.batches)
 
     def __len__(self) -> int:
         return len(self.batches)
 
 
-def assert_training_batches_equal(actual: TrainingBatch, expected: TrainingBatch) -> None:
+def assert_training_batches_equal(actual: RuntimeTrainingBatch, expected: RuntimeTrainingBatch) -> None:
     torch.testing.assert_close(actual.states, expected.states)
     torch.testing.assert_close(actual.policy_targets, expected.policy_targets)
     torch.testing.assert_close(actual.final_outcomes, expected.final_outcomes)
@@ -107,7 +107,7 @@ def test_vectorized_board_decode_matches_individual_decode() -> None:
 def test_prebatched_dataset_matches_individual_samples() -> None:
     samples = dataset()
     individual = [samples[index] for index in range(len(samples))]
-    expected = TrainingBatch(
+    expected = RuntimeTrainingBatch(
         states=torch.stack([sample.state for sample in individual]),
         policy_targets=torch.stack([sample.policy_target for sample in individual]),
         final_outcomes=torch.stack([sample.final_outcome for sample in individual]),

@@ -11,7 +11,7 @@ import torch
 from src.games.chess.encoding import decode_board_states_into, encode_board_state, get_board_result_score
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.board import ChessBoard
-from src.training.batch import ReplaySampleMetadata, TrainingBatch
+from src.training.batch import ReplaySampleMetadata, RuntimeTrainingBatch
 from src.games.chess.completed_game import ChessCompletedGame
 from src.self_play.completed_game_record import completed_game_from_path
 from src.self_play.value_target import ReplayValueTarget, TerminationReason, outcome_from_sample_perspective
@@ -26,7 +26,7 @@ from src.training.replay import (
     ReplaySnapshot,
     ReplayTrainingBatchLoader,
     append_archive_record,
-    canonical_game_payload,
+    runtime_completed_game_payload,
     index_archive,
     pack_visits,
     read_frame_payload,
@@ -41,7 +41,7 @@ __all__ = [
     'ReplayPhase',
     'append_chess_archive_record',
     'build_chess_training_batch',
-    'canonical_game_payload',
+    'runtime_completed_game_payload',
     'inspect_chess_archives',
     'materialize_chess_game',
     'pack_chess_visits',
@@ -197,7 +197,7 @@ def build_chess_training_batch(
     global_step: int,
     rank: int,
     sample_position_offset: int = 0,
-) -> TrainingBatch:
+) -> RuntimeTrainingBatch:
     samples = tuple(snapshot.samples[index] for index in sample_indices)
     batch_size = len(samples)
     states = np.empty(
@@ -233,7 +233,7 @@ def build_chess_training_batch(
     policies[mirrored] = 0.0
     mirrored_rows = np.flatnonzero(mirrored)
     policies[mirrored_rows[:, np.newaxis], CHESS_MIRROR_ACTION_MAP[np.newaxis, :]] = mirrored_policies
-    return TrainingBatch(
+    return RuntimeTrainingBatch(
         states=torch.from_numpy(states),
         policy_targets=torch.from_numpy(policies),
         final_outcomes=torch.tensor([int(sample.value_target.final_outcome) for sample in samples]),
@@ -343,7 +343,7 @@ class ChessReplayImplementation(ReplayGameImplementation[ChessCompletedGame]):
         global_step: int,
         rank: int,
         sample_position_offset: int,
-    ) -> TrainingBatch:
+    ) -> RuntimeTrainingBatch:
         return build_chess_training_batch(
             snapshot,
             sample_indices,

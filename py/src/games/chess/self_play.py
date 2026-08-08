@@ -35,7 +35,7 @@ from src.games.chess.completed_game import (
     ChessRulesMetadata,
     ChessSearchObservation,
 )
-from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
+from src.self_play.completed_game import RuntimeCompletedGamePublisher, RuntimeGameIdentity, SparseSearchVisit
 from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.self_play.worker import GameSelfPlayPolicy
 from src.games.chess.dataset_statistics import SelfPlayDatasetStats
@@ -101,7 +101,7 @@ class SelfPlayGame:
         is_resignation_audit: bool = False,
         production_resignation_enabled: bool = False,
         resignation_threshold: float | None = None,
-        identity: GameIdentity | None = None,
+        identity: RuntimeGameIdentity | None = None,
     ) -> None:
         self.board = CHESS_STATE_CONTRACT.initial_position()
         self.memory: list[SelfPlayGameMemory] = []
@@ -197,7 +197,7 @@ class ChessSelfPlayPolicy(
         device_id: int,
         configuration: ChessSelfPlayConfiguration,
         save_path: str,
-        completed_game_publisher: CompletedGamePublisher,
+        completed_game_publisher: RuntimeCompletedGamePublisher,
     ) -> None:
         self.device_id = device_id
         self.args = configuration

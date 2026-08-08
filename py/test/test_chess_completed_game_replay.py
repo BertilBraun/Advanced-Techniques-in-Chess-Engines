@@ -17,7 +17,7 @@ from src.games.chess.completed_game import (
     ChessRulesMetadata,
     ChessSearchObservation,
 )
-from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
+from src.self_play.completed_game import RuntimeCompletedGamePublisher, SparseSearchVisit
 from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame, SelfPlayGameMemory
 from src.games.chess.self_play_statistics import SelfPlayStatistics
 from src.self_play.value_target import FinalOutcome, TerminationReason
@@ -28,7 +28,7 @@ from src.games.chess.replay import (
     ReplayPhase,
     append_chess_archive_record,
     build_chess_training_batch,
-    canonical_game_payload,
+    runtime_completed_game_payload,
     inspect_chess_archives,
     materialize_chess_game,
     pack_chess_visits,
@@ -46,7 +46,7 @@ def chess_replay_maintainer(run_path: Path, capacity: int, sampler_seed: int) ->
 
 
 def completed_game(
-    publisher: CompletedGamePublisher,
+    publisher: RuntimeCompletedGamePublisher,
     model_generation: int = 3,
 ) -> ChessCompletedGame:
     identity = publisher.reserve_identity()
@@ -97,9 +97,9 @@ def completed_game(
 
 
 def test_concurrent_publishers_create_complete_unique_game_files(tmp_path: Path) -> None:
-    publishers = tuple(CompletedGamePublisher(tmp_path, 17, worker_id) for worker_id in range(8))
+    publishers = tuple(RuntimeCompletedGamePublisher(tmp_path, 17, worker_id) for worker_id in range(8))
 
-    def publish(publisher: CompletedGamePublisher) -> Path:
+    def publish(publisher: RuntimeCompletedGamePublisher) -> Path:
         game = completed_game(publisher)
         return publisher.publish(game)
 
@@ -113,7 +113,7 @@ def test_concurrent_publishers_create_complete_unique_game_files(tmp_path: Path)
 
 
 def test_self_play_completion_publishes_game_instead_of_writing_samples(tmp_path: Path) -> None:
-    publisher = CompletedGamePublisher(tmp_path, 18, 2)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, 18, 2)
     self_play = object.__new__(ChessSelfPlayPolicy)
     self_play.args = SimpleNamespace()
     self_play.resolved_parameters = SimpleNamespace(greedy_after_ply=30, minimum_root_visits=0)
@@ -140,7 +140,7 @@ def test_self_play_completion_publishes_game_instead_of_writing_samples(tmp_path
 
 
 def test_materializer_derives_current_chess_targets_and_source_metadata(tmp_path: Path) -> None:
-    game = completed_game(CompletedGamePublisher(tmp_path, 2, 0))
+    game = completed_game(RuntimeCompletedGamePublisher(tmp_path, 2, 0))
 
     samples = materialize_chess_game(game)
 
@@ -171,7 +171,7 @@ def test_packed_chess_visits_reject_values_outside_uint16(visits: tuple[tuple[in
 
 
 def test_ineligible_fast_search_is_archived_and_counted_without_earning_credit(tmp_path: Path) -> None:
-    game = completed_game(CompletedGamePublisher(tmp_path, 20, 0))
+    game = completed_game(RuntimeCompletedGamePublisher(tmp_path, 20, 0))
     fast_observation = game.observations[1].model_copy(update={'sample_eligible': False, 'search_budget': 3})
     game = game.model_copy(update={'observations': (game.observations[0], fast_observation, *game.observations[2:])})
     replay = Replay(CHESS_REPLAY_IMPLEMENTATION, capacity=10, sampler_seed=2)
@@ -185,7 +185,7 @@ def test_ineligible_fast_search_is_archived_and_counted_without_earning_credit(t
 
 
 def test_resignation_materializes_final_unplayed_search_position(tmp_path: Path) -> None:
-    publisher = CompletedGamePublisher(tmp_path, 22, 0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, 22, 0)
     game = completed_game(publisher)
     board = ChessBoard()
     for move_uci in FOOLS_MATE[:3]:
@@ -219,13 +219,13 @@ def test_resignation_materializes_final_unplayed_search_position(tmp_path: Path)
 
 
 def test_archive_recovers_incomplete_final_frame(tmp_path: Path) -> None:
-    publisher = CompletedGamePublisher(tmp_path, 3, 0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, 3, 0)
     first = completed_game(publisher)
     second = completed_game(publisher)
     archive = tmp_path / 'archive.games'
-    append_chess_archive_record(archive, canonical_game_payload(first), ingestion_sequence=0)
+    append_chess_archive_record(archive, runtime_completed_game_payload(first), ingestion_sequence=0)
     first_size = archive.stat().st_size
-    append_chess_archive_record(archive, canonical_game_payload(second), ingestion_sequence=1)
+    append_chess_archive_record(archive, runtime_completed_game_payload(second), ingestion_sequence=1)
     with archive.open('r+b') as file:
         file.truncate(archive.stat().st_size - 11)
 
@@ -237,11 +237,11 @@ def test_archive_recovers_incomplete_final_frame(tmp_path: Path) -> None:
 
 
 def test_restart_recovers_archived_inbox_game_exactly_once(tmp_path: Path) -> None:
-    publisher = CompletedGamePublisher(tmp_path, 4, 0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, 4, 0)
     game = completed_game(publisher)
     inbox_file = publisher.publish(game)
     archive = tmp_path / 'completed-games' / 'archive' / 'model-generation-00000000000000000003.games'
-    append_chess_archive_record(archive, canonical_game_payload(game), ingestion_sequence=0)
+    append_chess_archive_record(archive, runtime_completed_game_payload(game), ingestion_sequence=0)
 
     maintainer = chess_replay_maintainer(tmp_path, capacity=100, sampler_seed=11)
     snapshot, _ = maintainer.maintain(100)
@@ -253,7 +253,7 @@ def test_restart_recovers_archived_inbox_game_exactly_once(tmp_path: Path) -> No
 
 
 def test_archive_rebuild_matches_live_fifo_samples_and_credits(tmp_path: Path) -> None:
-    publisher = CompletedGamePublisher(tmp_path, 5, 0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, 5, 0)
     games = tuple(completed_game(publisher) for _ in range(3))
     for game in games:
         publisher.publish(game)
@@ -276,7 +276,7 @@ def test_restart_materializes_only_the_newest_frames_needed_for_capacity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publisher = CompletedGamePublisher(tmp_path, 23, 0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, 23, 0)
     for model_generation in range(5):
         publisher.publish(completed_game(publisher, model_generation=model_generation))
     chess_replay_maintainer(tmp_path, capacity=20, sampler_seed=29).maintain(20)
@@ -297,7 +297,7 @@ def test_restart_materializes_only_the_newest_frames_needed_for_capacity(
 
 
 def test_archive_ingestion_sequence_preserves_late_older_generation_order(tmp_path: Path) -> None:
-    publisher = CompletedGamePublisher(tmp_path, 21, 0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, 21, 0)
     publisher.publish(completed_game(publisher, model_generation=2))
     maintainer = chess_replay_maintainer(tmp_path, capacity=20, sampler_seed=5)
     maintainer.maintain(20)
@@ -311,7 +311,7 @@ def test_archive_ingestion_sequence_preserves_late_older_generation_order(tmp_pa
 
 
 def test_fifo_phase_capacity_and_deterministic_nonoverlapping_rank_sampling(tmp_path: Path) -> None:
-    publisher = CompletedGamePublisher(tmp_path, 6, 0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, 6, 0)
     replay = Replay(CHESS_REPLAY_IMPLEMENTATION, capacity=6, sampler_seed=31)
     replay.ingest_game(completed_game(publisher))
     replay.ingest_game(completed_game(publisher))
@@ -345,7 +345,7 @@ def test_preallocated_batch_encoding_applies_deterministic_chess_symmetry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publisher = CompletedGamePublisher(tmp_path, 7, 0)
+    publisher = RuntimeCompletedGamePublisher(tmp_path, 7, 0)
     replay = Replay(CHESS_REPLAY_IMPLEMENTATION, capacity=10, sampler_seed=41)
     replay.ingest_game(completed_game(publisher))
     snapshot = replay.freeze()

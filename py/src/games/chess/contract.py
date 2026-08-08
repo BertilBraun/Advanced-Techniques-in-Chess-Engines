@@ -8,6 +8,8 @@ from src.games.chess.game import BOARD_LENGTH, ChessGame, DictMove, index_to_squ
 from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
 from src.neural_network import NetworkDimensions
 from src.packed_planes import PackedPlaneLayout, PackedPlanePayload, decode_packed_planes, encode_packed_planes
+from src.replay.contracts import EligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
+from src.self_play.completed_game import SparseSearchVisit, TerminationReason
 
 
 class ChessStateContract(GameStateContract[ChessBoard]):
@@ -63,7 +65,9 @@ class ChessStateContract(GameStateContract[ChessBoard]):
             return WdlTarget(win=1.0, draw=0.0, loss=0.0)
         return WdlTarget(win=0.0, draw=0.0, loss=1.0)
 
-    def adjudicated_wdl(self, position: ChessBoard) -> WdlTarget:
+    def adjudicated_wdl(self, position: ChessBoard, reason: TerminationReason) -> WdlTarget:
+        if reason not in {TerminationReason.MAXIMUM_PLIES, TerminationReason.ADJUDICATION}:
+            raise ValueError(f'Chess cannot adjudicate termination reason {reason.value}.')
         material_score = 0
         for piece_type, value in PIECE_VALUE.items():
             material_score += value * len(position.board.pieces(piece_type, position.board.turn))
@@ -119,6 +123,36 @@ class ChessStateContract(GameStateContract[ChessBoard]):
             representation.packed_planes,
             representation.binary_channels,
             representation.scalar_channels,
+        )
+
+    def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
+        def transform_policy(policy: SparsePolicyTarget) -> SparsePolicyTarget:
+            return SparsePolicyTarget(
+                visits=tuple(
+                    SparseSearchVisit(
+                        action_id=self.transform_action_id(visit.action_id, augmentation_index),
+                        visit_count=visit.visit_count,
+                    )
+                    for visit in policy.visits
+                )
+            )
+
+        transformed_auxiliary = []
+        for target in sample.auxiliary_targets:
+            match target:
+                case EligibleNextPolicyTarget(policy=policy):
+                    transformed_auxiliary.append(EligibleNextPolicyTarget(policy=transform_policy(policy)))
+                case _:
+                    transformed_auxiliary.append(target)
+        return ReplaySample(
+            encoded_state=self.transform_encoded_state(sample.encoded_state, augmentation_index),
+            policy=transform_policy(sample.policy),
+            wdl_target=sample.wdl_target,
+            root_value=sample.root_value,
+            auxiliary_targets=tuple(transformed_auxiliary),
+            sample_weight=sample.sample_weight,
+            source_model_generation=sample.source_model_generation,
+            source_created_at_seconds=sample.source_created_at_seconds,
         )
 
     def canonical_board(self, board: ChessBoard) -> npt.NDArray[np.int8]:

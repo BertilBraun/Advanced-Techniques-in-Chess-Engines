@@ -11,7 +11,7 @@ from torch.nn import functional as F
 from src.neural_network import Network
 from src.games.chess.training import ChessTrainingObjective
 from src.experiment.generation_schedule import ConstantSchedule, LinearSchedule, ScheduleRounding
-from src.training.batch import TrainingBatch
+from src.training.batch import RuntimeTrainingBatch
 from src.self_play.value_target import (
     FinalOutcome,
     ReplayValueTarget,
@@ -39,11 +39,11 @@ class FixedValueNetwork(Network):
 
 
 class FixedBatchLoader:
-    def __init__(self, batch: TrainingBatch, repetitions: int = 1) -> None:
+    def __init__(self, batch: RuntimeTrainingBatch, repetitions: int = 1) -> None:
         self.batch = batch
         self.repetitions = repetitions
 
-    def __iter__(self) -> Iterator[TrainingBatch]:
+    def __iter__(self) -> Iterator[RuntimeTrainingBatch]:
         for _ in range(self.repetitions):
             yield self.batch
 
@@ -70,11 +70,11 @@ def training_batch(
     reasons: tuple[TerminationReason, ...],
     material_scores: tuple[float, ...] | None = None,
     material_eligibility: tuple[bool, ...] | None = None,
-) -> TrainingBatch:
+) -> RuntimeTrainingBatch:
     sample_count = len(outcomes)
     resolved_material_scores = material_scores or (0.0,) * sample_count
     resolved_material_eligibility = material_eligibility or (False,) * sample_count
-    return TrainingBatch(
+    return RuntimeTrainingBatch(
         states=torch.zeros((sample_count, 1)),
         policy_targets=torch.full((sample_count, 2), 0.5),
         final_outcomes=torch.tensor(tuple(int(outcome) for outcome in outcomes)),

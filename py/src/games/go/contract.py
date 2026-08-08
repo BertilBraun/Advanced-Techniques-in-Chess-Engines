@@ -10,6 +10,8 @@ from AlphaZeroCpp import GoPlayer, GoPosition7, GoPosition9, GoRules
 
 from src.neural_network import NetworkDimensions
 from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
+from src.replay.contracts import EligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
+from src.self_play.completed_game import SparseSearchVisit, TerminationReason
 from src.packed_planes import (
     PackedPlaneLayout,
     PackedPlanePayload,
@@ -113,7 +115,9 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
             return WdlTarget(win=0.0, draw=0.0, loss=1.0)
         return WdlTarget(win=0.0, draw=1.0, loss=0.0)
 
-    def adjudicated_wdl(self, position: NativeGoPosition) -> WdlTarget:
+    def adjudicated_wdl(self, position: NativeGoPosition, reason: TerminationReason) -> WdlTarget:
+        if reason not in {TerminationReason.MAXIMUM_PLIES, TerminationReason.ADJUDICATION}:
+            raise ValueError(f'Go cannot adjudicate termination reason {reason.value}.')
         target = self.terminal_wdl(position)
         if target is None:
             raise ValueError('Go adjudication requires a scored terminal position.')
@@ -161,6 +165,36 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
             case GoSymmetryIndex.REFLECT_ROTATE_270:
                 transformed_x, transformed_y = y, x
         return transformed_y * self.board_size + transformed_x
+
+    def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
+        def transform_policy(policy: SparsePolicyTarget) -> SparsePolicyTarget:
+            return SparsePolicyTarget(
+                visits=tuple(
+                    SparseSearchVisit(
+                        action_id=self.transform_action_id(visit.action_id, augmentation_index),
+                        visit_count=visit.visit_count,
+                    )
+                    for visit in policy.visits
+                )
+            )
+
+        transformed_auxiliary = []
+        for target in sample.auxiliary_targets:
+            match target:
+                case EligibleNextPolicyTarget(policy=policy):
+                    transformed_auxiliary.append(EligibleNextPolicyTarget(policy=transform_policy(policy)))
+                case _:
+                    transformed_auxiliary.append(target)
+        return ReplaySample(
+            encoded_state=self.transform_encoded_state(sample.encoded_state, augmentation_index),
+            policy=transform_policy(sample.policy),
+            wdl_target=sample.wdl_target,
+            root_value=sample.root_value,
+            auxiliary_targets=tuple(transformed_auxiliary),
+            sample_weight=sample.sample_weight,
+            source_model_generation=sample.source_model_generation,
+            source_created_at_seconds=sample.source_created_at_seconds,
+        )
 
     def transform_encoded_state(
         self,

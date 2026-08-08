@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame, has_positive_visit_counts
-from src.self_play.completed_game import CompletedGamePublisher
+from src.self_play.completed_game import RuntimeCompletedGamePublisher
 from src.games.chess.search_schedule import SearchScheduleState
 from test_helpers.chess_configuration import CHESS_SELF_PLAY
 from src.training.configuration import BatchedInferenceParams
@@ -157,7 +157,7 @@ def test_self_play_constructs_batched_inference_runtime_during_search_warmup(
         device_id=0,
         configuration=self_play_args,
         save_path=str(tmp_path),
-        completed_game_publisher=CompletedGamePublisher(tmp_path, 0, 0),
+        completed_game_publisher=RuntimeCompletedGamePublisher(tmp_path, 0, 0),
     )
 
     self_play.refresh_model(50, tmp_path / 'model-50.jit.pt', ())
@@ -189,7 +189,7 @@ def test_self_play_constructs_direct_inference_pipeline(
         device_id=0,
         configuration=self_play_args,
         save_path=str(tmp_path),
-        completed_game_publisher=CompletedGamePublisher(tmp_path, 0, 0),
+        completed_game_publisher=RuntimeCompletedGamePublisher(tmp_path, 0, 0),
     )
 
     self_play.refresh_model(50, tmp_path / 'model-50.jit.pt', ())

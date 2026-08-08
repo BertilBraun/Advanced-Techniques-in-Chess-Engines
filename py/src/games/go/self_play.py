@@ -24,7 +24,7 @@ from AlphaZeroCpp import (
 
 from src.games.go.configuration import GoExperimentConfiguration
 from src.util.tensorboard import log_scalar
-from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
+from src.self_play.completed_game import RuntimeCompletedGamePublisher, SparseSearchVisit
 from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.self_play.worker import GameSelfPlayPolicy
 from src.games.go.completed_game import (
@@ -62,7 +62,7 @@ class GoSelfPlayPolicy(
     def __init__(
         self,
         configuration: GoExperimentConfiguration,
-        publisher: CompletedGamePublisher,
+        publisher: RuntimeCompletedGamePublisher,
         device_id: int,
     ) -> None:
         self.configuration = configuration

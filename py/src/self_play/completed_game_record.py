@@ -4,7 +4,7 @@ from typing import Annotated, TypeAlias
 from pydantic import Field, TypeAdapter
 
 from src.games.chess.completed_game import ChessCompletedGame
-from src.self_play.completed_game import identity_from_file_name
+from src.self_play.completed_game import runtime_identity_from_file_name
 from src.games.go.completed_game import GoCompletedGame
 
 
@@ -14,6 +14,6 @@ _COMPLETED_GAME_ADAPTER = TypeAdapter(CompletedGame)
 
 def completed_game_from_path(path: Path) -> CompletedGame:
     game = _COMPLETED_GAME_ADAPTER.validate_json(path.read_text(encoding='utf-8'))
-    if game.identity != identity_from_file_name(path.name):
+    if game.identity != runtime_identity_from_file_name(path.name):
         raise ValueError(f'Completed-game identity does not match its file name: {path}')
     return game

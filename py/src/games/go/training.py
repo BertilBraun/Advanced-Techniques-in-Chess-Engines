@@ -20,10 +20,11 @@ from src.games.go.self_play import (
     NativeGoSearchRequest,
     NativeGoSearchResult,
 )
-from src.self_play.completed_game import CompletedGamePublisher
-from src.training.batch import TrainingBatch
+from src.self_play.completed_game import RuntimeCompletedGamePublisher
+from src.training.batch import RuntimeTrainingBatch
 from src.training.replay import ReplayGameImplementation
-from src.training.trainer import LossResult, TrainingObjective
+from src.training.objective import ResolvedTrainingObjective
+from src.training.trainer import LossResult, RuntimeTrainingObjective
 from src.training.configuration import TrainingObjectiveConfiguration
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 from src.self_play.value_target import FinalOutcome
@@ -37,7 +38,7 @@ class GoLoss:
     total: torch.Tensor
 
 
-class GoTrainingObjective(TrainingObjective):
+class GoTrainingObjective(RuntimeTrainingObjective, ResolvedTrainingObjective):
     def __init__(self, configuration: TrainingObjectiveConfiguration, model_generation: int) -> None:
         self.configuration = configuration
         self.model_generation = model_generation
@@ -57,10 +58,16 @@ class GoTrainingObjective(TrainingObjective):
     def root_value_blend(self) -> float:
         return self._root_value_blend
 
-    def calculate_loss(
+    @property
+    def auxiliary_loss_weights(self) -> tuple[float, ...]:
+        return tuple(
+            target.loss_weight.value_at(self.model_generation) for target in self.configuration.auxiliary_targets
+        )
+
+    def calculate_runtime_loss(
         self,
         training_model: nn.Module,
-        batch: TrainingBatch,
+        batch: RuntimeTrainingBatch,
         device: torch.device,
     ) -> LossResult:
         states = batch.states.to(device=device)
@@ -112,7 +119,7 @@ def create_go_model(configuration: GoExperimentConfiguration, device: torch.devi
 
 def calculate_go_loss(
     model: Network,
-    batch: TrainingBatch,
+    batch: RuntimeTrainingBatch,
     objective: TrainingObjectiveConfiguration,
     model_generation: int = 0,
 ) -> GoLoss:
@@ -131,7 +138,7 @@ def calculate_go_loss(
 def calculate_go_loss_from_logits(
     policy_logits: torch.Tensor,
     value_logits: torch.Tensor,
-    batch: TrainingBatch,
+    batch: RuntimeTrainingBatch,
     objective: TrainingObjectiveConfiguration,
     model_generation: int,
     device: torch.device,
@@ -200,12 +207,12 @@ class GoImplementation(
     def replay(self) -> ReplayGameImplementation[GoCompletedGame]:
         return self._replay
 
-    def training_objective_at(self, model_generation: int) -> TrainingObjective:
+    def training_objective_at(self, model_generation: int) -> ResolvedTrainingObjective:
         return GoTrainingObjective(self.configuration.go.objective, model_generation)
 
     def create_self_play_policy(
         self,
         device_id: int,
-        publisher: CompletedGamePublisher,
+        publisher: RuntimeCompletedGamePublisher,
     ) -> GoSelfPlayPolicy:
         return GoSelfPlayPolicy(self.configuration, publisher, device_id)

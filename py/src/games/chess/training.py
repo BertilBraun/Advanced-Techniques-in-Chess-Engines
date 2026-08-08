@@ -15,18 +15,19 @@ from src.games.chess.self_play import (
     SelfPlayStatisticsSnapshot,
 )
 from src.games.chess.completed_game import ChessCompletedGame
-from src.self_play.completed_game import CompletedGamePublisher
+from src.self_play.completed_game import RuntimeCompletedGamePublisher
 from src.games.chess.replay import CHESS_REPLAY_IMPLEMENTATION
 from src.training.replay import ReplayGameImplementation
-from src.training.batch import TrainingBatch
+from src.training.batch import RuntimeTrainingBatch
 from src.training.configuration import TrainingObjectiveConfiguration, TrainingParams
-from src.training.trainer import LossResult, TrainingObjective
+from src.training.objective import ResolvedTrainingObjective
+from src.training.trainer import LossResult, RuntimeTrainingObjective
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 from src.self_play.value_target import FinalOutcome
 from src.value import scalar_to_wdl
 
 
-class ChessTrainingObjective(TrainingObjective):
+class ChessTrainingObjective(RuntimeTrainingObjective, ResolvedTrainingObjective):
     def __init__(
         self,
         parameters: TrainingParams,
@@ -56,10 +57,16 @@ class ChessTrainingObjective(TrainingObjective):
             return self.value_target_weight_override
         return self._root_value_blend
 
-    def calculate_loss(
+    @property
+    def auxiliary_loss_weights(self) -> tuple[float, ...]:
+        return tuple(
+            target.loss_weight.value_at(self.model_generation) for target in self.configuration.auxiliary_targets
+        )
+
+    def calculate_runtime_loss(
         self,
         training_model: nn.Module,
-        batch: TrainingBatch,
+        batch: RuntimeTrainingBatch,
         device: torch.device,
     ) -> LossResult:
         mcts_value_target_weight = self.root_value_blend
@@ -150,7 +157,7 @@ class ChessImplementation(
     def replay(self) -> ReplayGameImplementation[ChessCompletedGame]:
         return CHESS_REPLAY_IMPLEMENTATION
 
-    def training_objective_at(self, model_generation: int) -> TrainingObjective:
+    def training_objective_at(self, model_generation: int) -> ResolvedTrainingObjective:
         return ChessTrainingObjective(
             self.training.trainer,
             self.configuration.chess.objective,
@@ -160,7 +167,7 @@ class ChessImplementation(
     def create_self_play_policy(
         self,
         device_id: int,
-        publisher: CompletedGamePublisher,
+        publisher: RuntimeCompletedGamePublisher,
     ) -> ChessSelfPlayPolicy:
         return ChessSelfPlayPolicy(
             device_id,

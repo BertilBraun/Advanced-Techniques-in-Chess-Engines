@@ -7,8 +7,8 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from src.self_play.completed_game import (
-    CompletedGameRecord,
-    GameIdentity,
+    RuntimeCompletedGameRecord,
+    RuntimeGameIdentity,
     SparseSearchVisit,
 )
 from src.util.frozen_model import FrozenModel
@@ -70,10 +70,10 @@ class GoSearchObservation(FrozenModel):
         return self
 
 
-class GoCompletedGame(CompletedGameRecord):
+class GoCompletedGame(RuntimeCompletedGameRecord):
     schema_version: Literal[2] = GO_COMPLETED_GAME_SCHEMA_VERSION
     game: Literal['go'] = 'go'
-    identity: GameIdentity
+    identity: RuntimeGameIdentity
     rules: GoRulesMetadata
     representation: GoRepresentationMetadata
     model_generation: int = Field(ge=0)

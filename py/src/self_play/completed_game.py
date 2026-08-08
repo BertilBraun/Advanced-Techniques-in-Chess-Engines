@@ -5,6 +5,7 @@ import re
 from enum import Enum
 from math import isfinite
 from typing import Literal
+from uuid import UUID
 
 from pydantic import Field
 
@@ -13,10 +14,26 @@ from src.util.frozen_model import FrozenModel
 from src.games.contracts import WdlTarget
 
 
-_GAME_FILE_PATTERN = re.compile(r'run-(?P<run>\d+)-worker-(?P<worker>\d+)-game-(?P<game>\d+)\.json')
+_RUNTIME_GAME_FILE_PATTERN = re.compile(r'run-(?P<run>\d+)-worker-(?P<worker>\d+)-game-(?P<game>\d+)\.json')
 
 
 class GameIdentity(FrozenModel):
+    worker_id: int = Field(ge=0)
+    process_instance_id: UUID
+    game_number: int = Field(ge=0)
+
+    @property
+    def file_name(self) -> str:
+        return f'worker-{self.worker_id}-process-{self.process_instance_id}-game-{self.game_number:020d}.json'
+
+    @property
+    def archive_key(self) -> str:
+        return f'{self.worker_id}:{self.process_instance_id}:{self.game_number}'
+
+
+class RuntimeGameIdentity(FrozenModel):
+    """Identity retained by the pre-Phase-2 completed-game runtime."""
+
     run_id: int = Field(ge=0)
     worker_id: int = Field(ge=0)
     game_number: int = Field(ge=0)
@@ -32,11 +49,11 @@ class GameIdentity(FrozenModel):
 
 class SparseSearchVisit(FrozenModel):
     action_id: int = Field(ge=0)
-    visit_count: int = Field(ge=0)
+    visit_count: int = Field(gt=0)
 
 
-class CompletedGameRecord(FrozenModel):
-    identity: GameIdentity
+class RuntimeCompletedGameRecord(FrozenModel):
+    identity: RuntimeGameIdentity
 
 
 class TerminationReason(str, Enum):
@@ -67,7 +84,7 @@ class SearchObservation(FrozenModel):
             raise ValueError('Search visits must contain positive total visits.')
 
 
-class CompletedSelfPlayGame(CompletedGameRecord):
+class CompletedSelfPlayGame(FrozenModel):
     schema_version: Literal[1] = 1
     identity: GameIdentity
     created_at_seconds: float = Field(ge=0.0)
@@ -87,12 +104,12 @@ class CompletedSelfPlayGame(CompletedGameRecord):
             raise ValueError('Observed selected actions must agree with the played trajectory.')
 
 
-class CompletedGamePublisherState(FrozenModel):
+class RuntimeCompletedGamePublisherState(FrozenModel):
     schema_version: Literal[1] = 1
     next_game_number: int = Field(ge=0)
 
 
-class CompletedGamePublisher:
+class RuntimeCompletedGamePublisher:
     def __init__(self, run_path: Path, run_id: int, worker_id: int) -> None:
         if run_id < 0 or worker_id < 0:
             raise ValueError('Run and worker identifiers must be nonnegative.')
@@ -101,18 +118,18 @@ class CompletedGamePublisher:
         self.run_id = run_id
         self.worker_id = worker_id
 
-    def reserve_identity(self) -> GameIdentity:
+    def reserve_identity(self) -> RuntimeGameIdentity:
         state = self._load_state()
-        identity = GameIdentity(
+        identity = RuntimeGameIdentity(
             run_id=self.run_id,
             worker_id=self.worker_id,
             game_number=state.next_game_number,
         )
-        next_state = CompletedGamePublisherState(next_game_number=state.next_game_number + 1)
+        next_state = RuntimeCompletedGamePublisherState(next_game_number=state.next_game_number + 1)
         write_text_atomically(self.state_path, next_state.model_dump_json(indent=2) + '\n')
         return identity
 
-    def publish(self, game: CompletedGameRecord) -> Path:
+    def publish(self, game: RuntimeCompletedGameRecord) -> Path:
         if game.identity.run_id != self.run_id or game.identity.worker_id != self.worker_id:
             raise ValueError('Completed-game identity does not belong to this publisher.')
         path = self.inbox_path / game.identity.file_name
@@ -124,18 +141,26 @@ class CompletedGamePublisher:
         write_text_atomically(path, payload)
         return path
 
-    def _load_state(self) -> CompletedGamePublisherState:
+    def _load_state(self) -> RuntimeCompletedGamePublisherState:
         if not self.state_path.exists():
-            return CompletedGamePublisherState(next_game_number=0)
-        return CompletedGamePublisherState.model_validate_json(self.state_path.read_text(encoding='utf-8'))
+            return RuntimeCompletedGamePublisherState(next_game_number=0)
+        return RuntimeCompletedGamePublisherState.model_validate_json(self.state_path.read_text(encoding='utf-8'))
 
 
-def identity_from_file_name(file_name: str) -> GameIdentity:
-    match = _GAME_FILE_PATTERN.fullmatch(file_name)
+def runtime_identity_from_file_name(file_name: str) -> RuntimeGameIdentity:
+    match = _RUNTIME_GAME_FILE_PATTERN.fullmatch(file_name)
     if match is None:
         raise ValueError(f'Invalid completed-game file name: {file_name}')
-    return GameIdentity(
+    return RuntimeGameIdentity(
         run_id=int(match.group('run')),
         worker_id=int(match.group('worker')),
         game_number=int(match.group('game')),
     )
+
+
+def publish_completed_self_play_game(inbox_path: Path, game: CompletedSelfPlayGame) -> Path:
+    path = inbox_path / game.identity.file_name
+    if path.exists():
+        raise ValueError(f'Completed-game identity already exists: {path}')
+    write_text_atomically(path, game.model_dump_json() + '\n')
+    return path

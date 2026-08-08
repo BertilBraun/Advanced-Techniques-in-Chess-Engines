@@ -17,8 +17,8 @@ import numpy as np
 import numpy.typing as npt
 
 from src.packed_planes import PackedPlanePayload
-from src.training.batch import ReplaySampleMetadata, TrainingBatch
-from src.self_play.completed_game import CompletedGameRecord, GameIdentity
+from src.training.batch import ReplaySampleMetadata, RuntimeTrainingBatch
+from src.self_play.completed_game import RuntimeCompletedGameRecord, RuntimeGameIdentity
 from src.self_play.value_target import ReplayValueTarget
 from src.training.replay_sampling import deterministic_rank_indices
 from src.util.atomic_file import fsync_directory, write_bytes_atomically
@@ -145,13 +145,13 @@ class ArchiveFrameIndex:
     payload_offset: int
     payload_length: int
     payload_digest: bytes
-    identity: GameIdentity
+    identity: RuntimeGameIdentity
     model_generation: int
     eligible_sample_count: int
     completed_searches: int
 
 
-CompletedGameT = TypeVar('CompletedGameT', bound=CompletedGameRecord)
+CompletedGameT = TypeVar('CompletedGameT', bound=RuntimeCompletedGameRecord)
 
 
 class ReplayGameImplementation(ABC, Generic[CompletedGameT]):
@@ -193,7 +193,7 @@ class ReplayGameImplementation(ABC, Generic[CompletedGameT]):
         global_step: int,
         rank: int,
         sample_position_offset: int,
-    ) -> TrainingBatch:
+    ) -> RuntimeTrainingBatch:
         raise NotImplementedError
 
 
@@ -225,7 +225,7 @@ class ReplayTrainingBatchLoader(Generic[CompletedGameT]):
         self.pin_memory = pin_memory
         self.preparation_seconds = 0.0
 
-    def __iter__(self) -> Iterator[TrainingBatch]:
+    def __iter__(self) -> Iterator[RuntimeTrainingBatch]:
         for offset in range(0, len(self.indices), self.local_batch_size):
             started_at = time.perf_counter()
             batch = self.implementation.build_batch(
@@ -354,7 +354,7 @@ class ReplayMaintainer(Generic[CompletedGameT]):
         self.archive_path = run_path / 'completed-games' / 'archive'
         self.implementation = implementation
         self.replay = Replay(implementation, capacity, sampler_seed)
-        self._archived_digests: dict[GameIdentity, bytes] = {}
+        self._archived_digests: dict[RuntimeGameIdentity, bytes] = {}
         self._next_ingestion_sequence = 0
         self._recover_and_rebuild()
 
@@ -362,7 +362,7 @@ class ReplayMaintainer(Generic[CompletedGameT]):
         self.replay.begin_ingestion(capacity)
         for inbox_file in sorted(self.inbox_path.glob('*.json')):
             game = self.implementation.parse_file(inbox_file)
-            payload = canonical_game_payload(game)
+            payload = runtime_completed_game_payload(game)
             payload_digest = hashlib.sha256(payload).digest()
             archived_digest = self._archived_digests.get(game.identity)
             if archived_digest is None:
@@ -429,7 +429,7 @@ class ReplayMaintainer(Generic[CompletedGameT]):
         return game
 
 
-def canonical_game_payload(game: CompletedGameRecord) -> bytes:
+def runtime_completed_game_payload(game: RuntimeCompletedGameRecord) -> bytes:
     return game.model_dump_json().encode('utf-8')
 
 
@@ -437,7 +437,7 @@ def append_archive_record(
     path: Path,
     payload: bytes,
     ingestion_sequence: int,
-    identity: GameIdentity,
+    identity: RuntimeGameIdentity,
     model_generation: int,
     eligible_sample_count: int,
     completed_searches: int,
@@ -509,7 +509,7 @@ def index_archive(path: Path, recover_incomplete: bool) -> tuple[ArchiveFrameInd
                     payload_offset=payload_offset,
                     payload_length=payload_length,
                     payload_digest=payload_digest,
-                    identity=GameIdentity(run_id=run_id, worker_id=worker_id, game_number=game_number),
+                    identity=RuntimeGameIdentity(run_id=run_id, worker_id=worker_id, game_number=game_number),
                     model_generation=model_generation,
                     eligible_sample_count=eligible_sample_count,
                     completed_searches=completed_searches,

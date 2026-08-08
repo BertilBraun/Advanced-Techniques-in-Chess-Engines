@@ -10,7 +10,7 @@ from AlphaZeroCpp import GoPlayer
 
 from src.games.go.contract import GoStateContract, GoSymmetryIndex, NativeGoPosition
 from src.packed_planes import PackedPlanePayload
-from src.training.batch import ReplaySampleMetadata, TrainingBatch
+from src.training.batch import ReplaySampleMetadata, RuntimeTrainingBatch
 from src.self_play.completed_game_record import completed_game_from_path
 from src.games.go.completed_game import GoCompletedGame
 from src.self_play.value_target import ReplayValueTarget, TerminationReason, outcome_from_sample_perspective
@@ -145,7 +145,7 @@ def build_go_training_batch(
     global_step: int,
     rank: int,
     sample_position_offset: int = 0,
-) -> TrainingBatch:
+) -> RuntimeTrainingBatch:
     samples = tuple(snapshot.samples[index] for index in sample_indices)
     batch_size = len(samples)
     states = np.empty(
@@ -161,7 +161,7 @@ def build_go_training_batch(
         counts = sample.visits[:, 1].astype(np.float32, copy=False)
         policies[row, actions] = counts / counts.sum()
     contract.decode_batch_into(tuple(transformed_states), states)
-    return TrainingBatch(
+    return RuntimeTrainingBatch(
         states=torch.from_numpy(states),
         policy_targets=torch.from_numpy(policies),
         final_outcomes=torch.tensor([int(sample.value_target.final_outcome) for sample in samples]),
@@ -225,7 +225,7 @@ class GoReplayImplementation(ReplayGameImplementation[GoCompletedGame]):
         global_step: int,
         rank: int,
         sample_position_offset: int,
-    ) -> TrainingBatch:
+    ) -> RuntimeTrainingBatch:
         return build_go_training_batch(
             self.contract,
             snapshot,
