@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
+from typing import Protocol
 
 import numpy as np
 import numpy.typing as npt
-
-from AlphaZeroCpp import GoPlayer, GoPosition7, GoPosition9, GoRules
 
 from src.neural_network import NetworkDimensions
 from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
@@ -21,7 +20,31 @@ from src.packed_planes import (
 )
 
 
-NativeGoPosition = GoPosition7 | GoPosition9
+class NativeEnumValue(Protocol):
+    @property
+    def name(self) -> str: ...
+
+
+class NativeGoPosition(Protocol):
+    @property
+    def board_size(self) -> int: ...
+
+    @property
+    def player(self) -> NativeEnumValue: ...
+
+    @property
+    def is_terminal(self) -> bool: ...
+
+    @property
+    def termination_reason(self) -> NativeEnumValue: ...
+
+    def legal_actions(self) -> list[int]: ...
+
+    def child(self, action_id: int) -> NativeGoPosition: ...
+
+    def terminal_value(self) -> float: ...
+
+    def packed_encoding(self) -> bytes: ...
 
 
 class GoSymmetryIndex(IntEnum):
@@ -92,6 +115,8 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
         )
 
     def initial_position(self) -> NativeGoPosition:
+        from AlphaZeroCpp import GoPosition7, GoPosition9, GoRules
+
         maximum_moves = self.board_size * self.board_size * 4 if self.maximum_moves is None else self.maximum_moves
         rules = GoRules(self.komi_half_points, maximum_moves)
         return GoPosition7(rules) if self.board_size == 7 else GoPosition9(rules)
@@ -103,7 +128,7 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
         return position.child(action_id)
 
     def current_player(self, position: NativeGoPosition) -> Player:
-        return Player.FIRST if position.player == GoPlayer.BLACK else Player.SECOND
+        return Player.FIRST if position.player.name == 'BLACK' else Player.SECOND
 
     def natural_terminal_wdl(self, position: NativeGoPosition) -> WdlTarget | None:
         if not position.is_terminal:
@@ -239,7 +264,3 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
             self.scalar_channels,
             output,
         )
-
-    @staticmethod
-    def player_sign(player: GoPlayer) -> int:
-        return 1 if player == GoPlayer.BLACK else -1

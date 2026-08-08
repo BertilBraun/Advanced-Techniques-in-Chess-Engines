@@ -8,6 +8,7 @@ from typing import cast
 import pytest
 
 from src.games.implementation import GameImplementation
+from src.experiment.configuration import ExperimentConfiguration
 from src.self_play.protocol import (
     PausedSelfPlayState,
     PausedSelfPlayStateApplied,
@@ -90,11 +91,18 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(self_play_group_module, 'SelfPlayWorker', _Worker)
+    fake_game = _Game(tmp_path)
+
+    def create_game(configuration: ExperimentConfiguration) -> GameImplementation:
+        del configuration
+        return cast(GameImplementation, fake_game)
+
+    monkeypatch.setattr(self_play_group_module, 'create_game_implementation', create_game)
     context = multiprocessing.get_context('spawn')
     parent, child = context.Pipe(duplex=True)
     process = Thread(
         target=_self_play_worker_main,
-        args=(child, 4, 0, cast(GameImplementation, _Game(tmp_path))),
+        args=(child, 4, 0, cast(ExperimentConfiguration, fake_game)),
     )
     process.start()
 

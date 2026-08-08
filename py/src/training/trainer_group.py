@@ -16,6 +16,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
+from src.games.composition import create_game_implementation
 from src.neural_network import Network
 from src.replay.batch_loader import MappedReplayBatchLoader
 from src.replay.manager import ReplayDescription
@@ -125,7 +126,6 @@ class TrainerGroup:
                     self.world_size,
                     rendezvous_port,
                     configuration,
-                    game,
                     starting_checkpoint,
                 ),
                 name=f'trainer-rank-{rank}',
@@ -238,10 +238,10 @@ def _trainer_rank_main(
     world_size: int,
     rendezvous_port: int,
     configuration: ExperimentConfiguration,
-    game: GameImplementation,
     starting_checkpoint: CheckpointReference,
 ) -> None:
     try:
+        game = create_game_implementation(configuration)
         topology = configuration.training.topology.trainer
         torch.set_num_threads(topology.cpu_threads)
         torch.set_num_interop_threads(topology.interop_threads)

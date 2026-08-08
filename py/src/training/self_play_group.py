@@ -10,6 +10,8 @@ import numpy as np
 import torch
 
 from src.games.implementation import GameImplementation
+from src.games.composition import create_game_implementation
+from src.experiment.configuration import ExperimentConfiguration
 from src.self_play.protocol import (
     PausedSelfPlayState,
     PausedSelfPlayStateApplied,
@@ -38,7 +40,7 @@ class SelfPlayGroup:
             parent, child = context.Pipe(duplex=True)
             process = context.Process(
                 target=_self_play_worker_main,
-                args=(child, worker_id, device_id, game),
+                args=(child, worker_id, device_id, game.configuration),
                 name=f'self-play-worker-{worker_id}',
             )
             process.start()
@@ -87,8 +89,9 @@ def _self_play_worker_main(
     connection: Connection,
     worker_id: int,
     device_id: int,
-    game: GameImplementation,
+    configuration: ExperimentConfiguration,
 ) -> None:
+    game = create_game_implementation(configuration)
     seed = game.training.random_seed + worker_id
     random.seed(seed)
     np.random.seed(seed)

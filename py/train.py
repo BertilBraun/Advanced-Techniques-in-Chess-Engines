@@ -96,14 +96,9 @@ if __name__ == '__main__':
 
         log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(training))
 
-    if experiment.game == 'chess':
-        from src.games.chess.training import ChessImplementation
+    from src.games.composition import create_game_implementation
 
-        game = ChessImplementation(experiment)
-    else:
-        from src.games.go.training import GoImplementation
-
-        game = GoImplementation(experiment)
+    game = create_game_implementation(experiment)
     commander = Coordinator(game, run_started_at)
     outcome_path = Path(training.save_path) / 'run-outcome.json'
     try:
