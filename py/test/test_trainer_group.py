@@ -133,3 +133,4 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
     assert result.checkpoint.generation == 1
     assert result.checkpoint.manifest_path.is_file()
     assert result.statistics.elapsed_seconds > 0.0
+    assert result.statistics.gradient_norm > 0.0

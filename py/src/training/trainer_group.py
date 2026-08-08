@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import multiprocessing
-from multiprocessing.connection import Connection
+from multiprocessing.connection import Connection, wait
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 import socket
@@ -56,6 +56,7 @@ class RankTrainingResult(FrozenModel):
     wdl_loss: float
     auxiliary_losses: tuple[float, ...]
     total_loss: float
+    gradient_norm: float
     elapsed_seconds: float
     checkpoint: CheckpointReference | None
 
@@ -80,6 +81,7 @@ class TrainingStatistics:
     wdl_loss: float
     auxiliary_losses: tuple[float, ...]
     total_loss: float
+    gradient_norm: float
     elapsed_seconds: float
 
 
@@ -157,20 +159,8 @@ class TrainerGroup:
         )
         for connection in self._connections:
             connection.send(command)
-        responses = tuple(self._receive(connection) for connection in self._connections)
-        failures: list[RankTrainingFailure] = []
-        results: list[RankTrainingResult] = []
-        for response in responses:
-            match response:
-                case RankTrainingFailure():
-                    failures.append(response)
-                case RankTrainingResult():
-                    results.append(response)
-                case TrainerStopped():
-                    raise RuntimeError('Trainer rank stopped during a training quantum.')
-        if failures:
-            details = '; '.join(f'rank {failure.rank}: {failure.error}' for failure in failures)
-            raise RuntimeError(f'DDP training quantum failed: {details}')
+        responses = self._receive_quantum_responses()
+        results = list(responses)
         if len(results) != self.world_size:
             raise RuntimeError('Trainer ranks returned an invalid response set.')
         expected_steps = target_progress.completed_optimizer_steps
@@ -195,6 +185,7 @@ class TrainerGroup:
                     for index in range(auxiliary_count)
                 ),
                 total_loss=_mean(tuple(result.total_loss for result in results)),
+                gradient_norm=_mean(tuple(result.gradient_norm for result in results)),
                 elapsed_seconds=max(result.elapsed_seconds for result in results),
             ),
         )
@@ -215,6 +206,38 @@ class TrainerGroup:
             process.join()
             if process.exitcode != 0:
                 raise RuntimeError(f'Trainer rank exited with code {process.exitcode}.')
+        for connection in self._connections:
+            connection.close()
+        self._closed = True
+
+    def _receive_quantum_responses(self) -> tuple[RankTrainingResult, ...]:
+        pending = set(self._connections)
+        results: list[RankTrainingResult] = []
+        while pending:
+            for connection in wait(pending):
+                try:
+                    response = self._receive(connection)
+                except RuntimeError:
+                    self._terminate_after_rank_failure()
+                    raise
+                pending.remove(connection)
+                match response:
+                    case RankTrainingResult():
+                        results.append(response)
+                    case RankTrainingFailure():
+                        self._terminate_after_rank_failure()
+                        raise RuntimeError(f'DDP training quantum failed on rank {response.rank}: {response.error}')
+                    case TrainerStopped():
+                        self._terminate_after_rank_failure()
+                        raise RuntimeError('Trainer rank stopped during a training quantum.')
+        return tuple(sorted(results, key=lambda result: result.rank))
+
+    def _terminate_after_rank_failure(self) -> None:
+        for process in self._processes:
+            if process.is_alive():
+                process.terminate()
+        for process in self._processes:
+            process.join()
         for connection in self._connections:
             connection.close()
         self._closed = True
@@ -333,16 +356,22 @@ def _train_rank_quantum(
     wdl_losses = 0.0
     auxiliary_losses = [0.0] * len(command.parameters.objective.auxiliary_loss_weights)
     total_losses = 0.0
+    gradient_norms = 0.0
     for batch in loader:
         batch = batch.to_device(device, non_blocking=topology_uses_cuda(configuration))
         optimizer.zero_grad(set_to_none=True)
         output = ddp(batch.states)
         loss = command.parameters.objective.calculate_loss(output, batch)
         loss.total.backward()
+        gradient_norm = torch.nn.utils.clip_grad_norm_(
+            ddp.parameters(),
+            configuration.training.trainer.max_grad_norm,
+        )
         optimizer.step()
         policy_losses += float(loss.policy.detach())
         wdl_losses += float(loss.wdl.detach())
         total_losses += float(loss.total.detach())
+        gradient_norms += float(gradient_norm.detach())
         for index, auxiliary in enumerate(loss.auxiliary):
             auxiliary_losses[index] += float(auxiliary.detach())
     checkpoint = None
@@ -362,6 +391,7 @@ def _train_rank_quantum(
         wdl_loss=wdl_losses / divisor,
         auxiliary_losses=tuple(value / divisor for value in auxiliary_losses),
         total_loss=total_losses / divisor,
+        gradient_norm=gradient_norms / divisor,
         elapsed_seconds=time.perf_counter() - started_at,
         checkpoint=checkpoint,
     )
