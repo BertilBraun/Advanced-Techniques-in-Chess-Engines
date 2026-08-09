@@ -89,11 +89,11 @@ evaluation:
   shutdown_grace_seconds: 5
   bootstrap_samples: 100
   dataset:
-    path: py/reference/vast-r11-go-9x9-evaluation-v1.bin
+    path: py/reference/vast-r11-go-9x9-evaluation-v2.bin
     random_seed: 1109
-    move_sampling_temperature: 1.0
+    move_sampling_temperature: 2.0
   openings:
-    path: py/reference/vast-r11-go-9x9-openings-v1.json
+    path: py/reference/vast-r11-go-9x9-openings-v2.json
     random_seed: 1109
     opening_count: 1
     expanded_actions_per_position: 3
@@ -103,7 +103,7 @@ evaluation:
     executable_path: engines/katago
     model_path: engines/katago.bin.gz
     analysis_configuration_path: engines/katago-analysis.cfg
-    label_max_visits: 2
+    label_max_visits: 16
     match_max_visits: 2
   definitions:
     - kind: fixed_dataset
