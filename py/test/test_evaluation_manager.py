@@ -34,12 +34,14 @@ class FakeProcess:
         target: Callable[..., None],
         args: tuple[object, ...],
         name: str,
+        events: list[str],
     ) -> None:
         self.target = target
         self.args = args
         self.name = name
         self.exitcode: int | None = None
         self.started = False
+        self.events = events
 
     def start(self) -> None:
         self.started = True
@@ -48,9 +50,11 @@ class FakeProcess:
         return self.started and self.exitcode is None
 
     def terminate(self) -> None:
+        self.events.append(f'terminate:{self.name}')
         self.exitcode = -15
 
     def join(self) -> None:
+        self.events.append(f'join:{self.name}')
         if self.exitcode is None:
             self.exitcode = 0
 
@@ -58,6 +62,7 @@ class FakeProcess:
 class FakeProcessContext:
     def __init__(self) -> None:
         self.processes: list[FakeProcess] = []
+        self.events: list[str] = []
 
     def Process(
         self,
@@ -65,7 +70,7 @@ class FakeProcessContext:
         args: tuple[object, ...],
         name: str,
     ) -> FakeProcess:
-        process = FakeProcess(target, args, name)
+        process = FakeProcess(target, args, name, self.events)
         self.processes.append(process)
         return process
 
@@ -255,6 +260,9 @@ def test_manager_cancels_running_jobs_on_shutdown(
 
     assert all(job.result_path.exists() for job in jobs)
     assert all(process.exitcode == -15 for process in context.processes)
+    first_join = next(index for index, event in enumerate(context.events) if event.startswith('join:'))
+    last_terminate = max(index for index, event in enumerate(context.events) if event.startswith('terminate:'))
+    assert last_terminate < first_join
     results = tuple(
         TypeAdapter(EvaluationResult).validate_json(job.result_path.read_text(encoding='utf-8')) for job in jobs
     )

@@ -172,10 +172,12 @@ class EvaluationManager:
             self.collect_completed_jobs()
             if self._processes:
                 time.sleep(0.05)
-        for job_id, (process, started_at) in tuple(self._processes.items()):
-            job = self._pending_job(job_id)
+        remaining = tuple(self._processes.items())
+        for _, (process, _) in remaining:
             if process.is_alive():
                 process.terminate()
+        for job_id, (process, started_at) in remaining:
+            job = self._pending_job(job_id)
             process.join()
             result = self._failure_result(
                 job,
