@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from src.experiment_queue.configuration import QueueConfiguration, QueuedExperiment, ResourceRequest, ResourceSlot
+from src.experiment_queue.configuration import (
+    QueueConfiguration,
+    QueuedExperiment,
+    ResourceRequest,
+    ResourceSlot,
+    RunnerCommand,
+)
 from src.experiment_queue.scheduler import create_assignment, schedule_experiments
 
 
@@ -93,23 +99,22 @@ def test_resource_slot_rejects_invalid_device_sets(field_name: str, value: tuple
 
 
 def test_queue_rejects_overlapping_slots_and_unassignable_requests() -> None:
-    shared_fields = {
-        'runner': {'command': ('python', 'py/train.py')},
-        'summary_path': Path('/summary.json'),
-    }
+    runner = RunnerCommand(command=('python', 'py/train.py'))
 
     with pytest.raises(ValidationError, match='share CUDA devices'):
         QueueConfiguration(
-            **shared_fields,
+            runner=runner,
             slots=(_slot('first', (0,), (0, 1)), _slot('second', (0,), (2, 3))),
             experiments=(_experiment('experiment', 1),),
+            summary_path=Path('/summary.json'),
         )
 
     with pytest.raises(ValidationError, match='no compatible resource slot'):
         QueueConfiguration(
-            **shared_fields,
+            runner=runner,
             slots=(_slot('single', (0,), (0, 1)),),
             experiments=(_experiment('pair', 2),),
+            summary_path=Path('/summary.json'),
         )
 
 

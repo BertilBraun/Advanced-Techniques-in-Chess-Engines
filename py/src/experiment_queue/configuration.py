@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Hashable
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypeVar
 
 import yaml
 from pydantic import Field, field_validator, model_validator
 from typing_extensions import Self
 
 from src.util.frozen_model import FrozenModel
+
+
+UniqueValueT = TypeVar('UniqueValueT', bound=Hashable)
 
 
 class RunnerCommand(FrozenModel):
@@ -126,7 +130,7 @@ def _resolve_path(path: Path, base_directory: Path) -> Path:
     return path.resolve() if path.is_absolute() else (base_directory / path).resolve()
 
 
-def _require_unique_values(label: str, values: tuple[object, ...]) -> None:
+def _require_unique_values(label: str, values: tuple[UniqueValueT, ...]) -> None:
     if len(set(values)) != len(values):
         raise ValueError(f'Queue {label} must be unique.')
 
