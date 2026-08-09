@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
-from src.experiment_queue.cgroup import CgroupV2MemoryScope
 from src.experiment_queue.configuration import QueueConfiguration, QueuedExperiment, ResourceSlot
 
 
@@ -58,9 +57,6 @@ def _validate_slot_paths(slot: ResourceSlot) -> None:
     slot.log_directory.mkdir(parents=True, exist_ok=True)
     if not slot.log_directory.is_dir():
         raise ValueError(f'Slot log path is not a directory: {slot.log_directory}')
-    memory_scope = CgroupV2MemoryScope(slot.cgroup_directory)
-    memory_scope.prepare(slot.ram_capacity_bytes)
-    memory_scope.validate_process_migration()
 
 
 def _validate_runner_executable(executable: str, working_directory: Path) -> None:

@@ -29,7 +29,6 @@ def test_restart_marks_prior_running_process_failed_without_adopting_it(tmp_path
         cuda_devices=(),
         cpu_affinity=(0,),
         ram_capacity_bytes=2_000,
-        cgroup_directory=tmp_path / 'cgroup',
         working_directory=tmp_path,
         log_directory=tmp_path,
     )

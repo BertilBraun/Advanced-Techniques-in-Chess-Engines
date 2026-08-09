@@ -202,11 +202,30 @@ class ExperimentQueueRunner:
 
     def _collect_finished_processes(self) -> None:
         for experiment_id, running_process in tuple(self._running_processes.items()):
-            exit_code = running_process.process.poll()
-            if exit_code is None or running_process.memory_scope.populated:
+            resident_memory_bytes = running_process.resident_memory_bytes
+            if resident_memory_bytes > running_process.assignment.ram_limit_bytes:
+                exit_code = terminate_process_group(
+                    running_process,
+                    self._queue.configuration.termination_grace_seconds,
+                )
+                self._finalize_process(
+                    experiment_id,
+                    running_process,
+                    FailedExperimentStatus(
+                        experiment_id=experiment_id,
+                        execution=self._running_status(experiment_id).execution,
+                        finished_at=_now(),
+                        exit_code=exit_code,
+                        reason=(
+                            f'Process-tree RSS {resident_memory_bytes} exceeded the configured limit '
+                            f'{running_process.assignment.ram_limit_bytes}.'
+                        ),
+                    ),
+                )
                 continue
-            running_process.close_logs()
-            del self._running_processes[experiment_id]
+            exit_code = running_process.process.poll()
+            if exit_code is None or running_process.has_live_processes:
+                continue
             running_status = self._running_status(experiment_id)
             if exit_code == 0:
                 final_status = CompletedExperimentStatus(
@@ -222,7 +241,7 @@ class ExperimentQueueRunner:
                     exit_code=exit_code,
                     reason=f'Runner process exited with code {exit_code}.',
                 )
-            self._replace_status(experiment_id, final_status)
+            self._finalize_process(experiment_id, running_process, final_status)
 
     def _terminate_running_processes(self) -> None:
         for experiment_id, running_process in tuple(self._running_processes.items()):
@@ -230,11 +249,10 @@ class ExperimentQueueRunner:
                 running_process,
                 self._queue.configuration.termination_grace_seconds,
             )
-            running_process.close_logs()
-            del self._running_processes[experiment_id]
             running_status = self._running_status(experiment_id)
-            self._replace_status(
+            self._finalize_process(
                 experiment_id,
+                running_process,
                 FailedExperimentStatus(
                     experiment_id=experiment_id,
                     execution=running_status.execution,
@@ -243,6 +261,16 @@ class ExperimentQueueRunner:
                     reason='Queue termination requested; the complete process group was terminated.',
                 ),
             )
+
+    def _finalize_process(
+        self,
+        experiment_id: str,
+        running_process: RunningProcess,
+        final_status: CompletedExperimentStatus | FailedExperimentStatus,
+    ) -> None:
+        running_process.close_logs()
+        del self._running_processes[experiment_id]
+        self._replace_status(experiment_id, final_status)
 
     def _replace_status(self, experiment_id: str, replacement: ExperimentStatus) -> None:
         statuses = tuple(

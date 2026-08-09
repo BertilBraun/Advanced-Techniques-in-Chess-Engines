@@ -77,7 +77,6 @@ slots:
     cuda_devices: [<cuda-index>, ...]
     cpu_affinity: [<cpu-index>, ...]
     ram_capacity_bytes: <ram-capacity-bytes>
-    cgroup_directory: <delegated-cgroup-v2-slot-directory>
     working_directory: <repository-directory>
     log_directory: <slot-log-directory>
 experiments:
@@ -95,23 +94,13 @@ termination_grace_seconds: 10.0
 Paths resolve relative to the queue file. CUDA and CPU sets must not overlap between slots. A job consumes one
 complete matching slot; its exact CPU affinity and aggregate RAM limit may be smaller than the slot capacity.
 
-### Node preparation
+### Memory monitoring
 
-The Linux node must use cgroup v2 with the memory controller enabled. Provision one empty cgroup directory per slot
-under a parent delegated to the account that runs the queue. The queue account must be able to write that scope's
-`cgroup.procs`, `memory.max`, `memory.swap.max`, `memory.oom.group`, and `cgroup.kill` files. The queue process must
-itself run inside the same delegated cgroup hierarchy; filesystem write permissions alone are insufficient to move
-a child from an unrelated hierarchy. Systemd-managed nodes should use a service or scope with memory-controller
-delegation and place the configured slot directories below it.
-
-The queue validates every scope while starting, including launching a short probe child and moving it into the
-scope. Every scope must be empty. Any missing controller, insufficient delegation, stale process, invalid experiment
-YAML, incompatible resource request, or existing pending-job log fails validation before an experiment launches.
-
-For every assignment the queue writes the requested aggregate budget to `memory.max`, writes zero to
-`memory.swap.max`, and enables `memory.oom.group`. The runner and all ordinary descendants inherit membership in that
-scope. A combined-memory breach therefore kills the experiment group and is recorded as a failed run. If the runner
-exits while descendants remain, the slot stays occupied until the cgroup is empty.
+The queue samples the resident memory of the runner and every discovered descendant. If aggregate process-tree RSS
+exceeds `ram_limit_bytes`, it terminates that experiment and records the observed usage and limit in the summary.
+This works inside unprivileged rented containers without delegated cgroups. It is intentionally a sampled safety
+monitor rather than a kernel-hard reservation, so the polling interval controls how quickly an overshoot is caught.
+Queue children must not daemonize away from the supervised process tree.
 
 ### Starting and observing a queue
 
@@ -131,7 +120,7 @@ python py/queue_experiments.py status --summary <queue-summary-json>
 
 The run command exits zero only when every experiment completed successfully and exits one when any experiment
 failed. On `SIGINT` or `SIGTERM`, it sends `SIGTERM` to each active process group, waits the configured grace period,
-uses `cgroup.kill` for any remaining descendants, and records failures before exiting. Completed and failed entries
+forcibly kills any remaining tracked descendants, and records failures before exiting. Completed and failed entries
 are terminal and are not run again; there is no automatic retry. Only `pending` entries are scheduled.
 
 If a summary contains `running` entries after a supervisor restart, the wrapper marks them failed and stops without

@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
-from src.experiment_queue.cgroup import CgroupV2MemoryScope
+import psutil
+
 from src.experiment_queue.scheduler import ResourceAssignment
 
 
@@ -20,11 +21,43 @@ class RunningProcess:
     process: subprocess.Popen[bytes]
     stdout_stream: BinaryIO
     stderr_stream: BinaryIO
-    memory_scope: CgroupV2MemoryScope
+    tracked_processes: dict[int, psutil.Process]
 
     def close_logs(self) -> None:
         self.stdout_stream.close()
         self.stderr_stream.close()
+
+    def refresh_process_tree(self) -> None:
+        for process in tuple(self.tracked_processes.values()):
+            try:
+                descendants = process.children(recursive=True)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            for descendant in descendants:
+                self.tracked_processes.setdefault(descendant.pid, descendant)
+
+    @property
+    def resident_memory_bytes(self) -> int:
+        self.refresh_process_tree()
+        resident_memory_bytes = 0
+        for process in self.tracked_processes.values():
+            try:
+                if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+                    resident_memory_bytes += process.memory_info().rss
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return resident_memory_bytes
+
+    @property
+    def has_live_processes(self) -> bool:
+        self.refresh_process_tree()
+        for process in self.tracked_processes.values():
+            try:
+                if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return False
 
 
 def launch_process(
@@ -38,15 +71,11 @@ def launch_process(
         raise ValueError('The experiment queue launcher supports Linux only.')
 
     child_wrapper = Path(__file__).with_name('linux_child.py').resolve()
-    memory_scope = CgroupV2MemoryScope(assignment.cgroup_directory)
-    memory_scope.prepare(assignment.ram_limit_bytes)
     wrapper_command = (
         sys.executable,
         str(child_wrapper),
         '--cpu-affinity',
         ','.join(str(cpu_index) for cpu_index in assignment.cpu_affinity),
-        '--cgroup-processes',
-        str(memory_scope.processes_path),
         *command,
     )
     environment = os.environ.copy()
@@ -77,26 +106,26 @@ def launch_process(
         process=process,
         stdout_stream=stdout_stream,
         stderr_stream=stderr_stream,
-        memory_scope=memory_scope,
+        tracked_processes={process.pid: psutil.Process(process.pid)},
     )
 
 
 def terminate_process_group(running_process: RunningProcess, grace_seconds: float) -> int:
+    running_process.refresh_process_tree()
     try:
         os.killpg(running_process.process.pid, signal.SIGTERM)
     except ProcessLookupError:
         pass
 
     deadline = time.monotonic() + grace_seconds
-    while running_process.memory_scope.populated and time.monotonic() < deadline:
+    while running_process.has_live_processes and time.monotonic() < deadline:
         time.sleep(0.01)
-    if running_process.memory_scope.populated:
-        running_process.memory_scope.kill()
-        kill_deadline = time.monotonic() + max(1.0, grace_seconds)
-        while running_process.memory_scope.populated and time.monotonic() < kill_deadline:
-            time.sleep(0.01)
-        if running_process.memory_scope.populated:
-            raise RuntimeError(f'Cgroup remained populated after cgroup.kill: {running_process.memory_scope.directory}')
+    if running_process.has_live_processes:
+        for process in running_process.tracked_processes.values():
+            try:
+                process.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
 
     return_code = running_process.process.poll()
     if return_code is not None:

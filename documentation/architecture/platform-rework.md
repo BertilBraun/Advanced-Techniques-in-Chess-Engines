@@ -350,7 +350,6 @@ Each indivisible slot defines:
 - explicit CUDA device indices;
 - CPU affinity;
 - RAM capacity;
-- one dedicated delegated cgroup-v2 directory;
 - run and log directories.
 
 CUDA and CPU sets are sorted, unique, nonnegative, and exclusive across slots.
@@ -365,33 +364,31 @@ success and failure both release the slot and advance the queue.
 Before launching anything, the wrapper validates the complete queue model,
 every experiment through the canonical discriminated experiment union, every
 request/slot compatibility, resource exclusivity, working and log directories,
-the runner executable, empty writable cgroup-v2 memory scopes, actual child
-migration into each scope, the existing durable summary, persisted
-assignments, and pending log paths. Cgroup directories are unique across slots
-and are pre-created by node provisioning below a memory-controller-enabled
-delegated parent. Relative queue paths resolve from the queue file. The
+the runner executable, the existing durable summary, persisted assignments,
+and pending log paths. Relative queue paths resolve from the queue file. The
 queue-owned runner command appends only the configured experiment-path
 argument and YAML path; required source-revision and approval arguments remain
 explicit parts of that runner command.
 
 Each experiment starts as a new Linux session and process group. A small
-queue-owned child wrapper enters the assigned cgroup, applies
-`sched_setaffinity`, sets the slot's device set through `CUDA_VISIBLE_DEVICES`,
-and then replaces itself with the configured runner through `exec`. CUDA
-visibility, affinity, and cgroup membership are inherited by ordinary child
-processes. The supervisor sets `memory.max` to the requested RAM budget,
-`memory.swap.max` to zero, and `memory.oom.group` to one before launch, so the
-limit covers the aggregate experiment process tree and an out-of-memory event
-kills the group rather than one arbitrary worker. It does not use a
-per-process address-space limit.
+queue-owned child wrapper applies `sched_setaffinity`, sets the slot's device
+set through `CUDA_VISIBLE_DEVICES`, and then replaces itself with the configured
+runner through `exec`. CUDA visibility and affinity are inherited by ordinary
+child processes. The supervisor discovers descendants through `psutil`, sums
+their resident memory each polling cycle, and terminates the tracked process
+tree when it exceeds the requested RAM budget. This sampled RSS limit is not a
+kernel-hard reservation: a short overshoot may occur between polls, and a child
+that daemonizes before it is observed can escape tracking. These are accepted
+tradeoffs for unprivileged rented containers that do not delegate cgroup
+controllers.
 
 Standard output and error go to separate exclusive per-experiment files. The
 supervisor captures the runner exit code and does not release a slot while its
-cgroup remains populated, even if the original runner process has already
-exited. Requested termination sends `SIGTERM` to the process group, waits the
-configured grace period, then uses `cgroup.kill` to remove descendants that
-changed process groups or otherwise remained alive. Success, failure, and
-requested termination close the log handles and release only an empty scope.
+tracked descendants remain alive, even if the original runner process has
+already exited. Requested termination sends `SIGTERM` to the process group,
+waits the configured grace period, then kills every still-live tracked process.
+Success, failure, and requested termination close the log handles and release
+the slot only after the tracked tree has ended.
 
 One atomic JSON summary records pending, running, completed, and failed
 experiments; queue, start, finish, and update timestamps; the exact assignment;
@@ -889,6 +886,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-10 | R10/R12 | Vast compatibility | Vast GPU containers expose read-only cgroup-v1 controllers and cannot satisfy the queue's delegated cgroup-v2 contract, while the screening matrix must run through the queue on rented nodes. | Remove cgroups from queue configuration and execution. Retain exclusive CUDA sets, CPU affinity, process groups, deterministic scheduling, logs, summaries, and restart behavior. Sample aggregate RSS across the discovered process tree with `psutil`; terminate and fail a run when it exceeds its requested RAM limit. Accept that this is a sampled safety monitor rather than a kernel-hard reservation. |
 | 2026-08-09 | Compute-node runtime | Dependency decision | CUDA 13 unnecessarily excluded lower-cost CUDA 12 marketplace hosts. PyTorch 2.12.1 is the newest release with an official CUDA 12 wheel, published for CUDA 12.6; NVIDIA's CUDA 12 minor-version compatibility supports that runtime on Linux drivers 525.60.13 or newer, subject to forward-compatibility feature and GPU-generation caveats. | Lock training and fresh-node setup to PyTorch `2.12.1+cu126`, treat a Vast CUDA 12.2 advertisement as eligible when the actual driver is at least 525.60.13, and require a real import, device, native-build, self-play, and evaluation smoke test before accepting a rented host. CUDA 13 is no longer a selection requirement. |
 | 2026-08-09 | Cross-phase Python structure | Cleanup handoff | The user authorized a behavior-preserving ownership cleanup after reviewing the live source layout. Single-consumer cost/value/runtime modules and engine adapters were consolidated; packed representation and network code moved to their semantic owners; checkpoint and trainer subsystems became focused packages; evaluation opening, dataset, scheduling, and process ownership was separated; native-search typing left the self-play loop; and component configuration moved beside self-play, replay, network, and run-limit owners. The checkpoint manifest intentionally dropped permanently empty replay metadata and renamed its progress field from `iteration` to `generation`. | Return the cleanup for user review. Commits `48c0927a`, `ce4e1ecf`, `3e19f753`, and `bf69b4dd` implement the four ownership slices. Ruff passes and the exact Windows suite passes 168 tests with 17 intentional infrastructure/native skips. No C++ search, binding, queue, experiment, or target-hardware behavior changed. |
 | 2026-08-09 | R10 | Review correction | Review confirmed that CUDA visibility and CPU affinity inheritance meet the intended node partitioning, but the RAM request is a budget for the complete experiment process tree rather than each process independently. `RLIMIT_AS` therefore did not enforce the required aggregate isolation. | Replace `RLIMIT_AS` with one pre-provisioned delegated cgroup-v2 memory scope per slot. Apply `memory.max`, disable swap, enable group OOM handling, require child-migration validation before any launch, keep a slot occupied while the scope is populated, and use `cgroup.kill` after graceful process-group termination. The exact Windows suite passes 168 tests with 17 infrastructure/Linux skips; the ordinary WSL2 queue suite passes 17 tests with 2 delegated-cgroup skips; and all 6 process tests pass in a real delegated scope, including aggregate OOM and surviving-descendant cases. Return the revision to `awaiting_user_review`; do not merge or start R11/R12 from the implementation worktree. |
