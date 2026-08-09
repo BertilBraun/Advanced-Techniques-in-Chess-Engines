@@ -1,176 +1,48 @@
-# AlphaZero-Clone: Deep Reinforcement Learning for Chess
+# AlphaZero chess and Go experimentation platform
 
-Play the trained chess model through the browser with the
-[public web-play API, UI, and Modal deployment guide](documentation/web_play.md).
+This repository is a typed, configuration-driven AlphaZero research runtime for chess, 7x7 Go, and 9x9 Go. Native
+C++ owns game rules, packed network encoding, batched inference, tree search, and interactive analysis. Python owns
+experiment composition, self-play supervision, memory-mapped replay, persistent DDP training, elapsed evaluation,
+telemetry, and artifact management.
 
-> **Achievement:** Intermediate-level Chess AI (~2000-2100 Elo) trained on a $350 personal R&D budget with final model costing $13 to train.
+The original chess project produced an approximately 2000-2100 Elo model on a modest personal research budget.
+Those models, games, plots, and logs remain available as
+[historical result evidence](documentation/benchmarks/chess-results/); they do not describe the current runtime.
 
-## **Project Overview**
+## Current architecture
 
-**AlphaZero-Clone** is a personal implementation of AlphaZero's deep reinforcement learning approach for chess through self-play without human knowledge. This project demonstrates that sophisticated AI techniques can achieve strong performance on modest personal budgets.
+One resolved experiment configuration selects a concrete chess or Go implementation. Both games then use the same
+production lifecycle:
 
-The system combines Monte Carlo Tree Search (MCTS) with deep neural networks to learn optimal play through millions of self-play games. The implementation focuses on practical optimization and efficiency, achieving intermediate-level Chess play on limited computational resources.
+1. persistent workers run the shared native self-play search and publish atomic completed trajectories;
+2. the coordinator drains those trajectories into one fixed-slot circular memory-mapped replay;
+3. persistent symmetric DDP ranks train one blocking optimizer quantum from read-only mapped replay;
+4. rank zero publishes the complete checkpoint and trimmed policy/WDL inference artifact;
+5. workers transition to the new generation, while short-lived evaluation jobs run on fixed elapsed boundaries.
 
-### **Core Features**
+There is no Python search implementation, alternate replay/trainer architecture, or generation-gating evaluator.
+Chess and Go evaluation share the same manager, paired-match runner, fixed-dataset metrics, result artifacts, and
+reporting path. Stockfish and KataGo remain explicitly configured external processes.
 
-- **Chess Training Platform**: Native chess search with Python training and experiment orchestration
-- **Self-Play Learning**: Learns optimal strategies without human knowledge or game-specific heuristics
-- **Distributed Training**: Scalable across multiple GPUs and CPU cores with asynchronous data generation
-- **Production-Ready Performance**: Optimized C++ MCTS implementation achieving ~77k searches per second during self play and 6-12k searches per second during evaluation per GPU
-- **Budget Efficient**: Achieves strong performance with quite limited computational resources
+For the authoritative design and current phase status, start at the
+[documentation index](documentation/README.md). `THINGS_TO_TRY.md` is the experiment backlog, not an authorization
+ledger.
 
----
+## Repository layout
 
-## **Chess Results**
+- `cpp/`: native chess/Go state, encoding, inference, search, bindings, benchmarks, and tests;
+- `py/`: experiment configuration, coordinator, replay, training, evaluation, UCI, and optional tools;
+- `deployment/`: fresh-node bootstrap plus web and Lichess deployment assets;
+- `documentation/architecture/`: current authoritative plans and architecture;
+- `documentation/operations/`: current deployment and operations guidance;
+- `documentation/history/`: explicitly non-normative implementation history;
+- `documentation/benchmarks/`: historical benchmark and result evidence.
 
-### **Chess Performance Analysis**
+## Fresh compute-node setup
 
-The Chess implementation represents the project's main achievement, demonstrating sophisticated understanding of both tactical and positional concepts. Training for ~12 hours utilized approximately 280,000 games over 100,000 update steps with a compact 8x96 neural network architecture.
-
-![Sample Game vs Stockfish Level 6](documentation/chess_results/Example%20Game.gif)
-
-*AlphaZero-Clone (White) defeating Stockfish Level 6 in a tactical middlegame*
-
-#### **Benchmark Results**
-
-Performance was evaluated against multiple opponents across various levels, including Stockfish at different skill levels and Elo-calibrated targets. The results indicate strong tactical play and positional understanding, with the engine consistently outperforming lower-level Stockfish configurations:
-
-**Stockfish UCI Level Testing:**
-
-| Stockfish Level | Win/Draw/Loss |
-| --------------- | ------------- |
-| Level 0         | 8/1/1         |
-| Level 3         | 7/1/2         |
-| Level 4         | 53/17/30      |
-| Level 5         | 7/6/7         |
-| Level 6         | 2/6/12        |
-
-**Elo-Calibrated Testing:**
-
-| Target Elo | Result |
-| ---------- | ------ |
-| 1400       | 20/0/0 |
-| 2000       | 12/4/4 |
-| 2200       | 7/4/9  |
-| 2400       | 5/7/8  |
-
-*Testing conditions: 1.0s/move time control, Stockfish skill level limited via `Skill Level`, Elo targets set via `UCI_Elo`*  
-*Testing hardware: Single A10 GPU + 16 CPUs vs Stockfish on 32 CPUs*
-
-The performance data suggests the engine operates at approximately **2000-2100 Elo**, demonstrating intermediate-level play with solid tactical awareness and positional understanding.
-
-**The engine also passed a more personal benchmark: winning a casual game against my Dad ❤️.**
-
----
-
-## **Technical Architecture**
-
-**For those interested in implementing their own AlphaZero-style system, detailed insights and recommendations based on my implementation experience can be found in [Insights and Recommendations](documentation/insights_and_recommendations.md).**
-
-The system is built around a robust training pipeline that separates concerns between data generation, neural network training, and model evaluation:
-
-### **Training Pipeline**
-
-1. **Self-Play Generation**: Multiple worker processes generate games using the current best model and MCTS
-2. **Data Collection**: Game states, MCTS-derived move probabilities, and final outcomes are stored efficiently
-3. **Neural Network Training**: Collected data trains the network to predict both move probabilities (policy) and position evaluations (value)
-4. **Model Evaluation**: New models are benchmarked against previous versions to ensure improvement
-5. **Model Promotion**: Superior models become the new best model for continued self-play generation
-
-### **Implementation Details**
-
-The project leverages a hybrid Python/C++ architecture optimized for both development velocity and runtime performance:
-
-- **Python Components**: Training orchestration, neural network definitions, experimental framework
-- **C++ Components**: High-performance MCTS implementation, game engines, batched inference
-- **Asynchronous Design**: Self-play workers operate independently while training occurs on accumulated data
-- **Mixed Precision**: `torch.amp.autocast(bfloat16)` training and inference in `bfloat16` for improved performance and reduced memory usage
-
-For a detailed overview of the entire project and all implementation details, refer to the [Technical Documentation: ![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines)
-
----
-
-## **Training Methodology**
-
-### **Resource Efficiency**
-
-The project achieves remarkable results through careful resource management:
-
-- **Total Personal Budget**: ~$350 including all experimental runs
-- **Final Model Training Cost**: ~$13 for 12-hour training session
-- **Hardware Configuration**: 96 CPU cores + 3.5 A10 GPUs
-- **Training Throughput**: 5-15 games per second during self-play generation
-
-### **Implementation Techniques**
-
-The implementation incorporates several established techniques for improved performance:
-
-- **AdamW Optimizer**: Superior convergence properties for deep learning
-- **Mixed Precision Training**: BFloat16 reduces memory usage while maintaining numerical stability
-- **ResNet Architecture**: Skip connections with Squeeze-and-Excitation blocks for efficient learning
-- **Playout-Cap Randomization**: Technique borrowed from KataGo for improved exploration
-- **Asynchronous Training**: Continuous data generation while neural network training occurs
-
-### Training Progression Analysis
-
-The training process demonstrates clear learning phases visible in comprehensive metrics:
-
-![Training Plots](documentation/chess_results/Training%20Plots.png)
-
-**Key Observations:**
-
-- **Loss Convergence**: Policy and value losses show steady improvement with occasional plateaus
-- **Value Accuracy**: Position evaluation accuracy improves consistently throughout training
-- **Search Efficiency**: MCTS becomes more selective as the neural network improves
-- **Evaluation Metrics**: Win rates against previous models and Stockfish show clear upward trends
-
-The training data reveals the model's learning trajectory from random play to sophisticated chess understanding, with the skill level increasing significantly over time. Notably, the model does not seem to have fully converged yet, indicating potential for further improvement with additional training resources. Additionally, increases in model size, training duration and number of games played will most likely lead to even stronger performance.
-
----
-
-## **Performance Optimizations**
-
-The training pipeline includes several important optimizations for efficiency:
-
-### **Core Optimizations**
-
-- **[Inference Optimization](documentation/optimizations/inference.md)**: Batched GPU inference with efficient memory management
-- **[MCTS Optimization](documentation/optimizations/mcts.md)**: Optimized tree traversal and node expansion algorithms
-- **[Game Engine Optimization](documentation/optimizations/games.md)**: Efficient board representation and move generation
-- **[Training Pipeline Optimization](documentation/optimizations/training.md)**: Data loading, shuffling, and batch processing improvements
-- **[Evaluation Optimization](documentation/optimizations/evaluation.md)**: Parallel game evaluation and statistical analysis
-
-### **System Design**
-
-- **Asynchronous Architecture**: Eliminates training bottlenecks through independent worker processes
-- **Memory Management**: Efficient data structures minimizing memory allocation overhead
-- **Batch Processing**: Optimal batch sizes for both training and inference operations
-- **Load Balancing**: Dynamic work distribution across available computational resources
-
----
-
-## **Potential Improvements**
-
-The training plots suggest the model hasn't fully converged yet, indicating significant room for improvement with additional computational resources:
-
-- **Extended Training**: Performance likely to improve with longer training runs and more games
-- **Larger Networks**: Scaling to bigger neural network architectures
-- **Game Expansion**: Support for Go, Shogi, and other complex strategy games
-- **Training Techniques**: Population-based training and advanced exploration methods
-- **Hyperparameter Optimization**: Systematic search for optimal training configurations
-
-Detailed roadmap available in **[Future Work](documentation/future.md)**.
-
----
-
-## **Getting Started**
-
-### **Remote Training Setup**
-
-The remote bootstrap clones a clean checkout, installs the locked training
-environment, compiles the Release C++ extension, and then runs the supplied
-command. The node image must provide Git, Python with `venv`, CMake, a C++20
-compiler, and the required NVIDIA driver and CUDA toolkit.
+[`deployment/setup_remote.sh`](deployment/setup_remote.sh) is the authoritative bootstrap for a fresh training node.
+It clones the requested revision, installs the hashed training environment, builds the Release extension, exports
+`ENGINE_SOURCE_REVISION`, and executes the supplied command:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/master/deployment/setup_remote.sh \
@@ -180,54 +52,44 @@ curl -fsSL https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-
       --approval-file /data/run-approval.json'
 ```
 
-Set `ENGINE_REPOSITORY_REF`, `ENGINE_REPOSITORY_DIRECTORY`,
-`ENGINE_VIRTUAL_ENVIRONMENT`, or `ENGINE_REPOSITORY_URL` to override the
-checkout and environment locations. The approval record and run configuration
-remain explicit inputs so a bootstrap cannot silently start an unapproved
-production run.
+Set `ENGINE_REPOSITORY_REF`, `ENGINE_REPOSITORY_DIRECTORY`, `ENGINE_VIRTUAL_ENVIRONMENT`, or
+`ENGINE_REPOSITORY_URL` to override checkout/environment locations. The script intentionally does not install
+Stockfish, KataGo, or their model/configuration artifacts.
 
-The files under `py/configs/*-experiment-template.yaml` are validated templates,
-not runnable production configurations. Resolve their hardware, environment,
-artifact, and approval fields for the selected compute node before launch.
+The checked-in `py/configs/*-experiment-template.yaml` files are validation templates, not approved production
+runs. Hardware, artifact paths and hashes, output paths, source revision, and approval must be resolved explicitly.
 
-### **Project Structure**
+## Validation
 
-- **`py/`**: Python components for training orchestration and experimentation
-- **`cpp/`**: High-performance C++ implementations for self-play and inference
-- **`deployment/`**: Remote setup, web client, and service deployment assets
-- **`documentation/`**: Comprehensive technical documentation and analysis
-- **`documentation/chess_results/`**: Detailed Chess performance data and sample games
+Run Python validation from `py`:
 
-For detailed setup instructions and usage examples, refer to the Getting Started guides in each directory.
+```powershell
+uv run ruff format
+uv run ruff check --fix
+python -m pytest --import-mode=importlib .\test -q
+```
 
----
+Build and test native code from the repository root:
 
-## **Contributing**
+```powershell
+cmake -S .\cpp -B .\cpp\build -DCMAKE_BUILD_TYPE=Release
+cmake --build .\cpp\build --parallel
+ctest --test-dir .\cpp\build --output-on-failure
+```
 
-Contributions are welcomed across multiple areas:
+Native-facing Python tests require the freshly built extension. Real Stockfish/KataGo smoke tests are opt-in and
+require provisioned external artifacts.
 
-- **Algorithm Implementation**: Training techniques and search improvements
-- **Game Support**: Additional board games and rule variants
-- **Performance Optimization**: Speed and memory efficiency improvements
-- **Documentation**: Technical documentation and educational resources
-- **Evaluation**: Benchmarking and performance analysis tools
+## Interactive chess deployment
 
-Please review contribution guidelines and open issues for current development priorities.
+The native interactive chess engine is shared by both deployments and is intentionally retained production code:
 
----
+- [web play](documentation/operations/web-play.md) uses the typed FastAPI backend and browser client;
+- [Lichess/Vast](deployment/lichess/README.md) invokes `python -m src.games.chess.uci` through the checked-in UCI
+  launcher.
 
-## **References and Acknowledgments**
+## Research and references
 
-This work builds upon extensive research in game AI and deep reinforcement learning. See **[references.md](documentation/references.md)** for comprehensive citations and related work.
-
-Special recognition to the AlphaZero team at DeepMind for the foundational research that made this project possible.
-
----
-
-## **License**
-
-This project is licensed under the [MIT License](./LICENSE), enabling both academic and commercial use.
-
----
-
-*Demonstrating that sophisticated AI techniques can be accessible on modest personal budgets.*
+- [Experiment backlog](THINGS_TO_TRY.md)
+- [Research references](documentation/research/references.md)
+- [Historical insights](documentation/history/insights-and-recommendations.md)

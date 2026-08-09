@@ -6,7 +6,7 @@ This document details our current strategies and benchmarks for optimizing neura
 
 ## 1. Hardware & Precision Tuning
 
-![NN Speed Comparison](../images/Network%20Inference%20Speed%20comparison.png)
+![NN Speed Comparison](../../images/Network%20Inference%20Speed%20comparison.png)
 
 *Inference latency per board across GPU types (A10, A100, V100) and precision modes (FP32, bfloat16).*
 Despite newer GPUs, the **A10** achieved the best real-world throughput for our workload:

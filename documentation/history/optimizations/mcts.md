@@ -302,7 +302,7 @@ The MCTS implementation was initially developed in Python but migrated to C++ to
 
 ### Performance Comparison Results
 
-![Performance Analysis Overview](../images/MCTS%20Search%20comparisons.png)
+![Performance Analysis Overview](../../images/MCTS%20Search%20comparisons.png)
 
 Figure: Average per-board search times for different batch sizes and thread counts. Each cell shows the time per board when processing N boards simultaneously (64B) versus a single board (1B) across Python, C++, and C++ Eval implementations.
 

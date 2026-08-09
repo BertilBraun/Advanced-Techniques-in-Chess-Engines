@@ -2,9 +2,9 @@
 
 ## Rework authority
 
-Read `REWORK.md` completely before changing rework code. Work only on the phase
-the user has authorized. Preserve unrelated changes and make feature-sized
-commits after relevant validation.
+Read `documentation/architecture/platform-rework.md` completely before changing rework code. For Python runtime
+work, also read `documentation/architecture/python-runtime-rework.md` completely. Work only on the phase the user
+has authorized. Preserve unrelated changes and make feature-sized commits after relevant validation.
 
 At every handoff, report completed work, outstanding phase work, commits,
 validation results, changes needing special review, and unresolved decisions.

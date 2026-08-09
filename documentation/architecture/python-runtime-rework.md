@@ -1,13 +1,17 @@
-# Python architecture rework
+# Python runtime architecture and rework record
 
 ## Status and purpose
 
-This document defines the target Python architecture for the experiment runtime. It is an implementation plan, not a compatibility specification for the current Python structure.
+This document defines the authoritative Python architecture implemented by Phases 1 through 3 and records the
+remaining Phase 4 validation work. It is not a compatibility specification for removed Python structures.
 
-Implementation status: Phases 1 and 2 are `accepted`. Phase 3 is `awaiting_user_review`. Phase 4 remains
-`pending` and is not authorized.
+Implementation status: Phases 1 through 3 are `accepted`. The authorized Phase 4 production-reachability and
+documentation cleanup slice is `awaiting_user_review`. Phase 4's integrated smoke, throughput, concurrency, and
+target-hardware evidence remains pending and was not authorized by this cleanup. R10 is a separate pending task.
 
-The rework should replace the current mixture of file mailboxes, commander-owned component details, trainer-owned replay maintenance, copied Python replay snapshots, and exact recovery machinery with a small synchronous coordinator and explicit process boundaries.
+The accepted rework replaced file mailboxes, commander-owned component details, trainer-owned replay maintenance,
+copied Python replay snapshots, and exact recovery machinery with a small synchronous coordinator and explicit
+process boundaries.
 
 The design priorities, in order, are:
 
@@ -1183,8 +1187,8 @@ Concretely, Phase 3 reworks `py/src/training/coordinator.py` (or its accepted Ph
 `py/src/experiment/configuration.py`, `py/src/experiment/base_configuration.py`, `py/src/experiment/run.py`,
 `py/src/training/checkpoint.py`, `py/src/util/tensorboard.py`, `py/src/games/implementation.py`, both concrete game
 configuration and implementation modules, and the checked-in experiment configurations. It replaces
-`documentation/optimizations/evaluation.md` as a normative design document. `py/src/training/statistics.py` remains
-the training-statistics owner and is not generalized into an evaluation result model.
+the former evaluation optimization note as a normative design document. Training-quantum statistics remain owned by
+`py/src/training/trainer_group.py` and are not generalized into an evaluation result model.
 
 ### Failure, restart, shutdown, and retention
 
@@ -1202,42 +1206,46 @@ remaining evaluation children, and writes cancelled failures. Successful and fai
 for the run. The current runtime retains every checkpoint artifact, so pending jobs are protected without another
 retention interface. Any future checkpoint deletion policy must first account for references in manager state.
 
-## Target source ownership
+## Source ownership
 
-The target structure is:
+The authoritative source structure is:
 
 ```text
 experiment/
+    base_configuration.py
     configuration.py
     generation_schedule.py
+    progress_telemetry.py
+    resource_telemetry.py
     run.py
 
-runtime/
-    coordinator.py
-    ledger.py
-
 self_play/
-    process.py
+    completed_game.py
+    parameters.py
     protocol.py
     worker.py
-    completed_game.py
 
 replay/
-    manager.py
-    store.py
+    batch_loader.py
+    contracts.py
     layout.py
+    manager.py
     materialization.py
-    targets.py
+    store.py
 
 training/
-    group.py
-    rank.py
-    protocol.py
-    trainer.py
-    model.py
-    inference_export.py
     batch.py
-    statistics.py
+    checkpoint.py
+    configuration.py
+    coordinator.py
+    credit_ledger.py
+    objective.py
+    progress.py
+    run_limits.py
+    self_play_group.py
+    targets.py
+    trainer_group.py
+    value.py
 
 evaluation/
     artifacts.py
@@ -1252,22 +1260,23 @@ evaluation/
     statistics.py
 
 games/
+    composition.py
+    contracts.py
     implementation.py
-    state.py
     chess/
+        contract.py
         configuration.py
         evaluation.py
-        implementation.py
-        objective.py
-        state.py
         stockfish.py
+        training.py
+        interactive/
+        uci/
     go/
+        contract.py
         configuration.py
         evaluation.py
-        implementation.py
         katago.py
-        objective.py
-        state.py
+        training.py
 ```
 
 Concrete game implementations own:
@@ -1965,7 +1974,7 @@ opponents; four-ply,
 temperature, sampling temperature, game counts, and the concrete evaluation-device tuple are benchmarked configuration
 values, not new architecture decisions.
 
-Phase 3 implementation evidence, awaiting user review:
+Accepted Phase 3 implementation evidence:
 
 - chess, Go 7x7, and Go 9x9 load the same evaluation definitions and use the same manager, job process, match,
   dataset, statistics, and reporting path;
@@ -1987,6 +1996,10 @@ Phase 3 implementation evidence, awaiting user review:
   deployment validation, not a second implementation path.
 
 ### Phase 4: integrated validation and cleanup
+
+Status: the production-reachability and documentation cleanup slice is `awaiting_user_review`. The remaining smoke,
+performance, concurrency, and target-hardware evidence below is pending future authorization; this cleanup does not
+start or complete it.
 
 - audit that no superseded modules, names, settings, tests, or normative documentation survived their owning phase;
 - validate clean startup, quantum transitions, worker restart, coordinator restart, and shutdown;

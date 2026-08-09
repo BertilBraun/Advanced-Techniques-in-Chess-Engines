@@ -42,7 +42,7 @@ and gradient reduction overheads outweigh the additional GPU compute.
 Multi-process `DistributedDataParallel` (DDP) instead keeps one persistent model
 replica per GPU and synchronizes bucketed gradients with NCCL.
 
-![Single GPU, DataParallel, and DDP throughput](../benchmarks/ddp-model-throughput-20260720/training-throughput.png)
+![Single GPU, DataParallel, and DDP throughput](../../benchmarks/ddp-model-throughput-20260720/training-throughput.png)
 
 In a model-only benchmark with resident BF16 batches, four-GPU DDP processes
 53.3 thousand synthetic samples/s, compared with 22.2 thousand samples/s for
@@ -51,7 +51,7 @@ the single-GPU batch-1,024 baseline and 13.3 thousand samples/s for four-GPU
 real replay loading, independent deterministic rank partitions, vectorized
 decoding, checkpointing, and retention.
 
-![Four-GPU DDP utilization](../benchmarks/ddp-model-throughput-20260720/ddp-gpu-utilization.png)
+![Four-GPU DDP utilization](../../benchmarks/ddp-model-throughput-20260720/ddp-gpu-utilization.png)
 
 Isolated production DDP uses 32.7%–58.3% mean SM utilization by GPU and about
 10% memory-controller capacity. Running five self-play processes per GPU during
@@ -60,7 +60,7 @@ optimization raises mean SM utilization to 96.6%–97.1%, while DDP continues at
 production sampler assigns disjoint rank-local partitions, drops only the
 incomplete global batch, and performs no duplicate padding.
 
-See the [benchmark artifact](../benchmarks/ddp-model-throughput-20260720/README.md)
+See the [benchmark artifact](../../benchmarks/ddp-model-throughput-20260720/README.md)
 for the comparison and plots, and the
-[production benchmark](../benchmarks/ddp-production-training-20260720/README.md)
+[production benchmark](../../benchmarks/ddp-production-training-20260720/README.md)
 for the authoritative replay, resource, and contention measurements.

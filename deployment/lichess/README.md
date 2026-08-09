@@ -427,4 +427,4 @@ If the process or network disconnects, rerunning `run_vast_bot.sh` reconnects th
 8. Verify search duration, reconnect behavior, PGN export, and clean shutdown.
 9. Only then enable rated games or a pre-registered direct-match schedule.
 
-For the statistical campaign, rating caveats, PGN reconciliation, and local Stockfish/Cute Chess comparison, see [`documentation/lichess_vast_evaluation.md`](../../documentation/lichess_vast_evaluation.md).
+For the statistical campaign, rating caveats, PGN reconciliation, and local Stockfish/Cute Chess comparison, see [`documentation/operations/lichess-vast-evaluation.md`](../../documentation/operations/lichess-vast-evaluation.md).

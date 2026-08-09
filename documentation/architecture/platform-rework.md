@@ -65,7 +65,7 @@ Component-level work may temporarily leave the complete training pipeline
 unavailable. Full integration and target-hardware validation occur after the
 components have been assembled.
 
-## Target system
+## Implemented platform through R9
 
 ### Experiment definition
 
@@ -88,8 +88,7 @@ The configuration covers:
 
 Loading performs cross-field validation, including supported board sizes,
 model shapes, action counts, worker-to-device assignments, evaluation
-compatibility, and resource limits. A queue-validation command resolves every
-selected YAML file before any experiment starts.
+compatibility, and resource limits.
 
 At run creation, the resolved Pydantic model, including defaults, is written as
 canonical JSON in the run directory. The YAML remains the authored experiment;
@@ -101,24 +100,26 @@ startup.
 
 ### Training lifecycle
 
-Presentation-credit training is the single training lifecycle. The commander
-starts persistent self-play and trainer processes, maintains replay while
-credits accumulate, starts one optimizer quantum when enough credits exist,
-publishes the resulting model generation, schedules evaluation, records
-telemetry, and continues until a configured run limit is reached.
+Presentation-credit training is the single training lifecycle. The coordinator
+owns the memory-mapped replay manager, credit ledger, persistent self-play
+processes, persistent DDP trainer group, asynchronous evaluation manager,
+checkpoint activation, telemetry, and shutdown. It starts one blocking optimizer
+quantum when replay and credits permit and continues until a configured run
+limit is reached.
 
 Credit parameters are required training configuration rather than an optional
-mode. Credit accounting, recovery, replay maintenance, model publication,
-evaluation scheduling, and shutdown each have focused owners. The commander
-coordinates those components at one level of abstraction.
+mode. Credit accounting, approximate restart, replay maintenance, model
+publication, evaluation scheduling, and shutdown each have focused owners. The
+coordinator composes those components at one level of abstraction.
 
 ### Native search path
 
 The production system has one MCTS implementation: the native C++ search used
 by self-play, evaluation, and interactive analysis. Python owns supervision,
 experiment policy, target construction, training, and result aggregation.
-Python modules that supervise native work use canonical names such as
-`SelfPlay`, `ModelEvaluation`, and `AlphaZeroBot`.
+The shared Python self-play worker, evaluation match runner, and interactive
+chess engine consume the same native search implementation through their
+coarse typed bindings.
 
 ### Game specialization
 
@@ -131,26 +132,17 @@ The concrete implementations determine:
 - position and action types;
 - initial position, legal actions, and immutable child transitions;
 - terminal detection, result, scoring, repetition, and ko semantics;
-- action encoding and decoding;
-- hashing and symmetries;
+- action-ID mapping and symmetries;
 - network input representation and tensor encoding;
 - policy, value, and auxiliary targets;
-- model definition and loss;
-- compact completed-game and replay representations.
+- training-objective semantics.
 
-The completed-game and replay boundaries are first established with chess.
-The next implementation pass traces the resulting chess path and extracts its
-game-specific decisions behind explicit C++ and Python contracts. It also
-separates shared experiment settings from chess settings. The native Go game
-then implements those contracts, and its integration provides the concrete
-second use case for any further boundary adjustments.
-
-Python remains responsible for experiment and process orchestration, game-level
-self-play policy, replay maintenance, target construction, training, evaluation
-scheduling, and reporting. Native code remains responsible for game-state
-operations and complete batched tree searches with direct model inference.
-Python supervisors consume completed native search results at the existing
-coarse boundary.
+Python remains responsible for experiment and process orchestration, shared
+self-play move policy, replay maintenance, target construction, training,
+evaluation scheduling, and reporting. Native code remains responsible for
+game-state operations and complete batched tree searches with direct model
+inference. Both games use the shared completed-game, replay, batch, trainer, and
+evaluation contracts.
 
 ### Go rules and position representation
 
@@ -234,10 +226,6 @@ position is created once when the child becomes a node. The native Go rules,
 action mapping, history updates, terminal detection, scoring, and symmetries
 receive deterministic unit tests against independently checked fixtures.
 
-The `codex/go-experimental-rework` branch is a reference for tested rules and
-integration ideas. Its position, history, and action interfaces are adapted to
-the design above.
-
 ### Completed-game records
 
 Each self-play worker publishes every completed game immediately as one file:
@@ -246,74 +234,68 @@ Each self-play worker publishes every completed game immediately as one file:
 2. flush and close it;
 3. atomically rename it to its final filename.
 
-The filename identity is derived from the run, worker, and worker-local
-monotonic game number. One trainer-side replay maintainer owns ingestion. For
-each published game it:
+The filename identity is derived from the worker, its process-instance UUID,
+and a process-local monotonic game number. The coordinator-owned replay manager
+drains the complete inbox. For each published game it:
 
 1. reads and validates the record;
-2. appends one framed record to the archive for its model generation;
-3. durably commits that append;
-4. materializes eligible replay samples;
+2. reconstructs and validates its complete trajectory through the selected
+   native state contract;
+3. materializes eligible replay rows and trajectory-dependent auxiliary targets;
+4. appends those rows to the fixed-slot memory-mapped FIFO;
 5. updates replay credits and telemetry;
-6. removes the consumed inbox file.
-
-A model-generation archive is a sequence of independently readable game records with
-enough framing to detect an incomplete final append during recovery. This
-provides prompt sample availability, a small steady-state inbox, easy per-
-generation inspection, and replay reconstruction from durable archives.
+6. removes the consumed inbox file only after its rows are written.
 
 A completed-game record contains:
 
-- schema, game, rules, representation, run, worker, and model-generation
-  metadata;
-- initial state or equivalent reconstruction data;
+- schema and collision-resistant game identity;
 - the action sequence and final result;
-- per-move legal actions and sparse search visits;
-- root value and the search statistics required by configured targets;
-- move-selection mode, search budget, resignation/adjudication information,
-  and sample eligibility or weighting data.
+- ordered search observations with sparse visits, root value, model generation,
+  budget, eligibility, and sample weight;
+- termination reason and timing metadata.
 
-The schema retains the source information needed to derive planned targets
-such as outcome, search policy, root value, remaining game length, and a later
-move's search policy. Target builders transform completed games into the
-compact replay representation selected by the experiment.
+The schema retains the source information needed to derive configured targets
+such as outcome, search policy, root value, and a later move's search policy.
+Consumed trajectory files are not retained as an exact replay-rebuild archive;
+approximate recovery from replay, ledger, checkpoint manifests, and any
+remaining inbox files is an accepted tradeoff.
 
 ### Active replay and batch construction
 
-The initial active replay is a simple bounded FIFO containing approximately
-2.5 million compact game-specific samples in RAM. Python objects or similarly
-direct containers are suitable for the first implementation. Each sample uses
-packed bitboards, sparse `(action_id, visit_count)` policy data, configured
-value and auxiliary targets, sample weight, and source model generation.
+Active replay is one preallocated fixed-slot circular memory-mapped file with a
+scheduled logical capacity and a static maximum capacity. Each row uses the
+game's packed network input, bounded sparse `(action_id, visit_count)` policy
+data, WDL/root value and configured auxiliary targets, sample weight, source
+generation, and source timestamp.
 
 Model generation supports replay-freshness telemetry, including the average
 generation lag sampled by each training batch.
 
-Replay maintenance and optimizer work use separate phases:
+Replay maintenance and optimizer work use separate coordinator phases:
 
-1. the maintainer ingests completed games and updates the FIFO;
-2. the trainer freezes a replay snapshot for an optimizer quantum;
-3. every DDP rank trains from its local copy of that snapshot;
-4. ingestion resumes and applies games accumulated during training.
+1. the replay manager drains completed games and flushes the mapped FIFO;
+2. the coordinator enters a blocking optimizer quantum, so replay is immutable;
+3. every persistent DDP rank maps the same file read-only and samples
+   deterministic non-overlapping indices;
+4. ingestion resumes and applies games accumulated in the inbox during training.
 
 Credits are awarded for eligible positions successfully materialized into the
-active replay. The existing deterministic distributed sampler is adapted so
-that ranks receive reproducible, non-overlapping samples from their snapshots.
+active replay. No replay object or dense batch crosses a process boundary.
 
 The batch builder samples indices, applies game-specific augmentation, expands
 packed states directly into preallocated final-shaped input and target
 buffers, and transfers contiguous pinned-memory batches asynchronously. CPU
 preparation of the next batch overlaps GPU training of the current batch.
 
-The first end-to-end run records replay memory use, materialization throughput,
-batch preparation time, transfer time, replay age, and credit balance. These
-measurements determine any later representation or loader optimization.
+Replay memory/file size, materialization throughput, mapped reads, batch
+preparation, transfer, replay age, and credit balance are measured evidence for
+later optimization decisions.
 
 ### Evaluation
 
 Evaluation runs concurrently with self-play and training on an elapsed
 20-minute cadence through the coordinator-owned asynchronous manager specified
-in `PYTHON_ARCHITECTURE_REWORK.md`. At each boundary it evaluates the newest
+in [the Python runtime architecture](python-runtime-rework.md). At each boundary it evaluates the newest
 checkpoint that was completely published at that boundary and reports the
 result at the boundary time, even when a blocking training quantum delays job
 launch. A six-hour screening run therefore produces approximately 18 strength
@@ -340,7 +322,7 @@ direct comparison across runs.
 The initial benchmark freezes one evaluation ladder and cadence for all
 experiments in a comparison set.
 
-### Experiment queue
+### Planned experiment queue (R10; not implemented)
 
 The Linux experiment runner accepts an ordered set of validated YAML files and
 a typed pool of resource slots. Each slot defines:
@@ -362,6 +344,11 @@ process group and records the resulting status.
 
 ## Execution ledger
 
+The task sections below preserve the deliverables and evidence used when each phase was reviewed. They are an
+implementation history, not parallel current architecture. The implemented-platform section above and the
+[Python runtime architecture](python-runtime-rework.md) are authoritative when a later accepted phase replaced an
+earlier phase's storage, process, or recovery design.
+
 | ID | Task | Status |
 | --- | --- | --- |
 | R1 | Remove Python MCTS and obsolete games | accepted |
@@ -372,12 +359,13 @@ process group and records the resulting status.
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
 | R8 | Go pipeline integration | accepted |
-| R9 | Go evaluation and elapsed checkpoint scheduling | awaiting_user_review |
+| R9 | Go evaluation and elapsed checkpoint scheduling | accepted |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R1 through R8 are accepted. R9 is awaiting user review. No later task is authorized.
+Current authorization: R1 through R9 are accepted. The post-R9 Python Phase 4 cleanup slice is
+`awaiting_user_review`. R10, R11 hardware validation, and R12 remain pending and are not authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -838,10 +826,12 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-09 | Post-R9 / Python Phase 4 | Cleanup handoff | The user accepted Phase 3/R9 and authorized an aggressive production-reachability and documentation cleanup. The audit traced training, UCI, web, and Lichess deployment roots separately; removed superseded Python rules/training modules and self-referential tests; made `deployment/setup_remote.sh` the sole fresh-node training bootstrap; reduced the locked dependency graph; and separated current authority, operations, research, history, and benchmark evidence. | Return the cleanup slice to `awaiting_user_review`. Keep the native interactive/UCI graph and deployment-called tools. Do not start R10, the remaining R11/Phase 4 hardware validation, compute provisioning, or R12 experiments. Commit `53419930` contains the production cleanup; the documentation commit and final validation are recorded in the handoff. |
+| 2026-08-09 | R9 | Acceptance | The user explicitly accepted Phase 3/R9 and authorized only the post-R9 cleanup described above. | Mark R9 `accepted`. Keep R10, R11, and R12 `pending`. |
 | 2026-08-09 | R9 | Ladder review correction | User review restored the fuller evaluation ladder: the three preceding 20-minute boundary checkpoints, every available fixed generation 10 through 100, and Stockfish levels 0 through 3. Every job should time out after the same 20 minutes as the cadence, and authored evaluation definitions should use readable block YAML. | Expand all chess/Go definitions in block YAML, set every job timeout to 1,200 seconds, run offsets 1/2/3 and fixed generations 10–100 for both games, and run Stockfish levels 0–3 for chess. Fixed generations are skipped until older than the candidate and present on disk; malformed present artifacts still fail. Commit `79af9c0d`; Ruff passes, Windows passes 168 tests with 12 infrastructure skips, and extension-backed Linux passes 195 tests with 4 real-infrastructure skips. Return R9 to `awaiting_user_review`. |
 | 2026-08-09 | R9 | Review correction | User review required policy-only play against random alongside search against random, so evaluation can distinguish improvement in the network policy from improvement contributed by search. | Add one `policy_random` definition to the shared union and all chess/Go templates. It uses direct batched inference, legal-action masking, greedy action selection, and the existing paired match, scheduling, device cycling, aggregation, and reporting path; it does not construct native search. Commit `d7adb9b6`; Ruff passes, Windows passes 164 tests with 12 infrastructure skips, and the extension-backed Linux suite passes 191 tests with 4 real-infrastructure skips. Return R9 to `awaiting_user_review`. |
 | 2026-08-09 | R9 | Implementation handoff | The elapsed evaluation replacement is implemented on `master`: canonical shared contracts and artifact builders, Stockfish UCI and KataGo JSON clients, raw fixed-dataset metrics, one paired match path, coordinator-owned asynchronous scheduling, boundary-time checkpoint selection and reporting, restart/failure/shutdown handling, and game-specific search/protocol composition. The complete superseded chess evaluation, HDF5 dataset, plateau, builder/tool, test, and TSV graph is deleted. | Return R9 to `awaiting_user_review`. Commits `02b04c70`, `47428d2c`, `871e7c0f`, `8d5bdba8`, `d3bcc596`, `f1d7888f`, and `b0addbc1` implement and validate the replacement. Ruff passes; Windows passes 163 tests with 12 infrastructure skips; the freshly built extension-backed Linux suite passes 190 tests with 4 real-infrastructure skips; native CTest passes. Real Stockfish/KataGo smoke tests remain opt-in because their external artifacts are not configured locally. |
-| 2026-08-08 | R9 | Authorization and evaluation simplification | The user accepted R8 and authorized Phase 3/R9. Evaluation should keep device assignment as a simple cycle, expand generated openings to four plies, retain every third engine-game position until the dataset contains 480 to 520 positions, keep external engines private to one job, and log at the requested elapsed boundary using the checkpoint available at that boundary. | Mark R8 accepted and R9 in progress. Implement the complete replacement architecture in `PYTHON_ARCHITECTURE_REWORK.md` with these simplified policies; do not begin R10 or later work. |
+| 2026-08-08 | R9 | Authorization and evaluation simplification | The user accepted R8 and authorized Phase 3/R9. Evaluation should keep device assignment as a simple cycle, expand generated openings to four plies, retain every third engine-game position until the dataset contains 480 to 520 positions, keep external engines private to one job, and log at the requested elapsed boundary using the checkpoint available at that boundary. | Mark R8 accepted and R9 in progress. Implement the complete replacement architecture in `documentation/architecture/python-runtime-rework.md` with these simplified policies; do not begin R10 or later work. |
 | 2026-08-08 | R8 | Python ownership review | User review found game-specific configuration, completed-game records, replay materialization, self-play, objectives, chess evaluation, interactive analysis, and UCI spread across shared root packages. The high-level training-game contract also required each game to provide a complete worker despite both games using the same active-game and model-refresh lifecycle; `cluster` and `train` split one training subsystem, and obsolete Python `Board`/`Game` ABCs competed with the typed state contracts. | Move every concrete game concern under `games/chess` or `games/go`; put chess evaluation, interactive analysis, and UCI below chess; make one shared `SelfPlayWorker` own active pools, batched turns, refresh, and statistics while game policies provide search/move/publication semantics; require the shared trainer to consume an explicit game-owned objective; move chess/Go self-play configuration into their experiment variants; merge shared replay, optimization, and processes under `training`; remove the single-implementation ABCs and four orphan utilities. Commits `50c7953`, `b7a57fb`, `a0316c3`, and `b088635` pass Ruff and the exact Windows suite with 314 tests passing and 5 native-dependent skips. Return R8 to `awaiting_user_review`. |
 | 2026-08-08 | R8 | Shared Python boundary correction | User review found that root settings still installed chess as a process-global current game, model creation and loading silently defaulted to chess dimensions, root encoding was chess-only, shared experiment/run ownership remained in chess-named modules, and eight files in the live configuration directory used an obsolete pre-R8 schema. | Delete the root game settings and current-game aliases; load the selected experiment directly in `train.py`; require explicit `NetworkDimensions` at every model boundary; move chess encoding under the chess implementation; rename shared experiment and run modules; make hardware validation accept the full experiment union; move shared telemetry/runtime imports off chess configuration; remove obsolete configuration documents and dead regression/settings helpers; retain three explicitly named, approval-required templates whose dependency hashes and chess/7x7/9x9 dimensions are validated together. The exact Windows suite passes 313 tests with 5 native-dependent skips, the fresh-extension suite passes all 351 tests, and Ruff passes. Return R8 to `awaiting_user_review`. |
 | 2026-08-07 | R8 | Desktop visualization cleanup | The retained Pygame grid, chess and Go visual strategies, mutable native-Go board adapter, font asset, and standalone Go inspector had no production training, evaluation, UCI, or deployment consumer after removal of the legacy human-play graph. | Remove the complete desktop presentation graph and its visualization-only tests, delete `CurrentGameVisuals`, and regenerate the locked training environment without Pygame. Preserve typed game/search/analysis boundaries for future web presentation. The exact Windows suite passes 313 tests with 5 native-dependent skips, the fresh-extension suite passes all 351 tests, and Ruff passes. Return R8 to `awaiting_user_review`. |
