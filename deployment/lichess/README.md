@@ -21,7 +21,7 @@ The first command clones the latest `master`, installs dependencies, compiles `A
 
 ### 1. Rent a development instance
 
-Choose a Vast recommended Ubuntu 22.04 or newer CUDA/PyTorch **development** template with SSH launch mode; the setup uses the distribution's Python 3 packages and requires Python 3.10 or newer. For an RTX 50-series GPU, Vast currently recommends its `[Automatic]` template so CUDA 12.8 and a compatible PyTorch are selected. Allocate about 50 GB disk, one GPU, 4+ CPU cores, and 8–16 GB system RAM. Prefer on-demand and a reliable/verified host for the first run.
+Choose a Vast recommended Ubuntu 22.04 or newer CUDA/PyTorch **development** template with SSH launch mode; the setup uses the distribution's Python 3 packages and requires Python 3.10 or newer. The locked environment installs PyTorch 2.12.1 with its CUDA 12.6 runtime. CUDA 12 minor-version compatibility permits this runtime on Linux NVIDIA drivers 525.60.13 or newer, including hosts advertised as CUDA 12.2; newer GPU generations can require a newer driver. Allocate about 50 GB disk, one GPU, 4+ CPU cores, and 8–16 GB system RAM. Prefer on-demand and a reliable/verified host for the first run.
 
 SSH launch mode gives an ordinary interactive shell. Nothing in this workflow automatically starts the chess bot.
 
@@ -223,7 +223,7 @@ Start conservatively with:
 
 An RTX 3090/4090, A10-class GPU, or comparable datacenter GPU is ample for one game if the model fits. A cheaper T4 may be adequate but should be benchmarked because fixed 10-second moves can hide throughput differences while affecting search counts. Do not rent several GPUs unless the interactive engine is deliberately changed to use them.
 
-The host NVIDIA driver and development template must support CUDA 12.8. Verify after launch:
+The host NVIDIA driver must be version 525.60.13 or newer and support the rented GPU. Verify the exact locked CUDA 12.6 runtime after setup:
 
 ```text
 nvidia-smi

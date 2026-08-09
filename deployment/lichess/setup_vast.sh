@@ -61,7 +61,7 @@ fi
 "${virtual_environment_root}/bin/uv" pip install \
     --python "${virtual_environment_root}/bin/python" \
     --require-hashes \
-    --torch-backend cu128 \
+    --torch-backend cu126 \
     --requirements "${engine_repository_root}/py/requirements-training.lock"
 "${virtual_environment_root}/bin/uv" pip install \
     --python "${virtual_environment_root}/bin/python" \

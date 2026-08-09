@@ -9,10 +9,10 @@ run:
   environment:
     runtime_image: local
     python_version: "3.12"
-    torch_version: "2.12.0+cu130"
-    cuda_version: "13.0"
+    torch_version: "2.12.1+cu126"
+    cuda_version: "12.6"
     dependency_lock_path: py/requirements-training.lock
-    dependency_lock_sha256: a83686f3d20341770641f9c72a56202edeb6cd3b3ed863ab9659a0fc51a43676
+    dependency_lock_sha256: 98be08cc170fbbbb4e1d99412bfb695fcd1a174e4d93e99678794e289928ce94
     minimum_open_file_soft_limit: 1024
 training:
   save_path: py/training_data/go-7x7

@@ -42,7 +42,7 @@ virtual_environment_uv="${virtual_environment}/bin/uv"
 "${virtual_environment_uv}" pip install \
     --python "${virtual_environment_python}" \
     --require-hashes \
-    --torch-backend cu128 \
+    --torch-backend cu126 \
     --requirements "${repository_directory}/py/requirements-training.lock"
 
 cmake \
