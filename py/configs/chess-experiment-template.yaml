@@ -81,7 +81,6 @@ training:
       recent_checkpoint_count: 11
       milestone_interval: 10
   limits:
-    cost_currency: EUR
     hourly_price: 1.0
     maximum_cost:
     maximum_wall_time_seconds: 172800

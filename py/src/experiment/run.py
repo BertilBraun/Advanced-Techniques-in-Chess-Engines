@@ -130,7 +130,6 @@ def _validate_approval(
         and approval.configuration_sha256 == experiment_sha256(experiment)
         and approval.provider_name == run.hardware.provider_name
         and approval.offer_id == run.hardware.offer_id
-        and approval.cost_currency == limits.cost_currency
         and approval.hourly_price == limits.hourly_price
         and approval.maximum_cost == limits.maximum_cost
         and approval.maximum_wall_time_minutes == int(limits.maximum_wall_time_seconds / 60)

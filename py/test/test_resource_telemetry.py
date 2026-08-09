@@ -2,8 +2,8 @@ from unittest.mock import Mock
 
 from src.experiment.resource_telemetry import (
     parse_nvidia_smi_output,
-    process_tree_open_file_counts,
 )
+from src.training.run_limits import process_tree_open_file_counts
 
 
 def test_parse_nvidia_smi_output() -> None:

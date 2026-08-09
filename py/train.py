@@ -37,7 +37,6 @@ if __name__ == '__main__':
         load_experiment_configuration,
         write_resolved_experiment,
     )
-    from src.runtime import USE_GPU
     from src.util.log import log
     from src.util.profiler import start_gpu_usage_logger
     from src.training.coordinator import Coordinator
@@ -64,7 +63,7 @@ if __name__ == '__main__':
     torch.cuda.manual_seed_all(training.random_seed)
 
     log('Starting training')
-    log('Training on:', 'GPU' if USE_GPU else 'CPU')
+    log('Training on:', training.topology.trainer.device_type.upper())
     log('Training args:')
     log(training, use_pprint=True)
 
@@ -84,7 +83,6 @@ if __name__ == '__main__':
     resource_telemetry = start_resource_telemetry(
         output_path=Path(training.save_path),
         started_at=run_started_at,
-        cost_currency=training.limits.cost_currency,
         hourly_price=training.limits.hourly_price,
         interval_seconds=training.limits.resource_telemetry_interval_seconds,
     )
@@ -111,7 +109,6 @@ if __name__ == '__main__':
             RunOutcomeStatus.FAILED,
             str(error),
             run_started_at,
-            training.limits.cost_currency,
             training.limits.hourly_price,
             0 if commander is None else commander.latest_completed_model_version,
         )
@@ -127,7 +124,6 @@ if __name__ == '__main__':
         outcome_status,
         commander.final_stop_reason,
         run_started_at,
-        training.limits.cost_currency,
         training.limits.hourly_price,
         commander.latest_completed_model_version,
     )

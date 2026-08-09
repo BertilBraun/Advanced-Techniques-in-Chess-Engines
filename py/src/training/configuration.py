@@ -6,7 +6,6 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from src.experiment.cost_accounting import CostCurrency
 from src.experiment.generation_schedule import (
     FloatGenerationSchedule,
     IntegerGenerationSchedule,
@@ -167,7 +166,6 @@ class TopologyParams(FrozenModel):
 
 
 class RuntimeLimits(FrozenModel):
-    cost_currency: CostCurrency
     hourly_price: float = Field(ge=0.0)
     maximum_cost: float | None = Field(default=None, gt=0.0)
     maximum_wall_time_seconds: float = Field(gt=0.0)

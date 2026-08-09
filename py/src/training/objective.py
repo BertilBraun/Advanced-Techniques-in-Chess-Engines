@@ -6,8 +6,15 @@ import torch
 import torch.nn.functional as functional
 
 from src.training.batch import TrainingBatch, TrainingModelOutput
-from src.training.value import scalar_to_wdl
 from src.util.frozen_model import FrozenModel
+
+
+def _scalar_to_wdl(scores: torch.Tensor) -> torch.Tensor:
+    """Represent scores in [-1, 1] with residual probability shared across WDL."""
+    wins = torch.clamp(scores, min=0.0)
+    losses = torch.clamp(-scores, min=0.0)
+    remainders = 1.0 - torch.abs(scores)
+    return torch.stack((wins + remainders / 3, remainders / 3, losses + remainders / 3), dim=-1)
 
 
 @dataclass(frozen=True)
@@ -38,7 +45,7 @@ class ResolvedTrainingObjective(FrozenModel):
         policy_loss = (policy_rows * sample_weights).mean()
         blended_wdl = torch.lerp(
             batch.wdl_targets,
-            scalar_to_wdl(batch.root_values),
+            _scalar_to_wdl(batch.root_values),
             self.root_value_blend,
         )
         wdl_rows = functional.cross_entropy(output.wdl_logits, blended_wdl, reduction='none')

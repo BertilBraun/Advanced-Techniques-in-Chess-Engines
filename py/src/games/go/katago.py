@@ -265,3 +265,20 @@ class KataGoClient:
         traceback: TracebackType | None,
     ) -> None:
         self.close()
+
+
+class KataGoMatchEngine:
+    def __init__(self, client: KataGoClient) -> None:
+        self.client = client
+
+    def choose_actions(
+        self,
+        positions: tuple[NativeGoPosition, ...],
+        action_sequences: tuple[tuple[int, ...], ...],
+    ) -> tuple[int, ...]:
+        if len(positions) != len(action_sequences):
+            raise ValueError('KataGo match positions and histories must have equal lengths.')
+        return self.client.choose_actions(action_sequences)
+
+    def close(self) -> None:
+        self.client.close()

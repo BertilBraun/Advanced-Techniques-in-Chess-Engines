@@ -6,7 +6,7 @@ from time import monotonic
 
 from src.util.frozen_model import FrozenModel
 
-from src.experiment.cost_accounting import CostCurrency, estimated_cost
+from src.training.run_limits import estimated_cost
 from src.util.atomic_file import write_text_atomically
 
 
@@ -21,7 +21,6 @@ class RunOutcome(FrozenModel):
     reason: str | None
     completed_at_utc: datetime
     elapsed_seconds: float
-    cost_currency: CostCurrency
     estimated_cost: float
     latest_checkpoint_model_version: int
 
@@ -31,7 +30,6 @@ def write_run_outcome(
     status: RunOutcomeStatus,
     reason: str | None,
     started_at: float,
-    cost_currency: CostCurrency,
     hourly_price: float,
     latest_checkpoint_model_version: int,
 ) -> None:
@@ -41,7 +39,6 @@ def write_run_outcome(
         reason=reason,
         completed_at_utc=datetime.now(timezone.utc),
         elapsed_seconds=elapsed_seconds,
-        cost_currency=cost_currency,
         estimated_cost=estimated_cost(hourly_price, elapsed_seconds),
         latest_checkpoint_model_version=latest_checkpoint_model_version,
     )

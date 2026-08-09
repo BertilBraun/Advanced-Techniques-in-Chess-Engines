@@ -1,11 +1,32 @@
 from pathlib import Path
+import os
 import time
 
 import psutil
 
-from src.experiment.cost_accounting import estimated_cost
-from src.experiment.resource_telemetry import process_tree_open_file_counts
 from src.training.configuration import RuntimeLimits
+
+
+def estimated_cost(hourly_price: float, elapsed_seconds: float) -> float:
+    return hourly_price * elapsed_seconds / 3600
+
+
+def process_open_file_count(process: psutil.Process) -> int:
+    if os.name == 'posix':
+        return process.num_fds()
+    return process.num_handles()
+
+
+def process_tree_open_file_counts(parent_process: psutil.Process) -> tuple[int, int]:
+    counts: list[int] = []
+    for process in (parent_process, *parent_process.children(recursive=True)):
+        try:
+            counts.append(process_open_file_count(process))
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    if not counts:
+        raise ValueError('No live processes were available for open-file monitoring.')
+    return max(counts), sum(counts)
 
 
 class RunLimitMonitor:

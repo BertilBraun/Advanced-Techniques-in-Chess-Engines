@@ -6,7 +6,6 @@ from pathlib import Path
 
 from pydantic import Field, model_validator
 
-from src.experiment.cost_accounting import CostCurrency
 from src.util.frozen_model import FrozenModel
 
 
@@ -52,7 +51,6 @@ class ApprovalRecord(FrozenModel):
     configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     provider_name: str
     offer_id: str
-    cost_currency: CostCurrency
     hourly_price: float
     maximum_cost: float | None
     maximum_wall_time_minutes: int

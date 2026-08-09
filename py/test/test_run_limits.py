@@ -19,9 +19,8 @@ class DiskUsage:
     free: int
 
 
-def limits(**updates: float | int | str | None) -> RuntimeLimits:
-    values: dict[str, float | int | str | None] = {
-        'cost_currency': 'USD',
+def limits(**updates: float | int | None) -> RuntimeLimits:
+    values: dict[str, float | int | None] = {
         'hourly_price': 2.0,
         'maximum_cost': 10.0,
         'maximum_wall_time_seconds': 100.0,

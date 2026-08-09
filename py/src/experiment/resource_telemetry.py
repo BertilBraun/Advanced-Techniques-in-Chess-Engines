@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import time
 from threading import Event, Thread
@@ -11,7 +10,7 @@ import psutil
 
 from src.util.frozen_model import FrozenModel
 
-from src.experiment.cost_accounting import CostCurrency, estimated_cost
+from src.training.run_limits import estimated_cost, process_tree_open_file_counts
 from src.util.background_worker import BackgroundWorker
 
 
@@ -28,7 +27,6 @@ class GpuTelemetry(FrozenModel):
 class ResourceTelemetry(FrozenModel):
     timestamp_utc: datetime
     elapsed_seconds: float
-    cost_currency: CostCurrency
     estimated_cost: float
     process_rss_mib: float
     process_cpu_percent: float
@@ -77,29 +75,10 @@ def collect_gpu_telemetry() -> tuple[GpuTelemetry, ...]:
     return parse_nvidia_smi_output(completed.stdout)
 
 
-def process_open_file_count(process: psutil.Process) -> int:
-    if os.name == 'posix':
-        return process.num_fds()
-    return process.num_handles()
-
-
-def process_tree_open_file_counts(parent_process: psutil.Process) -> tuple[int, int]:
-    counts: list[int] = []
-    for process in (parent_process, *parent_process.children(recursive=True)):
-        try:
-            counts.append(process_open_file_count(process))
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    if not counts:
-        raise ValueError('No live processes were available for open-file monitoring.')
-    return max(counts), sum(counts)
-
-
 def collect_resource_telemetry(
     parent_process: psutil.Process,
     output_path: Path,
     started_at: float,
-    cost_currency: CostCurrency,
     hourly_price: float,
 ) -> ResourceTelemetry:
     elapsed_seconds = time.monotonic() - started_at
@@ -108,7 +87,6 @@ def collect_resource_telemetry(
     return ResourceTelemetry(
         timestamp_utc=datetime.now(timezone.utc),
         elapsed_seconds=elapsed_seconds,
-        cost_currency=cost_currency,
         estimated_cost=estimated_cost(hourly_price, elapsed_seconds),
         process_rss_mib=parent_process.memory_info().rss / 2**20,
         process_cpu_percent=parent_process.cpu_percent(interval=None),
@@ -126,7 +104,6 @@ def record_resource_telemetry(
     parent_process_id: int,
     output_path: Path,
     started_at: float,
-    cost_currency: CostCurrency,
     hourly_price: float,
     interval_seconds: float,
     stop_event: Event,
@@ -140,7 +117,6 @@ def record_resource_telemetry(
             parent_process=parent_process,
             output_path=output_path,
             started_at=started_at,
-            cost_currency=cost_currency,
             hourly_price=hourly_price,
         )
         with telemetry_path.open('a', encoding='utf-8') as telemetry_file:
@@ -152,7 +128,6 @@ def record_resource_telemetry(
 def start_resource_telemetry(
     output_path: Path,
     started_at: float,
-    cost_currency: CostCurrency,
     hourly_price: float,
     interval_seconds: float,
 ) -> BackgroundWorker:
@@ -163,7 +138,6 @@ def start_resource_telemetry(
             psutil.Process().pid,
             output_path,
             started_at,
-            cost_currency,
             hourly_price,
             interval_seconds,
             stop_event,

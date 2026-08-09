@@ -21,9 +21,9 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.util.atomic_file import write_text_atomically
 
 if TYPE_CHECKING:
-    from src.games.chess.evaluation import StockfishMatchEngine
+    from src.games.chess.stockfish import StockfishMatchEngine
     from src.games.composition import ConfiguredGame
-    from src.games.go.evaluation import KataGoMatchEngine
+    from src.games.go.katago import KataGoMatchEngine
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -107,8 +107,8 @@ def _create_external_match_engine(
     job: MatchEvaluationJob,
     game: ConfiguredGame,
 ) -> StockfishMatchEngine | KataGoMatchEngine | None:
-    from src.games.chess.evaluation import StockfishMatchEngine
-    from src.games.go.evaluation import KataGoMatchEngine
+    from src.games.chess.stockfish import StockfishMatchEngine
+    from src.games.go.katago import KataGoMatchEngine
 
     match job.opponent.kind:
         case 'random' | 'checkpoint':
