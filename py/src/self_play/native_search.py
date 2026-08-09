@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import InferenceStatistics, SelfPlaySearchParameters, TimeInfo
+    from AlphaZeroCpp import InferenceStatistics, SelfPlaySearchParameters
 
 
 PositionT = TypeVar('PositionT')
@@ -77,4 +77,4 @@ class NativeSelfPlaySearch(Protocol[PositionT, NativeRootT, NativeRequestT, Nati
 
     def update_search_schedule(self, search_parameters: SelfPlaySearchParameters) -> bool: ...
 
-    def inference_statistics(self) -> tuple[InferenceStatistics, TimeInfo]: ...
+    def inference_statistics(self) -> InferenceStatistics: ...

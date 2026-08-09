@@ -1,8 +1,6 @@
 #include "games/chess/encoding/ChessEncoding.hpp"
 #include "util/py.hpp"
 
-#include "util/TimeItGuard.h"
-
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -57,7 +55,6 @@ BoardFingerprint fingerprintBoard(const CompressedEncodedBoard &compressed) {
 }
 
 CompressedEncodedBoard encodeBoard(const Board &board) {
-    TIMEIT("encodeBoard");
     CompressedEncodedBoard out{};
 
     // Canonical chess inputs are always encoded from the side-to-move perspective.
@@ -113,8 +110,6 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
 }
 
 torch::Tensor tensorEncoding(const CompressedEncodedBoard &compressed) {
-    TIMEIT("toTensor");
-
     auto tensor = torch::empty({ChessRepresentationDimensions::channel_count,
                                 ChessRepresentationDimensions::board_length,
                                 ChessRepresentationDimensions::board_length},

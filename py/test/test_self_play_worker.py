@@ -65,11 +65,6 @@ class FakeInferenceStatistics:
     averageNumberOfPositionsInInferenceCall: float = 2.0
 
 
-@dataclass(frozen=True)
-class FakeTimingStatistics:
-    totalTime: float = 3.0
-
-
 class FakeSearch:
     def __init__(self) -> None:
         self.generations: list[int] = []
@@ -95,8 +90,8 @@ class FakeSearch:
         del search_parameters
         return True
 
-    def inference_statistics(self) -> tuple[FakeInferenceStatistics, FakeTimingStatistics]:
-        return FakeInferenceStatistics(), FakeTimingStatistics()
+    def inference_statistics(self) -> FakeInferenceStatistics:
+        return FakeInferenceStatistics()
 
 
 class FakeState:

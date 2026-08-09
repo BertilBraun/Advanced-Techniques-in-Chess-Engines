@@ -23,7 +23,7 @@ from src.util.tensorboard import log_scalar
 
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import InferenceStatistics, TimeInfo
+    from AlphaZeroCpp import InferenceStatistics
 
     from src.games.implementation import GameImplementation
     from src.training.checkpoint import CheckpointReference
@@ -43,7 +43,6 @@ class SelfPlayStatisticsSnapshot:
     model_generation: int
     completed_searches: int
     inference: InferenceStatistics
-    timing: TimeInfo
 
 
 class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResultT, NativeSearchT]):
@@ -111,18 +110,16 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
     def snapshot_statistics(self) -> SelfPlayStatisticsSnapshot:
         search, _ = self._loaded_runtime()
         assert self.model_generation is not None
-        inference, timing = search.inference_statistics()
+        inference = search.inference_statistics()
         log_scalar(
             'inference/average_number_of_positions_in_inference_call',
             inference.averageNumberOfPositionsInInferenceCall,
             self.model_generation,
         )
-        log_scalar('timing/total_time_cpp', timing.totalTime, self.model_generation)
         return SelfPlayStatisticsSnapshot(
             model_generation=self.model_generation,
             completed_searches=self.completed_searches,
             inference=inference,
-            timing=timing,
         )
 
     def _new_game(
