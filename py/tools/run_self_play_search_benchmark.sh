@@ -21,6 +21,10 @@ duration_seconds=${MEASUREMENT_DURATION_SECONDS:-60}
 generation=${BENCHMARK_GENERATION:-0}
 pin_workers=${PIN_WORKERS_TO_CPUS:-0}
 cpus_per_process=${CPUS_PER_PROCESS:-4}
+parallel_searches=${PARALLEL_SEARCHES:-}
+inference_workers=${INFERENCE_WORKERS:-}
+inference_batch_size=${INFERENCE_BATCH_SIZE:-}
+outstanding_batches_per_worker=${OUTSTANDING_BATCHES_PER_WORKER:-}
 
 for value in "${gpu_count}" "${processes_per_gpu}" "${parallel_games}" "${duration_seconds}" "${cpus_per_process}"; do
     if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
@@ -105,8 +109,13 @@ for ((device = 0; device < gpu_count; device++)); do
         if [[ "${pin_workers}" == "1" ]]; then
             first_cpu=$((worker_index * cpus_per_process))
             last_cpu=$((first_cpu + cpus_per_process - 1))
-            worker_command=(taskset --cpu-list "${first_cpu}-${last_cpu}" "${worker_command[@]}")
+        worker_command=(taskset --cpu-list "${first_cpu}-${last_cpu}" "${worker_command[@]}")
         fi
+        benchmark_overrides=()
+        [[ -n "${parallel_searches}" ]] && benchmark_overrides+=(--parallel-searches "${parallel_searches}")
+        [[ -n "${inference_workers}" ]] && benchmark_overrides+=(--inference-workers "${inference_workers}")
+        [[ -n "${inference_batch_size}" ]] && benchmark_overrides+=(--inference-batch-size "${inference_batch_size}")
+        [[ -n "${outstanding_batches_per_worker}" ]] && benchmark_overrides+=(--outstanding-batches-per-worker "${outstanding_batches_per_worker}")
         "${worker_command[@]}" \
             --run-config "${run_config}" \
             --model "${model}" \
@@ -119,6 +128,7 @@ for ((device = 0; device < gpu_count; device++)); do
             --duration-seconds "${duration_seconds}" \
             --ready-file "${output_directory}/ready-${worker_index}" \
             --start-barrier "${barrier}" \
+            "${benchmark_overrides[@]}" \
             >"${output_directory}/worker-${worker_index}.json" \
             2>"${output_directory}/worker-${worker_index}.stderr" &
         processes+=("$!")

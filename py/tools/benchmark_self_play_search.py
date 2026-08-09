@@ -13,6 +13,8 @@ from typing import Literal
 
 from src.experiment.configuration import load_experiment_configuration
 from src.games.composition import create_game_implementation
+from src.games.chess.configuration import ChessExperimentConfiguration
+from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 
@@ -30,6 +32,10 @@ class Arguments:
     duration_seconds: float
     ready_file: Path | None
     start_barrier: Path | None
+    parallel_searches: int | None
+    inference_workers: int | None
+    inference_batch_size: int | None
+    outstanding_batches_per_worker: int | None
 
 
 @dataclass(frozen=True)
@@ -47,6 +53,10 @@ class BenchmarkResult:
     inference_device: Literal['cpu', 'cuda']
     model_generation: int
     parallel_games: int
+    parallel_searches: int
+    inference_workers: int
+    inference_batch_size: int
+    outstanding_batches_per_worker: int
     warmup_batches: int
     elapsed_seconds: float
     search_batches: int
@@ -97,8 +107,41 @@ def _difference(current: int, initial: int) -> int:
     return difference
 
 
+def _apply_self_play_overrides(
+    experiment: ChessExperimentConfiguration | GoExperimentConfiguration,
+    arguments: Arguments,
+) -> ChessExperimentConfiguration | GoExperimentConfiguration:
+    match experiment:
+        case ChessExperimentConfiguration(chess=game_configuration):
+            field_name = 'chess'
+        case GoExperimentConfiguration(go=game_configuration):
+            field_name = 'go'
+    self_play = game_configuration.self_play
+    search_update = {} if arguments.parallel_searches is None else {'parallel_searches': arguments.parallel_searches}
+    inference_update = {
+        field_name: value
+        for field_name, value in (
+            ('inference_workers', arguments.inference_workers),
+            ('inference_batch_size', arguments.inference_batch_size),
+            ('outstanding_batches_per_worker', arguments.outstanding_batches_per_worker),
+        )
+        if value is not None
+    }
+    updated_self_play = self_play.validated_copy(
+        update={
+            'search': self_play.search.validated_copy(update=search_update).model_dump(mode='json'),
+            'inference': self_play.inference.validated_copy(update=inference_update).model_dump(mode='json'),
+        }
+    )
+    updated_game_configuration = game_configuration.validated_copy(
+        update={'self_play': updated_self_play.model_dump(mode='json')}
+    )
+    return experiment.validated_copy(update={field_name: updated_game_configuration.model_dump(mode='json')})
+
+
 def run_benchmark(arguments: Arguments) -> BenchmarkResult:
     experiment = load_experiment_configuration(arguments.run_config)
+    experiment = _apply_self_play_overrides(experiment, arguments)
     configured_trainer = experiment.training.topology.trainer
     trainer = configured_trainer.validated_copy(
         update={
@@ -162,6 +205,10 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         inference_device=arguments.inference_device,
         model_generation=arguments.generation,
         parallel_games=arguments.games,
+        parallel_searches=game.self_play_configuration.search.parallel_searches,
+        inference_workers=game.self_play_configuration.inference.inference_workers,
+        inference_batch_size=game.self_play_configuration.inference.inference_batch_size,
+        outstanding_batches_per_worker=game.self_play_configuration.inference.outstanding_batches_per_worker,
         warmup_batches=arguments.warmup_batches,
         elapsed_seconds=elapsed_seconds,
         search_batches=search_batches,
@@ -191,6 +238,10 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--duration-seconds', default=60.0, type=float)
     parser.add_argument('--ready-file', type=Path)
     parser.add_argument('--start-barrier', type=Path)
+    parser.add_argument('--parallel-searches', type=int)
+    parser.add_argument('--inference-workers', type=int)
+    parser.add_argument('--inference-batch-size', type=int)
+    parser.add_argument('--outstanding-batches-per-worker', type=int)
     namespace = parser.parse_args()
     arguments = Arguments(
         run_config=namespace.run_config,
@@ -204,6 +255,10 @@ def parse_arguments() -> Arguments:
         duration_seconds=namespace.duration_seconds,
         ready_file=namespace.ready_file,
         start_barrier=namespace.start_barrier,
+        parallel_searches=namespace.parallel_searches,
+        inference_workers=namespace.inference_workers,
+        inference_batch_size=namespace.inference_batch_size,
+        outstanding_batches_per_worker=namespace.outstanding_batches_per_worker,
     )
     if not arguments.model.is_file():
         raise ValueError(f'Benchmark model does not exist: {arguments.model}')
@@ -211,6 +266,14 @@ def parse_arguments() -> Arguments:
         raise ValueError('Device, worker, generation, and warm-up batches must be nonnegative.')
     if arguments.games <= 0 or arguments.duration_seconds <= 0.0:
         raise ValueError('Games and duration must be positive.')
+    overrides = (
+        arguments.parallel_searches,
+        arguments.inference_workers,
+        arguments.inference_batch_size,
+        arguments.outstanding_batches_per_worker,
+    )
+    if any(value is not None and value <= 0 for value in overrides):
+        raise ValueError('Self-play benchmark overrides must be positive.')
     return arguments
 
 
