@@ -51,8 +51,11 @@ def get_run_id() -> int:
     log_root = Path(os.environ.get('TRAINING_TENSORBOARD_LOG_PATH', DEFAULT_TENSORBOARD_LOG_PATH))
     for run in range(10_000):
         run_path = log_root / f'run_{run}'
-        if not run_path.exists():
-            run_path.mkdir(parents=True)
+        try:
+            run_path.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            continue
+        else:
             return run
     raise ValueError('Could not find a free TensorBoard run directory.')
 

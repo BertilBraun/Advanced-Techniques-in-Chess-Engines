@@ -8,6 +8,7 @@ repository_directory="${ENGINE_REPOSITORY_DIRECTORY:-/workspace/alphazero-engine
 virtual_environment="${ENGINE_VIRTUAL_ENVIRONMENT:-${repository_directory}-venv}"
 python_command="${ENGINE_PYTHON:-python3}"
 uv_version="${ENGINE_UV_VERSION:-0.11.14}"
+open_file_soft_limit="${ENGINE_OPEN_FILE_SOFT_LIMIT:-65536}"
 
 if [[ $# -eq 0 ]]; then
     echo "Usage: setup_remote.sh COMMAND [ARGUMENT ...]" >&2
@@ -21,6 +22,15 @@ for required_command in git cmake "${python_command}"; do
         exit 1
     fi
 done
+
+if ! [[ "${open_file_soft_limit}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ENGINE_OPEN_FILE_SOFT_LIMIT must be a positive integer." >&2
+    exit 1
+fi
+if ! ulimit -Sn "${open_file_soft_limit}"; then
+    echo "Cannot raise the open-file soft limit to ${open_file_soft_limit}." >&2
+    exit 1
+fi
 
 if [[ -e "${repository_directory}" ]]; then
     echo "Repository destination already exists: ${repository_directory}" >&2

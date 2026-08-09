@@ -7,10 +7,24 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 from src.util.tensorboard import (
     TensorboardWriter,
     configure_tensorboard_run_directory,
+    get_run_id,
     is_tensorboard_writer_active,
     log_scalar,
     log_scalars,
 )
+
+
+def test_run_id_allocation_is_atomic_between_concurrent_experiments(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv('TRAINING_TENSORBOARD_LOG_PATH', str(tmp_path))
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        run_ids = tuple(executor.map(lambda _: get_run_id(), range(3)))
+
+    assert set(run_ids) == {0, 1, 2}
+    assert {path.name for path in tmp_path.iterdir()} == {'run_0', 'run_1', 'run_2'}
 
 
 def test_tensorboard_uses_run_specific_artifact_root(
