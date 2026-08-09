@@ -87,38 +87,38 @@ def is_tensorboard_writer_active() -> bool:
     return _TB_LOGGING_ENABLED.get() and _TB_SUMMARY.get() is not None
 
 
-def log_scalar(name: str, value: float, iteration: int | None = None) -> None:
+def log_scalar(name: str, value: float, step: int | None = None) -> None:
     if not _tb_check_active():
         return
     summary = _TB_SUMMARY.get()
     assert summary is not None, 'No tensorboard writer active'
-    if iteration is None:
-        iteration = int(time.time() * 1000)
-    summary.add_scalar(name, value, iteration)
+    if step is None:
+        step = int(time.time() * 1000)
+    summary.add_scalar(name, value, step)
 
 
-def log_scalars(name: str, values: dict[str, SupportsFloat], iteration: int | None = None) -> None:
+def log_scalars(name: str, values: dict[str, SupportsFloat], step: int | None = None) -> None:
     if not _tb_check_active() or not values:
         return
     summary = _TB_SUMMARY.get()
     assert summary is not None, 'No tensorboard writer active'
-    if iteration is None:
-        iteration = int(time.time() * 1000)
+    if step is None:
+        step = int(time.time() * 1000)
     values_float = {k: float(v) for k, v in values.items()}  # Ensure all values are floats
-    summary.add_scalars(name, values_float, iteration)
+    summary.add_scalars(name, values_float, step)
 
 
-def log_text(name: str, text: str, iteration: int | None = None) -> None:
+def log_text(name: str, text: str, step: int | None = None) -> None:
     if not _tb_check_active():
         return
     summary = _TB_SUMMARY.get()
     assert summary is not None, 'No tensorboard writer active'
-    if iteration is None:
-        iteration = int(time.time() * 1000)
-    summary.add_text(name, text, iteration)
+    if step is None:
+        step = int(time.time() * 1000)
+    summary.add_text(name, text, step)
 
 
-def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int | None = None) -> None:
+def log_histogram(name: str, values: torch.Tensor | np.ndarray, step: int | None = None) -> None:
     if not LOG_HISTOGRAMS or not _tb_check_active():
         return
     values = values.reshape(-1)
@@ -128,9 +128,9 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int |
         return
     summary = _TB_SUMMARY.get()
     assert summary is not None, 'No tensorboard writer active'
-    if iteration is None:
-        iteration = int(time.time() * 1000)
-    summary.add_histogram(name, values, iteration)
+    if step is None:
+        step = int(time.time() * 1000)
+    summary.add_histogram(name, values, step)
 
 
 class TensorboardWriter:

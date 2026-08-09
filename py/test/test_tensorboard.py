@@ -36,11 +36,11 @@ def test_tensorboard_explicit_run_directory_combines_process_restarts(
     first_process_writer = TensorboardWriter(run=1, suffix='trainer', postfix_pid=False)
     restarted_process_writer = TensorboardWriter(run=2, suffix='trainer', postfix_pid=False)
     with first_process_writer:
-        log_scalar('training/loss', 2.0, iteration=1)
-        log_scalars('evaluation/vs_random', {'wins': 20}, iteration=1)
+        log_scalar('training/loss', 2.0, step=1)
+        log_scalars('evaluation/vs_random', {'wins': 20}, step=1)
     with restarted_process_writer:
-        log_scalar('training/loss', 1.0, iteration=2)
-        log_scalars('evaluation/vs_random', {'wins': 30}, iteration=2)
+        log_scalar('training/loss', 1.0, step=2)
+        log_scalars('evaluation/vs_random', {'wins': 30}, step=2)
 
     expected_directory = tmp_path / 'clean-retrain' / 'trainer'
     assert Path(first_process_writer.log_folder) == expected_directory
@@ -62,7 +62,7 @@ def test_tensorboard_rejects_unsafe_run_directory(run_directory: str) -> None:
 def write_thread_event(run: int) -> Path:
     writer = TensorboardWriter(run=run, suffix='usage', postfix_pid=False)
     with writer:
-        log_scalar('utilization', float(run), iteration=0)
+        log_scalar('utilization', float(run), step=0)
     return Path(writer.log_folder)
 
 
@@ -91,7 +91,7 @@ def test_disabled_tensorboard_writer_creates_no_event_file(
 
     writer = TensorboardWriter(run=3, suffix='self_play', postfix_pid=False, enabled=False)
     with writer:
-        log_scalar('mcts/average_search_depth', 4.0, iteration=0)
+        log_scalar('mcts/average_search_depth', 4.0, step=0)
 
     assert not Path(writer.log_folder).exists()
 

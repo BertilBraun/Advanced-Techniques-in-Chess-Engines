@@ -268,8 +268,8 @@ def custom_scalar_categories() -> tuple[CustomScalarCategory, ...]:
                 _evaluation_wdl_chart('Stockfish level 1', 'evaluation/vs_stockfish_level_1'),
                 _evaluation_wdl_chart('Stockfish level 2', 'evaluation/vs_stockfish_level_2'),
                 _evaluation_wdl_chart('Stockfish level 3', 'evaluation/vs_stockfish_level_3'),
-                _evaluation_wdl_chart('Model from 10 iterations earlier', 'evaluation/vs_10_model'),
-                _evaluation_wdl_chart('Model from 20 iterations earlier', 'evaluation/vs_20_model'),
+                _evaluation_wdl_chart('Model from 10 generations earlier', 'evaluation/vs_10_model'),
+                _evaluation_wdl_chart('Model from 20 generations earlier', 'evaluation/vs_20_model'),
             ),
         ),
         CustomScalarCategory(
