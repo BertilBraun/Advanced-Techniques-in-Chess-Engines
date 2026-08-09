@@ -15,7 +15,7 @@ from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
 from src.training.trainer_group import TrainerGroup
 from src.util.save_paths import create_optimizer, save_model_and_optimizer
-from src.neural_network import Network
+from src.training.network import Network
 
 
 def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:

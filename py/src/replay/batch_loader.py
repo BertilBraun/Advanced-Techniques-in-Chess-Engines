@@ -9,7 +9,7 @@ import numpy.typing as npt
 import torch
 
 from src.games.contracts import GameStateContract
-from src.packed_planes import decode_packed_planes
+from src.games.representation import decode_packed_planes
 from src.replay.contracts import EligibleNextPolicyTarget
 from src.replay.manager import ReplayDescription
 from src.replay.store import ReplayStore

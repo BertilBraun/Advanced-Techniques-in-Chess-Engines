@@ -4,8 +4,8 @@ from uuid import UUID
 
 import pytest
 
-from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
-from src.packed_planes import PackedPlaneLayout, PackedPlanePayload
+from src.games.contracts import GameStateContract, Player, WdlTarget
+from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.contracts import EligibleNextPolicyTarget, IneligibleNextPolicyTarget, ReplaySample
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayManager

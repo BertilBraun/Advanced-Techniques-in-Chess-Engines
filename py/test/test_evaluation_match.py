@@ -18,8 +18,8 @@ from src.evaluation.contracts import (
     RandomOpponent,
 )
 from src.evaluation.match import run_match
-from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
-from src.packed_planes import PackedPlaneLayout, PackedPlanePayload
+from src.games.contracts import GameStateContract, Player, WdlTarget
+from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.contracts import ReplaySample
 from src.self_play.completed_game import TerminationReason
 from src.training.checkpoint import CheckpointReference

@@ -17,7 +17,7 @@ from torch.nn.parallel import DistributedDataParallel
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
 from src.games.composition import create_game_implementation
-from src.neural_network import Network
+from src.training.network import Network
 from src.replay.batch_loader import MappedReplayBatchLoader
 from src.replay.manager import ReplayDescription
 from src.training.batch import TrainingModelOutput

@@ -2,9 +2,8 @@ import torch
 
 from torch import Tensor, nn
 
-from src.neural_network import Network, ResBlock, SqueezeExcitation
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
-from src.training.configuration import NetworkParams, SEPlacement
+from src.training.network import Network, NetworkParams, ResBlock, SEPlacement, SqueezeExcitation
 
 
 class Multiply(nn.Module):

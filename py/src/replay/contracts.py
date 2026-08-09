@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal, TypeAlias
 
 from src.games.contracts import WdlTarget
-from src.packed_planes import PackedPlanePayload
+from src.games.representation import PackedPlanePayload
 from src.self_play.completed_game import SparseSearchVisit
 
 

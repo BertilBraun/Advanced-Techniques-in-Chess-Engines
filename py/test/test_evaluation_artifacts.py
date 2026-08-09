@@ -21,8 +21,8 @@ from src.evaluation.configuration import (
 from src.evaluation.contracts import FixedDatasetEvaluationJob
 from src.evaluation.dataset import evaluate_fixed_dataset
 from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
-from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
-from src.packed_planes import PackedPlaneLayout, PackedPlanePayload
+from src.games.contracts import GameStateContract, Player, WdlTarget
+from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.contracts import ReplaySample
 from src.self_play.completed_game import TerminationReason
 from src.training.checkpoint import CheckpointReference

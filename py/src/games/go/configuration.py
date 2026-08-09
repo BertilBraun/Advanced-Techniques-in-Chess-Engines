@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from src.experiment.base_configuration import BaseExperimentConfiguration
-from src.neural_network import NetworkDimensions
+from src.games.representation import NetworkDimensions
 from src.training.configuration import SelfPlayConfiguration, TrainingObjectiveConfiguration
 from src.util.frozen_model import FrozenModel
 

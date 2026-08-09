@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from src.games.contracts import WdlTarget
-from src.packed_planes import PackedPlaneLayout
+from src.games.representation import PackedPlaneLayout
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
     IneligibleNextPolicyTarget,

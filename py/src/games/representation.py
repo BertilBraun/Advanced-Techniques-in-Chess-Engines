@@ -9,6 +9,19 @@ import numpy.typing as npt
 
 
 @dataclass(frozen=True)
+class NetworkDimensions:
+    channels: int
+    rows: int
+    columns: int
+    actions: int
+    outcomes: int = 3
+
+    def __post_init__(self) -> None:
+        if min(self.channels, self.rows, self.columns, self.actions, self.outcomes) <= 0:
+            raise ValueError('Network dimensions must be positive.')
+
+
+@dataclass(frozen=True)
 class PackedPlaneLayout:
     """Game-owned dimensions for one canonical packed binary-plus-scalar layout."""
 
@@ -68,6 +81,16 @@ class PackedPlanePayload:
 
     def memory_bytes(self) -> int:
         return sys.getsizeof(self) + sys.getsizeof(self.payload)
+
+
+@dataclass(frozen=True)
+class RepresentationDimensions:
+    channels: int
+    rows: int
+    columns: int
+    binary_channels: tuple[int, ...]
+    scalar_channels: tuple[int, ...]
+    packed_planes: PackedPlaneLayout
 
 
 def _validate_state_shape(

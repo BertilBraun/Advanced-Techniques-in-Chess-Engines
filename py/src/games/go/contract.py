@@ -7,13 +7,14 @@ from typing import Protocol
 import numpy as np
 import numpy.typing as npt
 
-from src.neural_network import NetworkDimensions
-from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
+from src.games.representation import NetworkDimensions
+from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.replay.contracts import EligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
 from src.self_play.completed_game import SparseSearchVisit, TerminationReason
-from src.packed_planes import (
+from src.games.representation import (
     PackedPlaneLayout,
     PackedPlanePayload,
+    RepresentationDimensions,
     decode_packed_planes,
     decode_packed_planes_into,
     encode_packed_planes,

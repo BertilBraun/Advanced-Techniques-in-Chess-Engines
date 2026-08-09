@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from enum import Enum
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -12,6 +11,7 @@ from src.experiment.generation_schedule import (
     defined_schedule_values,
 )
 from src.self_play.parameters import ResolvedSelfPlayParameters
+from src.training.network import NetworkParams
 from src.training.targets import AuxiliaryTargetConfiguration
 from src.util.frozen_model import FrozenModel
 
@@ -46,28 +46,6 @@ class BatchedInferenceParams(FrozenModel):
     inference_workers: int = Field(gt=0)
     inference_batch_size: int = Field(gt=0)
     outstanding_batches_per_worker: int = Field(ge=1, le=2)
-
-
-class SEPlacement(str, Enum):
-    DISABLED = 'disabled'
-    EVERY_BLOCK = 'every_block'
-    EVERY_SECOND_BLOCK = 'every_second_block'
-
-    def applies_to(self, block_index: int) -> bool:
-        if self is SEPlacement.DISABLED:
-            return False
-        if self is SEPlacement.EVERY_BLOCK:
-            return True
-        return block_index % 2 == 1
-
-
-class NetworkParams(FrozenModel):
-    num_layers: int = Field(gt=0)
-    hidden_size: int = Field(gt=0)
-    se_placement: SEPlacement = SEPlacement.DISABLED
-    num_policy_channels: int = Field(default=4, gt=0)
-    num_value_channels: int = Field(default=2, gt=0)
-    value_fc_size: int = Field(default=48, gt=0)
 
 
 class SelfPlayConfiguration(FrozenModel):

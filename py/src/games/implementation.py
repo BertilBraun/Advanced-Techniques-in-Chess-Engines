@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract
-from src.neural_network import NetworkDimensions
+from src.games.representation import NetworkDimensions
 from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.training.configuration import SelfPlayConfiguration, TrainingArgs
 from src.training.objective import ResolvedTrainingObjective

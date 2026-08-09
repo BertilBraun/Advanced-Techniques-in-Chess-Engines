@@ -8,8 +8,9 @@ from pathlib import Path
 
 from src.util.frozen_model import FrozenModel
 
-from src.neural_network import Network, NetworkDimensions
-from src.training.configuration import NetworkParams, OptimizerType
+from src.games.representation import NetworkDimensions
+from src.training.configuration import OptimizerType
+from src.training.network import Network, NetworkParams
 from src.util.atomic_file import write_text_atomically
 from src.util.log import LogLevel, log
 

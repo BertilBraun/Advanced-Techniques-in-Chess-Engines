@@ -5,9 +5,8 @@ from pathlib import Path
 
 import torch
 
-from src.neural_network import Network
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
-from src.training.configuration import NetworkParams, SEPlacement
+from src.training.network import Network, NetworkParams, SEPlacement
 
 
 def parse_arguments() -> argparse.Namespace:

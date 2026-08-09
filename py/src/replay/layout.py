@@ -6,7 +6,7 @@ import json
 import numpy as np
 from pydantic import Field, model_validator
 
-from src.packed_planes import PackedPlaneLayout
+from src.games.representation import PackedPlaneLayout
 from src.training.targets import NextPolicyHeadLayout, TrainingTargetLayout
 from src.util.frozen_model import FrozenModel
 

@@ -7,7 +7,7 @@ from pydantic import model_validator
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.experiment.generation_schedule import IntegerGenerationSchedule
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
-from src.neural_network import NetworkDimensions
+from src.games.representation import NetworkDimensions
 from src.training.configuration import SelfPlayConfiguration, TrainingObjectiveConfiguration
 from src.util.frozen_model import FrozenModel
 

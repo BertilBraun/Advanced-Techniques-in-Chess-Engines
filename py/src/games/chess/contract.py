@@ -4,9 +4,15 @@ from typing import Protocol
 
 import numpy as np
 
-from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
-from src.neural_network import NetworkDimensions
-from src.packed_planes import PackedPlaneLayout, PackedPlanePayload, decode_packed_planes, encode_packed_planes
+from src.games.contracts import GameStateContract, Player, WdlTarget
+from src.games.representation import (
+    NetworkDimensions,
+    PackedPlaneLayout,
+    PackedPlanePayload,
+    RepresentationDimensions,
+    decode_packed_planes,
+    encode_packed_planes,
+)
 from src.replay.contracts import EligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
 from src.self_play.completed_game import SparseSearchVisit, TerminationReason
 

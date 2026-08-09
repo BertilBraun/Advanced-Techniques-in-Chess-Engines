@@ -1,25 +1,36 @@
-from dataclasses import dataclass
+from enum import Enum
 
 import torch
+from pydantic import Field
 
 from torch import nn, Tensor
 
-from src.training.configuration import NetworkParams
+from src.games.representation import NetworkDimensions
 from src.training.batch import TrainingModelOutput
+from src.util.frozen_model import FrozenModel
 from src.util.log import log
 
 
-@dataclass(frozen=True)
-class NetworkDimensions:
-    channels: int
-    rows: int
-    columns: int
-    actions: int
-    outcomes: int = 3
+class SEPlacement(str, Enum):
+    DISABLED = 'disabled'
+    EVERY_BLOCK = 'every_block'
+    EVERY_SECOND_BLOCK = 'every_second_block'
 
-    def __post_init__(self) -> None:
-        if min(self.channels, self.rows, self.columns, self.actions, self.outcomes) <= 0:
-            raise ValueError('Network dimensions must be positive.')
+    def applies_to(self, block_index: int) -> bool:
+        if self is SEPlacement.DISABLED:
+            return False
+        if self is SEPlacement.EVERY_BLOCK:
+            return True
+        return block_index % 2 == 1
+
+
+class NetworkParams(FrozenModel):
+    num_layers: int = Field(gt=0)
+    hidden_size: int = Field(gt=0)
+    se_placement: SEPlacement = SEPlacement.DISABLED
+    num_policy_channels: int = Field(default=4, gt=0)
+    num_value_channels: int = Field(default=2, gt=0)
+    value_fc_size: int = Field(default=48, gt=0)
 
 
 class Network(nn.Module):

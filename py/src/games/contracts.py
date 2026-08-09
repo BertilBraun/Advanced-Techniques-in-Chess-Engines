@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from enum import IntEnum
 from math import isfinite
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from src.packed_planes import PackedPlaneLayout, PackedPlanePayload
+from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.util.frozen_model import FrozenModel
 
 if TYPE_CHECKING:
@@ -47,16 +46,6 @@ class WdlTarget(FrozenModel):
             draw=remainder / 3.0,
             loss=max(-value, 0.0) + remainder / 3.0,
         )
-
-
-@dataclass(frozen=True)
-class RepresentationDimensions:
-    channels: int
-    rows: int
-    columns: int
-    binary_channels: tuple[int, ...]
-    scalar_channels: tuple[int, ...]
-    packed_planes: PackedPlaneLayout
 
 
 class GameStateContract(ABC, Generic[PositionT]):

@@ -7,7 +7,7 @@ from src.games.chess.configuration import ChessExperimentConfiguration, ChessSel
 from src.evaluation.configuration import EvaluationSearchConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.implementation import GameImplementation
-from src.neural_network import NetworkDimensions
+from src.games.representation import NetworkDimensions
 from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.self_play.worker import NativeSelfPlaySearch
 from src.training.checkpoint import CheckpointReference

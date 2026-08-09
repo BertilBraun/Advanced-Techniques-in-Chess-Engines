@@ -2,8 +2,8 @@ from pathlib import Path
 
 import torch
 
-from src.neural_network import Network, NetworkDimensions
-from src.training.configuration import NetworkParams, SEPlacement
+from src.games.representation import NetworkDimensions
+from src.training.network import Network, NetworkParams, SEPlacement
 from src.util.save_paths import create_optimizer, save_model_and_optimizer
 
 
