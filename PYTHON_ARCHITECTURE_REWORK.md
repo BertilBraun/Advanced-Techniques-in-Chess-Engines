@@ -957,6 +957,7 @@ The definition union contains only genuine job variants:
 EvaluationDefinition
 ├── FixedDatasetEvaluationDefinition
 ├── RandomOpponentEvaluationDefinition
+├── PolicyRandomOpponentEvaluationDefinition
 ├── PreviousCheckpointEvaluationDefinition
 ├── FixedCheckpointEvaluationDefinition
 ├── StockfishEvaluationDefinition
@@ -989,22 +990,25 @@ device IDs by cycling through the configured nonempty evaluation-device tuple in
 jobs than devices, several jobs intentionally share a device. The child activates its assigned device before Torch
 initializes CUDA models or the native extension constructs a search. This is the complete Phase 3 assignment policy.
 
-Dataset, random, and external-engine matches load one project inference model. Checkpoint matches load two and must
-be sized accordingly during target-hardware validation. Stockfish consumes additional CPU. A GPU-backed KataGo
-process also consumes the configured accelerator. Its device therefore belongs in the same explicit evaluation
+Dataset, both random-opponent variants, and external-engine matches load one project inference model. Checkpoint
+matches load two and must be sized accordingly during target-hardware validation. Stockfish consumes additional CPU.
+A GPU-backed KataGo process also consumes the configured accelerator. Its device therefore belongs in the same explicit evaluation
 device tuple and may contend with project inference jobs assigned there by the simple cycle. The KataGo subprocess
 sees only its assigned device through its private environment. Evaluation uses the training topology's CPU/CUDA
 device type; Phase 3 does not add a second placement policy.
 
 ### Shared match execution
 
-One shared asynchronous match runner owns active games, initial-state reconstruction, player assignment, native
-search batching, random play, maximum-ply handling, result perspective, and aggregation. For each opening it plays
-a color/player-swapped pair. Candidate and checkpoint models use fixed search visits, no root noise, zero action
-temperature, and ascending action ID as the deterministic tie break.
+One shared asynchronous match runner owns active games, initial-state reconstruction, player assignment, candidate
+action selection, random play, maximum-ply handling, result perspective, and aggregation. For each opening it plays
+a color/player-swapped pair. Search candidates and checkpoint models use fixed search visits, no root noise, zero
+action temperature, and ascending action ID as the deterministic tie break. The policy-only candidate batches the
+same active turns through the trimmed inference artifact, masks to legal actions, and greedily chooses the highest
+policy probability with ascending action ID as the tie break. It does not construct native search.
 
-Within one job, all candidate turns are submitted together to one native C++ search and all checkpoint-opponent
-turns are submitted together to the opponent's separate native search. Model-versus-model therefore owns two
+Within a search job, all candidate turns are submitted together to one native C++ search; within a policy-only job,
+they are submitted together to one direct Torch inference batch. All checkpoint-opponent turns are submitted
+together to the opponent's separate native search. Model-versus-model therefore owns two
 inference models but retains batching within each model. Random play uses a job-local generator. Each external-engine
 job owns exactly one engine subprocess. That process is reused for the full job rather than restarted for every move
 or game. No external-engine process is shared between evaluation jobs.
@@ -1900,9 +1904,10 @@ Accepted Phase 2 implementation evidence:
 - retain one simple configured evaluation-device tuple, assign due definitions by cycling over it, and start all due
   definitions concurrently;
 - run one short-lived process per dataset or opponent job and batch all active games within that process through the
-  shared native C++ search;
-- reuse one candidate native search for random and external matches and two separate searches for checkpoint
-  matches, without adding another C++ search implementation;
+  shared native C++ search or direct policy inference path;
+- run distinct `search-random` and `policy-random` jobs: reuse one candidate native search for the former and use
+  direct batched greedy policy inference for the latter; reuse one candidate native search for external matches and
+  two separate searches for checkpoint matches, without adding another C++ search implementation;
 - implement one shared paired-match loop, deterministic seeds, player-order swaps, cap policy, raw game records,
   paired-bootstrap aggregation, and TensorBoard/console reporting;
 - implement immutable engine-guided opening-suite generation, including the four-ply bounded beam, transposition
@@ -1931,8 +1936,9 @@ Phase 3 was implemented as feature-sized ownership commits:
 
 1. **Canonical contracts and immutable inputs:** shared configuration/contracts, Stockfish UCI and KataGo JSON
    clients, opening and dataset manifests/builders, preparation wiring, and protocol/builder tests.
-2. **Shared evaluation execution:** raw fixed-dataset inference, the asynchronous paired-match runner, random,
-   checkpoint, Stockfish, and KataGo opponents, typed results, aggregation, and focused chess/Go composition hooks.
+2. **Shared evaluation execution:** raw fixed-dataset inference, the asynchronous paired-match runner, search and
+   policy-only random opponents, checkpoint, Stockfish, and KataGo opponents, typed results, aggregation, and
+   focused chess/Go composition hooks.
 3. **Elapsed asynchronous lifecycle:** the manager state snapshot, simple device cycling, short-lived job processes,
    elapsed scheduling, collection/reporting, failure/shutdown behavior, retain-all checkpoint compatibility, and coordinator/run
    integration.
@@ -1954,15 +1960,17 @@ Phase 3 implementation evidence, awaiting user review:
 
 - chess, Go 7x7, and Go 9x9 load the same evaluation definitions and use the same manager, job process, match,
   dataset, statistics, and reporting path;
+- every game schedules separate `search-random` and `policy-random` series; the latter directly batches the trimmed
+  model policy, masks illegal actions, and uses greedy legal action selection without native search;
 - all due definitions launch concurrently, device assignment is a stable cycle, historical jobs require an actually
   older boundary checkpoint, and TensorBoard uses the requested elapsed boundary as its step;
 - generated openings contain exactly four plies and 50 distinct positions; generated datasets retain every third
   position until 480 to 520 positions exist and retain inspectable complete source-game records;
 - the old chess evaluation package, HDF5 dataset/database/loader/statistics graph, plateau automation, standalone
   preparation/benchmark tools, and TSV opening suites are deleted. From authorization through the final code commit,
-  Phase 3 changes 75 files, adds 3,422 lines, and deletes 4,601 lines for a net reduction of 1,179 lines;
-- Ruff passes. The Windows suite passes 163 tests with 12 intentional native/real-engine skips. The freshly built
-  extension-backed Linux suite passes 190 tests with 4 real-infrastructure skips. The native CTest target passes;
+  Phase 3 changes 78 files, adds 3,673 lines, and deletes 4,675 lines for a net reduction of 1,002 lines;
+- Ruff passes. The Windows suite passes 164 tests with 12 intentional native/real-engine skips. The freshly built
+  extension-backed Linux suite passes 191 tests with 4 real-infrastructure skips. The native CTest target passes;
 - opt-in Stockfish and KataGo smoke tests are present but were not run because local executable/model/configuration
   artifacts were not configured. Those real-engine and target-hardware contention measurements remain review-time
   deployment validation, not a second implementation path.
@@ -2006,6 +2014,7 @@ The implementation is complete only when tests cover:
 - correct checkpoint selection for every boundary crossed during one blocking quantum;
 - concurrent evaluation launch, deterministic device cycling, and finished-result collection;
 - paired chess/Go opening reconstruction, player swaps, deterministic seeds, cap handling, and aggregation;
+- direct greedy-policy-versus-random play with legal-action masking and no native search construction;
 - batched random and two-model match execution through the normalized native search bindings;
 - deterministic engine-guided opening generation, beam bounds, transposition removal, manifests, and renderings;
 - deterministic missing-or-reused fixed-dataset preparation, every-third-position sampling, the 480-to-520 range,
