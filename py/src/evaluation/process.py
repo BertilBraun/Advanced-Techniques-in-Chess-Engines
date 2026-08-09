@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import signal
 import time
@@ -47,6 +48,8 @@ def write_evaluation_result(result: EvaluationResult, path: Path) -> None:
 
 
 def run_evaluation_job(experiment: ExperimentConfiguration, job: EvaluationJob) -> None:
+    if os.name == 'posix':
+        os.setpgrp()
     started_at = time.monotonic()
     signal.signal(signal.SIGTERM, _terminate_evaluation)
     try:

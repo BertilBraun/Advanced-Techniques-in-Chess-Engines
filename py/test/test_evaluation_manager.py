@@ -40,6 +40,7 @@ class FakeProcess:
         self.args = args
         self.name = name
         self.exitcode: int | None = None
+        self.pid: int | None = None
         self.started = False
         self.events = events
 
@@ -53,7 +54,11 @@ class FakeProcess:
         self.events.append(f'terminate:{self.name}')
         self.exitcode = -15
 
-    def join(self) -> None:
+    def kill(self) -> None:
+        self.events.append(f'kill:{self.name}')
+        self.exitcode = -9
+
+    def join(self, timeout: float | None = None) -> None:
         self.events.append(f'join:{self.name}')
         if self.exitcode is None:
             self.exitcode = 0

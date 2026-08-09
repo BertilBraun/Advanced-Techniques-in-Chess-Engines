@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import multiprocessing as mp
+import os
 from pathlib import Path
+import signal
 import time
 from typing import Literal
 
@@ -41,6 +43,26 @@ class EvaluationManagerState(FrozenModel):
     checkpoint_publications: tuple[CheckpointPublication, ...]
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...]
     pending_jobs: tuple[EvaluationJob, ...]
+
+
+def _terminate_job_process(process: mp.Process) -> None:
+    if os.name == 'posix' and process.pid is not None:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            return
+        except ProcessLookupError:
+            pass
+    process.terminate()
+
+
+def _kill_job_process(process: mp.Process) -> None:
+    if os.name == 'posix' and process.pid is not None:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+            return
+        except ProcessLookupError:
+            pass
+    process.kill()
 
 
 class EvaluationManager:
@@ -89,8 +111,11 @@ class EvaluationManager:
             if process.is_alive() and elapsed < job.deadline_seconds:
                 continue
             if process.is_alive():
-                process.terminate()
-                process.join()
+                _terminate_job_process(process)
+                process.join(timeout=2.0)
+                if process.is_alive():
+                    _kill_job_process(process)
+                    process.join()
                 result = self._failure_result(
                     job,
                     EvaluationFailurePhase.DEADLINE,
@@ -175,7 +200,13 @@ class EvaluationManager:
         remaining = tuple(self._processes.items())
         for _, (process, _) in remaining:
             if process.is_alive():
-                process.terminate()
+                _terminate_job_process(process)
+        termination_deadline = self.clock() + 2.0
+        while any(process.is_alive() for _, (process, _) in remaining) and self.clock() < termination_deadline:
+            time.sleep(0.01)
+        for _, (process, _) in remaining:
+            if process.is_alive():
+                _kill_job_process(process)
         for job_id, (process, started_at) in remaining:
             job = self._pending_job(job_id)
             process.join()
