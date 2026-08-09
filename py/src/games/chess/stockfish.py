@@ -44,7 +44,6 @@ class StockfishClient:
             {
                 'Threads': configuration.threads,
                 'Hash': configuration.hash_mib,
-                'Ponder': False,
                 'UCI_ShowWDL': True,
             }
         )

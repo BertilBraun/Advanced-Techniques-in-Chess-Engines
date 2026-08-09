@@ -52,6 +52,11 @@ cmake \
     -DPython3_EXECUTABLE="${virtual_environment_python}"
 cmake --build "${repository_directory}/cpp/build" --parallel
 
+ENGINE_EVALUATION_DIRECTORY="${repository_directory}/engines" \
+    "${repository_directory}/deployment/install_evaluation_engines.sh"
+ENGINE_EVALUATION_DIRECTORY="${repository_directory}/engines" \
+    "${repository_directory}/deployment/smoke_evaluation_engines.sh"
+
 if [[ -n "$(git -C "${repository_directory}" status --porcelain)" ]]; then
     echo "The checkout changed while installing or building; refusing to start the runner." >&2
     git -C "${repository_directory}" status --short >&2
@@ -60,6 +65,10 @@ fi
 
 export ENGINE_SOURCE_REVISION
 ENGINE_SOURCE_REVISION="$(git -C "${repository_directory}" rev-parse HEAD)"
+export EVALUATION_STOCKFISH_EXECUTABLE="${repository_directory}/engines/stockfish"
+export EVALUATION_KATAGO_EXECUTABLE="${repository_directory}/engines/katago"
+export EVALUATION_KATAGO_MODEL="${repository_directory}/engines/katago.bin.gz"
+export EVALUATION_KATAGO_CONFIGURATION="${repository_directory}/engines/katago-analysis.cfg"
 export PATH="${virtual_environment}/bin:${PATH}"
 
 cd "${repository_directory}"

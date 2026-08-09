@@ -71,7 +71,7 @@ def test_stockfish_multipv_scores_form_normalized_policy(monkeypatch: pytest.Mon
 
     assert sum(entry.probability for entry in policy.entries) == pytest.approx(1.0)
     assert policy.top_action_id == 1
-    assert engine.configurations[0] == {'Threads': 1, 'Hash': 16, 'Ponder': False, 'UCI_ShowWDL': True}
+    assert engine.configurations[0] == {'Threads': 1, 'Hash': 16, 'UCI_ShowWDL': True}
 
 
 @pytest.mark.parametrize('board_size', (7, 9))

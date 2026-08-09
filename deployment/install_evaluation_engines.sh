@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repository_directory="$(cd -- "${script_directory}/.." && pwd)"
+engine_directory="${ENGINE_EVALUATION_DIRECTORY:-${repository_directory}/engines}"
+
+stockfish_version="18"
+stockfish_archive_name="stockfish-ubuntu-x86-64.tar"
+stockfish_archive_url="${ENGINE_STOCKFISH_ARCHIVE_URL:-https://github.com/official-stockfish/Stockfish/releases/download/sf_18/${stockfish_archive_name}}"
+stockfish_archive_sha256="${ENGINE_STOCKFISH_ARCHIVE_SHA256:-5c6f38b02a4da5f3ffe763f27da6c3e743eebefd92b50cb3661623b96696adff}"
+
+katago_version="1.17.1"
+default_katago_archive_name="katago-v${katago_version}-eigen-linux-x64.zip"
+katago_archive_url="${ENGINE_KATAGO_ARCHIVE_URL:-https://github.com/lightvector/KataGo/releases/download/v${katago_version}/${default_katago_archive_name}}"
+katago_archive_sha256="${ENGINE_KATAGO_ARCHIVE_SHA256:-cca71fff39abd19bd9acfc17750025d4bb0ee6adbad99d7513a2c6401b0a7af3}"
+katago_backend="${ENGINE_KATAGO_BACKEND:-eigen}"
+
+katago_model_name="b10c384h6nbttflrs.bin.gz"
+katago_model_url="${ENGINE_KATAGO_MODEL_URL:-https://github.com/lightvector/KataGo/releases/download/v${katago_version}/${katago_model_name}}"
+katago_model_sha256="${ENGINE_KATAGO_MODEL_SHA256:-0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229}"
+
+if [[ -e "${engine_directory}" ]]; then
+    echo "Evaluation-engine destination already exists: ${engine_directory}" >&2
+    exit 1
+fi
+
+for required_command in curl sha256sum tar unzip; do
+    if ! command -v "${required_command}" >/dev/null 2>&1; then
+        echo "Required command is unavailable: ${required_command}" >&2
+        exit 1
+    fi
+done
+
+if [[ -z "${katago_backend}" ]]; then
+    echo "ENGINE_KATAGO_BACKEND must identify the selected KataGo build." >&2
+    exit 1
+fi
+if [[ "${katago_backend}" != "eigen" ]] && {
+    [[ -z "${ENGINE_KATAGO_ARCHIVE_URL:-}" ]] || [[ -z "${ENGINE_KATAGO_ARCHIVE_SHA256:-}" ]]
+}; then
+    echo "A non-default KataGo backend requires ENGINE_KATAGO_ARCHIVE_URL and ENGINE_KATAGO_ARCHIVE_SHA256." >&2
+    exit 1
+fi
+
+temporary_directory="$(mktemp -d)"
+cleanup() {
+    rm -rf -- "${temporary_directory}"
+}
+trap cleanup EXIT
+
+download_verified() {
+    local url="$1"
+    local expected_sha256="$2"
+    local destination="$3"
+
+    curl --fail --location --retry 3 --output "${destination}" "${url}"
+    printf '%s  %s\n' "${expected_sha256}" "${destination}" | sha256sum --check --status
+}
+
+stockfish_archive="${temporary_directory}/${stockfish_archive_name}"
+katago_archive="${temporary_directory}/katago.zip"
+katago_model="${temporary_directory}/${katago_model_name}"
+
+download_verified "${stockfish_archive_url}" "${stockfish_archive_sha256}" "${stockfish_archive}"
+download_verified "${katago_archive_url}" "${katago_archive_sha256}" "${katago_archive}"
+download_verified "${katago_model_url}" "${katago_model_sha256}" "${katago_model}"
+
+mkdir -p "${temporary_directory}/stockfish" "${temporary_directory}/katago"
+tar -xf "${stockfish_archive}" -C "${temporary_directory}/stockfish"
+unzip -q "${katago_archive}" -d "${temporary_directory}/katago"
+
+stockfish_executable="${temporary_directory}/stockfish/stockfish/stockfish-ubuntu-x86-64"
+katago_executable="${temporary_directory}/katago/katago"
+if [[ ! -f "${stockfish_executable}" ]]; then
+    echo "Pinned Stockfish archive did not contain the expected executable." >&2
+    exit 1
+fi
+if [[ ! -f "${katago_executable}" ]]; then
+    echo "Pinned KataGo archive did not contain the expected executable." >&2
+    exit 1
+fi
+
+mkdir -p "${engine_directory}/upstream"
+mv "${temporary_directory}/stockfish/stockfish" "${engine_directory}/upstream/stockfish-${stockfish_version}"
+mv "${temporary_directory}/katago" "${engine_directory}/upstream/katago-${katago_version}-${katago_backend}"
+mv "${katago_model}" "${engine_directory}/${katago_model_name}"
+cp "${script_directory}/katago-analysis.cfg" "${engine_directory}/katago-analysis.cfg"
+
+ln -s "upstream/stockfish-${stockfish_version}/stockfish-ubuntu-x86-64" "${engine_directory}/stockfish"
+ln -s "upstream/katago-${katago_version}-${katago_backend}/katago" "${engine_directory}/katago"
+ln -s "${katago_model_name}" "${engine_directory}/katago.bin.gz"
+chmod +x "${engine_directory}/stockfish" "${engine_directory}/katago"
+
+cat >"${engine_directory}/ARTIFACTS.sha256" <<EOF
+${stockfish_archive_sha256}  ${stockfish_archive_name}
+${katago_archive_sha256}  katago-v${katago_version}-${katago_backend}-linux-x64.zip
+${katago_model_sha256}  ${katago_model_name}
+EOF
+
+cat >"${engine_directory}/INSTALLATION.txt" <<EOF
+Stockfish version: ${stockfish_version}
+Stockfish archive: ${stockfish_archive_url}
+KataGo version: ${katago_version}
+KataGo backend: ${katago_backend}
+KataGo archive: ${katago_archive_url}
+KataGo model: ${katago_model_url}
+EOF
+
+stockfish_protocol_output="$(printf 'uci\nisready\nquit\n' | "${engine_directory}/stockfish")"
+grep -F 'id name Stockfish 18' <<<"${stockfish_protocol_output}"
+grep -F 'uciok' <<<"${stockfish_protocol_output}"
+grep -F 'readyok' <<<"${stockfish_protocol_output}"
+"${engine_directory}/katago" version
+
+echo "Installed evaluation engines in ${engine_directory}"
