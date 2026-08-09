@@ -416,11 +416,12 @@ earlier phase's storage, process, or recovery design.
 | R8 | Go pipeline integration | accepted |
 | R9 | Go evaluation and elapsed checkpoint scheduling | accepted |
 | R10 | Resource-aware experiment queue | awaiting_user_review |
-| R11 | Integrated validation and benchmark preparation | pending |
+| R11 | Integrated validation and benchmark preparation | in_progress |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
 Current authorization: R1 through R9 and the post-R9 Python/documentation cleanup are accepted. R10 is implemented
-and `awaiting_user_review`. R11 hardware validation and R12 remain pending and are not authorized.
+and `awaiting_user_review`. The user authorized R11 rented-node provisioning and integrated validation on 2026-08-09;
+R12 baseline and screening experiments remain pending and are not authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 

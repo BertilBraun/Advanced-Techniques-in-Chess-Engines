@@ -4,6 +4,8 @@
 - [Lichess and Vast](lichess-vast-evaluation.md) covers the UCI/Lichess deployment and evidence collection.
 - [Evaluation engines](evaluation-engines.md) covers pinned Stockfish and KataGo installation for WSL and fresh
   compute nodes.
+- [R11 Vast integrated validation](vast-r11-validation.md) records the current rented-node connection, bootstrap,
+  scaled configurations, approvals, cgroup gate, and end-to-end evidence.
 - [`deployment/setup_remote.sh`](../../deployment/setup_remote.sh) is the authoritative fresh training-node
   bootstrap.
 - [`deployment/lichess/README.md`](../../deployment/lichess/README.md) is the executable Lichess deployment runbook.

@@ -6,7 +6,8 @@ This document defines the authoritative Python architecture implemented by Phase
 remaining Phase 4 validation work. It is not a compatibility specification for removed Python structures.
 
 Implementation status: Phases 1 through 3 and the Phase 4 production-reachability and documentation cleanup slice
-are `accepted`. Phase 4's integrated smoke, throughput, concurrency, and target-hardware evidence remains pending.
+are `accepted`. Phase 4's integrated smoke, throughput, concurrency, and target-hardware evidence is in progress
+under the authorized R11 rented-node validation pass.
 R10 is a separate standalone layer above this runtime and is `awaiting_user_review`; it does not change the Python
 training topology defined here.
 
