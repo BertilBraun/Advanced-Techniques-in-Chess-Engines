@@ -343,6 +343,7 @@ Each indivisible slot defines:
 - explicit CUDA device indices;
 - CPU affinity;
 - RAM capacity;
+- one dedicated delegated cgroup-v2 directory;
 - run and log directories.
 
 CUDA and CPU sets are sorted, unique, nonnegative, and exclusive across slots.
@@ -357,20 +358,33 @@ success and failure both release the slot and advance the queue.
 Before launching anything, the wrapper validates the complete queue model,
 every experiment through the canonical discriminated experiment union, every
 request/slot compatibility, resource exclusivity, working and log directories,
-the runner executable, the existing durable summary, persisted assignments,
-and pending log paths. Relative queue paths resolve from the queue file. The
-queue-owned runner command appends only the configured experiment-path argument
-and YAML path; required source-revision and approval arguments remain explicit
-parts of that runner command.
+the runner executable, empty writable cgroup-v2 memory scopes, actual child
+migration into each scope, the existing durable summary, persisted
+assignments, and pending log paths. Cgroup directories are unique across slots
+and are pre-created by node provisioning below a memory-controller-enabled
+delegated parent. Relative queue paths resolve from the queue file. The
+queue-owned runner command appends only the configured experiment-path
+argument and YAML path; required source-revision and approval arguments remain
+explicit parts of that runner command.
 
 Each experiment starts as a new Linux session and process group. A small
-queue-owned child wrapper applies `sched_setaffinity` and `RLIMIT_AS`, sets the
-slot's device set through `CUDA_VISIBLE_DEVICES`, and then replaces itself with
-the configured runner through `exec`. Standard output and error go to separate
-exclusive per-experiment files. The supervisor captures the exit code and uses
-`SIGTERM`, a configured grace period, and then `SIGKILL` when necessary against
-the complete process group. Success, failure, and requested termination close
-the log handles and release the slot.
+queue-owned child wrapper enters the assigned cgroup, applies
+`sched_setaffinity`, sets the slot's device set through `CUDA_VISIBLE_DEVICES`,
+and then replaces itself with the configured runner through `exec`. CUDA
+visibility, affinity, and cgroup membership are inherited by ordinary child
+processes. The supervisor sets `memory.max` to the requested RAM budget,
+`memory.swap.max` to zero, and `memory.oom.group` to one before launch, so the
+limit covers the aggregate experiment process tree and an out-of-memory event
+kills the group rather than one arbitrary worker. It does not use a
+per-process address-space limit.
+
+Standard output and error go to separate exclusive per-experiment files. The
+supervisor captures the runner exit code and does not release a slot while its
+cgroup remains populated, even if the original runner process has already
+exited. Requested termination sends `SIGTERM` to the process group, waits the
+configured grace period, then uses `cgroup.kill` to remove descendants that
+changed process groups or otherwise remained alive. Success, failure, and
+requested termination close the log handles and release only an empty scope.
 
 One atomic JSON summary records pending, running, completed, and failed
 experiments; queue, start, finish, and update timestamps; the exact assignment;
@@ -867,6 +881,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-09 | R10 | Review correction | Review confirmed that CUDA visibility and CPU affinity inheritance meet the intended node partitioning, but the RAM request is a budget for the complete experiment process tree rather than each process independently. `RLIMIT_AS` therefore did not enforce the required aggregate isolation. | Replace `RLIMIT_AS` with one pre-provisioned delegated cgroup-v2 memory scope per slot. Apply `memory.max`, disable swap, enable group OOM handling, require child-migration validation before any launch, keep a slot occupied while the scope is populated, and use `cgroup.kill` after graceful process-group termination. The exact Windows suite passes 168 tests with 17 infrastructure/Linux skips; the ordinary WSL2 queue suite passes 17 tests with 2 delegated-cgroup skips; and all 6 process tests pass in a real delegated scope, including aggregate OOM and surviving-descendant cases. Return the revision to `awaiting_user_review`; do not merge or start R11/R12 from the implementation worktree. |
 | 2026-08-09 | R10 | Implementation handoff | The resource-aware experiment queue is implemented as a standalone Python package and CLI above the unchanged training application. Frozen queue, slot, request, assignment, and durable-status models forbid extra fields; deterministic scheduling owns exclusive slots; and the Linux launcher applies CUDA visibility, CPU affinity, `RLIMIT_AS`, process groups, separate logs, exit capture, and group termination. Restart handling deliberately does not adopt or signal a persisted process identity. | Return R10 to `awaiting_user_review`. Commits `122f9d51` and `c4ade3d0` implement the scheduler and Linux execution/state layers. Ruff passes; the exact Windows suite passes 164 tests with 15 infrastructure/Linux skips; and the focused WSL2 queue suite passes all 13 tests. Leave R11/R12 pending and do not begin target-hardware validation. |
 | 2026-08-09 | Post-R9 / Python Phase 4 | Acceptance | The user explicitly accepted the completed post-R9 Python/documentation cleanup and authorized R10 only. | Mark the cleanup slice `accepted`, authorize R10, and leave the remaining R11/Phase 4 hardware validation and R12 pending. |
 | 2026-08-09 | Post-R9 / Python Phase 4 | Cleanup handoff | The user accepted Phase 3/R9 and authorized an aggressive production-reachability and documentation cleanup. The audit traced training, UCI, web, and Lichess deployment roots separately; removed superseded Python rules/training modules and self-referential tests; made `deployment/setup_remote.sh` the sole fresh-node training bootstrap; reduced the locked dependency graph; and separated current authority, operations, research, history, and benchmark evidence. | Return the cleanup slice to `awaiting_user_review`. Keep the native interactive/UCI graph and deployment-called tools. Do not start R10, the remaining R11/Phase 4 hardware validation, compute provisioning, or R12 experiments. Commit `53419930` contains the production cleanup; the documentation commit and final validation are recorded in the handoff. |

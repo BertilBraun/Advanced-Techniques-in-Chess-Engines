@@ -38,6 +38,7 @@ class ResourceSlot(FrozenModel):
     cuda_devices: tuple[int, ...] = ()
     cpu_affinity: tuple[int, ...] = Field(min_length=1)
     ram_capacity_bytes: int = Field(gt=0)
+    cgroup_directory: Path
     working_directory: Path
     log_directory: Path
 
@@ -71,6 +72,7 @@ class QueueConfiguration(FrozenModel):
         _require_unique_values('slot IDs', tuple(slot.slot_id for slot in self.slots))
         _require_unique_values('experiment IDs', tuple(item.experiment_id for item in self.experiments))
         _require_unique_values('experiment files', tuple(item.experiment_file for item in self.experiments))
+        _require_unique_values('cgroup directories', tuple(slot.cgroup_directory for slot in self.slots))
         _validate_slot_exclusivity(self.slots)
         for experiment in self.experiments:
             if not any(slot_satisfies_request(slot, experiment.resources) for slot in self.slots):
@@ -102,6 +104,7 @@ def _resolve_configuration_paths(configuration: QueueConfiguration, base_directo
             cuda_devices=slot.cuda_devices,
             cpu_affinity=slot.cpu_affinity,
             ram_capacity_bytes=slot.ram_capacity_bytes,
+            cgroup_directory=_resolve_path(slot.cgroup_directory, base_directory),
             working_directory=_resolve_path(slot.working_directory, base_directory),
             log_directory=_resolve_path(slot.log_directory, base_directory),
         )

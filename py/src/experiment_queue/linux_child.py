@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import argparse
 import os
-import resource
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--cpu-affinity', required=True)
-    parser.add_argument('--ram-limit-bytes', required=True, type=int)
+    parser.add_argument('--cgroup-processes', required=True)
     parser.add_argument('command', nargs=argparse.REMAINDER)
     arguments = parser.parse_args()
     if not arguments.command:
@@ -19,8 +18,9 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> None:
     arguments = parse_arguments()
     cpu_affinity = {int(cpu_index) for cpu_index in arguments.cpu_affinity.split(',')}
+    with open(arguments.cgroup_processes, 'w', encoding='ascii') as processes_file:
+        processes_file.write(f'{os.getpid()}\n')
     os.sched_setaffinity(0, cpu_affinity)
-    resource.setrlimit(resource.RLIMIT_AS, (arguments.ram_limit_bytes, arguments.ram_limit_bytes))
     os.execvpe(arguments.command[0], arguments.command, os.environ)
 
 

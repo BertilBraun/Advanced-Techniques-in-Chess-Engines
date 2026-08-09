@@ -203,7 +203,7 @@ class ExperimentQueueRunner:
     def _collect_finished_processes(self) -> None:
         for experiment_id, running_process in tuple(self._running_processes.items()):
             exit_code = running_process.process.poll()
-            if exit_code is None:
+            if exit_code is None or running_process.memory_scope.populated:
                 continue
             running_process.close_logs()
             del self._running_processes[experiment_id]

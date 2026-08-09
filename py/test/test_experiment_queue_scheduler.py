@@ -24,6 +24,7 @@ def _slot(
         cuda_devices=cuda_devices,
         cpu_affinity=cpu_affinity,
         ram_capacity_bytes=ram_capacity_bytes,
+        cgroup_directory=Path('/cgroups') / slot_id,
         working_directory=Path('/work') / slot_id,
         log_directory=Path('/logs') / slot_id,
     )
@@ -114,6 +115,27 @@ def test_queue_rejects_overlapping_slots_and_unassignable_requests() -> None:
             runner=runner,
             slots=(_slot('single', (0,), (0, 1)),),
             experiments=(_experiment('pair', 2),),
+            summary_path=Path('/summary.json'),
+        )
+
+
+def test_queue_rejects_reuse_of_one_cgroup_by_multiple_slots() -> None:
+    first_slot = _slot('first', (0,), (0, 1))
+    second_slot = ResourceSlot(
+        slot_id='second',
+        cuda_devices=(1,),
+        cpu_affinity=(2, 3),
+        ram_capacity_bytes=16_000,
+        cgroup_directory=first_slot.cgroup_directory,
+        working_directory=Path('/work/second'),
+        log_directory=Path('/logs/second'),
+    )
+
+    with pytest.raises(ValidationError, match='cgroup directories must be unique'):
+        QueueConfiguration(
+            runner=RunnerCommand(command=('python', 'py/train.py')),
+            slots=(first_slot, second_slot),
+            experiments=(_experiment('experiment', 1),),
             summary_path=Path('/summary.json'),
         )
 
