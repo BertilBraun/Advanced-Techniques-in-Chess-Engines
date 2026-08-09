@@ -21,13 +21,12 @@ The defaults were verified against primary upstream sources on 2026-08-09.
 | Artifact | Pin | Archive SHA-256 |
 | --- | --- | --- |
 | Stockfish portable Linux x86-64 | [Stockfish 18 `stockfish-ubuntu-x86-64.tar`](https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-ubuntu-x86-64.tar) | `5c6f38b02a4da5f3ffe763f27da6c3e743eebefd92b50cb3661623b96696adff` |
-| KataGo portable CPU | [KataGo 1.17.1 Eigen Linux x86-64](https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-eigen-linux-x64.zip) | `cca71fff39abd19bd9acfc17750025d4bb0ee6adbad99d7513a2c6401b0a7af3` |
+| KataGo CUDA/cuDNN | [KataGo 1.17.1 CUDA 12.8/cuDNN 9.8.0 Linux x86-64](https://github.com/lightvector/KataGo/releases/download/v1.17.1/katago-v1.17.1-cuda12.8-cudnn9.8.0-linux-x64.zip) | `458d226c2c8533600251bba3b2ee612d3aee0c796f592a2b53839a6a05b0826e` |
 | KataGo general network | [`b10c384h6nbttflrs.bin.gz`](https://github.com/lightvector/KataGo/releases/download/v1.17.1/b10c384h6nbttflrs.bin.gz) | `0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229` |
 
-Stockfish 18 is the latest stable Stockfish release; development builds are deliberately excluded. KataGo 1.17.2
-only replaces TensorRT builds affected by its fixes, so 1.17.1 remains the current official release for Eigen,
-OpenCL, and CUDA/cuDNN. The selected transformer network is an official 1.17.1 release asset and supports the 7x7
-and 9x9 requests used here. Upstream also publishes a [9x9-only finetuned
+Stockfish 18 is the selected stable Stockfish release; development builds are deliberately excluded. KataGo 1.17.1
+is pinned with its official CUDA 12.8/cuDNN 9.8.0 release. The selected transformer network is an official 1.17.1
+release asset and supports the 7x7 and 9x9 requests used here. Upstream also publishes a [9x9-only finetuned
 network](https://katagotraining.org/extra_networks/), but it is not selected: using one pinned general network keeps
 the initial external baseline and redistribution terms uniform across both board sizes. A later benchmark decision
 may pin separate networks by changing the explicit experiment path and provenance.
@@ -61,6 +60,7 @@ AppImage remains below `engines/upstream/` as provenance.
 The smoke script verifies:
 
 - Stockfish reports version 18, completes `uci`, and answers `isready`;
+- `katago version` reports `Using CUDA backend`;
 - KataGo starts with the pinned model and configuration;
 - 7x7 and 9x9 Chinese-rules requests return nonempty weighted `moveInfos`;
 - closing stdin lets KataGo drain work and exit cleanly, with a 120-second safety timeout.
@@ -95,25 +95,25 @@ bash deployment/setup_remote.sh \
 
 Production configuration and approval files remain explicit inputs. The templates still describe unconfirmed local
 hardware and CPU training; they must be copied, reviewed, and updated for the rented offer before approval.
-`setup_remote.sh` also prepends the CUDA libraries installed by the locked PyTorch wheel to `LD_LIBRARY_PATH`.
-This lets the selected CUDA 12.x KataGo runtime use the same pinned user-space CUDA/cuDNN stack even when the host
-image provides a newer CUDA toolkit; the host-injected NVIDIA driver remains untouched.
+`setup_remote.sh` also prepends the NVIDIA libraries installed by the locked PyTorch wheel to `LD_LIBRARY_PATH`.
+This supplies the CUDA 12 libraries needed by the selected KataGo binary even when the host image provides a newer
+toolkit; the host-injected NVIDIA driver remains untouched. The CUDA/cuDNN versions reported by the driver, host
+toolkit, PyTorch wheel, and KataGo build describe different layers and need not have identical labels. The required
+gate is a compatible NVIDIA driver followed by the real CUDA KataGo version and analysis smokes.
 
-## Selecting a KataGo accelerator backend
+## KataGo CUDA requirement
 
-KataGo officially supports Eigen CPU, OpenCL, CUDA/cuDNN, TensorRT, and Metal backends. Linux release binaries are
-published separately. Eigen is the validated default because it does not assume a GPU model, driver, device count,
-CUDA runtime, cuDNN, or TensorRT installation. It is suitable for provisioning and protocol smoke tests, not for
-the final performance baseline.
+This project supports only a CUDA/cuDNN KataGo release. The installer defaults to the pinned
+`cuda12.8-cudnn9.8.0` asset above and rejects Eigen CPU, OpenCL, and TensorRT builds. Omitting the three archive
+environment variables is therefore safe: it installs CUDA KataGo, not a portable CPU fallback.
 
-Do not choose a GPU archive until the rented node is known. On that node:
+On each new node:
 
 1. Record `nvidia-smi`, driver version, GPU model/count, and visible devices.
-2. Confirm the installed CUDA plus cuDNN or TensorRT versions against the exact version in the official KataGo
-   asset name. Upstream recommends matching those versions rather than assuming ABI compatibility.
-3. Select an official archive and its GitHub-published SHA-256. KataGo 1.17.1 CUDA/cuDNN or 1.17.2 TensorRT are the
-   current choices for this pin family.
-4. Provision with explicit inputs, for example:
+2. Record the host toolkit and locked PyTorch wheel's CUDA/cuDNN runtime separately. `nvidia-smi` reports driver
+   capability; it does not identify the user-space runtime used by every application.
+3. Use the pinned default unless the node requires a different official CUDA/cuDNN asset.
+4. For a different CUDA/cuDNN asset, provision with all three explicit inputs:
 
 ```bash
 export ENGINE_KATAGO_BACKEND=cuda12.8-cudnn9.8.0
@@ -122,11 +122,12 @@ export ENGINE_KATAGO_ARCHIVE_SHA256=458d226c2c8533600251bba3b2ee612d3aee0c796f59
 bash deployment/setup_remote.sh COMMAND ARGUMENTS
 ```
 
-The installer requires URL and hash together for every non-default backend. It never chooses a GPU build by
-probing the host. The application exposes only the evaluation job's assigned device through
-`CUDA_VISIBLE_DEVICES`; the analysis configuration uses one model server and does not encode a physical device ID
-or GPU count. The rented-node gate is therefore: confirm the backend starts, run the real client test, then measure
-evaluation/training contention under the approved topology before freezing a benchmark configuration.
+Any override requires backend, URL, and hash together. The installer never chooses an archive by probing the host,
+and both installation and smoke fail unless `katago version` confirms the CUDA backend. The application exposes
+only the evaluation job's assigned device through `CUDA_VISIBLE_DEVICES`; the analysis configuration uses one model
+server and does not encode a physical device ID or GPU count. The rented-node gate is therefore: confirm the backend
+starts, run the real client test, then measure evaluation/training contention under the approved topology before
+freezing a benchmark configuration.
 
 The checked-in analysis configuration is derived from KataGo's [1.17.1 analysis
 example](https://github.com/lightvector/KataGo/blob/v1.17.1/cpp/configs/analysis_example.cfg). It permits concurrent
@@ -159,9 +160,9 @@ with the run, but do not commit them. There is intentionally no install-time or 
 
 ## Troubleshooting
 
-- `Illegal instruction`: use the portable Stockfish or Eigen build, or select an archive matching the CPU features.
-- Missing CUDA, cuDNN, TensorRT, or OpenCL libraries: the chosen KataGo binary does not match the node runtime. Use
-  Eigen to validate protocols, then install the exact accelerator runtime or select a matching official archive.
+- `Illegal instruction`: use portable Stockfish or select a CUDA KataGo archive compatible with the host CPU.
+- Missing CUDA or cuDNN libraries: run through `setup_remote.sh` so the locked PyTorch NVIDIA libraries are exposed;
+  if the CUDA smoke still fails, select a compatible official CUDA/cuDNN archive. Do not fall back to Eigen.
 - KataGo reports a model-version error: the network is incompatible with the executable; restore the pinned pair.
 - KataGo returns errors for rules or coordinates: confirm the application is sending Chinese rules, half-integer
   komi, complete move history, and board sizes no larger than the configuration's 9x9 buffer.

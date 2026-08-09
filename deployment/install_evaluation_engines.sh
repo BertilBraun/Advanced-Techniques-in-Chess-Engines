@@ -12,10 +12,13 @@ stockfish_archive_url="${ENGINE_STOCKFISH_ARCHIVE_URL:-https://github.com/offici
 stockfish_archive_sha256="${ENGINE_STOCKFISH_ARCHIVE_SHA256:-5c6f38b02a4da5f3ffe763f27da6c3e743eebefd92b50cb3661623b96696adff}"
 
 katago_version="1.17.1"
-default_katago_archive_name="katago-v${katago_version}-eigen-linux-x64.zip"
-katago_archive_url="${ENGINE_KATAGO_ARCHIVE_URL:-https://github.com/lightvector/KataGo/releases/download/v${katago_version}/${default_katago_archive_name}}"
-katago_archive_sha256="${ENGINE_KATAGO_ARCHIVE_SHA256:-cca71fff39abd19bd9acfc17750025d4bb0ee6adbad99d7513a2c6401b0a7af3}"
-katago_backend="${ENGINE_KATAGO_BACKEND:-eigen}"
+default_katago_backend="cuda12.8-cudnn9.8.0"
+default_katago_archive_name="katago-v${katago_version}-${default_katago_backend}-linux-x64.zip"
+default_katago_archive_url="https://github.com/lightvector/KataGo/releases/download/v${katago_version}/${default_katago_archive_name}"
+default_katago_archive_sha256="458d226c2c8533600251bba3b2ee612d3aee0c796f592a2b53839a6a05b0826e"
+katago_backend="${ENGINE_KATAGO_BACKEND:-${default_katago_backend}}"
+katago_archive_url="${ENGINE_KATAGO_ARCHIVE_URL:-${default_katago_archive_url}}"
+katago_archive_sha256="${ENGINE_KATAGO_ARCHIVE_SHA256:-${default_katago_archive_sha256}}"
 
 katago_model_name="b10c384h6nbttflrs.bin.gz"
 katago_model_url="${ENGINE_KATAGO_MODEL_URL:-https://github.com/lightvector/KataGo/releases/download/v${katago_version}/${katago_model_name}}"
@@ -33,14 +36,18 @@ for required_command in curl sha256sum tar unzip; do
     fi
 done
 
-if [[ -z "${katago_backend}" ]]; then
-    echo "ENGINE_KATAGO_BACKEND must identify the selected KataGo build." >&2
-    exit 1
+if [[ -n "${ENGINE_KATAGO_BACKEND:-}" ]] ||
+    [[ -n "${ENGINE_KATAGO_ARCHIVE_URL:-}" ]] ||
+    [[ -n "${ENGINE_KATAGO_ARCHIVE_SHA256:-}" ]]; then
+    if [[ -z "${ENGINE_KATAGO_BACKEND:-}" ]] ||
+        [[ -z "${ENGINE_KATAGO_ARCHIVE_URL:-}" ]] ||
+        [[ -z "${ENGINE_KATAGO_ARCHIVE_SHA256:-}" ]]; then
+        echo "A KataGo archive override requires ENGINE_KATAGO_BACKEND, ENGINE_KATAGO_ARCHIVE_URL, and ENGINE_KATAGO_ARCHIVE_SHA256 together." >&2
+        exit 1
+    fi
 fi
-if [[ "${katago_backend}" != "eigen" ]] && {
-    [[ -z "${ENGINE_KATAGO_ARCHIVE_URL:-}" ]] || [[ -z "${ENGINE_KATAGO_ARCHIVE_SHA256:-}" ]]
-}; then
-    echo "A non-default KataGo backend requires ENGINE_KATAGO_ARCHIVE_URL and ENGINE_KATAGO_ARCHIVE_SHA256." >&2
+if [[ "${katago_backend}" != cuda* ]]; then
+    echo "KataGo must use a CUDA/cuDNN backend; CPU, OpenCL, and TensorRT builds are unsupported for this project." >&2
     exit 1
 fi
 
@@ -122,6 +129,8 @@ stockfish_protocol_output="$(printf 'uci\nisready\nquit\n' | "${engine_directory
 grep -F 'id name Stockfish 18' <<<"${stockfish_protocol_output}"
 grep -F 'uciok' <<<"${stockfish_protocol_output}"
 grep -F 'readyok' <<<"${stockfish_protocol_output}"
-"${engine_directory}/katago" version
+katago_version_output="$("${engine_directory}/katago" version 2>&1)"
+printf '%s\n' "${katago_version_output}"
+grep -F 'Using CUDA backend' <<<"${katago_version_output}"
 
 echo "Installed evaluation engines in ${engine_directory}"

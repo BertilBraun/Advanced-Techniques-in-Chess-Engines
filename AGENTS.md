@@ -17,6 +17,33 @@ requested revision, installs the locked training dependencies, builds the
 Release C++ extension, exports `ENGINE_SOURCE_REVISION`, and starts the supplied
 runner command. Keep production run configuration and approval files explicit.
 
+### KataGo CUDA requirement
+
+KataGo must always use a CUDA/cuDNN release on compute nodes. The engine
+installer defaults to the pinned `cuda12.8-cudnn9.8.0` KataGo 1.17.1 archive
+and rejects CPU, OpenCL, and TensorRT builds. Never select the Eigen fallback.
+
+Before provisioning a new node, record `nvidia-smi`, the driver version, GPU
+model/count, visible devices, and the locked PyTorch CUDA/cuDNN runtime. The
+`CUDA Version` reported by `nvidia-smi` is the driver's maximum supported CUDA
+version, not necessarily the user-space runtime used by PyTorch or KataGo.
+
+Omit all KataGo archive variables to use the checked-in CUDA default. To select
+a different official CUDA/cuDNN archive, set all three variables together; a
+partial override is rejected:
+
+```bash
+export ENGINE_KATAGO_BACKEND=cuda-version-cudnn-version
+export ENGINE_KATAGO_ARCHIVE_URL=OFFICIAL_KATAGO_ASSET_URL
+export ENGINE_KATAGO_ARCHIVE_SHA256=OFFICIAL_ASSET_SHA256
+```
+
+`setup_remote.sh` exposes the locked PyTorch wheel's NVIDIA libraries while it
+installs and smokes the engines. Do not bypass its engine smoke. Provisioning
+is successful only if `engines/INSTALLATION.txt` records a CUDA backend,
+`katago version` reports `Using CUDA backend`, and the 7x7 and 9x9 analysis
+smokes pass on an assigned GPU.
+
 ### Current Vast validation node
 
 Connect to the current rented validation node from Windows with the dedicated

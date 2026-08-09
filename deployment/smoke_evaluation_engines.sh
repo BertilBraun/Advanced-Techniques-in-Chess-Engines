@@ -18,6 +18,10 @@ grep -F 'id name Stockfish 18' <<<"${stockfish_protocol_output}"
 grep -F 'uciok' <<<"${stockfish_protocol_output}"
 grep -F 'readyok' <<<"${stockfish_protocol_output}"
 
+katago_version_output="$("${engine_directory}/katago" version 2>&1)"
+printf '%s\n' "${katago_version_output}"
+grep -F 'Using CUDA backend' <<<"${katago_version_output}"
+
 smoke_katago_board() {
     local board_size="$1"
     local request_id="smoke-${board_size}x${board_size}"
