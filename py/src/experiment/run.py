@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import hashlib
 import multiprocessing
 import os
@@ -17,7 +18,7 @@ from src.experiment.base_configuration import (
     WeightsOnlyResumeConfiguration,
 )
 from src.experiment.configuration import ExperimentConfiguration
-from src.evaluation.preparation import prepare_evaluation_artifacts
+from src.evaluation.preparation import PreparedEvaluationArtifacts, prepare_evaluation_artifacts
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.composition import create_game_implementation
@@ -51,6 +52,14 @@ class ExperimentRunManifest(FrozenModel):
     open_file_soft_limit: int
     torch_version: str
     cuda_version: str | None
+
+
+@dataclass(frozen=True)
+class _ValidatedRunEnvironment:
+    hardware: ResolvedHardware
+    approval: ApprovalRecord
+    source_revision: str
+    open_file_soft_limit: int
 
 
 def experiment_sha256(experiment: ExperimentConfiguration) -> str:
@@ -159,11 +168,11 @@ def _write_manifest(path: Path, manifest: ExperimentRunManifest) -> ExperimentRu
     return manifest
 
 
-def prepare_experiment_training_run(
+def _validate_run_environment(
     experiment: ExperimentConfiguration,
     expected_source_revision: str,
     approval_path: Path,
-) -> ExperimentRunManifest:
+) -> _ValidatedRunEnvironment:
     hardware = _resolved_hardware()
     _validate_hardware(experiment, hardware)
     source_revision = _git_output(['rev-parse', 'HEAD'])
@@ -171,9 +180,15 @@ def prepare_experiment_training_run(
         raise ValueError(f'Expected source revision {expected_source_revision}, found {source_revision}.')
     approval = load_approval_record(approval_path)
     _validate_approval(experiment, approval, source_revision)
+    _validate_runtime_configuration(experiment)
+    open_file_soft_limit = _validate_open_file_limit(experiment)
+    if _git_output(['status', '--short']):
+        raise ValueError('Refusing to start training from a dirty source working tree.')
+    return _ValidatedRunEnvironment(hardware, approval, source_revision, open_file_soft_limit)
 
+
+def _validate_runtime_configuration(experiment: ExperimentConfiguration) -> None:
     run = experiment.run
-    training = experiment.training
     if run.hardware.provider_name.casefold() == 'unconfirmed' or run.hardware.offer_id.casefold() == 'unconfirmed':
         raise ValueError('Hardware provider and offer ID must be confirmed before training.')
     dependency_lock_path = _resolve_source_path(run.environment.dependency_lock_path)
@@ -186,72 +201,106 @@ def prepare_experiment_training_run(
         raise ValueError('PyTorch or CUDA version does not match the experiment.')
     if os.environ.get('TRAINING_RUNTIME_IMAGE') != run.environment.runtime_image:
         raise ValueError('Training runtime image does not match the experiment.')
-    open_file_soft_limit = _open_file_soft_limit()
-    if open_file_soft_limit < run.environment.minimum_open_file_soft_limit:
-        raise ValueError('Open-file soft limit is below the experiment requirement.')
-    if training.limits.maximum_open_file_count >= open_file_soft_limit:
-        raise ValueError('Open-file safety stop must be lower than the process soft limit.')
 
-    source_worktree_clean = not bool(_git_output(['status', '--short']))
-    if not source_worktree_clean:
-        raise ValueError('Refusing to start training from a dirty source working tree.')
-    evaluation_artifacts = prepare_evaluation_artifacts(
-        experiment,
-        create_game_implementation(experiment),
-        SOURCE_ROOT,
-        source_revision,
-    )
-    output_path = Path(training.save_path)
-    manifest_path = output_path / 'run_manifest.json'
-    initial_checkpoint_path = model_save_path(0, output_path)
-    optimizer_type = training.trainer.optimizer
-    device = (
-        torch.device('cpu')
-        if training.topology.trainer.device_type == 'cpu'
-        else torch.device('cuda', training.topology.trainer.rank_zero_device_id)
-    )
-    dimensions = experiment.network_dimensions
+
+def _validate_open_file_limit(experiment: ExperimentConfiguration) -> int:
+    open_file_soft_limit = _open_file_soft_limit()
+    if open_file_soft_limit < experiment.run.environment.minimum_open_file_soft_limit:
+        raise ValueError('Open-file soft limit is below the experiment requirement.')
+    if experiment.training.limits.maximum_open_file_count >= open_file_soft_limit:
+        raise ValueError('Open-file safety stop must be lower than the process soft limit.')
+    return open_file_soft_limit
+
+
+def _training_device(experiment: ExperimentConfiguration) -> torch.device:
+    trainer_topology = experiment.training.topology.trainer
+    if trainer_topology.device_type == 'cpu':
+        return torch.device('cpu')
+    return torch.device('cuda', trainer_topology.rank_zero_device_id)
+
+
+def _auxiliary_action_sizes(experiment: ExperimentConfiguration) -> tuple[int, ...]:
     match experiment:
         case ChessExperimentConfiguration():
             objective = experiment.chess.objective
         case GoExperimentConfiguration():
             objective = experiment.go.objective
-    target_layout = build_training_target_layout(dimensions.actions, objective.auxiliary_targets)
-    auxiliary_action_sizes = tuple(head.action_size for head in target_layout.auxiliary_heads)
-    match run.resume:
+    layout = build_training_target_layout(experiment.network_dimensions.actions, objective.auxiliary_targets)
+    return tuple(head.action_size for head in layout.auxiliary_heads)
+
+
+def _prepare_initial_checkpoint(experiment: ExperimentConfiguration, output_path: Path, manifest_path: Path) -> Path:
+    training = experiment.training
+    checkpoint_path = model_save_path(0, output_path)
+    device = _training_device(experiment)
+    auxiliary_action_sizes = _auxiliary_action_sizes(experiment)
+    match experiment.run.resume:
         case WeightsOnlyResumeConfiguration(model_path=model_path):
             initial_model_path = _resolve_source_path(model_path)
             if not initial_model_path.is_file():
                 raise ValueError(f'Initial model does not exist: {initial_model_path}')
-            if not initial_checkpoint_path.exists():
+            if not checkpoint_path.exists():
                 model = load_model(
                     initial_model_path,
                     training.network,
                     device,
-                    dimensions,
+                    experiment.network_dimensions,
                     auxiliary_action_sizes,
                 )
-                save_model_and_optimizer(model, create_optimizer(model, optimizer_type), 0, output_path)
+                save_model_and_optimizer(model, create_optimizer(model, training.trainer.optimizer), 0, output_path)
         case RandomInitializationResumeConfiguration():
-            if initial_checkpoint_path.exists() and not manifest_path.exists():
-                raise ValueError(f'Random checkpoint exists without a run manifest: {initial_checkpoint_path}')
-            if not initial_checkpoint_path.exists():
-                model = create_model(training.network, device, dimensions, auxiliary_action_sizes)
-                save_model_and_optimizer(model, create_optimizer(model, optimizer_type), 0, output_path)
+            if checkpoint_path.exists() and not manifest_path.exists():
+                raise ValueError(f'Random checkpoint exists without a run manifest: {checkpoint_path}')
+            if not checkpoint_path.exists():
+                model = create_model(
+                    training.network,
+                    device,
+                    experiment.network_dimensions,
+                    auxiliary_action_sizes,
+                )
+                save_model_and_optimizer(model, create_optimizer(model, training.trainer.optimizer), 0, output_path)
+    return checkpoint_path
 
-    manifest = ExperimentRunManifest(
+
+def _run_manifest(
+    experiment: ExperimentConfiguration,
+    environment: _ValidatedRunEnvironment,
+    artifacts: PreparedEvaluationArtifacts,
+    initial_checkpoint_path: Path,
+) -> ExperimentRunManifest:
+    return ExperimentRunManifest(
         experiment=experiment,
-        approval=approval,
-        resolved_hardware=hardware,
-        source_revision=source_revision,
-        source_worktree_clean=source_worktree_clean,
+        approval=environment.approval,
+        resolved_hardware=environment.hardware,
+        source_revision=environment.source_revision,
+        source_worktree_clean=True,
         initial_model_sha256=_sha256(initial_checkpoint_path),
-        evaluation_dataset_sha256=_sha256(evaluation_artifacts.dataset_path),
-        evaluation_dataset_manifest_sha256=_sha256(evaluation_artifacts.dataset_manifest_path),
-        opening_suite_manifest_sha256=_sha256(evaluation_artifacts.opening_manifest_path),
-        evaluation_engine_artifact_sha256=evaluation_artifacts.dataset_manifest.engine_artifact_sha256,
-        open_file_soft_limit=open_file_soft_limit,
+        evaluation_dataset_sha256=_sha256(artifacts.dataset_path),
+        evaluation_dataset_manifest_sha256=_sha256(artifacts.dataset_manifest_path),
+        opening_suite_manifest_sha256=_sha256(artifacts.opening_manifest_path),
+        evaluation_engine_artifact_sha256=artifacts.dataset_manifest.engine_artifact_sha256,
+        open_file_soft_limit=environment.open_file_soft_limit,
         torch_version=torch.__version__,
         cuda_version=torch.version.cuda,
     )
-    return _write_manifest(manifest_path, manifest)
+
+
+def prepare_experiment_training_run(
+    experiment: ExperimentConfiguration,
+    expected_source_revision: str,
+    approval_path: Path,
+) -> ExperimentRunManifest:
+    environment = _validate_run_environment(experiment, expected_source_revision, approval_path)
+    evaluation_artifacts = prepare_evaluation_artifacts(
+        experiment,
+        create_game_implementation(experiment),
+        SOURCE_ROOT,
+        environment.source_revision,
+    )
+    output_path = Path(experiment.training.save_path)
+    manifest_path = output_path / 'run_manifest.json'
+    initial_checkpoint_path = _prepare_initial_checkpoint(experiment, output_path, manifest_path)
+    return _write_manifest(
+        manifest_path,
+        _run_manifest(experiment, environment, evaluation_artifacts, initial_checkpoint_path),
+    )
