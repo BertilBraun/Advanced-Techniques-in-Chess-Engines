@@ -4,8 +4,6 @@
 #include "search/InferenceConfiguration.hpp"
 #include "search/SearchTypes.hpp"
 #include "search/SelfPlay.hpp"
-#include "util/TimeItGuard.h"
-
 #include <pybind11/operators.h>
 #include <pybind11/stl.h>
 
@@ -62,17 +60,6 @@ void bind_search(py::module_ &module) {
         .def_readonly("loss", &WdlPrediction::loss)
         .def_property_readonly("value", &WdlPrediction::expectedValue);
     module.attr("OutcomeProbabilities") = module.attr("WdlPrediction");
-
-    py::class_<FunctionTimeInfo>(module, "FunctionTimeInfo")
-        .def_readonly("name", &FunctionTimeInfo::name)
-        .def_readonly("percent", &FunctionTimeInfo::percent)
-        .def_readonly("total", &FunctionTimeInfo::total)
-        .def_readonly("invocations", &FunctionTimeInfo::invocations);
-
-    py::class_<TimeInfo>(module, "TimeInfo")
-        .def_readonly("totalTime", &TimeInfo::totalTime)
-        .def_readonly("percentRecorded", &TimeInfo::percentRecorded)
-        .def_readonly("functionTimes", &TimeInfo::functionTimes);
 
     py::class_<GameSearchVisit>(module, "GameSearchVisit")
         .def_readonly("action_id", &GameSearchVisit::action_id)

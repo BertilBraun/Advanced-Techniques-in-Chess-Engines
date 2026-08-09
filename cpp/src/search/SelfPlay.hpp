@@ -3,7 +3,6 @@
 #include "games/GameConcepts.hpp"
 #include "search/InferenceConfiguration.hpp"
 #include "search/SearchEngine.hpp"
-#include "util/TimeItGuard.h"
 #include "util/py.hpp"
 
 #include <algorithm>
@@ -157,9 +156,9 @@ public:
         return m_search->modelGeneration();
     }
 
-    [[nodiscard]] std::pair<InferenceStatistics, TimeInfo> inferenceStatistics() {
+    [[nodiscard]] InferenceStatistics inferenceStatistics() const {
         const std::shared_lock lock(m_operationMutex);
-        return {m_search->inferenceStatistics(), resetTimes()};
+        return m_search->inferenceStatistics();
     }
 
     void refreshModel(const std::uint64_t modelGeneration, const std::string &modelPath) {

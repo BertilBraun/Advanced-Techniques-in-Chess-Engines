@@ -108,6 +108,80 @@ class SelfPlayGroup:
         return parent, process
 
 
+class _SelfPlayProcessRuntime:
+    def __init__(self, worker: SelfPlayWorker, worker_id: int) -> None:
+        self.worker = worker
+        self.worker_id = worker_id
+        self.loaded_generation: int | None = None
+        self.loaded_sha256: str | None = None
+        self.completed_search_batches = 0
+        self.running = False
+
+    def run_batch(self) -> None:
+        self.worker.run_batch()
+        self.completed_search_batches += 1
+
+    def apply(self, desired_state: SelfPlayDesiredState) -> SelfPlayStateApplied:
+        match desired_state:
+            case PausedSelfPlayState():
+                self.running = False
+                return PausedSelfPlayStateApplied(worker_id=self.worker_id)
+            case StoppedSelfPlayState():
+                return StoppedSelfPlayStateApplied(worker_id=self.worker_id)
+            case RunningSelfPlayState():
+                return self._apply_running_state(desired_state)
+
+    def _apply_running_state(self, desired_state: RunningSelfPlayState) -> RunningSelfPlayStateApplied:
+        checkpoint = desired_state.checkpoint
+        self._validate_checkpoint_transition(checkpoint, desired_state.completed_generation_statistics)
+        statistics = self._completed_generation_statistics(desired_state.completed_generation_statistics)
+        self._load_checkpoint(checkpoint)
+        self.running = True
+        return RunningSelfPlayStateApplied(
+            worker_id=self.worker_id,
+            loaded_generation=checkpoint.generation,
+            loaded_inference_model_sha256=checkpoint.inference_model_sha256,
+            completed_generation_statistics=statistics,
+        )
+
+    def _validate_checkpoint_transition(
+        self,
+        checkpoint: CheckpointReference,
+        statistics_level: StatisticsLevel | None,
+    ) -> None:
+        if self.loaded_generation is not None and checkpoint.generation < self.loaded_generation:
+            raise ValueError('Self-play model generation cannot move backwards.')
+        if statistics_level is not None:
+            if self.loaded_generation is None:
+                raise ValueError('Cannot collect generation statistics before loading a model.')
+            if checkpoint.generation <= self.loaded_generation:
+                raise ValueError('Completed-generation statistics require a newer checkpoint.')
+        if checkpoint.generation == self.loaded_generation and checkpoint.inference_model_sha256 != self.loaded_sha256:
+            raise ValueError('Loaded model generation changed immutable inference identity.')
+
+    def _completed_generation_statistics(self, statistics_level: StatisticsLevel | None) -> SelfPlayStatistics | None:
+        if statistics_level is None:
+            return None
+        assert self.loaded_generation is not None
+        if statistics_level is StatisticsLevel.DETAILED:
+            self.worker.snapshot_statistics()
+        statistics = SelfPlayStatistics(
+            completed_generation=self.loaded_generation,
+            level=statistics_level,
+            completed_search_batches=self.completed_search_batches,
+        )
+        self.completed_search_batches = 0
+        return statistics
+
+    def _load_checkpoint(self, checkpoint: CheckpointReference) -> None:
+        if checkpoint.generation == self.loaded_generation:
+            return
+        checkpoint.validate_inference_model()
+        self.worker.refresh_published_model(checkpoint)
+        self.loaded_generation = checkpoint.generation
+        self.loaded_sha256 = checkpoint.inference_model_sha256
+
+
 def _self_play_worker_main(
     connection: Connection,
     worker_id: int,
@@ -128,57 +202,19 @@ def _self_play_worker_main(
         device_id,
         Path(game.training.save_path) / 'completed-games' / 'inbox',
     )
-    loaded_generation: int | None = None
-    loaded_sha256: str | None = None
-    completed_search_batches = 0
-    running = False
+    runtime = _SelfPlayProcessRuntime(worker, worker_id)
     try:
         while True:
-            if running and not connection.poll():
-                worker.run_batch()
-                completed_search_batches += 1
+            if runtime.running and not connection.poll():
+                runtime.run_batch()
                 continue
             desired_state: SelfPlayDesiredState = connection.recv()
-            match desired_state:
-                case PausedSelfPlayState():
-                    running = False
-                    connection.send(PausedSelfPlayStateApplied(worker_id=worker_id))
-                case StoppedSelfPlayState():
-                    connection.send(StoppedSelfPlayStateApplied(worker_id=worker_id))
+            applied_state = runtime.apply(desired_state)
+            connection.send(applied_state)
+            match applied_state:
+                case StoppedSelfPlayStateApplied():
                     return
-                case RunningSelfPlayState():
-                    statistics = None
-                    checkpoint = desired_state.checkpoint
-                    if loaded_generation is not None and checkpoint.generation < loaded_generation:
-                        raise ValueError('Self-play model generation cannot move backwards.')
-                    if desired_state.completed_generation_statistics is not None:
-                        if loaded_generation is None:
-                            raise ValueError('Cannot collect generation statistics before loading a model.')
-                        if checkpoint.generation <= loaded_generation:
-                            raise ValueError('Completed-generation statistics require a newer checkpoint.')
-                        if desired_state.completed_generation_statistics is StatisticsLevel.DETAILED:
-                            worker.snapshot_statistics()
-                        statistics = SelfPlayStatistics(
-                            completed_generation=loaded_generation,
-                            level=desired_state.completed_generation_statistics,
-                            completed_search_batches=completed_search_batches,
-                        )
-                        completed_search_batches = 0
-                    if loaded_generation != checkpoint.generation:
-                        checkpoint.validate_inference_model()
-                        worker.refresh_published_model(checkpoint)
-                        loaded_generation = checkpoint.generation
-                        loaded_sha256 = checkpoint.inference_model_sha256
-                    elif loaded_sha256 != checkpoint.inference_model_sha256:
-                        raise ValueError('Loaded model generation changed immutable inference identity.')
-                    running = True
-                    connection.send(
-                        RunningSelfPlayStateApplied(
-                            worker_id=worker_id,
-                            loaded_generation=checkpoint.generation,
-                            loaded_inference_model_sha256=checkpoint.inference_model_sha256,
-                            completed_generation_statistics=statistics,
-                        )
-                    )
+                case _:
+                    pass
     finally:
         connection.close()

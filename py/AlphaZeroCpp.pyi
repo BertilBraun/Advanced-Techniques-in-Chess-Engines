@@ -21,7 +21,6 @@ __all__ = [
     'ChessSelfPlaySearchRequest',
     'ChessSelfPlaySearchResult',
     'SelfPlaySearchStatistics',
-    'FunctionTimeInfo',
     'GameSearchResult',
     'GameSearchVisit',
     'GameAnalysisResult',
@@ -48,7 +47,6 @@ __all__ = [
     'InferenceDevice',
     'InferenceConfiguration',
     'InferenceStatistics',
-    'TimeInfo',
     'WdlPrediction',
     'encode_board_packed_bytes',
     'mirror_chess_action_id',
@@ -423,16 +421,6 @@ class ChessAnalysisSession:
 def encode_board_packed_bytes(fen: str) -> bytes:
     """Encode a FEN into the canonical packed plane-major byte layout."""
 
-class FunctionTimeInfo:
-    @property
-    def invocations(self) -> int: ...
-    @property
-    def name(self) -> str: ...
-    @property
-    def percent(self) -> float: ...
-    @property
-    def total(self) -> float: ...
-
 class InferenceConfiguration:
     device_id: int
     model_path: str
@@ -472,7 +460,7 @@ class ChessSelfPlaySearch:
     @property
     def model_generation(self) -> int: ...
     def request(self, root: ChessSearchRoot, full_search: bool) -> ChessSelfPlaySearchRequest: ...
-    def inference_statistics(self) -> tuple[InferenceStatistics, TimeInfo]: ...
+    def inference_statistics(self) -> InferenceStatistics: ...
     def refresh_model(self, model_version: int, model_path: str) -> None: ...
     def update_search_schedule(self, search_parameters: SelfPlaySearchParameters) -> bool: ...
     def inference_with_history(
@@ -610,14 +598,6 @@ class SelfPlaySearchStatistics:
     def top_action_disagreement(self) -> float: ...
     @property
     def selected_action_prior_rank(self) -> float: ...
-
-class TimeInfo:
-    @property
-    def functionTimes(self) -> list[FunctionTimeInfo]: ...
-    @property
-    def percentRecorded(self) -> float: ...
-    @property
-    def totalTime(self) -> float: ...
 
 def new_root(fen: str, arena_capacity: int) -> ChessSearchRoot:
     """

@@ -42,6 +42,18 @@ class EvaluationDatasetRow:
     ply: int
 
 
+@dataclass(frozen=True)
+class _RetainedDatasetPosition:
+    digest: str
+    row: EvaluationDatasetRow
+
+
+@dataclass(frozen=True)
+class _GeneratedSourceGame:
+    source_game: EvaluationSourceGame
+    retained_positions: tuple[_RetainedDatasetPosition, ...]
+
+
 def _file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open('rb') as source:
@@ -105,6 +117,110 @@ def dataset_manifest_path(path: Path) -> Path:
     return path.with_name(f'{path.name}.manifest.json')
 
 
+def _load_existing_dataset(
+    path: Path,
+    manifest_path: Path,
+    configuration: EvaluationDatasetConfiguration,
+    state: GameStateContract[PositionT],
+    engine: EnginePolicyProvider[PositionT],
+) -> EvaluationDatasetManifest | None:
+    if not path.exists() and not manifest_path.exists():
+        return None
+    if not path.exists() or not manifest_path.exists():
+        raise ValueError('Evaluation dataset data and manifest must either both exist or both be absent.')
+    manifest = EvaluationDatasetManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
+    if _file_sha256(path) != manifest.data_sha256:
+        raise ValueError('Evaluation dataset hash does not match its manifest.')
+    expected = (
+        manifest.game == engine.game_name
+        and manifest.rules_digest == engine.rules_digest
+        and manifest.representation_digest == engine.representation_digest
+        and manifest.random_seed == configuration.random_seed
+        and manifest.move_sampling_temperature == configuration.move_sampling_temperature
+        and manifest.engine_identity == engine.engine_identity
+        and manifest.engine_artifact_sha256 == engine.engine_artifact_sha256
+        and manifest.label_search_limit == engine.label_search_limit
+        and manifest.packed_payload_bytes == state.packed_plane_layout.payload_bytes
+    )
+    if not expected:
+        raise ValueError('Existing evaluation dataset does not match its configured immutable provenance.')
+    return manifest
+
+
+def _generate_source_game(
+    source_game_id: int,
+    retained_offset: int,
+    configuration: EvaluationDatasetConfiguration,
+    state: GameStateContract[PositionT],
+    engine: EnginePolicyProvider[PositionT],
+    generator: random.Random,
+) -> _GeneratedSourceGame:
+    position = state.initial_position()
+    action_ids: tuple[int, ...] = ()
+    retained_positions: list[_RetainedDatasetPosition] = []
+    ply = 0
+    while legal_actions := state.legal_action_ids(position):
+        policy = validate_engine_policy(engine.policy(position, action_ids), legal_actions)
+        if ply % RETAINED_PLY_INTERVAL == retained_offset:
+            ordered_entries = tuple(sorted(policy.entries, key=lambda entry: (-entry.probability, entry.action_id)))
+            retained_positions.append(
+                _RetainedDatasetPosition(
+                    digest=_position_digest(state, position),
+                    row=EvaluationDatasetRow(
+                        packed_state=state.encode_network_input(position).payload,
+                        action_ids=tuple(entry.action_id for entry in ordered_entries),
+                        probabilities=tuple(entry.probability for entry in ordered_entries),
+                        top_action_id=policy.top_action_id,
+                        source_game_id=source_game_id,
+                        ply=ply,
+                    ),
+                )
+            )
+        selected_action = _sample_action(policy, configuration.move_sampling_temperature, generator)
+        position = state.child_position(position, selected_action)
+        action_ids = (*action_ids, selected_action)
+        ply += 1
+    return _GeneratedSourceGame(
+        source_game=EvaluationSourceGame(
+            source_game_id=source_game_id,
+            action_ids=action_ids,
+            human_readable=engine.render_game(action_ids),
+        ),
+        retained_positions=tuple(retained_positions),
+    )
+
+
+def _collect_dataset_rows(
+    configuration: EvaluationDatasetConfiguration,
+    state: GameStateContract[PositionT],
+    engine: EnginePolicyProvider[PositionT],
+) -> tuple[tuple[EvaluationDatasetRow, ...], tuple[EvaluationSourceGame, ...], int]:
+    generator = random.Random(configuration.random_seed)
+    retained_offset = configuration.random_seed % RETAINED_PLY_INTERVAL
+    rows: list[EvaluationDatasetRow] = []
+    source_games: list[EvaluationSourceGame] = []
+    position_digests: set[str] = set()
+    while len(rows) < MINIMUM_DATASET_POSITIONS:
+        source_game_id = len(source_games)
+        if source_game_id >= MAXIMUM_SOURCE_GAMES:
+            raise ValueError('Evaluation dataset did not reach its minimum position count.')
+        generated = _generate_source_game(
+            source_game_id,
+            retained_offset,
+            configuration,
+            state,
+            engine,
+            generator,
+        )
+        source_games.append(generated.source_game)
+        for retained in generated.retained_positions:
+            if retained.digest in position_digests or len(rows) >= MAXIMUM_DATASET_POSITIONS:
+                continue
+            rows.append(retained.row)
+            position_digests.add(retained.digest)
+    return tuple(rows), tuple(source_games), retained_offset
+
+
 def build_evaluation_dataset(
     path: Path,
     configuration: EvaluationDatasetConfiguration,
@@ -113,85 +229,21 @@ def build_evaluation_dataset(
     builder_source_revision: str,
 ) -> EvaluationDatasetManifest:
     manifest_path = dataset_manifest_path(path)
-    if path.exists() and manifest_path.exists():
-        manifest = EvaluationDatasetManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
-        if _file_sha256(path) != manifest.data_sha256:
-            raise ValueError('Evaluation dataset hash does not match its manifest.')
-        expected = (
-            manifest.game == engine.game_name
-            and manifest.rules_digest == engine.rules_digest
-            and manifest.representation_digest == engine.representation_digest
-            and manifest.random_seed == configuration.random_seed
-            and manifest.move_sampling_temperature == configuration.move_sampling_temperature
-            and manifest.engine_identity == engine.engine_identity
-            and manifest.engine_artifact_sha256 == engine.engine_artifact_sha256
-            and manifest.label_search_limit == engine.label_search_limit
-            and manifest.packed_payload_bytes == state.packed_plane_layout.payload_bytes
-        )
-        if not expected:
-            raise ValueError('Existing evaluation dataset does not match its configured immutable provenance.')
-        return manifest
-    if path.exists() or manifest_path.exists():
-        raise ValueError('Evaluation dataset data and manifest must either both exist or both be absent.')
-    generator = random.Random(configuration.random_seed)
-    retained_offset = configuration.random_seed % RETAINED_PLY_INTERVAL
-    rows: list[EvaluationDatasetRow] = []
-    source_games: list[EvaluationSourceGame] = []
-    position_digests: set[str] = set()
-    source_game_count = 0
-    while len(rows) < MINIMUM_DATASET_POSITIONS:
-        if source_game_count >= MAXIMUM_SOURCE_GAMES:
-            raise ValueError('Evaluation dataset did not reach its minimum position count.')
-        position = state.initial_position()
-        action_ids: tuple[int, ...] = ()
-        ply = 0
-        while True:
-            legal_actions = state.legal_action_ids(position)
-            if not legal_actions:
-                break
-            policy = validate_engine_policy(engine.policy(position, action_ids), legal_actions)
-            digest = _position_digest(state, position)
-            if (
-                ply % RETAINED_PLY_INTERVAL == retained_offset
-                and digest not in position_digests
-                and len(rows) < MAXIMUM_DATASET_POSITIONS
-            ):
-                ordered_entries = tuple(sorted(policy.entries, key=lambda entry: (-entry.probability, entry.action_id)))
-                rows.append(
-                    EvaluationDatasetRow(
-                        packed_state=state.encode_network_input(position).payload,
-                        action_ids=tuple(entry.action_id for entry in ordered_entries),
-                        probabilities=tuple(entry.probability for entry in ordered_entries),
-                        top_action_id=policy.top_action_id,
-                        source_game_id=source_game_count,
-                        ply=ply,
-                    )
-                )
-                position_digests.add(digest)
-            selected_action = _sample_action(policy, configuration.move_sampling_temperature, generator)
-            position = state.child_position(position, selected_action)
-            action_ids = (*action_ids, selected_action)
-            ply += 1
-        source_games.append(
-            EvaluationSourceGame(
-                source_game_id=source_game_count,
-                action_ids=action_ids,
-                human_readable=engine.render_game(action_ids),
-            )
-        )
-        source_game_count += 1
-    maximum_policy_entries = max(len(row.action_ids) for row in rows)
+    existing = _load_existing_dataset(path, manifest_path, configuration, state, engine)
+    if existing is not None:
+        return existing
+    resolved_rows, source_games, retained_offset = _collect_dataset_rows(configuration, state, engine)
+    maximum_policy_entries = max(len(row.action_ids) for row in resolved_rows)
     if maximum_policy_entries > 255:
         raise ValueError('Evaluation dataset sparse policies cannot exceed 255 entries.')
     dtype = _dataset_dtype(state.packed_plane_layout.payload_bytes, maximum_policy_entries)
-    resolved_rows = tuple(rows)
     _write_dataset(path, resolved_rows, dtype)
     manifest = EvaluationDatasetManifest(
         game=engine.game_name,
         rules_digest=engine.rules_digest,
         representation_digest=engine.representation_digest,
         position_count=len(resolved_rows),
-        source_games=tuple(source_games),
+        source_games=source_games,
         retained_ply_offset=retained_offset,
         random_seed=configuration.random_seed,
         move_sampling_temperature=configuration.move_sampling_temperature,

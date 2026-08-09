@@ -2,8 +2,6 @@
 #include "util/py.hpp"
 
 #include "games/chess/implementation/ChessAction.hpp"
-#include "util/TimeItGuard.h"
-
 #include "bitboard.h"
 #include "movegen.h"
 
@@ -65,8 +63,6 @@ Board Board::replay(const std::string &startingFen, const std::vector<std::strin
 }
 
 void Board::makeMove(Move m) {
-    TIMEIT("Board::makeMove");
-
     assert(std::ranges::find(validMoves(), m) != validMoves().end() &&
            "Attempting to push an illegal move");
     const bool pawnMove = type_of(m_pos.moved_piece(m)) == PAWN;
@@ -127,8 +123,6 @@ void Board::validateHistory() const {
 }
 
 bool Board::isGameOver() const {
-    TIMEIT("Board::isGameOver");
-
     const std::vector<Move> &legalMoves = validMoves();
     const bool fiftyMoveDraw =
         m_pos.rule50_count() >= 100 && (m_pos.checkers() == 0ULL || !legalMoves.empty());
@@ -140,8 +134,6 @@ bool Board::isGameOver() const {
 }
 
 std::optional<int> Board::checkWinner() const {
-    TIMEIT("Board::checkWinner");
-
     // If there is at least one legal move, the game is not over.
     if (!validMoves().empty()) {
         return std::nullopt;
@@ -160,8 +152,6 @@ std::optional<int> Board::checkWinner() const {
     }
 }
 const std::vector<Move> &Board::validMoves() const {
-    TIMEIT("Board::validMoves");
-
     if (m_validMoves.has_value()) {
         return *m_validMoves;
     }

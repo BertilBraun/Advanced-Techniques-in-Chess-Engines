@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -15,7 +16,14 @@ from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
 from src.games.go.contract import GoStateContract, NativeGoPosition
 
 
-JSON_VALUE_ADAPTER = TypeAdapter(JsonValue)
+JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, JsonValue])
+MOVE_INFO_LIST_ADAPTER = TypeAdapter(list[dict[str, JsonValue]])
+
+
+@dataclass(frozen=True)
+class _KataGoPolicyResponse:
+    request_id: str
+    weighted_actions: tuple[tuple[int, float], ...]
 
 
 def _file_sha256(path: Path) -> str:
@@ -55,6 +63,38 @@ def gtp_to_action_id(coordinate: str, board_size: int) -> int:
     if not 0 <= action_id < board_size * board_size:
         raise ValueError(f'Go coordinate is outside the board: {coordinate!r}')
     return action_id
+
+
+def _parse_weighted_actions(move_infos: JsonValue, board_size: int) -> tuple[tuple[int, float], ...]:
+    entries = MOVE_INFO_LIST_ADAPTER.validate_python(move_infos)
+    weighted_actions: list[tuple[int, float]] = []
+    for entry in entries:
+        move = entry.get('move')
+        weight = entry.get('weight')
+        if not isinstance(move, str) or not isinstance(weight, int | float) or isinstance(weight, bool) or weight <= 0:
+            continue
+        weighted_actions.append((gtp_to_action_id(move, board_size), float(weight)))
+    if not weighted_actions:
+        raise ValueError('KataGo response contained no positive move weights.')
+    return tuple(weighted_actions)
+
+
+def _parse_policy_response(line: str, expected_ids: set[str], board_size: int) -> _KataGoPolicyResponse:
+    response = JSON_OBJECT_ADAPTER.validate_json(line)
+    request_id = response.get('id')
+    if not isinstance(request_id, str) or request_id not in expected_ids:
+        raise ValueError('KataGo response has an unexpected request ID.')
+    if 'error' in response:
+        raise RuntimeError(f'KataGo analysis failed: {response["error"]}')
+    move_infos = response.get('moveInfos')
+    if move_infos is None:
+        raise ValueError('KataGo response omitted moveInfos.')
+    return _KataGoPolicyResponse(request_id, _parse_weighted_actions(move_infos, board_size))
+
+
+def _normalized_policy(weighted_actions: tuple[tuple[int, float], ...]) -> EnginePolicy:
+    total = sum(weight for _, weight in weighted_actions)
+    return EnginePolicy(tuple(EnginePolicyEntry(action_id, weight / total) for action_id, weight in weighted_actions))
 
 
 def action_id_to_sgf(action_id: int, board_size: int) -> str:
@@ -189,37 +229,8 @@ class KataGoClient:
             line = self._output.readline()
             if not line:
                 raise RuntimeError(f'KataGo analysis process exited with code {self._process.poll()}.')
-            response = JSON_VALUE_ADAPTER.validate_json(line)
-            if not isinstance(response, dict):
-                raise ValueError('KataGo response must be a JSON object.')
-            request_id = response.get('id')
-            if not isinstance(request_id, str) or request_id not in expected_ids:
-                raise ValueError('KataGo response has an unexpected request ID.')
-            if 'error' in response:
-                raise RuntimeError(f'KataGo analysis failed: {response["error"]}')
-            move_infos = response.get('moveInfos')
-            if not isinstance(move_infos, list) or not move_infos:
-                raise ValueError('KataGo response omitted moveInfos.')
-            weighted_actions: list[tuple[int, float]] = []
-            for move_info in move_infos:
-                if not isinstance(move_info, dict):
-                    raise ValueError('KataGo moveInfos entries must be objects.')
-                move = move_info.get('move')
-                weight = move_info.get('weight')
-                if (
-                    not isinstance(move, str)
-                    or not isinstance(weight, int | float)
-                    or isinstance(weight, bool)
-                    or weight <= 0
-                ):
-                    continue
-                weighted_actions.append((gtp_to_action_id(move, self.state.board_size), float(weight)))
-            if not weighted_actions:
-                raise ValueError('KataGo response contained no positive move weights.')
-            total = sum(weight for _, weight in weighted_actions)
-            responses[request_id] = EnginePolicy(
-                tuple(EnginePolicyEntry(action_id, weight / total) for action_id, weight in weighted_actions)
-            )
+            response = _parse_policy_response(line, expected_ids, self.state.board_size)
+            responses[response.request_id] = _normalized_policy(response.weighted_actions)
         return responses
 
     def analyze_many(

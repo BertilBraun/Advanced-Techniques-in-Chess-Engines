@@ -192,7 +192,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
     roots = [search.new_root(fen) for fen in openings]
     warmup_result = run_search_steps(search, roots, openings, args.warmup_steps)
     roots = warmup_result.roots
-    warmup_inference_statistics, _ = search.inference_statistics()
+    warmup_inference_statistics = search.inference_statistics()
     wait_for_synchronized_start(args)
 
     gpu_samples: list[GpuSample] = []
@@ -220,7 +220,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
     if sampler is not None:
         sampler.join()
 
-    inference_statistics, _ = search.inference_statistics()
+    inference_statistics = search.inference_statistics()
     measurement_evaluations = inference_statistics.evaluations - warmup_inference_statistics.evaluations
     measurement_model_calls = inference_statistics.modelInferenceCalls - warmup_inference_statistics.modelInferenceCalls
     measurement_model_positions = (

@@ -234,20 +234,14 @@ if [[ ! -f "${cmake_cache}" || ! -f "${compile_commands}" ]]; then
 fi
 
 build_type=$(awk -F= '/^CMAKE_BUILD_TYPE:STRING=/{print $2}' "${cmake_cache}")
-timing_instrumentation=$(awk -F= '/^ENABLE_TIMING_INSTRUMENTATION:BOOL=/{print $2}' "${cmake_cache}")
-if [[ "${build_type}" != "Release" || "${timing_instrumentation}" != "OFF" ]]; then
-    echo "Expected Release with timing instrumentation OFF; found ${build_type}/${timing_instrumentation}"
+if [[ "${build_type}" != "Release" ]]; then
+    echo "Expected Release build; found ${build_type}"
     exit 1
 fi
 if ! grep -q -- '-O3' "${compile_commands}"; then
     echo "The recorded compile commands do not contain -O3"
     exit 1
 fi
-if grep -q -- '-DENABLE_TIMING' "${compile_commands}"; then
-    echo "The recorded compile commands enable timing instrumentation"
-    exit 1
-fi
-
 run_timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 topology_name="g${gpu_count}-pg${processes_per_gpu}-games${parallel_games_per_process}"
 workload_name="s${searches_per_ply}-fs${fast_searches_per_ply}-ps${parallel_searches}-b${maximum_batch_size}"
@@ -276,7 +270,6 @@ jq -n \
     --arg model_sha256 "${model_sha256}" \
     --arg module_sha256 "${module_sha256}" \
     --arg build_type "${build_type}" \
-    --arg timing_instrumentation "${timing_instrumentation}" \
     --arg torch_version "${torch_version}" \
     --arg cuda_version "${cuda_version}" \
     --arg gpu_inventory "${gpu_inventory}" \
@@ -308,8 +301,7 @@ jq -n \
         },
         build: {
             type: $build_type,
-            optimization: "-O3",
-            timing_instrumentation: $timing_instrumentation
+            optimization: "-O3"
         },
         runtime: {
             torch_version: $torch_version,

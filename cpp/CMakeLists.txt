@@ -32,8 +32,6 @@ if (NOT CMAKE_BUILD_TYPE)
 endif ()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-option(ENABLE_TIMING_INSTRUMENTATION "Enable TIMEIT instrumentation" OFF)
-message(STATUS "Timing instrumentation: ${ENABLE_TIMING_INSTRUMENTATION}")
 option(ENABLE_NATIVE_ARCHITECTURE "Optimize for the build machine CPU" ON)
 message(STATUS "Native architecture optimization: ${ENABLE_NATIVE_ARCHITECTURE}")
 
@@ -204,9 +202,6 @@ else ()
 endif ()
 
 target_precompile_headers(AlphaZeroCpp PRIVATE src/common.hpp)
-if (ENABLE_TIMING_INSTRUMENTATION)
-    target_compile_definitions(AlphaZeroCpp PRIVATE ENABLE_TIMING)
-endif ()
 
 target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
 
@@ -232,7 +227,6 @@ if (BUILD_TESTING)
             src/games/chess/presentation/ChessSearchPresentation.cpp
             src/search/InferencePipeline.cpp
             src/util/Log.cpp
-            src/util/TimeItGuard.cpp
             "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
             "${stockfish_SOURCE_DIR}/src/memory.cpp"
             "${stockfish_SOURCE_DIR}/src/misc.cpp"

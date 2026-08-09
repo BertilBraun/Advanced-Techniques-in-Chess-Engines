@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import hashlib
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from pydantic import Field
 
 from src.evaluation.configuration import (
     EvaluationConfiguration,
+    EvaluationDefinition,
     FixedCheckpointEvaluationDefinition,
     FixedDatasetEvaluationDefinition,
     KataGoEvaluationDefinition,
@@ -17,6 +19,7 @@ from src.evaluation.configuration import (
 )
 from src.evaluation.contracts import (
     CheckpointOpponent,
+    EvaluationOpponent,
     EvaluationJob,
     FixedDatasetEvaluationJob,
     KataGoOpponent,
@@ -40,6 +43,17 @@ class ScheduledEvaluationSuite(FrozenModel):
     checkpoint: CheckpointReference
 
 
+@dataclass(frozen=True)
+class _EvaluationJobContext:
+    job_id: str
+    boundary_seconds: int
+    candidate: CheckpointReference
+    device_id: int
+    deadline_seconds: float
+    random_seed: int
+    result_path: Path
+
+
 def checkpoint_at(
     publications: tuple[CheckpointPublication, ...],
     boundary_seconds: int,
@@ -48,6 +62,108 @@ def checkpoint_at(
     if not available:
         raise RuntimeError('No complete checkpoint was available at the evaluation boundary.')
     return available[-1].checkpoint
+
+
+def _previous_checkpoint(
+    definition: PreviousCheckpointEvaluationDefinition,
+    configuration: EvaluationConfiguration,
+    suite: ScheduledEvaluationSuite,
+    scheduled_suites: tuple[ScheduledEvaluationSuite, ...],
+) -> CheckpointReference | None:
+    opponent_boundary = suite.boundary_seconds - definition.boundary_offset * configuration.cadence_seconds
+    previous = next(
+        (scheduled.checkpoint for scheduled in scheduled_suites if scheduled.boundary_seconds == opponent_boundary),
+        None,
+    )
+    if previous is None or previous.generation >= suite.checkpoint.generation:
+        return None
+    return previous
+
+
+def _fixed_checkpoint(
+    definition: FixedCheckpointEvaluationDefinition,
+    suite: ScheduledEvaluationSuite,
+    run_path: Path,
+) -> CheckpointReference | None:
+    generation = definition.generation
+    if generation >= suite.checkpoint.generation or not checkpoint_manifest_path(generation, run_path).is_file():
+        return None
+    return CheckpointReference.load_for_inference(run_path, generation)
+
+
+def _match_job(
+    definition: RandomOpponentEvaluationDefinition
+    | PolicyRandomOpponentEvaluationDefinition
+    | PreviousCheckpointEvaluationDefinition
+    | FixedCheckpointEvaluationDefinition
+    | StockfishEvaluationDefinition
+    | KataGoEvaluationDefinition,
+    opponent: EvaluationOpponent,
+    context: _EvaluationJobContext,
+) -> MatchEvaluationJob:
+    return MatchEvaluationJob(
+        kind='match',
+        job_id=context.job_id,
+        definition=definition,
+        boundary_seconds=context.boundary_seconds,
+        candidate=context.candidate,
+        opponent=opponent,
+        device_id=context.device_id,
+        deadline_seconds=context.deadline_seconds,
+        random_seed=context.random_seed,
+        result_path=context.result_path,
+    )
+
+
+def _job_for_definition(
+    definition: EvaluationDefinition,
+    configuration: EvaluationConfiguration,
+    suite: ScheduledEvaluationSuite,
+    scheduled_suites: tuple[ScheduledEvaluationSuite, ...],
+    run_path: Path,
+    context: _EvaluationJobContext,
+) -> EvaluationJob | None:
+    match definition:
+        case FixedDatasetEvaluationDefinition():
+            return FixedDatasetEvaluationJob(
+                kind='fixed_dataset',
+                job_id=context.job_id,
+                definition=definition,
+                boundary_seconds=context.boundary_seconds,
+                candidate=context.candidate,
+                device_id=context.device_id,
+                deadline_seconds=context.deadline_seconds,
+                random_seed=context.random_seed,
+                result_path=context.result_path,
+            )
+        case RandomOpponentEvaluationDefinition() | PolicyRandomOpponentEvaluationDefinition():
+            return _match_job(definition, RandomOpponent(kind='random'), context)
+        case PreviousCheckpointEvaluationDefinition():
+            checkpoint = _previous_checkpoint(definition, configuration, suite, scheduled_suites)
+            return (
+                None
+                if checkpoint is None
+                else _match_job(
+                    definition,
+                    CheckpointOpponent(kind='checkpoint', checkpoint=checkpoint),
+                    context,
+                )
+            )
+        case FixedCheckpointEvaluationDefinition():
+            checkpoint = _fixed_checkpoint(definition, suite, run_path)
+            return (
+                None
+                if checkpoint is None
+                else _match_job(
+                    definition,
+                    CheckpointOpponent(kind='checkpoint', checkpoint=checkpoint),
+                    context,
+                )
+            )
+        case StockfishEvaluationDefinition(skill_level=skill_level):
+            return _match_job(definition, StockfishOpponent(kind='stockfish', skill_level=skill_level), context)
+        case KataGoEvaluationDefinition():
+            return _match_job(definition, KataGoOpponent(kind='katago'), context)
 
 
 def jobs_for_suite(
@@ -63,66 +179,26 @@ def jobs_for_suite(
     device_cycle = experiment.training.topology.evaluation.device_cycle
     device_index = next_device_index
     for definition in configuration.definitions:
-        opponent = None
-        match definition:
-            case FixedDatasetEvaluationDefinition():
-                kind = 'fixed_dataset'
-            case RandomOpponentEvaluationDefinition() | PolicyRandomOpponentEvaluationDefinition():
-                kind = 'match'
-                opponent = RandomOpponent(kind='random')
-            case PreviousCheckpointEvaluationDefinition(boundary_offset=offset):
-                opponent_boundary = suite.boundary_seconds - offset * configuration.cadence_seconds
-                previous = next(
-                    (
-                        scheduled.checkpoint
-                        for scheduled in scheduled_suites
-                        if scheduled.boundary_seconds == opponent_boundary
-                    ),
-                    None,
-                )
-                if previous is None or previous.generation >= suite.checkpoint.generation:
-                    continue
-                kind = 'match'
-                opponent = CheckpointOpponent(kind='checkpoint', checkpoint=previous)
-            case FixedCheckpointEvaluationDefinition(generation=generation):
-                if (
-                    generation >= suite.checkpoint.generation
-                    or not checkpoint_manifest_path(generation, run_path).is_file()
-                ):
-                    continue
-                kind = 'match'
-                opponent = CheckpointOpponent(
-                    kind='checkpoint',
-                    checkpoint=CheckpointReference.load_for_inference(run_path, generation),
-                )
-            case StockfishEvaluationDefinition(skill_level=skill_level):
-                kind = 'match'
-                opponent = StockfishOpponent(kind='stockfish', skill_level=skill_level)
-            case KataGoEvaluationDefinition():
-                kind = 'match'
-                opponent = KataGoOpponent(kind='katago')
         device_id = device_cycle[device_index % len(device_cycle)]
-        device_index += 1
         job_id = f'{suite.boundary_seconds:010d}-{definition.definition_id}-g{suite.checkpoint.generation}'
-        common = {
-            'job_id': job_id,
-            'definition': definition,
-            'boundary_seconds': suite.boundary_seconds,
-            'candidate': suite.checkpoint,
-            'device_id': device_id,
-            'deadline_seconds': configuration.job_timeout_seconds,
-            'random_seed': _job_seed(
+        context = _EvaluationJobContext(
+            job_id=job_id,
+            boundary_seconds=suite.boundary_seconds,
+            candidate=suite.checkpoint,
+            device_id=device_id,
+            deadline_seconds=configuration.job_timeout_seconds,
+            random_seed=_job_seed(
                 experiment.training.random_seed,
                 suite.boundary_seconds,
                 definition.definition_id,
             ),
-            'result_path': result_directory / f'{job_id}.json',
-        }
-        if kind == 'fixed_dataset':
-            jobs.append(FixedDatasetEvaluationJob(kind='fixed_dataset', **common))
-        else:
-            assert opponent is not None
-            jobs.append(MatchEvaluationJob(kind='match', opponent=opponent, **common))
+            result_path=result_directory / f'{job_id}.json',
+        )
+        job = _job_for_definition(definition, configuration, suite, scheduled_suites, run_path, context)
+        if job is None:
+            continue
+        jobs.append(job)
+        device_index += 1
     return tuple(jobs), device_index
 
 
