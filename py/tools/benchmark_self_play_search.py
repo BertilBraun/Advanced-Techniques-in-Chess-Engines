@@ -22,6 +22,7 @@ class Arguments:
     run_config: Path
     model: Path
     device: int
+    worker_id: int
     inference_device: Literal['cpu', 'cuda']
     games: int
     generation: int
@@ -40,6 +41,7 @@ class BatchSizeCount:
 @dataclass(frozen=True)
 class BenchmarkResult:
     process_id: int
+    worker_id: int
     game: str
     device_id: int
     inference_device: Literal['cpu', 'cuda']
@@ -115,7 +117,7 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         worker = SelfPlayWorker(
             game=game,
             parallel_game_count=arguments.games,
-            worker_id=0,
+            worker_id=arguments.worker_id,
             device_id=arguments.device,
             inbox_path=inbox,
         )
@@ -154,6 +156,7 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
     )
     return BenchmarkResult(
         process_id=os.getpid(),
+        worker_id=arguments.worker_id,
         game=experiment.game,
         device_id=arguments.device,
         inference_device=arguments.inference_device,
@@ -180,6 +183,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--run-config', required=True, type=Path)
     parser.add_argument('--model', required=True, type=Path)
     parser.add_argument('--device', required=True, type=int)
+    parser.add_argument('--worker-id', required=True, type=int)
     parser.add_argument('--inference-device', choices=('cpu', 'cuda'), default='cuda')
     parser.add_argument('--games', required=True, type=int)
     parser.add_argument('--generation', default=0, type=int)
@@ -192,6 +196,7 @@ def parse_arguments() -> Arguments:
         run_config=namespace.run_config,
         model=namespace.model,
         device=namespace.device,
+        worker_id=namespace.worker_id,
         inference_device=namespace.inference_device,
         games=namespace.games,
         generation=namespace.generation,
@@ -202,8 +207,8 @@ def parse_arguments() -> Arguments:
     )
     if not arguments.model.is_file():
         raise ValueError(f'Benchmark model does not exist: {arguments.model}')
-    if arguments.device < 0 or arguments.generation < 0 or arguments.warmup_batches < 0:
-        raise ValueError('Device, generation, and warm-up batches must be nonnegative.')
+    if arguments.device < 0 or arguments.worker_id < 0 or arguments.generation < 0 or arguments.warmup_batches < 0:
+        raise ValueError('Device, worker, generation, and warm-up batches must be nonnegative.')
     if arguments.games <= 0 or arguments.duration_seconds <= 0.0:
         raise ValueError('Games and duration must be positive.')
     return arguments

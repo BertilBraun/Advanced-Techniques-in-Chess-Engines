@@ -88,6 +88,7 @@ for ((device = 0; device < gpu_count; device++)); do
             --run-config "${run_config}" \
             --model "${model}" \
             --device "${device}" \
+            --worker-id "${worker_index}" \
             --inference-device cuda \
             --games "${parallel_games}" \
             --warmup-batches "${warmup_batches}" \
@@ -104,6 +105,13 @@ done
 expected_workers=$((gpu_count * processes_per_gpu))
 deadline=$((SECONDS + 600))
 while [[ "$(find "${output_directory}" -maxdepth 1 -name 'ready-*' | wc -l)" -ne "${expected_workers}" ]]; do
+    for process in "${processes[@]}"; do
+        if ! kill -0 "${process}" 2>/dev/null; then
+            kill "${processes[@]}" 2>/dev/null || true
+            echo "A benchmark worker failed during warm-up."
+            exit 1
+        fi
+    done
     if [[ "${SECONDS}" -ge "${deadline}" ]]; then
         kill "${processes[@]}" 2>/dev/null || true
         echo "Timed out waiting for benchmark warm-up."
