@@ -5,9 +5,10 @@
 This document defines the authoritative Python architecture implemented by Phases 1 through 3 and records the
 remaining Phase 4 validation work. It is not a compatibility specification for removed Python structures.
 
-Implementation status: Phases 1 through 3 are `accepted`. The authorized Phase 4 production-reachability and
-documentation cleanup slice is `awaiting_user_review`. Phase 4's integrated smoke, throughput, concurrency, and
-target-hardware evidence remains pending and was not authorized by this cleanup. R10 is a separate pending task.
+Implementation status: Phases 1 through 3 and the Phase 4 production-reachability and documentation cleanup slice
+are `accepted`. Phase 4's integrated smoke, throughput, concurrency, and target-hardware evidence remains pending.
+R10 is a separate standalone layer above this runtime and is `awaiting_user_review`; it does not change the Python
+training topology defined here.
 
 The accepted rework replaced file mailboxes, commander-owned component details, trainer-owned replay maintenance,
 copied Python replay snapshots, and exact recovery machinery with a small synchronous coordinator and explicit
@@ -1997,9 +1998,9 @@ Accepted Phase 3 implementation evidence:
 
 ### Phase 4: integrated validation and cleanup
 
-Status: the production-reachability and documentation cleanup slice is `awaiting_user_review`. The remaining smoke,
-performance, concurrency, and target-hardware evidence below is pending future authorization; this cleanup does not
-start or complete it.
+Status: the production-reachability and documentation cleanup slice is `accepted`. The remaining smoke,
+performance, concurrency, and target-hardware evidence below is pending future authorization. R10 does not start or
+complete this runtime-validation work.
 
 - audit that no superseded modules, names, settings, tests, or normative documentation survived their owning phase;
 - validate clean startup, quantum transitions, worker restart, coordinator restart, and shutdown;
