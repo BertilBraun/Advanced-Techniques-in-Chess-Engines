@@ -4,10 +4,12 @@ from dataclasses import dataclass
 import hashlib
 from math import log
 from pathlib import Path
+import random
 
 import pytest
 import torch
 
+import src.evaluation.dataset as dataset_module
 from src.evaluation.dataset import (
     build_evaluation_dataset,
     load_evaluation_dataset,
@@ -108,6 +110,21 @@ class FakeEngine:
         pass
 
 
+class TerminalWithLegalMovesState(FakeState):
+    def legal_action_ids(self, position: FakePosition) -> tuple[int, ...]:
+        return (0, 1, 2, 3)
+
+    def natural_terminal_wdl(self, position: FakePosition) -> WdlTarget | None:
+        return WdlTarget(win=0.0, draw=1.0, loss=0.0) if position.actions else None
+
+
+class TerminalGuardEngine(FakeEngine):
+    def policy(self, position: FakePosition, action_ids: tuple[int, ...]) -> EnginePolicy:
+        if position.actions:
+            raise AssertionError('Dataset builder queried the engine after natural termination.')
+        return super().policy(position, action_ids)
+
+
 class FixedPolicyModel(torch.nn.Module):
     def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         policy = torch.tensor((0.4, 0.3, 0.2, 0.1), device=inputs.device).expand(inputs.shape[0], 4)
@@ -152,6 +169,24 @@ def test_dataset_builder_retains_every_third_position_in_requested_range(tmp_pat
     assert all(int(row['ply']) % 3 == manifest.retained_ply_offset for row in data)
     assert all(int(row['policy_count']) == 4 for row in data)
     assert build_evaluation_dataset(path, configuration, FakeState(), FakeEngine(), 'revision') == manifest
+
+
+def test_dataset_builder_stops_at_natural_terminal_with_remaining_legal_actions() -> None:
+    generated = dataset_module._generate_source_game(
+        source_game_id=0,
+        retained_offset=0,
+        configuration=EvaluationDatasetConfiguration(
+            path='terminal.bin',
+            random_seed=0,
+            move_sampling_temperature=1.0,
+        ),
+        state=TerminalWithLegalMovesState(),
+        engine=TerminalGuardEngine(),
+        generator=random.Random(0),
+    )
+
+    assert generated.source_game.action_ids == (3,)
+    assert len(generated.retained_positions) == 1
 
 
 def test_fixed_dataset_evaluates_raw_policy_metrics(tmp_path: Path) -> None:

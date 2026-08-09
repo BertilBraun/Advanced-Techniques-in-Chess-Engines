@@ -159,7 +159,10 @@ def _generate_source_game(
     action_ids: tuple[int, ...] = ()
     retained_positions: list[_RetainedDatasetPosition] = []
     ply = 0
-    while legal_actions := state.legal_action_ids(position):
+    while state.natural_terminal_wdl(position) is None:
+        legal_actions = state.legal_action_ids(position)
+        if not legal_actions:
+            break
         policy = validate_engine_policy(engine.policy(position, action_ids), legal_actions)
         if ply % RETAINED_PLY_INTERVAL == retained_offset:
             ordered_entries = tuple(sorted(policy.entries, key=lambda entry: (-entry.probability, entry.action_id)))
