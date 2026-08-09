@@ -1,0 +1,273 @@
+game: go
+run:
+  run_name: vast-go-7x7-2gpu-2h-baseline
+  tensorboard_run_directory: vast-go-7x7-2gpu-2h-baseline
+  stage: clean_retrain
+  requires_explicit_approval: true
+  resume:
+    mode: random_initialization
+  hardware:
+    provider_name: vast.ai
+    offer_id: instance-47261298-host-95290
+    gpu_model: NVIDIA GeForce RTX 3060
+    gpu_count: 2
+    logical_cpu_count: 42
+    minimum_ram_gib: 40
+    minimum_disk_gib: 20
+  environment:
+    runtime_image: vastai/pytorch:cuda-13.0.3-auto
+    python_version: "3.12"
+    torch_version: "2.12.1+cu126"
+    cuda_version: "12.6"
+    dependency_lock_path: py/requirements-training.lock
+    dependency_lock_sha256: f027ad99a12742660107a2857b18cbc6b821a95971c2ecf2c4ad814c38116171
+    minimum_open_file_soft_limit: 32768
+training:
+  save_path: py/training_data/baselines/vast-go-7x7-2gpu-2h
+  network:
+    num_layers: 6
+    hidden_size: 64
+    se_placement: every_second_block
+    num_policy_channels: 2
+    num_value_channels: 1
+    value_fc_size: 32
+  trainer:
+    global_batch_size: 1024
+    local_batch_size: 512
+    optimizer: adamw
+    learning_rate:
+      kind: constant
+      value: 0.002
+    max_grad_norm: 0.5
+    duplicate_multiplicity_weight_cap:
+  topology:
+    trainer:
+      device_type: cuda
+      process_group_backend: nccl
+      rank_zero_device_id: 0
+      ddp_device_ids:
+        - 0
+        - 1
+      cpu_threads: 8
+      interop_threads: 1
+    self_play:
+      device_ids:
+        - 0
+        - 0
+        - 0
+        - 0
+        - 1
+        - 1
+        - 1
+        - 1
+      parallel_games_per_process: 1024
+      tensorboard_processes: 1
+      node_ids_to_pause_during_training: []
+    evaluation:
+      device_cycle:
+        - 0
+        - 1
+  lifecycle:
+    replay:
+      capacity:
+        kind: linear
+        start_generation: 0
+        end_generation: 200
+        start_value: 100000
+        end_value: 2500000
+        rounding: nearest
+      maximum_capacity: 2500000
+      maximum_policy_entries: 50
+    credit:
+      replay_ratio: 8
+      optimizer_steps_per_quantum: 100
+      maximum_optimizer_steps: 100000
+      retained_checkpoint_interval_generations: 1
+    inference_retention:
+      recent_checkpoint_count: 11
+      milestone_interval: 10
+  limits:
+    hourly_price: 0.303
+    maximum_cost: 0.65
+    maximum_wall_time_seconds: 7200
+    maximum_open_file_count: 32768
+    maximum_host_ram_percent: 95.0
+    minimum_free_disk_gib: 10.0
+    resource_telemetry_interval_seconds: 5.0
+  random_seed: 1207
+evaluation:
+  cadence_seconds: 1200
+  job_timeout_seconds: 1200
+  shutdown_grace_seconds: 30
+  bootstrap_samples: 10000
+  dataset:
+    path: py/reference/go-7x7-baseline-v1.bin
+    random_seed: 1207
+    move_sampling_temperature: 1.0
+  openings:
+    path: py/reference/go-7x7-baseline-openings-v1.json
+    random_seed: 1207
+    opening_count: 50
+    expanded_actions_per_position: 8
+    beam_width: 512
+  engine:
+    kind: katago
+    executable_path: engines/katago
+    model_path: engines/katago.bin.gz
+    analysis_configuration_path: engines/katago-analysis.cfg
+    label_max_visits: 256
+    match_max_visits: 64
+  definitions:
+    - kind: fixed_dataset
+      definition_id: fixed-dataset
+    - kind: random
+      definition_id: search-random
+      maximum_game_plies: 196
+      search: &evaluation_search
+        searches_per_move: 64
+        parallel_searches: 1
+        exploration_constant: 1.0
+        inference:
+          inference_workers: 1
+          inference_batch_size: 64
+          outstanding_batches_per_worker: 1
+    - kind: policy_random
+      definition_id: policy-random
+      maximum_game_plies: 196
+    - kind: previous_checkpoint
+      definition_id: previous-20m
+      boundary_offset: 1
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: previous_checkpoint
+      definition_id: previous-40m
+      boundary_offset: 2
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: previous_checkpoint
+      definition_id: previous-60m
+      boundary_offset: 3
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-10
+      generation: 10
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-20
+      generation: 20
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-30
+      generation: 30
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-40
+      generation: 40
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-50
+      generation: 50
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-60
+      generation: 60
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-70
+      generation: 70
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-80
+      generation: 80
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-90
+      generation: 90
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-100
+      generation: 100
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: katago
+      definition_id: katago
+      maximum_game_plies: 196
+      search: *evaluation_search
+go:
+  self_play:
+    search:
+      full_searches:
+        kind: constant
+        value: 128
+      fast_searches:
+        kind: constant
+        value: 32
+      parallel_searches: 1
+      dirichlet_epsilon:
+        kind: constant
+        value: 0.25
+      dirichlet_alpha:
+        kind: constant
+        value: 0.3
+      exploration_constant:
+        kind: constant
+        value: 1.5
+      minimum_root_visits:
+        kind: constant
+        value: 0
+    inference:
+      inference_workers: 1
+      inference_batch_size: 512
+      outstanding_batches_per_worker: 2
+    random_opening_plies:
+      kind: constant
+      value: 0
+    full_search_probability:
+      kind: constant
+      value: 1.0
+    retained_root_visit_fraction:
+      kind: constant
+      value: 0.0
+    greedy_after_ply:
+      kind: constant
+      value: 40
+    starting_temperature:
+      kind: constant
+      value: 1.0
+    final_temperature:
+      kind: constant
+      value: 0.1
+    primary_sample_weight:
+      kind: constant
+      value: 1.0
+    detailed_statistics_workers: 1
+  rules:
+    komi_half_points: 15
+    maximum_moves: 196
+  representation:
+    board_size: 7
+    history_length: 8
+    binary_channel_count: 16
+    scalar_channel_count: 1
+    canonical_player_perspective: true
+  objective:
+    policy_loss_weight:
+      kind: constant
+      value: 1.0
+    value_loss_weight:
+      kind: constant
+      value: 1.0
+    root_value_blend:
+      kind: constant
+      value: 0.0
+    auxiliary_targets: []

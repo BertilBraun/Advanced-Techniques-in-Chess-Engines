@@ -29,12 +29,16 @@ Inventory was recorded on 2026-08-09 with `vastai show instances --raw`, `vast-c
 | Driver / host toolkit | NVIDIA 580.65.06 / CUDA 13.0.88 |
 | Host cuDNN | 9.14.0 |
 | Locked training runtime | Python 3.12.3, PyTorch 2.12.1+cu126, wheel CUDA 12.6 / cuDNN 9.10.2 |
-| CPU | 2× AMD EPYC 7B12, 256 logical CPUs; Vast reports 85.33 effective CPUs |
-| RAM | 251 GiB total |
+| CPU | Host exposes 2× AMD EPYC 7B12 and 256 logical CPUs; this rental owns 85.33 effective CPUs |
+| RAM | Host exposes 251 GiB; this rental owns 86 GiB |
 | Disk | 150 GiB ephemeral NVMe-backed container storage |
 
 The listing was expected to be an RTX 4070 offer, but the live allocation is four RTX 3060s. Configuration and
 evidence use the observed devices, not the advertised assumption.
+
+The host inventory is not the experiment's resource entitlement. Other tenants may use the logical CPUs and RAM
+outside the 85.33-CPU/86-GiB rental allocation. Do not size a run from `lscpu`, `free`, host-wide CPU percentages, or
+host-wide free-memory readings alone. Every run must stay within an explicit slot carved from the rental allocation.
 
 ## Bootstrap
 

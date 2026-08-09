@@ -25,8 +25,8 @@ pre-rework chess runtime fails on a natural terminal in a longer run.
 | Vast instance / host | `47261298` / `95290` |
 | GPUs | 4 x NVIDIA GeForce RTX 3060, 12,288 MiB each, 120 W limit, compute capability 8.6 |
 | Driver | NVIDIA 580.65.06 |
-| CPU | 2 x AMD EPYC 7B12, 256 logical CPUs; Vast allocation reports 85.33 effective CPUs |
-| RAM / disk | 251 GiB / 150 GiB ephemeral storage |
+| CPU | Host: 2 x AMD EPYC 7B12, 256 logical CPUs; rental allocation: 85.33 effective CPUs |
+| RAM / disk | Host-visible RAM: 251 GiB; rental allocation: 86 GiB; disk: 150 GiB ephemeral storage |
 | Runtime | Python 3.12.3, PyTorch 2.12.1+cu126, CUDA wheel 12.6, cuDNN 9.10.2 |
 | Price at measurement | $0.303/hour including disk |
 
@@ -34,6 +34,11 @@ The benchmark model hashes are:
 
 - chess 12-block, 112-channel model: `a31b5a5a31f3577e3e68d3e09a115de2e45c2d1473b9a4c651bd75fb9724a5bf`;
 - Go 7x7 6-block, 64-channel model: `9bcef68c7cd7706967ac980f334c0607a52e974fb56fc27f4aa1fca2893c2757`.
+
+Resource telemetry reports host-wide CPU and RAM denominators because the shared host inventory is visible inside
+the container. Those values must not be interpreted as owned capacity. The benchmark worker process CPU and RSS
+totals are the useful run-local measurements; every tested topology remained below the 85.33-CPU/86-GiB rental
+allocation.
 
 ## Chess: historical baseline to current optimum
 
