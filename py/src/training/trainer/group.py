@@ -80,6 +80,18 @@ class TrainerGroup:
         for connection in self._connections:
             connection.send(command)
         results = self._receive_quantum_responses()
+        checkpoint = self._validate_quantum_results(results, target_progress)
+        return TrainingQuantumResult(
+            completed_optimizer_steps=target_progress.completed_optimizer_steps,
+            checkpoint=checkpoint,
+            statistics=self._aggregate_statistics(results),
+        )
+
+    def _validate_quantum_results(
+        self,
+        results: tuple[RankTrainingResult, ...],
+        target_progress: TrainingProgress,
+    ) -> CheckpointReference:
         if len(results) != self.world_size:
             raise RuntimeError('Trainer ranks returned an invalid response set.')
         expected_steps = target_progress.completed_optimizer_steps
@@ -93,29 +105,28 @@ class TrainerGroup:
         auxiliary_count = len(rank_zero.auxiliary_losses)
         if any(len(result.auxiliary_losses) != auxiliary_count for result in results):
             raise RuntimeError('Trainer ranks disagree about auxiliary statistics.')
-        return TrainingQuantumResult(
-            completed_optimizer_steps=expected_steps,
-            checkpoint=rank_zero.checkpoint,
-            statistics=TrainingStatistics(
-                policy_loss=_mean(tuple(result.policy_loss for result in results)),
-                wdl_loss=_mean(tuple(result.wdl_loss for result in results)),
-                auxiliary_losses=tuple(
-                    _mean(tuple(result.auxiliary_losses[index] for result in results))
-                    for index in range(auxiliary_count)
-                ),
-                total_loss=_mean(tuple(result.total_loss for result in results)),
-                gradient_norm=_mean(tuple(result.gradient_norm for result in results)),
-                replay_rows_per_second=(
-                    sum(result.replay_rows_read for result in results)
-                    / max(result.replay_read_seconds for result in results)
-                ),
-                training_samples_per_second=(
-                    self.configuration.training.trainer.global_batch_size
-                    * self.configuration.training.lifecycle.credit.optimizer_steps_per_quantum
-                    / max(result.elapsed_seconds for result in results)
-                ),
-                elapsed_seconds=max(result.elapsed_seconds for result in results),
+        return rank_zero.checkpoint
+
+    def _aggregate_statistics(self, results: tuple[RankTrainingResult, ...]) -> TrainingStatistics:
+        auxiliary_count = len(results[0].auxiliary_losses)
+        return TrainingStatistics(
+            policy_loss=_mean(tuple(result.policy_loss for result in results)),
+            wdl_loss=_mean(tuple(result.wdl_loss for result in results)),
+            auxiliary_losses=tuple(
+                _mean(tuple(result.auxiliary_losses[index] for result in results)) for index in range(auxiliary_count)
             ),
+            total_loss=_mean(tuple(result.total_loss for result in results)),
+            gradient_norm=_mean(tuple(result.gradient_norm for result in results)),
+            replay_rows_per_second=(
+                sum(result.replay_rows_read for result in results)
+                / max(result.replay_read_seconds for result in results)
+            ),
+            training_samples_per_second=(
+                self.configuration.training.trainer.global_batch_size
+                * self.configuration.training.lifecycle.credit.optimizer_steps_per_quantum
+                / max(result.elapsed_seconds for result in results)
+            ),
+            elapsed_seconds=max(result.elapsed_seconds for result in results),
         )
 
     def close(self) -> None:
