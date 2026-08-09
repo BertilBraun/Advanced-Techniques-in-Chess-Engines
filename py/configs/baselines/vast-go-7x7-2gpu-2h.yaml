@@ -79,7 +79,7 @@ training:
       maximum_capacity: 2500000
       maximum_policy_entries: 50
     credit:
-      replay_ratio: 8
+      replay_ratio: 4
       optimizer_steps_per_quantum: 100
       maximum_optimizer_steps: 100000
       retained_checkpoint_interval_generations: 1
@@ -88,7 +88,6 @@ training:
       milestone_interval: 10
   limits:
     hourly_price: 0.303
-    maximum_cost: 0.65
     maximum_wall_time_seconds: 7200
     maximum_open_file_count: 32768
     maximum_host_ram_percent: 95.0

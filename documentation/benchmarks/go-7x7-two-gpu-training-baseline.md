@@ -16,7 +16,7 @@ the comparison explicitly declares another variable.
 | Aggregate RAM budget | 40 GiB |
 | Minimum disk | 20 GiB |
 | Wall time | 7,200 seconds |
-| Recorded node price / maximum cost | $0.303/hour / $0.65 |
+| Recorded node price | $0.303/hour |
 
 The shared host exposes 256 logical CPUs and 251 GiB RAM, but the rental owns only 85.33 effective CPUs and 86 GiB.
 This experiment deliberately takes approximately half of that allocation. `CUDA_VISIBLE_DEVICES=0,1` and inherited
@@ -25,8 +25,8 @@ so it cannot enforce an aggregate 40-GiB process-tree limit. The YAML records th
 monitor process-tree RSS and abort at 40 GiB unless the node is replaced with a delegated cgroup-v2 environment.
 `maximum_host_ram_percent` remains a last-resort host-pressure guard; it is not the run's RAM limiter.
 
-The $0.303 hourly price is conservatively the complete rented-instance price. Two hours cost at most $0.606 before
-rounding, so the configuration stops at a $0.65 cap as well as the wall-time limit.
+The $0.303 hourly price is conservatively the complete rented-instance price. The two-hour wall-time limit is the
+sole configured run-duration stop; no separate cost limit is set.
 
 ## Model and DDP training
 
@@ -77,7 +77,7 @@ Replay capacity grows linearly from 100,000 rows at generation 0 to 2.5 million 
 policy entries retain the complete 7x7 action space, including pass. The static maximum remains 2.5 million.
 
 Each training generation contains 100 optimizer steps. At global batch 1,024 that consumes 102,400 presentations.
-The replay ratio of 8 requires 12,800 new unique samples before the next quantum. The 100,000-step ceiling is only a
+The replay ratio of 4 requires 25,600 new unique samples before the next quantum. The 100,000-step ceiling is only a
 safety bound; the two-hour wall-time limit is expected to stop the run first.
 
 Full resumable checkpoints are retained each generation. Inference artifacts retain the latest 11 generations and
