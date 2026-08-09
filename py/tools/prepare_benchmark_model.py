@@ -5,21 +5,15 @@ from pathlib import Path
 
 import torch
 
-from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
-from src.training.network import Network, NetworkParams, SEPlacement
+from src.experiment.configuration import load_experiment_configuration
+from src.games.composition import create_game_implementation
+from src.training.network import Network
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--run-config', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--layers', required=True, type=int)
-    parser.add_argument('--hidden-size', required=True, type=int)
-    parser.add_argument(
-        '--se-placement',
-        choices=tuple(SEPlacement),
-        default=SEPlacement.EVERY_SECOND_BLOCK,
-        type=SEPlacement,
-    )
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--zero-parameters', action='store_true')
     return parser.parse_args()
@@ -27,15 +21,16 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> None:
     arguments = parse_arguments()
+    if not arguments.output.name.endswith('.jit.pt'):
+        raise ValueError('Benchmark model output must end in .jit.pt.')
     torch.manual_seed(arguments.seed)
+    arguments.output.parent.mkdir(parents=True, exist_ok=True)
+    experiment = load_experiment_configuration(arguments.run_config)
+    game = create_game_implementation(experiment)
     network = Network(
-        NetworkParams(
-            num_layers=arguments.layers,
-            hidden_size=arguments.hidden_size,
-            se_placement=arguments.se_placement,
-        ),
+        experiment.training.network,
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        game.network_dimensions,
     )
     if arguments.zero_parameters:
         with torch.no_grad():
