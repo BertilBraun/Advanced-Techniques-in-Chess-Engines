@@ -1,0 +1,9 @@
+extends: 00-baseline.yaml
+run:
+  run_name: go7-overnight-09-tree-retention-60
+  tensorboard_run_directory: go7-overnight-09-tree-retention-60
+training:
+  save_path: py/training_data/screening/go7-overnight/09-tree-retention-60
+go:
+  self_play:
+    retained_root_visit_fraction: {kind: constant, value: 0.6}

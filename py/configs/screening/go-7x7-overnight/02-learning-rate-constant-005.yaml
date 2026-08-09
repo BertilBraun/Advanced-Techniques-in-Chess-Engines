@@ -1,0 +1,8 @@
+extends: 00-baseline.yaml
+run:
+  run_name: go7-overnight-02-learning-rate-constant-005
+  tensorboard_run_directory: go7-overnight-02-learning-rate-constant-005
+training:
+  save_path: py/training_data/screening/go7-overnight/02-learning-rate-constant-005
+  trainer:
+    learning_rate: {kind: constant, value: 0.005}

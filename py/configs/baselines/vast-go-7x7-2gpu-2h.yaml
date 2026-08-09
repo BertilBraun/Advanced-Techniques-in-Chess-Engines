@@ -50,17 +50,17 @@ training:
       device_ids: [0, 0, 0, 0, 1, 1, 1, 1]
       parallel_games_per_process: 1024
       tensorboard_processes: 1
-      node_ids_to_pause_during_training: [0, 1, 4, 5]
+      node_ids_to_pause_during_training: [1, 2, 3, 5, 6, 7]
     evaluation:
       device_cycle: [0, 1]
   lifecycle:
     replay:
-      capacity: {kind: linear, start_generation: 0, end_generation: 20, start_value: 250000, end_value: 2500000, rounding: nearest}
-      maximum_capacity: 2500000
+      capacity: {kind: linear, start_generation: 0, end_generation: 15, start_value: 100000, end_value: 500000, rounding: nearest}
+      maximum_capacity: 500000
       maximum_policy_entries: 50
     credit:
       replay_ratio: 4
-      optimizer_steps_per_quantum: 500
+      optimizer_steps_per_quantum: 200
       maximum_optimizer_steps: 1000000
       retained_checkpoint_interval_generations: 1
     inference_retention:
@@ -95,7 +95,6 @@ evaluation:
     model_path: engines/katago.bin.gz
     analysis_configuration_path: engines/katago-analysis.cfg
     label_max_visits: 256
-    match_max_visits: 64
   definitions:
     - {kind: fixed_dataset, definition_id: fixed-dataset}
     - kind: random
@@ -123,7 +122,9 @@ evaluation:
     - {kind: fixed_checkpoint, definition_id: generation-80, generation: 80, maximum_game_plies: 196, search: *evaluation_search}
     - {kind: fixed_checkpoint, definition_id: generation-90, generation: 90, maximum_game_plies: 196, search: *evaluation_search}
     - {kind: fixed_checkpoint, definition_id: generation-100, generation: 100, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: katago, definition_id: katago, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: katago, definition_id: katago-16, maximum_visits: 16, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: katago, definition_id: katago-64, maximum_visits: 64, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: katago, definition_id: katago-256, maximum_visits: 256, maximum_game_plies: 196, search: *evaluation_search}
 go:
   self_play:
     search:

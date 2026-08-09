@@ -1,0 +1,6 @@
+extends: ../../baselines/vast-go-7x7-2gpu-2h.yaml
+run:
+  run_name: go7-overnight-00-baseline
+  tensorboard_run_directory: go7-overnight-00-baseline
+training:
+  save_path: py/training_data/screening/go7-overnight/00-baseline

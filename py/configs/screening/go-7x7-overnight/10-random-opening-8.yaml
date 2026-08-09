@@ -1,0 +1,9 @@
+extends: 00-baseline.yaml
+run:
+  run_name: go7-overnight-10-random-opening-8
+  tensorboard_run_directory: go7-overnight-10-random-opening-8
+training:
+  save_path: py/training_data/screening/go7-overnight/10-random-opening-8
+go:
+  self_play:
+    random_opening_plies: {kind: constant, value: 8}
