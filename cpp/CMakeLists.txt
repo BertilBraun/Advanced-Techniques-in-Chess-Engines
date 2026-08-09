@@ -288,7 +288,7 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "CompileCheck")
             # Generate the stub with correct PYTHONPATH
             COMMAND ${CMAKE_COMMAND} -E env
             PYTHONPATH=${PYTHON_MODULE_OUTPUT_DIR}
-            pybind11-stubgen AlphaZeroCpp -o ${CMAKE_CURRENT_BINARY_DIR}/stubs
+            ${Python3_EXECUTABLE} -m pybind11_stubgen AlphaZeroCpp -o ${CMAKE_CURRENT_BINARY_DIR}/stubs
     )
 endif ()
 
