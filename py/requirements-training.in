@@ -1,13 +1,10 @@
 torch==2.7.1
 numpy
-numba
-h5py
-tqdm
 chess
 GPUtil
-requests
 psutil
 pydantic==2.13.2
+PyYAML
 tensorboard
 tensorboardX
 pybind11-stubgen

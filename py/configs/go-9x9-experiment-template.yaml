@@ -12,7 +12,7 @@ run:
     torch_version: "2.12.0+cu130"
     cuda_version: "13.0"
     dependency_lock_path: py/requirements-training.lock
-    dependency_lock_sha256: 55fbeff4630bd7c4f10c9af5ea081e415da15515de7ad34d140461ef21c21cfd
+    dependency_lock_sha256: a83686f3d20341770641f9c72a56202edeb6cd3b3ed863ab9659a0fc51a43676
     minimum_open_file_soft_limit: 1024
 training:
   save_path: py/training_data/go-9x9

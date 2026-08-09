@@ -1,15 +1,12 @@
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
-import chess
 import pytest
 
-from src.games.chess.board import MAX_MATERIAL_VALUE, PIECE_VALUE, ChessBoard
-from src.games.chess.contract import ChessStateContract
-from src.games.chess.game import ChessGame
-from src.games.contracts import Player, WdlTarget
-from src.packed_planes import PackedPlanePayload, encode_packed_planes
-from src.replay.contracts import EligibleNextPolicyTarget, IneligibleNextPolicyTarget
+from src.games.contracts import GameStateContract, Player, RepresentationDimensions, WdlTarget
+from src.packed_planes import PackedPlaneLayout, PackedPlanePayload
+from src.replay.contracts import EligibleNextPolicyTarget, IneligibleNextPolicyTarget, ReplaySample
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayManager
 from src.replay.materialization import materialize_completed_game
@@ -25,64 +22,85 @@ from src.training.configuration import ReplayConfiguration
 from src.training.targets import NextPolicyHeadLayout, TrainingTargetLayout
 
 
-class PythonChessStateContract(ChessStateContract):
+@dataclass(frozen=True)
+class LinearPosition:
+    action_ids: tuple[int, ...] = ()
+
+
+class LinearStateContract(GameStateContract[LinearPosition]):
     def __init__(self) -> None:
-        super().__init__()
-        self.game = ChessGame()
-
-    def initial_position(self) -> ChessBoard:
-        return ChessBoard()
-
-    def legal_action_ids(self, position: ChessBoard) -> tuple[int, ...]:
-        return tuple(sorted(self.game.encode_move(move, position) for move in position.get_valid_moves()))
-
-    def child_position(self, position: ChessBoard, action_id: int) -> ChessBoard:
-        child = position.copy()
-        child.make_move(self.game.decode_move(action_id, position))
-        return child
-
-    def current_player(self, position: ChessBoard) -> Player:
-        return Player(position.current_player)
-
-    def natural_terminal_wdl(self, position: ChessBoard) -> WdlTarget | None:
-        if not position.is_game_over():
-            return None
-        winner = position.check_winner()
-        if winner is None:
-            return WdlTarget(win=0.0, draw=1.0, loss=0.0)
-        return WdlTarget.from_scalar(1.0 if winner == position.current_player else -1.0)
-
-    def adjudicated_wdl(self, position: ChessBoard, reason: TerminationReason) -> WdlTarget:
-        material_score = 0
-        for piece_type, value in PIECE_VALUE.items():
-            material_score += value * len(position.board.pieces(piece_type, position.board.turn))
-            material_score -= value * len(position.board.pieces(piece_type, not position.board.turn))
-        return WdlTarget.from_scalar(material_score / MAX_MATERIAL_VALUE)
-
-    def encode_network_input(self, position: ChessBoard) -> PackedPlanePayload:
-        state = self.game.get_canonical_board(position)
-        return encode_packed_planes(
-            state,
-            self.representation.packed_planes,
-            self.representation.binary_channels,
-            self.representation.scalar_channels,
+        packed_planes = PackedPlaneLayout(board_size=1, binary_plane_count=1, scalar_count=0)
+        self._representation = RepresentationDimensions(
+            channels=1,
+            rows=1,
+            columns=1,
+            binary_channels=(0,),
+            scalar_channels=(),
+            packed_planes=packed_planes,
         )
 
+    @property
+    def name(self) -> str:
+        return 'linear-test-game'
 
-PYTHON_CHESS_STATE_CONTRACT = PythonChessStateContract()
+    @property
+    def action_size(self) -> int:
+        return 3
+
+    @property
+    def representation(self) -> RepresentationDimensions:
+        return self._representation
+
+    def initial_position(self) -> LinearPosition:
+        return LinearPosition()
+
+    def legal_action_ids(self, position: LinearPosition) -> tuple[int, ...]:
+        return () if len(position.action_ids) == 4 else (0, 1, 2)
+
+    def child_position(self, position: LinearPosition, action_id: int) -> LinearPosition:
+        if action_id not in self.legal_action_ids(position):
+            raise ValueError('Action is not legal in the linear test game.')
+        return LinearPosition(position.action_ids + (action_id,))
+
+    def current_player(self, position: LinearPosition) -> Player:
+        return Player.FIRST if len(position.action_ids) % 2 == 0 else Player.SECOND
+
+    def natural_terminal_wdl(self, position: LinearPosition) -> WdlTarget | None:
+        return WdlTarget(win=0.0, draw=0.0, loss=1.0) if len(position.action_ids) == 4 else None
+
+    def adjudicated_wdl(self, position: LinearPosition, reason: TerminationReason) -> WdlTarget:
+        return WdlTarget(win=0.0, draw=1.0, loss=0.0)
+
+    def encode_network_input(self, position: LinearPosition) -> PackedPlanePayload:
+        return self.packed_plane_layout.value(len(position.action_ids).to_bytes(8, byteorder='little'))
+
+    @property
+    def augmentation_count(self) -> int:
+        return 1
+
+    def transform_action_id(self, action_id: int, augmentation_index: int) -> int:
+        return action_id
+
+    def transform_encoded_state(
+        self,
+        encoded_state: PackedPlanePayload,
+        augmentation_index: int,
+    ) -> PackedPlanePayload:
+        return encoded_state
+
+    def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
+        return sample
+
+
+LINEAR_STATE_CONTRACT = LinearStateContract()
 
 
 def _completed_game() -> CompletedSelfPlayGame:
-    moves = ('f2f3', 'e7e5', 'g2g4', 'd8h4')
-    board = ChessBoard()
+    actions = (0, 1, 0, 2)
     action_ids: list[int] = []
     observations: list[SearchObservation] = []
-    for ply, move_uci in enumerate(moves):
-        move = chess.Move.from_uci(move_uci)
-        selected_action = PYTHON_CHESS_STATE_CONTRACT.game.encode_move(move, board)
-        other_action = next(
-            action for action in PYTHON_CHESS_STATE_CONTRACT.legal_action_ids(board) if action != selected_action
-        )
+    for ply, selected_action in enumerate(actions):
+        other_action = (selected_action + 1) % LINEAR_STATE_CONTRACT.action_size
         action_ids.append(selected_action)
         observations.append(
             SearchObservation(
@@ -100,7 +118,6 @@ def _completed_game() -> CompletedSelfPlayGame:
                 minimum_root_visits=1,
             )
         )
-        board.make_move(move)
     return CompletedSelfPlayGame(
         identity=GameIdentity(
             worker_id=3,
@@ -118,16 +135,16 @@ def _completed_game() -> CompletedSelfPlayGame:
 
 def _target_layout() -> TrainingTargetLayout:
     return TrainingTargetLayout(
-        action_size=PYTHON_CHESS_STATE_CONTRACT.action_size,
+        action_size=LINEAR_STATE_CONTRACT.action_size,
         wdl_size=3,
         auxiliary_heads=(
-            NextPolicyHeadLayout(kind='next_policy', action_size=PYTHON_CHESS_STATE_CONTRACT.action_size, ply_offset=1),
+            NextPolicyHeadLayout(kind='next_policy', action_size=LINEAR_STATE_CONTRACT.action_size, ply_offset=1),
         ),
     )
 
 
 def test_shared_materialization_reconstructs_perspective_and_trajectory_targets() -> None:
-    materialized = materialize_completed_game(_completed_game(), PYTHON_CHESS_STATE_CONTRACT, _target_layout(), 1)
+    materialized = materialize_completed_game(_completed_game(), LINEAR_STATE_CONTRACT, _target_layout(), 1)
 
     assert len(materialized.samples) == 3
     assert materialized.policies_truncated == 5
@@ -159,11 +176,11 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
         maximum_policy_entries=1,
     )
     layout = ReplayLayout(
-        packed_planes=PYTHON_CHESS_STATE_CONTRACT.packed_plane_layout,
+        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
         targets=_target_layout(),
         maximum_policy_entries=1,
     )
-    manager = ReplayManager.open(tmp_path, PYTHON_CHESS_STATE_CONTRACT, layout, configuration, model_generation=2)
+    manager = ReplayManager.open(tmp_path, LINEAR_STATE_CONTRACT, layout, configuration, model_generation=2)
 
     ingestion = manager.ingest_available_games(2)
 
@@ -177,7 +194,7 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
     assert description.size == 4
     manager.close()
 
-    reopened = ReplayManager.open(tmp_path, PYTHON_CHESS_STATE_CONTRACT, layout, configuration, model_generation=2)
+    reopened = ReplayManager.open(tmp_path, LINEAR_STATE_CONTRACT, layout, configuration, model_generation=2)
     assert reopened.live_samples == 4
     reopened.close()
 
@@ -193,11 +210,11 @@ def test_replay_manager_keeps_malformed_game_for_inspection(tmp_path: Path) -> N
         maximum_policy_entries=1,
     )
     layout = ReplayLayout(
-        packed_planes=PYTHON_CHESS_STATE_CONTRACT.packed_plane_layout,
+        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
         targets=_target_layout(),
         maximum_policy_entries=1,
     )
-    manager = ReplayManager.open(tmp_path, PYTHON_CHESS_STATE_CONTRACT, layout, configuration, model_generation=0)
+    manager = ReplayManager.open(tmp_path, LINEAR_STATE_CONTRACT, layout, configuration, model_generation=0)
 
     with pytest.raises(ValueError):
         manager.ingest_available_games(0)

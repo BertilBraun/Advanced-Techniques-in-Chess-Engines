@@ -1,12 +1,6 @@
 import torch
 from torch import Tensor
 
-from src.self_play.value_target import FinalOutcome
-
-
-WIN_INDEX = int(FinalOutcome.WIN)
-LOSS_INDEX = int(FinalOutcome.LOSS)
-
 
 def scalar_to_wdl(scores: Tensor) -> Tensor:
     """Represent scores in [-1, 1] with residual probability shared across WDL."""

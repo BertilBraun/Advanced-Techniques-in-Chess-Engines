@@ -37,8 +37,9 @@ All orchestration (job submission, training loop, etc.) happens in Python — th
 
 ### Step 1: Build the Project
 
-Ensure you have PyTorch installed via pip as well as a compatible C++ compiler (e.g., GCC, Clang, MSVC) and CMake.
-You can use the provided `py/setup.sh` scripts to automate downloading dependencies and generating build files.
+Ensure you have PyTorch installed via the locked Python environment as well as a compatible C++ compiler (for
+example GCC, Clang, or MSVC) and CMake. For a fresh compute node, use the authoritative
+`deployment/setup_remote.sh` bootstrap from the repository root.
 
 ```bash
 compile

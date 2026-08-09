@@ -1,102 +1,60 @@
-# AlphaZero Chess and Go Training
+# Python runtime
 
-This project implements a full AlphaZero-style agent.  
-It includes self-play data generation, presentation-credit neural network training, and evaluation.
+Python owns experiment configuration, run preparation, coordinator lifecycle, replay ingestion, DDP training,
+evaluation scheduling, and reporting for chess and Go. Native C++ owns game rules, state transitions, network input
+encoding, and batched search.
 
-While computationally intensive search and inference are handled in C++ (`cpp/`), Python provides one typed orchestration pipeline for chess and Go completed games, replay, self-play supervision, and optimization.
+## Production entry points
 
-The source tree follows the same ownership boundary as the native side:
+- `python py/train.py --run-config ... --expected-source-revision ... --approval-file ...` starts an explicitly
+  approved training run from the repository root.
+- `python -m src.games.chess.uci --model ...` runs the native interactive chess engine behind the UCI protocol from
+  `py`.
+- `deployment/web/backend` uses the same native interactive chess engine for browser play.
 
-- `src/games/chess` owns chess state/encoding, configuration, completed games, replay, self-play policy, evaluation, interactive analysis, and UCI.
-- `src/games/go` owns Go state/encoding, configuration, completed games, replay, self-play policy, model, and loss behavior.
-- `src/self_play` owns the game-independent active-game pool, completed-game publication boundary, value targets, and worker lifecycle.
-- `src/training` owns shared replay storage, batch sampling, optimization, publication, and process orchestration.
-- `src/experiment` owns only cross-game experiment loading, run approval, and telemetry.
+The UCI and interactive packages are deployment-owned production code. They are independent of the removed Python
+chess rules and training implementations.
 
-## Components
+## Environment and build
 
-- **Self-Play Engine**  
-  Generate training data by playing games against itself using the current model.
+`deployment/setup_remote.sh` is the authoritative fresh-node setup path. It clones the requested revision, installs
+the hashed environment from `requirements-training.lock`, builds the Release extension, exports
+`ENGINE_SOURCE_REVISION`, and starts the supplied command. It intentionally does not provision Stockfish or KataGo;
+external evaluation artifacts remain explicit configuration inputs.
 
-- **Training Pipeline**  
-  Train the neural network on generated self-play data, with full support for multi-process parallelization.
+For local development, install `requirements-training.lock` with `uv` and build the extension with CMake:
 
-- **Evaluation Suite**  
-  Evaluate published chess models against configured baselines and previous generations.
+```powershell
+uv pip install --require-hashes --requirements .\py\requirements-training.lock
+cmake -S .\cpp -B .\cpp\build -DCMAKE_BUILD_TYPE=Release
+cmake --build .\cpp\build --parallel
+```
 
-- **UCI Engine**
-  Run a published chess model in UCI-compatible chess interfaces.
+The checked-in files under `configs/` are validated templates. Resolve their hardware, external artifacts, hashes,
+paths, and approval record before a production run.
 
-## Main Scripts
+## Validation
 
-- **`train.py`**  
-  - Loads one required run configuration and approval record.
-  - Starts persistent game-specific self-play workers and the shared trainer process.
-  - Uses the same optimizer loop with no DDP wrapper when world size is one.
-  - Trains optimizer quanta when replay presentation credits are available.
-  - Logs training progress and metrics to TensorBoard (`logs/`).
+Run Python validation from `py`:
 
-- **`python -m src.games.chess.uci`**
-  - Serves a published chess model through the UCI protocol.
-  - Supports policy and retained-tree MCTS analysis modes.
+```powershell
+uv run ruff format
+uv run ruff check --fix
+python -m pytest --import-mode=importlib .\test -q
+```
 
-## Shell Scripts
+Retain `--import-mode=importlib`; the repository's `py` package otherwise conflicts with pytest's historical `py`
+dependency during collection.
 
-- **`train.sh`**
-  - Submits a Slurm job to train the model on a compute cluster.
-  - Preconfigured for reasonable resource allocation.
+Native-facing changes also require the extension-backed Python suite and CTest target. External-engine integration
+tests remain opt-in and require configured Stockfish or KataGo artifacts.
 
-The training script automates distributed training job submission.
+## Optional tools
 
-## Technologies
+`tools/` contains explicit manual utilities for benchmark evidence, UCI validation, Lichess model retrieval, and
+Cute Chess compatibility. They are not alternate training or evaluation runtimes. In particular:
 
-- **Programming Language**: Python 3.10
-- **Machine Learning**: PyTorch
-- **Visualization**: TensorBoard
-
-## Workflow Overview
-
-1. **Install Dependencies**:
-
-    ```bash
-    source setup.sh
-    ```
-
-2. **Choose** a validated presentation-credit run configuration and matching approval record.
-3. **Start Training**:
-
-    ```bash
-    python train.py --run-config <approved-experiment.yaml> \
-      --expected-source-revision <git-revision> \
-      --approval-file <approval.json>
-    ```
-
-    The checked-in `configs/*-experiment-template.yaml` files must first be
-    resolved for the selected hardware and environment.
-
-4. **Monitor Progress**:
-
-    Open TensorBoard:
-
-    ```bash
-    tensorboard --logdir logs/
-    ```
-
-5. **Run a Chess Model Through UCI**:
-
-    ```bash
-    python -m src.games.chess.uci --model <model.jit.pt>
-    ```
-
-6. **Optional: Submit Training to Cluster**:
-
-    ```bash
-    sbatch train.sh
-    ```
-
-## Notes
-
-- **Self-Play**: Chess and Go use the same active-game batching and model-refresh orchestration around their concrete native search policies.
-- **Persistence**: Both games use one publisher identity, atomic inbox protocol, indexed archive frame, checksum, recovery, and capacity-tail rebuild implementation.
-- **Training**: One replay and trainer lifecycle materializes game-specific targets, freezes deterministic snapshots, and trains either a local rank or persistent DDP ranks.
-- **Evaluation**: Existing chess evaluation remains available. Go evaluation and elapsed scheduling are intentionally deferred to R9.
+- `fetch_hf_model.py` and `validate_uci_transcript.py` are called by the Lichess deployment;
+- `benchmark_interactive_engine.py` exercises the same engine used by web and UCI deployment;
+- `run_cutechess_gauntlet.py` is a retained manual interoperability tool;
+- benchmark scripts reproduce historical performance evidence under `documentation/benchmarks`.

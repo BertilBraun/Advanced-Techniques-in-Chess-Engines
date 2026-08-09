@@ -4,7 +4,6 @@ import torch
 
 from torch import nn, Tensor
 
-from src.self_play.value_target import FinalOutcome
 from src.training.configuration import NetworkParams
 from src.training.batch import TrainingModelOutput
 from src.util.log import log
@@ -16,7 +15,7 @@ class NetworkDimensions:
     rows: int
     columns: int
     actions: int
-    outcomes: int = len(FinalOutcome)
+    outcomes: int = 3
 
     def __post_init__(self) -> None:
         if min(self.channels, self.rows, self.columns, self.actions, self.outcomes) <= 0:
