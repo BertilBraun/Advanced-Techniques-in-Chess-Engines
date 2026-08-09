@@ -167,6 +167,29 @@ class EvaluationManager:
     def seconds_until_next_boundary(self) -> float:
         return max(0.0, self._state.next_boundary_seconds - self.elapsed_seconds)
 
+    @property
+    def required_checkpoint_generations(self) -> tuple[int, ...]:
+        fixed_generations: set[int] = set()
+        maximum_previous_offset = 0
+        for definition in self.configuration.definitions:
+            match definition:
+                case FixedCheckpointEvaluationDefinition(generation=generation):
+                    fixed_generations.add(generation)
+                case PreviousCheckpointEvaluationDefinition(boundary_offset=offset):
+                    maximum_previous_offset = max(maximum_previous_offset, offset)
+                case _:
+                    pass
+        recent_suites = self._state.scheduled_suites[-maximum_previous_offset:] if maximum_previous_offset else ()
+        required = fixed_generations | {suite.checkpoint.generation for suite in recent_suites}
+        for job in self._state.pending_jobs:
+            required.add(job.candidate.generation)
+            match job:
+                case MatchEvaluationJob(opponent=CheckpointOpponent(checkpoint=checkpoint)):
+                    required.add(checkpoint.generation)
+                case FixedDatasetEvaluationJob() | MatchEvaluationJob():
+                    pass
+        return tuple(sorted(required))
+
     def close(self) -> None:
         deadline = self.clock() + self.configuration.shutdown_grace_seconds
         while self._processes and self.clock() < deadline:
@@ -261,7 +284,7 @@ class EvaluationManager:
                     kind = 'match'
                     opponent = CheckpointOpponent(
                         kind='checkpoint',
-                        checkpoint=CheckpointReference.load(self.run_path, generation),
+                        checkpoint=CheckpointReference.load_for_inference(self.run_path, generation),
                     )
                 case StockfishEvaluationDefinition(skill_level=skill_level):
                     kind = 'match'

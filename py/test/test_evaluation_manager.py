@@ -175,6 +175,7 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     assert tuple(job.opponent.checkpoint.generation for job in previous_jobs) == tuple(
         4 - offset for offset in (1, 2, 3)
     )
+    assert {1, 2, 3, 4, *range(10, 101, 10)} <= set(manager.required_checkpoint_generations)
 
 
 def test_manager_schedules_only_available_older_fixed_checkpoints(
@@ -187,7 +188,7 @@ def test_manager_schedules_only_available_older_fixed_checkpoints(
     (tmp_path / 'checkpoint_10.json').write_text('{}', encoding='utf-8')
     monkeypatch.setattr(
         CheckpointReference,
-        'load',
+        'load_for_inference',
         classmethod(lambda _cls, run_path, generation: checkpoint(run_path, generation)),
     )
 

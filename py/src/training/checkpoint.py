@@ -4,7 +4,12 @@ import hashlib
 from pathlib import Path
 
 from src.util.frozen_model import FrozenModel
-from src.util.save_paths import CheckpointManifest, checkpoint_manifest_path, load_checkpoint_manifest
+from src.util.save_paths import (
+    CheckpointManifest,
+    checkpoint_manifest_path,
+    load_checkpoint_manifest,
+    load_inference_checkpoint_manifest,
+)
 
 
 class CheckpointReference(FrozenModel):
@@ -28,6 +33,11 @@ class CheckpointReference(FrozenModel):
     @classmethod
     def load(cls, run_path: Path, generation: int) -> CheckpointReference:
         manifest = load_checkpoint_manifest(generation, run_path)
+        return cls.from_manifest(run_path, manifest)
+
+    @classmethod
+    def load_for_inference(cls, run_path: Path, generation: int) -> CheckpointReference:
+        manifest = load_inference_checkpoint_manifest(generation, run_path)
         return cls.from_manifest(run_path, manifest)
 
     @classmethod

@@ -13,6 +13,7 @@ from src.self_play.protocol import (
     StatisticsLevel,
 )
 from src.training.checkpoint import CheckpointReference
+from src.training.checkpoint_retention import CheckpointRetention
 from src.training.credit_ledger import CreditLedger
 from src.training.self_play_group import SelfPlayGroup
 from src.training.trainer_group import TrainerGroup, TrainingQuantumResult
@@ -51,6 +52,8 @@ class Coordinator:
         self.trainer_group = TrainerGroup(self.configuration, game, self.ledger.state.active_checkpoint)
         self.self_play_group = SelfPlayGroup(game)
         self.evaluation_manager = EvaluationManager(self.configuration, self.ledger.state.active_checkpoint)
+        self.checkpoint_retention = CheckpointRetention(run_path, training.lifecycle)
+        self._apply_checkpoint_retention()
         self.latest_completed_model_version = self.ledger.model_generation
         self.final_stop_reason: str | None = None
 
@@ -118,6 +121,13 @@ class Coordinator:
         applied = self.self_play_group.apply(desired_states)
         if any(response.kind != 'running' for response in applied):
             raise RuntimeError('Self-play workers did not apply the trained checkpoint.')
+        self._apply_checkpoint_retention()
+
+    def _apply_checkpoint_retention(self) -> None:
+        self.checkpoint_retention.apply(
+            self.ledger.model_generation,
+            self.evaluation_manager.required_checkpoint_generations,
+        )
 
     def _detailed_statistics_workers(self) -> int:
         configured = self.game.self_play_configuration.detailed_statistics_workers

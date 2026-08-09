@@ -73,12 +73,7 @@ def load_checkpoint_manifest(
     iteration: int,
     save_folder: str | PathLike,
 ) -> CheckpointManifest:
-    manifest_path = checkpoint_manifest_path(iteration, save_folder)
-    if not manifest_path.is_file():
-        raise ValueError(f'Checkpoint manifest does not exist: {manifest_path}')
-    manifest = CheckpointManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
-    if manifest.iteration != iteration:
-        raise ValueError(f'Checkpoint manifest iteration {manifest.iteration} does not match {iteration}.')
+    manifest = read_checkpoint_manifest(iteration, save_folder)
 
     root = Path(save_folder)
     artifacts = (
@@ -87,10 +82,7 @@ def load_checkpoint_manifest(
         (root / manifest.jit_model_path, manifest.jit_model_sha256),
     )
     for artifact_path, expected_sha256 in artifacts:
-        if not artifact_path.is_file():
-            raise ValueError(f'Checkpoint artifact does not exist: {artifact_path}')
-        if _sha256(artifact_path) != expected_sha256:
-            raise ValueError(f'Checkpoint artifact hash does not match: {artifact_path}')
+        _validate_checkpoint_artifact(artifact_path, expected_sha256)
 
     for replay_reference in manifest.replay_files:
         replay_path = root / replay_reference.path
@@ -99,6 +91,35 @@ def load_checkpoint_manifest(
         if replay_path.stat().st_size != replay_reference.size_bytes:
             raise ValueError(f'Checkpoint replay file size does not match: {replay_path}')
     return manifest
+
+
+def read_checkpoint_manifest(
+    iteration: int,
+    save_folder: str | PathLike,
+) -> CheckpointManifest:
+    manifest_path = checkpoint_manifest_path(iteration, save_folder)
+    if not manifest_path.is_file():
+        raise ValueError(f'Checkpoint manifest does not exist: {manifest_path}')
+    manifest = CheckpointManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
+    if manifest.iteration != iteration:
+        raise ValueError(f'Checkpoint manifest iteration {manifest.iteration} does not match {iteration}.')
+    return manifest
+
+
+def load_inference_checkpoint_manifest(
+    iteration: int,
+    save_folder: str | PathLike,
+) -> CheckpointManifest:
+    manifest = read_checkpoint_manifest(iteration, save_folder)
+    _validate_checkpoint_artifact(Path(save_folder) / manifest.jit_model_path, manifest.jit_model_sha256)
+    return manifest
+
+
+def _validate_checkpoint_artifact(path: Path, expected_sha256: str) -> None:
+    if not path.is_file():
+        raise ValueError(f'Checkpoint artifact does not exist: {path}')
+    if _sha256(path) != expected_sha256:
+        raise ValueError(f'Checkpoint artifact hash does not match: {path}')
 
 
 def create_model(
