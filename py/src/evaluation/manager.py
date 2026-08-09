@@ -35,6 +35,7 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.save_paths import checkpoint_manifest_path
 from src.util.log import log
 from src.util.tensorboard import log_scalar
 
@@ -252,6 +253,11 @@ class EvaluationManager:
                     kind = 'match'
                     opponent = CheckpointOpponent(kind='checkpoint', checkpoint=previous)
                 case FixedCheckpointEvaluationDefinition(generation=generation):
+                    if (
+                        generation >= suite.checkpoint.generation
+                        or not checkpoint_manifest_path(generation, self.run_path).is_file()
+                    ):
+                        continue
                     kind = 'match'
                     opponent = CheckpointOpponent(
                         kind='checkpoint',

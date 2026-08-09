@@ -16,14 +16,45 @@ def test_checked_in_evaluation_definitions_are_canonical_for_each_game() -> None
     assert chess.evaluation.engine.kind == 'stockfish'
     assert go.evaluation.engine.kind == 'katago'
     assert chess.evaluation.cadence_seconds == go.evaluation.cadence_seconds == 1200
+    assert chess.evaluation.job_timeout_seconds == go.evaluation.job_timeout_seconds == 1200
     assert chess.training.topology.evaluation.device_cycle == (0,)
-    assert tuple(definition.definition_id for definition in chess.evaluation.definitions) == (
-        'fixed-dataset',
-        'search-random',
-        'policy-random',
-        'previous-checkpoint',
-        'stockfish-level-0',
+    assert tuple(
+        definition.boundary_offset
+        for definition in chess.evaluation.definitions
+        if definition.kind == 'previous_checkpoint'
+    ) == (1, 2, 3)
+    assert tuple(
+        definition.generation for definition in chess.evaluation.definitions if definition.kind == 'fixed_checkpoint'
+    ) == tuple(range(10, 101, 10))
+    assert tuple(
+        definition.skill_level for definition in chess.evaluation.definitions if definition.kind == 'stockfish'
+    ) == (0, 1, 2, 3)
+    assert tuple(
+        definition.definition_id
+        for definition in go.evaluation.definitions
+        if definition.kind not in ('katago', 'fixed_dataset', 'random', 'policy_random')
+    ) == tuple(
+        definition.definition_id
+        for definition in chess.evaluation.definitions
+        if definition.kind in ('previous_checkpoint', 'fixed_checkpoint')
     )
+
+
+@pytest.mark.parametrize(
+    'path',
+    (
+        Path('configs/chess-experiment-template.yaml'),
+        Path('configs/go-7x7-experiment-template.yaml'),
+        Path('configs/go-9x9-experiment-template.yaml'),
+    ),
+)
+def test_checked_in_evaluation_definitions_use_block_yaml(path: Path) -> None:
+    source = path.read_text(encoding='utf-8')
+    definitions = source.split('  definitions:\n', maxsplit=1)[1].split('\nchess:\n', maxsplit=1)[0]
+    if path.name.startswith('go-'):
+        definitions = definitions.split('\ngo:\n', maxsplit=1)[0]
+
+    assert '{' not in definitions
 
 
 def test_evaluation_definition_ids_must_be_unique() -> None:

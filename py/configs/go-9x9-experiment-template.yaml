@@ -34,14 +34,15 @@ training:
   random_seed: 0
 evaluation:
   cadence_seconds: 1200
-  job_timeout_seconds: 3600
+  job_timeout_seconds: 1200
   shutdown_grace_seconds: 30
   bootstrap_samples: 10000
   dataset: {path: py/reference/go-9x9-evaluation-v1.bin, random_seed: 0, move_sampling_temperature: 1.0}
   openings: {path: py/reference/go-9x9-openings-v1.json, random_seed: 0, opening_count: 50, expanded_actions_per_position: 8, beam_width: 512}
   engine: {kind: katago, executable_path: engines/katago, model_path: engines/katago.bin.gz, analysis_configuration_path: engines/katago-analysis.cfg, label_max_visits: 256, match_max_visits: 64}
   definitions:
-    - {kind: fixed_dataset, definition_id: fixed-dataset}
+    - kind: fixed_dataset
+      definition_id: fixed-dataset
     - kind: random
       definition_id: search-random
       maximum_game_plies: 324
@@ -49,10 +50,82 @@ evaluation:
         searches_per_move: 96
         parallel_searches: 1
         exploration_constant: 1.0
-        inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 1}
-    - {kind: policy_random, definition_id: policy-random, maximum_game_plies: 324}
-    - {kind: previous_checkpoint, definition_id: previous-checkpoint, boundary_offset: 1, maximum_game_plies: 324, search: *evaluation_search}
-    - {kind: katago, definition_id: katago, maximum_game_plies: 324, search: *evaluation_search}
+        inference:
+          inference_workers: 1
+          inference_batch_size: 64
+          outstanding_batches_per_worker: 1
+    - kind: policy_random
+      definition_id: policy-random
+      maximum_game_plies: 324
+    - kind: previous_checkpoint
+      definition_id: previous-20m
+      boundary_offset: 1
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: previous_checkpoint
+      definition_id: previous-40m
+      boundary_offset: 2
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: previous_checkpoint
+      definition_id: previous-60m
+      boundary_offset: 3
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-10
+      generation: 10
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-20
+      generation: 20
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-30
+      generation: 30
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-40
+      generation: 40
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-50
+      generation: 50
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-60
+      generation: 60
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-70
+      generation: 70
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-80
+      generation: 80
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-90
+      generation: 90
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: fixed_checkpoint
+      definition_id: generation-100
+      generation: 100
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: katago
+      definition_id: katago
+      maximum_game_plies: 324
+      search: *evaluation_search
 go:
   self_play:
     search: {full_searches: {kind: constant, value: 256}, fast_searches: {kind: constant, value: 64}, parallel_searches: 2, dirichlet_epsilon: {kind: constant, value: 0.25}, dirichlet_alpha: {kind: constant, value: 0.3}, exploration_constant: {kind: constant, value: 1.5}, minimum_root_visits: {kind: constant, value: 0}}

@@ -125,7 +125,7 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     clock.now = 21.0
     first_jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 2))
     assert {job.candidate.generation for job in first_jobs} == {1}
-    assert tuple(job.device_id for job in first_jobs) == (2, 5, 2, 5)
+    assert tuple(job.device_id for job in first_jobs) == (2, 5, 2, 5, 2, 5, 2)
     assert all(process.started for process in context.processes)
 
     scalar_steps: list[int | None] = []
@@ -154,7 +154,7 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     clock.now = 41.0
     second_jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 3))
     assert {job.candidate.generation for job in second_jobs} == {2}
-    assert tuple(job.device_id for job in second_jobs) == (2, 5, 2, 5, 2)
+    assert tuple(job.device_id for job in second_jobs) == (5, 2, 5, 2, 5, 2, 5, 2)
     previous_jobs = tuple(
         job
         for job in second_jobs
@@ -162,6 +162,48 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     )
     assert len(previous_jobs) == 1
     assert previous_jobs[0].opponent.checkpoint.generation == 1
+
+    clock.now = 61.0
+    manager.schedule_due_jobs(checkpoint(tmp_path, 4))
+    clock.now = 81.0
+    fourth_jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 5))
+    previous_jobs = tuple(
+        job
+        for job in fourth_jobs
+        if isinstance(job, MatchEvaluationJob) and isinstance(job.opponent, CheckpointOpponent)
+    )
+    assert tuple(job.opponent.checkpoint.generation for job in previous_jobs) == tuple(
+        4 - offset for offset in (1, 2, 3)
+    )
+
+
+def test_manager_schedules_only_available_older_fixed_checkpoints(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(experiment_configuration(tmp_path), checkpoint(tmp_path, 0), clock, context)
+    (tmp_path / 'checkpoint_10.json').write_text('{}', encoding='utf-8')
+    monkeypatch.setattr(
+        CheckpointReference,
+        'load',
+        classmethod(lambda _cls, run_path, generation: checkpoint(run_path, generation)),
+    )
+
+    clock.now = 19.0
+    manager.schedule_due_jobs(checkpoint(tmp_path, 20))
+    clock.now = 21.0
+    jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 21))
+
+    fixed_opponents = tuple(
+        job.opponent.checkpoint.generation
+        for job in jobs
+        if isinstance(job, MatchEvaluationJob)
+        and isinstance(job.opponent, CheckpointOpponent)
+        and job.definition.kind == 'fixed_checkpoint'
+    )
+    assert fixed_opponents == (10,)
 
 
 def test_manager_publishes_missing_artifact_and_deadline_failures(tmp_path: Path) -> None:
