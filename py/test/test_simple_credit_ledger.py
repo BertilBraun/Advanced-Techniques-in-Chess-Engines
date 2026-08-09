@@ -6,7 +6,7 @@ import pytest
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedger
-from src.training.trainer_group import TrainingQuantumResult, TrainingStatistics
+from src.training.trainer import TrainingQuantumResult, TrainingStatistics
 
 
 def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:

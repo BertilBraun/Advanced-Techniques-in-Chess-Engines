@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.training.checkpoint.contracts import read_checkpoint_manifest
 from src.training.configuration import TrainingLifecycleParams
-from src.util.save_paths import read_checkpoint_manifest
 
 
 class CheckpointRetention:
@@ -39,7 +39,7 @@ class CheckpointRetention:
                 (self.run_path / manifest.model_path).unlink(missing_ok=True)
                 (self.run_path / manifest.optimizer_path).unlink(missing_ok=True)
             if generation not in inference_checkpoints:
-                (self.run_path / manifest.jit_model_path).unlink(missing_ok=True)
+                (self.run_path / manifest.inference_model_path).unlink(missing_ok=True)
 
     def _published_generations(self) -> tuple[int, ...]:
         return tuple(

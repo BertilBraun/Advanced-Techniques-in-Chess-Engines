@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
 from src.training.progress import TrainingProgress
-from src.training.trainer_group import TrainingQuantumResult
+from src.training.trainer import TrainingQuantumResult
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 

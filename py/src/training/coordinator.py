@@ -13,10 +13,10 @@ from src.self_play.protocol import (
     StatisticsLevel,
 )
 from src.training.checkpoint import CheckpointReference
-from src.training.checkpoint_retention import CheckpointRetention
+from src.training.checkpoint.retention import CheckpointRetention
 from src.training.credit_ledger import CreditLedger
 from src.training.self_play_group import SelfPlayGroup
-from src.training.trainer_group import TrainerGroup, TrainingQuantumResult
+from src.training.trainer import TrainerGroup, TrainingQuantumResult
 from src.training.run_limits import RunLimitMonitor
 from src.util.log import log
 from src.util.tensorboard import log_scalar

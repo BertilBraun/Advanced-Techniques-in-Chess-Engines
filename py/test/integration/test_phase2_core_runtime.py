@@ -14,8 +14,8 @@ from src.replay.manager import ReplayManager
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
-from src.training.trainer_group import TrainerGroup
-from src.util.save_paths import create_model, create_optimizer, save_model_and_optimizer
+from src.training.trainer import TrainerGroup
+from src.training.checkpoint.persistence import create_model, create_optimizer, save_model_and_optimizer
 
 
 pytestmark = [

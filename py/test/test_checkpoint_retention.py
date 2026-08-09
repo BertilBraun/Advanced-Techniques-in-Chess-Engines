@@ -6,9 +6,8 @@ from pathlib import Path
 import pytest
 
 from src.experiment.configuration import load_chess_experiment_configuration
-from src.training.checkpoint import CheckpointReference
-from src.training.checkpoint_retention import CheckpointRetention
-from src.util.save_paths import CheckpointManifest
+from src.training.checkpoint import CheckpointManifest, CheckpointReference
+from src.training.checkpoint.retention import CheckpointRetention
 
 
 def _sha256(path: Path) -> str:
@@ -23,14 +22,13 @@ def _write_checkpoint(run_path: Path, generation: int) -> None:
     optimizer_path.write_bytes(f'optimizer-{generation}'.encode())
     inference_path.write_bytes(f'inference-{generation}'.encode())
     manifest = CheckpointManifest(
-        iteration=generation,
+        generation=generation,
         model_path=model_path.name,
         model_sha256=_sha256(model_path),
         optimizer_path=optimizer_path.name,
         optimizer_sha256=_sha256(optimizer_path),
-        jit_model_path=inference_path.name,
-        jit_model_sha256=_sha256(inference_path),
-        replay_files=(),
+        inference_model_path=inference_path.name,
+        inference_model_sha256=_sha256(inference_path),
     )
     (run_path / f'checkpoint_{generation}.json').write_text(manifest.model_dump_json(), encoding='utf-8')
 

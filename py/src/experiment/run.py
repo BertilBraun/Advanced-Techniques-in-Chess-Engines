@@ -26,7 +26,13 @@ from src.games.go.configuration import GoExperimentConfiguration
 from src.training.targets import build_training_target_layout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
-from src.util.save_paths import create_model, create_optimizer, load_model, model_save_path, save_model_and_optimizer
+from src.training.checkpoint.paths import model_save_path
+from src.training.checkpoint.persistence import (
+    create_model,
+    create_optimizer,
+    load_model,
+    save_model_and_optimizer,
+)
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]

@@ -35,7 +35,7 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
-from src.util.save_paths import checkpoint_manifest_path
+from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.util.log import log
 from src.util.tensorboard import log_scalar
 

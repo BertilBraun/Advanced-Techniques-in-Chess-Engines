@@ -1,61 +1,16 @@
 import hashlib
-import os
 import torch
 from os import PathLike
 from time import sleep
 from pathlib import Path
 
-
-from src.util.frozen_model import FrozenModel
-
 from src.games.representation import NetworkDimensions
+from src.training.checkpoint.contracts import CheckpointManifest, load_checkpoint_manifest
+from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
 from src.training.configuration import OptimizerType
 from src.training.network import Network, NetworkParams
 from src.util.atomic_file import write_text_atomically
 from src.util.log import LogLevel, log
-
-
-class ReplayFileReference(FrozenModel):
-    path: str
-    size_bytes: int
-
-
-class CheckpointManifest(FrozenModel):
-    iteration: int
-    model_path: str
-    model_sha256: str
-    optimizer_path: str
-    optimizer_sha256: str
-    jit_model_path: str
-    jit_model_sha256: str
-    replay_files: tuple[ReplayFileReference, ...]
-
-
-def model_save_path(iteration: int, save_folder: str | PathLike) -> Path:
-    path = Path(save_folder) / f'model_{iteration}.pt'
-    if not path.exists():
-        os.makedirs(path.parent, exist_ok=True)
-    return path
-
-
-def optimizer_save_path(iteration: int, save_folder: str | PathLike) -> Path:
-    path = Path(save_folder) / f'optimizer_{iteration}.pt'
-    if not path.exists():
-        os.makedirs(path.parent, exist_ok=True)
-    return path
-
-
-def checkpoint_manifest_path(iteration: int, save_folder: str | PathLike) -> Path:
-    return Path(save_folder) / f'checkpoint_{iteration}.json'
-
-
-def inference_model_path(path: str | PathLike) -> Path:
-    model_path = Path(path)
-    if model_path.name.endswith('.jit.pt'):
-        return model_path
-    if model_path.suffix == '.pt':
-        return model_path.with_suffix('.jit.pt')
-    raise ValueError(f'Model path must end in .pt or .jit.pt: {model_path}')
 
 
 def _sha256(path: Path) -> str:
@@ -68,59 +23,6 @@ def _sha256(path: Path) -> str:
 
 def _temporary_path(path: Path) -> Path:
     return path.with_name(f'.{path.name}.tmp')
-
-
-def load_checkpoint_manifest(
-    iteration: int,
-    save_folder: str | PathLike,
-) -> CheckpointManifest:
-    manifest = read_checkpoint_manifest(iteration, save_folder)
-
-    root = Path(save_folder)
-    artifacts = (
-        (root / manifest.model_path, manifest.model_sha256),
-        (root / manifest.optimizer_path, manifest.optimizer_sha256),
-        (root / manifest.jit_model_path, manifest.jit_model_sha256),
-    )
-    for artifact_path, expected_sha256 in artifacts:
-        _validate_checkpoint_artifact(artifact_path, expected_sha256)
-
-    for replay_reference in manifest.replay_files:
-        replay_path = root / replay_reference.path
-        if not replay_path.is_file():
-            raise ValueError(f'Checkpoint replay file does not exist: {replay_path}')
-        if replay_path.stat().st_size != replay_reference.size_bytes:
-            raise ValueError(f'Checkpoint replay file size does not match: {replay_path}')
-    return manifest
-
-
-def read_checkpoint_manifest(
-    iteration: int,
-    save_folder: str | PathLike,
-) -> CheckpointManifest:
-    manifest_path = checkpoint_manifest_path(iteration, save_folder)
-    if not manifest_path.is_file():
-        raise ValueError(f'Checkpoint manifest does not exist: {manifest_path}')
-    manifest = CheckpointManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
-    if manifest.iteration != iteration:
-        raise ValueError(f'Checkpoint manifest iteration {manifest.iteration} does not match {iteration}.')
-    return manifest
-
-
-def load_inference_checkpoint_manifest(
-    iteration: int,
-    save_folder: str | PathLike,
-) -> CheckpointManifest:
-    manifest = read_checkpoint_manifest(iteration, save_folder)
-    _validate_checkpoint_artifact(Path(save_folder) / manifest.jit_model_path, manifest.jit_model_sha256)
-    return manifest
-
-
-def _validate_checkpoint_artifact(path: Path, expected_sha256: str) -> None:
-    if not path.is_file():
-        raise ValueError(f'Checkpoint artifact does not exist: {path}')
-    if _sha256(path) != expected_sha256:
-        raise ValueError(f'Checkpoint artifact hash does not match: {path}')
 
 
 def create_model(
@@ -142,7 +44,7 @@ def create_optimizer(model: Network, type: OptimizerType) -> torch.optim.Optimiz
 
 
 def load_model(
-    path: str | PathLike,
+    path: str | PathLike[str],
     args: NetworkParams,
     device: torch.device,
     dimensions: NetworkDimensions,
@@ -192,7 +94,7 @@ def load_model(
 
 
 def load_optimizer(
-    path: str | PathLike,
+    path: str | PathLike[str],
     model: Network,
     type: OptimizerType,
     device: torch.device,
@@ -218,24 +120,24 @@ def load_optimizer(
 
 
 def load_model_and_optimizer(
-    iteration: int,
+    generation: int,
     args: NetworkParams,
     device: torch.device,
-    save_folder: str | PathLike,
+    save_folder: str | PathLike[str],
     type: OptimizerType,
     dimensions: NetworkDimensions,
     auxiliary_action_sizes: tuple[int, ...] = (),
 ) -> tuple[Network, torch.optim.Optimizer]:
-    manifest_path = checkpoint_manifest_path(iteration, save_folder)
-    if iteration == 0 and not manifest_path.exists():
+    manifest_path = checkpoint_manifest_path(generation, save_folder)
+    if generation == 0 and not manifest_path.exists():
         model = create_model(args, device, dimensions, auxiliary_action_sizes)
         optimizer = create_optimizer(model, type)
-        log('Created a new model and optimizer for iteration 0.')
+        log('Created a new model and optimizer for generation 0.')
         return model, optimizer
-    if iteration < 0:
-        raise ValueError(f'Checkpoint iteration cannot be negative: {iteration}')
+    if generation < 0:
+        raise ValueError(f'Checkpoint generation cannot be negative: {generation}')
 
-    manifest = load_checkpoint_manifest(iteration, save_folder)
+    manifest = load_checkpoint_manifest(generation, save_folder)
     model = load_model(
         Path(save_folder) / manifest.model_path,
         args,
@@ -244,15 +146,18 @@ def load_model_and_optimizer(
         auxiliary_action_sizes,
     )
     optimizer = load_optimizer(Path(save_folder) / manifest.optimizer_path, model, type, device)
-    log(f'Model and optimizer loaded from iteration {iteration}')
+    log(f'Model and optimizer loaded from generation {generation}')
     return model, optimizer
 
 
 def save_model_and_optimizer(
-    model: Network, optimizer: torch.optim.Optimizer, iteration: int, save_folder: str | PathLike
+    model: Network,
+    optimizer: torch.optim.Optimizer,
+    generation: int,
+    save_folder: str | PathLike[str],
 ) -> None:
-    raw_model_path = model_save_path(iteration, save_folder)
-    raw_optimizer_path = optimizer_save_path(iteration, save_folder)
+    raw_model_path = model_save_path(generation, save_folder)
+    raw_optimizer_path = optimizer_save_path(generation, save_folder)
     jit_model_path = raw_model_path.with_suffix('.jit.pt')
 
     temporary_model_path = _temporary_path(raw_model_path)
@@ -277,27 +182,13 @@ def save_model_and_optimizer(
     temporary_jit_path.replace(jit_model_path)
 
     manifest = CheckpointManifest(
-        iteration=iteration,
+        generation=generation,
         model_path=raw_model_path.name,
         model_sha256=_sha256(raw_model_path),
         optimizer_path=raw_optimizer_path.name,
         optimizer_sha256=_sha256(raw_optimizer_path),
-        jit_model_path=jit_model_path.name,
-        jit_model_sha256=_sha256(jit_model_path),
-        replay_files=(),
+        inference_model_path=jit_model_path.name,
+        inference_model_sha256=_sha256(jit_model_path),
     )
-    manifest_path = checkpoint_manifest_path(iteration, save_folder)
+    manifest_path = checkpoint_manifest_path(generation, save_folder)
     write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')
-
-
-def get_latest_model_version(save_folder: str | PathLike) -> int:
-    versions = tuple(
-        int(path.stem.removeprefix('checkpoint_'))
-        for path in Path(save_folder).glob('checkpoint_*.json')
-        if path.stem.removeprefix('checkpoint_').isdigit()
-    )
-    if not versions:
-        return 0
-    latest_version = max(versions)
-    load_checkpoint_manifest(latest_version, save_folder)
-    return latest_version

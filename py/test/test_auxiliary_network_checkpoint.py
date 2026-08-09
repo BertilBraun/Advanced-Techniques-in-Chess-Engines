@@ -4,7 +4,7 @@ import torch
 
 from src.games.representation import NetworkDimensions
 from src.training.network import Network, NetworkParams, SEPlacement
-from src.util.save_paths import create_optimizer, save_model_and_optimizer
+from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 
 
 def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them(tmp_path: Path) -> None:

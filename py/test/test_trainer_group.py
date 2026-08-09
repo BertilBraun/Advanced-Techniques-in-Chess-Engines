@@ -13,8 +13,8 @@ from src.replay.store import ReplayStore
 from src.self_play.completed_game import SparseSearchVisit
 from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
-from src.training.trainer_group import TrainerGroup
-from src.util.save_paths import create_optimizer, save_model_and_optimizer
+from src.training.trainer import TrainerGroup
+from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.network import Network
 
 

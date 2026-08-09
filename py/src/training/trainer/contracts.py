@@ -1,0 +1,76 @@
+from dataclasses import dataclass
+from typing import Literal, TypeAlias
+
+from src.replay.manager import ReplayDescription
+from src.training.checkpoint import CheckpointReference
+from src.training.objective import ResolvedTrainingObjective
+from src.training.progress import TrainingProgress
+from src.util.frozen_model import FrozenModel
+
+
+class ResolvedTrainingParameters(FrozenModel):
+    learning_rate: float
+    objective: ResolvedTrainingObjective
+
+
+class TrainQuantumCommand(FrozenModel):
+    kind: Literal['train_quantum'] = 'train_quantum'
+    replay: ReplayDescription
+    source_progress: TrainingProgress
+    target_progress: TrainingProgress
+    parameters: ResolvedTrainingParameters
+
+
+class StopTrainerCommand(FrozenModel):
+    kind: Literal['stop'] = 'stop'
+
+
+TrainerCommand: TypeAlias = TrainQuantumCommand | StopTrainerCommand
+
+
+class RankTrainingResult(FrozenModel):
+    kind: Literal['trained'] = 'trained'
+    rank: int
+    completed_optimizer_steps: int
+    policy_loss: float
+    wdl_loss: float
+    auxiliary_losses: tuple[float, ...]
+    total_loss: float
+    gradient_norm: float
+    replay_rows_read: int
+    replay_read_seconds: float
+    elapsed_seconds: float
+    checkpoint: CheckpointReference | None
+
+
+class RankTrainingFailure(FrozenModel):
+    kind: Literal['failed'] = 'failed'
+    rank: int
+    error: str
+
+
+class TrainerStopped(FrozenModel):
+    kind: Literal['stopped'] = 'stopped'
+    rank: int
+
+
+TrainerResponse: TypeAlias = RankTrainingResult | RankTrainingFailure | TrainerStopped
+
+
+@dataclass(frozen=True)
+class TrainingStatistics:
+    policy_loss: float
+    wdl_loss: float
+    auxiliary_losses: tuple[float, ...]
+    total_loss: float
+    gradient_norm: float
+    replay_rows_per_second: float
+    training_samples_per_second: float
+    elapsed_seconds: float
+
+
+@dataclass(frozen=True)
+class TrainingQuantumResult:
+    completed_optimizer_steps: int
+    checkpoint: CheckpointReference
+    statistics: TrainingStatistics
