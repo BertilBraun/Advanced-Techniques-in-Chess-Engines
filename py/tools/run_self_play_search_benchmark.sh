@@ -18,15 +18,22 @@ processes_per_gpu=${PROCESSES_PER_GPU:-1}
 parallel_games=${PARALLEL_GAMES_PER_PROCESS:-64}
 warmup_batches=${WARMUP_BATCHES:-2}
 duration_seconds=${MEASUREMENT_DURATION_SECONDS:-60}
+generation=${BENCHMARK_GENERATION:-0}
+pin_workers=${PIN_WORKERS_TO_CPUS:-0}
+cpus_per_process=${CPUS_PER_PROCESS:-4}
 
-for value in "${gpu_count}" "${processes_per_gpu}" "${parallel_games}" "${duration_seconds}"; do
+for value in "${gpu_count}" "${processes_per_gpu}" "${parallel_games}" "${duration_seconds}" "${cpus_per_process}"; do
     if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
         echo "GPU, process, game, and duration values must be positive integers."
         exit 1
     fi
 done
-if [[ ! "${warmup_batches}" =~ ^[0-9]+$ ]]; then
-    echo "WARMUP_BATCHES must be a nonnegative integer."
+if [[ ! "${warmup_batches}" =~ ^[0-9]+$ || ! "${generation}" =~ ^[0-9]+$ ]]; then
+    echo "WARMUP_BATCHES and BENCHMARK_GENERATION must be nonnegative integers."
+    exit 1
+fi
+if [[ "${pin_workers}" != "0" && "${pin_workers}" != "1" ]]; then
+    echo "PIN_WORKERS_TO_CPUS must be 0 or 1."
     exit 1
 fi
 if [[ ! -f "${model}" || ! -f "${run_config}" ]]; then
@@ -49,6 +56,11 @@ game=$(
 )
 output_directory="${output_root}/self-play-search-${game}-gpus${gpu_count}-processes${processes_per_gpu}-games${parallel_games}-${duration_seconds}s-${run_timestamp}"
 mkdir -p "${output_directory}"
+expected_workers=$((gpu_count * processes_per_gpu))
+if [[ "${pin_workers}" == "1" && $((expected_workers * cpus_per_process)) -gt "$(nproc)" ]]; then
+    echo "Pinned benchmark workers require more logical CPUs than are available."
+    exit 1
+fi
 
 jq -n \
     --arg timestamp "${run_timestamp}" \
@@ -62,6 +74,9 @@ jq -n \
     --argjson parallel_games "${parallel_games}" \
     --argjson warmup_batches "${warmup_batches}" \
     --argjson duration_seconds "${duration_seconds}" \
+    --argjson generation "${generation}" \
+    --argjson pin_workers "${pin_workers}" \
+    --argjson cpus_per_process "${cpus_per_process}" \
     '{
         timestamp_utc: $timestamp,
         source_revision: $revision,
@@ -72,9 +87,11 @@ jq -n \
             gpu_count: $gpu_count,
             processes_per_gpu: $processes_per_gpu,
             parallel_games_per_process: $parallel_games,
-            total_parallel_games: ($gpu_count * $processes_per_gpu * $parallel_games)
+            total_parallel_games: ($gpu_count * $processes_per_gpu * $parallel_games),
+            pin_workers_to_cpus: ($pin_workers == 1),
+            cpus_per_process: $cpus_per_process
         },
-        workload: {warmup_batches: $warmup_batches, duration_seconds: $duration_seconds}
+        workload: {generation: $generation, warmup_batches: $warmup_batches, duration_seconds: $duration_seconds}
     }' >"${output_directory}/manifest.json"
 
 cd "${python_root}"
@@ -84,13 +101,20 @@ processes=()
 worker_index=0
 for ((device = 0; device < gpu_count; device++)); do
     for ((replica = 0; replica < processes_per_gpu; replica++)); do
-        "${python_binary}" tools/benchmark_self_play_search.py \
+        worker_command=("${python_binary}" tools/benchmark_self_play_search.py)
+        if [[ "${pin_workers}" == "1" ]]; then
+            first_cpu=$((worker_index * cpus_per_process))
+            last_cpu=$((first_cpu + cpus_per_process - 1))
+            worker_command=(taskset --cpu-list "${first_cpu}-${last_cpu}" "${worker_command[@]}")
+        fi
+        "${worker_command[@]}" \
             --run-config "${run_config}" \
             --model "${model}" \
             --device "${device}" \
             --worker-id "${worker_index}" \
             --inference-device cuda \
             --games "${parallel_games}" \
+            --generation "${generation}" \
             --warmup-batches "${warmup_batches}" \
             --duration-seconds "${duration_seconds}" \
             --ready-file "${output_directory}/ready-${worker_index}" \
@@ -102,7 +126,6 @@ for ((device = 0; device < gpu_count; device++)); do
     done
 done
 
-expected_workers=$((gpu_count * processes_per_gpu))
 deadline=$((SECONDS + 600))
 while [[ "$(find "${output_directory}" -maxdepth 1 -name 'ready-*' | wc -l)" -ne "${expected_workers}" ]]; do
     for process in "${processes[@]}"; do
@@ -121,10 +144,22 @@ while [[ "$(find "${output_directory}" -maxdepth 1 -name 'ready-*' | wc -l)" -ne
 done
 touch "${barrier}"
 
-while kill -0 "${processes[0]}" 2>/dev/null; do
-    nvidia-smi --query-gpu=timestamp,index,utilization.gpu,memory.used \
+echo 'timestamp,index,gpu_utilization_percent,memory_utilization_percent,memory_used_mib,memory_total_mib,power_draw_watts' >"${output_directory}/gpu.csv"
+echo 'runnable,blocked,swap_used_kib,memory_free_kib,memory_buffer_kib,memory_cache_kib,swap_in_kib,swap_out_kib,blocks_in,blocks_out,interrupts,context_switches,cpu_user_percent,cpu_system_percent,cpu_idle_percent,cpu_wait_percent,cpu_stolen_percent' >"${output_directory}/cpu.csv"
+while true; do
+    running=0
+    for process in "${processes[@]}"; do
+        if kill -0 "${process}" 2>/dev/null; then
+            running=1
+            break
+        fi
+    done
+    if [[ "${running}" == "0" ]]; then
+        break
+    fi
+    nvidia-smi --query-gpu=timestamp,index,utilization.gpu,utilization.memory,memory.used,memory.total,power.draw \
         --format=csv,noheader,nounits >>"${output_directory}/gpu.csv"
-    sleep 1
+    vmstat -n 1 2 | tail -n 1 | awk '{$1=$1; print}' | tr ' ' ',' >>"${output_directory}/cpu.csv"
 done
 for process in "${processes[@]}"; do
     wait "${process}"
