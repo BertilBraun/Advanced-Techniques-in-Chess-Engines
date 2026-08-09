@@ -200,6 +200,20 @@ job. This estimate is deliberately provisional; measure a complete production-si
 topology is frozen. The configured 20-minute job timeout should make an unexpectedly slow or contended job visible
 without permitting silent overlap indefinitely.
 
+### Evaluation checkpoint retention
+
+Evaluation does not depend on retaining every full training checkpoint. A published checkpoint has separate model,
+optimizer, and trimmed inference artifacts. The chess template keeps resumable model and optimizer artifacts for
+generation 0, the active generation, and every third generation. Separately, it keeps trimmed inference artifacts
+for generation 0, the latest 11 generations, and every tenth generation. The evaluation manager additionally marks
+all configured fixed-checkpoint generations, recent elapsed-boundary opponents, and checkpoints referenced by
+pending jobs as required before the coordinator applies retention.
+
+Consequently, the configured fixed generations 10, 20, ..., 100 remain evaluable for the life of the run even after
+their full optimizer state is pruned. The three previous elapsed-boundary opponents are also protected independently
+of their generation numbers. No retention change is required for the current evaluation ladder; restoring training
+from every fixed evaluation generation would be a separate and substantially larger storage policy.
+
 ### Current self-play/search throughput
 
 The game-generic benchmark drives the real production `SelfPlayWorker`: scheduled search parameters, normalized
@@ -232,11 +246,27 @@ schedule, and a requested 60-second window:
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
 | 4,668,190 | 67.23 s | **69,439.93** | 274.17 | 36.74 | 1,644% | 9.23% | 95.79–97.84% | 531 MiB/device |
 
-This satisfies the saturation criterion through the GPU: all four devices are effectively full while the host has
-ample CPU, RAM, and GPU-memory headroom. The mature four-process comparison reached 60,013.43 searches/s and 238.86
-searched plies/s, so two processes improve search throughput by 15.71% and searched-ply throughput by 14.78%.
-Increasing games beyond 384 per process is not currently justified: 768 games with one process did not improve
-throughput, and two processes already sustain near-full GPU utilization.
+The requested high-concurrency follow-up kept 380 games in every worker and changed only the number of workers per
+GPU. These runs intentionally raised total active games instead of holding the prior 3,072-game total constant:
+
+| Processes/GPU | Games/process | Total games | Searches/s | Mean batch | Aggregate process CPU | Mean host CPU | Summed worker peak RSS | Mean GPU utilization | Peak GPU memory |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| 2 | 384 | 3,072 | **69,439.93** | 36.74 | 1,644% | 9.23% | not recorded | 95.79-97.84% | 531 MiB/device |
+| 3 | 380 | 4,560 | 68,608.30 | 36.25 | 2,449% | 10.95% | 18,403.59 MiB | 93.10-96.02% | 794 MiB/device |
+| 4 | 380 | 6,080 | 68,976.85 | 36.19 | 3,250% | 14.55% | 24,328.13 MiB | 94.63-96.45% | 1,055 MiB/device |
+
+Three and four processes use approximately 7.2% and 9.5% of the node's 251 GiB RAM respectively when summed from
+each worker's peak RSS; each worker peaks near 1.5 GiB. CPU and RAM therefore remain comfortable at four processes,
+and all topologies saturate the GPUs. The additional games do not improve mean batch size: both new runs remain near
+36.2, effectively the same as 2x384. Their throughput is 1.20% and 0.67% below 2x384 respectively, well within the
+range where repeat-run variance could change their order but not evidence of a material gain.
+
+This satisfies the saturation criterion through the GPU while retaining ample CPU, RAM, and GPU-memory headroom.
+Use 2x384 as the isolated self-play baseline because it achieves the highest measured throughput with half as many
+processes as 4x380. Four processes/GPU with 380 games/process remains operationally safe and can be used for the
+integrated contention run if matching the historical process topology is more important than minimizing resource
+use. The mature 4x192 comparison reached only 60,013.43 searches/s, so increasing games per worker did recover most
+of that topology's previous throughput deficit.
 
 For reference only, the smaller-network 60-second Go measurements remain 95,754.34 searches/s for Go 7x7 and
 76,216.56 searches/s for Go 9x9. They are within-game smoke baselines, not strength- or model-size-normalized
@@ -298,3 +328,6 @@ The complete ignored evidence archive is `.codex-diagnostics/r11-final-evidence.
 (557,092 bytes, SHA-256 `21231f09572d8439177d87baf8f02121e2b7936d50b20949a542d242fc0341e9`). It contains
 the smoke/timeout logs, result artifacts, benchmark JSON and logs, persistent reference inputs, diagnostic-only
 historical benchmark wrappers, and final pytest/CTest output. Preserve it before destroying the instance.
+The requested 3x380 and 4x380 follow-up artifacts are in the supplemental ignored archive
+`.codex-diagnostics/r11-topology-3x380-4x380-evidence.tar.gz` (28,529 bytes, SHA-256
+`e9aacd2e9699394403e5c7d24f76b2077ab88a3c299d63ed10c8bdc9cc3414e1`).
