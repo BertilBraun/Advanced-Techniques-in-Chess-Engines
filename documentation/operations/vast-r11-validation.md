@@ -216,6 +216,13 @@ from every fixed evaluation generation would be a separate and substantially lar
 
 ### Current self-play/search throughput
 
+Training and inference batch sizes are independent. `global_batch_size` is the number of replay rows consumed by one
+DDP optimizer step, while `local_batch_size` is the per-rank portion. Configuration validation requires
+`global_batch_size == local_batch_size * len(ddp_device_ids)`. The generic chess template is still a one-rank local
+template and therefore currently says 2,048 for both values. A four-GPU production configuration must explicitly
+set a global batch of 2,048, a local batch of 512, four DDP device IDs, CUDA/NCCL, and the node topology. That
+production configuration has not yet been frozen; the self-play benchmarks below do not exercise DDP training.
+
 The game-generic benchmark drives the real production `SelfPlayWorker`: scheduled search parameters, normalized
 native multi-game search, TorchScript inference, move selection, tree updates, terminal handling, and completed-game
 publication. It excludes replay ingestion, optimizer work, and evaluation contention, so it is a self-play capacity
@@ -261,12 +268,33 @@ and all topologies saturate the GPUs. The additional games do not improve mean b
 36.2, effectively the same as 2x384. Their throughput is 1.20% and 0.67% below 2x384 respectively, well within the
 range where repeat-run variance could change their order but not evidence of a material gain.
 
-This satisfies the saturation criterion through the GPU while retaining ample CPU, RAM, and GPU-memory headroom.
-Use 2x384 as the isolated self-play baseline because it achieves the highest measured throughput with half as many
-processes as 4x380. Four processes/GPU with 380 games/process remains operationally safe and can be used for the
-integrated contention run if matching the historical process topology is more important than minimizing resource
-use. The mature 4x192 comparison reached only 60,013.43 searches/s, so increasing games per worker did recover most
-of that topology's previous throughput deficit.
+The unexpectedly low average batch has one concrete cause. Every process has two inference workers and permits two
+outstanding batches per worker, giving four concurrent inference slots. Only 25% of games receive the full 600-search
+budget; the other 75% finish after 150 searches. With 380 games, the long full-search tail therefore contains only
+about 95 roots, or about 24 independent positions per slot. The recorded histograms agree: approximately 31% of
+calls are full batches of 64 and approximately 63% are below 32. With sequential tree search, the approximate number
+of games needed to fill the tail is `batch size * inference slots / full-search probability`.
+
+The follow-up increased independent games without enabling parallel leaves:
+
+| Processes/GPU | Games/process | Batch limit | Mean batch | Full calls | Searches/s | Approx. batch latency | Host CPU | Summed worker peak RSS | Mean/peak power |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2 | 384 | 64 | 36.74 | not recorded | 69,439.93 | 11 s | 9.23% | not recorded | not recorded |
+| 2 | 768 | 64 | 55.89 | 57.28% | 68,224.86 | 23 s | 7.46% | 14.48 GiB | 50.85/62.72 W |
+| 2 | 1,024 | 64 | **63.53** | **92.45%** | **76,719.77** | 27 s | 8.63% | 16.37 GiB | 54.29/63.63 W |
+| 4 | 1,024 | 64 | 63.32 | 91.33% | 76,353.73 | 54 s | 18.35% | 31.69 GiB | 54.69/66.56 W |
+| 2 | 2,048 | 128 | 126.97 | 92.86% | 71,453.58 | 57 s | 8.11% | 22.95 GiB | 55.43/68.22 W |
+
+The 2x1,024 topology is 10.49% faster than 2x384 and fills essentially every useful 64-position inference batch
+without changing MCTS semantics. Doubling the process count provides no throughput gain and doubles CPU, RAM, and
+batch latency. Doubling both games and the batch limit fills batches of 128 but is slower and makes lifecycle
+response too coarse. The isolated self-play recommendation is therefore 2 processes/GPU, 1,024 games/process,
+inference batch size 64, two inference workers, two outstanding batches per worker, and one parallel search.
+
+Despite the filled batches, power remains around 54 W rather than the 120 W training level. A batch of 64 for the
+small 8x8 inference network is still much less compute-dense than a local training batch of 512 with forward and
+backward passes. The full batches improve useful throughput, but NVIDIA's utilization percentage continues to
+overstate arithmetic saturation.
 
 For reference only, the smaller-network 60-second Go measurements remain 95,754.34 searches/s for Go 7x7 and
 76,216.56 searches/s for Go 9x9. They are within-game smoke baselines, not strength- or model-size-normalized
@@ -301,14 +329,16 @@ but their survivor-only throughput is not used for comparison. Current completes
 
 The benchmark result does not yet include simultaneous replay, training, and evaluation contention. Before freezing
 an R12 production configuration, run one integrated baseline with the proposed `[0, 0, 1, 1, 2, 2, 3, 3]`
-self-play device assignment and 384 games per worker, then verify that trainer/evaluation scheduling does not reduce
-self-play capacity unexpectedly. Do not copy the node-specific topology into the generic local template without an
-explicit production run configuration and approval.
+self-play device assignment and 1,024 games per worker, then verify that trainer/evaluation scheduling and the
+approximately 27-second worker batch latency do not delay lifecycle operations unacceptably. Do not copy the
+node-specific topology into the generic local template without an explicit production run configuration and
+approval.
 
 ### Validation and remaining gate
 
 Runtime validation completed at `a62219a422ef2e191fcc2ead65c652e63b703901`; the resource-aware benchmark
-harness and this corrected report are on `84b6b32e119fae7c4a187176e852eea37bcaef04`:
+harness, batching overrides, and this corrected report are on `bdd6059e03e96232d6e3cfeffd4aaf52ddbc13a6` and its
+documentation follow-up:
 
 - `python -m pytest --import-mode=importlib test -q`: 200 passed, 6 skipped, 59 warnings in 21.45 seconds.
 - `ctest --test-dir cpp/build --output-on-failure`: 1/1 native test target passed in 1.34 seconds after configuring
@@ -331,3 +361,6 @@ historical benchmark wrappers, and final pytest/CTest output. Preserve it before
 The requested 3x380 and 4x380 follow-up artifacts are in the supplemental ignored archive
 `.codex-diagnostics/r11-topology-3x380-4x380-evidence.tar.gz` (28,529 bytes, SHA-256
 `e9aacd2e9699394403e5c7d24f76b2077ab88a3c299d63ed10c8bdc9cc3414e1`).
+The independent-game and inference-batch sweep is in
+`.codex-diagnostics/r11-batching-sweep-evidence.tar.gz` (44,997 bytes, SHA-256
+`f0a18498341169a30794cad1acbcf21f3b769cb459035fdca98e9d8d6f7fed65`).
