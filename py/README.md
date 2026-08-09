@@ -35,6 +35,26 @@ cmake --build .\cpp\build --parallel
 The checked-in files under `configs/` are validated templates. Resolve their hardware, external artifacts, hashes,
 paths, and approval record before a production run.
 
+### Experiment overrides
+
+An experiment YAML may inherit another experiment with a top-level `extends` path. The path resolves relative to
+the inheriting file. Mapping fields merge recursively, while lists replace the inherited list. A discriminated
+mapping such as a schedule replaces the complete inherited mapping when its `kind` changes:
+
+```yaml
+extends: ../../baselines/vast-go-7x7-2gpu-2h.yaml
+run:
+  run_name: go7-learning-rate-decay
+training:
+  save_path: py/training_data/screening/go7-learning-rate-decay
+  trainer:
+    learning_rate: {kind: linear, start_generation: 0, end_generation: 50, start_value: 0.005, end_value: 0.001, rounding: none}
+```
+
+Inheritance may be chained, but cycles are rejected. The fully resolved configuration is validated through the
+canonical chess/Go Pydantic union. Approval records, resolved run JSON, and queue fingerprints use that effective
+configuration, so changing a base invalidates approvals and queue summaries for every dependent experiment.
+
 ## Experiment queue
 
 The queue is a resource wrapper above `train.py`; it does not add a training mode. Its command prefix owns all
@@ -118,9 +138,9 @@ If a summary contains `running` entries after a supervisor restart, the wrapper 
 signalling or adopting possibly stale process IDs. Verify the recorded process groups have ended, then invoke the
 same queue again to continue entries still marked `pending`.
 
-The summary fingerprint covers the resolved queue configuration and the bytes of every experiment YAML. Reusing a
-summary after changing either input is rejected. Deleting the summary intentionally creates a fresh queue and will
-make every configured experiment eligible to run again.
+The summary fingerprint covers the resolved queue configuration and each experiment's fully resolved canonical
+configuration. Reusing a summary after changing a queue, an override, or any inherited base is rejected. Deleting
+the summary intentionally creates a fresh queue and will make every configured experiment eligible to run again.
 
 ## Validation
 

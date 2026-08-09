@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.experiment.configuration import (
+    experiment_configuration_sha256,
     load_experiment_configuration,
     load_chess_experiment_configuration,
     validate_experiment_queue,
@@ -180,6 +181,63 @@ def test_resolved_experiment_round_trips_as_canonical_json(tmp_path: Path) -> No
     assert load_chess_experiment_configuration(resolved_path) == configuration
 
 
+def test_experiment_configuration_extends_and_deeply_overrides_a_base(tmp_path: Path) -> None:
+    base_path = tmp_path / 'base.yaml'
+    base_path.write_text(Path('configs/go-7x7-experiment-template.yaml').read_text(encoding='utf-8'), encoding='utf-8')
+    override_path = tmp_path / 'override.yaml'
+    override_path.write_text(
+        '\n'.join(
+            (
+                'extends: base.yaml',
+                'run:',
+                '  run_name: inherited-run',
+                'training:',
+                '  save_path: inherited-output',
+                '  trainer:',
+                '    learning_rate: {kind: linear, start_generation: 0, end_generation: 10, start_value: 0.004, end_value: 0.001, rounding: none}',
+                '  topology:',
+                '    self_play:',
+                '      node_ids_to_pause_during_training: [0]',
+            )
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+
+    configuration = load_experiment_configuration(override_path)
+
+    assert isinstance(configuration, GoExperimentConfiguration)
+    assert configuration.run.run_name == 'inherited-run'
+    assert configuration.training.save_path == 'inherited-output'
+    assert configuration.training.trainer.learning_rate.value_at(0) == pytest.approx(0.004)
+    assert configuration.training.topology.self_play.node_ids_to_pause_during_training == (0,)
+    assert configuration.go.representation.board_size == 7
+
+
+def test_experiment_configuration_hash_includes_resolved_base_content(tmp_path: Path) -> None:
+    base_path = tmp_path / 'base.yaml'
+    source = Path('configs/go-7x7-experiment-template.yaml').read_text(encoding='utf-8')
+    base_path.write_text(source, encoding='utf-8')
+    override_path = tmp_path / 'override.yaml'
+    override_path.write_text('extends: base.yaml\n', encoding='utf-8')
+    original = experiment_configuration_sha256(load_experiment_configuration(override_path))
+    base_path.write_text(source.replace('value: 0.002', 'value: 0.004', 1), encoding='utf-8')
+
+    changed = experiment_configuration_sha256(load_experiment_configuration(override_path))
+
+    assert changed != original
+
+
+def test_experiment_configuration_rejects_inheritance_cycles(tmp_path: Path) -> None:
+    first = tmp_path / 'first.yaml'
+    second = tmp_path / 'second.yaml'
+    first.write_text('extends: second.yaml\n', encoding='utf-8')
+    second.write_text('extends: first.yaml\n', encoding='utf-8')
+
+    with pytest.raises(ValueError, match='inheritance contains a cycle'):
+        load_experiment_configuration(first)
+
+
 def test_legacy_run_topology_is_rejected() -> None:
     candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
     candidate['run']['topology'] = {'trainer_device_type': 'cpu'}
@@ -204,7 +262,6 @@ def test_game_specific_external_engines_are_validated() -> None:
         'model_path': 'model.bin.gz',
         'analysis_configuration_path': 'analysis.cfg',
         'label_max_visits': 64,
-        'match_max_visits': 32,
     }
     chess_candidate['evaluation']['definitions'] = [
         definition for definition in chess_candidate['evaluation']['definitions'] if definition['kind'] != 'stockfish'

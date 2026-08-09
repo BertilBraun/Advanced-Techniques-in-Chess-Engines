@@ -6,7 +6,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.experiment.configuration import load_experiment_configuration
+from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.experiment_queue.cgroup import CgroupV2MemoryScope
 from src.experiment_queue.configuration import QueueConfiguration, QueuedExperiment, ResourceSlot
 
@@ -45,10 +45,10 @@ def validate_queue_for_launch(configuration: QueueConfiguration) -> ValidatedQue
 def _validate_experiment(experiment: QueuedExperiment) -> ValidatedQueuedExperiment:
     if not experiment.experiment_file.is_file():
         raise ValueError(f'Experiment file does not exist: {experiment.experiment_file}')
-    load_experiment_configuration(experiment.experiment_file)
+    configuration = load_experiment_configuration(experiment.experiment_file)
     return ValidatedQueuedExperiment(
         definition=experiment,
-        configuration_sha256=hashlib.sha256(experiment.experiment_file.read_bytes()).hexdigest(),
+        configuration_sha256=experiment_configuration_sha256(configuration),
     )
 
 

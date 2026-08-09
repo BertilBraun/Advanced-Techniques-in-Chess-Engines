@@ -90,6 +90,13 @@ Loading performs cross-field validation, including supported board sizes,
 model shapes, action counts, worker-to-device assignments, evaluation
 compatibility, and resource limits.
 
+Authored experiment YAML may declare one relative `extends` path. Base mappings
+are recursively merged with the child, lists are replaced, and changing a
+discriminated union's `kind` replaces that complete variant. Cycles are
+rejected. Validation, approval hashing, resolved JSON, and queue fingerprinting
+all use the final canonical configuration, so screening configurations contain
+only their identity, artifact path, and experimental overrides.
+
 At run creation, the resolved Pydantic model, including defaults, is written as
 canonical JSON in the run directory. The YAML remains the authored experiment;
 the JSON records the exact effective configuration used by the run.
@@ -389,8 +396,8 @@ requested termination close the log handles and release only an empty scope.
 One atomic JSON summary records pending, running, completed, and failed
 experiments; queue, start, finish, and update timestamps; the exact assignment;
 PID and process-group identity; exit code; reason; and log paths. Its
-fingerprint covers the resolved queue configuration and authored experiment
-bytes. A matching restart preserves terminal entries and pending work. Any
+fingerprint covers the resolved queue configuration and each experiment's
+fully resolved canonical configuration. A matching restart preserves terminal entries and pending work. Any
 persisted running entry is marked failed but its possibly stale process group is
 not signalled or adopted; that invocation stops and tells the operator to
 verify the recorded process group has ended before invoking the queue again to

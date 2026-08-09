@@ -17,7 +17,7 @@ from src.experiment.base_configuration import (
     RandomInitializationResumeConfiguration,
     WeightsOnlyResumeConfiguration,
 )
-from src.experiment.configuration import ExperimentConfiguration
+from src.experiment.configuration import ExperimentConfiguration, experiment_configuration_sha256
 from src.evaluation.preparation import PreparedEvaluationArtifacts, prepare_evaluation_artifacts
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.chess.configuration import ChessExperimentConfiguration
@@ -60,10 +60,6 @@ class _ValidatedRunEnvironment:
     approval: ApprovalRecord
     source_revision: str
     open_file_soft_limit: int
-
-
-def experiment_sha256(experiment: ExperimentConfiguration) -> str:
-    return hashlib.sha256(experiment.model_dump_json().encode('utf-8')).hexdigest()
 
 
 def _git_output(arguments: list[str]) -> str:
@@ -141,7 +137,7 @@ def _validate_approval(
     expected = (
         approval.run_name == run.run_name
         and approval.source_revision == source_revision
-        and approval.configuration_sha256 == experiment_sha256(experiment)
+        and approval.configuration_sha256 == experiment_configuration_sha256(experiment)
         and approval.provider_name == run.hardware.provider_name
         and approval.offer_id == run.hardware.offer_id
         and approval.hourly_price == limits.hourly_price
