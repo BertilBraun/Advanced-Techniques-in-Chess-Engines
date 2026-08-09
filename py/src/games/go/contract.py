@@ -26,6 +26,11 @@ class NativeEnumValue(Protocol):
     def name(self) -> str: ...
 
 
+class NativeGoAreaScore(Protocol):
+    @property
+    def winner(self) -> NativeEnumValue | None: ...
+
+
 class NativeGoPosition(Protocol):
     @property
     def board_size(self) -> int: ...
@@ -44,6 +49,8 @@ class NativeGoPosition(Protocol):
     def child(self, action_id: int) -> NativeGoPosition: ...
 
     def terminal_value(self) -> float: ...
+
+    def area_score(self) -> NativeGoAreaScore: ...
 
     def packed_encoding(self) -> bytes: ...
 
@@ -146,9 +153,12 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
     def adjudicated_wdl(self, position: NativeGoPosition, reason: TerminationReason) -> WdlTarget:
         if reason not in {TerminationReason.MAXIMUM_PLIES, TerminationReason.ADJUDICATION}:
             raise ValueError(f'Go cannot adjudicate termination reason {reason.value}.')
-        if not position.is_terminal:
-            raise ValueError('Go adjudication requires a scored terminal position.')
-        return WdlTarget.from_scalar(position.terminal_value())
+        winner = position.area_score().winner
+        if winner is None:
+            return WdlTarget(win=0.0, draw=1.0, loss=0.0)
+        if winner.name == position.player.name:
+            return WdlTarget(win=1.0, draw=0.0, loss=0.0)
+        return WdlTarget(win=0.0, draw=0.0, loss=1.0)
 
     def encode_network_input(self, position: NativeGoPosition) -> PackedPlanePayload:
         return self.packed_position(position)

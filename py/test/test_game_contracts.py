@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.training import ChessImplementation
+from src.games.go.contract import GoStateContract
 from src.games.contracts import Player, WdlTarget
 from src.replay.contracts import EligibleNextPolicyTarget, IneligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
 from src.self_play.completed_game import (
@@ -58,6 +59,25 @@ def test_chess_adjudication_uses_fixed_starting_material_normalization() -> None
     target = CHESS_STATE_CONTRACT.adjudicated_wdl(position, TerminationReason.MAXIMUM_PLIES)
 
     assert target == WdlTarget.from_scalar(9 / 39)
+
+
+@pytest.mark.parametrize(
+    ('komi_half_points', 'expected'),
+    (
+        (0, WdlTarget(win=0.0, draw=1.0, loss=0.0)),
+        (15, WdlTarget(win=0.0, draw=0.0, loss=1.0)),
+    ),
+)
+def test_go_adjudication_area_scores_nonterminal_positions(
+    komi_half_points: int,
+    expected: WdlTarget,
+) -> None:
+    pytest.importorskip('AlphaZeroCpp')
+    state = GoStateContract(board_size=7, komi_half_points=komi_half_points, maximum_moves=98)
+
+    target = state.adjudicated_wdl(state.initial_position(), TerminationReason.MAXIMUM_PLIES)
+
+    assert target == expected
 
 
 @pytest.mark.parametrize(
