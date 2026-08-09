@@ -45,6 +45,14 @@ virtual_environment_uv="${virtual_environment}/bin/uv"
     --torch-backend cu126 \
     --requirements "${repository_directory}/py/requirements-training.lock"
 
+python_nvidia_library_path="$(
+    "${virtual_environment_python}" -c \
+        'from pathlib import Path; import site; root = Path(site.getsitepackages()[0]) / "nvidia"; print(":".join(str(path) for path in sorted(root.glob("*/lib")) if path.is_dir()))'
+)"
+if [[ -n "${python_nvidia_library_path}" ]]; then
+    export LD_LIBRARY_PATH="${python_nvidia_library_path}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+fi
+
 cmake \
     -S "${repository_directory}/cpp" \
     -B "${repository_directory}/cpp/build" \

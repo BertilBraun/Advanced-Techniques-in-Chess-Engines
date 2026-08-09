@@ -82,6 +82,15 @@ if [[ ! -f "${katago_executable}" ]]; then
     exit 1
 fi
 
+katago_runtime_relative_path="katago"
+if (
+    cd "${temporary_directory}/katago"
+    "${katago_executable}" --appimage-extract >/dev/null
+); then
+    mv "${temporary_directory}/katago/squashfs-root" "${temporary_directory}/katago/appimage-root"
+    katago_runtime_relative_path="appimage-root/AppRun"
+fi
+
 mkdir -p "${engine_directory}/upstream"
 mv "${temporary_directory}/stockfish/stockfish" "${engine_directory}/upstream/stockfish-${stockfish_version}"
 mv "${temporary_directory}/katago" "${engine_directory}/upstream/katago-${katago_version}-${katago_backend}"
@@ -89,7 +98,7 @@ mv "${katago_model}" "${engine_directory}/${katago_model_name}"
 cp "${script_directory}/katago-analysis.cfg" "${engine_directory}/katago-analysis.cfg"
 
 ln -s "upstream/stockfish-${stockfish_version}/stockfish-ubuntu-x86-64" "${engine_directory}/stockfish"
-ln -s "upstream/katago-${katago_version}-${katago_backend}/katago" "${engine_directory}/katago"
+ln -s "upstream/katago-${katago_version}-${katago_backend}/${katago_runtime_relative_path}" "${engine_directory}/katago"
 ln -s "${katago_model_name}" "${engine_directory}/katago.bin.gz"
 chmod +x "${engine_directory}/stockfish" "${engine_directory}/katago"
 
@@ -105,6 +114,7 @@ Stockfish archive: ${stockfish_archive_url}
 KataGo version: ${katago_version}
 KataGo backend: ${katago_backend}
 KataGo archive: ${katago_archive_url}
+KataGo runtime path: ${katago_runtime_relative_path}
 KataGo model: ${katago_model_url}
 EOF
 

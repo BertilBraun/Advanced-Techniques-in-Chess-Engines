@@ -54,6 +54,10 @@ Installation refuses to overwrite an existing `engines/` directory. To reinstall
 directory after confirming it contains only generated upstream artifacts. `ARTIFACTS.sha256` and
 `INSTALLATION.txt` inside it record what was fetched.
 
+Official KataGo Linux archives contain an AppImage. The installer extracts its embedded runtime and points
+`engines/katago` at the extracted `AppRun`, so unprivileged compute containers do not require FUSE. The original
+AppImage remains below `engines/upstream/` as provenance.
+
 The smoke script verifies:
 
 - Stockfish reports version 18, completes `uci`, and answers `isready`;
@@ -91,6 +95,9 @@ bash deployment/setup_remote.sh \
 
 Production configuration and approval files remain explicit inputs. The templates still describe unconfirmed local
 hardware and CPU training; they must be copied, reviewed, and updated for the rented offer before approval.
+`setup_remote.sh` also prepends the CUDA libraries installed by the locked PyTorch wheel to `LD_LIBRARY_PATH`.
+This lets the selected CUDA 12.x KataGo runtime use the same pinned user-space CUDA/cuDNN stack even when the host
+image provides a newer CUDA toolkit; the host-injected NVIDIA driver remains untouched.
 
 ## Selecting a KataGo accelerator backend
 
