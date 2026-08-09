@@ -159,7 +159,7 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     dataset_process = next(process for process in context.processes if process.args[1] == dataset_job)
     dataset_process.exitcode = 0
     assert manager.collect_completed_jobs()[0].job == dataset_job
-    assert scalar_steps == [20, 20]
+    assert scalar_steps == [20, 20, 20]
 
     clock.now = 41.0
     second_jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 3))

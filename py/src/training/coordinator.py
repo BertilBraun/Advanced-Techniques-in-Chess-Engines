@@ -16,6 +16,7 @@ from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.retention import CheckpointRetention
 from src.training.credit_ledger import CreditLedger
 from src.training.self_play_group import SelfPlayGroup
+from src.training.telemetry import training_lifecycle_telemetry
 from src.training.trainer import TrainerGroup, TrainingQuantumResult
 from src.training.run_limits import RunLimitMonitor
 from src.util.log import log
@@ -56,6 +57,7 @@ class Coordinator:
         self._apply_checkpoint_retention()
         self.latest_completed_model_version = self.ledger.model_generation
         self.final_stop_reason: str | None = None
+        self._credit_wait_started_at = time.perf_counter()
 
     def run(self) -> None:
         try:
@@ -88,6 +90,7 @@ class Coordinator:
         )
         if any(response.kind != 'running' for response in responses):
             raise RuntimeError('Self-play workers did not enter the running state.')
+        self._credit_wait_started_at = time.perf_counter()
 
     def _ingest_available_games(self) -> None:
         generation = self.ledger.model_generation
@@ -95,6 +98,7 @@ class Coordinator:
         self.ledger.add_samples(ingestion.samples_added, generation)
 
     def _train_quantum(self) -> None:
+        credit_wait_seconds = time.perf_counter() - self._credit_wait_started_at
         paused_worker_ids = self.configuration.training.topology.self_play.node_ids_to_pause_during_training
         paused = self.self_play_group.apply_to_workers(
             paused_worker_ids,
@@ -114,7 +118,7 @@ class Coordinator:
         result = self.trainer_group.train_quantum(self.replay_manager.description(), self.ledger.progress)
         self.ledger.commit_quantum(result)
         self.latest_completed_model_version = self.ledger.model_generation
-        self._record_training_statistics(result)
+        self._record_training_statistics(result, credit_wait_seconds)
         detailed_workers = self._detailed_statistics_workers()
         desired_states = tuple(
             RunningSelfPlayState(
@@ -129,6 +133,7 @@ class Coordinator:
         if any(response.kind != 'running' for response in applied):
             raise RuntimeError('Self-play workers did not apply the trained checkpoint.')
         self._apply_checkpoint_retention()
+        self._credit_wait_started_at = time.perf_counter()
 
     def _apply_checkpoint_retention(self) -> None:
         self.checkpoint_retention.apply(
@@ -140,17 +145,56 @@ class Coordinator:
         configured = self.game.self_play_configuration.detailed_statistics_workers
         return min(configured, self.self_play_group.worker_count)
 
-    def _record_training_statistics(self, result: TrainingQuantumResult) -> None:
+    def _record_training_statistics(self, result: TrainingQuantumResult, credit_wait_seconds: float) -> None:
         generation = result.checkpoint.generation
+        source_generation = generation - 1
         statistics = result.statistics
+        training = self.configuration.training
+        lifecycle = training_lifecycle_telemetry(
+            self.ledger.state,
+            training.lifecycle.credit,
+            self.replay_manager.description(),
+            training.trainer.global_batch_size,
+        )
+        self_play = self.game.self_play_parameters_at(source_generation)
         log_scalar('training/policy_loss', statistics.policy_loss, generation)
         log_scalar('training/wdl_loss', statistics.wdl_loss, generation)
         log_scalar('training/total_loss', statistics.total_loss, generation)
         log_scalar('training/gradient_norm', statistics.gradient_norm, generation)
         log_scalar('throughput/replay_rows_per_second', statistics.replay_rows_per_second, generation)
         log_scalar('throughput/training_samples_per_second', statistics.training_samples_per_second, generation)
+        log_scalar('training/optimizer_steps', result.completed_optimizer_steps, generation)
+        log_scalar('training/learning_rate', training.trainer.learning_rate.value_at(source_generation), generation)
+        log_scalar('training/quantum_duration_seconds', statistics.elapsed_seconds, generation)
+        log_scalar('credit/wait_seconds', credit_wait_seconds, generation)
+        log_scalar('credit/configured_replay_ratio', lifecycle.configured_replay_ratio, generation)
+        log_scalar('credit/observed_replay_ratio', lifecycle.observed_replay_ratio, generation)
+        log_scalar('credit/materialized_samples', lifecycle.materialized_samples, generation)
+        log_scalar('credit/consumed_presentations', lifecycle.consumed_presentations, generation)
+        log_scalar('credit/available_presentations', lifecycle.available_presentations, generation)
+        log_scalar(
+            'credit/required_presentations_per_quantum',
+            lifecycle.required_presentations_per_quantum,
+            generation,
+        )
+        log_scalar('credit/available_quantum_fraction', lifecycle.available_quantum_fraction, generation)
+        log_scalar('replay/live_rows', lifecycle.live_replay_rows, generation)
+        log_scalar('replay/logical_capacity', lifecycle.logical_replay_capacity, generation)
+        log_scalar('replay/fill_fraction', lifecycle.replay_fill_fraction, generation)
+        log_scalar('self_play/full_searches', self_play.full_searches, generation)
+        log_scalar('self_play/fast_searches', self_play.fast_searches, generation)
+        log_scalar('self_play/full_search_probability', self_play.full_search_probability, generation)
+        log_scalar(
+            'training/root_value_blend',
+            self.game.training_objective_at(source_generation).root_value_blend,
+            generation,
+        )
         log(
             f'Completed generation {generation}: loss={statistics.total_loss:.4f}, '
             f'replay={statistics.replay_rows_per_second:.0f} rows/s, '
-            f'training={statistics.training_samples_per_second:.0f} samples/s'
+            f'training={statistics.training_samples_per_second:.0f} samples/s, '
+            f'credit-wait={credit_wait_seconds:.1f}s, '
+            f'available-presentations={lifecycle.available_presentations:.0f}, '
+            f'observed-replay-ratio={lifecycle.observed_replay_ratio:.3f}, '
+            f'replay={lifecycle.live_replay_rows}/{lifecycle.logical_replay_capacity}'
         )

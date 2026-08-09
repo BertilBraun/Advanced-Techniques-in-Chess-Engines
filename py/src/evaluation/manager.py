@@ -348,6 +348,7 @@ class EvaluationManager:
     def _report(self, result: EvaluationResult) -> None:
         step = result.job.boundary_seconds
         definition_id = result.job.definition.definition_id
+        log_scalar(f'evaluation/{definition_id}/duration_seconds', result.duration_seconds, step)
         match result.kind:
             case 'fixed_dataset':
                 log_scalar(
