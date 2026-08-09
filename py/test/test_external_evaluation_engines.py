@@ -11,7 +11,13 @@ import pytest
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
 from src.games.chess.stockfish import StockfishClient
 from src.games.go.contract import GoStateContract
-from src.games.go.katago import KataGoClient, action_id_to_gtp, action_id_to_sgf, gtp_to_action_id
+from src.games.go.katago import (
+    KataGoClient,
+    _process_environment,
+    action_id_to_gtp,
+    action_id_to_sgf,
+    gtp_to_action_id,
+)
 
 
 class FakeChessPosition:
@@ -84,6 +90,15 @@ def test_go_sgf_coordinates_use_sgf_not_gtp_notation() -> None:
     assert action_id_to_sgf(0, 7) == 'aa'
     assert action_id_to_sgf(48, 7) == 'gg'
     assert action_id_to_sgf(49, 7) == ''
+
+
+def test_katago_selects_a_device_from_the_inherited_cuda_slot(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '2,3')
+
+    environment = _process_environment(1)
+
+    assert environment is not None
+    assert environment['CUDA_VISIBLE_DEVICES'] == '3'
 
 
 class FakeKataGoProcess:

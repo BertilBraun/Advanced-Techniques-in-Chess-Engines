@@ -105,6 +105,20 @@ def action_id_to_sgf(action_id: int, board_size: int) -> str:
     return f'{chr(ord("a") + action_id % board_size)}{chr(ord("a") + action_id // board_size)}'
 
 
+def _process_environment(visible_cuda_device: int | None) -> dict[str, str] | None:
+    if visible_cuda_device is None:
+        return None
+    inherited_devices = os.environ.get('CUDA_VISIBLE_DEVICES')
+    if inherited_devices is None:
+        selected_device = str(visible_cuda_device)
+    else:
+        device_tokens = tuple(token.strip() for token in inherited_devices.split(',') if token.strip())
+        if visible_cuda_device >= len(device_tokens):
+            raise ValueError('KataGo CUDA device is outside the inherited visible-device set.')
+        selected_device = device_tokens[visible_cuda_device]
+    return {**os.environ, 'CUDA_VISIBLE_DEVICES': selected_device}
+
+
 class KataGoClient:
     def __init__(
         self,
@@ -128,9 +142,7 @@ class KataGoClient:
         self.model_path = model_path
         self.analysis_configuration_path = analysis_configuration_path
         self._next_request_id = 0
-        process_environment = (
-            None if visible_cuda_device is None else {**os.environ, 'CUDA_VISIBLE_DEVICES': str(visible_cuda_device)}
-        )
+        process_environment = _process_environment(visible_cuda_device)
         self._process = subprocess.Popen(
             [
                 str(executable_path),
