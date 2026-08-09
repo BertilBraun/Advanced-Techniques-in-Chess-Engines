@@ -1186,10 +1186,10 @@ entry point rather than retaining compatibility wrappers.
 
 Concretely, Phase 3 reworks `py/src/training/coordinator.py` (or its accepted Phase 2 destination),
 `py/src/experiment/configuration.py`, `py/src/experiment/base_configuration.py`, `py/src/experiment/run.py`,
-`py/src/training/checkpoint.py`, `py/src/util/tensorboard.py`, `py/src/games/implementation.py`, both concrete game
+the `py/src/training/checkpoint` package, `py/src/util/tensorboard.py`, `py/src/games/implementation.py`, both concrete game
 configuration and implementation modules, and the checked-in experiment configurations. It replaces
 the former evaluation optimization note as a normative design document. Training-quantum statistics remain owned by
-`py/src/training/trainer_group.py` and are not generalized into an evaluation result model.
+the `py/src/training/trainer` package and are not generalized into an evaluation result model.
 
 ### Failure, restart, shutdown, and retention
 
@@ -1222,12 +1222,15 @@ experiment/
 
 self_play/
     completed_game.py
+    configuration.py
+    native_search.py
     parameters.py
     protocol.py
     worker.py
 
 replay/
     batch_loader.py
+    configuration.py
     contracts.py
     layout.py
     manager.py
@@ -1236,38 +1239,46 @@ replay/
 
 training/
     batch.py
-    checkpoint.py
     configuration.py
     coordinator.py
     credit_ledger.py
+    network.py
     objective.py
     progress.py
     run_limits.py
     self_play_group.py
     targets.py
-    trainer_group.py
-    value.py
+    checkpoint/
+        contracts.py
+        paths.py
+        persistence.py
+        retention.py
+    trainer/
+        contracts.py
+        group.py
+        rank.py
 
 evaluation/
-    artifacts.py
     configuration.py
     contracts.py
     dataset.py
     engine.py
     manager.py
     match.py
+    openings.py
     preparation.py
     process.py
+    scheduling.py
     statistics.py
 
 games/
     composition.py
     contracts.py
     implementation.py
+    representation.py
     chess/
         contract.py
         configuration.py
-        evaluation.py
         stockfish.py
         training.py
         interactive/
@@ -1275,7 +1286,6 @@ games/
     go/
         contract.py
         configuration.py
-        evaluation.py
         katago.py
         training.py
 ```
