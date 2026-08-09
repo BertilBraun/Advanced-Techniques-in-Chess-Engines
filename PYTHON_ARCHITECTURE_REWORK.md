@@ -947,7 +947,7 @@ contains:
 
 - the elapsed cadence, initially 1,200 seconds;
 - a nonempty tuple of evaluation device IDs owned by the shared training topology;
-- one fixed deadline and shutdown grace period;
+- one 1,200-second per-job deadline and shutdown grace period;
 - a tuple of uniquely named evaluation definitions;
 - game-specific Stockfish or KataGo artifact configuration where used.
 
@@ -966,10 +966,15 @@ EvaluationDefinition
 
 Checkpoint opponents select either a positive previous-evaluation-boundary offset or one fixed retained checkpoint.
 Job construction resolves that selector to the existing canonical `CheckpointReference`; process messages do not
-carry a second model-reference representation. The recommended initial ladder uses the immediately preceding
-evaluated checkpoint, which keeps the comparison interval meaningful when generation speed changes. A definition
-that cannot yet resolve its opponent is not due. There are no inspection/full tiers, historical-model rotation
-buckets, teacher-evaluation special cases, or plateau rules.
+carry a second model-reference representation. The initial ladder uses offsets one, two, and three, showing progress
+against the checkpoints selected 20, 40, and 60 minutes earlier. It also evaluates every available retained generation
+10, 20, ..., 100 at every boundary. A fixed generation is not due until it is older than the candidate and its
+checkpoint manifest exists. There is no historical rotation, inspection/full tier, teacher-evaluation special case,
+or plateau rule.
+
+Chess additionally runs Stockfish skill levels 0, 1, 2, and 3 at every boundary. Go retains its configured KataGo
+baseline. Together with the fixed dataset, search against random, and greedy policy against random, the complete
+chess ladder reaches 20 concurrent jobs after generation 100 is available.
 
 Every resolved job records:
 
@@ -989,6 +994,9 @@ All definitions due at one boundary launch as independent processes without a sl
 device IDs by cycling through the configured nonempty evaluation-device tuple in stable job order. If there are more
 jobs than devices, several jobs intentionally share a device. The child activates its assigned device before Torch
 initializes CUDA models or the native extension constructs a search. This is the complete Phase 3 assignment policy.
+Every job has the same 20-minute timeout as the cadence. The manager terminates a job that exceeds it, writes a typed
+deadline failure artifact, and logs the failure explicitly. The coordinator collects these failures before scheduling
+due jobs on each outer-loop iteration.
 
 Dataset, both random-opponent variants, and external-engine matches load one project inference model. Checkpoint
 matches load two and must be sized accordingly during target-hardware validation. Stockfish consumes additional CPU.
@@ -1949,8 +1957,9 @@ Each commit leaves its introduced package internally tested and formatted. Tempo
 part of this sequence; the final migration changes controlled callers directly.
 
 The initial implementation therefore has five deliberate policy defaults: 20-minute elapsed boundaries evaluated
-with the checkpoint available at each boundary; one concurrent process per enabled definition assigned by cycling
-evaluation devices; the immediately preceding evaluated checkpoint as the historical opponent; four-ply,
+with the checkpoint available at each boundary and a matching 20-minute job deadline; one concurrent process per enabled definition assigned by cycling
+evaluation devices; three preceding evaluated checkpoints plus retained generations 10 through 100 as historical
+opponents; four-ply,
 50-position generated opening suites; and one engine-self-play dataset retaining every third position until it has
 480 to 520 positions per game/ruleset. Search limits, Stockfish WDL
 temperature, sampling temperature, game counts, and the concrete evaluation-device tuple are benchmarked configuration
@@ -1964,13 +1973,15 @@ Phase 3 implementation evidence, awaiting user review:
   model policy, masks illegal actions, and uses greedy legal action selection without native search;
 - all due definitions launch concurrently, device assignment is a stable cycle, historical jobs require an actually
   older boundary checkpoint, and TensorBoard uses the requested elapsed boundary as its step;
+- chess evaluates Stockfish levels 0 through 3, all games evaluate the preceding 20-, 40-, and 60-minute checkpoints
+  and each available retained generation from 10 through 100, and every job has a 20-minute deadline;
 - generated openings contain exactly four plies and 50 distinct positions; generated datasets retain every third
   position until 480 to 520 positions exist and retain inspectable complete source-game records;
 - the old chess evaluation package, HDF5 dataset/database/loader/statistics graph, plateau automation, standalone
   preparation/benchmark tools, and TSV opening suites are deleted. From authorization through the final code commit,
-  Phase 3 changes 78 files, adds 3,673 lines, and deletes 4,675 lines for a net reduction of 1,002 lines;
-- Ruff passes. The Windows suite passes 164 tests with 12 intentional native/real-engine skips. The freshly built
-  extension-backed Linux suite passes 191 tests with 4 real-infrastructure skips. The native CTest target passes;
+  Phase 3 changes 78 files, adds 4,011 lines, and deletes 4,683 lines for a net reduction of 672 lines;
+- Ruff passes. The Windows suite passes 168 tests with 12 intentional native/real-engine skips. The freshly built
+  extension-backed Linux suite passes 195 tests with 4 real-infrastructure skips. The native CTest target passes;
 - opt-in Stockfish and KataGo smoke tests are present but were not run because local executable/model/configuration
   artifacts were not configured. Those real-engine and target-hardware contention measurements remain review-time
   deployment validation, not a second implementation path.
