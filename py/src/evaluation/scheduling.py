@@ -162,8 +162,12 @@ def _job_for_definition(
             )
         case StockfishEvaluationDefinition(skill_level=skill_level):
             return _match_job(definition, StockfishOpponent(kind='stockfish', skill_level=skill_level), context)
-        case KataGoEvaluationDefinition():
-            return _match_job(definition, KataGoOpponent(kind='katago'), context)
+        case KataGoEvaluationDefinition(maximum_visits=maximum_visits):
+            return _match_job(
+                definition,
+                KataGoOpponent(kind='katago', maximum_visits=maximum_visits),
+                context,
+            )
 
 
 def jobs_for_suite(

@@ -58,7 +58,6 @@ class KataGoEngineConfiguration(FrozenModel):
     model_path: str = Field(min_length=1)
     analysis_configuration_path: str = Field(min_length=1)
     label_max_visits: int = Field(gt=0)
-    match_max_visits: int = Field(gt=0)
 
 
 ExternalEngineConfiguration: TypeAlias = Annotated[
@@ -112,6 +111,7 @@ class StockfishEvaluationDefinition(FrozenModel):
 class KataGoEvaluationDefinition(FrozenModel):
     kind: Literal['katago']
     definition_id: str = Field(min_length=1)
+    maximum_visits: int = Field(gt=0)
     search: EvaluationSearchConfiguration
     maximum_game_plies: int = Field(gt=0)
 

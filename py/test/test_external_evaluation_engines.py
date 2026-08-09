@@ -135,7 +135,6 @@ def test_katago_analysis_matches_out_of_order_responses(monkeypatch: pytest.Monk
         model_path=str(paths[1]),
         analysis_configuration_path=str(paths[2]),
         label_max_visits=32,
-        match_max_visits=16,
     )
     state = GoStateContract(7, komi_half_points=15, maximum_moves=196)
     client = KataGoClient(configuration, state, *paths)

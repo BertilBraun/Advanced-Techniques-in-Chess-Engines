@@ -51,7 +51,6 @@ def test_real_katago_returns_an_initial_policy() -> None:
         model_path=str(model),
         analysis_configuration_path=str(analysis_configuration),
         label_max_visits=16,
-        match_max_visits=16,
     )
 
     with KataGoClient(configuration, state, executable, model, analysis_configuration) as client:

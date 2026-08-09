@@ -142,4 +142,4 @@ def _create_external_match_engine(
                 resolve_project_path(engine_configuration.analysis_configuration_path),
                 visible_cuda_device=job.device_id,
             )
-            return KataGoMatchEngine(client)
+            return KataGoMatchEngine(client, job.opponent.maximum_visits)

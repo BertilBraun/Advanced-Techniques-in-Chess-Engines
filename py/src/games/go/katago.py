@@ -245,10 +245,12 @@ class KataGoClient:
     def policy(self, position: NativeGoPosition, action_ids: tuple[int, ...]) -> EnginePolicy:
         return self.analyze_many((action_ids,), self.configuration.label_max_visits)[0]
 
-    def choose_actions(self, action_sequences: tuple[tuple[int, ...], ...]) -> tuple[int, ...]:
-        return tuple(
-            policy.top_action_id for policy in self.analyze_many(action_sequences, self.configuration.match_max_visits)
-        )
+    def choose_actions(
+        self,
+        action_sequences: tuple[tuple[int, ...], ...],
+        maximum_visits: int,
+    ) -> tuple[int, ...]:
+        return tuple(policy.top_action_id for policy in self.analyze_many(action_sequences, maximum_visits))
 
     def render_game(self, action_ids: tuple[int, ...]) -> str:
         moves = ''.join(
@@ -280,8 +282,9 @@ class KataGoClient:
 
 
 class KataGoMatchEngine:
-    def __init__(self, client: KataGoClient) -> None:
+    def __init__(self, client: KataGoClient, maximum_visits: int) -> None:
         self.client = client
+        self.maximum_visits = maximum_visits
 
     def choose_actions(
         self,
@@ -290,7 +293,7 @@ class KataGoMatchEngine:
     ) -> tuple[int, ...]:
         if len(positions) != len(action_sequences):
             raise ValueError('KataGo match positions and histories must have equal lengths.')
-        return self.client.choose_actions(action_sequences)
+        return self.client.choose_actions(action_sequences, self.maximum_visits)
 
     def close(self) -> None:
         self.client.close()

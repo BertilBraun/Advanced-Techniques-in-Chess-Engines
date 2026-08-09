@@ -5,8 +5,8 @@ from pydantic import TypeAdapter, ValidationError
 
 from src.evaluation.configuration import EvaluationConfiguration
 from src.evaluation.contracts import MatchEvaluationJob, OpeningLine, RandomOpponent
-from src.training.checkpoint import CheckpointReference
 from src.experiment.configuration import load_experiment_configuration
+from src.training.checkpoint import CheckpointReference
 
 
 def test_checked_in_evaluation_definitions_are_canonical_for_each_game() -> None:
@@ -29,6 +29,9 @@ def test_checked_in_evaluation_definitions_are_canonical_for_each_game() -> None
     assert tuple(
         definition.skill_level for definition in chess.evaluation.definitions if definition.kind == 'stockfish'
     ) == (0, 1, 2, 3)
+    assert tuple(
+        definition.maximum_visits for definition in go.evaluation.definitions if definition.kind == 'katago'
+    ) == (16, 64, 256)
     assert tuple(
         definition.definition_id
         for definition in go.evaluation.definitions

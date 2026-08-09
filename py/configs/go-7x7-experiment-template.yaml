@@ -39,7 +39,7 @@ evaluation:
   bootstrap_samples: 10000
   dataset: {path: py/reference/go-7x7-evaluation-v1.bin, random_seed: 0, move_sampling_temperature: 1.0}
   openings: {path: py/reference/go-7x7-openings-v1.json, random_seed: 0, opening_count: 50, expanded_actions_per_position: 8, beam_width: 512}
-  engine: {kind: katago, executable_path: engines/katago, model_path: engines/katago.bin.gz, analysis_configuration_path: engines/katago-analysis.cfg, label_max_visits: 256, match_max_visits: 64}
+  engine: {kind: katago, executable_path: engines/katago, model_path: engines/katago.bin.gz, analysis_configuration_path: engines/katago-analysis.cfg, label_max_visits: 256}
   definitions:
     - kind: fixed_dataset
       definition_id: fixed-dataset
@@ -123,7 +123,18 @@ evaluation:
       maximum_game_plies: 196
       search: *evaluation_search
     - kind: katago
-      definition_id: katago
+      definition_id: katago-16
+      maximum_visits: 16
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: katago
+      definition_id: katago-64
+      maximum_visits: 64
+      maximum_game_plies: 196
+      search: *evaluation_search
+    - kind: katago
+      definition_id: katago-256
+      maximum_visits: 256
       maximum_game_plies: 196
       search: *evaluation_search
 go:

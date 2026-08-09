@@ -104,7 +104,6 @@ evaluation:
     model_path: engines/katago.bin.gz
     analysis_configuration_path: engines/katago-analysis.cfg
     label_max_visits: 16
-    match_max_visits: 2
   definitions:
     - kind: fixed_dataset
       definition_id: fixed-dataset
@@ -129,6 +128,7 @@ evaluation:
       search: *evaluation_search
     - kind: katago
       definition_id: katago
+      maximum_visits: 2
       maximum_game_plies: 20
       search: *evaluation_search
 go:

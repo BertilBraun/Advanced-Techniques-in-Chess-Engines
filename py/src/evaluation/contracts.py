@@ -80,6 +80,7 @@ class StockfishOpponent(FrozenModel):
 
 class KataGoOpponent(FrozenModel):
     kind: Literal['katago']
+    maximum_visits: int = Field(gt=0)
 
 
 EvaluationOpponent: TypeAlias = Annotated[
