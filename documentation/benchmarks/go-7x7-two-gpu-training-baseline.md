@@ -86,11 +86,16 @@ every tenth generation, while evaluation additionally protects referenced histor
 ## Evaluation baseline
 
 Evaluation remains on the accepted 20-minute elapsed cadence and logs at the scheduled boundary. Jobs time out after
-20 minutes and cycle independently across devices 0 and 1. Dataset and opening artifacts use new immutable baseline
-paths and are generated only if absent:
+20 minutes and cycle independently across devices 0 and 1. The production dataset and opening suite are immutable,
+checked-in baseline inputs. Run preparation validates and reuses them rather than invoking KataGo generation:
 
 - engine-labelled dataset: `py/reference/go-7x7-baseline-v1.bin`;
 - four-ply, 50-line opening suite: `py/reference/go-7x7-baseline-openings-v1.json`.
+
+The dataset contains 486 positions retained from 30 complete games. Its SHA-256 is
+`c63c3e8894ea01d016e5c3bc5a0bc90a1214b98eb2eb3cac7301a7270d8ba5b0`; the manifest SHA-256 is
+`c0aa1b1da69186e6062f64c0f7a1e4ef37b4b573f270084056228e4f627dbd99`; and the opening-suite SHA-256 is
+`57283f2e27d27af6c8e3403c1979dd5431948cd8132ccb01177d727e6c00f80e`.
 
 KataGo labels the dataset at 256 visits and plays matches at 64 visits. Every paired match definition uses all 50
 openings with the candidate playing each side, hence 100 games per definition. The fixed ladder contains:

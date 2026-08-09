@@ -1,5 +1,6 @@
 **/**.so
 **/**.bin
+!reference/go-7x7-baseline-v1.bin
 
 **/log_**.txt
 **/**.dot
