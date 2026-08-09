@@ -2,6 +2,7 @@ torch==2.12.1
 numpy
 chess
 GPUtil
+huggingface-hub
 psutil
 pydantic==2.13.2
 PyYAML
