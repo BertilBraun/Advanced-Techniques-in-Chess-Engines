@@ -47,13 +47,22 @@ class _RankRuntime:
     device: torch.device
 
 
-@dataclass
+@dataclass(frozen=True)
 class _LossTotals:
     policy: float
     wdl: float
-    auxiliary: list[float]
+    auxiliary: tuple[float, ...]
     total: float
     gradient_norm: float
+
+
+@dataclass(frozen=True)
+class _DeviceLossTotals:
+    policy: torch.Tensor
+    wdl: torch.Tensor
+    auxiliary: torch.Tensor
+    total: torch.Tensor
+    gradient_norm: torch.Tensor
 
 
 def _initialize_rank(
@@ -153,8 +162,14 @@ def _train_batches(
     uses_cuda: bool,
     maximum_gradient_norm: float,
     objective: ResolvedTrainingObjective,
-) -> _LossTotals:
-    totals = _LossTotals(0.0, 0.0, [0.0] * len(objective.auxiliary_loss_weights), 0.0, 0.0)
+) -> _DeviceLossTotals:
+    totals = _DeviceLossTotals(
+        policy=torch.zeros((), device=device),
+        wdl=torch.zeros((), device=device),
+        auxiliary=torch.zeros(len(objective.auxiliary_loss_weights), device=device),
+        total=torch.zeros((), device=device),
+        gradient_norm=torch.zeros((), device=device),
+    )
     for batch in loader:
         batch = batch.to_device(device, non_blocking=uses_cuda)
         optimizer.zero_grad(set_to_none=True)
@@ -163,13 +178,29 @@ def _train_batches(
         loss.total.backward()
         gradient_norm = torch.nn.utils.clip_grad_norm_(distributed_model.parameters(), maximum_gradient_norm)
         optimizer.step()
-        totals.policy += float(loss.policy.detach())
-        totals.wdl += float(loss.wdl.detach())
-        totals.total += float(loss.total.detach())
-        totals.gradient_norm += float(gradient_norm.detach())
-        for index, auxiliary in enumerate(loss.auxiliary):
-            totals.auxiliary[index] += float(auxiliary.detach())
+        totals.policy.add_(loss.policy.detach())
+        totals.wdl.add_(loss.wdl.detach())
+        totals.total.add_(loss.total.detach())
+        totals.gradient_norm.add_(gradient_norm.detach())
+        if loss.auxiliary:
+            totals.auxiliary.add_(torch.stack(tuple(auxiliary.detach() for auxiliary in loss.auxiliary)))
     return totals
+
+
+def _resolve_loss_totals(totals: _DeviceLossTotals) -> _LossTotals:
+    host_totals = torch.cat(
+        (
+            torch.stack((totals.policy, totals.wdl, totals.total, totals.gradient_norm)),
+            totals.auxiliary,
+        )
+    ).cpu()
+    return _LossTotals(
+        policy=float(host_totals[0]),
+        wdl=float(host_totals[1]),
+        auxiliary=tuple(float(value) for value in host_totals[4:]),
+        total=float(host_totals[2]),
+        gradient_norm=float(host_totals[3]),
+    )
 
 
 def _save_rank_checkpoint(
@@ -215,14 +246,16 @@ def train_rank_quantum(
         sampler_seed=configuration.training.random_seed,
         pin_memory=uses_cuda,
     )
-    totals = _train_batches(
-        loader,
-        ddp,
-        optimizer,
-        device,
-        uses_cuda,
-        configuration.training.trainer.max_grad_norm,
-        command.parameters.objective,
+    totals = _resolve_loss_totals(
+        _train_batches(
+            loader,
+            ddp,
+            optimizer,
+            device,
+            uses_cuda,
+            configuration.training.trainer.max_grad_norm,
+            command.parameters.objective,
+        )
     )
     checkpoint = _save_rank_checkpoint(rank, model, optimizer, command, configuration.training.save_path)
     distributed.barrier()
