@@ -4,7 +4,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 
-from src.training.configuration import BatchedInferenceParams
+from src.self_play.configuration import BatchedInferenceParams
 from src.util.frozen_model import FrozenModel
 
 

@@ -7,9 +7,9 @@ from src.games.go.contract import GoStateContract, NativeGoPosition
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
 from src.self_play.parameters import ResolvedSelfPlayParameters
-from src.self_play.worker import NativeSelfPlaySearch
+from src.self_play.native_search import NativeSelfPlaySearch
 from src.training.checkpoint import CheckpointReference
-from src.training.configuration import BatchedInferenceParams, SelfPlayConfiguration
+from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 

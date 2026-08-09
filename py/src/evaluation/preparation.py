@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.evaluation.artifacts import build_evaluation_dataset, build_opening_suite, dataset_manifest_path
+from src.evaluation.dataset import build_evaluation_dataset, dataset_manifest_path
+from src.evaluation.openings import build_opening_suite
 from src.evaluation.contracts import EvaluationDatasetManifest, OpeningSuiteManifest
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.chess.configuration import ChessExperimentConfiguration

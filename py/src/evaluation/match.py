@@ -27,7 +27,7 @@ from src.evaluation.statistics import aggregate_match
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.implementation import GameImplementation
 from src.self_play.completed_game import TerminationReason
-from src.self_play.worker import NativeSelfPlaySearch
+from src.self_play.native_search import NativeSelfPlaySearch
 
 
 PositionT = TypeVar('PositionT')

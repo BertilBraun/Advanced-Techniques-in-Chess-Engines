@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 import torch
 
-from src.evaluation.artifacts import (
+from src.evaluation.dataset import (
     build_evaluation_dataset,
-    build_opening_suite,
     load_evaluation_dataset,
 )
+from src.evaluation.openings import build_opening_suite
 from src.evaluation.configuration import (
     EvaluationDatasetConfiguration,
     FixedDatasetEvaluationDefinition,

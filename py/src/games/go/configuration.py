@@ -6,7 +6,8 @@ from pydantic import Field, model_validator
 
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.games.representation import NetworkDimensions
-from src.training.configuration import SelfPlayConfiguration, TrainingObjectiveConfiguration
+from src.self_play.configuration import SelfPlayConfiguration
+from src.training.configuration import TrainingObjectiveConfiguration
 from src.util.frozen_model import FrozenModel
 
 

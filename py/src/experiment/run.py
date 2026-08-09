@@ -17,7 +17,6 @@ from src.experiment.base_configuration import (
     WeightsOnlyResumeConfiguration,
 )
 from src.experiment.configuration import ExperimentConfiguration
-from src.evaluation.artifacts import file_sha256
 from src.evaluation.preparation import prepare_evaluation_artifacts
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.chess.configuration import ChessExperimentConfiguration
@@ -247,9 +246,9 @@ def prepare_experiment_training_run(
         source_revision=source_revision,
         source_worktree_clean=source_worktree_clean,
         initial_model_sha256=_sha256(initial_checkpoint_path),
-        evaluation_dataset_sha256=file_sha256(evaluation_artifacts.dataset_path),
-        evaluation_dataset_manifest_sha256=file_sha256(evaluation_artifacts.dataset_manifest_path),
-        opening_suite_manifest_sha256=file_sha256(evaluation_artifacts.opening_manifest_path),
+        evaluation_dataset_sha256=_sha256(evaluation_artifacts.dataset_path),
+        evaluation_dataset_manifest_sha256=_sha256(evaluation_artifacts.dataset_manifest_path),
+        opening_suite_manifest_sha256=_sha256(evaluation_artifacts.opening_manifest_path),
         evaluation_engine_artifact_sha256=evaluation_artifacts.dataset_manifest.engine_artifact_sha256,
         open_file_soft_limit=open_file_soft_limit,
         torch_version=torch.__version__,

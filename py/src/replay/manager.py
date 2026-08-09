@@ -10,7 +10,7 @@ from src.replay.layout import ReplayLayout
 from src.replay.materialization import materialize_completed_game
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import CompletedSelfPlayGame
-from src.training.configuration import ReplayConfiguration
+from src.replay.configuration import ReplayConfiguration
 from src.util.frozen_model import FrozenModel
 
 

@@ -3,8 +3,19 @@ import os
 import time
 
 import psutil
+from pydantic import Field
 
-from src.training.configuration import RuntimeLimits
+from src.util.frozen_model import FrozenModel
+
+
+class RuntimeLimits(FrozenModel):
+    hourly_price: float = Field(ge=0.0)
+    maximum_cost: float | None = Field(default=None, gt=0.0)
+    maximum_wall_time_seconds: float = Field(gt=0.0)
+    maximum_open_file_count: int = Field(gt=0)
+    maximum_host_ram_percent: float = Field(gt=0.0, le=100.0)
+    minimum_free_disk_gib: float = Field(ge=0.0)
+    resource_telemetry_interval_seconds: float = Field(gt=0.0)
 
 
 def estimated_cost(hourly_price: float, elapsed_seconds: float) -> float:

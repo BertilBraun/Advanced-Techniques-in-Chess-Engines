@@ -65,3 +65,10 @@ class EnginePolicyProvider(Protocol, Generic[PositionT]):
     def render_game(self, action_ids: tuple[int, ...]) -> str: ...
 
     def close(self) -> None: ...
+
+
+def validate_engine_policy(policy: EnginePolicy, legal_actions: tuple[int, ...]) -> EnginePolicy:
+    legal = set(legal_actions)
+    if any(entry.action_id not in legal for entry in policy.entries):
+        raise ValueError('Engine policy contains an illegal action.')
+    return policy

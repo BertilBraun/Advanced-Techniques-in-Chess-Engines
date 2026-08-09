@@ -18,7 +18,7 @@ from src.self_play.completed_game import (
     TerminationReason,
     publish_completed_self_play_game,
 )
-from src.training.configuration import ReplayConfiguration
+from src.replay.configuration import ReplayConfiguration
 from src.training.targets import NextPolicyHeadLayout, TrainingTargetLayout
 
 

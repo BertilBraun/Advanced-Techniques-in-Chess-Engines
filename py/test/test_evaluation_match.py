@@ -23,7 +23,7 @@ from src.games.representation import PackedPlaneLayout, PackedPlanePayload, Repr
 from src.replay.contracts import ReplaySample
 from src.self_play.completed_game import TerminationReason
 from src.training.checkpoint import CheckpointReference
-from src.training.configuration import BatchedInferenceParams
+from src.self_play.configuration import BatchedInferenceParams
 
 
 @dataclass(frozen=True)

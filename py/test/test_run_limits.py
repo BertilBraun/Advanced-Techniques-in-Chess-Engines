@@ -4,8 +4,7 @@ from pathlib import Path
 import psutil
 import pytest
 
-from src.training.configuration import RuntimeLimits
-from src.training.run_limits import RunLimitMonitor
+from src.training.run_limits import RunLimitMonitor, RuntimeLimits
 import src.training.run_limits as run_limits_module
 
 

@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract
 from src.games.representation import NetworkDimensions
+from src.self_play.configuration import SelfPlayConfiguration
 from src.self_play.parameters import ResolvedSelfPlayParameters
-from src.training.configuration import SelfPlayConfiguration, TrainingArgs
+from src.training.configuration import TrainingArgs
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import TrainingTargetLayout
 
@@ -15,7 +16,7 @@ from src.training.targets import TrainingTargetLayout
 if TYPE_CHECKING:
     from AlphaZeroCpp import SelfPlaySearchParameters
 
-    from src.self_play.worker import NativeSelfPlaySearch
+    from src.self_play.native_search import NativeSelfPlaySearch
     from src.evaluation.configuration import EvaluationSearchConfiguration
     from src.training.checkpoint import CheckpointReference
 
