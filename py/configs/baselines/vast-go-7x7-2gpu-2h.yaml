@@ -35,9 +35,7 @@ training:
     global_batch_size: 1024
     local_batch_size: 512
     optimizer: adamw
-    learning_rate:
-      kind: constant
-      value: 0.002
+    learning_rate: {kind: constant, value: 0.002}
     max_grad_norm: 0.5
     duplicate_multiplicity_weight_cap:
   topology:
@@ -45,41 +43,19 @@ training:
       device_type: cuda
       process_group_backend: nccl
       rank_zero_device_id: 0
-      ddp_device_ids:
-        - 0
-        - 1
+      ddp_device_ids: [0, 1]
       cpu_threads: 8
       interop_threads: 1
     self_play:
-      device_ids:
-        - 0
-        - 0
-        - 0
-        - 0
-        - 1
-        - 1
-        - 1
-        - 1
+      device_ids: [0, 0, 0, 0, 1, 1, 1, 1]
       parallel_games_per_process: 1024
       tensorboard_processes: 1
-      node_ids_to_pause_during_training:
-        - 0
-        - 1
-        - 4
-        - 5
+      node_ids_to_pause_during_training: [0, 1, 4, 5]
     evaluation:
-      device_cycle:
-        - 0
-        - 1
+      device_cycle: [0, 1]
   lifecycle:
     replay:
-      capacity:
-        kind: linear
-        start_generation: 0
-        end_generation: 200
-        start_value: 100000
-        end_value: 2500000
-        rounding: nearest
+      capacity: {kind: linear, start_generation: 0, end_generation: 200, start_value: 100000, end_value: 2500000, rounding: nearest}
       maximum_capacity: 2500000
       maximum_policy_entries: 50
     credit:
@@ -121,8 +97,7 @@ evaluation:
     label_max_visits: 256
     match_max_visits: 64
   definitions:
-    - kind: fixed_dataset
-      definition_id: fixed-dataset
+    - {kind: fixed_dataset, definition_id: fixed-dataset}
     - kind: random
       definition_id: search-random
       maximum_game_plies: 196
@@ -134,125 +109,42 @@ evaluation:
           inference_workers: 1
           inference_batch_size: 64
           outstanding_batches_per_worker: 1
-    - kind: policy_random
-      definition_id: policy-random
-      maximum_game_plies: 196
-    - kind: previous_checkpoint
-      definition_id: previous-20m
-      boundary_offset: 1
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: previous_checkpoint
-      definition_id: previous-40m
-      boundary_offset: 2
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: previous_checkpoint
-      definition_id: previous-60m
-      boundary_offset: 3
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-10
-      generation: 10
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-20
-      generation: 20
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-30
-      generation: 30
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-40
-      generation: 40
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-50
-      generation: 50
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-60
-      generation: 60
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-70
-      generation: 70
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-80
-      generation: 80
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-90
-      generation: 90
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-100
-      generation: 100
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: katago
-      definition_id: katago
-      maximum_game_plies: 196
-      search: *evaluation_search
+    - {kind: policy_random, definition_id: policy-random, maximum_game_plies: 196}
+    - {kind: previous_checkpoint, definition_id: previous-20m, boundary_offset: 1, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-40m, boundary_offset: 2, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-60m, boundary_offset: 3, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: fixed_checkpoint, definition_id: generation-10, generation: 10, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: fixed_checkpoint, definition_id: generation-20, generation: 20, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: fixed_checkpoint, definition_id: generation-30, generation: 30, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: fixed_checkpoint, definition_id: generation-40, generation: 40, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: fixed_checkpoint, definition_id: generation-50, generation: 50, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: fixed_checkpoint, definition_id: generation-60, generation: 60, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: fixed_checkpoint, definition_id: generation-70, generation: 70, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: fixed_checkpoint, definition_id: generation-80, generation: 80, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: fixed_checkpoint, definition_id: generation-90, generation: 90, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: fixed_checkpoint, definition_id: generation-100, generation: 100, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: katago, definition_id: katago, maximum_game_plies: 196, search: *evaluation_search}
 go:
   self_play:
     search:
-      full_searches:
-        kind: constant
-        value: 256
-      fast_searches:
-        kind: constant
-        value: 32
+      full_searches: {kind: constant, value: 256}
+      fast_searches: {kind: constant, value: 32}
       parallel_searches: 1
-      dirichlet_epsilon:
-        kind: constant
-        value: 0.25
-      dirichlet_alpha:
-        kind: constant
-        value: 0.3
-      exploration_constant:
-        kind: constant
-        value: 1.5
-      minimum_root_visits:
-        kind: constant
-        value: 0
+      dirichlet_epsilon: {kind: constant, value: 0.25}
+      dirichlet_alpha: {kind: constant, value: 0.3}
+      exploration_constant: {kind: constant, value: 1.5}
+      minimum_root_visits: {kind: constant, value: 0}
     inference:
       inference_workers: 1
       inference_batch_size: 128
       outstanding_batches_per_worker: 2
-    random_opening_plies:
-      kind: constant
-      value: 0
-    full_search_probability:
-      kind: constant
-      value: 1.0
-    retained_root_visit_fraction:
-      kind: constant
-      value: 0.0
-    greedy_after_ply:
-      kind: constant
-      value: 40
-    starting_temperature:
-      kind: constant
-      value: 1.0
-    final_temperature:
-      kind: constant
-      value: 0.1
-    primary_sample_weight:
-      kind: constant
-      value: 1.0
+    random_opening_plies: {kind: constant, value: 0}
+    full_search_probability: {kind: constant, value: 1.0}
+    retained_root_visit_fraction: {kind: constant, value: 0.0}
+    greedy_after_ply: {kind: constant, value: 40}
+    starting_temperature: {kind: constant, value: 1.0}
+    final_temperature: {kind: constant, value: 0.1}
+    primary_sample_weight: {kind: constant, value: 1.0}
     detailed_statistics_workers: 1
   rules:
     komi_half_points: 15
@@ -264,13 +156,7 @@ go:
     scalar_channel_count: 1
     canonical_player_perspective: true
   objective:
-    policy_loss_weight:
-      kind: constant
-      value: 1.0
-    value_loss_weight:
-      kind: constant
-      value: 1.0
-    root_value_blend:
-      kind: constant
-      value: 0.0
+    policy_loss_weight: {kind: constant, value: 1.0}
+    value_loss_weight: {kind: constant, value: 1.0}
+    root_value_blend: {kind: constant, value: 0.0}
     auxiliary_targets: []
