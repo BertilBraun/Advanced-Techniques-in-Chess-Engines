@@ -36,7 +36,7 @@ training:
     local_batch_size: 512
     optimizer: adamw
     learning_rate: {kind: constant, value: 0.002}
-    max_grad_norm: 0.5
+    max_grad_norm: 1.0
     duplicate_multiplicity_weight_cap:
   topology:
     trainer:

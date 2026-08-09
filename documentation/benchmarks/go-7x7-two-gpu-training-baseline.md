@@ -39,7 +39,8 @@ Two persistent NCCL ranks share the same two GPUs as self-play:
 - local batch size is 512 rows per rank;
 - global batch size is 1,024 rows per optimizer step;
 - each rank may use eight intra-op CPU threads and one inter-op thread;
-- AdamW uses the existing constant learning rate 0.002 and gradient norm cap 0.5.
+- AdamW uses the existing constant learning rate 0.002 and gradient norm cap 1.0. The earlier calibration ran close
+  to the 0.5 cap, so the screening baseline raises it to avoid clipping ordinary updates too aggressively.
 
 Batch 512 is a conservative first training baseline inherited from the established per-GPU batch target. It has not
 yet been optimized for the much smaller Go model. Training-batch throughput, GPU power, memory, and step latency are
