@@ -67,7 +67,22 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
     assert configuration.training.network.hidden_size == 112
     assert configuration.chess.self_play.search.exploration_constant.value_at(0) == pytest.approx(1.5)
     assert configuration.training.topology.trainer.ddp_device_ids == (0,)
-    assert configuration.chess.self_play.search.parallel_searches == 2
+    assert configuration.training.trainer.global_batch_size == 2048
+    assert configuration.training.trainer.local_batch_size == 2048
+    assert configuration.training.trainer.learning_rate.value_at(199) == pytest.approx(0.005)
+    assert configuration.training.trainer.learning_rate.value_at(200) == pytest.approx(0.0035)
+    assert configuration.training.trainer.learning_rate.value_at(500) == pytest.approx(0.002)
+    assert configuration.training.trainer.duplicate_multiplicity_weight_cap is None
+    assert configuration.training.topology.self_play.device_ids == (0, 0, 0, 0)
+    assert configuration.training.lifecycle.credit.retained_checkpoint_interval_generations == 3
+    assert configuration.training.limits.maximum_wall_time_seconds == 2 * 24 * 60 * 60
+    assert configuration.run.environment.minimum_open_file_soft_limit == 65_536
+    assert configuration.chess.self_play.search.full_searches.value_at(0) == 300
+    assert configuration.chess.self_play.search.full_searches.value_at(20) == 600
+    assert configuration.chess.self_play.search.fast_searches.value_at(0) == 75
+    assert configuration.chess.self_play.search.fast_searches.value_at(20) == 150
+    assert configuration.chess.self_play.search.parallel_searches == 1
+    assert configuration.chess.self_play.search.minimum_root_visits.value_at(0) == 0
     assert configuration.chess.self_play.inference.inference_workers == 2
     assert configuration.chess.self_play.inference.inference_batch_size == 64
     assert configuration.chess.self_play.inference.outstanding_batches_per_worker == 2
@@ -75,6 +90,14 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
     assert configuration.evaluation.dataset.path.endswith('chess-evaluation-v1.bin')
     assert configuration.evaluation.openings.opening_count == 50
     assert configuration.evaluation.engine.kind == 'stockfish'
+    assert configuration.evaluation.engine.hash_mib == 1024
+    assert configuration.chess.self_play.maximum_game_plies is not None
+    assert configuration.chess.self_play.maximum_game_plies.value_at(0) == 200
+    assert configuration.chess.self_play.maximum_game_plies.value_at(25) == 300
+    assert configuration.chess.self_play.maximum_game_plies.value_at(50) == 400
+    assert configuration.chess.objective.root_value_blend.value_at(9) == pytest.approx(0.0)
+    assert configuration.chess.objective.root_value_blend.value_at(20) == pytest.approx(0.075)
+    assert configuration.chess.objective.root_value_blend.value_at(30) == pytest.approx(0.15)
     assert tuple(definition.kind for definition in configuration.evaluation.definitions) == (
         'fixed_dataset',
         'random',

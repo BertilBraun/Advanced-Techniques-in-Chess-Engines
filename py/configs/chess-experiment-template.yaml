@@ -21,7 +21,7 @@ run:
     cuda_version: "13.0"
     dependency_lock_path: py/requirements-training.lock
     dependency_lock_sha256: a83686f3d20341770641f9c72a56202edeb6cd3b3ed863ab9659a0fc51a43676
-    minimum_open_file_soft_limit: 1024
+    minimum_open_file_soft_limit: 65536
 training:
   save_path: py/training_data/chess
   network:
@@ -32,20 +32,20 @@ training:
     num_value_channels: 2
     value_fc_size: 48
   trainer:
-    global_batch_size: 1024
-    local_batch_size: 1024
+    global_batch_size: 2048
+    local_batch_size: 2048
     optimizer: adamw
     learning_rate:
       kind: staged
       stages:
         - start_generation: 0
           value: 0.005
-        - start_generation: 60
+        - start_generation: 200
+          value: 0.0035
+        - start_generation: 500
           value: 0.002
-        - start_generation: 250
-          value: 0.001
     max_grad_norm: 0.5
-    duplicate_multiplicity_weight_cap: 4.0
+    duplicate_multiplicity_weight_cap:
   topology:
     trainer:
       device_type: cpu
@@ -55,7 +55,7 @@ training:
       cpu_threads: 1
       interop_threads: 1
     self_play:
-      device_ids: [0]
+      device_ids: [0, 0, 0, 0]
       parallel_games_per_process: 2
       tensorboard_processes: 1
       node_ids_to_pause_during_training: []
@@ -76,7 +76,7 @@ training:
       replay_ratio: 8
       optimizer_steps_per_quantum: 500
       maximum_optimizer_steps: 500000
-      retained_checkpoint_interval_generations: 10
+      retained_checkpoint_interval_generations: 3
     inference_retention:
       recent_checkpoint_count: 11
       milestone_interval: 10
@@ -84,7 +84,7 @@ training:
     cost_currency: EUR
     hourly_price: 1.0
     maximum_cost:
-    maximum_wall_time_seconds: 31536000
+    maximum_wall_time_seconds: 172800
     maximum_open_file_count: 32768
     maximum_host_ram_percent: 95.0
     minimum_free_disk_gib: 0.1
@@ -111,7 +111,7 @@ evaluation:
     label_nodes: 10000
     match_nodes: 1000
     threads: 1
-    hash_mib: 128
+    hash_mib: 1024
     multi_pv: 8
     policy_softmax_temperature: 0.15
   definitions:
@@ -219,9 +219,9 @@ evaluation:
 chess:
   self_play:
     search:
-      full_searches: {kind: linear, start_generation: 0, end_generation: 15, start_value: 300, end_value: 600, rounding: nearest}
-      fast_searches: {kind: linear, start_generation: 0, end_generation: 15, start_value: 75, end_value: 150, rounding: nearest}
-      parallel_searches: 2
+      full_searches: {kind: linear, start_generation: 0, end_generation: 20, start_value: 300, end_value: 600, rounding: nearest}
+      fast_searches: {kind: linear, start_generation: 0, end_generation: 20, start_value: 75, end_value: 150, rounding: nearest}
+      parallel_searches: 1
       dirichlet_epsilon: {kind: constant, value: 0.25}
       dirichlet_alpha: {kind: constant, value: 0.3}
       exploration_constant: {kind: constant, value: 1.5}
@@ -235,11 +235,17 @@ chess:
     retained_root_visit_fraction: {kind: constant, value: 0.6}
     greedy_after_ply: {kind: constant, value: 50}
     maximum_game_plies:
+      kind: linear
+      start_generation: 0
+      end_generation: 50
+      start_value: 200
+      end_value: 400
+      rounding: nearest
     starting_temperature: {kind: constant, value: 1.3}
     final_temperature: {kind: constant, value: 0.1}
     primary_sample_weight: {kind: constant, value: 1.0}
   objective:
     policy_loss_weight: {kind: constant, value: 1.0}
     value_loss_weight: {kind: constant, value: 0.5}
-    root_value_blend: {kind: constant, value: 0.15}
+    root_value_blend: {kind: linear, start_generation: 10, end_generation: 30, start_value: 0.0, end_value: 0.15, rounding: none}
     auxiliary_targets: []
