@@ -64,7 +64,7 @@ int runBatchedSearchTests() {
         require(std::abs(inferenceValue(search)) < 0.001F,
                 "initial model returned the wrong value");
         const std::uint64_t evaluationsBeforeSearch =
-            search.inferenceStatistics().first.evaluations;
+            search.inferenceStatistics().evaluations;
 
         const std::vector<ChessSelfPlaySearchRequest> boards = {
             ChessSelfPlaySearchRequest(search.newRoot(Board{}), true),
@@ -83,8 +83,7 @@ int runBatchedSearchTests() {
         require(!results.results[0].visits.empty(), "full root did not expand legal moves");
         require(!results.results[1].visits.empty(), "fast root did not expand legal moves");
 
-        const auto [statistics, timing] = search.inferenceStatistics();
-        static_cast<void>(timing);
+        const InferenceStatistics statistics = search.inferenceStatistics();
         require(statistics.evaluations == evaluationsBeforeSearch + 26,
                 "scheduler did not distinguish root initialization from searches");
         require(statistics.modelInferencePositions == statistics.evaluations,
@@ -99,12 +98,12 @@ int runBatchedSearchTests() {
         require(completedResults.simulations_completed == 0,
                 "completed roots unexpectedly performed additional searches");
 
-        const InferenceStatistics beforeRefresh = search.inferenceStatistics().first;
+        const InferenceStatistics beforeRefresh = search.inferenceStatistics();
         search.refreshModel(8, updatedModelPath.string());
         require(search.modelGeneration() == 8, "refresh did not publish its model generation");
         require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
                 "refresh retained old model output");
-        require(search.inferenceStatistics().first.evaluations > beforeRefresh.evaluations,
+        require(search.inferenceStatistics().evaluations > beforeRefresh.evaluations,
                 "refresh reset cumulative statistics");
         require(completedBoards[0].root.visits() == 0 && completedBoards[1].root.visits() == 0,
                 "model refresh retained stale search trees");
