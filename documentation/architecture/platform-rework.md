@@ -322,25 +322,66 @@ direct comparison across runs.
 The initial benchmark freezes one evaluation ladder and cadence for all
 experiments in a comparison set.
 
-### Planned experiment queue (R10; not implemented)
+### Resource-aware experiment queue
 
-The Linux experiment runner accepts an ordered set of validated YAML files and
-a typed pool of resource slots. Each slot defines:
+The Linux experiment queue is a standalone wrapper above the training
+application. It imports the canonical experiment loader only to validate each
+authored YAML file, then invokes the unchanged training entry point through one
+queue-owned command prefix. Queue state and scheduling do not enter the
+coordinator, trainer, replay, self-play, evaluation, or game implementations.
+
+The frozen queue configuration owns an ordered experiment list, an ordered
+resource-slot pool, the runner command, polling and termination timing, and one
+summary path. Extra fields are forbidden. Each experiment entry contains only
+a queue identity, its authored YAML path, and a resource request for an exact
+CUDA-device count, CPU-core count, and RAM limit. It does not duplicate game,
+model, training, evaluation, artifact, approval, or run-limit semantics from
+the experiment configuration.
+
+Each indivisible slot defines:
 
 - explicit CUDA device indices;
 - CPU affinity;
-- RAM limit;
+- RAM capacity;
 - run and log directories.
 
-The runner validates the complete queue, assigns ready experiments to free
-compatible slots, launches each experiment in its own process group, captures
-logs and exit status, releases resources at exit, and immediately starts the
-next compatible experiment. Success and failure both advance the queue.
+CUDA and CPU sets are sorted, unique, nonnegative, and exclusive across slots.
+A compatible slot has exactly the requested CUDA-device count and at least the
+requested CPU and RAM capacity. Assignment deterministically uses the complete
+slot CUDA set, the requested prefix of its CPU affinity, and the requested RAM
+limit. The scheduler scans pending experiments in authored order and gives each
+the first compatible free slot in slot-definition order. It fills all possible
+free slots in one pass and repeats immediately after collecting an exit, so
+success and failure both release the slot and advance the queue.
 
-A durable queue summary records pending, running, completed, and failed
-experiments; start and finish times; assigned resources; process identifiers;
-exit codes; and artifact locations. Termination handling signals the full
-process group and records the resulting status.
+Before launching anything, the wrapper validates the complete queue model,
+every experiment through the canonical discriminated experiment union, every
+request/slot compatibility, resource exclusivity, working and log directories,
+the runner executable, the existing durable summary, persisted assignments,
+and pending log paths. Relative queue paths resolve from the queue file. The
+queue-owned runner command appends only the configured experiment-path argument
+and YAML path; required source-revision and approval arguments remain explicit
+parts of that runner command.
+
+Each experiment starts as a new Linux session and process group. A small
+queue-owned child wrapper applies `sched_setaffinity` and `RLIMIT_AS`, sets the
+slot's device set through `CUDA_VISIBLE_DEVICES`, and then replaces itself with
+the configured runner through `exec`. Standard output and error go to separate
+exclusive per-experiment files. The supervisor captures the exit code and uses
+`SIGTERM`, a configured grace period, and then `SIGKILL` when necessary against
+the complete process group. Success, failure, and requested termination close
+the log handles and release the slot.
+
+One atomic JSON summary records pending, running, completed, and failed
+experiments; queue, start, finish, and update timestamps; the exact assignment;
+PID and process-group identity; exit code; reason; and log paths. Its
+fingerprint covers the resolved queue configuration and authored experiment
+bytes. A matching restart preserves terminal entries and pending work. Any
+persisted running entry is marked failed but its possibly stale process group is
+not signalled or adopted; that invocation stops and tells the operator to
+verify the recorded process group has ended before invoking the queue again to
+continue pending work. There is no distributed coordination, lock service,
+attempt journal, automatic retry, or orphan-process adoption.
 
 ## Execution ledger
 
@@ -360,12 +401,12 @@ earlier phase's storage, process, or recovery design.
 | R7 | Native Go game implementation | accepted |
 | R8 | Go pipeline integration | accepted |
 | R9 | Go evaluation and elapsed checkpoint scheduling | accepted |
-| R10 | Resource-aware experiment queue | pending |
+| R10 | Resource-aware experiment queue | awaiting_user_review |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R1 through R9 are accepted. The post-R9 Python Phase 4 cleanup slice is
-`awaiting_user_review`. R10, R11 hardware validation, and R12 remain pending and are not authorized.
+Current authorization: R1 through R9 and the post-R9 Python/documentation cleanup are accepted. R10 is implemented
+and `awaiting_user_review`. R11 hardware validation and R12 remain pending and are not authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -826,6 +867,8 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-09 | R10 | Implementation handoff | The resource-aware experiment queue is implemented as a standalone Python package and CLI above the unchanged training application. Frozen queue, slot, request, assignment, and durable-status models forbid extra fields; deterministic scheduling owns exclusive slots; and the Linux launcher applies CUDA visibility, CPU affinity, `RLIMIT_AS`, process groups, separate logs, exit capture, and group termination. Restart handling deliberately does not adopt or signal a persisted process identity. | Return R10 to `awaiting_user_review`. Commits `122f9d51` and `c4ade3d0` implement the scheduler and Linux execution/state layers. Ruff passes; the exact Windows suite passes 164 tests with 15 infrastructure/Linux skips; and the focused WSL2 queue suite passes all 13 tests. Leave R11/R12 pending and do not begin target-hardware validation. |
+| 2026-08-09 | Post-R9 / Python Phase 4 | Acceptance | The user explicitly accepted the completed post-R9 Python/documentation cleanup and authorized R10 only. | Mark the cleanup slice `accepted`, authorize R10, and leave the remaining R11/Phase 4 hardware validation and R12 pending. |
 | 2026-08-09 | Post-R9 / Python Phase 4 | Cleanup handoff | The user accepted Phase 3/R9 and authorized an aggressive production-reachability and documentation cleanup. The audit traced training, UCI, web, and Lichess deployment roots separately; removed superseded Python rules/training modules and self-referential tests; made `deployment/setup_remote.sh` the sole fresh-node training bootstrap; reduced the locked dependency graph; and separated current authority, operations, research, history, and benchmark evidence. | Return the cleanup slice to `awaiting_user_review`. Keep the native interactive/UCI graph and deployment-called tools. Do not start R10, the remaining R11/Phase 4 hardware validation, compute provisioning, or R12 experiments. Commit `53419930` contains the production cleanup; the documentation commit and final validation are recorded in the handoff. |
 | 2026-08-09 | R9 | Acceptance | The user explicitly accepted Phase 3/R9 and authorized only the post-R9 cleanup described above. | Mark R9 `accepted`. Keep R10, R11, and R12 `pending`. |
 | 2026-08-09 | R9 | Ladder review correction | User review restored the fuller evaluation ladder: the three preceding 20-minute boundary checkpoints, every available fixed generation 10 through 100, and Stockfish levels 0 through 3. Every job should time out after the same 20 minutes as the cadence, and authored evaluation definitions should use readable block YAML. | Expand all chess/Go definitions in block YAML, set every job timeout to 1,200 seconds, run offsets 1/2/3 and fixed generations 10–100 for both games, and run Stockfish levels 0–3 for chess. Fixed generations are skipped until older than the candidate and present on disk; malformed present artifacts still fail. Commit `79af9c0d`; Ruff passes, Windows passes 168 tests with 12 infrastructure skips, and extension-backed Linux passes 195 tests with 4 real-infrastructure skips. Return R9 to `awaiting_user_review`. |
