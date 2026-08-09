@@ -125,7 +125,7 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     clock.now = 21.0
     first_jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 2))
     assert {job.candidate.generation for job in first_jobs} == {1}
-    assert tuple(job.device_id for job in first_jobs) == (2, 5, 2)
+    assert tuple(job.device_id for job in first_jobs) == (2, 5, 2, 5)
     assert all(process.started for process in context.processes)
 
     scalar_steps: list[int | None] = []
@@ -154,7 +154,7 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     clock.now = 41.0
     second_jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 3))
     assert {job.candidate.generation for job in second_jobs} == {2}
-    assert tuple(job.device_id for job in second_jobs) == (5, 2, 5, 2)
+    assert tuple(job.device_id for job in second_jobs) == (2, 5, 2, 5, 2)
     previous_jobs = tuple(
         job
         for job in second_jobs

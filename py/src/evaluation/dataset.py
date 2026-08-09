@@ -9,8 +9,8 @@ import torch
 
 from src.evaluation.artifacts import dataset_manifest_path, load_evaluation_dataset
 from src.evaluation.contracts import EvaluationDatasetManifest, FixedDatasetEvaluationJob, FixedDatasetEvaluationResult
+from src.evaluation.inference import decode_packed_inputs
 from src.games.contracts import GameStateContract
-from src.packed_planes import PackedPlanePayload, decode_packed_planes_into
 
 
 PositionT = TypeVar('PositionT')
@@ -38,22 +38,9 @@ def evaluate_fixed_dataset(
     with torch.inference_mode():
         for start in range(0, manifest.position_count, batch_size):
             batch = data[start : start + batch_size]
-            packed_states = tuple(state.packed_plane_layout.value(bytes(row['packed_state'])) for row in batch)
-            decoded = np.empty(
-                (
-                    len(batch),
-                    state.representation.channels,
-                    state.representation.rows,
-                    state.representation.columns,
-                ),
-                dtype=np.float32,
-            )
-            decode_packed_planes_into(
-                tuple(PackedPlanePayload(value.payload) for value in packed_states),
-                state.packed_plane_layout,
-                state.representation.binary_channels,
-                state.representation.scalar_channels,
-                decoded,
+            decoded = decode_packed_inputs(
+                state,
+                tuple(state.packed_plane_layout.value(bytes(row['packed_state'])) for row in batch),
             )
             policy, _ = model(torch.from_numpy(decoded).to(device))
             policy = policy.float().cpu()

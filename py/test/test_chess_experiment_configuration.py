@@ -78,6 +78,7 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
     assert tuple(definition.kind for definition in configuration.evaluation.definitions) == (
         'fixed_dataset',
         'random',
+        'policy_random',
         'previous_checkpoint',
         'stockfish',
     )

@@ -79,6 +79,12 @@ class RandomOpponentEvaluationDefinition(FrozenModel):
     maximum_game_plies: int = Field(gt=0)
 
 
+class PolicyRandomOpponentEvaluationDefinition(FrozenModel):
+    kind: Literal['policy_random']
+    definition_id: str = Field(min_length=1)
+    maximum_game_plies: int = Field(gt=0)
+
+
 class PreviousCheckpointEvaluationDefinition(FrozenModel):
     kind: Literal['previous_checkpoint']
     definition_id: str = Field(min_length=1)
@@ -113,6 +119,7 @@ class KataGoEvaluationDefinition(FrozenModel):
 EvaluationDefinition: TypeAlias = Annotated[
     FixedDatasetEvaluationDefinition
     | RandomOpponentEvaluationDefinition
+    | PolicyRandomOpponentEvaluationDefinition
     | PreviousCheckpointEvaluationDefinition
     | FixedCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
@@ -122,6 +129,7 @@ EvaluationDefinition: TypeAlias = Annotated[
 
 MatchEvaluationDefinition: TypeAlias = Annotated[
     RandomOpponentEvaluationDefinition
+    | PolicyRandomOpponentEvaluationDefinition
     | PreviousCheckpointEvaluationDefinition
     | FixedCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition

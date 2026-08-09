@@ -43,13 +43,14 @@ evaluation:
   definitions:
     - {kind: fixed_dataset, definition_id: fixed-dataset}
     - kind: random
-      definition_id: random
+      definition_id: search-random
       maximum_game_plies: 324
       search: &evaluation_search
         searches_per_move: 96
         parallel_searches: 1
         exploration_constant: 1.0
         inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 1}
+    - {kind: policy_random, definition_id: policy-random, maximum_game_plies: 324}
     - {kind: previous_checkpoint, definition_id: previous-checkpoint, boundary_offset: 1, maximum_game_plies: 324, search: *evaluation_search}
     - {kind: katago, definition_id: katago, maximum_game_plies: 324, search: *evaluation_search}
 go:

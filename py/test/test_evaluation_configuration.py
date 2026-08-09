@@ -19,7 +19,8 @@ def test_checked_in_evaluation_definitions_are_canonical_for_each_game() -> None
     assert chess.training.topology.evaluation.device_cycle == (0,)
     assert tuple(definition.definition_id for definition in chess.evaluation.definitions) == (
         'fixed-dataset',
-        'random',
+        'search-random',
+        'policy-random',
         'previous-checkpoint',
         'stockfish-level-0',
     )

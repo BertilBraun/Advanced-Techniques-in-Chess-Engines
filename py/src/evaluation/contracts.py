@@ -116,6 +116,7 @@ class MatchEvaluationJob(FrozenModel):
     def validate_opponent(self) -> MatchEvaluationJob:
         expected_opponent = {
             'random': 'random',
+            'policy_random': 'random',
             'previous_checkpoint': 'checkpoint',
             'fixed_checkpoint': 'checkpoint',
             'stockfish': 'stockfish',

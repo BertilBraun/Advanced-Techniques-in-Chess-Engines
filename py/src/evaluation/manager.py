@@ -13,6 +13,7 @@ from src.evaluation.configuration import (
     FixedCheckpointEvaluationDefinition,
     FixedDatasetEvaluationDefinition,
     KataGoEvaluationDefinition,
+    PolicyRandomOpponentEvaluationDefinition,
     PreviousCheckpointEvaluationDefinition,
     RandomOpponentEvaluationDefinition,
     StockfishEvaluationDefinition,
@@ -233,7 +234,7 @@ class EvaluationManager:
             match definition:
                 case FixedDatasetEvaluationDefinition():
                     kind = 'fixed_dataset'
-                case RandomOpponentEvaluationDefinition():
+                case RandomOpponentEvaluationDefinition() | PolicyRandomOpponentEvaluationDefinition():
                     kind = 'match'
                     opponent = RandomOpponent(kind='random')
                 case PreviousCheckpointEvaluationDefinition(boundary_offset=offset):

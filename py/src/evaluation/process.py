@@ -81,6 +81,7 @@ def run_evaluation_job(experiment: ExperimentConfiguration, job: EvaluationJob) 
                         openings,
                         experiment.evaluation.bootstrap_samples,
                         external_engine,
+                        experiment.training.topology.trainer.device_type,
                     )
                 finally:
                     if external_engine is not None:

@@ -3,12 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 import random
 import time
-from typing import Generic, Protocol, TypeVar
+from typing import Generic, Literal, Protocol, TypeVar
 
 from src.evaluation.configuration import (
     EvaluationSearchConfiguration,
     FixedCheckpointEvaluationDefinition,
     KataGoEvaluationDefinition,
+    PolicyRandomOpponentEvaluationDefinition,
     PreviousCheckpointEvaluationDefinition,
     RandomOpponentEvaluationDefinition,
     StockfishEvaluationDefinition,
@@ -21,6 +22,7 @@ from src.evaluation.contracts import (
     MatchEvaluationResult,
     OpeningSuiteManifest,
 )
+from src.evaluation.inference import PolicyActionSelector
 from src.evaluation.statistics import aggregate_match
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.implementation import GameImplementation
@@ -40,6 +42,27 @@ class ExternalMatchEngine(Protocol, Generic[PositionT]):
     ) -> tuple[int, ...]: ...
 
     def close(self) -> None: ...
+
+
+class MatchActionSelector(Protocol, Generic[PositionT]):
+    def choose_actions(self, positions: tuple[PositionT, ...]) -> tuple[int, ...]: ...
+
+
+class SearchActionSelector(Generic[PositionT]):
+    def __init__(self, search: NativeSelfPlaySearch) -> None:
+        self.search = search
+
+    def choose_actions(self, positions: tuple[PositionT, ...]) -> tuple[int, ...]:
+        if not positions:
+            return ()
+        roots = tuple(self.search.new_root(position) for position in positions)
+        batch = self.search.search([self.search.request(root, True) for root in roots])
+        selected = []
+        for result in batch.results:
+            if not result.visits:
+                raise RuntimeError('Evaluation search returned no visits for a nonterminal position.')
+            selected.append(min(result.visits, key=lambda visit: (-visit.visit_count, visit.action_id)).action_id)
+        return tuple(selected)
 
 
 @dataclass
@@ -72,17 +95,7 @@ def _definition_search(job: MatchEvaluationJob) -> EvaluationSearchConfiguration
 
 
 def _maximum_game_plies(job: MatchEvaluationJob) -> int:
-    definition = job.definition
-    if not isinstance(
-        definition,
-        RandomOpponentEvaluationDefinition
-        | PreviousCheckpointEvaluationDefinition
-        | FixedCheckpointEvaluationDefinition
-        | StockfishEvaluationDefinition
-        | KataGoEvaluationDefinition,
-    ):
-        raise ValueError('Match job must contain a match evaluation definition.')
-    return definition.maximum_game_plies
+    return job.definition.maximum_game_plies
 
 
 def _build_matches(
@@ -116,22 +129,6 @@ def _build_matches(
     return matches
 
 
-def _search_actions(
-    search: NativeSelfPlaySearch,
-    matches: tuple[_ActiveMatch[PositionT], ...],
-) -> tuple[int, ...]:
-    if not matches:
-        return ()
-    roots = tuple(search.new_root(match.position) for match in matches)
-    batch = search.search([search.request(root, True) for root in roots])
-    selected = []
-    for result in batch.results:
-        if not result.visits:
-            raise RuntimeError('Evaluation search returned no visits for a nonterminal position.')
-        selected.append(min(result.visits, key=lambda visit: (-visit.visit_count, visit.action_id)).action_id)
-    return tuple(selected)
-
-
 def _outcome_for_candidate(
     state: GameStateContract[PositionT],
     match: _ActiveMatch[PositionT],
@@ -151,15 +148,29 @@ def run_match(
     openings: OpeningSuiteManifest,
     bootstrap_samples: int,
     external_engine: ExternalMatchEngine[PositionT] | None,
+    device_type: Literal['cpu', 'cuda'],
 ) -> MatchEvaluationResult:
     started_at = time.monotonic()
-    search_configuration = _definition_search(job)
-    candidate_search = game.create_evaluation_search(job.device_id, job.candidate, search_configuration)
-    opponent_search = (
-        game.create_evaluation_search(job.device_id, job.opponent.checkpoint, search_configuration)
-        if job.opponent.kind == 'checkpoint'
-        else None
-    )
+    if isinstance(job.definition, PolicyRandomOpponentEvaluationDefinition):
+        candidate_selector: MatchActionSelector[PositionT] = PolicyActionSelector(
+            game.state,
+            job.candidate.inference_model_path,
+            job.device_id,
+            device_type,
+        )
+        opponent_selector = None
+    else:
+        search_configuration = _definition_search(job)
+        candidate_selector = SearchActionSelector(
+            game.create_evaluation_search(job.device_id, job.candidate, search_configuration)
+        )
+        opponent_selector = (
+            SearchActionSelector(
+                game.create_evaluation_search(job.device_id, job.opponent.checkpoint, search_configuration)
+            )
+            if job.opponent.kind == 'checkpoint'
+            else None
+        )
     active = _build_matches(game.state, openings, job.random_seed)
     completed: list[EvaluationGameResult] = []
     random_generators = {
@@ -176,14 +187,14 @@ def run_match(
         actions: dict[int, int] = {}
         for match, action_id in zip(
             candidate_turns,
-            _search_actions(candidate_search, candidate_turns),
+            candidate_selector.choose_actions(tuple(match.position for match in candidate_turns)),
             strict=True,
         ):
             actions[match.game_index] = action_id
         match job.opponent.kind:
             case 'checkpoint':
-                assert opponent_search is not None
-                opponent_actions = _search_actions(opponent_search, opponent_turns)
+                assert opponent_selector is not None
+                opponent_actions = opponent_selector.choose_actions(tuple(match.position for match in opponent_turns))
             case 'random':
                 opponent_actions = tuple(
                     random_generators[match.game_index].choice(game.state.legal_action_ids(match.position))
