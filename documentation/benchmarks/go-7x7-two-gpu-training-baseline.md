@@ -1,6 +1,6 @@
 # Proposed Go 7x7 two-GPU training baseline
 
-Status: authored and validated for review; not approved or launched.
+Status: revised after the first live calibration run; the accepted baseline has not yet been launched.
 
 The complete configuration is
 [`py/configs/baselines/vast-go-7x7-2gpu-2h.yaml`](../../py/configs/baselines/vast-go-7x7-2gpu-2h.yaml). It defines the
@@ -56,16 +56,19 @@ The configuration applies the isolated Go optimum measured on the same RTX 3060 
 - four self-play processes per GPU, eight processes total;
 - 1,024 independent games per process, 8,192 active games total;
 - one sequential search per root, with no parallel-leaf approximation;
-- one inference worker, two outstanding batches, and a batch limit of 512 per process;
-- 128 visits for every move because `full_search_probability` is 1.0;
-- no self-play process is paused during a training quantum.
+- one inference worker, two outstanding batches, and a batch limit of 128 per process;
+- 256 visits for every move because `full_search_probability` is 1.0;
+- workers 0, 1, 4, and 5 pause during a training quantum, leaving two self-play processes running on each GPU.
 
 The configured 32-visit fast-search budget is therefore inactive in this baseline; it remains explicit so a later
 experiment that changes full-search probability has a defined fast path.
 
-The four-GPU isolated measurement sustained 446,725 searches/s, so linear scaling suggests roughly 223,000
-searches/s on two GPUs before trainer and evaluation contention. The integrated run is authoritative: its sustained
-self-play rate, not the isolated projection, becomes the optimization baseline.
+The first live calibration used 128 visits and a 512-position inference limit. It exposed bursty inference, paused
+all eight self-play workers during every training quantum despite the authored empty pause list, and therefore does
+not define the accepted baseline. The revised run measures whether smaller, more frequent inference calls and four
+continuing workers improve integrated GPU duty cycle while 256 visits produce stronger search targets. Its measured
+sustained self-play rate becomes the optimization baseline; the earlier isolated projection is not comparable to
+this revised search budget.
 
 Self-play retains the existing AlphaZero policy: 0.25 Dirichlet mixing with alpha 0.3, exploration constant 1.5,
 temperature annealing from 1.0 to 0.1, greedy play after ply 40, no random opening plies, and one primary sample per

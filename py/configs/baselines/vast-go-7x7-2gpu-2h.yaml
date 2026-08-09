@@ -62,7 +62,11 @@ training:
         - 1
       parallel_games_per_process: 1024
       tensorboard_processes: 1
-      node_ids_to_pause_during_training: []
+      node_ids_to_pause_during_training:
+        - 0
+        - 1
+        - 4
+        - 5
     evaluation:
       device_cycle:
         - 0
@@ -207,7 +211,7 @@ go:
     search:
       full_searches:
         kind: constant
-        value: 128
+        value: 256
       fast_searches:
         kind: constant
         value: 32
@@ -226,7 +230,7 @@ go:
         value: 0
     inference:
       inference_workers: 1
-      inference_batch_size: 512
+      inference_batch_size: 128
       outstanding_batches_per_worker: 2
     random_opening_plies:
       kind: constant

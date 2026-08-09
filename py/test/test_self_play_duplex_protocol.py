@@ -5,6 +5,7 @@ from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 from threading import Thread
+from types import TracebackType
 from typing import cast
 
 import pytest
@@ -21,6 +22,7 @@ from src.self_play.protocol import (
     StoppedSelfPlayStateApplied,
 )
 from src.training.checkpoint import CheckpointReference
+from src.training.configuration import SelfPlayTopologyParams
 from src.training.self_play_group import SelfPlayGroup, _self_play_worker_main
 import src.training.self_play_group as self_play_group_module
 
@@ -33,6 +35,7 @@ class _TrainerTopology:
 @dataclass(frozen=True)
 class _SelfPlayTopology:
     parallel_games_per_process: int = 2
+    tensorboard_processes: int = 1
 
 
 @dataclass(frozen=True)
@@ -73,6 +76,23 @@ class _Worker:
 
     def snapshot_statistics(self) -> None:
         assert self.generation == 0
+
+
+class _TensorboardWriter:
+    def __init__(self, enabled: bool, observed: list[bool]) -> None:
+        self.enabled = enabled
+        self.observed = observed
+
+    def __enter__(self) -> None:
+        self.observed.append(self.enabled)
+
+    def __exit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        del exception_type, exception_value, traceback
 
 
 class _Connection:
@@ -122,6 +142,18 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(self_play_group_module, 'SelfPlayWorker', _Worker)
+    observed_tensorboard_states: list[bool] = []
+
+    def create_tensorboard_writer(
+        run: int,
+        suffix: str,
+        enabled: bool,
+    ) -> _TensorboardWriter:
+        assert run == 0
+        assert suffix == 'self_play'
+        return _TensorboardWriter(enabled, observed_tensorboard_states)
+
+    monkeypatch.setattr(self_play_group_module, 'TensorboardWriter', create_tensorboard_writer)
     fake_game = _Game(tmp_path)
 
     def create_game(configuration: ExperimentConfiguration) -> GameImplementation:
@@ -133,7 +165,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     parent, child = context.Pipe(duplex=True)
     process = Thread(
         target=_self_play_worker_main,
-        args=(child, 4, 0, cast(ExperimentConfiguration, fake_game)),
+        args=(child, 0, 0, cast(ExperimentConfiguration, fake_game)),
     )
     process.start()
 
@@ -165,6 +197,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     parent.close()
 
     assert not process.is_alive()
+    assert observed_tensorboard_states == [True]
 
 
 def test_group_restarts_only_exited_workers_at_active_checkpoint(
@@ -201,3 +234,52 @@ def test_group_restarts_only_exited_workers_at_active_checkpoint(
     assert exited_process.joined
     assert exited_connection.closed
     assert replacement_connection.sent == [RunningSelfPlayState(checkpoint=checkpoint)]
+
+
+def test_group_applies_state_only_to_selected_workers(tmp_path: Path) -> None:
+    checkpoint = _checkpoint(tmp_path, 3)
+    connections = [
+        _Connection(
+            RunningSelfPlayStateApplied(
+                worker_id=worker_id,
+                loaded_generation=checkpoint.generation,
+                loaded_inference_model_sha256=checkpoint.inference_model_sha256,
+                completed_generation_statistics=None,
+            )
+        )
+        for worker_id in range(4)
+    ]
+    group = SelfPlayGroup.__new__(SelfPlayGroup)
+    group._closed = False
+    group._connections = [cast(Connection, connection) for connection in connections]
+
+    desired_state = RunningSelfPlayState(checkpoint=checkpoint)
+    responses = group.apply_to_workers((1, 3), desired_state)
+
+    assert [response.worker_id for response in responses] == [1, 3]
+    assert connections[0].sent == []
+    assert connections[1].sent == [desired_state]
+    assert connections[2].sent == []
+    assert connections[3].sent == [desired_state]
+
+
+@pytest.mark.parametrize(
+    'tensorboard_processes,paused_worker_ids',
+    [
+        (3, ()),
+        (1, (0, 0)),
+        (1, (-1,)),
+        (1, (2,)),
+    ],
+)
+def test_self_play_topology_rejects_invalid_worker_assignments(
+    tensorboard_processes: int,
+    paused_worker_ids: tuple[int, ...],
+) -> None:
+    with pytest.raises(ValueError):
+        SelfPlayTopologyParams(
+            device_ids=(0, 1),
+            parallel_games_per_process=8,
+            tensorboard_processes=tensorboard_processes,
+            node_ids_to_pause_during_training=paused_worker_ids,
+        )

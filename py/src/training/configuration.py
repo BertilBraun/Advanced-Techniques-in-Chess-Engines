@@ -44,6 +44,18 @@ class SelfPlayTopologyParams(FrozenModel):
     tensorboard_processes: int = Field(gt=0)
     node_ids_to_pause_during_training: tuple[int, ...]
 
+    @model_validator(mode='after')
+    def validate_worker_assignments(self) -> SelfPlayTopologyParams:
+        if self.tensorboard_processes > len(self.device_ids):
+            raise ValueError('TensorBoard process count cannot exceed the self-play worker count.')
+        if len(set(self.node_ids_to_pause_during_training)) != len(self.node_ids_to_pause_during_training):
+            raise ValueError('Self-play worker IDs paused during training must be unique.')
+        if any(
+            worker_id < 0 or worker_id >= len(self.device_ids) for worker_id in self.node_ids_to_pause_during_training
+        ):
+            raise ValueError('Self-play worker ID paused during training is outside the configured worker range.')
+        return self
+
 
 class EvaluationTopologyParams(FrozenModel):
     device_cycle: tuple[int, ...] = Field(min_length=1)

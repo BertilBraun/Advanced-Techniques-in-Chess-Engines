@@ -26,6 +26,7 @@ from src.self_play.protocol import (
 )
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
+from src.util.tensorboard import TensorboardWriter
 
 
 class SelfPlayGroup:
@@ -54,6 +55,22 @@ class SelfPlayGroup:
         for connection, desired_state in zip(self._connections, desired_states):
             connection.send(desired_state)
         return tuple(self._receive(connection) for connection in self._connections)
+
+    def apply_to_workers(
+        self,
+        worker_ids: tuple[int, ...],
+        desired_state: SelfPlayDesiredState,
+    ) -> tuple[SelfPlayStateApplied, ...]:
+        if self._closed:
+            raise RuntimeError('Self-play group is closed.')
+        if len(set(worker_ids)) != len(worker_ids):
+            raise ValueError('Selected self-play worker IDs must be unique.')
+        if any(worker_id < 0 or worker_id >= self.worker_count for worker_id in worker_ids):
+            raise ValueError('Selected self-play worker ID is outside the worker range.')
+        selected_connections = tuple(self._connections[worker_id] for worker_id in worker_ids)
+        for connection in selected_connections:
+            connection.send(desired_state)
+        return tuple(self._receive(connection) for connection in selected_connections)
 
     def restart_exited_workers(self, checkpoint: CheckpointReference) -> tuple[int, ...]:
         if self._closed:
@@ -204,17 +221,19 @@ def _self_play_worker_main(
     )
     runtime = _SelfPlayProcessRuntime(worker, worker_id)
     try:
-        while True:
-            if runtime.running and not connection.poll():
-                runtime.run_batch()
-                continue
-            desired_state: SelfPlayDesiredState = connection.recv()
-            applied_state = runtime.apply(desired_state)
-            connection.send(applied_state)
-            match applied_state:
-                case StoppedSelfPlayStateApplied():
-                    return
-                case _:
-                    pass
+        tensorboard_enabled = worker_id < game.training.topology.self_play.tensorboard_processes
+        with TensorboardWriter(run=0, suffix='self_play', enabled=tensorboard_enabled):
+            while True:
+                if runtime.running and not connection.poll():
+                    runtime.run_batch()
+                    continue
+                desired_state: SelfPlayDesiredState = connection.recv()
+                applied_state = runtime.apply(desired_state)
+                connection.send(applied_state)
+                match applied_state:
+                    case StoppedSelfPlayStateApplied():
+                        return
+                    case _:
+                        pass
     finally:
         connection.close()

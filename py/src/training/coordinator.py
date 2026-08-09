@@ -95,14 +95,21 @@ class Coordinator:
         self.ledger.add_samples(ingestion.samples_added, generation)
 
     def _train_quantum(self) -> None:
-        paused = self.self_play_group.apply(
-            tuple(PausedSelfPlayState() for _ in range(self.self_play_group.worker_count))
+        paused_worker_ids = self.configuration.training.topology.self_play.node_ids_to_pause_during_training
+        paused = self.self_play_group.apply_to_workers(
+            paused_worker_ids,
+            PausedSelfPlayState(),
         )
         if any(response.kind != 'paused' for response in paused):
-            raise RuntimeError('Self-play workers did not enter the paused state.')
+            raise RuntimeError('Selected self-play workers did not enter the paused state.')
         self._ingest_available_games()
         if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
-            self._start_self_play()
+            resumed = self.self_play_group.apply_to_workers(
+                paused_worker_ids,
+                RunningSelfPlayState(checkpoint=self.ledger.state.active_checkpoint),
+            )
+            if any(response.kind != 'running' for response in resumed):
+                raise RuntimeError('Selected self-play workers did not resume after a cancelled training quantum.')
             return
         result = self.trainer_group.train_quantum(self.replay_manager.description(), self.ledger.progress)
         self.ledger.commit_quantum(result)
