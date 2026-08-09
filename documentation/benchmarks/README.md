@@ -7,4 +7,7 @@ README may reproduce that historical run but may reference paths or interfaces r
 Use the [platform ledger](../architecture/platform-rework.md) for current acceptance evidence and the
 [operations guides](../operations/README.md) for current deployment commands.
 
+The [four-RTX-3060 self-play throughput baseline](self-play-throughput-rtx3060.md) records the current chess and Go
+7x7 capacity topologies, the matched pre-rework comparison, optimization rationale, and reproduction evidence.
+
 `chess-results/` preserves the original trained model, games, plots, and logs as historical strength evidence.

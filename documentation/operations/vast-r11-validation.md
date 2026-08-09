@@ -296,9 +296,10 @@ small 8x8 inference network is still much less compute-dense than a local traini
 backward passes. The full batches improve useful throughput, but NVIDIA's utilization percentage continues to
 overstate arithmetic saturation.
 
-For reference only, the smaller-network 60-second Go measurements remain 95,754.34 searches/s for Go 7x7 and
-76,216.56 searches/s for Go 9x9. They are within-game smoke baselines, not strength- or model-size-normalized
-comparisons with chess.
+The subsequent Go 7x7 sweep reached 446,725.00 searches/s with four processes/GPU, 1,024 independent games/process,
+batch 512, and sequential tree search. The complete baseline-to-optimized comparison, causal analysis, frozen chess
+and Go settings, and raw evidence are recorded in the
+[self-play throughput baseline](../benchmarks/self-play-throughput-rtx3060.md).
 
 ### Pre-rework comparison
 
@@ -364,3 +365,5 @@ The requested 3x380 and 4x380 follow-up artifacts are in the supplemental ignore
 The independent-game and inference-batch sweep is in
 `.codex-diagnostics/r11-batching-sweep-evidence.tar.gz` (44,997 bytes, SHA-256
 `f0a18498341169a30794cad1acbcf21f3b769cb459035fdca98e9d8d6f7fed65`).
+The Go 7x7 throughput sweep is in `.codex-diagnostics/r11-go7-throughput-evidence.tar.gz` (160,260 bytes, SHA-256
+`f49e3eda997a2a041d747e64596ec21e03e55f18a9e1da54bdecf48c89b43259`).
