@@ -92,16 +92,21 @@ class FakeKataGoProcess:
         self.stdout = StringIO(output)
         self.stderr = StringIO()
         self._return_code: int | None = None
+        self.was_terminated = False
 
     def poll(self) -> int | None:
         return self._return_code
 
-    def wait(self, timeout: float) -> int:
+    def wait(self, timeout: float | None = None) -> int:
         self._return_code = 0
         return 0
 
     def terminate(self) -> None:
+        self.was_terminated = True
         self._return_code = -15
+
+    def kill(self) -> None:
+        self._return_code = -9
 
 
 def test_katago_analysis_matches_out_of_order_responses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -136,9 +141,11 @@ def test_katago_analysis_matches_out_of_order_responses(monkeypatch: pytest.Monk
     client = KataGoClient(configuration, state, *paths)
 
     policies = client.analyze_many(((), (0,)), 32)
+    submitted = [json.loads(line) for line in process.stdin.getvalue().splitlines()]
+    client.close()
 
     assert policies[0].top_action_id == 0
     assert policies[1].top_action_id == state.pass_action
-    submitted = [json.loads(line) for line in process.stdin.getvalue().splitlines()]
     assert submitted[1]['moves'] == [['B', 'A7']]
     assert all(request['rules'] == 'chinese' and request['komi'] == 7.5 for request in submitted)
+    assert process.was_terminated

@@ -259,12 +259,13 @@ class KataGoClient:
 
     def close(self) -> None:
         if self._process.poll() is None:
-            self._input.close()
+            self._process.terminate()
             try:
-                self._process.wait(timeout=10)
+                self._process.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                self._process.terminate()
-                self._process.wait(timeout=10)
+                self._process.kill()
+                self._process.wait()
+        self._input.close()
 
     def __enter__(self) -> KataGoClient:
         return self
