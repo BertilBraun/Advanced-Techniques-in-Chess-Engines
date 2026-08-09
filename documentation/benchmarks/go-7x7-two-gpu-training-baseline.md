@@ -74,14 +74,37 @@ Self-play retains the existing AlphaZero policy: 0.25 Dirichlet mixing with alph
 temperature annealing from 1.0 to 0.1, greedy play after ply 40, no random opening plies, and one primary sample per
 eligible position. Go uses 7.5 komi, area scoring through the existing game contract, and a 196-ply safety limit.
 
+## Credit calibration evidence
+
+The 128-visit calibration completed generation 49 in 46 minutes 42 seconds after checkpoint zero. Excluding the
+long first-generation startup, generations 1 through 49 averaged 55.5 seconds. Its final ledger recorded 1,276,728
+materialized positions, 5,017,600 consumed presentations, and 89,312 available presentations. The cumulative
+observed replay ratio was therefore 3.930 against the configured 4.0, and only 0.872 of the next 102,400-presentation
+quantum was available. This run was credit-bound rather than accumulating a useful producer surplus.
+
+Training 100 steps took approximately 32 seconds at the measured 3,100 to 3,400 samples/s. Holding that throughput,
+500 steps takes approximately 160 seconds. Producing the required 128,000 new positions at the calibration's
+effective rate adds roughly another two minutes when self-play is fully paused, giving about 4.5 to 5 minutes per
+generation at 128 visits. The production baseline uses 256 visits and permits four workers to continue during
+training, so 18 to 25 generations in two hours is the reasonable range to validate; 50 generations is not a
+planning assumption.
+
+The 256-visit calibration ended during its initial game-completion wave and did not reach generation one, so it
+does not establish a steady production rate. Keep two self-play workers active per GPU during training for the first
+complete baseline. Pausing six of eight workers or reducing the replay ratio is justified only if the new
+`credit/available_quantum_fraction` metric remains above 1.0 across generations and credit wait approaches zero.
+
 ## Replay and optimizer cadence
 
-Replay capacity grows linearly from 100,000 rows at generation 0 to 2.5 million at generation 200. Fifty sparse
-policy entries retain the complete 7x7 action space, including pass. The static maximum remains 2.5 million.
+Replay capacity grows linearly from 250,000 rows at generation 0 to 2.5 million at generation 20. This adds 112,500
+rows of logical capacity per generation, slightly less than the 128,000 new positions required by each quantum, so
+the replay can remain full while reaching final capacity near the end of the expected two-hour generation range.
+Fifty sparse policy entries retain the complete 7x7 action space, including pass. The static maximum remains 2.5
+million.
 
-Each training generation contains 100 optimizer steps. At global batch 1,024 that consumes 102,400 presentations.
-The replay ratio of 4 requires 25,600 new unique samples before the next quantum. The 100,000-step ceiling is only a
-safety bound; the two-hour wall-time limit is expected to stop the run first.
+Each training generation contains 500 optimizer steps. At global batch 1,024 that consumes 512,000 presentations.
+The replay ratio of 4 requires 128,000 new unique samples before the next quantum. The 1,000,000-step ceiling is only
+a safety bound; the two-hour wall-time limit is expected to stop the run first.
 
 Full resumable checkpoints are retained each generation. Inference artifacts retain the latest 11 generations and
 every tenth generation, while evaluation additionally protects referenced historical checkpoints.
@@ -125,5 +148,11 @@ The baseline is complete only when its artifacts record:
 - process-tree CPU and RSS against the 42-CPU/40-GiB slot;
 - replay size, credit balance, replay age, ingestion rate, and generation cadence;
 - every evaluation completion, failure, and timeout.
+
+The coordinator records configured and observed replay ratio, cumulative materialized positions and consumed
+presentations, available and required presentation credits, available-quantum fraction, replay rows/capacity/fill,
+credit-wait and training-quantum durations, optimizer steps, learning rate, search budgets, full-search probability,
+root-value blend, and per-evaluation duration in TensorBoard. The generation-completion console line includes the
+credit backlog, observed ratio, wait time, and replay fill state.
 
 Do not launch this run until the configuration and the 40-GiB monitoring approach receive explicit approval.

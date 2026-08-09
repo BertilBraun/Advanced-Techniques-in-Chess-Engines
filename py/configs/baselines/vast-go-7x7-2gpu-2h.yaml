@@ -55,13 +55,13 @@ training:
       device_cycle: [0, 1]
   lifecycle:
     replay:
-      capacity: {kind: linear, start_generation: 0, end_generation: 200, start_value: 100000, end_value: 2500000, rounding: nearest}
+      capacity: {kind: linear, start_generation: 0, end_generation: 20, start_value: 250000, end_value: 2500000, rounding: nearest}
       maximum_capacity: 2500000
       maximum_policy_entries: 50
     credit:
       replay_ratio: 4
-      optimizer_steps_per_quantum: 100
-      maximum_optimizer_steps: 100000
+      optimizer_steps_per_quantum: 500
+      maximum_optimizer_steps: 1000000
       retained_checkpoint_interval_generations: 1
     inference_retention:
       recent_checkpoint_count: 11
