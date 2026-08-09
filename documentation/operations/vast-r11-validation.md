@@ -149,10 +149,34 @@ samples, and the exact commands are copied into the dated R11 evidence directory
 Chess, Go 7x7, and Go 9x9 each completed five generations concurrently with exit code zero. The runs exercised
 preparation/reuse of evaluation inputs, native self-play/search, Python inference and training, checkpoint
 publication, asynchronous evaluation scheduling, result JSON, and TensorBoard output. The scaled definitions used
-two match games and two searches/engine visits per move. Chess completed fixed-dataset, policy-vs-random,
-search-vs-random, Stockfish, and previous-checkpoint jobs at early boundaries. Go completed the corresponding
-native jobs; a separately isolated Go 7x7 KataGo match completed two capped games in 15.97 seconds. Almost all of
-that isolated duration was KataGo's roughly 15-second CUDA graph warm-up.
+two match games and two searches/engine visits per move.
+
+The original five-generation Go runs predated the capped-position scoring fix. Their training lifecycle passed,
+but their policy-random and search-random artifacts failed with `Go adjudication requires a scored terminal
+position`, and their KataGo jobs were cancelled when the intentionally short training run ended. Do not count those
+original match artifacts as successful evaluation evidence. Commit `addb2e9e` added deterministic area scoring for
+capped Go matches; the post-fix timeout run, isolated jobs, and the manager exercise below provide the authoritative
+match evidence.
+
+| Evaluation path | Chess | Go 7x7 | Go 9x9 | Authoritative result |
+| --- | --- | --- | --- | --- |
+| Fixed engine-labelled dataset | Passed, 520 positions | Passed, 491 positions | Passed, 484 positions | All three payloads loaded and produced policy accuracy/cross-entropy results. |
+| Policy-only vs random | Passed | Passed post-fix | Passed post-fix | Two balanced games completed for every game/board variant. |
+| Search vs random | Passed | Passed post-fix | Passed post-fix | Two balanced native-search games completed for every game/board variant. |
+| Candidate vs checkpoint | Passed, generation 1 vs 0 | Passed post-fix | Passed post-fix, generation 1 vs 0 | The shared checkpoint-opponent runtime completed both colors/player orders. |
+| External engine | Stockfish level 0 passed | KataGo passed in 15.97 s | KataGo passed in 16.40–16.49 s | UCI and KataGo analysis boundaries both produced match results. |
+
+Stockfish levels 1–3 were not separately played in the tiny smoke; they use the same tested UCI client and differ
+only in the validated `UCI_LimitStrength`/skill configuration. Likewise, fixed generations 10, 20, and later could
+not be scheduled by a five-generation run. They use the same tested checkpoint-opponent match path; scheduling
+tests verify that only existing older generations are launched. These are configuration-variant gaps, not untested
+runtime boundaries.
+
+A dedicated two-boundary Go 9x9 `EvaluationManager` run launched the complete suite in parallel. Boundary 2
+completed fixed-dataset, policy-random, search-random, and KataGo. Boundary 4 repeated those jobs for generation 1
+and also completed generation 1 against boundary generation 0. All nine artifacts were successful, the manager
+collected and reported them later, and no evaluation or KataGo process remained. This proves KataGo inside the real
+manager lifecycle rather than only as a direct isolated job.
 
 The 30-second wall-time smoke stopped for `maximum wall time reached`, returned exit code zero, and left no training,
 evaluation, or KataGo processes behind. The final process-group implementation recorded 44.94 seconds from
@@ -178,21 +202,45 @@ without permitting silent overlap indefinitely.
 
 ### Current self-play/search throughput
 
-The game-generic benchmark drives the production `SelfPlayWorker` and normalized native search binding with one
-process per GPU, 64 parallel games per process, and a 60-second measurement window. Benchmark models use the real
-production architecture with zeroed weights, so the figures measure the same inference/search shape without
-claiming playing strength.
+The game-generic benchmark drives the real production `SelfPlayWorker`: scheduled search parameters, normalized
+native multi-game search, TorchScript inference, move selection, tree updates, terminal handling, and completed-game
+publication. It excludes replay ingestion, optimizer work, and evaluation contention, so it is a self-play capacity
+benchmark rather than a complete training-throughput benchmark. Benchmark models use the production network shape
+with zeroed weights; they measure identical compute without claiming playing strength.
 
-| Game/model | Searches | Makespan | Searches/second | Mean inference batch |
-| --- | ---: | ---: | ---: | ---: |
-| Chess, 12×112 | 1,224,837 | 61.26 s | 19,993.92 | 27.39 |
-| Go 7x7 smoke network | — | 60 s window | 95,754.34 | 61.09 |
-| Go 9x9 smoke network | — | 60 s window | 76,216.56 | 63.20 |
+The accepted historical topology was not roughly 1,000 games per process. It was four processes per GPU and 192
+games per process: 16 processes and 3,072 active games across four GPUs. R11 held total active games at 3,072 and
+varied only their process distribution. Every current matrix run used CPU pinning, two direct-inference workers,
+batch size 64, two outstanding batches per worker, the generation-0 300/75 full/fast search schedule, and the same
+12×112 model.
 
-The chess evidence is
-`r11-benchmarks/current-independent/self-play-search-chess-gpus4-processes1-games64-60s-20260809T152032Z`.
-Go's much smaller boards/networks explain their higher rates; these are useful within-game baselines, not a direct
-strength-normalized comparison.
+| Processes/GPU | Games/process | Window/makespan | Searches/s | Mean batch | Aggregate process CPU | Mean host CPU | Mean GPU utilization |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 8 | 96 | one short batch, 9.28 s | 40,613.98 | 19.71 | 5,080% | not sampled | not authoritative |
+| 4 | 192 | 30 s / 32.34 s | 59,715.93 | 26.89 | 3,179% | 14.17% | 90.33–96.50% |
+| 2 | 384 | 30 s / 34.57 s | **67,560.50** | 36.70 | 1,618% | 9.00% | 91.16–92.97% |
+| 1 | 768 | 30 s / 34.74 s | 67,152.53 | 55.83 | 810% | 5.58% | 71.55–77.09% |
+
+Two processes per GPU are 13.14% faster than four and 66.35% faster than the earlier eight-process diagnostic. One
+process nearly matches raw throughput through larger inference batches, but leaves substantially less GPU
+utilization margin. Two processes are therefore the recommended baseline on this four-RTX-3060 node.
+
+The confirming mature-generation run used two processes/GPU, 384 games/process, the generation-20 600/150 search
+schedule, and a requested 60-second window:
+
+| Searches | Makespan | Searches/s | Searched plies/s | Mean batch | Aggregate process CPU | Mean host CPU | Mean GPU utilization | Peak GPU memory |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 4,668,190 | 67.23 s | **69,439.93** | 274.17 | 36.74 | 1,644% | 9.23% | 95.79–97.84% | 531 MiB/device |
+
+This satisfies the saturation criterion through the GPU: all four devices are effectively full while the host has
+ample CPU, RAM, and GPU-memory headroom. The mature four-process comparison reached 60,013.43 searches/s and 238.86
+searched plies/s, so two processes improve search throughput by 15.71% and searched-ply throughput by 14.78%.
+Increasing games beyond 384 per process is not currently justified: 768 games with one process did not improve
+throughput, and two processes already sustain near-full GPU utilization.
+
+For reference only, the smaller-network 60-second Go measurements remain 95,754.34 searches/s for Go 7x7 and
+76,216.56 searches/s for Go 9x9. They are within-game smoke baselines, not strength- or model-size-normalized
+comparisons with chess.
 
 ### Pre-rework comparison
 
@@ -202,36 +250,51 @@ reporter required two diagnostic-only corrections outside the historical checkou
 and restore eight result fields that were accidentally indented under the publisher class. Neither correction
 changes the historical runtime or native search.
 
-Three matched short runs show parity at one process per GPU:
+The authoritative same-node comparison now uses the historical training topology and a complete 30-second window:
 
-| Topology | Current mean | Pre-rework mean | Current delta |
+| Topology/workload | Current | Pre-rework | Current delta |
 | --- | ---: | ---: | ---: |
-| 4 GPUs, 1 process/GPU, 64 games/process | 16,732.88 searches/s | 16,586.90 searches/s | +0.88% |
-| 4 GPUs, 8 processes/GPU, 96 games/process | 41,007.77 searches/s | 49,174.23 searches/s | -16.61% |
+| 4 GPUs, 4 processes/GPU, 192 games/process, 300/75 searches | 59,715.93 searches/s | 60,458.72 searches/s | -1.23% |
+| Mean inference batch | 26.89 | 26.87 | +0.08% |
+| Aggregate process CPU | 3,179% | 3,166% | +0.41% |
+| Mean host CPU utilization | 14.17% | 14.27% | -0.10 percentage points |
+| Mean per-GPU utilization range | 90.33–96.50% | 90.00–94.57% | comparable |
 
-The one-process result indicates no material rewrite regression in the search/inference path itself. The repeatable
-16.61% loss appears only under 32-process contention and is therefore a process/topology scaling regression to
-profile before freezing the production worker count. Do not tune from the single five-second figure alone; rerun a
-longer scaled comparison after profiling. A 60-second historical run cannot complete because the old runtime fails
-after natural chess game completion with `ChessSearchObservation` visits that reference illegal actions. That
-historical defect is itself evidence against using the old runtime as a long-duration baseline.
+The 1.23% difference is practical parity. The earlier 16.61% loss was real for the eight-process/GPU topology, but
+that topology is poor for both runtimes and should not be used to characterize the rewrite. At the useful 4×192
+topology, search rate, batch size, CPU use, and GPU saturation are all equivalent.
+
+A requested 60-second historical 4×192 run again reproduced the old natural-terminal defect: four workers failed
+near the end with `ChessSearchObservation` visits referencing illegal actions. The other 12 ran for 61–63 seconds,
+but their survivor-only throughput is not used for comparison. Current completes the full 60-second topology. The
+30-second historical window above is the longest complete, directly comparable result on this code state.
+
+The benchmark result does not yet include simultaneous replay, training, and evaluation contention. Before freezing
+an R12 production configuration, run one integrated baseline with the proposed `[0, 0, 1, 1, 2, 2, 3, 3]`
+self-play device assignment and 384 games per worker, then verify that trainer/evaluation scheduling does not reduce
+self-play capacity unexpectedly. Do not copy the node-specific topology into the generic local template without an
+explicit production run configuration and approval.
 
 ### Validation and remaining gate
 
-At source revision `a62219a422ef2e191fcc2ead65c652e63b703901`:
+Runtime validation completed at `a62219a422ef2e191fcc2ead65c652e63b703901`; the resource-aware benchmark
+harness and this corrected report are on `84b6b32e119fae7c4a187176e852eea37bcaef04`:
 
 - `python -m pytest --import-mode=importlib test -q`: 200 passed, 6 skipped, 59 warnings in 21.45 seconds.
 - `ctest --test-dir cpp/build --output-on-failure`: 1/1 native test target passed in 1.34 seconds after configuring
   the validation build with `BUILD_TESTING=ON`.
 - Focused external-engine and evaluation-manager tests: 10 passed in 4.14 seconds.
+- `bash -n py/tools/run_self_play_search_benchmark.sh` passed, followed by a real pinned CUDA harness smoke and the
+  topology measurements above.
 
 The only infrastructure validation still blocked on this offer is R10's real resource-aware queue launch because
 the container exposes read-only cgroup v1 rather than delegated cgroup v2. The functional R11 path, engines,
 datasets, evaluation lifecycle, timeout, and current/pre-rework throughput comparison are complete. The scaled
-multi-process regression and a production-sized evaluation timing run remain benchmark/topology follow-ups, not
+topology question is resolved for isolated self-play on this node. A production-sized evaluation timing run and an
+integrated self-play/replay/training/evaluation contention measurement remain R12 benchmark follow-ups, not
 functional blockers.
 
 The complete ignored evidence archive is `.codex-diagnostics/r11-final-evidence.tar.gz` on the development host
-(418,114 bytes, SHA-256 `2e92fc4aaef67e6707770ae91d5b6288aa48e0295de46a5c63891590f00d0682`). It contains
+(557,092 bytes, SHA-256 `21231f09572d8439177d87baf8f02121e2b7936d50b20949a542d242fc0341e9`). It contains
 the smoke/timeout logs, result artifacts, benchmark JSON and logs, persistent reference inputs, diagnostic-only
 historical benchmark wrappers, and final pytest/CTest output. Preserve it before destroying the instance.
