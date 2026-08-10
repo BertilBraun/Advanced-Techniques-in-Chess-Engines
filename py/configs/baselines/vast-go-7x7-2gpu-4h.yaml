@@ -8,14 +8,14 @@ run:
     mode: random_initialization
   hardware:
     provider_name: vast.ai
-    offer_id: instance-47386144-host-399360
-    gpu_model: NVIDIA GeForce RTX 4070
+    offer_id: instance-47400225-machine-112617-host-115630
+    gpu_model: NVIDIA GeForce RTX 3060
     gpu_count: 2
-    logical_cpu_count: 20
-    minimum_ram_gib: 48
+    logical_cpu_count: 16
+    minimum_ram_gib: 44
     minimum_disk_gib: 25
   environment:
-    runtime_image: vastai/pytorch:cuda-13.2.1-auto
+    runtime_image: vastai/pytorch:cuda-13.0.3-auto
     python_version: "3.12"
     torch_version: "2.12.1+cu126"
     cuda_version: "12.6"
@@ -67,7 +67,7 @@ training:
       recent_checkpoint_count: 11
       milestone_interval: 10
   limits:
-    hourly_price: 0.1808333333333333
+    hourly_price: 0.11522222222222215
     maximum_wall_time_seconds: 14700
     maximum_open_file_count: 32768
     maximum_host_ram_percent: 95.0

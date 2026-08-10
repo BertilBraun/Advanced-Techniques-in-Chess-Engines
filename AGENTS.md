@@ -49,17 +49,21 @@ smokes pass on an assigned GPU.
 
 ### Current Vast screening node
 
-The current rented node is Vast instance `47386144` on host `399360`: eight RTX 4070 12-GiB GPUs, 80 logical CPUs,
-approximately 251 GiB RAM, and a 150-GB ephemeral root disk at $0.7233333333/hour. The four production slots are
-GPU pairs `[0,1]`, `[2,3]`, `[4,5]`, and `[6,7]`, each with 20 logical CPUs and a 48-GiB queue RAM budget. Connect
-from Windows with the dedicated Vast key:
+The current rented node is Vast instance `47400225` on machine `112617`, host `115630`: eight RTX 3060 12-GiB GPUs,
+64 logical AMD EPYC 7452 CPUs, approximately 188 GiB RAM, and a 150-GB ephemeral root disk at $0.4608888889/hour.
+The cgroup exposes CPUs `0-63` with a 61.44-CPU quota; an idle audit found no hidden host load, and pinned SHA-256
+throughput was uniform at 1.61-1.62 GB/s. The local disk measured 1.4 GB/s write and 3.4 GB/s direct read; the offer
+advertised 843-Mbps down and 1289-Mbps up networking with 94.7% reliability. The four 16-CPU, 44-GiB production
+slots use GPU pairs `[0,1]`, `[2,3]`, `[4,5]`, and `[6,7]`. Pairs `[2,3]`, `[4,5]`, and `[6,7]` are NUMA-local;
+`[0,1]` crosses NUMA domains because GPU 0 is the only GPU on NUMA node 3. Connect from Windows with the dedicated
+Vast key:
 
 ```powershell
-ssh -i C:\Users\berti\.ssh\codex_vast_ed25519 -p 30692 root@38.246.237.140 -L 8080:localhost:8080
+ssh -i C:\Users\berti\.ssh\codex_vast_ed25519 -p 39529 root@1.193.139.91 -L 8080:localhost:8080
 ```
 
-The image is `vastai/pytorch:cuda-13.2.1-auto`; the locked training environment uses Python 3.12.3, PyTorch
-2.12.1+cu126, CUDA 12.6, and cuDNN 9.10.2. The host driver is 595.71.05 and reports CUDA 13.2 as its maximum
+The image is `vastai/pytorch:cuda-13.0.3-auto`; the locked training environment uses Python 3.12.3, PyTorch
+2.12.1+cu126, CUDA 12.6, and cuDNN 9.10.2. The host driver is 580.126.20 and reports CUDA 13.0 as its maximum
 supported driver API. Use a separate `-L 6006:localhost:16006` forward for the node's TensorBoard service.
 
 The private key is local-only and must never be copied into the repository or
