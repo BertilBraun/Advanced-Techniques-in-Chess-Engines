@@ -29,6 +29,15 @@ slots:
     log_directory: /workspace/run-control/logs/gpu-pair-d
 experiments:
   - {experiment_id: go7-00-baseline, experiment_file: ../screening/go-7x7-overnight/00-baseline.yaml, resources: {cuda_device_count: 2, cpu_core_count: 20, ram_limit_bytes: 51539607552}}
+  - {experiment_id: go7-01-learning-rate-decay, experiment_file: ../screening/go-7x7-overnight/01-learning-rate-decay.yaml, resources: {cuda_device_count: 2, cpu_core_count: 20, ram_limit_bytes: 51539607552}}
+  - {experiment_id: go7-02-learning-rate-constant-004, experiment_file: ../screening/go-7x7-overnight/02-learning-rate-constant-004.yaml, resources: {cuda_device_count: 2, cpu_core_count: 20, ram_limit_bytes: 51539607552}}
+  - {experiment_id: go7-04-mixed-search-25-full, experiment_file: ../screening/go-7x7-overnight/04-mixed-search-25-full.yaml, resources: {cuda_device_count: 2, cpu_core_count: 20, ram_limit_bytes: 51539607552}}
+  - {experiment_id: go7-06-progressive-search-64-512, experiment_file: ../screening/go-7x7-overnight/06-progressive-search-64-512.yaml, resources: {cuda_device_count: 2, cpu_core_count: 20, ram_limit_bytes: 51539607552}}
+  - {experiment_id: go7-07-root-value-blend, experiment_file: ../screening/go-7x7-overnight/07-root-value-blend.yaml, resources: {cuda_device_count: 2, cpu_core_count: 20, ram_limit_bytes: 51539607552}}
+  - {experiment_id: go7-08-replay-ratio-8, experiment_file: ../screening/go-7x7-overnight/08-replay-ratio-8.yaml, resources: {cuda_device_count: 2, cpu_core_count: 20, ram_limit_bytes: 51539607552}}
+  - {experiment_id: go7-09-tree-retention-60, experiment_file: ../screening/go-7x7-overnight/09-tree-retention-60.yaml, resources: {cuda_device_count: 2, cpu_core_count: 20, ram_limit_bytes: 51539607552}}
+  - {experiment_id: go7-10-random-opening-12, experiment_file: ../screening/go-7x7-overnight/10-random-opening-12.yaml, resources: {cuda_device_count: 2, cpu_core_count: 20, ram_limit_bytes: 51539607552}}
+  - {experiment_id: go7-11-next-policy, experiment_file: ../screening/go-7x7-overnight/11-next-policy.yaml, resources: {cuda_device_count: 2, cpu_core_count: 20, ram_limit_bytes: 51539607552}}
 summary_path: /workspace/run-control/go7-screening-summary.json
 poll_interval_seconds: 1.0
 termination_grace_seconds: 30.0

@@ -1,0 +1,144 @@
+# Experiment platform
+
+This is the current operational entry point for configuring, provisioning, launching, observing, and collecting
+AlphaZero experiments. The architecture rework ledgers are historical design records; consult them only for an
+architectural change or a concrete design ambiguity.
+
+## Architecture at a glance
+
+Python owns typed configuration, run preparation, the coordinator, replay credits, two-rank DDP training,
+self-play, elapsed-time evaluation, TensorBoard, and result export. Native C++ owns game rules, representations,
+and batched search. `py/train.py` runs one approved experiment. `py/queue_experiments.py` owns resource slots and
+starts stable children through `py/run_approved_experiment.py`; the queue is supervision, not another training
+mode.
+
+Experiment YAML has one canonical resolved form. A small authored override may use `extends`; paths resolve relative
+to the child YAML, mappings merge recursively, lists replace, and changing a base invalidates every dependent
+approval. The production baseline is `py/configs/baselines/vast-go-7x7-2gpu-4h.yaml`, the one-variable overrides are
+under `py/configs/screening/go-7x7-overnight`, and the canonical queue is
+`py/configs/queues/vast-go-7x7-screening.yaml`. See [`py/README.md`](../../py/README.md) for the schema and entry-point
+details.
+
+## Training and evaluation lifecycle
+
+Run preparation verifies a clean exact source revision, approval, hardware/runtime contract, output paths, and
+immutable evaluation inputs. The coordinator starts self-play, ingests completed games into replay, grants trainer
+credits at the configured replay ratio, publishes inference checkpoints after DDP quanta, schedules evaluation,
+and records a durable outcome on clean shutdown. Six of eight self-play workers pause during each training quantum
+in the current two-GPU baseline.
+
+Evaluation belongs to the coordinator and is scheduled by elapsed 20-minute boundaries. Jobs are asynchronous,
+device-cycled, limited to ten concurrent jobs, and individually time out after 20 minutes. The ladder contains the
+fixed dataset; previous 20-, 40-, and 60-minute checkpoints; the same-time baseline; and KataGo at 64 visits.
+Checkpoint and same-time matches use 200 paired openings (400 games); KataGo uses 50 pairs (100 games). The checked-in
+v2 dataset and openings are immutable and must be reused, never regenerated. Exact engine assets, checksums, and
+artifact preparation checks are in [Evaluation engines](evaluation-engines.md).
+
+For a screening campaign, run a fresh baseline first. Its
+`py/training_data/screening/go7-overnight/00-baseline/evaluations/reference-checkpoints.json` and referenced
+checkpoints are the only runtime same-time baseline. Historical archives are analysis evidence, not runtime input.
+Give the baseline roughly two to five minutes of lead before adding challengers, then confirm at their first
+boundary that `same-time-baseline` jobs were scheduled rather than skipped.
+
+## Fresh-node bootstrap and approval
+
+Before mutation, read `/etc/vast-agents-guide.md` and record the offer/price, `nvidia-smi`, GPU model/count/VRAM and
+topology, CPU affinity/NUMA, RAM, disk capacity and throughput, network, driver, and image. Stop if measured hardware
+does not support the authored topology.
+
+`deployment/setup_remote.sh` is the authoritative fresh bootstrap. Give it the exact revision and runner command;
+it creates the locked virtual environment, builds the Release native extension, installs engines, exposes the
+PyTorch NVIDIA libraries during engine smoke, and exports `ENGINE_SOURCE_REVISION`. Omit KataGo archive variables to
+use the checked-in pinned CUDA default. A different official CUDA/cuDNN release requires all three
+`ENGINE_KATAGO_BACKEND`, `ENGINE_KATAGO_ARCHIVE_URL`, and `ENGINE_KATAGO_ARCHIVE_SHA256` values. CPU, OpenCL, and
+TensorRT KataGo builds are forbidden. Success requires `engines/INSTALLATION.txt` to name CUDA, `katago version` to
+report the CUDA backend, and both board-size smokes to pass. Exact assets and hashes remain in
+[Evaluation engines](evaluation-engines.md).
+
+For later supervised commands, preserve the bootstrap runtime requirements: raise the soft open-file limit above
+the configured minimum, set `TRAINING_RUNTIME_IMAGE`, and include every locked-venv `site-packages/nvidia/*/lib`
+directory in `LD_LIBRARY_PATH`. Otherwise KataGo children can fail to load CUDA libraries even though bootstrap
+passed.
+
+Every production run needs a new approval JSON outside Git. Create it only after the final revision and resolved
+configuration are fixed. It must bind the approver, exact Git revision, canonical configuration hash, offer, hourly
+price, and wall-time limit. Never reuse an approval from another revision, configuration, node, or campaign.
+
+## Queue ownership and operation
+
+The queue owns slot allocation, child process groups, sampled process-tree RAM limits, logs, and the atomic summary.
+It reloads the desired queue and pending experiment YAML before every scheduling pass. Adding, removing, reordering,
+or editing pending entries does not require a restart. Running and terminal experiment IDs are immutable; a failed
+entry releases its resources and is not silently retried.
+
+Use the node's supported supervisor instead of a detached shell. The supervised command is:
+
+```bash
+/workspace/alphazero-engine-venv/bin/python py/queue_experiments.py run \
+  --queue-config /workspace/run-control/go7-screening-live.yaml
+```
+
+For a baseline-first launch, materialize the committed queue outside Git with absolute experiment paths. Initially
+include only the baseline; after its evaluation manager and reference manifest exist and the lead interval has
+elapsed, atomically replace the live file with the complete materialized queue. This preserves a clean, unchanged
+repository and one exact source revision for every child while exercising normal live reload.
+
+Start and inspect the supervisor with the node's `supervisorctl`:
+
+```bash
+supervisorctl start experiment-queue
+supervisorctl status experiment-queue
+/workspace/alphazero-engine-venv/bin/python py/queue_experiments.py status \
+  --summary /workspace/run-control/go7-screening-summary.json
+```
+
+Update only pending work by atomically replacing the live queue file. Stop with
+`supervisorctl stop experiment-queue` only when active runs should also terminate: queue shutdown sends termination
+to every active child. Restarting against a summary that still says `running` marks those entries failed rather
+than adopting stale processes, so first verify all recorded process groups are gone. Deleting the summary creates a
+new campaign and makes configured IDs eligible again; do that only deliberately with clean run, log, and TensorBoard
+paths.
+
+## Monitoring and TensorBoard
+
+Inspect the queue summary, per-slot stdout/stderr, run outcome, credit ledger, evaluation manager state/results,
+resource telemetry, `nvidia-smi`, host RAM, and disk. A healthy four-slot launch shows four independent two-GPU
+children progressing in games, credits, optimizer steps, generations, checkpoints, and TensorBoard. Watch replay
+ratio and available-quantum fraction together, and distinguish credit waits from training time. Check GPU memory,
+temperature, power, and utilization across self-play, DDP, and evaluation contention.
+
+The node TensorBoard service listens on port 16006 and watches `/workspace`. Forward it separately, for example:
+
+```powershell
+ssh -i C:\Users\berti\.ssh\codex_vast_ed25519 -p 30692 root@38.246.237.140 `
+  -L 6006:localhost:16006
+```
+
+Open `http://localhost:6006`. Evaluation custom scalars group match W/D/L and scores, dataset accuracy/cross-entropy,
+and one combined duration chart. Compare experiments on elapsed time, with optimizer steps and generations at each
+boundary as supporting context.
+
+## Result export and validation checklist
+
+Export terminal entries with `py/export_experiment_results.py`. A full archive contains authored/resolved configs,
+identity/outcome, telemetry, queue and child logs, evaluation state/results, TensorBoard, every elapsed evaluation
+checkpoint, and only the latest optimizer; replay and completed games stay remote. Exporting does not delete source
+directories. Commands, selection rules, and manifest semantics are in
+[Experiment result export](experiment-result-export.md). Download the ZIP to the project evidence directory, verify
+its SHA-256 and ZIP integrity, and retain both local and remote copies until the campaign is accepted.
+
+Before launch, verify:
+
+- exact clean revision, fresh approvals, measured slot resources, locked dependencies, Release native tests, and
+  CUDA KataGo/Stockfish integration;
+- v2 dataset/opening hashes reuse immediately, focused/full Python tests, and a bounded real DDP smoke covering
+  credits, prefetch, pause/resume, checkpointing, scheduled evaluation, TensorBoard layout, and clean shutdown;
+- empty production run/TensorBoard/log/summary paths, baseline initialization before challenger live reload, and
+  four concurrent progressing slots through the challengers' first evaluation boundary.
+
+After completion, verify terminal outcomes, every due evaluation result or explicit failure, archive manifest and
+ZIP integrity, elapsed-time comparisons against the fresh same-time baseline and previous checkpoints, fixed-dataset
+metrics, KataGo-64, replay/credit balance, throughput, and resource contention. Do not promote a feature
+automatically; report the evidence for a user decision. Detailed prior-node validation evidence remains in
+[R11 Vast integrated validation](vast-r11-validation.md), and the historical baseline rationale is in
+[Go 7x7 two-GPU training baseline](../benchmarks/go-7x7-two-gpu-training-baseline.md).

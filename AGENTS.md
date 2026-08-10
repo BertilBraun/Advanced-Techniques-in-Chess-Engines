@@ -2,9 +2,12 @@
 
 ## Rework authority
 
-Read `documentation/architecture/platform-rework.md` completely before changing rework code. For Python runtime
-work, also read `documentation/architecture/python-runtime-rework.md` completely. Work only on the phase the user
-has authorized. Preserve unrelated changes and make feature-sized commits after relevant validation.
+Read `documentation/operations/experiment-platform.md` completely before ordinary experiment configuration, fresh
+node provisioning, queue operation, monitoring, or result export. Read
+`documentation/architecture/platform-rework.md` before architectural changes or when investigating historical
+platform decisions. For architectural Python runtime work, also read
+`documentation/architecture/python-runtime-rework.md`. Preserve unrelated changes and make feature-sized commits
+after relevant validation.
 
 At every handoff, report completed work, outstanding phase work, commits,
 validation results, changes needing special review, and unresolved decisions.
@@ -44,14 +47,20 @@ is successful only if `engines/INSTALLATION.txt` records a CUDA backend,
 `katago version` reports `Using CUDA backend`, and the 7x7 and 9x9 analysis
 smokes pass on an assigned GPU.
 
-### Current Vast validation node
+### Current Vast screening node
 
-Connect to the current rented validation node from Windows with the dedicated
-Vast key and the TensorBoard/local-service forward:
+The current rented node is Vast instance `47386144` on host `399360`: eight RTX 4070 12-GiB GPUs, 80 logical CPUs,
+approximately 251 GiB RAM, and a 150-GB ephemeral root disk at $0.7233333333/hour. The four production slots are
+GPU pairs `[0,1]`, `[2,3]`, `[4,5]`, and `[6,7]`, each with 20 logical CPUs and a 48-GiB queue RAM budget. Connect
+from Windows with the dedicated Vast key:
 
 ```powershell
-ssh -i C:\Users\berti\.ssh\codex_vast_ed25519 -p 56488 root@171.101.230.38 -L 8080:localhost:8080
+ssh -i C:\Users\berti\.ssh\codex_vast_ed25519 -p 30692 root@38.246.237.140 -L 8080:localhost:8080
 ```
+
+The image is `vastai/pytorch:cuda-13.2.1-auto`; the locked training environment uses Python 3.12.3, PyTorch
+2.12.1+cu126, CUDA 12.6, and cuDNN 9.10.2. The host driver is 595.71.05 and reports CUDA 13.2 as its maximum
+supported driver API. Use a separate `-L 6006:localhost:16006` forward for the node's TensorBoard service.
 
 The private key is local-only and must never be copied into the repository or
 onto the node. Read `/etc/vast-agents-guide.md` completely before changing the

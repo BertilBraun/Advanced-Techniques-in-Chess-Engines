@@ -20,9 +20,9 @@ chess rules and training implementations.
 ## Environment and build
 
 `deployment/setup_remote.sh` is the authoritative fresh-node setup path. It clones the requested revision, installs
-the hashed environment from `requirements-training.lock`, builds the Release extension, exports
-`ENGINE_SOURCE_REVISION`, and starts the supplied command. It intentionally does not provision Stockfish or KataGo;
-external evaluation artifacts remain explicit configuration inputs.
+the hashed environment from `requirements-training.lock`, builds the Release extension, installs and smokes the
+pinned evaluation engines, exports `ENGINE_SOURCE_REVISION`, and starts the supplied command. External engine paths
+and immutable evaluation artifacts remain explicit configuration inputs.
 
 For local development, install `requirements-training.lock` with `uv` and build the extension with CMake:
 
@@ -93,7 +93,7 @@ Paths resolve relative to the queue file. CUDA and CPU sets must not overlap bet
 complete matching slot; its exact CPU affinity and aggregate RAM limit may be smaller than the slot capacity.
 `run_approved_experiment.py` resolves the current repository revision at child launch and selects
 `<approval-directory>/<experiment-yaml-stem>.json`; the approval remains revision- and configuration-specific.
-The current four-GPU screening queue is committed at
+The current eight-GPU, four-two-GPU-slot screening queue is committed at
 [`configs/queues/vast-go-7x7-screening.yaml`](configs/queues/vast-go-7x7-screening.yaml).
 
 ### Memory monitoring
