@@ -5,8 +5,9 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 from tensorboard.compat.proto import event_pb2, summary_pb2
 from tensorboard.plugins.custom_scalar import layout_pb2
 from tensorboard.summary.writer.event_file_writer import EventFileWriter
+from tensorboardX import SummaryWriter
 
-from tools.consolidate_tensorboard_logs import consolidate_once
+from tools.consolidate_tensorboard_logs import TensorboardLogConsolidator, consolidate_once
 
 
 def write_scalar(log_directory: Path, tag: str, step: int, value: float, wall_time: float) -> None:
@@ -27,6 +28,13 @@ def scalar_values(output_root: Path, tag: str) -> tuple[float, ...]:
     accumulator = EventAccumulator(str(output_root))
     accumulator.Reload()
     return tuple(event.value for event in accumulator.Scalars(tag))
+
+
+def custom_scalar_layout(output_root: Path) -> layout_pb2.Layout:
+    accumulator = EventAccumulator(str(output_root))
+    accumulator.Reload()
+    layout_event = accumulator.Tensors('custom_scalars__config__')[-1]
+    return layout_pb2.Layout.FromString(layout_event.tensor_proto.string_val[0])
 
 
 def test_consolidation_merges_run_fragments_and_keeps_newest_duplicate(tmp_path: Path) -> None:
@@ -125,23 +133,133 @@ def test_consolidation_preserves_add_scalars_child_series(tmp_path: Path) -> Non
     assert scalar_values(output_root, 'evaluation/policy_accuracy/5') == pytest.approx((0.6,))
 
 
-def test_custom_scalar_layout_groups_wins_draws_and_losses(tmp_path: Path) -> None:
+def test_consolidation_preserves_evaluation_boundary_summary(tmp_path: Path) -> None:
     source_root = tmp_path / 'source'
     output_root = tmp_path / 'output'
-    write_scalar(source_root / 'run_0' / 'trainer', 'train/total_loss', 1, 1.0, wall_time=10.0)
+    writer = SummaryWriter(str(source_root / 'run_0' / 'coordinator'))
+    writer.add_text('evaluation/summaries', '| Evaluation | Score |', global_step=1_200)
+    writer.close()
 
-    consolidate_once(source_root, output_root)
+    manifest = consolidate_once(source_root, output_root)
 
     accumulator = EventAccumulator(str(output_root))
     accumulator.Reload()
-    layout_event = accumulator.Tensors('custom_scalars__config__')[0]
-    layout = layout_pb2.Layout.FromString(layout_event.tensor_proto.string_val[0])
-    wdl_category = next(category for category in layout.category if category.title == 'Evaluation W/D/L')
-    reference_chart = next(chart for chart in wdl_category.chart if chart.title == 'Reference model')
-    assert tuple(reference_chart.multiline.tag) == (
-        'evaluation/vs_reference_model/wins',
-        'evaluation/vs_reference_model/draws',
-        'evaluation/vs_reference_model/losses',
+    events = accumulator.Tensors('coordinator/evaluation/summaries/text_summary')
+    assert len(events) == 1
+    assert manifest.excluded_text_summary_count == 0
+
+
+def test_custom_scalar_layout_groups_discovered_evaluation_definitions(tmp_path: Path) -> None:
+    source_root = tmp_path / 'source'
+    output_root = tmp_path / 'output'
+    evaluation_directory = source_root / 'run_0' / 'coordinator'
+    for metric, value in (
+        ('wins', 12.0),
+        ('draws', 0.0),
+        ('losses', 88.0),
+        ('score', 0.12),
+        ('first_player_score', 0.0),
+        ('second_player_score', 0.24),
+        ('duration_seconds', 80.0),
+    ):
+        write_scalar(evaluation_directory, f'evaluation/katago-16/{metric}', 1_200, value, wall_time=10.0)
+    write_scalar(
+        evaluation_directory,
+        'evaluation/previous-20m/duration_seconds',
+        1_200,
+        70.0,
+        wall_time=10.0,
+    )
+
+    consolidate_once(source_root, output_root)
+
+    layout = custom_scalar_layout(output_root)
+    match_category = next(category for category in layout.category if category.title == 'Evaluation matches')
+    assert tuple(chart.title for chart in match_category.chart) == ('katago-16 W/D/L', 'katago-16 scores')
+    assert tuple(match_category.chart[0].multiline.tag) == (
+        'coordinator/evaluation/katago-16/wins',
+        'coordinator/evaluation/katago-16/draws',
+        'coordinator/evaluation/katago-16/losses',
+    )
+    assert tuple(match_category.chart[1].multiline.tag) == (
+        'coordinator/evaluation/katago-16/score',
+        'coordinator/evaluation/katago-16/first_player_score',
+        'coordinator/evaluation/katago-16/second_player_score',
+    )
+    timing_category = next(category for category in layout.category if category.title == 'Evaluation timing')
+    assert tuple(timing_category.chart[0].multiline.tag) == (
+        'coordinator/evaluation/katago-16/duration_seconds',
+        'coordinator/evaluation/previous-20m/duration_seconds',
+    )
+
+
+def test_custom_scalar_layout_compacts_discovered_fixed_dataset_metrics(tmp_path: Path) -> None:
+    source_root = tmp_path / 'source'
+    output_root = tmp_path / 'output'
+    evaluation_directory = source_root / 'run_0' / 'evaluation_fixed_dataset'
+    write_scalar(
+        evaluation_directory,
+        'evaluation/fixed-dataset/top_action_accuracy',
+        1_200,
+        0.2,
+        wall_time=10.0,
+    )
+    write_scalar(
+        evaluation_directory,
+        'evaluation/fixed-dataset/policy_cross_entropy',
+        1_200,
+        3.1,
+        wall_time=10.0,
+    )
+    write_scalar(
+        evaluation_directory,
+        'evaluation/fixed-dataset/duration_seconds',
+        1_200,
+        5.0,
+        wall_time=10.0,
+    )
+
+    consolidate_once(source_root, output_root)
+
+    layout = custom_scalar_layout(output_root)
+    dataset_category = next(category for category in layout.category if category.title == 'Evaluation datasets')
+    assert tuple(chart.title for chart in dataset_category.chart) == (
+        'Top-action accuracy',
+        'Policy cross-entropy',
+    )
+    assert tuple(dataset_category.chart[0].multiline.tag) == ('evaluation/fixed-dataset/top_action_accuracy',)
+    assert tuple(dataset_category.chart[1].multiline.tag) == ('evaluation/fixed-dataset/policy_cross_entropy',)
+
+
+def test_watched_consolidation_updates_layout_for_new_definition(tmp_path: Path) -> None:
+    source_root = tmp_path / 'source'
+    output_root = tmp_path / 'output'
+    write_scalar(
+        source_root / 'run_0' / 'evaluation_katago_16',
+        'evaluation/katago-16/duration_seconds',
+        1_200,
+        80.0,
+        wall_time=10.0,
+    )
+    consolidator = TensorboardLogConsolidator(source_root, output_root)
+    try:
+        consolidator.scan()
+        write_scalar(
+            source_root / 'run_0' / 'evaluation_same_time_baseline',
+            'evaluation/same-time-baseline/duration_seconds',
+            1_200,
+            90.0,
+            wall_time=20.0,
+        )
+        consolidator.scan()
+    finally:
+        consolidator.close()
+
+    layout = custom_scalar_layout(output_root)
+    timing_category = next(category for category in layout.category if category.title == 'Evaluation timing')
+    assert tuple(timing_category.chart[0].multiline.tag) == (
+        'evaluation/katago-16/duration_seconds',
+        'evaluation/same-time-baseline/duration_seconds',
     )
 
 

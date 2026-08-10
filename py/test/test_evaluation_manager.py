@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 from pydantic import TypeAdapter
+from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+from tensorboard.plugins.custom_scalar import layout_pb2
 
 from src.evaluation.contracts import (
     CheckpointOpponent,
@@ -23,6 +25,7 @@ from src.evaluation.scheduling import ScheduledEvaluationSuite, jobs_for_suite
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
+from src.util.tensorboard import TensorboardWriter
 
 
 class FakeClock:
@@ -123,6 +126,48 @@ def experiment_configuration(
             ),
         }
     )
+
+
+def test_manager_writes_compact_evaluation_layout_to_raw_coordinator_log(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tensorboard_root = tmp_path / 'tensorboard'
+    monkeypatch.setenv('TRAINING_TENSORBOARD_LOG_PATH', str(tensorboard_root))
+    experiment = experiment_configuration(tmp_path / 'run')
+
+    with TensorboardWriter(run=0, suffix='coordinator', postfix_pid=False):
+        manager = EvaluationManager(
+            experiment,
+            checkpoint(tmp_path / 'run', 0),
+            FakeClock(),
+            FakeProcessContext(),
+        )
+        manager.close()
+
+    accumulator = EventAccumulator(str(tensorboard_root / 'run_0' / 'coordinator'))
+    accumulator.Reload()
+    layout_event = accumulator.Tensors('custom_scalars__config__')[0]
+    layout = layout_pb2.Layout.FromString(layout_event.tensor_proto.string_val[0])
+    match_category = next(category for category in layout.category if category.title == 'Evaluation matches')
+    search_random_charts = tuple(chart for chart in match_category.chart if chart.title.startswith('search-random '))
+    assert tuple(chart.title for chart in search_random_charts) == (
+        'search-random W/D/L',
+        'search-random scores',
+    )
+    assert tuple(search_random_charts[0].multiline.tag) == (
+        'evaluation/search-random/wins',
+        'evaluation/search-random/draws',
+        'evaluation/search-random/losses',
+    )
+    dataset_category = next(category for category in layout.category if category.title == 'Evaluation datasets')
+    assert tuple(chart.title for chart in dataset_category.chart) == (
+        'Top-action accuracy',
+        'Policy cross-entropy',
+    )
+    timing_category = next(category for category in layout.category if category.title == 'Evaluation timing')
+    assert len(timing_category.chart) == 1
+    assert len(timing_category.chart[0].multiline.tag) == len(experiment.evaluation.definitions)
 
 
 def test_manager_schedules_boundary_checkpoint_and_cycles_devices(

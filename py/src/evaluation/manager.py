@@ -30,12 +30,13 @@ from src.evaluation.scheduling import (
     jobs_for_suite,
     required_checkpoint_generations,
 )
+from src.evaluation.tensorboard import evaluation_tensorboard_categories
 from src.experiment.configuration import ExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.log import log
-from src.util.tensorboard import log_scalar, log_text
+from src.util.tensorboard import log_custom_scalar_layout, log_scalar, log_text
 
 
 class EvaluationManagerState(FrozenModel):
@@ -78,6 +79,7 @@ class EvaluationManager:
     ) -> None:
         self.experiment = experiment
         self.configuration = experiment.evaluation
+        log_custom_scalar_layout(evaluation_tensorboard_categories(self.configuration))
         self.run_path = Path(experiment.training.save_path)
         self.result_directory = self.run_path / 'evaluations'
         self.result_directory.mkdir(parents=True, exist_ok=True)

@@ -4,6 +4,7 @@ import torch
 import numpy as np
 import multiprocessing
 from contextvars import ContextVar, Token
+from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
 from tensorboardX import SummaryWriter
@@ -45,6 +46,18 @@ _TB_LOGGING_ENABLED = ContextVar[bool]('tensorboard_logging_enabled', default=Tr
 _HAS_PROMPTED = False
 _TENSORBOARD_RUN_DIRECTORY_ENVIRONMENT_VARIABLE = 'TRAINING_TENSORBOARD_RUN_DIRECTORY'
 DEFAULT_TENSORBOARD_LOG_PATH = 'logs'
+
+
+@dataclass(frozen=True)
+class TensorboardMultilineChart:
+    title: str
+    tags: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TensorboardCustomScalarCategory:
+    title: str
+    charts: tuple[TensorboardMultilineChart, ...]
 
 
 def get_run_id() -> int:
@@ -119,6 +132,18 @@ def log_text(name: str, text: str, step: int | None = None) -> None:
     if step is None:
         step = int(time.time() * 1000)
     summary.add_text(name, text, step)
+
+
+def log_custom_scalar_layout(categories: tuple[TensorboardCustomScalarCategory, ...]) -> None:
+    if not _tb_check_active() or not categories:
+        return
+    summary = _TB_SUMMARY.get()
+    assert summary is not None, 'No tensorboard writer active'
+    layout = {
+        category.title: {chart.title: ['Multiline', list(chart.tags)] for chart in category.charts}
+        for category in categories
+    }
+    summary.add_custom_scalars(layout)
 
 
 def log_histogram(name: str, values: torch.Tensor | np.ndarray, step: int | None = None) -> None:

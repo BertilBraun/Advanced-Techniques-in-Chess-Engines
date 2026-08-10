@@ -16,6 +16,9 @@ from tensorboard.compat.proto import event_pb2, summary_pb2, tensor_pb2, tensor_
 from tensorboard.plugins.custom_scalar import layout_pb2
 from tensorboard.summary.writer.event_file_writer import EventFileWriter
 
+from src.evaluation.tensorboard import discovered_evaluation_tensorboard_categories
+from src.util.tensorboard import TensorboardCustomScalarCategory, TensorboardMultilineChart
+
 
 EVENT_FILE_PATTERN = 'events.out.tfevents.*'
 RUN_NAME_PATTERN = re.compile(r'run_(\d+)')
@@ -55,26 +58,6 @@ class EventFileSelection:
 class TimeSeriesRoute:
     run_name: str
     tag: str
-
-
-@dataclass(frozen=True)
-class MultilineChart:
-    title: str
-    tags: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class MarginChart:
-    title: str
-    value_tag: str
-    lower_tag: str
-    upper_tag: str
-
-
-@dataclass(frozen=True)
-class CustomScalarCategory:
-    title: str
-    charts: tuple[MultilineChart | MarginChart, ...]
 
 
 class RepresentativeSelfPlayProcess(BaseModel):
@@ -244,87 +227,13 @@ def _plugin_name(value: summary_pb2.Summary.Value) -> str:
     return ''
 
 
-def _evaluation_wdl_chart(title: str, tag_prefix: str) -> MultilineChart:
-    return MultilineChart(
-        title=title,
-        tags=(
-            f'{tag_prefix}/wins',
-            f'{tag_prefix}/draws',
-            f'{tag_prefix}/losses',
-        ),
-    )
-
-
-def custom_scalar_categories() -> tuple[CustomScalarCategory, ...]:
+def custom_scalar_categories(scalar_tags: set[str]) -> tuple[TensorboardCustomScalarCategory, ...]:
     return (
-        CustomScalarCategory(
-            title='Evaluation W/D/L',
-            charts=(
-                _evaluation_wdl_chart('Reference model', 'evaluation/vs_reference_model'),
-                _evaluation_wdl_chart('Random', 'evaluation/vs_random'),
-                _evaluation_wdl_chart('Policy vs random', 'evaluation/policy_vs_random'),
-                _evaluation_wdl_chart('Stockfish fixed nodes', 'evaluation/vs_stockfish_fixed_nodes'),
-                _evaluation_wdl_chart('Stockfish level 0', 'evaluation/vs_stockfish_level_0'),
-                _evaluation_wdl_chart('Stockfish level 1', 'evaluation/vs_stockfish_level_1'),
-                _evaluation_wdl_chart('Stockfish level 2', 'evaluation/vs_stockfish_level_2'),
-                _evaluation_wdl_chart('Stockfish level 3', 'evaluation/vs_stockfish_level_3'),
-                _evaluation_wdl_chart('Model from 10 generations earlier', 'evaluation/vs_10_model'),
-                _evaluation_wdl_chart('Model from 20 generations earlier', 'evaluation/vs_20_model'),
-            ),
-        ),
-        CustomScalarCategory(
-            title='Evaluation scores',
-            charts=(
-                MultilineChart(
-                    title='Stockfish skill levels',
-                    tags=tuple(f'evaluation/vs_stockfish_level_{level}/score' for level in range(4)),
-                ),
-                MultilineChart(
-                    title='Reference and random baselines',
-                    tags=(
-                        'evaluation/vs_reference_model/score',
-                        'evaluation/vs_random/score',
-                        'evaluation/policy_vs_random/score',
-                    ),
-                ),
-                MultilineChart(
-                    title='Previous models',
-                    tags=(
-                        'evaluation/vs_10_model/score',
-                        'evaluation/vs_20_model/score',
-                    ),
-                ),
-                MarginChart(
-                    title='Reference model confidence interval',
-                    value_tag='evaluation/vs_reference_model/score',
-                    lower_tag='evaluation/vs_reference_model/score_confidence_low',
-                    upper_tag='evaluation/vs_reference_model/score_confidence_high',
-                ),
-                MarginChart(
-                    title='Stockfish fixed-nodes confidence interval',
-                    value_tag='evaluation/vs_stockfish_fixed_nodes/score',
-                    lower_tag='evaluation/vs_stockfish_fixed_nodes/score_confidence_low',
-                    upper_tag='evaluation/vs_stockfish_fixed_nodes/score_confidence_high',
-                ),
-            ),
-        ),
-        CustomScalarCategory(
-            title='Policy',
-            charts=(
-                MultilineChart(
-                    title='Policy accuracy',
-                    tags=(
-                        'evaluation/policy_accuracy/1',
-                        'evaluation/policy_accuracy/5',
-                        'evaluation/policy_accuracy/10',
-                    ),
-                ),
-            ),
-        ),
-        CustomScalarCategory(
+        *discovered_evaluation_tensorboard_categories(scalar_tags),
+        TensorboardCustomScalarCategory(
             title='Optimization',
             charts=(
-                MultilineChart(
+                TensorboardMultilineChart(
                     title='Training losses',
                     tags=(
                         'train/policy_loss',
@@ -332,7 +241,7 @@ def custom_scalar_categories() -> tuple[CustomScalarCategory, ...]:
                         'train/total_loss',
                     ),
                 ),
-                MultilineChart(
+                TensorboardMultilineChart(
                     title='Validation losses',
                     tags=(
                         'validation/policy_loss',
@@ -345,46 +254,30 @@ def custom_scalar_categories() -> tuple[CustomScalarCategory, ...]:
     )
 
 
-def _custom_scalar_layout() -> layout_pb2.Layout:
+def _custom_scalar_layout(scalar_tags: set[str]) -> layout_pb2.Layout:
     categories: list[layout_pb2.Category] = []
-    for category_definition in custom_scalar_categories():
+    for category_definition in custom_scalar_categories(scalar_tags):
         charts: list[layout_pb2.Chart] = []
         for chart_definition in category_definition.charts:
-            match chart_definition:
-                case MultilineChart():
-                    charts.append(
-                        layout_pb2.Chart(
-                            title=chart_definition.title,
-                            multiline=layout_pb2.MultilineChartContent(tag=chart_definition.tags),
-                        )
-                    )
-                case MarginChart():
-                    charts.append(
-                        layout_pb2.Chart(
-                            title=chart_definition.title,
-                            margin=layout_pb2.MarginChartContent(
-                                series=(
-                                    layout_pb2.MarginChartContent.Series(
-                                        value=chart_definition.value_tag,
-                                        lower=chart_definition.lower_tag,
-                                        upper=chart_definition.upper_tag,
-                                    ),
-                                )
-                            ),
-                        )
-                    )
+            charts.append(
+                layout_pb2.Chart(
+                    title=chart_definition.title,
+                    multiline=layout_pb2.MultilineChartContent(tag=chart_definition.tags),
+                )
+            )
         categories.append(layout_pb2.Category(title=category_definition.title, chart=charts))
     return layout_pb2.Layout(category=categories)
 
 
-def _write_custom_scalar_layout(writer: EventFileWriter) -> None:
-    layout = _custom_scalar_layout()
+def _write_custom_scalar_layout(writer: EventFileWriter, scalar_tags: set[str]) -> bytes:
+    layout = _custom_scalar_layout(scalar_tags)
+    serialized_layout = layout.SerializeToString()
     metadata = summary_pb2.SummaryMetadata(
         plugin_data=summary_pb2.SummaryMetadata.PluginData(plugin_name='custom_scalars')
     )
     tensor = tensor_pb2.TensorProto(
         dtype=types_pb2.DT_STRING,
-        string_val=(layout.SerializeToString(),),
+        string_val=(serialized_layout,),
         tensor_shape=tensor_shape_pb2.TensorShapeProto(),
     )
     writer.add_event(
@@ -401,15 +294,31 @@ def _write_custom_scalar_layout(writer: EventFileWriter) -> None:
             ),
         )
     )
+    return serialized_layout
+
+
+def _event_scalar_tags(event_files: tuple[Path, ...]) -> set[str]:
+    scalar_tags: set[str] = set()
+    for event_file in event_files:
+        loader = LegacyEventFileLoader(str(event_file))
+        for event in loader.Load():
+            if not event.HasField('summary'):
+                continue
+            for value in event.summary.value:
+                if value.WhichOneof('value') == 'simple_value':
+                    scalar_tags.add(value.tag)
+    return scalar_tags
 
 
 def append_custom_scalar_layout(output_root: Path) -> None:
     resolved_output_root = output_root.resolve()
     if not resolved_output_root.is_dir():
         raise ValueError(f'TensorBoard output root does not exist: {resolved_output_root}')
+    event_files = tuple(resolved_output_root.rglob(EVENT_FILE_PATTERN))
+    scalar_tags = _event_scalar_tags(event_files)
     writer = EventFileWriter(str(resolved_output_root))
     try:
-        _write_custom_scalar_layout(writer)
+        _write_custom_scalar_layout(writer, scalar_tags)
     finally:
         writer.close()
 
@@ -437,8 +346,7 @@ class TensorboardLogConsolidator:
             None if time_series_view else EventFileWriter(str(self.output_root), max_queue_size=1_000, flush_secs=10)
         )
         self.time_series_writers: dict[str, EventFileWriter] = {}
-        if self.writer is not None:
-            _write_custom_scalar_layout(self.writer)
+        self.written_custom_scalar_layout: bytes | None = None
         self.summary_states: dict[SummaryIdentity, SummaryState] = {}
         self.emitted_summary_states: dict[SummaryIdentity, SummaryState] = {}
         self.event_file_fingerprints: dict[Path, EventFileFingerprint] = {}
@@ -465,6 +373,10 @@ class TensorboardLogConsolidator:
             self.event_file_fingerprints[event_file] = fingerprint
         self._emit_changed_summaries()
         if self.writer is not None:
+            scalar_tags = {identity.tag for identity in self.summary_states if identity.value_type == 'simple_value'}
+            layout = _custom_scalar_layout(scalar_tags).SerializeToString()
+            if layout != self.written_custom_scalar_layout:
+                self.written_custom_scalar_layout = _write_custom_scalar_layout(self.writer, scalar_tags)
             self.writer.flush()
         for writer in self.time_series_writers.values():
             writer.flush()
@@ -481,9 +393,9 @@ class TensorboardLogConsolidator:
             if not event.HasField('summary'):
                 continue
             for original_value in event.summary.value:
-                if _plugin_name(original_value) == 'text' and event_file.relative_to(self.source_root).parts[1] != (
-                    'training_args'
-                ):
+                category = event_file.relative_to(self.source_root).parts[1]
+                is_evaluation_summary = original_value.tag.startswith('evaluation/summaries/')
+                if _plugin_name(original_value) == 'text' and category != 'training_args' and not is_evaluation_summary:
                     self.excluded_text_summary_count += 1
                     continue
                 self._select_if_newer(event_file, event, original_value)
