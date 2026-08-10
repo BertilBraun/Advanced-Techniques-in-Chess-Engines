@@ -13,6 +13,7 @@ from typing import BinaryIO
 import psutil
 
 from src.experiment_queue.scheduler import ResourceAssignment
+from src.experiment_queue.launcher_snapshot import LauncherSnapshot
 
 
 @dataclass
@@ -69,21 +70,20 @@ def launch_process(
     runtime_directory: Path,
     tensorboard_log_directory: Path,
     setup_commands: tuple[tuple[str, ...], ...],
+    launcher_snapshot: LauncherSnapshot,
     stdout_path: Path,
     stderr_path: Path,
 ) -> RunningProcess:
     if sys.platform != 'linux':
         raise ValueError('The experiment queue launcher supports Linux only.')
 
-    child_wrapper = Path(__file__).with_name('linux_child.py').resolve()
-    worktree_wrapper = Path(__file__).with_name('worktree_child.py').resolve()
     wrapper_command = (
         sys.executable,
-        str(child_wrapper),
+        str(launcher_snapshot.linux_child),
         '--cpu-affinity',
         ','.join(str(cpu_index) for cpu_index in assignment.cpu_affinity),
         sys.executable,
-        str(worktree_wrapper),
+        str(launcher_snapshot.worktree_child),
         '--source-worktree',
         str(source_worktree),
         '--runtime-directory',

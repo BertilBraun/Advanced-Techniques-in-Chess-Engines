@@ -11,6 +11,7 @@ from types import FrameType
 
 from src.experiment_queue.configuration import QueuedExperiment, ResourceSlot, slot_satisfies_request
 from src.experiment_queue.process import RunningProcess, launch_process, terminate_process_group
+from src.experiment_queue.launcher_snapshot import create_launcher_snapshot, experiment_queue_source_directory
 from src.experiment_queue.scheduler import ResourceAssignment, schedule_experiments
 from src.experiment_queue.state import (
     CompletedExperimentStatus,
@@ -38,6 +39,10 @@ class ExperimentQueueRunner:
         self._running_processes: dict[str, RunningProcess] = {}
         self._workspaces: dict[str, ExperimentWorkspace] = {}
         self._workspace_manager = ExperimentWorkspaceManager(self._queue.configuration)
+        self._launcher_snapshot = create_launcher_snapshot(
+            self._queue.configuration.runtime_directory,
+            experiment_queue_source_directory(),
+        )
         self._stop_requested = False
         self._validate_pending_log_paths()
 
@@ -55,6 +60,7 @@ class ExperimentQueueRunner:
 
     def run(self) -> QueueSummary:
         if self._restart_block_reason is not None:
+            self._launcher_snapshot.close()
             raise ValueError(self._restart_block_reason)
         previous_sigint = signal.signal(signal.SIGINT, self._handle_termination_signal)
         previous_sigterm = signal.signal(signal.SIGTERM, self._handle_termination_signal)
@@ -76,8 +82,11 @@ class ExperimentQueueRunner:
         finally:
             signal.signal(signal.SIGINT, previous_sigint)
             signal.signal(signal.SIGTERM, previous_sigterm)
-            if self._running_processes:
-                self._terminate_running_processes()
+            try:
+                if self._running_processes:
+                    self._terminate_running_processes()
+            finally:
+                self._launcher_snapshot.close()
 
     def refresh_configuration(self) -> None:
         try:
@@ -305,6 +314,7 @@ class ExperimentQueueRunner:
             runtime_directory=workspace.runtime_directory,
             tensorboard_log_directory=workspace.tensorboard_log_directory,
             setup_commands=self._queue.configuration.runner.setup_commands,
+            launcher_snapshot=self._launcher_snapshot,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
         )

@@ -19,6 +19,7 @@ from src.experiment_queue.configuration import (
     RunnerCommand,
 )
 from src.experiment_queue.process import launch_process, terminate_process_group
+from src.experiment_queue.launcher_snapshot import create_launcher_snapshot, experiment_queue_source_directory
 from src.experiment_queue.runner import ExperimentQueueRunner
 from src.experiment_queue.scheduler import ResourceAssignment
 from src.experiment_queue.state import CompletedExperimentStatus, FailedExperimentStatus, load_queue_summary
@@ -65,6 +66,7 @@ def test_linux_launcher_applies_cuda_affinity_process_group_and_logs(tmp_path: P
         runtime_directory=tmp_path,
         tensorboard_log_directory=tmp_path / 'tensorboard',
         setup_commands=(),
+        launcher_snapshot=create_launcher_snapshot(tmp_path, experiment_queue_source_directory()),
         stdout_path=stdout_path,
         stderr_path=stderr_path,
     )
@@ -102,6 +104,7 @@ def test_linux_launcher_terminates_the_complete_process_group(tmp_path: Path) ->
         runtime_directory=tmp_path,
         tensorboard_log_directory=tmp_path / 'tensorboard',
         setup_commands=(),
+        launcher_snapshot=create_launcher_snapshot(tmp_path, experiment_queue_source_directory()),
         stdout_path=tmp_path / 'termination.stdout.log',
         stderr_path=tmp_path / 'termination.stderr.log',
     )

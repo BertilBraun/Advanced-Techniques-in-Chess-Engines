@@ -107,6 +107,9 @@ enter the disposable worktree. `run_approved_experiment.py` selects
 After a successful exit and an empty tracked process tree, the queue copies the authored configuration chain and
 workspace provenance below `<runtime-directory>/.queue-evidence/<experiment-id>`, then removes the worktree. Failed,
 terminated, setup-failed, and preservation-failed worktrees remain for diagnosis. Pending entries are never prebuilt.
+At supervisor initialization, the queue also snapshots its two small Linux launch helpers below
+`<runtime-directory>/.queue-launchers`; later control-checkout pulls cannot change the executable supervision path
+used for pending launches. The snapshot is removed after the supervisor has ended all children.
 The current eight-GPU, four-two-GPU-slot screening queue is committed at
 [`configs/queues/vast-go-7x7-screening.yaml`](configs/queues/vast-go-7x7-screening.yaml).
 

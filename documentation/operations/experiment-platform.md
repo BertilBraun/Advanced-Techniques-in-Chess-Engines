@@ -83,6 +83,10 @@ authored configuration chain and workspace provenance under `.queue-evidence`, t
 failed or incompletely preserved worktrees for diagnosis. The control checkout can therefore be pulled and used for
 future development while active experiments remain pinned to their own revisions.
 
+The supervisor snapshots its queue-owned Linux launch helpers into the persistent runtime root when it initializes.
+Future launches use that immutable supervisor snapshot, not helper files in the pullable control checkout. Desired
+queue YAML and pending experiment YAML remain the only intentionally live-read control-checkout inputs.
+
 Use the node's supported supervisor instead of a detached shell. The supervised command is:
 
 ```bash
