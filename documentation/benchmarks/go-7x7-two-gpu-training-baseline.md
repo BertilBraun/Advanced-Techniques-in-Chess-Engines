@@ -1,6 +1,6 @@
-# Proposed Go 7x7 two-GPU training baseline
+# Go 7x7 two-GPU training baseline
 
-Status: revised after the first live calibration run; the accepted baseline has not yet been launched.
+Status: four-hour baseline and screening runs are active on the rented four-RTX-3060 node.
 
 The complete revised configuration is
 [`py/configs/baselines/vast-go-7x7-2gpu-4h.yaml`](../../py/configs/baselines/vast-go-7x7-2gpu-4h.yaml). It defines the
@@ -47,6 +47,21 @@ Batch 512 is a conservative first training baseline inherited from the establish
 yet been optimized for the much smaller Go model. Training-batch throughput, GPU power, memory, and step latency are
 baseline outputs to measure, not assumptions to tune before this run.
 
+The live baseline exposed a phase-specific rank imbalance. Across five-second samples, self-play/waiting averaged
+91.3% utilization on GPU 0 and 93.6% on GPU 1, while inferred training windows averaged 88.9% and 70.6%. Before the
+first evaluation boundary, training alone averaged 87.9% and 62.7%, so external evaluation does not explain the
+difference. Worker pausing is symmetric: workers 1–3 and 5–7 pause, leaving workers 0 and 4 on the two devices.
+
+The trainer performs no per-batch host scalar extraction, explicit CUDA synchronization, statistics aggregation, or
+checkpoint write. Necessary DDP gradient reduction occurs during every backward pass. The current DDP wrapper also
+uses the default per-forward BatchNorm-buffer broadcast even though only rank zero's checkpoint is retained. More
+materially, each rank constructs, augments, densifies, and pins its next replay batch synchronously in the optimizer
+loop; the documented CPU/GPU prefetch overlap is not implemented. A rank that prepares its batch first can therefore
+wait at DDP synchronization while the other device catches up. Disable unnecessary buffer broadcasts and implement
+bounded next-batch prefetch before interpreting the imbalance as insufficient GPU work. Testing two surviving
+self-play workers per GPU is a separate topology experiment because it increases CPU contention as well as filling
+GPU gaps.
+
 Policy and value losses both have weight 1.0. The value target uses the final game outcome only
 (`root_value_blend: 0.0`), and no auxiliary target is enabled. Run seed 1207 is fixed for self-play, replay sampling,
 dataset preparation, openings, and paired-match assignment so later comparisons can reuse the same stochastic input.
@@ -88,7 +103,7 @@ Training 100 steps took approximately 32 seconds at the measured 3,100 to 3,400 
 quantum consumes 204,800 presentations and requires 51,200 newly materialized positions at replay ratio 4. This
 keeps publication frequent enough for stronger self-play models to enter the data stream early. The production
 baseline uses 256 visits and permits one worker per GPU to continue during training. The intended range is roughly
-60 generations in two hours, but the first complete baseline must measure whether credit waits or training time make
+120 generations in four hours, but the first complete baseline must measure whether credit waits or training time make
 that estimate optimistic.
 
 The 256-visit calibration ended during its initial game-completion wave and did not reach generation one, so it
@@ -140,7 +155,7 @@ The baseline and nine one-variable challengers live under
 the complete baseline and changes only run identity and output path. Every later YAML inherits `00-baseline.yaml`
 and declares only its experimental difference: learning-rate decay through generation 120, constant learning rate
 0.004, 75% fast search, a 64-to-512 search-budget progression through generation 120, root-value blending, replay
-ratio 8, tree retention, eight random opening plies, and finally the next-policy auxiliary target.
+ratio 8, tree retention, twelve random opening plies, and finally the next-policy auxiliary target.
 
 The replay-ratio-8 experiment uses a 250,000-row maximum rather than 500,000 because it produces only 25,600 new
 positions per generation; this preserves approximately the baseline's ten-generation replay-age window.
@@ -170,4 +185,4 @@ credit-wait and training-quantum durations, optimizer steps, learning rate, sear
 root-value blend, and per-evaluation duration in TensorBoard. The generation-completion console line includes the
 credit backlog, observed ratio, wait time, and replay fill state.
 
-Do not launch this run until the configuration and the 40-GiB monitoring approach receive explicit approval.
+The live run uses the sampled 40-GiB process-tree monitor described above.
