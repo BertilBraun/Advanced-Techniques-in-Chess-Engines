@@ -14,7 +14,6 @@ class ResourceAssignment(FrozenModel):
     cuda_devices: tuple[int, ...]
     cpu_affinity: tuple[int, ...] = Field(min_length=1)
     ram_limit_bytes: int = Field(gt=0)
-    working_directory: Path
     log_directory: Path
 
     @field_validator('cuda_devices', 'cpu_affinity')
@@ -60,6 +59,5 @@ def create_assignment(experiment: QueuedExperiment, slot: ResourceSlot) -> Resou
         cuda_devices=slot.cuda_devices,
         cpu_affinity=slot.cpu_affinity[: experiment.resources.cpu_core_count],
         ram_limit_bytes=experiment.resources.ram_limit_bytes,
-        working_directory=slot.working_directory,
         log_directory=slot.log_directory,
     )

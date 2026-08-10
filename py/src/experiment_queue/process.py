@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
@@ -64,6 +65,10 @@ def launch_process(
     experiment_id: str,
     command: tuple[str, ...],
     assignment: ResourceAssignment,
+    source_worktree: Path,
+    runtime_directory: Path,
+    tensorboard_log_directory: Path,
+    setup_commands: tuple[tuple[str, ...], ...],
     stdout_path: Path,
     stderr_path: Path,
 ) -> RunningProcess:
@@ -71,15 +76,26 @@ def launch_process(
         raise ValueError('The experiment queue launcher supports Linux only.')
 
     child_wrapper = Path(__file__).with_name('linux_child.py').resolve()
+    worktree_wrapper = Path(__file__).with_name('worktree_child.py').resolve()
     wrapper_command = (
         sys.executable,
         str(child_wrapper),
         '--cpu-affinity',
         ','.join(str(cpu_index) for cpu_index in assignment.cpu_affinity),
+        sys.executable,
+        str(worktree_wrapper),
+        '--source-worktree',
+        str(source_worktree),
+        '--runtime-directory',
+        str(runtime_directory),
+        '--setup-commands',
+        json.dumps(setup_commands),
+        '--',
         *command,
     )
     environment = os.environ.copy()
     environment['CUDA_VISIBLE_DEVICES'] = ','.join(str(device) for device in assignment.cuda_devices)
+    environment['TRAINING_TENSORBOARD_LOG_PATH'] = str(tensorboard_log_directory)
     stdout_stream = stdout_path.open('xb')
     try:
         stderr_stream = stderr_path.open('xb')
@@ -89,7 +105,7 @@ def launch_process(
     try:
         process = subprocess.Popen(
             wrapper_command,
-            cwd=assignment.working_directory,
+            cwd=runtime_directory,
             env=environment,
             stdin=subprocess.DEVNULL,
             stdout=stdout_stream,

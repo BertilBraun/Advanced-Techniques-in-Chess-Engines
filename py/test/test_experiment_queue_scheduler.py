@@ -13,6 +13,9 @@ from src.experiment_queue.configuration import (
 from src.experiment_queue.scheduler import create_assignment, schedule_experiments
 
 
+SOURCE_REVISION = '1' * 40
+
+
 def _slot(
     slot_id: str,
     cuda_devices: tuple[int, ...],
@@ -24,7 +27,6 @@ def _slot(
         cuda_devices=cuda_devices,
         cpu_affinity=cpu_affinity,
         ram_capacity_bytes=ram_capacity_bytes,
-        working_directory=Path('/work') / slot_id,
         log_directory=Path('/logs') / slot_id,
     )
 
@@ -38,6 +40,7 @@ def _experiment(
     return QueuedExperiment(
         experiment_id=experiment_id,
         experiment_file=Path('/experiments') / f'{experiment_id}.yaml',
+        source_revision=SOURCE_REVISION,
         resources=ResourceRequest(
             cuda_device_count=cuda_device_count,
             cpu_core_count=cpu_core_count,
@@ -100,21 +103,27 @@ def test_resource_slot_rejects_invalid_device_sets(field_name: str, value: tuple
 
 def test_queue_rejects_overlapping_slots_and_unassignable_requests() -> None:
     runner = RunnerCommand(command=('python', 'py/train.py'))
+    common = {
+        'runner': runner,
+        'repository_directory': Path('/repository'),
+        'worktree_root': Path('/worktrees'),
+        'runtime_directory': Path('/runtime'),
+        'tensorboard_log_directory': Path('/tensorboard'),
+        'summary_path': Path('/summary.json'),
+    }
 
     with pytest.raises(ValidationError, match='share CUDA devices'):
         QueueConfiguration(
-            runner=runner,
+            **common,
             slots=(_slot('first', (0,), (0, 1)), _slot('second', (0,), (2, 3))),
             experiments=(_experiment('experiment', 1),),
-            summary_path=Path('/summary.json'),
         )
 
     with pytest.raises(ValidationError, match='no compatible resource slot'):
         QueueConfiguration(
-            runner=runner,
+            **common,
             slots=(_slot('single', (0,), (0, 1)),),
             experiments=(_experiment('pair', 2),),
-            summary_path=Path('/summary.json'),
         )
 
 

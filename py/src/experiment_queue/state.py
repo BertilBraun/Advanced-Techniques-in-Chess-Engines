@@ -14,6 +14,12 @@ from src.util.frozen_model import FrozenModel
 
 class ExecutionIdentity(FrozenModel):
     configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    source_revision: str = Field(pattern=r'^[0-9a-f]{40}$')
+    setup_commands: tuple[tuple[str, ...], ...]
+    source_worktree: Path
+    runtime_directory: Path
+    preserved_configuration_directory: Path
+    preserved_experiment_file: Path
     command: tuple[str, ...] = Field(min_length=1)
     assignment: ResourceAssignment
     started_at: AwareDatetime
@@ -28,12 +34,23 @@ class PendingExperimentStatus(FrozenModel):
     experiment_id: str
     queued_at: AwareDatetime
     configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    source_revision: str = Field(pattern=r'^[0-9a-f]{40}$')
 
 
 class RunningExperimentStatus(FrozenModel):
     status: Literal['running'] = 'running'
     experiment_id: str
     execution: ExecutionIdentity
+
+
+class PreparationFailedExperimentStatus(FrozenModel):
+    status: Literal['preparation_failed'] = 'preparation_failed'
+    experiment_id: str
+    source_revision: str = Field(pattern=r'^[0-9a-f]{40}$')
+    configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    source_worktree: Path
+    finished_at: AwareDatetime
+    reason: str = Field(min_length=1)
 
 
 class CompletedExperimentStatus(FrozenModel):
@@ -54,13 +71,17 @@ class FailedExperimentStatus(FrozenModel):
 
 
 ExperimentStatus: TypeAlias = Annotated[
-    PendingExperimentStatus | RunningExperimentStatus | CompletedExperimentStatus | FailedExperimentStatus,
+    PendingExperimentStatus
+    | RunningExperimentStatus
+    | PreparationFailedExperimentStatus
+    | CompletedExperimentStatus
+    | FailedExperimentStatus,
     Field(discriminator='status'),
 ]
 
 
 class QueueSummary(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     queue_fingerprint: str = Field(pattern=r'^[0-9a-f]{64}$')
     created_at: AwareDatetime
     updated_at: AwareDatetime

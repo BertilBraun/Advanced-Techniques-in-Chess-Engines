@@ -28,6 +28,7 @@ from src.experiment_queue.validation import validate_queue_for_launch
 pytestmark = pytest.mark.skipif(sys.platform != 'linux', reason='Linux process controls are required.')
 
 EXPERIMENT_TEMPLATE = Path(__file__).parents[1] / 'configs' / 'go-7x7-experiment-template.yaml'
+SOURCE_REVISION = '1' * 40
 
 
 def _available_cpu_cores(count: int) -> tuple[int, ...]:
@@ -42,7 +43,6 @@ def _assignment(temporary_directory: Path, ram_limit_bytes: int = 2_000_000_000)
         cuda_devices=(3, 5),
         cpu_affinity=_available_cpu_cores(1),
         ram_limit_bytes=ram_limit_bytes,
-        working_directory=temporary_directory,
         log_directory=temporary_directory,
     )
 
@@ -61,6 +61,10 @@ def test_linux_launcher_applies_cuda_affinity_process_group_and_logs(tmp_path: P
         experiment_id='resources',
         command=(sys.executable, '-c', script),
         assignment=assignment,
+        source_worktree=tmp_path,
+        runtime_directory=tmp_path,
+        tensorboard_log_directory=tmp_path / 'tensorboard',
+        setup_commands=(),
         stdout_path=stdout_path,
         stderr_path=stderr_path,
     )
@@ -94,6 +98,10 @@ def test_linux_launcher_terminates_the_complete_process_group(tmp_path: Path) ->
         experiment_id='termination',
         command=(sys.executable, '-c', parent_script),
         assignment=_assignment(tmp_path),
+        source_worktree=tmp_path,
+        runtime_directory=tmp_path,
+        tensorboard_log_directory=tmp_path / 'tensorboard',
+        setup_commands=(),
         stdout_path=tmp_path / 'termination.stdout.log',
         stderr_path=tmp_path / 'termination.stderr.log',
     )
@@ -125,17 +133,21 @@ def test_queue_releases_slot_after_success_and_failure_and_runs_next_job(tmp_pat
         cuda_devices=(),
         cpu_affinity=_available_cpu_cores(1),
         ram_capacity_bytes=2_000_000_000,
-        working_directory=tmp_path,
         log_directory=tmp_path / 'logs',
     )
     request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
     configuration = QueueConfiguration(
         runner=RunnerCommand(command=(sys.executable, '-c', script)),
+        repository_directory=tmp_path,
+        worktree_root=tmp_path / 'worktrees',
+        runtime_directory=tmp_path / 'runtime',
+        tensorboard_log_directory=tmp_path / 'tensorboard',
         slots=(slot,),
         experiments=tuple(
             QueuedExperiment(
                 experiment_id=f'experiment-{index}',
                 experiment_file=experiment_path,
+                source_revision=SOURCE_REVISION,
                 resources=request,
             )
             for index, experiment_path in enumerate(experiment_paths)
@@ -179,16 +191,26 @@ def test_queue_reloads_changed_pending_experiment_before_launch(tmp_path: Path) 
         cuda_devices=(),
         cpu_affinity=_available_cpu_cores(1),
         ram_capacity_bytes=2_000_000_000,
-        working_directory=tmp_path,
         log_directory=tmp_path / 'logs',
     )
     request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
     configuration = QueueConfiguration(
         runner=RunnerCommand(command=(sys.executable, '-c', script)),
+        repository_directory=tmp_path,
+        worktree_root=tmp_path / 'worktrees',
+        runtime_directory=tmp_path / 'runtime',
+        tensorboard_log_directory=tmp_path / 'tensorboard',
         slots=(slot,),
         experiments=(
-            QueuedExperiment(experiment_id='first', experiment_file=first_path, resources=request),
-            QueuedExperiment(experiment_id='pending', experiment_file=pending_path, resources=request),
+            QueuedExperiment(
+                experiment_id='first', experiment_file=first_path, source_revision=SOURCE_REVISION, resources=request
+            ),
+            QueuedExperiment(
+                experiment_id='pending',
+                experiment_file=pending_path,
+                source_revision=SOURCE_REVISION,
+                resources=request,
+            ),
         ),
         summary_path=tmp_path / 'queue-summary.json',
         poll_interval_seconds=0.01,
@@ -226,14 +248,21 @@ def test_empty_queue_waits_for_new_desired_experiment(tmp_path: Path) -> None:
         cuda_devices=(),
         cpu_affinity=_available_cpu_cores(1),
         ram_capacity_bytes=2_000_000_000,
-        working_directory=tmp_path,
         log_directory=tmp_path / 'logs',
     )
     request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
-    first = QueuedExperiment(experiment_id='first', experiment_file=first_path, resources=request)
-    added = QueuedExperiment(experiment_id='added', experiment_file=added_path, resources=request)
+    first = QueuedExperiment(
+        experiment_id='first', experiment_file=first_path, source_revision=SOURCE_REVISION, resources=request
+    )
+    added = QueuedExperiment(
+        experiment_id='added', experiment_file=added_path, source_revision=SOURCE_REVISION, resources=request
+    )
     initial_configuration = QueueConfiguration(
         runner=RunnerCommand(command=(sys.executable, '-c', "print('completed')")),
+        repository_directory=tmp_path,
+        worktree_root=tmp_path / 'worktrees',
+        runtime_directory=tmp_path / 'runtime',
+        tensorboard_log_directory=tmp_path / 'tensorboard',
         slots=(slot,),
         experiments=(first,),
         summary_path=tmp_path / 'queue-summary.json',
@@ -275,16 +304,20 @@ def test_queue_terminates_a_process_tree_over_its_rss_limit(tmp_path: Path) -> N
         cuda_devices=(),
         cpu_affinity=_available_cpu_cores(1),
         ram_capacity_bytes=100_000_000,
-        working_directory=tmp_path,
         log_directory=tmp_path / 'logs',
     )
     configuration = QueueConfiguration(
         runner=RunnerCommand(command=(sys.executable, '-c', parent_script)),
+        repository_directory=tmp_path,
+        worktree_root=tmp_path / 'worktrees',
+        runtime_directory=tmp_path / 'runtime',
+        tensorboard_log_directory=tmp_path / 'tensorboard',
         slots=(slot,),
         experiments=(
             QueuedExperiment(
                 experiment_id='memory-limit',
                 experiment_file=experiment_path,
+                source_revision=SOURCE_REVISION,
                 resources=ResourceRequest(
                     cuda_device_count=0,
                     cpu_core_count=1,
@@ -314,16 +347,20 @@ def test_queue_termination_records_failure_and_releases_the_running_slot(tmp_pat
         cuda_devices=(),
         cpu_affinity=_available_cpu_cores(1),
         ram_capacity_bytes=2_000_000_000,
-        working_directory=tmp_path,
         log_directory=tmp_path / 'logs',
     )
     configuration = QueueConfiguration(
         runner=RunnerCommand(command=(sys.executable, '-c', 'import time; time.sleep(60)')),
+        repository_directory=tmp_path,
+        worktree_root=tmp_path / 'worktrees',
+        runtime_directory=tmp_path / 'runtime',
+        tensorboard_log_directory=tmp_path / 'tensorboard',
         slots=(slot,),
         experiments=(
             QueuedExperiment(
                 experiment_id='long-running',
                 experiment_file=experiment_path,
+                source_revision=SOURCE_REVISION,
                 resources=ResourceRequest(
                     cuda_device_count=0,
                     cpu_core_count=1,

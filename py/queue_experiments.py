@@ -5,7 +5,7 @@ from pathlib import Path
 
 from src.experiment_queue.configuration import load_queue_configuration
 from src.experiment_queue.runner import ExperimentQueueRunner
-from src.experiment_queue.state import FailedExperimentStatus, load_queue_summary
+from src.experiment_queue.state import FailedExperimentStatus, PreparationFailedExperimentStatus, load_queue_summary
 from src.experiment_queue.validation import ValidatedQueue, validate_queue_for_launch
 
 
@@ -34,7 +34,14 @@ def main() -> int:
 
     summary = ExperimentQueueRunner(load_validated_queue).run()
     print(summary.model_dump_json(indent=2))
-    return 1 if any(isinstance(status, FailedExperimentStatus) for status in summary.experiments) else 0
+    return (
+        1
+        if any(
+            isinstance(status, FailedExperimentStatus | PreparationFailedExperimentStatus)
+            for status in summary.experiments
+        )
+        else 0
+    )
 
 
 if __name__ == '__main__':

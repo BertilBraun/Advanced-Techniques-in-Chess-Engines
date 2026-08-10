@@ -152,6 +152,7 @@ def _fixture(tmp_path: Path) -> tuple[ExportRequest, Path, Path]:
     experiment_definition = QueuedExperiment(
         experiment_id='experiment',
         experiment_file=experiment_file,
+        source_revision=source_revision,
         resources=ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_000),
     )
     slot = ResourceSlot(
@@ -159,11 +160,14 @@ def _fixture(tmp_path: Path) -> tuple[ExportRequest, Path, Path]:
         cuda_devices=(),
         cpu_affinity=(0,),
         ram_capacity_bytes=2_000,
-        working_directory=working_directory,
         log_directory=tmp_path,
     )
     queue = QueueConfiguration(
         runner=RunnerCommand(command=('python',)),
+        repository_directory=working_directory,
+        worktree_root=tmp_path / 'worktrees',
+        runtime_directory=working_directory,
+        tensorboard_log_directory=working_directory / 'logs',
         slots=(slot,),
         experiments=(experiment_definition,),
         summary_path=tmp_path / 'summary.json',
@@ -173,6 +177,12 @@ def _fixture(tmp_path: Path) -> tuple[ExportRequest, Path, Path]:
     timestamp = datetime.now(timezone.utc)
     execution = ExecutionIdentity(
         configuration_sha256=configuration_sha256,
+        source_revision=source_revision,
+        setup_commands=(),
+        source_worktree=tmp_path / 'worktree',
+        runtime_directory=working_directory,
+        preserved_configuration_directory=tmp_path / 'evidence',
+        preserved_experiment_file=experiment_file,
         command=('python', 'train.py'),
         assignment=create_assignment(experiment_definition, slot),
         started_at=timestamp,

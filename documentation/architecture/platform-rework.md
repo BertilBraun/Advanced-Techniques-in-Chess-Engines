@@ -346,9 +346,9 @@ queue-owned command prefix. Queue state and scheduling do not enter the
 coordinator, trainer, replay, self-play, evaluation, or game implementations.
 
 The frozen queue configuration owns an ordered experiment list, an ordered
-resource-slot pool, the runner command, polling and termination timing, and one
-summary path. Extra fields are forbidden. Each experiment entry contains only
-a queue identity, its authored YAML path, and a resource request for an exact
+resource-slot pool, repository/worktree/persistent-output roots, setup and runner commands, polling and termination
+timing, and one summary path. Extra fields are forbidden. Each experiment entry contains only
+a queue identity, its authored YAML path, exact source commit, and a resource request for an exact
 CUDA-device count, CPU-core count, and RAM limit. It does not duplicate game,
 model, training, evaluation, artifact, approval, or run-limit semantics from
 the experiment configuration.
@@ -358,7 +358,7 @@ Each indivisible slot defines:
 - explicit CUDA device indices;
 - CPU affinity;
 - RAM capacity;
-- run and log directories.
+- log directory.
 
 CUDA and CPU sets are sorted, unique, nonnegative, and exclusive across slots.
 A compatible slot has exactly the requested CUDA-device count and at least the
@@ -371,20 +371,20 @@ success and failure both release the slot and advance the queue.
 
 Before launching anything, the wrapper validates the complete queue model,
 every experiment through the canonical discriminated experiment union, every
-request/slot compatibility, resource exclusivity, working and log directories,
-the runner executable, the existing durable summary, persisted assignments,
-and pending log paths. Relative queue paths resolve from the queue file. The
-queue-owned runner command appends only the configured experiment-path
-argument and YAML path; required source-revision and approval arguments remain
-explicit parts of that runner command.
+request/slot compatibility, resource exclusivity, persistent and log directories,
+the setup/runner executables, exact Git commits and committed configuration sources, the existing durable summary,
+persisted assignments, and pending log paths. Relative queue paths resolve from the queue file. At assignment the
+queue creates one detached exact-revision worktree, executes the configured build there, and appends the worktree's
+experiment YAML to the runner. The child runs from the persistent runtime root, and TensorBoard uses a separate
+persistent log root. Revision-matched approval selection remains explicit in the runner.
 
 The queue reloads the desired file before every scheduling pass. Slots,
 summary ownership, and termination policy are immutable while the supervisor
 is active. The runner command and pending experiments may be changed, and
 pending experiments may be added, removed, or reordered; each accepted pending
-version is revalidated and its canonical configuration hash is persisted. A
+version is revalidated and its canonical configuration hash and revision are persisted. A
 running, completed, or failed experiment ID is immutable, and changing its
-canonical configuration rejects that reload without stopping active work or
+canonical configuration or revision rejects that reload without stopping active work or
 launching more work from the invalid desired state. Every execution records the
 exact runner command used. The queue can remain alive while empty when
 `wait_for_updates_when_empty` is enabled; changing that control to false lets
@@ -408,11 +408,13 @@ tracked descendants remain alive, even if the original runner process has
 already exited. Requested termination sends `SIGTERM` to the process group,
 waits the configured grace period, then kills every still-live tracked process.
 Success, failure, and requested termination close the log handles and release
-the slot only after the tracked tree has ended.
+the slot only after the tracked tree has ended. A successful run first preserves its authored configuration chain
+and workspace provenance beside the central artifacts, then removes its worktree. Failed, terminated, setup-failed,
+or preservation-failed runs retain their worktrees for diagnosis.
 
 One atomic JSON summary records pending, running, completed, and failed
 experiments; queue, start, finish, and update timestamps; the exact assignment;
-PID and process-group identity; runner command; canonical configuration hash;
+PID and process-group identity; runner command; exact source revision and worktree; canonical configuration hash;
 exit code; reason; and log paths. Its fingerprint covers the immutable queue runtime and each
 experiment status records the canonical configuration hash accepted for that
 entry. A matching restart preserves terminal entries and pending work. Any
@@ -907,6 +909,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-11 | R10 follow-up | Per-experiment source isolation | A slot-owned shared checkout prevented safe deployment of newly committed experiment features while older runs still spawned workers and evaluations. | Bind every queue entry to an exact commit. Create and build one detached worktree only when that experiment receives a slot; run with central artifact, TensorBoard, and log paths; preserve configuration provenance and remove the worktree only after successful exit and complete process-tree shutdown; retain failed worktrees for diagnosis. Pending revision/configuration updates remain live-reloadable, while running and terminal identities remain immutable. |
 | 2026-08-10 | R10/R11/R12 | Acceptance | The resource-aware queue, integrated rented-node validation, fresh target-hardware baseline, and live four-slot screening workflow are operating successfully. | Mark R10, R11, and R12 `accepted`. Treat later screening and experiment extensions as ordinary platform operation unless they introduce an architectural change. |
 | 2026-08-11 | R9/R12 | Go external-engine ladder simplification | The three KataGo tiers consumed three job slots and substantial evaluation time while the 16/64/128 curves were too similar to justify all three during screening. | Keep one paired 50-opening KataGo match at 64 visits. Retain the completed 16-vs-128 diagnostic as evidence that visit strength is ordered, but remove the 16- and 128-visit jobs from current 7x7/9x9 templates and the screening baseline. |
 | 2026-08-10 | R9/R12 | Go evaluation controls and screening ladder | Early KataGo curves were noisy, strongly player-order dependent, and insufficiently separated; the online ladder also spent capacity on increasingly old in-run checkpoints while primary comparisons used only 50 opening pairs. | Add a focused typed diagnostic with complete per-game JSON/SGF and native/KataGo score checks. Target-hardware controls produced exact 50% deterministic model identity, KataGo-16 self-play consistent with 50%, and a statistically detectable KataGo-128 advantage over KataGo-16. Keep paired KataGo 16/64/128 matches at 50 openings; evaluate only previous 20/40/60-minute and same-time baseline checkpoints with 200 pairs (400 games) each; remove older alternating offsets. |

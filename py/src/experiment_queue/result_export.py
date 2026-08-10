@@ -39,7 +39,7 @@ class ExportRequest(FrozenModel):
     queue_configuration_path: Path
     output_path: Path
     queue_summary_path: Path | None = None
-    tensorboard_log_root: Path = Path('logs')
+    tensorboard_log_root: Path | None = None
     experiment_ids: tuple[str, ...] = ()
     explicit_experiments: tuple[ExplicitExperimentConfiguration, ...] = ()
     queue_stdout_log: Path | None = None
@@ -156,9 +156,11 @@ def export_experiment_results(request: ExportRequest) -> ResultArchiveManifest:
     _add_optional_queue_log(selection, request.queue_stdout_log, 'stdout')
     _add_optional_queue_log(selection, request.queue_stderr_log, 'stderr')
 
+    tensorboard_log_root = (
+        queue.tensorboard_log_directory if request.tensorboard_log_root is None else request.tensorboard_log_root
+    )
     exported_experiments = tuple(
-        _select_experiment(status, experiment_files, request.tensorboard_log_root, selection)
-        for status in selected_statuses
+        _select_experiment(status, experiment_files, tensorboard_log_root, selection) for status in selected_statuses
     )
     return _write_archive(request.output_path, summary, exported_experiments, selection)
 
@@ -204,7 +206,15 @@ def _select_experiment(
     selection: _ArchiveSelection,
 ) -> ExportedExperiment:
     experiment_id = status.experiment_id
-    experiment_file = experiment_files.get(experiment_id)
+    configured_experiment_file = experiment_files.get(experiment_id)
+    if status.execution.preserved_experiment_file.is_file():
+        experiment_file = status.execution.preserved_experiment_file
+    else:
+        retained_worktree_file = (
+            status.execution.source_worktree
+            / status.execution.preserved_experiment_file.relative_to(status.execution.preserved_configuration_directory)
+        )
+        experiment_file = retained_worktree_file if retained_worktree_file.is_file() else configured_experiment_file
     if experiment_file is None:
         raise ValueError(f'No authored configuration is available for experiment {experiment_id!r}.')
     experiment = load_experiment_configuration(_require_regular_file(experiment_file))
@@ -233,7 +243,7 @@ def _select_experiment(
         'experiment_stderr',
     )
 
-    working_directory = _require_directory(status.execution.assignment.working_directory)
+    working_directory = _require_directory(status.execution.runtime_directory)
     run_path = _runtime_path(experiment.training.save_path, working_directory)
     _require_directory(run_path)
     selection.protect_root(run_path)

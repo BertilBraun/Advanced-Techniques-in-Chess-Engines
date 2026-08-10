@@ -62,24 +62,31 @@ arguments other than the experiment YAML path, so source revision and approval s
 schema sketch; replace every angle-bracket placeholder with the approved run and node values:
 
 ```yaml
-schema_version: 1
+schema_version: 2
 runner:
   command:
     - python
     - py/run_approved_experiment.py
     - --approval-directory
     - <approval-directory>
+  setup_commands:
+    - [cmake, -S, cpp, -B, cpp/build, -DCMAKE_BUILD_TYPE=Release, -DPython3_EXECUTABLE=<venv-python>]
+    - [cmake, --build, cpp/build, --parallel]
   experiment_path_argument: --run-config
+repository_directory: <control-checkout>
+worktree_root: <disposable-worktree-root>
+runtime_directory: <persistent-artifact-root>
+tensorboard_log_directory: <persistent-tensorboard-root>
 slots:
   - slot_id: <slot-id>
     cuda_devices: [<cuda-index>, ...]
     cpu_affinity: [<cpu-index>, ...]
     ram_capacity_bytes: <ram-capacity-bytes>
-    working_directory: <repository-directory>
     log_directory: <slot-log-directory>
 experiments:
   - experiment_id: <experiment-id>
     experiment_file: <experiment-yaml>
+    source_revision: <exact-40-character-commit>
     resources:
       cuda_device_count: <exact-device-count>
       cpu_core_count: <requested-core-count>
@@ -91,8 +98,15 @@ termination_grace_seconds: 10.0
 
 Paths resolve relative to the queue file. CUDA and CPU sets must not overlap between slots. A job consumes one
 complete matching slot; its exact CPU affinity and aggregate RAM limit may be smaller than the slot capacity.
-`run_approved_experiment.py` resolves the current repository revision at child launch and selects
+Each experiment YAML and its inherited sources must match `source_revision`. At launch, the queue creates one
+detached worktree at that exact commit, runs `setup_commands` there, and starts the repository runner from it. The
+runner uses `runtime_directory` as its current directory and the persistent TensorBoard root, so outputs do not
+enter the disposable worktree. `run_approved_experiment.py` selects
 `<approval-directory>/<experiment-yaml-stem>.json`; the approval remains revision- and configuration-specific.
+
+After a successful exit and an empty tracked process tree, the queue copies the authored configuration chain and
+workspace provenance below `<runtime-directory>/.queue-evidence/<experiment-id>`, then removes the worktree. Failed,
+terminated, setup-failed, and preservation-failed worktrees remain for diagnosis. Pending entries are never prebuilt.
 The current eight-GPU, four-two-GPU-slot screening queue is committed at
 [`configs/queues/vast-go-7x7-screening.yaml`](configs/queues/vast-go-7x7-screening.yaml).
 
@@ -115,8 +129,9 @@ python py/queue_experiments.py run --queue-config <queue-yaml>
 Keep that supervisor running. It launches every currently compatible job, captures separate stdout and stderr logs,
 records exits, releases empty slots, and immediately schedules the next compatible pending job. Before each
 scheduling pass it reloads the desired queue and every authored experiment. Pending entries may therefore be added,
-removed, reordered, or changed without interrupting running work. A running, completed, or failed experiment ID is
-immutable; changing one rejects that desired update and suspends new launches until the file is corrected. Set
+removed, reordered, or changed, including their exact revision, without interrupting running work. A running,
+completed, or failed experiment ID is immutable in both configuration and revision; changing one rejects that
+desired update and suspends new launches until the file is corrected. Set
 `wait_for_updates_when_empty: true` to keep the supervisor alive after the current desired queue is empty. In another
 terminal, inspect the atomic summary without modifying the queue:
 
@@ -124,9 +139,10 @@ terminal, inspect the atomic summary without modifying the queue:
 python py/queue_experiments.py status --summary <queue-summary-json>
 ```
 
-To change future work, commit and pull changes to the queue YAML or any still-pending experiment YAML. The active
-supervisor reloads them before its next scheduling pass. Running entries keep the exact configuration hash already
-recorded in the summary. Stop the supervisor with `SIGINT` or `SIGTERM` only when active runs should also be stopped;
+To change future work, commit and pull changes in the control checkout, create fresh approvals, and update pending
+entries to the new exact revision. The active supervisor reloads them before its next scheduling pass. Running
+entries keep the exact revision and configuration hash already recorded in the summary; updating the control
+checkout cannot change their source. Stop the supervisor with `SIGINT` or `SIGTERM` only when active runs should also be stopped;
 ordinary queue edits do not require a restart.
 
 After selected queue entries are terminal, export their durable evidence without replay or completed games:

@@ -69,10 +69,19 @@ price, and wall-time limit. Never reuse an approval from another revision, confi
 
 ## Queue ownership and operation
 
-The queue owns slot allocation, child process groups, sampled process-tree RAM limits, logs, and the atomic summary.
+The queue owns slot allocation, per-experiment detached Git worktrees, child process groups, sampled process-tree
+RAM limits, logs, and the atomic summary.
 It reloads the desired queue and pending experiment YAML before every scheduling pass. Adding, removing, reordering,
-or editing pending entries does not require a restart. Running and terminal experiment IDs are immutable; a failed
+or editing pending entries does not require a restart. Each pending entry names an exact source commit. When assigned
+a slot, the queue creates one detached worktree, builds that revision, and launches the child from it; it never
+prebuilds pending work. Running and terminal experiment IDs are immutable in configuration and revision; a failed
 entry releases its resources and is not silently retried.
+
+Training artifacts use the queue's central runtime directory and TensorBoard uses its central log root, both outside
+the disposable worktree. After a successful exit and complete process-tree shutdown, the queue preserves the
+authored configuration chain and workspace provenance under `.queue-evidence`, then deletes that worktree. It keeps
+failed or incompletely preserved worktrees for diagnosis. The control checkout can therefore be pulled and used for
+future development while active experiments remain pinned to their own revisions.
 
 Use the node's supported supervisor instead of a detached shell. The supervised command is:
 
@@ -81,10 +90,11 @@ Use the node's supported supervisor instead of a detached shell. The supervised 
   --queue-config /workspace/run-control/go7-screening-live.yaml
 ```
 
-For a baseline-first launch, materialize the committed queue outside Git with absolute experiment paths. Initially
+For a baseline-first launch, materialize the committed queue outside Git with absolute experiment paths and exact
+source revisions. Initially
 include only the baseline; after its evaluation manager and reference manifest exist and the lead interval has
-elapsed, atomically replace the live file with the complete materialized queue. This preserves a clean, unchanged
-repository and one exact source revision for every child while exercising normal live reload.
+elapsed, atomically replace the live file with the complete materialized queue. Create fresh revision-bound approvals
+for every entry. The control checkout may advance afterward; each child remains isolated at its recorded revision.
 
 Start and inspect the supervisor with the node's `supervisorctl`:
 

@@ -22,7 +22,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--queue-config', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--queue-summary', type=Path)
-    parser.add_argument('--tensorboard-log-root', type=Path, default=Path('logs'))
+    parser.add_argument('--tensorboard-log-root', type=Path)
     parser.add_argument('--experiment-id', action='append', default=[])
     parser.add_argument('--experiment-config', action='append', default=[], type=_explicit_experiment)
     parser.add_argument('--queue-stdout-log', type=Path)

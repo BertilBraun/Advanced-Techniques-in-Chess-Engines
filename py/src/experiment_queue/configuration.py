@@ -17,6 +17,7 @@ UniqueValueT = TypeVar('UniqueValueT', bound=Hashable)
 
 class RunnerCommand(FrozenModel):
     command: tuple[str, ...] = Field(min_length=1)
+    setup_commands: tuple[tuple[str, ...], ...] = ()
     experiment_path_argument: str = Field(default='--run-config', min_length=1)
 
     @field_validator('command')
@@ -25,6 +26,13 @@ class RunnerCommand(FrozenModel):
         if any(not part.strip() for part in command):
             raise ValueError('Runner command parts must not be empty.')
         return command
+
+    @field_validator('setup_commands')
+    @classmethod
+    def validate_setup_commands(cls, commands: tuple[tuple[str, ...], ...]) -> tuple[tuple[str, ...], ...]:
+        if any(not command or any(not part.strip() for part in command) for command in commands):
+            raise ValueError('Setup commands and their parts must not be empty.')
+        return commands
 
 
 class ResourceRequest(FrozenModel):
@@ -38,7 +46,6 @@ class ResourceSlot(FrozenModel):
     cuda_devices: tuple[int, ...] = ()
     cpu_affinity: tuple[int, ...] = Field(min_length=1)
     ram_capacity_bytes: int = Field(gt=0)
-    working_directory: Path
     log_directory: Path
 
     @field_validator('cuda_devices', 'cpu_affinity')
@@ -54,12 +61,17 @@ class ResourceSlot(FrozenModel):
 class QueuedExperiment(FrozenModel):
     experiment_id: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]*$')
     experiment_file: Path
+    source_revision: str = Field(pattern=r'^[0-9a-f]{40}$')
     resources: ResourceRequest
 
 
 class QueueConfiguration(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     runner: RunnerCommand
+    repository_directory: Path
+    worktree_root: Path
+    runtime_directory: Path
+    tensorboard_log_directory: Path
     slots: tuple[ResourceSlot, ...] = Field(min_length=1)
     experiments: tuple[QueuedExperiment, ...] = Field(min_length=1)
     summary_path: Path
@@ -103,7 +115,6 @@ def _resolve_configuration_paths(configuration: QueueConfiguration, base_directo
             cuda_devices=slot.cuda_devices,
             cpu_affinity=slot.cpu_affinity,
             ram_capacity_bytes=slot.ram_capacity_bytes,
-            working_directory=_resolve_path(slot.working_directory, base_directory),
             log_directory=_resolve_path(slot.log_directory, base_directory),
         )
         for slot in configuration.slots
@@ -112,6 +123,7 @@ def _resolve_configuration_paths(configuration: QueueConfiguration, base_directo
         QueuedExperiment(
             experiment_id=experiment.experiment_id,
             experiment_file=_resolve_path(experiment.experiment_file, base_directory),
+            source_revision=experiment.source_revision,
             resources=experiment.resources,
         )
         for experiment in configuration.experiments
@@ -119,6 +131,10 @@ def _resolve_configuration_paths(configuration: QueueConfiguration, base_directo
     return QueueConfiguration(
         schema_version=configuration.schema_version,
         runner=configuration.runner,
+        repository_directory=_resolve_path(configuration.repository_directory, base_directory),
+        worktree_root=_resolve_path(configuration.worktree_root, base_directory),
+        runtime_directory=_resolve_path(configuration.runtime_directory, base_directory),
+        tensorboard_log_directory=_resolve_path(configuration.tensorboard_log_directory, base_directory),
         slots=slots,
         experiments=experiments,
         summary_path=_resolve_path(configuration.summary_path, base_directory),

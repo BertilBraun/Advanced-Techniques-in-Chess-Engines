@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 import signal
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -16,12 +18,14 @@ from src.experiment_queue.state import (
     FailedExperimentStatus,
     ExperimentStatus,
     PendingExperimentStatus,
+    PreparationFailedExperimentStatus,
     QueueSummary,
     RunningExperimentStatus,
     load_queue_summary,
     write_queue_summary,
 )
 from src.experiment_queue.validation import ValidatedQueue, ValidatedQueuedExperiment
+from src.experiment_queue.workspace import ExperimentWorkspace, ExperimentWorkspaceManager
 
 
 class ExperimentQueueRunner:
@@ -32,6 +36,8 @@ class ExperimentQueueRunner:
         self._reload_error: str | None = None
         self._summary = self._load_or_create_summary()
         self._running_processes: dict[str, RunningProcess] = {}
+        self._workspaces: dict[str, ExperimentWorkspace] = {}
+        self._workspace_manager = ExperimentWorkspaceManager(self._queue.configuration)
         self._stop_requested = False
         self._validate_pending_log_paths()
 
@@ -100,6 +106,7 @@ class ExperimentQueueRunner:
                         experiment_id=experiment.definition.experiment_id,
                         queued_at=timestamp,
                         configuration_sha256=experiment.configuration_sha256,
+                        source_revision=experiment.definition.source_revision,
                     )
                     for experiment in self._queue.experiments
                 ),
@@ -122,7 +129,7 @@ class ExperimentQueueRunner:
         if summary.queue_fingerprint != self._queue.fingerprint:
             raise ValueError('Existing queue summary does not match the immutable queue runtime configuration.')
         for status in summary.experiments:
-            if isinstance(status, PendingExperimentStatus):
+            if isinstance(status, PendingExperimentStatus | PreparationFailedExperimentStatus):
                 continue
             self._validate_persisted_assignment(status.execution.assignment)
 
@@ -132,7 +139,6 @@ class ExperimentQueueRunner:
             assignment.cuda_devices != slot.cuda_devices
             or assignment.cpu_affinity != slot.cpu_affinity[: len(assignment.cpu_affinity)]
             or assignment.ram_limit_bytes > slot.ram_capacity_bytes
-            or assignment.working_directory != slot.working_directory
             or assignment.log_directory != slot.log_directory
         ):
             raise ValueError(f'Persisted assignment for slot {assignment.slot_id!r} is invalid.')
@@ -157,24 +163,33 @@ class ExperimentQueueRunner:
                         experiment_id=experiment_id,
                         queued_at=timestamp,
                         configuration_sha256=experiment.configuration_sha256,
+                        source_revision=experiment.definition.source_revision,
                     )
                 )
                 continue
-            expected_sha256 = (
-                status.configuration_sha256
-                if isinstance(status, PendingExperimentStatus)
-                else status.execution.configuration_sha256
-            )
-            if not isinstance(status, PendingExperimentStatus) and expected_sha256 != experiment.configuration_sha256:
-                raise ValueError(f'Running or terminal experiment {experiment_id!r} cannot change configuration.')
+            if isinstance(status, PendingExperimentStatus | PreparationFailedExperimentStatus):
+                expected_sha256 = status.configuration_sha256
+                expected_revision = status.source_revision
+            else:
+                expected_sha256 = status.execution.configuration_sha256
+                expected_revision = status.execution.source_revision
+            if not isinstance(status, PendingExperimentStatus) and (
+                expected_sha256 != experiment.configuration_sha256
+                or expected_revision != experiment.definition.source_revision
+            ):
+                raise ValueError(f'Running or terminal experiment {experiment_id!r} cannot change identity.')
             if isinstance(status, PendingExperimentStatus):
                 statuses.append(
                     PendingExperimentStatus(
                         experiment_id=experiment_id,
                         queued_at=(
-                            status.queued_at if expected_sha256 == experiment.configuration_sha256 else timestamp
+                            status.queued_at
+                            if expected_sha256 == experiment.configuration_sha256
+                            and expected_revision == experiment.definition.source_revision
+                            else timestamp
                         ),
                         configuration_sha256=experiment.configuration_sha256,
+                        source_revision=experiment.definition.source_revision,
                     )
                 )
             else:
@@ -229,7 +244,21 @@ class ExperimentQueueRunner:
             slot for slot in self._queue.configuration.slots if slot.slot_id not in occupied_slot_ids
         )
         for scheduled in schedule_experiments(pending, available_slots):
-            self._launch_experiment(scheduled.experiment, scheduled.assignment)
+            try:
+                self._launch_experiment(scheduled.experiment, scheduled.assignment)
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                validated = self._validated_experiment(scheduled.experiment.experiment_id)
+                self._replace_status(
+                    scheduled.experiment.experiment_id,
+                    PreparationFailedExperimentStatus(
+                        experiment_id=scheduled.experiment.experiment_id,
+                        source_revision=scheduled.experiment.source_revision,
+                        configuration_sha256=validated.configuration_sha256,
+                        source_worktree=(self._queue.configuration.worktree_root / scheduled.experiment.experiment_id),
+                        finished_at=_now(),
+                        reason=f'Experiment worktree preparation or process launch failed: {error}',
+                    ),
+                )
 
     def _validate_pending_log_paths(self, summary: QueueSummary | None = None) -> None:
         checked_summary = self._summary if summary is None else summary
@@ -260,22 +289,39 @@ class ExperimentQueueRunner:
         log_stem = f'{index:04d}-{experiment.experiment_id}'
         stdout_path = assignment.log_directory / f'{log_stem}.stdout.log'
         stderr_path = assignment.log_directory / f'{log_stem}.stderr.log'
+        validated_experiment = self._validated_experiment(experiment.experiment_id)
+        workspace = self._workspace_manager.create(validated_experiment)
         command = (
             *self._queue.configuration.runner.command,
             self._queue.configuration.runner.experiment_path_argument,
-            str(experiment.experiment_file),
+            str(workspace.experiment_file),
         )
+        command = _resolve_repository_command(command, workspace.source_worktree)
         running_process = launch_process(
             experiment_id=experiment.experiment_id,
             command=command,
             assignment=assignment,
+            source_worktree=workspace.source_worktree,
+            runtime_directory=workspace.runtime_directory,
+            tensorboard_log_directory=workspace.tensorboard_log_directory,
+            setup_commands=self._queue.configuration.runner.setup_commands,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
         )
         self._running_processes[experiment.experiment_id] = running_process
+        self._workspaces[experiment.experiment_id] = workspace
         started_at = _now()
         execution = ExecutionIdentity(
-            configuration_sha256=self._validated_experiment(experiment.experiment_id).configuration_sha256,
+            configuration_sha256=validated_experiment.configuration_sha256,
+            source_revision=experiment.source_revision,
+            setup_commands=self._queue.configuration.runner.setup_commands,
+            source_worktree=workspace.source_worktree,
+            runtime_directory=workspace.runtime_directory,
+            preserved_configuration_directory=workspace.preserved_configuration_directory,
+            preserved_experiment_file=(
+                workspace.preserved_configuration_directory
+                / experiment.experiment_file.relative_to(self._queue.configuration.repository_directory)
+            ),
             command=command,
             assignment=assignment,
             started_at=started_at,
@@ -317,11 +363,25 @@ class ExperimentQueueRunner:
                 continue
             running_status = self._running_status(experiment_id)
             if exit_code == 0:
-                final_status = CompletedExperimentStatus(
-                    experiment_id=experiment_id,
-                    execution=running_status.execution,
-                    finished_at=_now(),
-                )
+                try:
+                    self._workspace_manager.preserve_and_remove(
+                        self._validated_experiment(experiment_id),
+                        self._workspaces[experiment_id],
+                    )
+                except (OSError, ValueError, subprocess.SubprocessError) as error:
+                    final_status = FailedExperimentStatus(
+                        experiment_id=experiment_id,
+                        execution=running_status.execution,
+                        finished_at=_now(),
+                        exit_code=0,
+                        reason=f'Run succeeded but workspace preservation or cleanup failed: {error}',
+                    )
+                else:
+                    final_status = CompletedExperimentStatus(
+                        experiment_id=experiment_id,
+                        execution=running_status.execution,
+                        finished_at=_now(),
+                    )
             else:
                 final_status = FailedExperimentStatus(
                     experiment_id=experiment_id,
@@ -359,6 +419,7 @@ class ExperimentQueueRunner:
     ) -> None:
         running_process.close_logs()
         del self._running_processes[experiment_id]
+        del self._workspaces[experiment_id]
         self._replace_status(experiment_id, final_status)
 
     def _replace_status(self, experiment_id: str, replacement: ExperimentStatus) -> None:
@@ -409,3 +470,12 @@ class ExperimentQueueRunner:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _resolve_repository_command(command: tuple[str, ...], source_worktree: Path) -> tuple[str, ...]:
+    resolved: list[str] = []
+    for part in command:
+        candidate = Path(part)
+        repository_path = source_worktree / candidate
+        resolved.append(str(repository_path) if not candidate.is_absolute() and repository_path.is_file() else part)
+    return tuple(resolved)

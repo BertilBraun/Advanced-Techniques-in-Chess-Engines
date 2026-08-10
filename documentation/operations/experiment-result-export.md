@@ -4,6 +4,10 @@ Use `py/export_experiment_results.py` after queue experiments are terminal to cr
 altering their run directories. By default, every experiment in the durable queue summary is selected; the command
 fails if any selected experiment is pending or running.
 
+For successful worktree-isolated runs, export reads the queue-preserved authored configuration chain under the
+central runtime directory rather than depending on the disposable worktree or current control checkout. Failed runs
+retain their worktree, which remains the configuration fallback for diagnostic exports.
+
 The archive contains authored and resolved configuration, run identity and outcome, resource telemetry, evaluation
 results and manager state, TensorBoard events, queue logs, every elapsed evaluation checkpoint's model and inference
 artifacts, and the latest checkpoint's optimizer state. It excludes replay storage, completed self-play games,
