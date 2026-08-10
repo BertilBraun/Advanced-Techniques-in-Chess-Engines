@@ -122,6 +122,15 @@ terminal, inspect the atomic summary without modifying the queue:
 python py/queue_experiments.py status --summary <queue-summary-json>
 ```
 
+After selected queue entries are terminal, export their durable evidence without replay or completed games:
+
+```text
+python py/export_experiment_results.py --queue-config <queue-yaml> --output <results-zip>
+```
+
+The complete Vast workflow and archive contents are documented in
+[`documentation/operations/experiment-result-export.md`](../documentation/operations/experiment-result-export.md).
+
 The run command exits zero only when every experiment completed successfully and exits one when any experiment
 failed. On `SIGINT` or `SIGTERM`, it sends `SIGTERM` to each active process group, waits the configured grace period,
 forcibly kills any remaining tracked descendants, and records failures before exiting. Completed and failed entries

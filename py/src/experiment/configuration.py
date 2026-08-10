@@ -23,15 +23,23 @@ JSON_MAPPING_ADAPTER = TypeAdapter(dict[str, JsonValue])
 
 
 def load_experiment_configuration(path: Path) -> ExperimentConfiguration:
-    resolved = _load_experiment_mapping(path.resolve(), ())
+    resolved, _ = _load_experiment_mapping(path.resolve(), ())
     return TypeAdapter(ExperimentConfiguration).validate_python(resolved)
+
+
+def experiment_configuration_source_paths(path: Path) -> tuple[Path, ...]:
+    _, source_paths = _load_experiment_mapping(path.resolve(), ())
+    return source_paths
 
 
 def experiment_configuration_sha256(configuration: ExperimentConfiguration) -> str:
     return hashlib.sha256(configuration.model_dump_json().encode('utf-8')).hexdigest()
 
 
-def _load_experiment_mapping(path: Path, inheritance_chain: tuple[Path, ...]) -> dict[str, JsonValue]:
+def _load_experiment_mapping(
+    path: Path,
+    inheritance_chain: tuple[Path, ...],
+) -> tuple[dict[str, JsonValue], tuple[Path, ...]]:
     if path in inheritance_chain:
         cycle = ' -> '.join(str(item) for item in (*inheritance_chain, path))
         raise ValueError(f'Experiment configuration inheritance contains a cycle: {cycle}')
@@ -42,14 +50,14 @@ def _load_experiment_mapping(path: Path, inheritance_chain: tuple[Path, ...]) ->
     mapping = JSON_MAPPING_ADAPTER.validate_python(parsed)
     extends = mapping.pop('extends', None)
     if extends is None:
-        return mapping
+        return mapping, (path,)
     if not isinstance(extends, str) or not extends.strip():
         raise ValueError(f'Experiment extends must be a nonempty path string: {path}')
     base_path = Path(extends)
     if not base_path.is_absolute():
         base_path = path.parent / base_path
-    base = _load_experiment_mapping(base_path.resolve(), (*inheritance_chain, path))
-    return _merge_experiment_mappings(base, mapping)
+    base, source_paths = _load_experiment_mapping(base_path.resolve(), (*inheritance_chain, path))
+    return _merge_experiment_mappings(base, mapping), (*source_paths, path)
 
 
 def _merge_experiment_mappings(

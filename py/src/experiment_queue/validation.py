@@ -34,7 +34,7 @@ def validate_queue_for_launch(configuration: QueueConfiguration) -> ValidatedQue
         _validate_runner_executable(configuration.runner.command[0], slot.working_directory)
 
     configuration.summary_path.parent.mkdir(parents=True, exist_ok=True)
-    fingerprint = _queue_fingerprint(configuration)
+    fingerprint = queue_configuration_fingerprint(configuration)
     return ValidatedQueue(
         configuration=configuration,
         experiments=validated_experiments,
@@ -71,7 +71,7 @@ def _validate_runner_executable(executable: str, working_directory: Path) -> Non
         raise ValueError(f'Runner executable is not available on PATH: {executable}')
 
 
-def _queue_fingerprint(configuration: QueueConfiguration) -> str:
+def queue_configuration_fingerprint(configuration: QueueConfiguration) -> str:
     runtime_identity = configuration.model_dump(
         mode='json',
         exclude={'runner', 'experiments', 'poll_interval_seconds', 'wait_for_updates_when_empty'},
