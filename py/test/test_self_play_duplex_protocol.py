@@ -77,6 +77,9 @@ class _Worker:
     def snapshot_statistics(self) -> None:
         assert self.generation == 0
 
+    def close(self) -> None:
+        pass
+
 
 class _TensorboardWriter:
     def __init__(self, enabled: bool, observed: list[bool]) -> None:
