@@ -129,27 +129,26 @@ definition uses all 50 openings with the candidate playing each side, hence 100 
 ladder contains:
 
 - fixed-dataset policy accuracy and cross-entropy;
-- search versus random and policy-only versus random;
-- checkpoints selected at the preceding 20-, 40-, and 60-minute boundaries;
-- available retained generations 10, 20, ..., 100;
-- KataGo at 16, 64, and 256 visits.
+- checkpoints selected at the preceding 20-, 40-, and 60-minute boundaries plus alternating older offsets;
+- the same-time checkpoint from the completed baseline run;
+- KataGo at 16, 64, and 128 visits.
 
 ## Overnight screening matrix
 
-The baseline and eleven one-variable challengers live under
+The baseline and nine one-variable challengers live under
 [`py/configs/screening/go-7x7-overnight`](../../py/configs/screening/go-7x7-overnight). `00-baseline.yaml` inherits
 the complete baseline and changes only run identity and output path. Every later YAML inherits `00-baseline.yaml`
-and declares only its experimental difference: learning-rate decay, constant learning rate 0.005, 100-step
-publication, 75% fast search, two search-budget progressions, root-value blending, replay ratio 8, tree retention,
-eight random opening plies, and finally the next-policy auxiliary target.
+and declares only its experimental difference: learning-rate decay through generation 120, constant learning rate
+0.004, 75% fast search, a 64-to-512 search-budget progression through generation 120, root-value blending, replay
+ratio 8, tree retention, eight random opening plies, and finally the next-policy auxiliary target.
 
-The 100-step and replay-ratio-8 experiments use a 250,000-row maximum rather than 500,000 because each produces only
-25,600 new positions per generation; this preserves approximately the baseline's ten-generation replay-age window.
+The replay-ratio-8 experiment uses a 250,000-row maximum rather than 500,000 because it produces only 25,600 new
+positions per generation; this preserves approximately the baseline's ten-generation replay-age window.
 Changing the baseline automatically changes every inherited run and invalidates their existing approvals and queue
 summary fingerprint.
 
-All due definitions run concurrently, as required by the evaluation architecture. This can create substantial GPU
-contention once all fixed generations exist. That contention is intentionally part of the end-to-end baseline and
+Up to ten due evaluation jobs run concurrently, with excess work queued by the evaluation manager. This can create
+substantial GPU contention at later boundaries. That contention is intentionally part of the end-to-end baseline and
 must remain identical in later comparisons. Evaluation duration, timeout/failure status, and the self-play-rate dip
 at each boundary must be included in the baseline report.
 

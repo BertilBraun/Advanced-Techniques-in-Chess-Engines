@@ -7,4 +7,4 @@ training:
 go:
   self_play:
     search:
-      full_searches: {kind: linear, start_generation: 0, end_generation: 60, start_value: 64, end_value: 512, rounding: nearest}
+      full_searches: {kind: linear, start_generation: 0, end_generation: 120, start_value: 64, end_value: 512, rounding: nearest}
