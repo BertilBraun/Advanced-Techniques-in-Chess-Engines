@@ -107,7 +107,8 @@ class StockfishClient:
             tuple(
                 EnginePolicyEntry(action_id, weight / total)
                 for (action_id, _), weight in zip(scored_actions, unnormalized, strict=True)
-            )
+            ),
+            scored_actions[0][0],
         )
 
     def choose_action(self, position: ChessPosition, skill_level: int) -> int:

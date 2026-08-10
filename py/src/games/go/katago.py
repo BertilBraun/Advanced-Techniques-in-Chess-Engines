@@ -24,6 +24,7 @@ MOVE_INFO_LIST_ADAPTER = TypeAdapter(list[dict[str, JsonValue]])
 class _KataGoPolicyResponse:
     request_id: str
     weighted_actions: tuple[tuple[int, float], ...]
+    selected_action_id: int
 
 
 def _file_sha256(path: Path) -> str:
@@ -65,18 +66,25 @@ def gtp_to_action_id(coordinate: str, board_size: int) -> int:
     return action_id
 
 
-def _parse_weighted_actions(move_infos: JsonValue, board_size: int) -> tuple[tuple[int, float], ...]:
+def _parse_weighted_actions(move_infos: JsonValue, board_size: int) -> tuple[tuple[tuple[int, float], ...], int]:
     entries = MOVE_INFO_LIST_ADAPTER.validate_python(move_infos)
     weighted_actions: list[tuple[int, float]] = []
+    selected_actions: list[int] = []
     for entry in entries:
         move = entry.get('move')
         weight = entry.get('weight')
+        order = entry.get('order')
         if not isinstance(move, str) or not isinstance(weight, int | float) or isinstance(weight, bool) or weight <= 0:
             continue
-        weighted_actions.append((gtp_to_action_id(move, board_size), float(weight)))
+        action_id = gtp_to_action_id(move, board_size)
+        weighted_actions.append((action_id, float(weight)))
+        if order == 0:
+            selected_actions.append(action_id)
     if not weighted_actions:
         raise ValueError('KataGo response contained no positive move weights.')
-    return tuple(weighted_actions)
+    if len(selected_actions) != 1:
+        raise ValueError('KataGo response must contain exactly one order-zero move.')
+    return tuple(weighted_actions), selected_actions[0]
 
 
 def _parse_policy_response(line: str, expected_ids: set[str], board_size: int) -> _KataGoPolicyResponse:
@@ -89,12 +97,16 @@ def _parse_policy_response(line: str, expected_ids: set[str], board_size: int) -
     move_infos = response.get('moveInfos')
     if move_infos is None:
         raise ValueError('KataGo response omitted moveInfos.')
-    return _KataGoPolicyResponse(request_id, _parse_weighted_actions(move_infos, board_size))
+    weighted_actions, selected_action_id = _parse_weighted_actions(move_infos, board_size)
+    return _KataGoPolicyResponse(request_id, weighted_actions, selected_action_id)
 
 
-def _normalized_policy(weighted_actions: tuple[tuple[int, float], ...]) -> EnginePolicy:
+def _normalized_policy(weighted_actions: tuple[tuple[int, float], ...], selected_action_id: int) -> EnginePolicy:
     total = sum(weight for _, weight in weighted_actions)
-    return EnginePolicy(tuple(EnginePolicyEntry(action_id, weight / total) for action_id, weight in weighted_actions))
+    return EnginePolicy(
+        tuple(EnginePolicyEntry(action_id, weight / total) for action_id, weight in weighted_actions),
+        selected_action_id,
+    )
 
 
 def action_id_to_sgf(action_id: int, board_size: int) -> str:
@@ -242,7 +254,10 @@ class KataGoClient:
             if not line:
                 raise RuntimeError(f'KataGo analysis process exited with code {self._process.poll()}.')
             response = _parse_policy_response(line, expected_ids, self.state.board_size)
-            responses[response.request_id] = _normalized_policy(response.weighted_actions)
+            responses[response.request_id] = _normalized_policy(
+                response.weighted_actions,
+                response.selected_action_id,
+            )
         return responses
 
     def analyze_many(
@@ -262,7 +277,7 @@ class KataGoClient:
         action_sequences: tuple[tuple[int, ...], ...],
         maximum_visits: int,
     ) -> tuple[int, ...]:
-        return tuple(policy.top_action_id for policy in self.analyze_many(action_sequences, maximum_visits))
+        return tuple(policy.selected_action_id for policy in self.analyze_many(action_sequences, maximum_visits))
 
     def render_game(self, action_ids: tuple[int, ...]) -> str:
         moves = ''.join(

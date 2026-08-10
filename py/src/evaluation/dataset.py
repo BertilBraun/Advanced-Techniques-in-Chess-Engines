@@ -173,7 +173,7 @@ def _generate_source_game(
                         packed_state=state.encode_network_input(position).payload,
                         action_ids=tuple(entry.action_id for entry in ordered_entries),
                         probabilities=tuple(entry.probability for entry in ordered_entries),
-                        top_action_id=policy.top_action_id,
+                        top_action_id=policy.selected_action_id,
                         source_game_id=source_game_id,
                         ply=ply,
                     ),

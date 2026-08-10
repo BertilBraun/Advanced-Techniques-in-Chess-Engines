@@ -101,7 +101,7 @@ class FakeEngine:
 
     def policy(self, position: FakePosition, action_ids: tuple[int, ...]) -> EnginePolicy:
         assert position.actions == action_ids
-        return EnginePolicy(tuple(EnginePolicyEntry(action_id, 0.25) for action_id in range(4)))
+        return EnginePolicy(tuple(EnginePolicyEntry(action_id, 0.25) for action_id in range(4)), 0)
 
     def render_game(self, action_ids: tuple[int, ...]) -> str:
         return ' '.join(str(action_id) for action_id in action_ids)

@@ -76,7 +76,7 @@ def test_stockfish_multipv_scores_form_normalized_policy(monkeypatch: pytest.Mon
     policy = client.policy(FakeChessPosition(), ())
 
     assert sum(entry.probability for entry in policy.entries) == pytest.approx(1.0)
-    assert policy.top_action_id == 1
+    assert policy.selected_action_id == 1
     assert engine.configurations[0] == {'Threads': 1, 'Hash': 16, 'UCI_ShowWDL': True}
 
 
@@ -130,13 +130,13 @@ def test_katago_analysis_matches_out_of_order_responses(monkeypatch: pytest.Monk
         path.write_bytes(path.name.encode('utf-8'))
     responses = '\n'.join(
         (
-            json.dumps({'id': 'evaluation-1', 'moveInfos': [{'move': 'pass', 'weight': 1.0}]}),
+            json.dumps({'id': 'evaluation-1', 'moveInfos': [{'move': 'pass', 'weight': 1.0, 'order': 0}]}),
             json.dumps(
                 {
                     'id': 'evaluation-0',
                     'moveInfos': [
-                        {'move': 'A7', 'weight': 3.0},
-                        {'move': 'B7', 'weight': 1.0},
+                        {'move': 'A7', 'weight': 1.0, 'order': 0},
+                        {'move': 'B7', 'weight': 3.0, 'order': 1},
                     ],
                 }
             ),
@@ -158,8 +158,9 @@ def test_katago_analysis_matches_out_of_order_responses(monkeypatch: pytest.Monk
     submitted = [json.loads(line) for line in process.stdin.getvalue().splitlines()]
     client.close()
 
-    assert policies[0].top_action_id == 0
-    assert policies[1].top_action_id == state.pass_action
+    assert policies[0].selected_action_id == 0
+    assert policies[1].selected_action_id == state.pass_action
+    assert max(policies[0].entries, key=lambda entry: entry.probability).action_id == 1
     assert submitted[1]['moves'] == [['B', 'A7']]
     assert all(request['rules'] == 'chinese' and request['komi'] == 7.5 for request in submitted)
     assert process.was_terminated

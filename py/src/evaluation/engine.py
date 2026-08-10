@@ -23,6 +23,7 @@ class EnginePolicyEntry:
 @dataclass(frozen=True)
 class EnginePolicy:
     entries: tuple[EnginePolicyEntry, ...]
+    selected_action_id: int
 
     def __post_init__(self) -> None:
         if not self.entries:
@@ -32,13 +33,8 @@ class EnginePolicy:
             raise ValueError('Engine policy action IDs must be unique.')
         if abs(sum(entry.probability for entry in self.entries) - 1.0) > 1e-6:
             raise ValueError('Engine policy probabilities must sum to one.')
-
-    @property
-    def top_action_id(self) -> int:
-        return min(
-            self.entries,
-            key=lambda entry: (-entry.probability, entry.action_id),
-        ).action_id
+        if self.selected_action_id not in action_ids:
+            raise ValueError('Engine-selected action must be present in its policy.')
 
 
 class EnginePolicyProvider(Protocol, Generic[PositionT]):
