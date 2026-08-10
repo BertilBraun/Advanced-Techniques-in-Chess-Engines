@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import sys
 from dataclasses import dataclass
@@ -33,7 +34,7 @@ def validate_queue_for_launch(configuration: QueueConfiguration) -> ValidatedQue
         _validate_runner_executable(configuration.runner.command[0], slot.working_directory)
 
     configuration.summary_path.parent.mkdir(parents=True, exist_ok=True)
-    fingerprint = _queue_fingerprint(configuration, validated_experiments)
+    fingerprint = _queue_fingerprint(configuration)
     return ValidatedQueue(
         configuration=configuration,
         experiments=validated_experiments,
@@ -70,12 +71,10 @@ def _validate_runner_executable(executable: str, working_directory: Path) -> Non
         raise ValueError(f'Runner executable is not available on PATH: {executable}')
 
 
-def _queue_fingerprint(
-    configuration: QueueConfiguration,
-    experiments: tuple[ValidatedQueuedExperiment, ...],
-) -> str:
-    digest = hashlib.sha256(configuration.model_dump_json().encode('utf-8'))
-    for experiment in experiments:
-        digest.update(experiment.definition.experiment_id.encode('utf-8'))
-        digest.update(experiment.configuration_sha256.encode('ascii'))
-    return digest.hexdigest()
+def _queue_fingerprint(configuration: QueueConfiguration) -> str:
+    runtime_identity = configuration.model_dump(
+        mode='json',
+        exclude={'runner', 'experiments', 'poll_interval_seconds', 'wait_for_updates_when_empty'},
+    )
+    serialized = json.dumps(runtime_identity, sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()

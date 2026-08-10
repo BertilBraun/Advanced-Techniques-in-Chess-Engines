@@ -145,7 +145,8 @@ def test_queue_releases_slot_after_success_and_failure_and_runs_next_job(tmp_pat
         termination_grace_seconds=1.0,
     )
 
-    summary = ExperimentQueueRunner(validate_queue_for_launch(configuration)).run()
+    validated_queue = validate_queue_for_launch(configuration)
+    summary = ExperimentQueueRunner(lambda: validated_queue).run()
 
     assert tuple(status.status for status in summary.experiments) == ('completed', 'failed', 'completed')
     first, second, third = summary.experiments
@@ -160,6 +161,105 @@ def test_queue_releases_slot_after_success_and_failure_and_runs_next_job(tmp_pat
     assert tuple(
         status.execution.stdout_log.read_text(encoding='utf-8').strip() for status in summary.experiments
     ) == tuple(path.name for path in experiment_paths)
+
+
+def test_queue_reloads_changed_pending_experiment_before_launch(tmp_path: Path) -> None:
+    first_path = tmp_path / 'first.yaml'
+    pending_path = tmp_path / 'pending.yaml'
+    shutil.copyfile(EXPERIMENT_TEMPLATE, first_path)
+    shutil.copyfile(EXPERIMENT_TEMPLATE, pending_path)
+    script = (
+        'import pathlib, sys, time; '
+        'path=pathlib.Path(sys.argv[-1]); '
+        "time.sleep(0.3) if path.name == 'first.yaml' else None; "
+        "print('updated' if 'updated-pending' in path.read_text() else 'original', flush=True)"
+    )
+    slot = ResourceSlot(
+        slot_id='only-slot',
+        cuda_devices=(),
+        cpu_affinity=_available_cpu_cores(1),
+        ram_capacity_bytes=2_000_000_000,
+        working_directory=tmp_path,
+        log_directory=tmp_path / 'logs',
+    )
+    request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
+    configuration = QueueConfiguration(
+        runner=RunnerCommand(command=(sys.executable, '-c', script)),
+        slots=(slot,),
+        experiments=(
+            QueuedExperiment(experiment_id='first', experiment_file=first_path, resources=request),
+            QueuedExperiment(experiment_id='pending', experiment_file=pending_path, resources=request),
+        ),
+        summary_path=tmp_path / 'queue-summary.json',
+        poll_interval_seconds=0.01,
+        termination_grace_seconds=1.0,
+    )
+
+    def update_pending_experiment() -> None:
+        content = pending_path.read_text(encoding='utf-8')
+        pending_path.write_text(content.replace('go-7x7-template', 'updated-pending', 1), encoding='utf-8')
+
+    update = threading.Timer(0.1, update_pending_experiment)
+    update.start()
+    try:
+        runner = ExperimentQueueRunner(lambda: validate_queue_for_launch(configuration))
+        summary = runner.run()
+    finally:
+        update.cancel()
+
+    assert tuple(status.status for status in summary.experiments) == ('completed', 'completed')
+    pending_status = next(status for status in summary.experiments if status.experiment_id == 'pending')
+    assert pending_status.execution.stdout_log.read_text(encoding='utf-8').strip() == 'updated'
+    assert (
+        pending_status.execution.configuration_sha256
+        == validate_queue_for_launch(configuration).experiments[1].configuration_sha256
+    )
+
+
+def test_empty_queue_waits_for_new_desired_experiment(tmp_path: Path) -> None:
+    first_path = tmp_path / 'first.yaml'
+    added_path = tmp_path / 'added.yaml'
+    shutil.copyfile(EXPERIMENT_TEMPLATE, first_path)
+    shutil.copyfile(EXPERIMENT_TEMPLATE, added_path)
+    slot = ResourceSlot(
+        slot_id='only-slot',
+        cuda_devices=(),
+        cpu_affinity=_available_cpu_cores(1),
+        ram_capacity_bytes=2_000_000_000,
+        working_directory=tmp_path,
+        log_directory=tmp_path / 'logs',
+    )
+    request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
+    first = QueuedExperiment(experiment_id='first', experiment_file=first_path, resources=request)
+    added = QueuedExperiment(experiment_id='added', experiment_file=added_path, resources=request)
+    initial_configuration = QueueConfiguration(
+        runner=RunnerCommand(command=(sys.executable, '-c', "print('completed')")),
+        slots=(slot,),
+        experiments=(first,),
+        summary_path=tmp_path / 'queue-summary.json',
+        poll_interval_seconds=0.01,
+        termination_grace_seconds=1.0,
+        wait_for_updates_when_empty=True,
+    )
+    final_configuration = initial_configuration.model_copy(
+        update={
+            'runner': RunnerCommand(command=(sys.executable, '-c', "print('updated-command')")),
+            'experiments': (first, added),
+            'wait_for_updates_when_empty': False,
+        }
+    )
+    desired = [validate_queue_for_launch(initial_configuration)]
+    update = threading.Timer(0.2, lambda: desired.__setitem__(0, validate_queue_for_launch(final_configuration)))
+    update.start()
+    try:
+        summary = ExperimentQueueRunner(lambda: desired[0]).run()
+    finally:
+        update.cancel()
+
+    assert tuple(status.experiment_id for status in summary.experiments) == ('first', 'added')
+    assert tuple(status.status for status in summary.experiments) == ('completed', 'completed')
+    added_status = next(status for status in summary.experiments if status.experiment_id == 'added')
+    assert added_status.execution.stdout_log.read_text(encoding='utf-8').strip() == 'updated-command'
 
 
 def test_queue_terminates_a_process_tree_over_its_rss_limit(tmp_path: Path) -> None:
@@ -197,7 +297,8 @@ def test_queue_terminates_a_process_tree_over_its_rss_limit(tmp_path: Path) -> N
         termination_grace_seconds=0.1,
     )
 
-    summary = ExperimentQueueRunner(validate_queue_for_launch(configuration)).run()
+    validated_queue = validate_queue_for_launch(configuration)
+    summary = ExperimentQueueRunner(lambda: validated_queue).run()
 
     status = summary.experiments[0]
     assert isinstance(status, FailedExperimentStatus)
@@ -234,7 +335,8 @@ def test_queue_termination_records_failure_and_releases_the_running_slot(tmp_pat
         poll_interval_seconds=0.01,
         termination_grace_seconds=1.0,
     )
-    runner = ExperimentQueueRunner(validate_queue_for_launch(configuration))
+    validated_queue = validate_queue_for_launch(configuration)
+    runner = ExperimentQueueRunner(lambda: validated_queue)
     termination = threading.Timer(0.2, lambda: os.kill(os.getpid(), signal.SIGTERM))
     termination.start()
     try:

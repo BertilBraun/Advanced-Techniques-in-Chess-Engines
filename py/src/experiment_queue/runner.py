@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import signal
+import sys
 import time
 from datetime import datetime, timezone
 from types import FrameType
@@ -19,13 +21,15 @@ from src.experiment_queue.state import (
     load_queue_summary,
     write_queue_summary,
 )
-from src.experiment_queue.validation import ValidatedQueue
+from src.experiment_queue.validation import ValidatedQueue, ValidatedQueuedExperiment
 
 
 class ExperimentQueueRunner:
-    def __init__(self, queue: ValidatedQueue) -> None:
-        self._queue = queue
+    def __init__(self, load_queue: Callable[[], ValidatedQueue]) -> None:
+        self._load_queue = load_queue
+        self._queue = load_queue()
         self._restart_block_reason: str | None = None
+        self._reload_error: str | None = None
         self._summary = self._load_or_create_summary()
         self._running_processes: dict[str, RunningProcess] = {}
         self._stop_requested = False
@@ -39,20 +43,28 @@ class ExperimentQueueRunner:
     def active_process_count(self) -> int:
         return len(self._running_processes)
 
+    @property
+    def configuration_reload_error(self) -> str | None:
+        return self._reload_error
+
     def run(self) -> QueueSummary:
         if self._restart_block_reason is not None:
             raise ValueError(self._restart_block_reason)
         previous_sigint = signal.signal(signal.SIGINT, self._handle_termination_signal)
         previous_sigterm = signal.signal(signal.SIGTERM, self._handle_termination_signal)
         try:
-            while self._has_pending_or_running_experiments():
+            while True:
+                self.refresh_configuration()
                 self._collect_finished_processes()
                 if self._stop_requested:
                     self._terminate_running_processes()
                     break
-                self._launch_ready_experiments()
-                if self._running_processes:
-                    time.sleep(self._queue.configuration.poll_interval_seconds)
+                if self._reload_error is None:
+                    self._launch_ready_experiments()
+                if not self._has_pending_or_running_experiments():
+                    if not self._queue.configuration.wait_for_updates_when_empty:
+                        break
+                time.sleep(self._queue.configuration.poll_interval_seconds)
             self._collect_finished_processes()
             return self._summary
         finally:
@@ -60,6 +72,20 @@ class ExperimentQueueRunner:
             signal.signal(signal.SIGTERM, previous_sigterm)
             if self._running_processes:
                 self._terminate_running_processes()
+
+    def refresh_configuration(self) -> None:
+        try:
+            refreshed = self._load_queue()
+            self._reconcile_configuration(refreshed)
+        except (OSError, ValueError) as error:
+            message = f'{type(error).__name__}: {error}'
+            if message != self._reload_error:
+                print(f'Queue configuration reload rejected: {message}', file=sys.stderr, flush=True)
+            self._reload_error = message
+            return
+        if self._reload_error is not None:
+            print('Queue configuration reload recovered.', file=sys.stderr, flush=True)
+        self._reload_error = None
 
     def _load_or_create_summary(self) -> QueueSummary:
         summary_path = self._queue.configuration.summary_path
@@ -73,6 +99,7 @@ class ExperimentQueueRunner:
                     PendingExperimentStatus(
                         experiment_id=experiment.definition.experiment_id,
                         queued_at=timestamp,
+                        configuration_sha256=experiment.configuration_sha256,
                     )
                     for experiment in self._queue.experiments
                 ),
@@ -93,22 +120,76 @@ class ExperimentQueueRunner:
 
     def _validate_existing_summary(self, summary: QueueSummary) -> None:
         if summary.queue_fingerprint != self._queue.fingerprint:
-            raise ValueError('Existing queue summary does not match the validated queue configuration and experiments.')
-        expected_ids = tuple(experiment.definition.experiment_id for experiment in self._queue.experiments)
-        actual_ids = tuple(experiment.experiment_id for experiment in summary.experiments)
-        if actual_ids != expected_ids:
-            raise ValueError('Existing queue summary experiment order does not match the queue configuration.')
+            raise ValueError('Existing queue summary does not match the immutable queue runtime configuration.')
         for status in summary.experiments:
             if isinstance(status, PendingExperimentStatus):
                 continue
-            self._validate_persisted_assignment(status.experiment_id, status.execution.assignment)
+            self._validate_persisted_assignment(status.execution.assignment)
 
-    def _validate_persisted_assignment(self, experiment_id: str, assignment: ResourceAssignment) -> None:
-        experiment = self._experiment_definition(experiment_id)
+    def _validate_persisted_assignment(self, assignment: ResourceAssignment) -> None:
         slot = self._slot(assignment.slot_id)
-        scheduled = schedule_experiments((experiment,), (slot,))
-        if not scheduled or scheduled[0].assignment != assignment:
-            raise ValueError(f'Persisted assignment for experiment {experiment_id!r} is invalid.')
+        if (
+            assignment.cuda_devices != slot.cuda_devices
+            or assignment.cpu_affinity != slot.cpu_affinity[: len(assignment.cpu_affinity)]
+            or assignment.ram_limit_bytes > slot.ram_capacity_bytes
+            or assignment.working_directory != slot.working_directory
+            or assignment.log_directory != slot.log_directory
+        ):
+            raise ValueError(f'Persisted assignment for slot {assignment.slot_id!r} is invalid.')
+
+    def _reconcile_configuration(self, refreshed: ValidatedQueue) -> None:
+        if refreshed.fingerprint != self._queue.fingerprint:
+            raise ValueError('Running queue resources, summary, or termination policy cannot change.')
+        existing = {status.experiment_id: status for status in self._summary.experiments}
+        refreshed_ids = {experiment.definition.experiment_id for experiment in refreshed.experiments}
+        statuses: list[ExperimentStatus] = [
+            status
+            for status in self._summary.experiments
+            if not isinstance(status, PendingExperimentStatus) and status.experiment_id not in refreshed_ids
+        ]
+        timestamp = _now()
+        for experiment in refreshed.experiments:
+            experiment_id = experiment.definition.experiment_id
+            status = existing.get(experiment_id)
+            if status is None:
+                statuses.append(
+                    PendingExperimentStatus(
+                        experiment_id=experiment_id,
+                        queued_at=timestamp,
+                        configuration_sha256=experiment.configuration_sha256,
+                    )
+                )
+                continue
+            expected_sha256 = (
+                status.configuration_sha256
+                if isinstance(status, PendingExperimentStatus)
+                else status.execution.configuration_sha256
+            )
+            if not isinstance(status, PendingExperimentStatus) and expected_sha256 != experiment.configuration_sha256:
+                raise ValueError(f'Running or terminal experiment {experiment_id!r} cannot change configuration.')
+            if isinstance(status, PendingExperimentStatus):
+                statuses.append(
+                    PendingExperimentStatus(
+                        experiment_id=experiment_id,
+                        queued_at=(
+                            status.queued_at if expected_sha256 == experiment.configuration_sha256 else timestamp
+                        ),
+                        configuration_sha256=experiment.configuration_sha256,
+                    )
+                )
+            else:
+                statuses.append(status)
+        reconciled = QueueSummary(
+            queue_fingerprint=self._summary.queue_fingerprint,
+            created_at=self._summary.created_at,
+            updated_at=timestamp,
+            experiments=tuple(statuses),
+        )
+        self._queue = refreshed
+        self._validate_pending_log_paths(reconciled)
+        if reconciled.experiments != self._summary.experiments:
+            self._summary = reconciled
+            write_queue_summary(self._queue.configuration.summary_path, self._summary)
 
     def _fail_unrecoverable_running_experiments(self, summary: QueueSummary) -> QueueSummary:
         timestamp = _now()
@@ -150,11 +231,17 @@ class ExperimentQueueRunner:
         for scheduled in schedule_experiments(pending, available_slots):
             self._launch_experiment(scheduled.experiment, scheduled.assignment)
 
-    def _validate_pending_log_paths(self) -> None:
-        for index, status in enumerate(self._summary.experiments):
+    def _validate_pending_log_paths(self, summary: QueueSummary | None = None) -> None:
+        checked_summary = self._summary if summary is None else summary
+        for status in checked_summary.experiments:
             if not isinstance(status, PendingExperimentStatus):
                 continue
             experiment = self._experiment_definition(status.experiment_id)
+            index = next(
+                index
+                for index, configured_experiment in enumerate(self._queue.configuration.experiments)
+                if configured_experiment.experiment_id == status.experiment_id
+            )
             log_stem = f'{index:04d}-{experiment.experiment_id}'
             for slot in self._queue.configuration.slots:
                 if not slot_satisfies_request(slot, experiment.resources):
@@ -188,6 +275,8 @@ class ExperimentQueueRunner:
         self._running_processes[experiment.experiment_id] = running_process
         started_at = _now()
         execution = ExecutionIdentity(
+            configuration_sha256=self._validated_experiment(experiment.experiment_id).configuration_sha256,
+            command=command,
             assignment=assignment,
             started_at=started_at,
             pid=running_process.process.pid,
@@ -294,6 +383,11 @@ class ExperimentQueueRunner:
             experiment
             for experiment in self._queue.configuration.experiments
             if experiment.experiment_id == experiment_id
+        )
+
+    def _validated_experiment(self, experiment_id: str) -> ValidatedQueuedExperiment:
+        return next(
+            experiment for experiment in self._queue.experiments if experiment.definition.experiment_id == experiment_id
         )
 
     def _slot(self, slot_id: str) -> ResourceSlot:

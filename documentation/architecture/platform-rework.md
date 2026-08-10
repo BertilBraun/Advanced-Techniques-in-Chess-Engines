@@ -371,6 +371,18 @@ queue-owned runner command appends only the configured experiment-path
 argument and YAML path; required source-revision and approval arguments remain
 explicit parts of that runner command.
 
+The queue reloads the desired file before every scheduling pass. Slots,
+summary ownership, and termination policy are immutable while the supervisor
+is active. The runner command and pending experiments may be changed, and
+pending experiments may be added, removed, or reordered; each accepted pending
+version is revalidated and its canonical configuration hash is persisted. A
+running, completed, or failed experiment ID is immutable, and changing its
+canonical configuration rejects that reload without stopping active work or
+launching more work from the invalid desired state. Every execution records the
+exact runner command used. The queue can remain alive while empty when
+`wait_for_updates_when_empty` is enabled; changing that control to false lets
+an empty queue exit normally.
+
 Each experiment starts as a new Linux session and process group. A small
 queue-owned child wrapper applies `sched_setaffinity`, sets the slot's device
 set through `CUDA_VISIBLE_DEVICES`, and then replaces itself with the configured
@@ -393,9 +405,10 @@ the slot only after the tracked tree has ended.
 
 One atomic JSON summary records pending, running, completed, and failed
 experiments; queue, start, finish, and update timestamps; the exact assignment;
-PID and process-group identity; exit code; reason; and log paths. Its
-fingerprint covers the resolved queue configuration and each experiment's
-fully resolved canonical configuration. A matching restart preserves terminal entries and pending work. Any
+PID and process-group identity; runner command; canonical configuration hash;
+exit code; reason; and log paths. Its fingerprint covers the immutable queue runtime and each
+experiment status records the canonical configuration hash accepted for that
+entry. A matching restart preserves terminal entries and pending work. Any
 persisted running entry is marked failed but its possibly stale process group is
 not signalled or adopted; that invocation stops and tells the operator to
 verify the recorded process group has ended before invoking the queue again to
@@ -887,6 +900,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-10 | R10/R12 | Interactive queue correction | A frozen startup fingerprint conflicted with the screening workflow: pending authored YAML was read again by the child at launch, so a changed pending experiment could run without the durable queue state recording or revalidating the new canonical hash, while changing the desired experiment list required terminating active work. A committed configuration-only change also advances the expected source revision embedded in the runner command. | Reload and validate the desired queue before each scheduling pass. Keep slots and lifecycle ownership immutable; allow the runner command and pending IDs to be added, removed, reordered, or updated; persist the exact command and canonical hash for launched entries; reject mutations of running or terminal IDs without stopping them; pause new launches while a reload is invalid; and optionally keep an empty queue alive for later additions. |
 | 2026-08-10 | R10/R12 | Vast compatibility | Vast GPU containers expose read-only cgroup-v1 controllers and cannot satisfy the queue's delegated cgroup-v2 contract, while the screening matrix must run through the queue on rented nodes. | Remove cgroups from queue configuration and execution. Retain exclusive CUDA sets, CPU affinity, process groups, deterministic scheduling, logs, summaries, and restart behavior. Sample aggregate RSS across the discovered process tree with `psutil`; terminate and fail a run when it exceeds its requested RAM limit. Accept that this is a sampled safety monitor rather than a kernel-hard reservation. |
 | 2026-08-09 | Compute-node runtime | Dependency decision | CUDA 13 unnecessarily excluded lower-cost CUDA 12 marketplace hosts. PyTorch 2.12.1 is the newest release with an official CUDA 12 wheel, published for CUDA 12.6; NVIDIA's CUDA 12 minor-version compatibility supports that runtime on Linux drivers 525.60.13 or newer, subject to forward-compatibility feature and GPU-generation caveats. | Lock training and fresh-node setup to PyTorch `2.12.1+cu126`, treat a Vast CUDA 12.2 advertisement as eligible when the actual driver is at least 525.60.13, and require a real import, device, native-build, self-play, and evaluation smoke test before accepting a rented host. CUDA 13 is no longer a selection requirement. |
 | 2026-08-09 | Cross-phase Python structure | Cleanup handoff | The user authorized a behavior-preserving ownership cleanup after reviewing the live source layout. Single-consumer cost/value/runtime modules and engine adapters were consolidated; packed representation and network code moved to their semantic owners; checkpoint and trainer subsystems became focused packages; evaluation opening, dataset, scheduling, and process ownership was separated; native-search typing left the self-play loop; and component configuration moved beside self-play, replay, network, and run-limit owners. The checkpoint manifest intentionally dropped permanently empty replay metadata and renamed its progress field from `iteration` to `generation`. | Return the cleanup for user review. Commits `48c0927a`, `ce4e1ecf`, `3e19f753`, and `bf69b4dd` implement the four ownership slices. Ruff passes and the exact Windows suite passes 168 tests with 17 intentional infrastructure/native skips. No C++ search, binding, queue, experiment, or target-hardware behavior changed. |

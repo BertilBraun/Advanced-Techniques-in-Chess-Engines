@@ -13,6 +13,8 @@ from src.util.frozen_model import FrozenModel
 
 
 class ExecutionIdentity(FrozenModel):
+    configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    command: tuple[str, ...] = Field(min_length=1)
     assignment: ResourceAssignment
     started_at: AwareDatetime
     pid: int = Field(gt=0)
@@ -25,6 +27,7 @@ class PendingExperimentStatus(FrozenModel):
     status: Literal['pending'] = 'pending'
     experiment_id: str
     queued_at: AwareDatetime
+    configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
 class RunningExperimentStatus(FrozenModel):

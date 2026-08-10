@@ -65,6 +65,7 @@ class QueueConfiguration(FrozenModel):
     summary_path: Path
     poll_interval_seconds: float = Field(default=0.1, gt=0.0)
     termination_grace_seconds: float = Field(default=10.0, gt=0.0)
+    wait_for_updates_when_empty: bool = False
 
     @model_validator(mode='after')
     def validate_queue(self) -> Self:
@@ -123,6 +124,7 @@ def _resolve_configuration_paths(configuration: QueueConfiguration, base_directo
         summary_path=_resolve_path(configuration.summary_path, base_directory),
         poll_interval_seconds=configuration.poll_interval_seconds,
         termination_grace_seconds=configuration.termination_grace_seconds,
+        wait_for_updates_when_empty=configuration.wait_for_updates_when_empty,
     )
 
 

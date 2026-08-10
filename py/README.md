@@ -111,8 +111,12 @@ python py/queue_experiments.py run --queue-config <queue-yaml>
 ```
 
 Keep that supervisor running. It launches every currently compatible job, captures separate stdout and stderr logs,
-records exits, releases empty slots, and immediately schedules the next compatible pending job. In another terminal,
-inspect the atomic summary without modifying the queue:
+records exits, releases empty slots, and immediately schedules the next compatible pending job. Before each
+scheduling pass it reloads the desired queue and every authored experiment. Pending entries may therefore be added,
+removed, reordered, or changed without interrupting running work. A running, completed, or failed experiment ID is
+immutable; changing one rejects that desired update and suspends new launches until the file is corrected. Set
+`wait_for_updates_when_empty: true` to keep the supervisor alive after the current desired queue is empty. In another
+terminal, inspect the atomic summary without modifying the queue:
 
 ```text
 python py/queue_experiments.py status --summary <queue-summary-json>
@@ -127,9 +131,10 @@ If a summary contains `running` entries after a supervisor restart, the wrapper 
 signalling or adopting possibly stale process IDs. Verify the recorded process groups have ended, then invoke the
 same queue again to continue entries still marked `pending`.
 
-The summary fingerprint covers the resolved queue configuration and each experiment's fully resolved canonical
-configuration. Reusing a summary after changing a queue, an override, or any inherited base is rejected. Deleting
-the summary intentionally creates a fresh queue and will make every configured experiment eligible to run again.
+The summary fingerprint covers immutable slot, summary, and termination ownership. Each launched entry records the
+exact runner command and independently resolved canonical configuration hash. The runner command, pending entries,
+polling interval, and empty-wait control may change at runtime. Deleting the summary intentionally creates a fresh
+queue and will make every configured experiment eligible to run again.
 
 ## Validation
 

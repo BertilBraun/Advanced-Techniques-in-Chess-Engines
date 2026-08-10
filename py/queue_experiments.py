@@ -6,7 +6,7 @@ from pathlib import Path
 from src.experiment_queue.configuration import load_queue_configuration
 from src.experiment_queue.runner import ExperimentQueueRunner
 from src.experiment_queue.state import FailedExperimentStatus, load_queue_summary
-from src.experiment_queue.validation import validate_queue_for_launch
+from src.experiment_queue.validation import ValidatedQueue, validate_queue_for_launch
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -27,9 +27,12 @@ def main() -> int:
         print(load_queue_summary(arguments.summary.resolve()).model_dump_json(indent=2))
         return 0
 
-    configuration = load_queue_configuration(arguments.queue_config.resolve())
-    validated_queue = validate_queue_for_launch(configuration)
-    summary = ExperimentQueueRunner(validated_queue).run()
+    queue_path = arguments.queue_config.resolve()
+
+    def load_validated_queue() -> ValidatedQueue:
+        return validate_queue_for_launch(load_queue_configuration(queue_path))
+
+    summary = ExperimentQueueRunner(load_validated_queue).run()
     print(summary.model_dump_json(indent=2))
     return 1 if any(isinstance(status, FailedExperimentStatus) for status in summary.experiments) else 0
 
