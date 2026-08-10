@@ -19,6 +19,7 @@ from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.persistence import load_model_and_optimizer, save_model_and_optimizer
 from src.training.network import Network
 from src.training.objective import ResolvedTrainingObjective
+from src.training.configuration import TrainerTopologyParams
 from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
@@ -96,11 +97,20 @@ def _initialize_rank(
         game.network_dimensions,
         auxiliary_sizes,
     )
-    distributed_model = DistributedDataParallel(
+    distributed_model = _create_distributed_model(model, topology, device_id)
+    return _RankRuntime(game, model, distributed_model, optimizer, device)
+
+
+def _create_distributed_model(
+    model: Network,
+    topology: TrainerTopologyParams,
+    device_id: int,
+) -> DistributedDataParallel:
+    return DistributedDataParallel(
         DistributedTrainingModel(model),
         device_ids=None if topology.device_type == 'cpu' else [device_id],
+        broadcast_buffers=False,
     )
-    return _RankRuntime(game, model, distributed_model, optimizer, device)
 
 
 def _run_rank_commands(

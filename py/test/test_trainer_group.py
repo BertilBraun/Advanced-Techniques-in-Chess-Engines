@@ -1,6 +1,9 @@
 from pathlib import Path
+from typing import cast
 
 import torch
+import pytest
+from torch import nn
 
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
@@ -16,6 +19,8 @@ from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.network import Network
+import src.training.trainer.rank as trainer_rank
+from src.training.trainer.rank import DistributedTrainingModel
 
 
 def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
@@ -142,3 +147,49 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
     assert result.statistics.gradient_norm > 0.0
     assert result.statistics.replay_rows_per_second > 0.0
     assert result.statistics.training_samples_per_second > 0.0
+
+
+def test_distributed_training_model_has_only_batch_norm_buffers() -> None:
+    configuration = load_experiment_configuration(
+        Path(__file__).parents[1] / 'configs' / 'chess-experiment-template.yaml'
+    )
+    game = ChessImplementation(configuration)
+    model = DistributedTrainingModel(
+        Network(configuration.training.network, torch.device('cpu'), game.network_dimensions)
+    )
+
+    buffer_names = tuple(name for name, _ in model.named_buffers())
+
+    assert buffer_names
+    assert all(name.endswith(('running_mean', 'running_var', 'num_batches_tracked')) for name in buffer_names)
+
+
+def test_distributed_training_disables_per_forward_buffer_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
+    configuration = load_experiment_configuration(
+        Path(__file__).parents[1] / 'configs' / 'chess-experiment-template.yaml'
+    )
+    game = ChessImplementation(configuration)
+    model = Network(configuration.training.network, torch.device('cpu'), game.network_dimensions)
+
+    class CapturedDistributedModel:
+        def __init__(
+            self,
+            module: nn.Module,
+            device_ids: list[int] | None,
+            broadcast_buffers: bool,
+        ) -> None:
+            self.module = module
+            self.device_ids = device_ids
+            self.broadcast_buffers = broadcast_buffers
+
+    monkeypatch.setattr(trainer_rank, 'DistributedDataParallel', CapturedDistributedModel)
+
+    distributed_model = trainer_rank._create_distributed_model(
+        model,
+        configuration.training.topology.trainer,
+        device_id=0,
+    )
+    captured = cast(CapturedDistributedModel, distributed_model)
+
+    assert captured.device_ids is None
+    assert captured.broadcast_buffers is False
