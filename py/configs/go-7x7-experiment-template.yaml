@@ -66,14 +66,6 @@ evaluation:
       boundary_offset: 3
       maximum_game_plies: 196
       search: *evaluation_search
-    - {kind: previous_checkpoint, definition_id: previous-80m, boundary_offset: 4, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-100m, boundary_offset: 5, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-120m, boundary_offset: 6, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-140m, boundary_offset: 7, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-160m, boundary_offset: 8, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-180m, boundary_offset: 9, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-200m, boundary_offset: 10, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-220m, boundary_offset: 11, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
     - kind: katago
       definition_id: katago-16
       maximum_visits: 16

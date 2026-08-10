@@ -264,7 +264,7 @@ def test_manager_limits_active_evaluation_processes(tmp_path: Path) -> None:
     assert len(manager._processes) == 2
 
 
-def test_older_checkpoint_offsets_alternate_by_boundary_parity(tmp_path: Path) -> None:
+def test_baseline_schedule_keeps_only_three_recent_checkpoint_offsets(tmp_path: Path) -> None:
     experiment = load_experiment_configuration(Path('configs/baselines/vast-go-7x7-2gpu-4h.yaml'))
     experiment = experiment.model_copy(
         update={'evaluation': experiment.evaluation.model_copy(update={'cadence_seconds': 20})}
@@ -274,7 +274,7 @@ def test_older_checkpoint_offsets_alternate_by_boundary_parity(tmp_path: Path) -
         for boundary in range(20, 121, 20)
     )
 
-    even_jobs, next_device_index = jobs_for_suite(
+    jobs, _ = jobs_for_suite(
         experiment,
         tmp_path,
         tmp_path / 'results',
@@ -282,20 +282,9 @@ def test_older_checkpoint_offsets_alternate_by_boundary_parity(tmp_path: Path) -
         suites[:-1],
         0,
     )
-    odd_suite = ScheduledEvaluationSuite(boundary_seconds=140, checkpoint=checkpoint(tmp_path, 7))
-    odd_jobs, _ = jobs_for_suite(
-        experiment,
-        tmp_path,
-        tmp_path / 'results',
-        odd_suite,
-        suites,
-        next_device_index,
-    )
-
-    even_ids = {job.definition.definition_id for job in even_jobs}
-    odd_ids = {job.definition.definition_id for job in odd_jobs}
-    assert 'previous-80m' in even_ids and 'previous-100m' not in even_ids
-    assert 'previous-100m' in odd_ids and 'previous-80m' not in odd_ids
+    previous_jobs = tuple(job for job in jobs if job.definition.kind == 'previous_checkpoint')
+    assert tuple(job.definition.boundary_offset for job in previous_jobs) == (1, 2, 3)
+    assert all(job.definition.opening_pair_count == 200 for job in previous_jobs)
 
 
 def test_same_time_reference_checkpoint_is_resolved_from_manifest(tmp_path: Path) -> None:

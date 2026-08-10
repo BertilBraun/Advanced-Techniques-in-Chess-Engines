@@ -87,7 +87,7 @@ evaluation:
   openings:
     path: py/reference/go-7x7-baseline-openings-v1.json
     random_seed: 1207
-    opening_count: 50
+    opening_count: 200
     expanded_actions_per_position: 8
     beam_width: 512
   engine:
@@ -101,6 +101,7 @@ evaluation:
     - kind: previous_checkpoint
       definition_id: previous-20m
       boundary_offset: 1
+      opening_pair_count: 200
       maximum_game_plies: 196
       search: &evaluation_search
         searches_per_move: 64
@@ -110,20 +111,12 @@ evaluation:
           inference_workers: 1
           inference_batch_size: 64
           outstanding_batches_per_worker: 1
-    - {kind: previous_checkpoint, definition_id: previous-40m, boundary_offset: 2, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-60m, boundary_offset: 3, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-80m, boundary_offset: 4, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-100m, boundary_offset: 5, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-120m, boundary_offset: 6, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-140m, boundary_offset: 7, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-160m, boundary_offset: 8, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-180m, boundary_offset: 9, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-200m, boundary_offset: 10, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-220m, boundary_offset: 11, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: reference_checkpoint, definition_id: same-time-baseline, manifest_path: py/training_data/screening/go7-overnight/00-baseline/evaluations/reference-checkpoints.json, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: katago, definition_id: katago-16, maximum_visits: 16, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: katago, definition_id: katago-64, maximum_visits: 64, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: katago, definition_id: katago-128, maximum_visits: 128, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-40m, boundary_offset: 2, opening_pair_count: 200, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-60m, boundary_offset: 3, opening_pair_count: 200, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: reference_checkpoint, definition_id: same-time-baseline, manifest_path: py/training_data/screening/go7-overnight/00-baseline/evaluations/reference-checkpoints.json, opening_pair_count: 200, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: katago, definition_id: katago-16, maximum_visits: 16, opening_pair_count: 50, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: katago, definition_id: katago-64, maximum_visits: 64, opening_pair_count: 50, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: katago, definition_id: katago-128, maximum_visits: 128, opening_pair_count: 50, maximum_game_plies: 196, search: *evaluation_search}
 go:
   self_play:
     search:

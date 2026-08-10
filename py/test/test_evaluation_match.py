@@ -160,6 +160,7 @@ def test_shared_match_swaps_players_and_aggregates_pairs() -> None:
     definition = RandomOpponentEvaluationDefinition(
         kind='random',
         definition_id='random',
+        opening_pair_count=1,
         search=search,
         maximum_game_plies=6,
     )
@@ -212,6 +213,7 @@ def test_policy_random_match_uses_direct_greedy_policy(tmp_path: Path) -> None:
     definition = PolicyRandomOpponentEvaluationDefinition(
         kind='policy_random',
         definition_id='policy-random',
+        opening_pair_count=1,
         maximum_game_plies=6,
     )
     job = MatchEvaluationJob(

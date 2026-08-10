@@ -38,19 +38,7 @@ def test_checked_in_evaluation_definitions_are_canonical_for_each_game() -> None
         (definition.boundary_offset, definition.boundary_parity)
         for definition in go.evaluation.definitions
         if definition.kind == 'previous_checkpoint'
-    ) == (
-        (1, 'every'),
-        (2, 'every'),
-        (3, 'every'),
-        (4, 'even'),
-        (5, 'odd'),
-        (6, 'even'),
-        (7, 'odd'),
-        (8, 'even'),
-        (9, 'odd'),
-        (10, 'even'),
-        (11, 'odd'),
-    )
+    ) == ((1, 'every'), (2, 'every'), (3, 'every'))
     assert all(definition.kind not in ('random', 'policy_random') for definition in go.evaluation.definitions)
 
 
@@ -60,6 +48,16 @@ def test_evaluation_definition_ids_must_be_unique() -> None:
     payload['definitions'][1]['definition_id'] = payload['definitions'][0]['definition_id']
 
     with pytest.raises(ValidationError, match='must be unique'):
+        EvaluationConfiguration.model_validate(payload)
+
+
+def test_opening_suite_must_cover_largest_match_definition() -> None:
+    experiment = load_experiment_configuration(Path('configs/go-7x7-experiment-template.yaml'))
+    payload = experiment.evaluation.model_dump(mode='json')
+    payload['openings']['opening_count'] = 1
+    payload['definitions'][1]['opening_pair_count'] = 2
+
+    with pytest.raises(ValidationError, match='cover every requested opening pair'):
         EvaluationConfiguration.model_validate(payload)
 
 

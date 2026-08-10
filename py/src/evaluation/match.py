@@ -109,10 +109,13 @@ def _maximum_game_plies(job: MatchEvaluationJob) -> int:
 def _build_matches(
     state: GameStateContract[PositionT],
     openings: OpeningSuiteManifest,
+    opening_pair_count: int,
     random_seed: int,
 ) -> list[_ActiveMatch[PositionT]]:
     matches: list[_ActiveMatch[PositionT]] = []
-    for pair_index, opening in enumerate(openings.openings):
+    if opening_pair_count > len(openings.openings):
+        raise ValueError('Opening suite does not contain enough pairs for the evaluation definition.')
+    for pair_index, opening in enumerate(openings.openings[:opening_pair_count]):
         for candidate_player in (Player.FIRST, Player.SECOND):
             position = state.initial_position()
             for action_id in opening.action_ids:
@@ -319,7 +322,7 @@ def run_match(
 ) -> MatchEvaluationResult:
     started_at = time.monotonic()
     selectors = _create_match_selectors(job, game, device_type)
-    active = _build_matches(game.state, openings, job.random_seed)
+    active = _build_matches(game.state, openings, job.definition.opening_pair_count, job.random_seed)
     completed: list[EvaluationGameResult] = []
     maximum_game_plies = _maximum_game_plies(job)
     while active:

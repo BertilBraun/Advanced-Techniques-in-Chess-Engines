@@ -71,50 +71,49 @@ class FixedDatasetEvaluationDefinition(FrozenModel):
     definition_id: str = Field(min_length=1)
 
 
-class RandomOpponentEvaluationDefinition(FrozenModel):
+class PairedMatchEvaluationDefinition(FrozenModel):
+    opening_pair_count: int = Field(default=50, gt=0)
+    maximum_game_plies: int = Field(gt=0)
+
+
+class RandomOpponentEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['random']
     definition_id: str = Field(min_length=1)
     search: EvaluationSearchConfiguration
-    maximum_game_plies: int = Field(gt=0)
 
 
-class PolicyRandomOpponentEvaluationDefinition(FrozenModel):
+class PolicyRandomOpponentEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['policy_random']
     definition_id: str = Field(min_length=1)
-    maximum_game_plies: int = Field(gt=0)
 
 
-class PreviousCheckpointEvaluationDefinition(FrozenModel):
+class PreviousCheckpointEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['previous_checkpoint']
     definition_id: str = Field(min_length=1)
     boundary_offset: int = Field(default=1, gt=0)
     boundary_parity: Literal['every', 'even', 'odd'] = 'every'
     search: EvaluationSearchConfiguration
-    maximum_game_plies: int = Field(gt=0)
 
 
-class ReferenceCheckpointEvaluationDefinition(FrozenModel):
+class ReferenceCheckpointEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['reference_checkpoint']
     definition_id: str = Field(min_length=1)
     manifest_path: str = Field(min_length=1)
     search: EvaluationSearchConfiguration
-    maximum_game_plies: int = Field(gt=0)
 
 
-class StockfishEvaluationDefinition(FrozenModel):
+class StockfishEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['stockfish']
     definition_id: str = Field(min_length=1)
     skill_level: int = Field(ge=0, le=20)
     search: EvaluationSearchConfiguration
-    maximum_game_plies: int = Field(gt=0)
 
 
-class KataGoEvaluationDefinition(FrozenModel):
+class KataGoEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['katago']
     definition_id: str = Field(min_length=1)
     maximum_visits: int = Field(gt=0)
     search: EvaluationSearchConfiguration
-    maximum_game_plies: int = Field(gt=0)
 
 
 EvaluationDefinition: TypeAlias = Annotated[
@@ -161,4 +160,9 @@ class EvaluationConfiguration(FrozenModel):
             raise ValueError('Stockfish evaluation configuration cannot contain a KataGo opponent.')
         if self.engine.kind == 'katago' and any(definition.kind == 'stockfish' for definition in self.definitions):
             raise ValueError('KataGo evaluation configuration cannot contain a Stockfish opponent.')
+        match_definitions = tuple(
+            definition for definition in self.definitions if isinstance(definition, PairedMatchEvaluationDefinition)
+        )
+        if any(definition.opening_pair_count > self.openings.opening_count for definition in match_definitions):
+            raise ValueError('Evaluation opening suite must cover every requested opening pair.')
         return self
