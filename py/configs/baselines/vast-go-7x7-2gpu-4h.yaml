@@ -114,9 +114,7 @@ evaluation:
     - {kind: previous_checkpoint, definition_id: previous-40m, boundary_offset: 2, opening_pair_count: 200, maximum_game_plies: 196, search: *evaluation_search}
     - {kind: previous_checkpoint, definition_id: previous-60m, boundary_offset: 3, opening_pair_count: 200, maximum_game_plies: 196, search: *evaluation_search}
     - {kind: reference_checkpoint, definition_id: same-time-baseline, manifest_path: py/training_data/screening/go7-overnight/00-baseline/evaluations/reference-checkpoints.json, opening_pair_count: 200, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: katago, definition_id: katago-16, maximum_visits: 16, opening_pair_count: 50, maximum_game_plies: 196, search: *evaluation_search}
     - {kind: katago, definition_id: katago-64, maximum_visits: 64, opening_pair_count: 50, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: katago, definition_id: katago-128, maximum_visits: 128, opening_pair_count: 50, maximum_game_plies: 196, search: *evaluation_search}
 go:
   self_play:
     search:

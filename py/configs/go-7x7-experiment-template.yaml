@@ -67,18 +67,8 @@ evaluation:
       maximum_game_plies: 196
       search: *evaluation_search
     - kind: katago
-      definition_id: katago-16
-      maximum_visits: 16
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: katago
       definition_id: katago-64
       maximum_visits: 64
-      maximum_game_plies: 196
-      search: *evaluation_search
-    - kind: katago
-      definition_id: katago-128
-      maximum_visits: 128
       maximum_game_plies: 196
       search: *evaluation_search
 go:

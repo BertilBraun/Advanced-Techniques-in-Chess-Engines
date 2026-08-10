@@ -33,7 +33,7 @@ def test_checked_in_evaluation_definitions_are_canonical_for_each_game() -> None
     ) == (0, 1, 2, 3)
     assert tuple(
         definition.maximum_visits for definition in go.evaluation.definitions if definition.kind == 'katago'
-    ) == (16, 64, 128)
+    ) == (64,)
     assert tuple(
         (definition.boundary_offset, definition.boundary_parity)
         for definition in go.evaluation.definitions

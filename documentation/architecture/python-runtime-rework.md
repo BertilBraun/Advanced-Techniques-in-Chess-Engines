@@ -983,7 +983,7 @@ baseline available at the same training time. Fixed-generation opponents are rem
 tier, teacher-evaluation special case, or plateau rule.
 
 Chess additionally runs Stockfish skill levels 0, 1, 2, and 3 at every boundary and retains its search/policy random
-diagnostics. Go uses fixed-dataset evaluation, historical/reference checkpoints, and KataGo at 16, 64, and 128 visits;
+diagnostics. Go uses fixed-dataset evaluation, historical/reference checkpoints, and KataGo at 64 visits;
 its saturated random-opponent diagnostics are removed from the screening ladder.
 
 Every resolved job records:

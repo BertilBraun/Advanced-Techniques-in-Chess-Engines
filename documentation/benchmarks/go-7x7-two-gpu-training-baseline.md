@@ -139,14 +139,14 @@ The dataset contains 485 positions retained from 30 complete games. Its SHA-256 
 `9636ce92b638fcdb9684872d0fe68296e659d384e9c046190dc2a4d0f9631c01`; and the opening-suite SHA-256 is
 `d3df25e4228b6eaf456b169e055b60d71a591345bbd3a434fd03725d98479299`.
 
-KataGo labels the dataset at 256 visits. Separate match definitions use 16, 64, and 128 visits. Checkpoint and
-same-time baseline definitions use 200 paired openings, hence 400 games per definition. KataGo definitions use 50
-paired openings, hence 100 games per definition. The fixed ladder contains:
+KataGo labels the dataset at 256 visits. Its match definition uses 64 visits. Checkpoint and same-time baseline
+definitions use 200 paired openings, hence 400 games per definition. KataGo uses 50 paired openings, hence 100 games.
+The fixed ladder contains:
 
 - fixed-dataset policy accuracy and cross-entropy;
 - checkpoints selected at the preceding 20-, 40-, and 60-minute boundaries;
 - the same-time checkpoint from the completed baseline run;
-- KataGo at 16, 64, and 128 visits.
+- KataGo at 64 visits.
 
 ## Overnight screening matrix
 
