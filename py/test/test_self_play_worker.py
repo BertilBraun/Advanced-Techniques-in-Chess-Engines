@@ -3,6 +3,7 @@ import hashlib
 from pathlib import Path
 from typing import cast
 
+import numpy as np
 import pytest
 
 from src.games.implementation import GameImplementation
@@ -125,13 +126,14 @@ class FakeGame:
     training = FakeTraining()
     state = FakeState()
 
-    def __init__(self) -> None:
+    def __init__(self, maximum_random_opening_plies: int = 0) -> None:
         self.search = FakeSearch()
+        self.maximum_random_opening_plies = maximum_random_opening_plies
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
         del model_generation
         return ResolvedSelfPlayParameters(
-            random_opening_plies=0,
+            maximum_random_opening_plies=self.maximum_random_opening_plies,
             full_search_probability=1.0,
             parallel_searches=1,
             full_searches=3,
@@ -223,3 +225,32 @@ def test_worker_replaces_roots_when_search_arena_capacity_changes(tmp_path: Path
     assert [active_game.root.position.ply for active_game in worker.active_games] == [1, 1]
     assert [active_game.action_ids for active_game in worker.active_games] == [[0], [0]]
     assert [active_game.root.reset_count for active_game in worker.active_games] == [0, 0]
+
+
+class FakeOpeningRandom:
+    def __init__(self, opening_lengths: tuple[int, ...]) -> None:
+        self.opening_lengths = iter(opening_lengths)
+
+    def integers(self, low: int, high: int) -> int:
+        assert (low, high) == (0, 13)
+        return next(self.opening_lengths)
+
+    def choice(self, values: tuple[int, ...]) -> int:
+        return values[0]
+
+
+def test_worker_samples_random_opening_length_from_zero_through_configured_maximum(tmp_path: Path) -> None:
+    game = FakeGame(maximum_random_opening_plies=12)
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=2,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path,
+    )
+    worker.random = cast(np.random.Generator, FakeOpeningRandom((0, 12)))
+
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    assert [active_game.root.position.ply for active_game in worker.active_games] == [0, 12]
+    assert [active_game.action_ids for active_game in worker.active_games] == [[], [0] * 12]

@@ -155,7 +155,8 @@ The baseline and nine one-variable challengers live under
 the complete baseline and changes only run identity and output path. Every later YAML inherits `00-baseline.yaml`
 and declares only its experimental difference: learning-rate decay through generation 120, constant learning rate
 0.004, 75% fast search, a 64-to-512 search-budget progression through generation 120, root-value blending, replay
-ratio 8, tree retention, twelve random opening plies, and finally the next-policy auxiliary target.
+ratio 8, tree retention, uniformly sampled random openings of zero through twelve plies, and finally the next-policy
+auxiliary target.
 
 The replay-ratio-8 experiment uses a 250,000-row maximum rather than 500,000 because it produces only 25,600 new
 positions per generation; this preserves approximately the baseline's ten-generation replay-age window.

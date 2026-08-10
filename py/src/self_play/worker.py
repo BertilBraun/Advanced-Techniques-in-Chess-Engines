@@ -134,7 +134,8 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         while True:
             position = self.game.state.initial_position()
             action_ids: list[int] = []
-            for _ in range(parameters.random_opening_plies):
+            opening_plies = int(self.random.integers(0, parameters.maximum_random_opening_plies + 1))
+            for _ in range(opening_plies):
                 legal_actions = self.game.state.legal_action_ids(position)
                 action_id = int(self.random.choice(legal_actions))
                 action_ids.append(action_id)

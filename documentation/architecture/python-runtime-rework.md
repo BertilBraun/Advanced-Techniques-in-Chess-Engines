@@ -1585,7 +1585,7 @@ The worker resolves one immutable parameter value when it loads a model generati
 ```python
 @dataclass(frozen=True)
 class ResolvedSelfPlayParameters:
-    random_opening_plies: int
+    maximum_random_opening_plies: int
     full_search_probability: float
     parallel_searches: int
     full_searches: int
@@ -1605,8 +1605,8 @@ class ResolvedSelfPlayParameters:
 Every corresponding authored field is either static or a generation schedule in self-play configuration. Resolution
 validates counts, positive temperatures and weights, full-search probability in `(0, 1]`, other probability/fraction
 ranges, and that full and fast budgets are
-compatible with parallel search. When a maximum ply cap exists, random opening plies must be below it. Values remain
-fixed until the next model load.
+compatible with parallel search. When a maximum ply cap exists, maximum random opening plies must be below it. Values
+remain fixed until the next model load.
 
 The shared worker:
 
@@ -1625,8 +1625,9 @@ The shared worker:
 The ordinary turn algorithm is fully specified:
 
 1. a new game starts from `state.initial_position()`;
-2. if configured, a generation-scheduled number of uniformly sampled legal opening actions is applied without
-   search and retained in the action sequence; zero is valid and is the default, and a terminal random opening is
+2. if configured, an opening length is sampled uniformly from zero through the generation-scheduled maximum, then
+   that many uniformly sampled legal actions are applied without search and retained in the action sequence; zero is
+   valid and is the default, and a terminal random opening is
    discarded and restarted because it contains no training observation;
 3. the native search root is created from the resulting position;
 4. each ply independently selects a full search with the configured randomized-playout-cap probability and a fast

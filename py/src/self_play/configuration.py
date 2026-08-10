@@ -46,7 +46,7 @@ class BatchedInferenceParams(FrozenModel):
 class SelfPlayConfiguration(FrozenModel):
     search: SelfPlaySearchParams
     inference: BatchedInferenceParams
-    random_opening_plies: IntegerGenerationSchedule
+    maximum_random_opening_plies: IntegerGenerationSchedule
     full_search_probability: FloatGenerationSchedule
     retained_root_visit_fraction: FloatGenerationSchedule
     greedy_after_ply: IntegerGenerationSchedule
@@ -63,8 +63,8 @@ class SelfPlayConfiguration(FrozenModel):
         ):
             if any(value <= 0.0 for value in defined_schedule_values(schedule)):
                 raise ValueError(f'{name} must remain positive.')
-        if any(value < 0 for value in defined_schedule_values(self.random_opening_plies)):
-            raise ValueError('Random opening plies must remain nonnegative.')
+        if any(value < 0 for value in defined_schedule_values(self.maximum_random_opening_plies)):
+            raise ValueError('Maximum random opening plies must remain nonnegative.')
         if any(value <= 0 for value in defined_schedule_values(self.greedy_after_ply)):
             raise ValueError('Greedy ply must remain positive.')
         if any(not 0.0 < value <= 1.0 for value in defined_schedule_values(self.full_search_probability)):
@@ -82,7 +82,7 @@ class SelfPlayConfiguration(FrozenModel):
     ) -> ResolvedSelfPlayParameters:
         search = self.search
         return ResolvedSelfPlayParameters(
-            random_opening_plies=self.random_opening_plies.value_at(model_generation),
+            maximum_random_opening_plies=self.maximum_random_opening_plies.value_at(model_generation),
             full_search_probability=self.full_search_probability.value_at(model_generation),
             parallel_searches=search.parallel_searches,
             full_searches=search.full_searches.value_at(model_generation),
