@@ -17,8 +17,13 @@ from src.self_play.completed_game import (
     TerminationReason,
     publish_completed_self_play_game,
 )
-from src.self_play.parameters import ResolvedSelfPlayParameters
+from src.self_play.parameters import (
+    RandomOpeningStartParameters,
+    ResolvedSelfPlayParameters,
+    RestartStateStartParameters,
+)
 from src.self_play.native_search import NativeRequestT, NativeResultT, NativeRootT, NativeSearchT, PositionT
+from src.self_play.restart_archive import RestartStateArchive
 from src.util.tensorboard import log_scalar
 
 
@@ -36,6 +41,7 @@ class ActiveSelfPlayGame(Generic[NativeRootT]):
     started_at_seconds: float
     action_ids: list[int] = field(default_factory=list)
     observations: list[SearchObservation] = field(default_factory=list)
+    reserved_restart_action_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +67,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         self.worker_id = worker_id
         self.device_id = device_id
         self.inbox_path = inbox_path
+        self.restart_archive_path = inbox_path.parent / 'restart-states.sqlite3'
         self.random = np.random.default_rng(game.training.random_seed + worker_id)
         self.process_instance_id = uuid4()
         self.next_game_number = 0
@@ -69,12 +76,19 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         self.search: NativeSearchT | None = None
         self.active_games: list[ActiveSelfPlayGame[NativeRootT]] = []
         self.completed_searches = 0
+        self.restart_archive: RestartStateArchive | None = None
+        self.true_starts = 0
+        self.restart_starts = 0
+        self.empty_restart_fallbacks = 0
 
     def run_batch(self) -> None:
         search, parameters = self._loaded_runtime()
         requests: list[NativeRequestT] = []
         for active_game in self.active_games:
-            full_search = self.random.random() < parameters.full_search_probability
+            full_search = (
+                active_game.reserved_restart_action_id is not None
+                or self.random.random() < parameters.full_search_probability
+            )
             if full_search:
                 active_game.root.discount(parameters.retained_root_visit_fraction)
             requests.append(search.request(active_game.root, full_search))
@@ -88,6 +102,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             if completed is None:
                 next_games.append(active_game)
             else:
+                self._archive_completed_game(completed, parameters)
                 publish_completed_self_play_game(self.inbox_path, completed)
                 next_games.append(self._new_game(search, parameters))
         self.active_games = next_games
@@ -102,6 +117,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             capacity_changed = self.search.update_search_schedule(self.game.native_search_parameters(parameters))
         self.parameters = parameters
         self.model_generation = checkpoint.generation
+        self._prepare_restart_archive(parameters)
         if not self.active_games:
             self.active_games = [self._new_game(self.search, parameters) for _ in range(self.parallel_game_count)]
         elif capacity_changed:
@@ -120,6 +136,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             inference.averageNumberOfPositionsInInferenceCall,
             self.model_generation,
         )
+        self._log_restart_statistics()
         return SelfPlayStatisticsSnapshot(
             model_generation=self.model_generation,
             completed_searches=self.completed_searches,
@@ -131,10 +148,21 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         search: NativeSearchT,
         parameters: ResolvedSelfPlayParameters,
     ) -> ActiveSelfPlayGame[NativeRootT]:
+        match parameters.start_position:
+            case RandomOpeningStartParameters(maximum_plies=maximum_plies):
+                return self._new_random_opening_game(search, maximum_plies)
+            case RestartStateStartParameters() as restart_parameters:
+                return self._new_restart_or_true_game(search, restart_parameters)
+
+    def _new_random_opening_game(
+        self,
+        search: NativeSearchT,
+        maximum_opening_plies: int,
+    ) -> ActiveSelfPlayGame[NativeRootT]:
         while True:
             position = self.game.state.initial_position()
             action_ids: list[int] = []
-            opening_plies = int(self.random.integers(0, parameters.maximum_random_opening_plies + 1))
+            opening_plies = int(self.random.integers(0, maximum_opening_plies + 1))
             for _ in range(opening_plies):
                 legal_actions = self.game.state.legal_action_ids(position)
                 action_id = int(self.random.choice(legal_actions))
@@ -149,6 +177,44 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
                     started_at_seconds=time.time(),
                     action_ids=action_ids,
                 )
+
+    def _new_restart_or_true_game(
+        self,
+        search: NativeSearchT,
+        parameters: RestartStateStartParameters,
+    ) -> ActiveSelfPlayGame[NativeRootT]:
+        assert self.model_generation is not None
+        archive = self._required_restart_archive()
+        if self.random.random() < parameters.true_start_probability:
+            self.true_starts += 1
+            return self._new_true_start_game(search)
+        reserved = archive.reserve(self.model_generation, parameters)
+        if reserved is None:
+            self.empty_restart_fallbacks += 1
+            self.true_starts += 1
+            return self._new_true_start_game(search)
+        position = self.game.state.initial_position()
+        for action_id in reserved.action_prefix:
+            if action_id not in self.game.state.legal_action_ids(position):
+                raise RuntimeError('Restart archive contains an illegal action prefix.')
+            position = self.game.state.child_position(position, action_id)
+        if reserved.action_id not in self.game.state.legal_action_ids(position):
+            raise RuntimeError('Restart archive contains an illegal reserved action.')
+        self.restart_starts += 1
+        return ActiveSelfPlayGame(
+            identity=self._next_identity(),
+            root=search.new_root(position),
+            started_at_seconds=time.time(),
+            action_ids=list(reserved.action_prefix),
+            reserved_restart_action_id=reserved.action_id,
+        )
+
+    def _new_true_start_game(self, search: NativeSearchT) -> ActiveSelfPlayGame[NativeRootT]:
+        return ActiveSelfPlayGame(
+            identity=self._next_identity(),
+            root=search.new_root(self.game.state.initial_position()),
+            started_at_seconds=time.time(),
+        )
 
     def _advance_game(
         self,
@@ -166,7 +232,11 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if not visits:
             raise RuntimeError('Native search returned no visited action for a nonterminal root.')
         ply = len(active_game.action_ids)
-        selected_action_id = self._select_action(visits, ply, parameters)
+        selected_action_id = active_game.reserved_restart_action_id
+        if selected_action_id is None:
+            selected_action_id = self._select_action(visits, ply, parameters)
+        elif not request.full_search:
+            raise RuntimeError('Restart roots require a full search.')
         active_game.observations.append(
             SearchObservation(
                 ply=ply,
@@ -181,6 +251,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             )
         )
         active_game.action_ids.append(selected_action_id)
+        active_game.reserved_restart_action_id = None
         active_game.root = result.root
         active_game.root.play(selected_action_id)
         natural_wdl = self.game.state.natural_terminal_wdl(active_game.root.position)
@@ -229,6 +300,55 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if self.search is None or self.parameters is None:
             raise RuntimeError('A model must be loaded before self-play starts.')
         return self.search, self.parameters
+
+    def close(self) -> None:
+        if self.restart_archive is not None:
+            self.restart_archive.close()
+            self.restart_archive = None
+
+    def _prepare_restart_archive(self, parameters: ResolvedSelfPlayParameters) -> None:
+        match parameters.start_position:
+            case RandomOpeningStartParameters():
+                if self.restart_archive is not None:
+                    self.restart_archive.close()
+                    self.restart_archive = None
+            case RestartStateStartParameters():
+                if self.restart_archive is None:
+                    self.restart_archive = RestartStateArchive(self.restart_archive_path)
+
+    def _archive_completed_game(
+        self,
+        game: CompletedSelfPlayGame,
+        parameters: ResolvedSelfPlayParameters,
+    ) -> None:
+        match parameters.start_position:
+            case RandomOpeningStartParameters():
+                return
+            case RestartStateStartParameters() as restart_parameters:
+                self._required_restart_archive().archive_completed_game(game, restart_parameters)
+
+    def _required_restart_archive(self) -> RestartStateArchive:
+        if self.restart_archive is None:
+            raise RuntimeError('Restart-state self-play requires an initialized archive.')
+        return self.restart_archive
+
+    def _log_restart_statistics(self) -> None:
+        if self.restart_archive is None or self.model_generation is None:
+            return
+        snapshot = self.restart_archive.snapshot()
+        for name, value in (
+            ('true_starts', self.true_starts),
+            ('restart_starts', self.restart_starts),
+            ('empty_fallbacks', self.empty_restart_fallbacks),
+            ('archived_positions', snapshot.archived_positions),
+            ('archived_candidates', snapshot.archived_candidates),
+            ('exhausted_evictions', snapshot.exhausted_evictions),
+            ('expired_evictions', snapshot.expired_evictions),
+            ('capacity_evictions', snapshot.capacity_evictions),
+            ('positions', snapshot.positions),
+            ('candidates', snapshot.candidates),
+        ):
+            log_scalar(f'restart_states/{name}', value, self.model_generation)
 
     def _next_identity(self) -> GameIdentity:
         identity = GameIdentity(

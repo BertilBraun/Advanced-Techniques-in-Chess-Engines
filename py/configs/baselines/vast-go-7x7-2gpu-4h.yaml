@@ -130,7 +130,9 @@ go:
       inference_workers: 1
       inference_batch_size: 128
       outstanding_batches_per_worker: 2
-    maximum_random_opening_plies: {kind: constant, value: 0}
+    start_position:
+      kind: random_opening
+      maximum_plies: {kind: constant, value: 0}
     full_search_probability: {kind: constant, value: 1.0}
     retained_root_visit_fraction: {kind: constant, value: 0.0}
     greedy_after_ply: {kind: constant, value: 40}

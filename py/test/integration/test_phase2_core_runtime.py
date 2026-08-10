@@ -106,7 +106,7 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
             'inference_batch_size': 1,
             'outstanding_batches_per_worker': 1,
         },
-        'maximum_random_opening_plies': {'kind': 'constant', 'value': 0},
+        'start_position': {'kind': 'random_opening', 'maximum_plies': {'kind': 'constant', 'value': 0}},
         'full_search_probability': {'kind': 'constant', 'value': 1.0},
         'retained_root_visit_fraction': {'kind': 'constant', 'value': 0.0},
         'greedy_after_ply': {'kind': 'constant', 'value': 1},

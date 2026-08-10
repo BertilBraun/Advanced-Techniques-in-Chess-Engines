@@ -11,7 +11,8 @@ from src.replay.contracts import (
     ReplaySample,
     SparsePolicyTarget,
 )
-from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, SparseSearchVisit, TerminationReason
+from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, TerminationReason
+from src.self_play.policy import preprocessed_search_visits
 from src.training.targets import NextPolicyHeadLayout, TrainingTargetLayout
 
 
@@ -35,15 +36,7 @@ class MaterializedGame:
 
 
 def retain_policy(observation: SearchObservation, maximum_entries: int) -> PolicyRetention:
-    adjusted_visits = (
-        SparseSearchVisit(
-            action_id=visit.action_id,
-            visit_count=visit.visit_count - observation.minimum_root_visits,
-        )
-        for visit in observation.visits
-        if visit.visit_count > observation.minimum_root_visits
-    )
-    ordered = tuple(sorted(adjusted_visits, key=lambda visit: (-visit.visit_count, visit.action_id)))
+    ordered = preprocessed_search_visits(observation)
     if not ordered:
         raise ValueError(f'Observation at ply {observation.ply} has no visits after root-visit preprocessing.')
     retained = ordered[:maximum_entries]

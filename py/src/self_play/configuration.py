@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from math import isfinite
+from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 
@@ -9,7 +10,11 @@ from src.experiment.generation_schedule import (
     IntegerGenerationSchedule,
     defined_schedule_values,
 )
-from src.self_play.parameters import ResolvedSelfPlayParameters
+from src.self_play.parameters import (
+    RandomOpeningStartParameters,
+    ResolvedSelfPlayParameters,
+    RestartStateStartParameters,
+)
 from src.util.frozen_model import FrozenModel
 
 
@@ -48,10 +53,62 @@ class BatchedInferenceParams(FrozenModel):
     outstanding_batches_per_worker: int = Field(ge=1, le=2)
 
 
+class RandomOpeningStartConfiguration(FrozenModel):
+    kind: Literal['random_opening'] = 'random_opening'
+    maximum_plies: IntegerGenerationSchedule
+
+    @model_validator(mode='after')
+    def validate_maximum_plies(self) -> RandomOpeningStartConfiguration:
+        if any(value < 0 for value in defined_schedule_values(self.maximum_plies)):
+            raise ValueError('Maximum random opening plies must remain nonnegative.')
+        return self
+
+    def resolve(self, model_generation: int) -> RandomOpeningStartParameters:
+        return RandomOpeningStartParameters(kind=self.kind, maximum_plies=self.maximum_plies.value_at(model_generation))
+
+
+class RestartStateStartConfiguration(FrozenModel):
+    kind: Literal['restart_state'] = 'restart_state'
+    true_start_probability: float = Field(gt=0.0, le=1.0)
+    candidate_visit_mass: float = Field(gt=0.0, le=1.0)
+    minimum_candidates: int = Field(ge=2)
+    maximum_candidates: int = Field(ge=2)
+    maximum_absolute_root_value: float = Field(ge=0.0, le=1.0)
+    minimum_remaining_plies: int = Field(gt=0)
+    maximum_archive_positions: int = Field(gt=0)
+    maximum_age_generations: int = Field(gt=0)
+
+    @model_validator(mode='after')
+    def validate_candidate_count(self) -> RestartStateStartConfiguration:
+        if self.maximum_candidates < self.minimum_candidates:
+            raise ValueError('Maximum restart candidates must not be below the minimum.')
+        return self
+
+    def resolve(self, model_generation: int) -> RestartStateStartParameters:
+        del model_generation
+        return RestartStateStartParameters(
+            kind=self.kind,
+            true_start_probability=self.true_start_probability,
+            candidate_visit_mass=self.candidate_visit_mass,
+            minimum_candidates=self.minimum_candidates,
+            maximum_candidates=self.maximum_candidates,
+            maximum_absolute_root_value=self.maximum_absolute_root_value,
+            minimum_remaining_plies=self.minimum_remaining_plies,
+            maximum_archive_positions=self.maximum_archive_positions,
+            maximum_age_generations=self.maximum_age_generations,
+        )
+
+
+StartPositionConfiguration: TypeAlias = Annotated[
+    RandomOpeningStartConfiguration | RestartStateStartConfiguration,
+    Field(discriminator='kind'),
+]
+
+
 class SelfPlayConfiguration(FrozenModel):
     search: SelfPlaySearchParams
     inference: BatchedInferenceParams
-    maximum_random_opening_plies: IntegerGenerationSchedule
+    start_position: StartPositionConfiguration
     full_search_probability: FloatGenerationSchedule
     retained_root_visit_fraction: FloatGenerationSchedule
     greedy_after_ply: IntegerGenerationSchedule
@@ -68,8 +125,6 @@ class SelfPlayConfiguration(FrozenModel):
         ):
             if any(value <= 0.0 for value in defined_schedule_values(schedule)):
                 raise ValueError(f'{name} must remain positive.')
-        if any(value < 0 for value in defined_schedule_values(self.maximum_random_opening_plies)):
-            raise ValueError('Maximum random opening plies must remain nonnegative.')
         if any(value <= 0 for value in defined_schedule_values(self.greedy_after_ply)):
             raise ValueError('Greedy ply must remain positive.')
         if any(not 0.0 < value <= 1.0 for value in defined_schedule_values(self.full_search_probability)):
@@ -87,7 +142,7 @@ class SelfPlayConfiguration(FrozenModel):
     ) -> ResolvedSelfPlayParameters:
         search = self.search
         return ResolvedSelfPlayParameters(
-            maximum_random_opening_plies=self.maximum_random_opening_plies.value_at(model_generation),
+            start_position=self.start_position.resolve(model_generation),
             full_search_probability=self.full_search_probability.value_at(model_generation),
             parallel_searches=search.parallel_searches,
             full_searches=search.full_searches.value_at(model_generation),

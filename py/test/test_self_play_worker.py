@@ -2,14 +2,18 @@ from dataclasses import dataclass
 import hashlib
 from pathlib import Path
 from typing import cast
+from uuid import UUID
 
 import numpy as np
 import pytest
 
 from src.games.implementation import GameImplementation
 from src.games.contracts import WdlTarget
-from src.self_play.parameters import ResolvedSelfPlayParameters
+from src.self_play.parameters import RandomOpeningStartParameters, ResolvedSelfPlayParameters
+from src.self_play.parameters import RestartStateStartParameters
+from src.self_play.completed_game import CompletedSelfPlayGame, GameIdentity, SearchObservation
 from src.self_play.completed_game import SparseSearchVisit, TerminationReason
+from src.self_play.restart_archive import RestartStateArchive
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 
@@ -26,7 +30,7 @@ class FakeRoot:
     reset_count: int = 0
 
     def play(self, action_id: int) -> None:
-        assert action_id == 0
+        assert action_id in (0, 1)
         self.position = FakePosition(self.position.ply + 1)
 
     def reset(self) -> None:
@@ -102,10 +106,10 @@ class FakeState:
 
     def legal_action_ids(self, position: FakePosition) -> tuple[int, ...]:
         del position
-        return (0,)
+        return (0, 1)
 
     def child_position(self, position: FakePosition, action_id: int) -> FakePosition:
-        assert action_id == 0
+        assert action_id in (0, 1)
         return FakePosition(position.ply + 1)
 
     def natural_terminal_wdl(self, position: FakePosition) -> WdlTarget | None:
@@ -126,14 +130,24 @@ class FakeGame:
     training = FakeTraining()
     state = FakeState()
 
-    def __init__(self, maximum_random_opening_plies: int = 0) -> None:
+    def __init__(
+        self,
+        maximum_random_opening_plies: int = 0,
+        restart_parameters: RestartStateStartParameters | None = None,
+    ) -> None:
         self.search = FakeSearch()
         self.maximum_random_opening_plies = maximum_random_opening_plies
+        self.restart_parameters = restart_parameters
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
         del model_generation
+        start_position = self.restart_parameters
+        if start_position is None:
+            start_position = RandomOpeningStartParameters(
+                kind='random_opening', maximum_plies=self.maximum_random_opening_plies
+            )
         return ResolvedSelfPlayParameters(
-            maximum_random_opening_plies=self.maximum_random_opening_plies,
+            start_position=start_position,
             full_search_probability=1.0,
             parallel_searches=1,
             full_searches=3,
@@ -255,3 +269,115 @@ def test_worker_samples_random_opening_length_from_zero_through_configured_maxim
 
     assert [active_game.root.position.ply for active_game in worker.active_games] == [0, 12]
     assert [active_game.action_ids for active_game in worker.active_games] == [[], [0] * 12]
+
+
+def restart_parameters(true_start_probability: float = 0.5) -> RestartStateStartParameters:
+    return RestartStateStartParameters(
+        kind='restart_state',
+        true_start_probability=true_start_probability,
+        candidate_visit_mass=0.85,
+        minimum_candidates=2,
+        maximum_candidates=3,
+        maximum_absolute_root_value=0.3,
+        minimum_remaining_plies=15,
+        maximum_archive_positions=50_000,
+        maximum_age_generations=20,
+    )
+
+
+class FakeRestartRandom:
+    def __init__(self, probability_draw: float) -> None:
+        self.probability_draw = probability_draw
+
+    def random(self) -> float:
+        return self.probability_draw
+
+
+def restart_source_game() -> CompletedSelfPlayGame:
+    action_ids = (0,) * 15
+    return CompletedSelfPlayGame(
+        identity=GameIdentity(worker_id=0, process_instance_id=UUID(int=1), game_number=0),
+        created_at_seconds=1.0,
+        generation_seconds=1.0,
+        action_ids=action_ids,
+        observations=(
+            SearchObservation(
+                ply=0,
+                model_generation=0,
+                visits=(
+                    SparseSearchVisit(action_id=0, visit_count=60),
+                    SparseSearchVisit(action_id=1, visit_count=30),
+                    SparseSearchVisit(action_id=2, visit_count=10),
+                ),
+                root_value=0.0,
+                selected_action_id=0,
+                full_search=True,
+                sample_weight=1.0,
+                search_budget=256,
+                minimum_root_visits=0,
+            ),
+        ),
+        final_wdl=WdlTarget(win=0.0, draw=1.0, loss=0.0),
+        termination_reason=TerminationReason.MAXIMUM_PLIES,
+    )
+
+
+def test_restart_policy_uses_exact_initial_states_without_random_openings(tmp_path: Path) -> None:
+    worker = SelfPlayWorker(
+        cast(GameImplementation, FakeGame(restart_parameters=restart_parameters(1.0))),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path / 'inbox',
+    )
+    worker.random = cast(np.random.Generator, FakeRestartRandom(0.0))
+
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    assert worker.active_games[0].action_ids == []
+    assert worker.active_games[0].root.position == FakePosition(0)
+    assert worker.true_starts == 1
+    worker.close()
+
+
+def test_restart_policy_falls_back_to_exact_start_when_archive_is_empty(tmp_path: Path) -> None:
+    worker = SelfPlayWorker(
+        cast(GameImplementation, FakeGame(restart_parameters=restart_parameters())),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path / 'inbox',
+    )
+    worker.random = cast(np.random.Generator, FakeRestartRandom(0.9))
+
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    assert worker.active_games[0].action_ids == []
+    assert worker.empty_restart_fallbacks == 1
+    worker.close()
+
+
+def test_restart_root_runs_full_search_and_plays_reserved_candidate(tmp_path: Path) -> None:
+    parameters = restart_parameters()
+    archive = RestartStateArchive(tmp_path / 'restart-states.sqlite3')
+    archive.archive_completed_game(restart_source_game(), parameters)
+    archive.close()
+    game = FakeGame(restart_parameters=parameters)
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path / 'inbox',
+    )
+    worker.random = cast(np.random.Generator, FakeRestartRandom(0.9))
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    worker.run_batch()
+
+    active_game = worker.active_games[0]
+    assert active_game.action_ids == [1]
+    assert active_game.observations[0].full_search
+    assert active_game.observations[0].selected_action_id == 1
+    assert worker.restart_starts == 1
+    worker.close()

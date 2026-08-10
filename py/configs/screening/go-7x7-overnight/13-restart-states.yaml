@@ -1,0 +1,18 @@
+extends: 00-baseline.yaml
+run:
+  run_name: go7-overnight-13-restart-states
+  tensorboard_run_directory: go7-overnight-13-restart-states
+training:
+  save_path: py/training_data/screening/go7-overnight/13-restart-states
+go:
+  self_play:
+    start_position:
+      kind: restart_state
+      true_start_probability: 0.5
+      candidate_visit_mass: 0.85
+      minimum_candidates: 2
+      maximum_candidates: 3
+      maximum_absolute_root_value: 0.3
+      minimum_remaining_plies: 15
+      maximum_archive_positions: 50000
+      maximum_age_generations: 20

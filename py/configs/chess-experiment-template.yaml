@@ -181,7 +181,7 @@ chess:
       inference_workers: 2
       inference_batch_size: 64
       outstanding_batches_per_worker: 2
-    maximum_random_opening_plies: {kind: constant, value: 0}
+    start_position: {kind: random_opening, maximum_plies: {kind: constant, value: 0}}
     full_search_probability: {kind: constant, value: 0.25}
     retained_root_visit_fraction: {kind: constant, value: 0.6}
     greedy_after_ply: {kind: constant, value: 50}

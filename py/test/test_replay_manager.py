@@ -156,6 +156,40 @@ def test_shared_materialization_reconstructs_perspective_and_trajectory_targets(
     assert materialized.samples[0].policy.visits[0].visit_count == 9
 
 
+def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
+    game = CompletedSelfPlayGame(
+        identity=GameIdentity(
+            worker_id=1,
+            process_instance_id=UUID('f4cb1244-c91d-4897-87e0-3e9b05e54974'),
+            game_number=1,
+        ),
+        created_at_seconds=1.0,
+        generation_seconds=1.0,
+        action_ids=(0, 1, 2, 0),
+        observations=(
+            SearchObservation(
+                ply=2,
+                model_generation=1,
+                visits=(SparseSearchVisit(action_id=2, visit_count=8),),
+                root_value=0.0,
+                selected_action_id=2,
+                full_search=True,
+                sample_weight=1.0,
+                search_budget=8,
+                minimum_root_visits=0,
+            ),
+        ),
+        final_wdl=WdlTarget(win=0.0, draw=0.0, loss=1.0),
+        termination_reason=TerminationReason.NATURAL,
+    )
+    targets = TrainingTargetLayout(action_size=3, wdl_size=3, auxiliary_heads=())
+
+    materialized = materialize_completed_game(game, LINEAR_STATE_CONTRACT, targets, maximum_policy_entries=3)
+
+    assert len(materialized.samples) == 1
+    assert materialized.samples[0].encoded_state == LINEAR_STATE_CONTRACT.encode_network_input(LinearPosition((0, 1)))
+
+
 def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> None:
     game = _completed_game()
     inbox = tmp_path / 'completed-games' / 'inbox'

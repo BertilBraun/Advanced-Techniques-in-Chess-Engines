@@ -236,4 +236,5 @@ def _self_play_worker_main(
                     case _:
                         pass
     finally:
+        worker.close()
         connection.close()

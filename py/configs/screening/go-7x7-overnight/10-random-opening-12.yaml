@@ -6,4 +6,5 @@ training:
   save_path: py/training_data/screening/go7-overnight/10-random-opening-12
 go:
   self_play:
-    maximum_random_opening_plies: {kind: constant, value: 12}
+    start_position:
+      maximum_plies: {kind: constant, value: 12}
