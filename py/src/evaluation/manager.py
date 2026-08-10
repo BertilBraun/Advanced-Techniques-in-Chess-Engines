@@ -14,10 +14,13 @@ from src.evaluation.contracts import (
     CheckpointOpponent,
     EvaluationFailurePhase,
     EvaluationJob,
+    EvaluationReferenceManifest,
     EvaluationResult,
     FailedEvaluationResult,
     FixedDatasetEvaluationJob,
+    FixedDatasetEvaluationResult,
     MatchEvaluationJob,
+    MatchEvaluationResult,
 )
 from src.evaluation.process import run_evaluation_job, write_evaluation_result
 from src.evaluation.scheduling import (
@@ -32,7 +35,7 @@ from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.log import log
-from src.util.tensorboard import log_scalar
+from src.util.tensorboard import log_scalar, log_text
 
 
 class EvaluationManagerState(FrozenModel):
@@ -79,6 +82,7 @@ class EvaluationManager:
         self.result_directory = self.run_path / 'evaluations'
         self.result_directory.mkdir(parents=True, exist_ok=True)
         self.state_path = self.result_directory / 'manager-state.json'
+        self.reference_manifest_path = self.result_directory / 'reference-checkpoints.json'
         self.clock = clock
         self.process_context = mp.get_context('spawn') if process_context is None else process_context
         self.session_started_at = clock()
@@ -146,6 +150,7 @@ class EvaluationManager:
             )
             self._report(result)
         if completed:
+            self._launch_available_jobs()
             self._save_state()
         return tuple(completed)
 
@@ -174,8 +179,7 @@ class EvaluationManager:
                 }
             )
             self._save_state()
-            for job in jobs:
-                self._launch(job)
+            self._launch_available_jobs()
             scheduled.extend(jobs)
             next_boundary += self.configuration.cadence_seconds
         return tuple(scheduled)
@@ -220,6 +224,19 @@ class EvaluationManager:
             write_evaluation_result(result, job.result_path)
             self._report(result)
             del self._processes[job_id]
+        running_job_ids = {job_id for job_id, _ in remaining}
+        for job in self._state.pending_jobs:
+            if job.job_id in running_job_ids:
+                continue
+            result = self._failure_result(
+                job,
+                EvaluationFailurePhase.CANCELLED,
+                'Queued evaluation job was cancelled during coordinator shutdown.',
+                None,
+                0.0,
+            )
+            write_evaluation_result(result, job.result_path)
+            self._report(result)
         self._state = self._state.model_copy(
             update={
                 'accumulated_elapsed_seconds': self.elapsed_seconds,
@@ -278,6 +295,14 @@ class EvaluationManager:
         self._processes[job.job_id] = (process, self.clock())
         return True
 
+    def _launch_available_jobs(self) -> None:
+        available_slots = self.configuration.maximum_concurrent_jobs - len(self._processes)
+        if available_slots <= 0:
+            return
+        queued_jobs = tuple(job for job in self._state.pending_jobs if job.job_id not in self._processes)
+        for job in queued_jobs[:available_slots]:
+            self._launch(job)
+
     def _resume_pending_jobs(self) -> None:
         retained: list[EvaluationJob] = []
         for job in self._state.pending_jobs:
@@ -292,8 +317,7 @@ class EvaluationManager:
                 case FixedDatasetEvaluationJob() | MatchEvaluationJob():
                     pass
             if all(path.exists() for path in required_paths):
-                if self._launch(job):
-                    retained.append(job)
+                retained.append(job)
                 continue
             result = self._failure_result(
                 job,
@@ -305,6 +329,7 @@ class EvaluationManager:
             write_evaluation_result(result, job.result_path)
             self._report(result)
         self._state = self._state.model_copy(update={'pending_jobs': tuple(retained)})
+        self._launch_available_jobs()
         self._save_state()
 
     def _pending_job(self, job_id: str) -> EvaluationJob:
@@ -348,6 +373,10 @@ class EvaluationManager:
     def _report(self, result: EvaluationResult) -> None:
         step = result.job.boundary_seconds
         definition_id = result.job.definition.definition_id
+        generation = result.job.candidate.generation
+        optimizer_steps = generation * self.experiment.training.lifecycle.credit.optimizer_steps_per_quantum
+        log_scalar('evaluation/progress/model_generation', generation, step)
+        log_scalar('evaluation/progress/optimizer_steps', optimizer_steps, step)
         log_scalar(f'evaluation/{definition_id}/duration_seconds', result.duration_seconds, step)
         match result.kind:
             case 'fixed_dataset':
@@ -371,13 +400,60 @@ class EvaluationManager:
                 log_scalar(f'evaluation/{definition_id}/wins', result.aggregate.wins, step)
                 log_scalar(f'evaluation/{definition_id}/draws', result.aggregate.draws, step)
                 log_scalar(f'evaluation/{definition_id}/losses', result.aggregate.losses, step)
+                log_scalar(f'evaluation/{definition_id}/first_player_score', result.aggregate.first_player_score, step)
+                log_scalar(
+                    f'evaluation/{definition_id}/second_player_score', result.aggregate.second_player_score, step
+                )
                 log(
                     f'Evaluation {definition_id} at {step}s: '
                     f'{result.aggregate.wins}/{result.aggregate.draws}/{result.aggregate.losses}'
                 )
             case 'failed':
                 log(f'Evaluation {definition_id} at {step}s failed: {result.message}')
+        self._write_boundary_summary(step, generation, optimizer_steps)
+
+    def _write_boundary_summary(self, boundary_seconds: int, generation: int, optimizer_steps: int) -> None:
+        results: list[EvaluationResult] = []
+        for path in sorted(self.result_directory.glob(f'{boundary_seconds:010d}-*.json')):
+            results.append(TypeAdapter(EvaluationResult).validate_json(path.read_text(encoding='utf-8')))
+        header = (
+            f'Generation **{generation}**, optimizer steps **{optimizer_steps}**, '
+            f'elapsed boundary **{boundary_seconds}s**.\n\n'
+        )
+        rows = (
+            '| Evaluation | Status | Score / accuracy | W-D-L | First | Second | Duration |\n'
+            '| --- | --- | ---: | ---: | ---: | ---: | ---: |\n'
+        )
+        lines = [header, rows]
+        for result in results:
+            definition_id = result.job.definition.definition_id
+            match result:
+                case MatchEvaluationResult():
+                    aggregate = result.aggregate
+                    lines.append(
+                        f'| {definition_id} | complete | {aggregate.score:.3f} | '
+                        f'{aggregate.wins}-{aggregate.draws}-{aggregate.losses} | '
+                        f'{aggregate.first_player_score:.3f} | {aggregate.second_player_score:.3f} | '
+                        f'{result.duration_seconds:.1f}s |\n'
+                    )
+                case FixedDatasetEvaluationResult():
+                    lines.append(
+                        f'| {definition_id} | complete | {result.top_action_accuracy:.3f} '
+                        f'(CE {result.policy_cross_entropy:.3f}) | — | — | — | {result.duration_seconds:.1f}s |\n'
+                    )
+                case FailedEvaluationResult():
+                    lines.append(
+                        f'| {definition_id} | {result.phase.value} | — | — | — | — | {result.duration_seconds:.1f}s |\n'
+                    )
+        summary = ''.join(lines)
+        write_text_atomically(self.result_directory / f'{boundary_seconds:010d}-summary.md', summary)
+        log_text('evaluation/summaries', summary, boundary_seconds)
 
     def _save_state(self) -> None:
         snapshot = self._state.model_copy(update={'accumulated_elapsed_seconds': self.elapsed_seconds})
         write_text_atomically(self.state_path, snapshot.model_dump_json(indent=2) + '\n')
+        reference_manifest = EvaluationReferenceManifest(checkpoints=snapshot.scheduled_suites)
+        write_text_atomically(
+            self.reference_manifest_path,
+            reference_manifest.model_dump_json(indent=2) + '\n',
+        )

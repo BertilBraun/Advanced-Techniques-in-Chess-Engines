@@ -94,6 +94,7 @@ evaluation:
   job_timeout_seconds: 1200
   shutdown_grace_seconds: 30
   bootstrap_samples: 10000
+  maximum_concurrent_jobs: 10
   dataset:
     path: py/reference/chess-evaluation-v1.bin
     random_seed: 0
@@ -143,56 +144,6 @@ evaluation:
     - kind: previous_checkpoint
       definition_id: previous-60m
       boundary_offset: 3
-      maximum_game_plies: 200
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-10
-      generation: 10
-      maximum_game_plies: 200
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-20
-      generation: 20
-      maximum_game_plies: 200
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-30
-      generation: 30
-      maximum_game_plies: 200
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-40
-      generation: 40
-      maximum_game_plies: 200
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-50
-      generation: 50
-      maximum_game_plies: 200
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-60
-      generation: 60
-      maximum_game_plies: 200
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-70
-      generation: 70
-      maximum_game_plies: 200
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-80
-      generation: 80
-      maximum_game_plies: 200
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-90
-      generation: 90
-      maximum_game_plies: 200
-      search: *evaluation_search
-    - kind: fixed_checkpoint
-      definition_id: generation-100
-      generation: 100
       maximum_game_plies: 200
       search: *evaluation_search
     - kind: stockfish

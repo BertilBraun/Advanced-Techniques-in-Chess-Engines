@@ -1,7 +1,7 @@
 game: go
 run:
-  run_name: vast-go-7x7-2gpu-2h-baseline
-  tensorboard_run_directory: vast-go-7x7-2gpu-2h-baseline
+  run_name: vast-go-7x7-2gpu-4h-baseline
+  tensorboard_run_directory: vast-go-7x7-2gpu-4h-baseline
   stage: clean_retrain
   requires_explicit_approval: true
   resume:
@@ -23,7 +23,7 @@ run:
     dependency_lock_sha256: f027ad99a12742660107a2857b18cbc6b821a95971c2ecf2c4ad814c38116171
     minimum_open_file_soft_limit: 32768
 training:
-  save_path: py/training_data/baselines/vast-go-7x7-2gpu-2h
+  save_path: py/training_data/baselines/vast-go-7x7-2gpu-4h
   network:
     num_layers: 6
     hidden_size: 64
@@ -68,7 +68,7 @@ training:
       milestone_interval: 10
   limits:
     hourly_price: 0.303
-    maximum_wall_time_seconds: 7200
+    maximum_wall_time_seconds: 14700
     maximum_open_file_count: 32768
     maximum_host_ram_percent: 95.0
     minimum_free_disk_gib: 10.0
@@ -79,6 +79,7 @@ evaluation:
   job_timeout_seconds: 1200
   shutdown_grace_seconds: 30
   bootstrap_samples: 10000
+  maximum_concurrent_jobs: 10
   dataset:
     path: py/reference/go-7x7-baseline-v1.bin
     random_seed: 1207
@@ -97,8 +98,9 @@ evaluation:
     label_max_visits: 256
   definitions:
     - {kind: fixed_dataset, definition_id: fixed-dataset}
-    - kind: random
-      definition_id: search-random
+    - kind: previous_checkpoint
+      definition_id: previous-20m
+      boundary_offset: 1
       maximum_game_plies: 196
       search: &evaluation_search
         searches_per_move: 64
@@ -108,23 +110,20 @@ evaluation:
           inference_workers: 1
           inference_batch_size: 64
           outstanding_batches_per_worker: 1
-    - {kind: policy_random, definition_id: policy-random, maximum_game_plies: 196}
-    - {kind: previous_checkpoint, definition_id: previous-20m, boundary_offset: 1, maximum_game_plies: 196, search: *evaluation_search}
     - {kind: previous_checkpoint, definition_id: previous-40m, boundary_offset: 2, maximum_game_plies: 196, search: *evaluation_search}
     - {kind: previous_checkpoint, definition_id: previous-60m, boundary_offset: 3, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: fixed_checkpoint, definition_id: generation-10, generation: 10, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: fixed_checkpoint, definition_id: generation-20, generation: 20, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: fixed_checkpoint, definition_id: generation-30, generation: 30, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: fixed_checkpoint, definition_id: generation-40, generation: 40, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: fixed_checkpoint, definition_id: generation-50, generation: 50, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: fixed_checkpoint, definition_id: generation-60, generation: 60, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: fixed_checkpoint, definition_id: generation-70, generation: 70, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: fixed_checkpoint, definition_id: generation-80, generation: 80, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: fixed_checkpoint, definition_id: generation-90, generation: 90, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: fixed_checkpoint, definition_id: generation-100, generation: 100, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-80m, boundary_offset: 4, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-100m, boundary_offset: 5, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-120m, boundary_offset: 6, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-140m, boundary_offset: 7, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-160m, boundary_offset: 8, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-180m, boundary_offset: 9, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-200m, boundary_offset: 10, boundary_parity: even, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-220m, boundary_offset: 11, boundary_parity: odd, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: reference_checkpoint, definition_id: same-time-baseline, manifest_path: py/training_data/screening/go7-overnight/00-baseline/evaluations/reference-checkpoints.json, maximum_game_plies: 196, search: *evaluation_search}
     - {kind: katago, definition_id: katago-16, maximum_visits: 16, maximum_game_plies: 196, search: *evaluation_search}
     - {kind: katago, definition_id: katago-64, maximum_visits: 64, maximum_game_plies: 196, search: *evaluation_search}
-    - {kind: katago, definition_id: katago-256, maximum_visits: 256, maximum_game_plies: 196, search: *evaluation_search}
+    - {kind: katago, definition_id: katago-128, maximum_visits: 128, maximum_game_plies: 196, search: *evaluation_search}
 go:
   self_play:
     search:

@@ -131,7 +131,7 @@ freezing a benchmark configuration.
 
 The checked-in analysis configuration is derived from KataGo's [1.17.1 analysis
 example](https://github.com/lightvector/KataGo/blob/v1.17.1/cpp/configs/analysis_example.cfg). It permits concurrent
-position analysis, caps NN buffers at 9x9, and leaves rules, komi, board size, and visit limits to every JSON request,
+position analysis with 16 analysis threads, caps NN buffers at 9x9, and leaves rules, komi, board size, and visit limits to every JSON request,
 matching the application client. See the [official asynchronous analysis protocol](https://github.com/lightvector/KataGo/blob/v1.17.1/docs/Analysis_Engine.md).
 
 ## Evaluation openings and datasets
@@ -142,8 +142,10 @@ search limits, random seed, builder source revision, and output hash. `python py
 after hardware and approval validation and before the coordinator starts. Missing artifacts are generated;
 matching artifacts are reused; mismatches fail instead of being overwritten.
 
-The generated paths under `py/reference/` are ignored by Git. Preserve and back up the resulting data and manifests
-with the run, but do not commit them. There is intentionally no install-time or implicit global dataset cache.
+The small canonical Go 7x7 screening dataset and opening suite under `py/reference/` are checked in so fresh compute
+nodes do not repeat the expensive engine preparation. New versions are generated once on an approved node, inspected,
+and replace the previous checked-in version. Other generated reference artifacts remain outside Git unless explicitly
+promoted in the same way. There is intentionally no install-time or implicit global dataset cache.
 
 ## Licensing and redistribution
 

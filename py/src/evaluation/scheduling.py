@@ -9,16 +9,18 @@ from pydantic import Field
 from src.evaluation.configuration import (
     EvaluationConfiguration,
     EvaluationDefinition,
-    FixedCheckpointEvaluationDefinition,
     FixedDatasetEvaluationDefinition,
     KataGoEvaluationDefinition,
     PolicyRandomOpponentEvaluationDefinition,
     PreviousCheckpointEvaluationDefinition,
     RandomOpponentEvaluationDefinition,
+    ReferenceCheckpointEvaluationDefinition,
     StockfishEvaluationDefinition,
 )
 from src.evaluation.contracts import (
     CheckpointOpponent,
+    ElapsedCheckpointReference,
+    EvaluationReferenceManifest,
     EvaluationOpponent,
     EvaluationJob,
     FixedDatasetEvaluationJob,
@@ -29,7 +31,6 @@ from src.evaluation.contracts import (
 )
 from src.experiment.configuration import ExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
-from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.util.frozen_model import FrozenModel
 
 
@@ -38,9 +39,7 @@ class CheckpointPublication(FrozenModel):
     checkpoint: CheckpointReference
 
 
-class ScheduledEvaluationSuite(FrozenModel):
-    boundary_seconds: int = Field(gt=0)
-    checkpoint: CheckpointReference
+ScheduledEvaluationSuite = ElapsedCheckpointReference
 
 
 @dataclass(frozen=True)
@@ -80,22 +79,29 @@ def _previous_checkpoint(
     return previous
 
 
-def _fixed_checkpoint(
-    definition: FixedCheckpointEvaluationDefinition,
+def _reference_checkpoint(
+    definition: ReferenceCheckpointEvaluationDefinition,
     suite: ScheduledEvaluationSuite,
-    run_path: Path,
 ) -> CheckpointReference | None:
-    generation = definition.generation
-    if generation >= suite.checkpoint.generation or not checkpoint_manifest_path(generation, run_path).is_file():
+    manifest_path = Path(definition.manifest_path)
+    if not manifest_path.is_file():
         return None
-    return CheckpointReference.load_for_inference(run_path, generation)
+    manifest = EvaluationReferenceManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
+    reference = next(
+        (entry.checkpoint for entry in manifest.checkpoints if entry.boundary_seconds == suite.boundary_seconds),
+        None,
+    )
+    if reference is None or reference.inference_model_sha256 == suite.checkpoint.inference_model_sha256:
+        return None
+    reference.validate_inference_model()
+    return reference
 
 
 def _match_job(
     definition: RandomOpponentEvaluationDefinition
     | PolicyRandomOpponentEvaluationDefinition
     | PreviousCheckpointEvaluationDefinition
-    | FixedCheckpointEvaluationDefinition
+    | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
     | KataGoEvaluationDefinition,
     opponent: EvaluationOpponent,
@@ -120,7 +126,6 @@ def _job_for_definition(
     configuration: EvaluationConfiguration,
     suite: ScheduledEvaluationSuite,
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...],
-    run_path: Path,
     context: _EvaluationJobContext,
 ) -> EvaluationJob | None:
     match definition:
@@ -139,6 +144,11 @@ def _job_for_definition(
         case RandomOpponentEvaluationDefinition() | PolicyRandomOpponentEvaluationDefinition():
             return _match_job(definition, RandomOpponent(kind='random'), context)
         case PreviousCheckpointEvaluationDefinition():
+            boundary_index = suite.boundary_seconds // configuration.cadence_seconds
+            if definition.boundary_parity != 'every' and definition.boundary_parity != (
+                'even' if boundary_index % 2 == 0 else 'odd'
+            ):
+                return None
             checkpoint = _previous_checkpoint(definition, configuration, suite, scheduled_suites)
             return (
                 None
@@ -149,8 +159,8 @@ def _job_for_definition(
                     context,
                 )
             )
-        case FixedCheckpointEvaluationDefinition():
-            checkpoint = _fixed_checkpoint(definition, suite, run_path)
+        case ReferenceCheckpointEvaluationDefinition():
+            checkpoint = _reference_checkpoint(definition, suite)
             return (
                 None
                 if checkpoint is None
@@ -198,7 +208,7 @@ def jobs_for_suite(
             ),
             result_path=result_directory / f'{job_id}.json',
         )
-        job = _job_for_definition(definition, configuration, suite, scheduled_suites, run_path, context)
+        job = _job_for_definition(definition, configuration, suite, scheduled_suites, context)
         if job is None:
             continue
         jobs.append(job)
@@ -211,18 +221,17 @@ def required_checkpoint_generations(
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...],
     pending_jobs: tuple[EvaluationJob, ...],
 ) -> tuple[int, ...]:
-    fixed_generations: set[int] = set()
     maximum_previous_offset = 0
     for definition in configuration.definitions:
         match definition:
-            case FixedCheckpointEvaluationDefinition(generation=generation):
-                fixed_generations.add(generation)
             case PreviousCheckpointEvaluationDefinition(boundary_offset=offset):
                 maximum_previous_offset = max(maximum_previous_offset, offset)
             case _:
                 pass
     recent_suites = scheduled_suites[-maximum_previous_offset:] if maximum_previous_offset else ()
-    required = fixed_generations | {suite.checkpoint.generation for suite in recent_suites}
+    required = {suite.checkpoint.generation for suite in scheduled_suites} | {
+        suite.checkpoint.generation for suite in recent_suites
+    }
     for job in pending_jobs:
         required.add(job.candidate.generation)
         match job:

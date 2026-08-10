@@ -8,11 +8,11 @@ from typing import Generic, Literal, Protocol, TypeVar
 
 from src.evaluation.configuration import (
     EvaluationSearchConfiguration,
-    FixedCheckpointEvaluationDefinition,
     KataGoEvaluationDefinition,
     PolicyRandomOpponentEvaluationDefinition,
     PreviousCheckpointEvaluationDefinition,
     RandomOpponentEvaluationDefinition,
+    ReferenceCheckpointEvaluationDefinition,
     StockfishEvaluationDefinition,
 )
 from src.evaluation.contracts import (
@@ -92,7 +92,7 @@ def _definition_search(job: MatchEvaluationJob) -> EvaluationSearchConfiguration
             return search
         case PreviousCheckpointEvaluationDefinition(search=search):
             return search
-        case FixedCheckpointEvaluationDefinition(search=search):
+        case ReferenceCheckpointEvaluationDefinition(search=search):
             return search
         case StockfishEvaluationDefinition(search=search):
             return search

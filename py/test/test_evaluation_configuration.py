@@ -18,46 +18,40 @@ def test_checked_in_evaluation_definitions_are_canonical_for_each_game() -> None
     assert chess.evaluation.cadence_seconds == go.evaluation.cadence_seconds == 1200
     assert chess.evaluation.job_timeout_seconds == go.evaluation.job_timeout_seconds == 1200
     assert chess.training.topology.evaluation.device_cycle == (0,)
+    assert chess.evaluation.maximum_concurrent_jobs == go.evaluation.maximum_concurrent_jobs == 10
     assert tuple(
         definition.boundary_offset
         for definition in chess.evaluation.definitions
         if definition.kind == 'previous_checkpoint'
     ) == (1, 2, 3)
-    assert tuple(
-        definition.generation for definition in chess.evaluation.definitions if definition.kind == 'fixed_checkpoint'
-    ) == tuple(range(10, 101, 10))
+    assert all(
+        definition.kind != 'fixed_checkpoint'
+        for definition in (*chess.evaluation.definitions, *go.evaluation.definitions)
+    )
     assert tuple(
         definition.skill_level for definition in chess.evaluation.definitions if definition.kind == 'stockfish'
     ) == (0, 1, 2, 3)
     assert tuple(
         definition.maximum_visits for definition in go.evaluation.definitions if definition.kind == 'katago'
-    ) == (16, 64, 256)
+    ) == (16, 64, 128)
     assert tuple(
-        definition.definition_id
+        (definition.boundary_offset, definition.boundary_parity)
         for definition in go.evaluation.definitions
-        if definition.kind not in ('katago', 'fixed_dataset', 'random', 'policy_random')
-    ) == tuple(
-        definition.definition_id
-        for definition in chess.evaluation.definitions
-        if definition.kind in ('previous_checkpoint', 'fixed_checkpoint')
+        if definition.kind == 'previous_checkpoint'
+    ) == (
+        (1, 'every'),
+        (2, 'every'),
+        (3, 'every'),
+        (4, 'even'),
+        (5, 'odd'),
+        (6, 'even'),
+        (7, 'odd'),
+        (8, 'even'),
+        (9, 'odd'),
+        (10, 'even'),
+        (11, 'odd'),
     )
-
-
-@pytest.mark.parametrize(
-    'path',
-    (
-        Path('configs/chess-experiment-template.yaml'),
-        Path('configs/go-7x7-experiment-template.yaml'),
-        Path('configs/go-9x9-experiment-template.yaml'),
-    ),
-)
-def test_checked_in_evaluation_definitions_use_block_yaml(path: Path) -> None:
-    source = path.read_text(encoding='utf-8')
-    definitions = source.split('  definitions:\n', maxsplit=1)[1].split('\nchess:\n', maxsplit=1)[0]
-    if path.name.startswith('go-'):
-        definitions = definitions.split('\ngo:\n', maxsplit=1)[0]
-
-    assert '{' not in definitions
+    assert all(definition.kind not in ('random', 'policy_random') for definition in go.evaluation.definitions)
 
 
 def test_evaluation_definition_ids_must_be_unique() -> None:

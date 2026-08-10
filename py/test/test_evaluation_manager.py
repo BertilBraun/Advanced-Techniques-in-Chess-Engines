@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -7,14 +8,18 @@ from pydantic import TypeAdapter
 from src.evaluation.contracts import (
     CheckpointOpponent,
     EvaluationFailurePhase,
+    EvaluationReferenceManifest,
     EvaluationResult,
     FailedEvaluationResult,
     FixedDatasetEvaluationJob,
     FixedDatasetEvaluationResult,
     MatchEvaluationJob,
+    ElapsedCheckpointReference,
 )
+from src.evaluation.configuration import ReferenceCheckpointEvaluationDefinition
 from src.evaluation.manager import EvaluationManager
 from src.evaluation.process import write_evaluation_result
+from src.evaluation.scheduling import ScheduledEvaluationSuite, jobs_for_suite
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
@@ -159,7 +164,7 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     dataset_process = next(process for process in context.processes if process.args[1] == dataset_job)
     dataset_process.exitcode = 0
     assert manager.collect_completed_jobs()[0].job == dataset_job
-    assert scalar_steps == [20, 20, 20]
+    assert scalar_steps == [20, 20, 20, 20, 20]
 
     clock.now = 41.0
     second_jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 3))
@@ -185,36 +190,115 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     assert tuple(job.opponent.checkpoint.generation for job in previous_jobs) == tuple(
         4 - offset for offset in (1, 2, 3)
     )
-    assert {1, 2, 3, 4, *range(10, 101, 10)} <= set(manager.required_checkpoint_generations)
+    assert {1, 2, 3, 4} <= set(manager.required_checkpoint_generations)
 
 
-def test_manager_schedules_only_available_older_fixed_checkpoints(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_manager_limits_active_evaluation_processes(tmp_path: Path) -> None:
     clock = FakeClock()
     context = FakeProcessContext()
-    manager = EvaluationManager(experiment_configuration(tmp_path), checkpoint(tmp_path, 0), clock, context)
-    (tmp_path / 'checkpoint_10.json').write_text('{}', encoding='utf-8')
-    monkeypatch.setattr(
-        CheckpointReference,
-        'load_for_inference',
-        classmethod(lambda _cls, run_path, generation: checkpoint(run_path, generation)),
+    experiment = experiment_configuration(tmp_path)
+    experiment = experiment.model_copy(
+        update={
+            'evaluation': experiment.evaluation.model_copy(update={'maximum_concurrent_jobs': 2}),
+        }
     )
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
 
-    clock.now = 19.0
-    manager.schedule_due_jobs(checkpoint(tmp_path, 20))
     clock.now = 21.0
-    jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 21))
+    jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 1))
 
-    fixed_opponents = tuple(
-        job.opponent.checkpoint.generation
-        for job in jobs
-        if isinstance(job, MatchEvaluationJob)
-        and isinstance(job.opponent, CheckpointOpponent)
-        and job.definition.kind == 'fixed_checkpoint'
+    assert len(jobs) == 7
+    assert len(context.processes) == 2
+    assert len(manager._processes) == 2
+
+    for process in context.processes:
+        process.exitcode = 1
+    manager.collect_completed_jobs()
+
+    assert len(context.processes) == 4
+    assert len(manager._processes) == 2
+
+
+def test_older_checkpoint_offsets_alternate_by_boundary_parity(tmp_path: Path) -> None:
+    experiment = load_experiment_configuration(Path('configs/baselines/vast-go-7x7-2gpu-4h.yaml'))
+    experiment = experiment.model_copy(
+        update={'evaluation': experiment.evaluation.model_copy(update={'cadence_seconds': 20})}
     )
-    assert fixed_opponents == (10,)
+    suites = tuple(
+        ScheduledEvaluationSuite(boundary_seconds=boundary, checkpoint=checkpoint(tmp_path, boundary // 20))
+        for boundary in range(20, 121, 20)
+    )
+
+    even_jobs, next_device_index = jobs_for_suite(
+        experiment,
+        tmp_path,
+        tmp_path / 'results',
+        suites[-1],
+        suites[:-1],
+        0,
+    )
+    odd_suite = ScheduledEvaluationSuite(boundary_seconds=140, checkpoint=checkpoint(tmp_path, 7))
+    odd_jobs, _ = jobs_for_suite(
+        experiment,
+        tmp_path,
+        tmp_path / 'results',
+        odd_suite,
+        suites,
+        next_device_index,
+    )
+
+    even_ids = {job.definition.definition_id for job in even_jobs}
+    odd_ids = {job.definition.definition_id for job in odd_jobs}
+    assert 'previous-80m' in even_ids and 'previous-100m' not in even_ids
+    assert 'previous-100m' in odd_ids and 'previous-80m' not in odd_ids
+
+
+def test_same_time_reference_checkpoint_is_resolved_from_manifest(tmp_path: Path) -> None:
+    experiment = experiment_configuration(tmp_path)
+    search = next(
+        definition.search
+        for definition in experiment.evaluation.definitions
+        if definition.kind == 'previous_checkpoint'
+    )
+    reference_inference_path = tmp_path / 'reference-inference.pt'
+    reference_inference_path.write_bytes(b'reference')
+    reference = checkpoint(tmp_path, 9).model_copy(
+        update={
+            'inference_model_path': reference_inference_path,
+            'inference_model_sha256': hashlib.sha256(b'reference').hexdigest(),
+        }
+    )
+    manifest_path = tmp_path / 'reference-checkpoints.json'
+    manifest_path.write_text(
+        EvaluationReferenceManifest(
+            checkpoints=(ElapsedCheckpointReference(boundary_seconds=20, checkpoint=reference),)
+        ).model_dump_json(),
+        encoding='utf-8',
+    )
+    definition = ReferenceCheckpointEvaluationDefinition(
+        kind='reference_checkpoint',
+        definition_id='same-time-baseline',
+        manifest_path=str(manifest_path),
+        search=search,
+        maximum_game_plies=200,
+    )
+    experiment = experiment.model_copy(
+        update={
+            'evaluation': experiment.evaluation.model_copy(
+                update={'definitions': (*experiment.evaluation.definitions, definition)}
+            )
+        }
+    )
+    clock = FakeClock()
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, FakeProcessContext())
+
+    clock.now = 21.0
+    jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 1))
+
+    reference_job = next(job for job in jobs if job.definition.kind == 'reference_checkpoint')
+    assert isinstance(reference_job, MatchEvaluationJob)
+    assert isinstance(reference_job.opponent, CheckpointOpponent)
+    assert reference_job.opponent.checkpoint == reference
 
 
 def test_manager_publishes_missing_artifact_and_deadline_failures(tmp_path: Path) -> None:

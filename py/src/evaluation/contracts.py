@@ -64,6 +64,16 @@ class OpeningSuiteManifest(FrozenModel):
     builder_source_revision: str = Field(min_length=1)
 
 
+class ElapsedCheckpointReference(FrozenModel):
+    boundary_seconds: int = Field(gt=0)
+    checkpoint: CheckpointReference
+
+
+class EvaluationReferenceManifest(FrozenModel):
+    schema_version: Literal[1] = 1
+    checkpoints: tuple[ElapsedCheckpointReference, ...]
+
+
 class RandomOpponent(FrozenModel):
     kind: Literal['random']
 
@@ -119,7 +129,7 @@ class MatchEvaluationJob(FrozenModel):
             'random': 'random',
             'policy_random': 'random',
             'previous_checkpoint': 'checkpoint',
-            'fixed_checkpoint': 'checkpoint',
+            'reference_checkpoint': 'checkpoint',
             'stockfish': 'stockfish',
             'katago': 'katago',
         }[self.definition.kind]
@@ -165,6 +175,8 @@ class MatchAggregate(FrozenModel):
     draws: int = Field(ge=0)
     losses: int = Field(ge=0)
     score: float = Field(ge=0.0, le=1.0)
+    first_player_score: float = Field(ge=0.0, le=1.0)
+    second_player_score: float = Field(ge=0.0, le=1.0)
     pair_count: int = Field(ge=0)
     score_confidence_low: float = Field(ge=0.0, le=1.0)
     score_confidence_high: float = Field(ge=0.0, le=1.0)

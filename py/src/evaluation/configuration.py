@@ -88,14 +88,15 @@ class PreviousCheckpointEvaluationDefinition(FrozenModel):
     kind: Literal['previous_checkpoint']
     definition_id: str = Field(min_length=1)
     boundary_offset: int = Field(default=1, gt=0)
+    boundary_parity: Literal['every', 'even', 'odd'] = 'every'
     search: EvaluationSearchConfiguration
     maximum_game_plies: int = Field(gt=0)
 
 
-class FixedCheckpointEvaluationDefinition(FrozenModel):
-    kind: Literal['fixed_checkpoint']
+class ReferenceCheckpointEvaluationDefinition(FrozenModel):
+    kind: Literal['reference_checkpoint']
     definition_id: str = Field(min_length=1)
-    generation: int = Field(ge=0)
+    manifest_path: str = Field(min_length=1)
     search: EvaluationSearchConfiguration
     maximum_game_plies: int = Field(gt=0)
 
@@ -121,7 +122,7 @@ EvaluationDefinition: TypeAlias = Annotated[
     | RandomOpponentEvaluationDefinition
     | PolicyRandomOpponentEvaluationDefinition
     | PreviousCheckpointEvaluationDefinition
-    | FixedCheckpointEvaluationDefinition
+    | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
     | KataGoEvaluationDefinition,
     Field(discriminator='kind'),
@@ -131,7 +132,7 @@ MatchEvaluationDefinition: TypeAlias = Annotated[
     RandomOpponentEvaluationDefinition
     | PolicyRandomOpponentEvaluationDefinition
     | PreviousCheckpointEvaluationDefinition
-    | FixedCheckpointEvaluationDefinition
+    | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
     | KataGoEvaluationDefinition,
     Field(discriminator='kind'),
@@ -143,6 +144,7 @@ class EvaluationConfiguration(FrozenModel):
     job_timeout_seconds: float = Field(gt=0.0)
     shutdown_grace_seconds: float = Field(gt=0.0)
     bootstrap_samples: int = Field(gt=0)
+    maximum_concurrent_jobs: int = Field(default=10, gt=0)
     dataset: EvaluationDatasetConfiguration
     openings: OpeningSuiteConfiguration
     engine: ExternalEngineConfiguration

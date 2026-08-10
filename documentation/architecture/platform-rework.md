@@ -310,12 +310,13 @@ measurements and can be inspected or stopped early.
 
 The configured ladder includes:
 
-- MCTS against random play;
-- the previously evaluated and selected fixed checkpoints;
-- fixed external engine levels appropriate to the selected game.
+- the preceding 20-, 40-, and 60-minute checkpoints plus alternating older elapsed offsets;
+- the same-time checkpoint from an explicit baseline run;
+- game-appropriate diagnostics and fixed external-engine levels.
 
-Chess uses its Stockfish opponents. Go adds an external engine adapter and a
-fixed low-search opponent ladder suitable for both 7x7 and 9x9. Engine command,
+Chess retains search/policy play against random and its Stockfish opponents. Go uses fixed-dataset, checkpoint, and
+KataGo evaluations because random play saturated too early to discriminate the screening runs. The Go KataGo ladder
+uses 16, 64, and 128 visits. Engine command,
 rules, komi, board size, time/search limits, concurrency, game count, and
 strength settings belong to the Go evaluation configuration.
 

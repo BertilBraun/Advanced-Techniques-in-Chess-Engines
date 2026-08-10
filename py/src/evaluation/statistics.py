@@ -30,11 +30,15 @@ def aggregate_match(
     draws = sum(game.outcome is CandidateOutcome.DRAW for game in games)
     losses = sum(game.outcome is CandidateOutcome.LOSS for game in games)
     score = (wins + draws * 0.5) / len(games)
+    first_player_games = tuple(game for game in games if game.candidate_player == 'first')
+    second_player_games = tuple(game for game in games if game.candidate_player == 'second')
     return MatchAggregate(
         wins=wins,
         draws=draws,
         losses=losses,
         score=score,
+        first_player_score=sum(_score(game.outcome) for game in first_player_games) / len(first_player_games),
+        second_player_score=sum(_score(game.outcome) for game in second_player_games) / len(second_player_games),
         pair_count=len(pair_scores),
         score_confidence_low=float(np.quantile(bootstrap, 0.025)),
         score_confidence_high=float(np.quantile(bootstrap, 0.975)),

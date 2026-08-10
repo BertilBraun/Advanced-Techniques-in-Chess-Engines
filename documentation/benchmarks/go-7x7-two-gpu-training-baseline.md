@@ -2,9 +2,10 @@
 
 Status: revised after the first live calibration run; the accepted baseline has not yet been launched.
 
-The complete configuration is
-[`py/configs/baselines/vast-go-7x7-2gpu-2h.yaml`](../../py/configs/baselines/vast-go-7x7-2gpu-2h.yaml). It defines the
-first two-hour Go 7x7 learning baseline. Subsequent self-play optimizations should retain every other setting unless
+The complete revised configuration is
+[`py/configs/baselines/vast-go-7x7-2gpu-4h.yaml`](../../py/configs/baselines/vast-go-7x7-2gpu-4h.yaml). It defines the
+four-hour Go 7x7 learning baseline plus five minutes for the final scheduled evaluation to launch. Subsequent
+self-play optimizations should retain every other setting unless
 the comparison explicitly declares another variable.
 
 ## Resource slot
@@ -15,7 +16,7 @@ the comparison explicitly declares another variable.
 | CPU affinity | 42 logical CPUs |
 | Aggregate RAM budget | 40 GiB |
 | Minimum disk | 20 GiB |
-| Wall time | 7,200 seconds |
+| Wall time | 14,700 seconds |
 | Recorded node price | $0.303/hour |
 
 The shared host exposes 256 logical CPUs and 251 GiB RAM, but the rental owns only 85.33 effective CPUs and 86 GiB.
@@ -25,7 +26,7 @@ so it cannot enforce an aggregate 40-GiB process-tree limit. The YAML records th
 monitor process-tree RSS and abort at 40 GiB unless the node is replaced with a delegated cgroup-v2 environment.
 `maximum_host_ram_percent` remains a last-resort host-pressure guard; it is not the run's RAM limiter.
 
-The $0.303 hourly price is conservatively the complete rented-instance price. The two-hour wall-time limit is the
+The $0.303 hourly price is conservatively the complete rented-instance price. The four-hour-five-minute wall-time limit is the
 sole configured run-duration stop; no separate cost limit is set.
 
 ## Model and DDP training

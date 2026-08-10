@@ -918,8 +918,9 @@ class EvaluationManager:
 ```
 
 `schedule_due_jobs()` returns quickly. Every configured dataset or opponent comparison becomes its own short-lived
-evaluation job process, and every due job is started immediately. Jobs from one
-evaluation suite are therefore concurrent rather than one suite process running categories sequentially. A job may
+evaluation job process. Due jobs enter one FIFO owned by the manager, which starts up to the configured maximum
+concurrency and starts the next queued job whenever a process finishes. Jobs from one evaluation suite are therefore
+concurrent rather than one suite process running categories sequentially. A job may
 itself batch many active games through the native C++ search. The manager never loads a model, plays a game, reads a
 dataset row, or controls an external engine.
 
@@ -954,6 +955,7 @@ contains:
 - the elapsed cadence, initially 1,200 seconds;
 - a nonempty tuple of evaluation device IDs owned by the shared training topology;
 - one 1,200-second per-job deadline and shutdown grace period;
+- one maximum active-job count, initially 10;
 - a tuple of uniquely named evaluation definitions;
 - game-specific Stockfish or KataGo artifact configuration where used.
 
@@ -965,22 +967,24 @@ EvaluationDefinition
 ├── RandomOpponentEvaluationDefinition
 ├── PolicyRandomOpponentEvaluationDefinition
 ├── PreviousCheckpointEvaluationDefinition
-├── FixedCheckpointEvaluationDefinition
+├── ReferenceCheckpointEvaluationDefinition
 ├── StockfishEvaluationDefinition
 └── KataGoEvaluationDefinition
 ```
 
-Checkpoint opponents select either a positive previous-evaluation-boundary offset or one fixed retained checkpoint.
+Checkpoint opponents select either a positive previous-evaluation-boundary offset or the same elapsed boundary from
+an explicit reference-run manifest.
 Job construction resolves that selector to the existing canonical `CheckpointReference`; process messages do not
 carry a second model-reference representation. The initial ladder uses offsets one, two, and three, showing progress
-against the checkpoints selected 20, 40, and 60 minutes earlier. It also evaluates every available retained generation
-10, 20, ..., 100 at every boundary. A fixed generation is not due until it is older than the candidate and its
-checkpoint manifest exists. There is no historical rotation, inspection/full tier, teacher-evaluation special case,
-or plateau rule.
+against the checkpoints selected 20, 40, and 60 minutes earlier. Older offsets alternate explicitly: 80, 120, 160,
+and 200 minutes run on even-numbered boundaries, while 100, 140, 180, and 220 minutes run on odd-numbered boundaries.
+The reference manifest records the checkpoint selected at every elapsed boundary, allowing a candidate to play the
+baseline available at the same training time. Fixed-generation opponents are removed. There is no inspection/full
+tier, teacher-evaluation special case, or plateau rule.
 
-Chess additionally runs Stockfish skill levels 0, 1, 2, and 3 at every boundary. Go retains its configured KataGo
-baseline. Together with the fixed dataset, search against random, and greedy policy against random, the complete
-chess ladder reaches 20 concurrent jobs after generation 100 is available.
+Chess additionally runs Stockfish skill levels 0, 1, 2, and 3 at every boundary and retains its search/policy random
+diagnostics. Go uses fixed-dataset evaluation, historical/reference checkpoints, and KataGo at 16, 64, and 128 visits;
+its saturated random-opponent diagnostics are removed from the screening ladder.
 
 Every resolved job records:
 
@@ -996,9 +1000,10 @@ Every resolved job records:
 
 ### Parallelism and device assignment
 
-All definitions due at one boundary launch as independent processes without a slot scheduler. The manager assigns
+All definitions due at one boundary become independent jobs. The manager assigns
 device IDs by cycling through the configured nonempty evaluation-device tuple in stable job order. If there are more
-jobs than devices, several jobs intentionally share a device. The child activates its assigned device before Torch
+jobs than active slots, excess jobs wait in FIFO order; their deadlines start only when their processes launch. If
+there are more active jobs than devices, several jobs intentionally share a device. The child activates its assigned device before Torch
 initializes CUDA models or the native extension constructs a search. This is the complete Phase 3 assignment policy.
 Every job has the same 20-minute timeout as the cadence. The manager terminates a job that exceeds it, writes a typed
 deadline failure artifact, and logs the failure explicitly. The coordinator collects these failures before scheduling
@@ -1084,18 +1089,19 @@ Each dataset row contains only:
 
 - the canonical packed network input;
 - a sparse engine policy target over action IDs;
-- the engine's highest-probability action ID;
+- the engine-selected action ID;
 - a source-game ID and ply for inspection and grouped metrics.
 
 The fixed-dataset job loads the trimmed inference artifact and evaluates raw policy output without candidate MCTS,
 augmentation, value targets, game outcomes, training weights, root-value blends, or auxiliary heads. It reports:
 
-- accuracy of the model's top action against the engine's highest-probability action;
+- accuracy of the model's top action against the engine-selected action;
 - cross-entropy from the complete normalized sparse engine policy to the model policy.
 
 Stockfish uses fixed-node MultiPV search. The builder converts each principal variation's side-to-move WDL expected
 score through a configured softmax temperature and renormalizes over the reported legal moves; the exact conversion,
-MultiPV width, and temperature are part of the dataset version. KataGo normalizes searched move weights. These soft
+MultiPV width, and temperature are part of the dataset version. KataGo uses the unique `order: 0` move as its selected
+action and separately normalizes searched move weights as the soft policy label. These soft
 targets make cross-entropy distinct from top-action accuracy. Human moves, played outcomes, engine values,
 calibration metrics, and symmetry-consistency datasets are optional later research additions, not part of the
 initial Phase 3 dataset.
@@ -1123,7 +1129,8 @@ KataGo uses its
 rather than stateful GTP. The job keeps one KataGo process
 alive, submits several active positions with stable request IDs, and accepts out-of-order responses. Every request
 supplies the complete move history, board size, exact rules, komi, fixed maximum visits, and the requested policy
-fields. This boundary supports batched match play and the offline dataset/opening builders without implementing a
+fields. The unique `order: 0` move is authoritative for match play; `weight` is used only for policy labels and
+opening probabilities. This boundary supports batched match play and the offline dataset/opening builders without implementing a
 second protocol. The executable, network, backend, and analysis configuration are pinned and hashed. Go coordinate
 translation and exact rule composition are the only game-specific protocol concerns. Node provisioning installs the KataGo
 executable, a compatible network, and an analysis configuration outside the evaluation child; run preparation only
@@ -1141,7 +1148,7 @@ The result union has three variants:
 
 Match results contain the exact job, per-game pair/opening/player identities, pair seed, initial and played action
 sequences, termination reason, candidate outcome, plies, and duration. The aggregate contains wins, draws, losses,
-mean score, pair count, and a paired-bootstrap score interval. Elo is optional descriptive output, not a training
+mean score, first-player score, second-player score, pair count, and a paired-bootstrap score interval. Elo is optional descriptive output, not a training
 gate. Dataset results contain the exact job, position count, source-game count, top-action accuracy, cross-entropy,
 and duration. Failed results contain the exact job, a closed failure phase (`validation`, `setup`, `execution`,
 `deadline`, `cancelled`, or `missing_artifact`), a concise message, child exit code when available, and the path to a
@@ -1151,7 +1158,9 @@ combined into one catch-all model.
 Every child writes one result JSON atomically. The manager validates it after process exit, logs a concise console
 summary, and writes TensorBoard scalars below `evaluation/<definition_id>/...` at the requested cadence boundary,
 regardless of when the job actually finishes. The candidate generation identifies the checkpoint available at that
-boundary. Per-game actions remain in the result artifact rather than being emitted as thousands of TensorBoard text
+boundary. It also logs candidate generation and optimizer steps at that elapsed boundary and rewrites one grouped
+Markdown summary containing status, score, W-D-L, player-order scores, and duration for direct TensorBoard inspection.
+Per-game actions remain in the result artifact rather than being emitted as thousands of TensorBoard text
 records.
 
 There is no plateau automation. `experiment/plateau.py`, `tools/evaluate_plateau.py`, and their tests are deleted.
@@ -1204,9 +1213,9 @@ result is relaunched only when all referenced artifacts still exist; otherwise i
 event journal, attempt history, or reconstruction beyond that snapshot and result scan.
 
 On shutdown the manager stops launching work, waits for the configured short grace period, terminates
-remaining evaluation children, and writes cancelled failures. Successful and failed evaluation artifacts are kept
-for the run. The current runtime retains every checkpoint artifact, so pending jobs are protected without another
-retention interface. Any future checkpoint deletion policy must first account for references in manager state.
+remaining evaluation children, and writes cancelled failures for running and queued jobs. Successful and failed
+evaluation artifacts are kept for the run. Scheduled elapsed-boundary inference checkpoints are retained so the
+run remains usable as a later reference manifest; pending jobs additionally retain every checkpoint they reference.
 
 ## Source ownership
 

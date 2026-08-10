@@ -104,7 +104,6 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
         'random',
         'policy_random',
         *('previous_checkpoint',) * 3,
-        *('fixed_checkpoint',) * 10,
         *('stockfish',) * 4,
     )
 
