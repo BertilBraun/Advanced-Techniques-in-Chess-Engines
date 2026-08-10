@@ -84,6 +84,7 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
     assert configuration.chess.self_play.search.fast_searches.value_at(20) == 150
     assert configuration.chess.self_play.search.parallel_searches == 1
     assert configuration.chess.self_play.search.minimum_root_visits.value_at(0) == 0
+    assert configuration.chess.self_play.search.fpu_reduction.value_at(0) == pytest.approx(0.0)
     assert configuration.chess.self_play.inference.inference_workers == 2
     assert configuration.chess.self_play.inference.inference_batch_size == 64
     assert configuration.chess.self_play.inference.outstanding_batches_per_worker == 2
@@ -156,6 +157,11 @@ def test_queue_validation_supports_both_games() -> None:
             ('go', 'objective', 'root_value_blend'),
             {'kind': 'constant', 'value': 1.5},
             'must remain in',
+        ),
+        (
+            ('go', 'self_play', 'search', 'fpu_reduction'),
+            {'kind': 'constant', 'value': -0.1},
+            'FPU reduction must remain finite and nonnegative',
         ),
         (('go', 'self_play', 'maximum_game_plies'), 200, 'Extra inputs are not permitted'),
     ),

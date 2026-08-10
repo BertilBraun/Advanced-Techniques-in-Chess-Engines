@@ -140,6 +140,7 @@ class FakeGame:
             fast_searches=1,
             minimum_root_visits=0,
             exploration_constant=1.0,
+            fpu_reduction=0.0,
             dirichlet_alpha=0.3,
             dirichlet_epsilon=0.25,
             retained_root_visit_fraction=0.5,

@@ -182,6 +182,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             args.searches,
             args.searches,
             1.0,
+            0.0,
             0.3,
             0.0,
             0,

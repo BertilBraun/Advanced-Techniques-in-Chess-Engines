@@ -97,6 +97,7 @@ class BatchedSearchParameters:
         self,
         parallel_searches: int,
         exploration_constant: float,
+        fpu_reduction: float,
         minimum_root_visits: int,
         dirichlet_alpha: float,
         dirichlet_epsilon: float,
@@ -552,6 +553,7 @@ class ChessSearchRoot:
 
 class SelfPlaySearchParameters:
     exploration_constant: float
+    fpu_reduction: float
     dirichlet_alpha: float
     dirichlet_epsilon: float
     fast_searches: int
@@ -564,6 +566,7 @@ class SelfPlaySearchParameters:
         full_searches: int,
         fast_searches: int,
         exploration_constant: float,
+        fpu_reduction: float,
         dirichlet_alpha: float,
         dirichlet_epsilon: float,
         minimum_root_visits: int,

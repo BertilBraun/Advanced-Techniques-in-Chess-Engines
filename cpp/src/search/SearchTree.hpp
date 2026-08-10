@@ -94,20 +94,20 @@ public:
     }
 
     [[nodiscard]] std::optional<std::size_t>
-    selectAvailableLeaf(const float explorationConstant,
+    selectAvailableLeaf(const float explorationConstant, const float fpuReduction = 0.0F,
                         const std::uint32_t minimumRootVisits = 0) {
         const std::size_t edgeCount = root().children.size();
         for (const auto edgeIndex : range(edgeCount)) {
             if (root().children[edgeIndex].visits >= minimumRootVisits) {
                 continue;
             }
-            const std::optional<std::size_t> leaf =
-                selectAvailableLeaf(materializeChild(m_rootIndex, edgeIndex), explorationConstant);
+            const std::optional<std::size_t> leaf = selectAvailableLeaf(
+                materializeChild(m_rootIndex, edgeIndex), explorationConstant, fpuReduction);
             if (leaf.has_value()) {
                 return leaf;
             }
         }
-        return selectAvailableLeaf(m_rootIndex, explorationConstant);
+        return selectAvailableLeaf(m_rootIndex, explorationConstant, fpuReduction);
     }
 
     void expand(const std::size_t nodeIndex, const SearchInferenceResult<Game> &inferenceResult) {
@@ -294,15 +294,15 @@ private:
     float m_turnDiscount;
 
     [[nodiscard]] std::size_t bestEdgeIndex(const std::size_t nodeIndex,
-                                            const float explorationConstant) const {
+                                            const float explorationConstant,
+                                            const float fpuReduction) const {
         const Node &parent = node(nodeIndex);
         const float parentScale = std::sqrt(static_cast<float>(std::max(1U, parent.visits)));
         float bestScore = -std::numeric_limits<float>::infinity();
         std::size_t bestIndex = 0;
         for (const auto index : range(parent.children.size())) {
             const Edge &edge = parent.children[index];
-            const float meanValue =
-                edge.visits == 0 ? 0.0F : (edge.value_sum + edge.virtual_loss) / edge.visits;
+            const float meanValue = childMeanValue(parent, edge, fpuReduction);
             const float exploration =
                 explorationConstant * edge.prior * parentScale / (1.0F + edge.visits);
             const float score = -meanValue + exploration;
@@ -315,7 +315,8 @@ private:
     }
 
     [[nodiscard]] std::optional<std::size_t> selectAvailableLeaf(const std::size_t nodeIndex,
-                                                                 const float explorationConstant) {
+                                                                 const float explorationConstant,
+                                                                 const float fpuReduction) {
         if (!node(nodeIndex).expanded()) {
             return node(nodeIndex).inference_pending ? std::nullopt
                                                      : std::optional<std::size_t>(nodeIndex);
@@ -333,8 +334,7 @@ private:
                     continue;
                 }
                 const Edge &edge = node(nodeIndex).children[index];
-                const float meanValue =
-                    edge.visits == 0 ? 0.0F : (edge.value_sum + edge.virtual_loss) / edge.visits;
+                const float meanValue = childMeanValue(node(nodeIndex), edge, fpuReduction);
                 const float score = -meanValue + explorationConstant * edge.prior * parentScale /
                                                      (1.0F + edge.visits);
                 if (score > bestScore) {
@@ -343,13 +343,23 @@ private:
                 }
             }
             attempted[bestIndex] = true;
-            const std::optional<std::size_t> leaf =
-                selectAvailableLeaf(materializeChild(nodeIndex, bestIndex), explorationConstant);
+            const std::optional<std::size_t> leaf = selectAvailableLeaf(
+                materializeChild(nodeIndex, bestIndex), explorationConstant, fpuReduction);
             if (leaf.has_value()) {
                 return leaf;
             }
         }
         return std::nullopt;
+    }
+
+    [[nodiscard]] static float childMeanValue(const Node &parent, const Edge &edge,
+                                              const float fpuReduction) {
+        if (edge.visits > 0) {
+            return (edge.value_sum + edge.virtual_loss) / static_cast<float>(edge.visits);
+        }
+        const float parentMean =
+            parent.visits == 0 ? 0.0F : parent.value_sum / static_cast<float>(parent.visits);
+        return -parentMean + fpuReduction;
     }
 
     void updatePath(std::size_t nodeIndex, const int visitDelta, float value,

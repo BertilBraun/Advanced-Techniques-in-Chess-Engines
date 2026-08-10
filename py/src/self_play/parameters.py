@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from math import isfinite
 
 
 @dataclass(frozen=True)
@@ -10,6 +11,7 @@ class ResolvedSelfPlayParameters:
     fast_searches: int
     minimum_root_visits: int
     exploration_constant: float
+    fpu_reduction: float
     dirichlet_alpha: float
     dirichlet_epsilon: float
     retained_root_visit_fraction: float
@@ -34,6 +36,8 @@ class ResolvedSelfPlayParameters:
             raise ValueError('Minimum root visits must be nonnegative.')
         if self.exploration_constant <= 0.0 or self.dirichlet_alpha <= 0.0:
             raise ValueError('Search constants must be positive.')
+        if not isfinite(self.fpu_reduction) or self.fpu_reduction < 0.0:
+            raise ValueError('FPU reduction must be finite and nonnegative.')
         if not 0.0 <= self.dirichlet_epsilon <= 1.0:
             raise ValueError('Dirichlet epsilon must lie in [0, 1].')
         if not 0.0 <= self.retained_root_visit_fraction <= 1.0:

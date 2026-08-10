@@ -43,6 +43,22 @@ template <SearchGame Game> void exercise_tree(typename Game::State position) {
     require(tree.root().visits == 0, "Shared game tree reset retained old statistics");
 }
 
+std::size_t selectedRootEdgeAfterOneVisit(const float rootValue, const float fpuReduction) {
+    GameSearchTree<Go7Game> tree(
+        GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}), 1, 64);
+    const auto legalActions = Go7Game::legalActions(tree.root().position);
+    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}};
+    for (const GoAction action : legalActions) {
+        inference.actions.emplace_back(action, 1.0F / static_cast<float>(legalActions.size()));
+    }
+    tree.expand(tree.rootIndex(), inference);
+    const std::size_t firstLeaf = *tree.selectAvailableLeaf(0.1F);
+    tree.backPropagate(firstLeaf, -rootValue);
+
+    const std::size_t selectedLeaf = *tree.selectAvailableLeaf(0.1F, fpuReduction);
+    return *tree.node(selectedLeaf).parent_edge_index;
+}
+
 } // namespace
 
 int runGameSearchTreeTests() {
@@ -54,6 +70,12 @@ int runGameSearchTreeTests() {
             GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}));
         exercise_tree<Go9Game>(
             GoPosition<9>(GoRules{.komi_half_points = 15, .maximum_moves = 324}));
+        for (const float rootValue : {-0.8F, 0.8F}) {
+            require(selectedRootEdgeAfterOneVisit(rootValue, 0.0F) != 0,
+                    "Zero FPU reduction did not preserve the unvisited-child preference");
+            require(selectedRootEdgeAfterOneVisit(rootValue, 0.2F) == 0,
+                    "Reduced-parent FPU did not use the parent-value perspective");
+        }
         std::cout << "Shared chess and Go search-tree tests passed\n";
         return EXIT_SUCCESS;
     } catch (const std::exception &error) {

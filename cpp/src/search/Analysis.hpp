@@ -70,7 +70,8 @@ public:
           m_search(runtimeParameters.model_path, runtimeParameters.device,
                    runtimeParameters.device_id, parameters.inference,
                    BatchedSearchParameters(parameters.parallel_searches,
-                                           parameters.exploration_constant, 0, 1.0F, 0.0F, 1'024),
+                                           parameters.exploration_constant, 0.0F, 0, 1.0F, 0.0F,
+                                           1'024),
                    0, false, 1.0F) {}
 
     [[nodiscard]] Root newRoot(Position position) {

@@ -68,7 +68,7 @@ def main() -> None:
 
     search = ChessSelfPlaySearch(
         InferenceConfiguration(args.device, str(args.model)),
-        SelfPlaySearchParameters(1, 8, 8, 1.0, 0.3, 0.0, 0),
+        SelfPlaySearchParameters(1, 8, 8, 1.0, 0.0, 0.3, 0.0, 0),
         BatchedInferenceParameters(1, 16, 1),
     )
     blind_parent = search.new_root(board_before_third_occurrence.fen())

@@ -56,15 +56,19 @@ int runBatchedSearchTests() {
     const std::filesystem::path invalidModelPath =
         createTestModel("invalid", 0.5F, 0.5F, 0.0F, false);
     try {
+        try {
+            static_cast<void>(ChessSelfPlaySearchParameters(1, 16, 8, 1.5F, -0.1F, 0.3F, 0.25F, 0));
+            throw std::runtime_error("negative FPU reduction unexpectedly validated");
+        } catch (const std::invalid_argument &) {
+        }
         const InferenceConfiguration runtimeParameters(0, modelPath.string(), InferenceDevice::Cpu);
-        const ChessSelfPlaySearchParameters searchParameters(1, 16, 8, 1.5F, 0.3F, 0.25F, 0);
+        const ChessSelfPlaySearchParameters searchParameters(1, 16, 8, 1.5F, 0.0F, 0.3F, 0.25F, 0);
         const BatchedInferenceParameters inferenceParameters(2, 4, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
         require(search.modelGeneration() == 7, "search lost its initial model generation");
         require(std::abs(inferenceValue(search)) < 0.001F,
                 "initial model returned the wrong value");
-        const std::uint64_t evaluationsBeforeSearch =
-            search.inferenceStatistics().evaluations;
+        const std::uint64_t evaluationsBeforeSearch = search.inferenceStatistics().evaluations;
 
         const std::vector<ChessSelfPlaySearchRequest> boards = {
             ChessSelfPlaySearchRequest(search.newRoot(Board{}), true),
@@ -151,10 +155,11 @@ int runBatchedSearchTests() {
         }
         require(search.modelGeneration() == 28, "repeated refresh lost model generation");
 
-        const ChessSelfPlaySearchParameters sameCapacitySchedule(1, 16, 7, 1.25F, 0.3F, 0.25F, 0);
+        const ChessSelfPlaySearchParameters sameCapacitySchedule(1, 16, 7, 1.25F, 0.0F, 0.3F, 0.25F,
+                                                                 0);
         require(!search.updateSearchSchedule(sameCapacitySchedule),
                 "equal-capacity schedule incorrectly required root replacement");
-        const ChessSelfPlaySearchParameters largerSchedule(1, 24, 8, 1.25F, 0.3F, 0.25F, 0);
+        const ChessSelfPlaySearchParameters largerSchedule(1, 24, 8, 1.25F, 0.0F, 0.3F, 0.25F, 0);
         require(search.updateSearchSchedule(largerSchedule),
                 "larger schedule did not report an arena-capacity change");
 

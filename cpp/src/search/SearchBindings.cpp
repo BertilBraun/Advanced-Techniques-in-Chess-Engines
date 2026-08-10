@@ -68,9 +68,9 @@ void bind_search(py::module_ &module) {
         .def_readonly("root_value", &GameSearchResult::root_value)
         .def_readonly("visits", &GameSearchResult::visits);
     py::class_<BatchedSearchParameters>(module, "BatchedSearchParameters")
-        .def(py::init<std::uint32_t, float, std::uint32_t, float, float, std::size_t>(),
+        .def(py::init<std::uint32_t, float, float, std::uint32_t, float, float, std::size_t>(),
              py::arg("parallel_searches"), py::arg("exploration_constant"),
-             py::arg("minimum_root_visits"), py::arg("dirichlet_alpha"),
+             py::arg("fpu_reduction"), py::arg("minimum_root_visits"), py::arg("dirichlet_alpha"),
              py::arg("dirichlet_epsilon"), py::arg("tree_capacity"));
     py::class_<BatchedInferenceParameters>(module, "BatchedInferenceParameters")
         .def(py::init<std::size_t, std::size_t, std::size_t>(), py::arg("workers"),
@@ -86,15 +86,16 @@ void bind_search(py::module_ &module) {
         .def_readonly("exploration_constant", &AnalysisParameters::exploration_constant)
         .def_readonly("inference", &AnalysisParameters::inference);
     py::class_<SelfPlaySearchParameters>(module, "SelfPlaySearchParameters")
-        .def(py::init<std::uint32_t, std::uint32_t, std::uint32_t, float, float, float,
+        .def(py::init<std::uint32_t, std::uint32_t, std::uint32_t, float, float, float, float,
                       std::uint32_t>(),
              py::arg("parallel_searches"), py::arg("full_searches"), py::arg("fast_searches"),
-             py::arg("exploration_constant"), py::arg("dirichlet_alpha"),
+             py::arg("exploration_constant"), py::arg("fpu_reduction"), py::arg("dirichlet_alpha"),
              py::arg("dirichlet_epsilon"), py::arg("minimum_root_visits"))
         .def_readwrite("parallel_searches", &SelfPlaySearchParameters::parallel_searches)
         .def_readwrite("full_searches", &SelfPlaySearchParameters::full_searches)
         .def_readwrite("fast_searches", &SelfPlaySearchParameters::fast_searches)
         .def_readwrite("exploration_constant", &SelfPlaySearchParameters::exploration_constant)
+        .def_readwrite("fpu_reduction", &SelfPlaySearchParameters::fpu_reduction)
         .def_readwrite("dirichlet_alpha", &SelfPlaySearchParameters::dirichlet_alpha)
         .def_readwrite("dirichlet_epsilon", &SelfPlaySearchParameters::dirichlet_epsilon)
         .def_readwrite("minimum_root_visits", &SelfPlaySearchParameters::minimum_root_visits);

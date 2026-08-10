@@ -150,6 +150,9 @@ go:
       exploration_constant:
         kind: constant
         value: 1.5
+      fpu_reduction:
+        kind: constant
+        value: 0.0
       minimum_root_visits:
         kind: constant
         value: 0

@@ -307,6 +307,7 @@ private:
                 tree.node(*leaf).inference_pending = true;
             } else {
                 leaf = tree.selectAvailableLeaf(m_searchParameters.exploration_constant,
+                                                m_searchParameters.fpu_reduction,
                                                 m_searchParameters.minimum_root_visits);
                 if (!leaf.has_value()) {
                     return false;

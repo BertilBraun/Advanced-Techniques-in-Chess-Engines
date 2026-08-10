@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from math import isfinite
+
 from pydantic import Field, model_validator
 
 from src.experiment.generation_schedule import (
@@ -18,6 +20,7 @@ class SelfPlaySearchParams(FrozenModel):
     dirichlet_epsilon: FloatGenerationSchedule
     dirichlet_alpha: FloatGenerationSchedule
     exploration_constant: FloatGenerationSchedule
+    fpu_reduction: FloatGenerationSchedule
     minimum_root_visits: IntegerGenerationSchedule
 
     @model_validator(mode='after')
@@ -32,6 +35,8 @@ class SelfPlaySearchParams(FrozenModel):
             raise ValueError('Dirichlet alpha must remain positive.')
         if any(value <= 0.0 for value in defined_schedule_values(self.exploration_constant)):
             raise ValueError('Exploration constant must remain positive.')
+        if any(not isfinite(value) or value < 0.0 for value in defined_schedule_values(self.fpu_reduction)):
+            raise ValueError('FPU reduction must remain finite and nonnegative.')
         if any(value < 0 for value in defined_schedule_values(self.minimum_root_visits)):
             raise ValueError('Minimum root visits must remain nonnegative.')
         return self
@@ -89,6 +94,7 @@ class SelfPlayConfiguration(FrozenModel):
             fast_searches=search.fast_searches.value_at(model_generation),
             minimum_root_visits=search.minimum_root_visits.value_at(model_generation),
             exploration_constant=search.exploration_constant.value_at(model_generation),
+            fpu_reduction=search.fpu_reduction.value_at(model_generation),
             dirichlet_alpha=search.dirichlet_alpha.value_at(model_generation),
             dirichlet_epsilon=search.dirichlet_epsilon.value_at(model_generation),
             retained_root_visit_fraction=self.retained_root_visit_fraction.value_at(model_generation),

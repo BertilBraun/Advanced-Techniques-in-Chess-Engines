@@ -24,20 +24,24 @@ struct SelfPlaySearchParameters {
     std::uint32_t full_searches;
     std::uint32_t fast_searches;
     float exploration_constant;
+    float fpu_reduction;
     float dirichlet_alpha;
     float dirichlet_epsilon;
     std::uint32_t minimum_root_visits;
 
     SelfPlaySearchParameters(std::uint32_t parallelSearches, std::uint32_t fullSearches,
                              std::uint32_t fastSearches, float explorationConstant,
-                             float dirichletAlpha, float dirichletEpsilon,
+                             float fpuReduction, float dirichletAlpha, float dirichletEpsilon,
                              std::uint32_t minimumRootVisits)
         : parallel_searches(parallelSearches), full_searches(fullSearches),
           fast_searches(fastSearches), exploration_constant(explorationConstant),
-          dirichlet_alpha(dirichletAlpha), dirichlet_epsilon(dirichletEpsilon),
-          minimum_root_visits(minimumRootVisits) {
+          fpu_reduction(fpuReduction), dirichlet_alpha(dirichletAlpha),
+          dirichlet_epsilon(dirichletEpsilon), minimum_root_visits(minimumRootVisits) {
         if (parallel_searches == 0 || full_searches == 0 || fast_searches == 0) {
             throw std::invalid_argument("Self-play search counts must be positive");
+        }
+        if (!std::isfinite(fpu_reduction) || fpu_reduction < 0.0F) {
+            throw std::invalid_argument("FPU reduction must be finite and nonnegative");
         }
     }
 
@@ -193,9 +197,10 @@ private:
 
     [[nodiscard]] static BatchedSearchParameters
     engineParameters(const SelfPlaySearchParameters &parameters) {
-        return {parameters.parallel_searches,   parameters.exploration_constant,
-                parameters.minimum_root_visits, parameters.dirichlet_alpha,
-                parameters.dirichlet_epsilon,   parameters.arenaCapacity()};
+        return {parameters.parallel_searches, parameters.exploration_constant,
+                parameters.fpu_reduction,     parameters.minimum_root_visits,
+                parameters.dirichlet_alpha,   parameters.dirichlet_epsilon,
+                parameters.arenaCapacity()};
     }
 
     [[nodiscard]] static SelfPlaySearchStatistics treeStatistics(const Root &root) {

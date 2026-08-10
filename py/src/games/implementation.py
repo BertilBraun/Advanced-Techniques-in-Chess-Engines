@@ -67,6 +67,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
             full_searches=parameters.full_searches,
             fast_searches=parameters.fast_searches,
             exploration_constant=parameters.exploration_constant,
+            fpu_reduction=parameters.fpu_reduction,
             dirichlet_alpha=parameters.dirichlet_alpha,
             dirichlet_epsilon=parameters.dirichlet_epsilon,
             minimum_root_visits=parameters.minimum_root_visits,

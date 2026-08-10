@@ -215,6 +215,7 @@ def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
         full_searches=arguments.searches,
         fast_searches=arguments.searches,
         exploration_constant=2.0,
+        fpu_reduction=0.0,
         dirichlet_alpha=0.3,
         dirichlet_epsilon=0.25,
         minimum_root_visits=0,

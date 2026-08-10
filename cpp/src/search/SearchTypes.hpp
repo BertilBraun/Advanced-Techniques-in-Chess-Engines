@@ -4,6 +4,7 @@
 #include "search/InferenceTypes.hpp"
 #include "search/SearchTree.hpp"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
@@ -35,22 +36,24 @@ struct GameSearchBatchResult {
 struct BatchedSearchParameters {
     std::uint32_t parallel_searches;
     float exploration_constant;
+    float fpu_reduction;
     std::uint32_t minimum_root_visits;
     float dirichlet_alpha;
     float dirichlet_epsilon;
     std::size_t tree_capacity;
 
     BatchedSearchParameters(std::uint32_t parallelSearches, float explorationConstant,
-                            std::uint32_t minimumRootVisits, float dirichletAlpha,
-                            float dirichletEpsilon, std::size_t treeCapacity)
+                            float fpuReduction, std::uint32_t minimumRootVisits,
+                            float dirichletAlpha, float dirichletEpsilon, std::size_t treeCapacity)
         : parallel_searches(parallelSearches), exploration_constant(explorationConstant),
-          minimum_root_visits(minimumRootVisits), dirichlet_alpha(dirichletAlpha),
-          dirichlet_epsilon(dirichletEpsilon), tree_capacity(treeCapacity) {
+          fpu_reduction(fpuReduction), minimum_root_visits(minimumRootVisits),
+          dirichlet_alpha(dirichletAlpha), dirichlet_epsilon(dirichletEpsilon),
+          tree_capacity(treeCapacity) {
         if (parallel_searches == 0 || tree_capacity == 0) {
             throw std::invalid_argument("Batched search counts and tree capacity must be positive");
         }
-        if (exploration_constant <= 0.0F || dirichlet_alpha <= 0.0F || dirichlet_epsilon < 0.0F ||
-            dirichlet_epsilon > 1.0F) {
+        if (exploration_constant <= 0.0F || !std::isfinite(fpu_reduction) || fpu_reduction < 0.0F ||
+            dirichlet_alpha <= 0.0F || dirichlet_epsilon < 0.0F || dirichlet_epsilon > 1.0F) {
             throw std::invalid_argument("Batched search constants are outside their valid range");
         }
     }
