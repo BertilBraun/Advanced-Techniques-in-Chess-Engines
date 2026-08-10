@@ -81,11 +81,11 @@ evaluation:
   bootstrap_samples: 10000
   maximum_concurrent_jobs: 10
   dataset:
-    path: py/reference/go-7x7-baseline-v1.bin
+    path: py/reference/go-7x7-baseline-v2.bin
     random_seed: 1207
     move_sampling_temperature: 1.0
   openings:
-    path: py/reference/go-7x7-baseline-openings-v1.json
+    path: py/reference/go-7x7-baseline-openings-v2.json
     random_seed: 1207
     opening_count: 200
     expanded_actions_per_position: 8

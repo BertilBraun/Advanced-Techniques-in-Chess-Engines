@@ -119,7 +119,7 @@ artifact storage when a production baseline is frozen; Git remains an option onl
 wants binary reference data in repository history.
 
 The approved Go 7x7 production baseline is that deliberate exception. Its 486-position dataset, dataset manifest,
-and 50-line opening suite are tracked under `py/reference/go-7x7-baseline-*`, so fresh nodes validate and reuse them
+and opening suite are tracked under `py/reference/go-7x7-baseline-*`, so fresh nodes validate and reuse them
 without repeating the production-strength KataGo generation pass.
 
 ## R10 infrastructure gate

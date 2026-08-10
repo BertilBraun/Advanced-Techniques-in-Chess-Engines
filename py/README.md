@@ -138,6 +138,15 @@ python py/export_experiment_results.py --queue-config <queue-yaml> --output <res
 The complete Vast workflow and archive contents are documented in
 [`documentation/operations/experiment-result-export.md`](../documentation/operations/experiment-result-export.md).
 
+Generate or validate the immutable engine-labelled dataset and opening suite without starting training:
+
+```text
+python py/prepare_evaluation_artifacts.py --run-config <experiment-yaml>
+```
+
+Existing artifacts are reused only when their complete engine, rules, representation, search-limit, and generation
+provenance matches the configuration.
+
 The run command exits zero only when every experiment completed successfully and exits one when any experiment
 failed. On `SIGINT` or `SIGTERM`, it sends `SIGTERM` to each active process group, waits the configured grace period,
 forcibly kills any remaining tracked descendants, and records failures before exiting. Completed and failed entries

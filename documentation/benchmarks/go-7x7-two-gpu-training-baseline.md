@@ -131,8 +131,8 @@ Evaluation remains on the accepted 20-minute elapsed cadence and logs at the sch
 20 minutes and cycle independently across devices 0 and 1. The production dataset and opening suite are immutable,
 checked-in baseline inputs. Run preparation validates and reuses them rather than invoking KataGo generation:
 
-- engine-labelled dataset: `py/reference/go-7x7-baseline-v1.bin`;
-- four-ply, 50-line opening suite: `py/reference/go-7x7-baseline-openings-v1.json`.
+- engine-labelled dataset: `py/reference/go-7x7-baseline-v2.bin`;
+- four-ply, 200-line opening suite: `py/reference/go-7x7-baseline-openings-v2.json`.
 
 The dataset contains 486 positions retained from 30 complete games. Its SHA-256 is
 `c63c3e8894ea01d016e5c3bc5a0bc90a1214b98eb2eb3cac7301a7270d8ba5b0`; the manifest SHA-256 is
