@@ -134,17 +134,17 @@ checked-in baseline inputs. Run preparation validates and reuses them rather tha
 - engine-labelled dataset: `py/reference/go-7x7-baseline-v2.bin`;
 - four-ply, 200-line opening suite: `py/reference/go-7x7-baseline-openings-v2.json`.
 
-The dataset contains 486 positions retained from 30 complete games. Its SHA-256 is
-`c63c3e8894ea01d016e5c3bc5a0bc90a1214b98eb2eb3cac7301a7270d8ba5b0`; the manifest SHA-256 is
-`c0aa1b1da69186e6062f64c0f7a1e4ef37b4b573f270084056228e4f627dbd99`; and the opening-suite SHA-256 is
-`57283f2e27d27af6c8e3403c1979dd5431948cd8132ccb01177d727e6c00f80e`.
+The dataset contains 485 positions retained from 30 complete games. Its SHA-256 is
+`efd71e287fed4a57654a88ff406b712e5114ee1ed8e091e016f745eaa3876cfb`; the manifest SHA-256 is
+`9636ce92b638fcdb9684872d0fe68296e659d384e9c046190dc2a4d0f9631c01`; and the opening-suite SHA-256 is
+`d3df25e4228b6eaf456b169e055b60d71a591345bbd3a434fd03725d98479299`.
 
-KataGo labels the dataset at 256 visits. Separate match definitions use 16, 64, and 256 visits. Every paired match
-definition uses all 50 openings with the candidate playing each side, hence 100 games per definition. The fixed
-ladder contains:
+KataGo labels the dataset at 256 visits. Separate match definitions use 16, 64, and 128 visits. Checkpoint and
+same-time baseline definitions use 200 paired openings, hence 400 games per definition. KataGo definitions use 50
+paired openings, hence 100 games per definition. The fixed ladder contains:
 
 - fixed-dataset policy accuracy and cross-entropy;
-- checkpoints selected at the preceding 20-, 40-, and 60-minute boundaries plus alternating older offsets;
+- checkpoints selected at the preceding 20-, 40-, and 60-minute boundaries;
 - the same-time checkpoint from the completed baseline run;
 - KataGo at 16, 64, and 128 visits.
 
