@@ -40,11 +40,14 @@ checkpoints are the only runtime same-time baseline. Historical archives are ana
 Give the baseline roughly two to five minutes of lead before adding challengers, then confirm at their first
 boundary that `same-time-baseline` jobs were scheduled rather than skipped.
 
-## Fresh-node bootstrap and approval
+## Hardware gate, fresh-node bootstrap, and approval
 
-Before mutation, read `/etc/vast-agents-guide.md` and record the offer/price, `nvidia-smi`, GPU model/count/VRAM and
-topology, CPU affinity/NUMA, RAM, disk capacity and throughput, network, driver, and image. Stop if measured hardware
-does not support the authored topology.
+Before renting, compare the offer's GPU model/count/VRAM, CPU allocation, RAM, disk capacity and throughput,
+network, reliability, maximum duration, and hourly price with the intended experiment topology and budget. After
+connecting but before bootstrap, read `/etc/vast-agents-guide.md`; record the actual `nvidia-smi` inventory and
+topology, CPU affinity/NUMA and quota, RAM, disk, network, driver, and image; and run a bounded pinned CPU check when
+host contention is in doubt. Stop before `deployment/setup_remote.sh` if measured hardware, available resources,
+or cost do not support the authored slots. Marketplace claims are selection hints, not validation evidence.
 
 `deployment/setup_remote.sh` is the authoritative fresh bootstrap. Give it the exact revision and runner command;
 it creates the locked virtual environment, builds the Release native extension, installs engines, exposes the
@@ -110,7 +113,7 @@ temperature, power, and utilization across self-play, DDP, and evaluation conten
 The node TensorBoard service listens on port 16006 and watches `/workspace`. Forward it separately, for example:
 
 ```powershell
-ssh -i C:\Users\berti\.ssh\codex_vast_ed25519 -p 30692 root@38.246.237.140 `
+ssh -i C:\path\to\vast_key -p SSH_PORT root@HOST `
   -L 6006:localhost:16006
 ```
 

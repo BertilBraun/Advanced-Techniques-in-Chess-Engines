@@ -440,14 +440,13 @@ earlier phase's storage, process, or recovery design.
 | R7 | Native Go game implementation | accepted |
 | R8 | Go pipeline integration | accepted |
 | R9 | Go evaluation and elapsed checkpoint scheduling | accepted |
-| R10 | Resource-aware experiment queue | awaiting_user_review |
-| R11 | Integrated validation and benchmark preparation | in_progress |
-| R12 | Target-hardware baseline and screening experiments | in_progress |
+| R10 | Resource-aware experiment queue | accepted |
+| R11 | Integrated validation and benchmark preparation | accepted |
+| R12 | Target-hardware baseline and screening experiments | accepted |
 
-Current authorization: R1 through R9 and the post-R9 Python/documentation cleanup are accepted. R10 is implemented
-and `awaiting_user_review`. The user authorized R11 rented-node provisioning and integrated validation on 2026-08-09
-and subsequently authorized the R12 7x7 baseline and screening runs. R11 and R12 remain `in_progress` while the
-evaluation foundation and repeatable queue workflow are finalized.
+Current status: R1 through R12 and the post-R9 Python/documentation cleanup are accepted. Ongoing screening runs and
+future experiment additions are ordinary operation of the accepted platform, not open rework phases. Use the
+[experiment platform guide](../operations/experiment-platform.md) for current node and experiment work.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -908,6 +907,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-10 | R10/R11/R12 | Acceptance | The resource-aware queue, integrated rented-node validation, fresh target-hardware baseline, and live four-slot screening workflow are operating successfully. | Mark R10, R11, and R12 `accepted`. Treat later screening and experiment extensions as ordinary platform operation unless they introduce an architectural change. |
 | 2026-08-11 | R9/R12 | Go external-engine ladder simplification | The three KataGo tiers consumed three job slots and substantial evaluation time while the 16/64/128 curves were too similar to justify all three during screening. | Keep one paired 50-opening KataGo match at 64 visits. Retain the completed 16-vs-128 diagnostic as evidence that visit strength is ordered, but remove the 16- and 128-visit jobs from current 7x7/9x9 templates and the screening baseline. |
 | 2026-08-10 | R9/R12 | Go evaluation controls and screening ladder | Early KataGo curves were noisy, strongly player-order dependent, and insufficiently separated; the online ladder also spent capacity on increasingly old in-run checkpoints while primary comparisons used only 50 opening pairs. | Add a focused typed diagnostic with complete per-game JSON/SGF and native/KataGo score checks. Target-hardware controls produced exact 50% deterministic model identity, KataGo-16 self-play consistent with 50%, and a statistically detectable KataGo-128 advantage over KataGo-16. Keep paired KataGo 16/64/128 matches at 50 openings; evaluate only previous 20/40/60-minute and same-time baseline checkpoints with 200 pairs (400 games) each; remove older alternating offsets. |
 | 2026-08-10 | R10/R12 | Queue ownership and result preservation | Remote-only queue YAML and a revision-specific wrapper made the desired screening order hard to inspect or change, while completed-run backups needed evaluation checkpoints but not replay payloads. | Commit the two-slot Vast screening queue and a stable approval-directory runner that resolves the child revision at launch. Continue reloading pending YAML without interrupting running entries. Add a verified queue-aware ZIP exporter containing run metadata, logs, TensorBoard, evaluations, every elapsed evaluation checkpoint, and only the latest optimizer. |
