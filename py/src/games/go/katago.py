@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
-from typing import TextIO
+from typing import Literal, TextIO
 from types import TracebackType
 
 from pydantic import JsonValue, TypeAdapter
@@ -25,6 +25,19 @@ class _KataGoPolicyResponse:
     request_id: str
     weighted_actions: tuple[tuple[int, float], ...]
     selected_action_id: int
+    score_estimate: KataGoScoreEstimate | None
+
+
+@dataclass(frozen=True)
+class KataGoScoreEstimate:
+    current_player: Literal['black', 'white']
+    score_lead: float
+
+
+@dataclass(frozen=True)
+class KataGoAnalysis:
+    policy: EnginePolicy
+    score_estimate: KataGoScoreEstimate | None
 
 
 def _file_sha256(path: Path) -> str:
@@ -98,7 +111,21 @@ def _parse_policy_response(line: str, expected_ids: set[str], board_size: int) -
     if move_infos is None:
         raise ValueError('KataGo response omitted moveInfos.')
     weighted_actions, selected_action_id = _parse_weighted_actions(move_infos, board_size)
-    return _KataGoPolicyResponse(request_id, weighted_actions, selected_action_id)
+    root_info = response.get('rootInfo')
+    score_estimate = None
+    if root_info is not None:
+        root = JSON_OBJECT_ADAPTER.validate_python(root_info)
+        current_player = root.get('currentPlayer')
+        score_lead = root.get('scoreLead')
+        if current_player not in {'B', 'W'}:
+            raise ValueError('KataGo rootInfo has an invalid current player.')
+        if not isinstance(score_lead, int | float) or isinstance(score_lead, bool):
+            raise ValueError('KataGo rootInfo has an invalid score lead.')
+        score_estimate = KataGoScoreEstimate(
+            current_player='black' if current_player == 'B' else 'white',
+            score_lead=float(score_lead),
+        )
+    return _KataGoPolicyResponse(request_id, weighted_actions, selected_action_id, score_estimate)
 
 
 def _normalized_policy(weighted_actions: tuple[tuple[int, float], ...], selected_action_id: int) -> EnginePolicy:
@@ -247,27 +274,37 @@ class KataGoClient:
         self._input.flush()
         return request_id
 
-    def _receive(self, expected_ids: set[str]) -> dict[str, EnginePolicy]:
-        responses: dict[str, EnginePolicy] = {}
+    def _receive(self, expected_ids: set[str]) -> dict[str, KataGoAnalysis]:
+        responses: dict[str, KataGoAnalysis] = {}
         while responses.keys() != expected_ids:
             line = self._output.readline()
             if not line:
                 raise RuntimeError(f'KataGo analysis process exited with code {self._process.poll()}.')
             response = _parse_policy_response(line, expected_ids, self.state.board_size)
-            responses[response.request_id] = _normalized_policy(
-                response.weighted_actions,
-                response.selected_action_id,
+            responses[response.request_id] = KataGoAnalysis(
+                policy=_normalized_policy(
+                    response.weighted_actions,
+                    response.selected_action_id,
+                ),
+                score_estimate=response.score_estimate,
             )
         return responses
+
+    def analyze_detailed_many(
+        self,
+        action_sequences: tuple[tuple[int, ...], ...],
+        maximum_visits: int,
+    ) -> tuple[KataGoAnalysis, ...]:
+        request_ids = tuple(self._submit(action_ids, maximum_visits) for action_ids in action_sequences)
+        responses = self._receive(set(request_ids))
+        return tuple(responses[request_id] for request_id in request_ids)
 
     def analyze_many(
         self,
         action_sequences: tuple[tuple[int, ...], ...],
         maximum_visits: int,
     ) -> tuple[EnginePolicy, ...]:
-        request_ids = tuple(self._submit(action_ids, maximum_visits) for action_ids in action_sequences)
-        responses = self._receive(set(request_ids))
-        return tuple(responses[request_id] for request_id in request_ids)
+        return tuple(analysis.policy for analysis in self.analyze_detailed_many(action_sequences, maximum_visits))
 
     def policy(self, position: NativeGoPosition, action_ids: tuple[int, ...]) -> EnginePolicy:
         return self.analyze_many((action_ids,), self.configuration.label_max_visits)[0]

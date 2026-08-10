@@ -130,7 +130,13 @@ def test_katago_analysis_matches_out_of_order_responses(monkeypatch: pytest.Monk
         path.write_bytes(path.name.encode('utf-8'))
     responses = '\n'.join(
         (
-            json.dumps({'id': 'evaluation-1', 'moveInfos': [{'move': 'pass', 'weight': 1.0, 'order': 0}]}),
+            json.dumps(
+                {
+                    'id': 'evaluation-1',
+                    'moveInfos': [{'move': 'pass', 'weight': 1.0, 'order': 0}],
+                    'rootInfo': {'currentPlayer': 'W', 'scoreLead': 2.5},
+                }
+            ),
             json.dumps(
                 {
                     'id': 'evaluation-0',
@@ -138,6 +144,7 @@ def test_katago_analysis_matches_out_of_order_responses(monkeypatch: pytest.Monk
                         {'move': 'A7', 'weight': 1.0, 'order': 0},
                         {'move': 'B7', 'weight': 3.0, 'order': 1},
                     ],
+                    'rootInfo': {'currentPlayer': 'B', 'scoreLead': -1.5},
                 }
             ),
         )
@@ -154,13 +161,20 @@ def test_katago_analysis_matches_out_of_order_responses(monkeypatch: pytest.Monk
     state = GoStateContract(7, komi_half_points=15, maximum_moves=196)
     client = KataGoClient(configuration, state, *paths)
 
-    policies = client.analyze_many(((), (0,)), 32)
+    analyses = client.analyze_detailed_many(((), (0,)), 32)
+    policies = tuple(analysis.policy for analysis in analyses)
     submitted = [json.loads(line) for line in process.stdin.getvalue().splitlines()]
     client.close()
 
     assert policies[0].selected_action_id == 0
     assert policies[1].selected_action_id == state.pass_action
     assert max(policies[0].entries, key=lambda entry: entry.probability).action_id == 1
+    assert analyses[0].score_estimate is not None
+    assert analyses[0].score_estimate.current_player == 'black'
+    assert analyses[0].score_estimate.score_lead == -1.5
+    assert analyses[1].score_estimate is not None
+    assert analyses[1].score_estimate.current_player == 'white'
+    assert analyses[1].score_estimate.score_lead == 2.5
     assert submitted[1]['moves'] == [['B', 'A7']]
     assert all(request['rules'] == 'chinese' and request['komi'] == 7.5 for request in submitted)
     assert process.was_terminated

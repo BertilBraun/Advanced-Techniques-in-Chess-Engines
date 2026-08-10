@@ -28,6 +28,12 @@ class NativeEnumValue(Protocol):
 
 class NativeGoAreaScore(Protocol):
     @property
+    def black_half_points(self) -> int: ...
+
+    @property
+    def white_half_points(self) -> int: ...
+
+    @property
     def winner(self) -> NativeEnumValue | None: ...
 
 
