@@ -485,6 +485,12 @@ def write_go_diagnostic_result(result: GoEvaluationDiagnosticResult, path: Path)
     write_text_atomically(path, result.model_dump_json(indent=2) + '\n')
 
 
+def _summarize_opening_ids(opening_ids: tuple[str, ...]) -> str:
+    visible = ', '.join(opening_ids[:5])
+    remaining = len(opening_ids) - 5
+    return visible if remaining <= 0 else f'{visible} (+{remaining} more)'
+
+
 def render_go_diagnostic_analysis(result: GoEvaluationDiagnosticResult) -> str:
     lines = ['# Go evaluation diagnostic', '']
     for match in result.matches:
@@ -509,8 +515,12 @@ def render_go_diagnostic_analysis(result: GoEvaluationDiagnosticResult) -> str:
         )
         minimum_pair_score = min(score for _, score in pair_scores)
         maximum_pair_score = max(score for _, score in pair_scores)
-        minimum_openings = ', '.join(opening_id for opening_id, score in pair_scores if score == minimum_pair_score)
-        maximum_openings = ', '.join(opening_id for opening_id, score in pair_scores if score == maximum_pair_score)
+        minimum_openings = _summarize_opening_ids(
+            tuple(opening_id for opening_id, score in pair_scores if score == minimum_pair_score)
+        )
+        maximum_openings = _summarize_opening_ids(
+            tuple(opening_id for opening_id, score in pair_scores if score == maximum_pair_score)
+        )
         engine_score_checks = tuple(
             (
                 game.native_area_score.black_minus_white_points,
@@ -547,6 +557,10 @@ def render_go_diagnostic_analysis(result: GoEvaluationDiagnosticResult) -> str:
     identity = result.matches[0]
     equal_katago = result.matches[1]
     stronger = result.matches[2]
+    equal_is_consistent = (
+        equal_katago.aggregate.score_confidence_low <= 0.5 <= equal_katago.aggregate.score_confidence_high
+    )
+    stronger_is_demonstrated = stronger.aggregate.score_confidence_high < 0.5
     lines.extend(
         (
             '## Interpretation',
@@ -557,14 +571,21 @@ def render_go_diagnostic_analysis(result: GoEvaluationDiagnosticResult) -> str:
             else f'- Identical deterministic checkpoint play is {identity.aggregate.score:.1%}; '
             'the plumbing identity invariant failed.',
             f'- Equal KataGo 16-visit play scores {equal_katago.aggregate.score:.1%}.',
+            f'- Its paired interval {"includes" if equal_is_consistent else "excludes"} 50%; '
+            'the equal-engine control is therefore '
+            f'{"consistent" if equal_is_consistent else "inconsistent"} with fair role swapping.',
             f'- KataGo 16 versus 128 visits scores {stronger.aggregate.score:.1%} for the 16-visit engine; '
             f'the paired interval is {stronger.aggregate.score_confidence_low:.1%}–'
             f'{stronger.aggregate.score_confidence_high:.1%}.',
-            '- A 128-visit advantage is demonstrable only when the 16-visit score interval lies wholly below 50%.',
-            '- If both identity controls are exactly 50%, the early 10–18% project-model scores are not an '
-            'aggregation or role-swap artifact. On only 100 games, a barely trained policy can still win a '
-            'nonzero opening-dependent tail against a very low-visit opponent; later curve changes then reflect '
-            'actual policy/search learning plus ordinary paired-sample uncertainty.',
+            f'- The 128-visit advantage is {"demonstrable" if stronger_is_demonstrated else "not demonstrable"} '
+            'at this sample size because the 16-visit score interval '
+            f'{"lies wholly below" if stronger_is_demonstrated else "does not lie wholly below"} 50%.',
+            '- The very large first-player advantage shows why raw color totals are misleading and every opening '
+            'must be paired.',
+            '- The exact model identity result and the equal-KataGo interval rule out a role-swap or aggregation '
+            'explanation for the initially barely trained model scoring 10–18%. A weak, low-visit KataGo opponent '
+            'still loses an opening-dependent tail within 100 games; later curve changes are compatible with real '
+            'policy/search learning plus paired-sample uncertainty.',
             '',
         )
     )
