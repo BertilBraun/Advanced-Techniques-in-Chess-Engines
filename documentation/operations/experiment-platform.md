@@ -87,6 +87,30 @@ The supervisor snapshots its queue-owned Linux launch helpers into the persisten
 Future launches use that immutable supervisor snapshot, not helper files in the pullable control checkout. Desired
 queue YAML and pending experiment YAML remain the only intentionally live-read control-checkout inputs.
 
+### Add new code while experiments are running
+
+Active experiments no longer pin the control checkout. To make a new implementation available to later queue
+entries:
+
+1. Develop and validate the code and its complete experiment-configuration inheritance chain in the control
+   checkout, then commit them.
+2. Put that commit's full 40-character SHA in the pending entry's `source_revision` and create a fresh approval for
+   that exact revision and resolved configuration.
+3. Atomically replace the live queue YAML. The supervisor validates the committed configuration chain immediately,
+   but creates and builds the detached worktree only when a slot is assigned.
+4. Confirm the queue summary records the intended `source_revision`, `source_worktree`, and central
+   `runtime_directory` when the experiment starts.
+
+Pulling or otherwise advancing the control checkout does not change any running experiment, and it does not
+implicitly advance a pending entry: change the pending `source_revision` and its approval explicitly. Pending
+entries may be added, removed, reordered, or revised through live reload; never change the identity of a running or
+terminal entry. Setup and compilation happen after slot assignment and therefore occupy that slot briefly.
+
+On success, the supervisor waits for tracked descendants to exit, preserves configuration and workspace provenance
+under the central runtime root, and removes the disposable worktree. It deliberately retains worktrees for failed,
+terminated, setup-failed, or preservation-failed experiments; inspect and export the evidence before removing them
+manually. Result export continues to work after successful cleanup by using the preserved configuration snapshot.
+
 Use the node's supported supervisor instead of a detached shell. The supervised command is:
 
 ```bash
