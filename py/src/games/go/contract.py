@@ -9,7 +9,12 @@ import numpy.typing as npt
 
 from src.games.representation import NetworkDimensions
 from src.games.contracts import GameStateContract, Player, WdlTarget
-from src.replay.contracts import EligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
+from src.replay.contracts import (
+    EligibleNextPolicyTarget,
+    EligibleRemainingGameLengthTarget,
+    ReplaySample,
+    SparsePolicyTarget,
+)
 from src.self_play.completed_game import SparseSearchVisit, TerminationReason
 from src.games.representation import (
     PackedPlaneLayout,
@@ -226,6 +231,8 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
             match target:
                 case EligibleNextPolicyTarget(policy=policy):
                     transformed_auxiliary.append(EligibleNextPolicyTarget(policy=transform_policy(policy)))
+                case EligibleRemainingGameLengthTarget():
+                    transformed_auxiliary.append(target)
                 case _:
                     transformed_auxiliary.append(target)
         return ReplaySample(

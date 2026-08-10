@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Annotated, Literal, TypeAlias
 
 import torch
 import torch.nn.functional as functional
+from pydantic import Field
 
 from src.training.batch import TrainingBatch, TrainingModelOutput
+from src.training.targets import (
+    AuxiliaryTargetConfiguration,
+    NextPolicyTargetConfiguration,
+    RemainingGameLengthTargetConfiguration,
+)
 from src.util.frozen_model import FrozenModel
 
 
@@ -25,14 +32,44 @@ class ObjectiveLoss:
     total: torch.Tensor
 
 
+class ResolvedNextPolicyLoss(FrozenModel):
+    kind: Literal['next_policy'] = 'next_policy'
+    weight: float = Field(ge=0.0)
+
+
+class ResolvedRemainingGameLengthLoss(FrozenModel):
+    kind: Literal['remaining_game_length'] = 'remaining_game_length'
+    weight: float = Field(ge=0.0)
+
+
+ResolvedAuxiliaryLoss: TypeAlias = Annotated[
+    ResolvedNextPolicyLoss | ResolvedRemainingGameLengthLoss,
+    Field(discriminator='kind'),
+]
+
+
+def resolve_auxiliary_losses(
+    targets: tuple[AuxiliaryTargetConfiguration, ...],
+    model_generation: int,
+) -> tuple[ResolvedAuxiliaryLoss, ...]:
+    losses: list[ResolvedAuxiliaryLoss] = []
+    for target in targets:
+        match target:
+            case NextPolicyTargetConfiguration(loss_weight=loss_weight):
+                losses.append(ResolvedNextPolicyLoss(weight=loss_weight.value_at(model_generation)))
+            case RemainingGameLengthTargetConfiguration(loss_weight=loss_weight):
+                losses.append(ResolvedRemainingGameLengthLoss(weight=loss_weight.value_at(model_generation)))
+    return tuple(losses)
+
+
 class ResolvedTrainingObjective(FrozenModel):
     policy_loss_weight: float
     value_loss_weight: float
     root_value_blend: float
-    auxiliary_loss_weights: tuple[float, ...]
+    auxiliary_losses: tuple[ResolvedAuxiliaryLoss, ...]
 
     def calculate_loss(self, output: TrainingModelOutput, batch: TrainingBatch) -> ObjectiveLoss:
-        auxiliary_count = len(self.auxiliary_loss_weights)
+        auxiliary_count = len(self.auxiliary_losses)
         if not (
             len(output.auxiliary_logits)
             == len(batch.auxiliary_targets)
@@ -51,26 +88,32 @@ class ResolvedTrainingObjective(FrozenModel):
         wdl_rows = functional.cross_entropy(output.wdl_logits, blended_wdl, reduction='none')
         wdl_loss = (wdl_rows * sample_weights).mean()
         auxiliary_losses = tuple(
-            self._masked_auxiliary_loss(logits, target, eligibility, sample_weights)
-            for logits, target, eligibility in zip(
+            self._masked_auxiliary_loss(configuration, prediction, target, eligibility, sample_weights)
+            for configuration, prediction, target, eligibility in zip(
+                self.auxiliary_losses,
                 output.auxiliary_logits,
                 batch.auxiliary_targets,
                 batch.auxiliary_eligibility,
             )
         )
         total = self.policy_loss_weight * policy_loss + self.value_loss_weight * wdl_loss
-        for weight, loss in zip(self.auxiliary_loss_weights, auxiliary_losses):
-            total = total + weight * loss
+        for configuration, loss in zip(self.auxiliary_losses, auxiliary_losses):
+            total = total + configuration.weight * loss
         return ObjectiveLoss(policy=policy_loss, wdl=wdl_loss, auxiliary=auxiliary_losses, total=total)
 
     @staticmethod
     def _masked_auxiliary_loss(
-        logits: torch.Tensor,
+        configuration: ResolvedAuxiliaryLoss,
+        prediction: torch.Tensor,
         target: torch.Tensor,
         eligibility: torch.Tensor,
         sample_weights: torch.Tensor,
     ) -> torch.Tensor:
-        rows = functional.cross_entropy(logits, target, reduction='none')
+        match configuration:
+            case ResolvedNextPolicyLoss():
+                rows = functional.cross_entropy(prediction, target, reduction='none')
+            case ResolvedRemainingGameLengthLoss():
+                rows = functional.smooth_l1_loss(prediction, target, reduction='none').squeeze(1)
         eligible_weights = eligibility.to(dtype=rows.dtype) * sample_weights
         denominator = eligible_weights.sum().clamp_min(1.0)
         return (rows * eligible_weights).sum() / denominator

@@ -7,13 +7,14 @@ from typing import TypeVar
 from src.games.contracts import GameStateContract, WdlTarget
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
+    EligibleRemainingGameLengthTarget,
     IneligibleNextPolicyTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
 from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, TerminationReason
 from src.self_play.policy import preprocessed_search_visits
-from src.training.targets import NextPolicyHeadLayout, TrainingTargetLayout
+from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 
 
 PositionT = TypeVar('PositionT')
@@ -90,6 +91,11 @@ def materialize_completed_game(
                     retained_visit_mass += auxiliary.retained_visit_mass
                     discarded_visit_mass += auxiliary.discarded_visit_mass
                     auxiliary_targets.append(EligibleNextPolicyTarget(policy=auxiliary.policy))
+                case RemainingGameLengthHeadLayout(normalization_scale=normalization_scale):
+                    remaining_plies = len(game.action_ids) - observation.ply
+                    auxiliary_targets.append(
+                        EligibleRemainingGameLengthTarget(normalized_length=remaining_plies / normalization_scale)
+                    )
 
         position = positions[observation.ply]
         position_wdl = game.final_wdl if state.current_player(position) == final_player else game.final_wdl.reversed()

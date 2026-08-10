@@ -6,7 +6,12 @@ import pytest
 
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
-from src.replay.contracts import EligibleNextPolicyTarget, IneligibleNextPolicyTarget, ReplaySample
+from src.replay.contracts import (
+    EligibleNextPolicyTarget,
+    EligibleRemainingGameLengthTarget,
+    IneligibleNextPolicyTarget,
+    ReplaySample,
+)
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayManager
 from src.replay.materialization import materialize_completed_game
@@ -19,7 +24,7 @@ from src.self_play.completed_game import (
     publish_completed_self_play_game,
 )
 from src.replay.configuration import ReplayConfiguration
-from src.training.targets import NextPolicyHeadLayout, TrainingTargetLayout
+from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 
 
 @dataclass(frozen=True)
@@ -188,6 +193,28 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
 
     assert len(materialized.samples) == 1
     assert materialized.samples[0].encoded_state == LINEAR_STATE_CONTRACT.encode_network_input(LinearPosition((0, 1)))
+
+
+def test_remaining_game_length_uses_exact_completed_trajectory_boundary() -> None:
+    targets = TrainingTargetLayout(
+        action_size=3,
+        wdl_size=3,
+        auxiliary_heads=(
+            RemainingGameLengthHeadLayout(
+                kind='remaining_game_length',
+                normalization_scale=4.0,
+            ),
+        ),
+    )
+
+    materialized = materialize_completed_game(_completed_game(), LINEAR_STATE_CONTRACT, targets, 3)
+
+    assert tuple(
+        target.normalized_length
+        for sample in materialized.samples
+        for target in sample.auxiliary_targets
+        if isinstance(target, EligibleRemainingGameLengthTarget)
+    ) == pytest.approx((1.0, 0.5, 0.25))
 
 
 def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> None:

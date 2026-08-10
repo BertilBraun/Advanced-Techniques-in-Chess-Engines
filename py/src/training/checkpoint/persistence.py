@@ -29,9 +29,9 @@ def create_model(
     args: NetworkParams,
     device: torch.device,
     dimensions: NetworkDimensions,
-    auxiliary_action_sizes: tuple[int, ...] = (),
+    auxiliary_output_sizes: tuple[int, ...] = (),
 ) -> Network:
-    model = Network(args, device, dimensions, auxiliary_action_sizes)
+    model = Network(args, device, dimensions, auxiliary_output_sizes)
     return model
 
 
@@ -48,9 +48,9 @@ def load_model(
     args: NetworkParams,
     device: torch.device,
     dimensions: NetworkDimensions,
-    auxiliary_action_sizes: tuple[int, ...] = (),
+    auxiliary_output_sizes: tuple[int, ...] = (),
 ) -> Network:
-    model = create_model(args, device, dimensions, auxiliary_action_sizes)
+    model = create_model(args, device, dimensions, auxiliary_output_sizes)
     try:
         for _ in range(5):
             try:
@@ -126,11 +126,11 @@ def load_model_and_optimizer(
     save_folder: str | PathLike[str],
     type: OptimizerType,
     dimensions: NetworkDimensions,
-    auxiliary_action_sizes: tuple[int, ...] = (),
+    auxiliary_output_sizes: tuple[int, ...] = (),
 ) -> tuple[Network, torch.optim.Optimizer]:
     manifest_path = checkpoint_manifest_path(generation, save_folder)
     if generation == 0 and not manifest_path.exists():
-        model = create_model(args, device, dimensions, auxiliary_action_sizes)
+        model = create_model(args, device, dimensions, auxiliary_output_sizes)
         optimizer = create_optimizer(model, type)
         log('Created a new model and optimizer for generation 0.')
         return model, optimizer
@@ -143,7 +143,7 @@ def load_model_and_optimizer(
         args,
         device,
         dimensions,
-        auxiliary_action_sizes,
+        auxiliary_output_sizes,
     )
     optimizer = load_optimizer(Path(save_folder) / manifest.optimizer_path, model, type, device)
     log(f'Model and optimizer loaded from generation {generation}')
@@ -168,10 +168,10 @@ def save_model_and_optimizer(
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
 
     # Create a copy of the model, then set that to eval mode, fuse it, and save it as a JIT script
-    fused_model = Network(model.network_args, model.device, model.dimensions, model.auxiliary_action_sizes)
+    fused_model = Network(model.network_args, model.device, model.dimensions, model.auxiliary_output_sizes)
     fused_model.load_state_dict(model.state_dict())
     fused_model.auxiliaryHeads = torch.nn.ModuleList()
-    fused_model.auxiliary_action_sizes = ()
+    fused_model.auxiliary_output_sizes = ()
     fused_model.eval()
     fused_model.fuse_model()
 

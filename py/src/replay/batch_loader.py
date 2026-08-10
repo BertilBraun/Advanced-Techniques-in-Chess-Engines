@@ -13,11 +13,12 @@ import torch
 
 from src.games.contracts import GameStateContract
 from src.games.representation import decode_packed_planes
-from src.replay.contracts import EligibleNextPolicyTarget
+from src.replay.contracts import EligibleNextPolicyTarget, EligibleRemainingGameLengthTarget
 from src.replay.manager import ReplayDescription
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import SparseSearchVisit
 from src.training.batch import TrainingBatch
+from src.training.targets import auxiliary_head_output_size
 
 
 PositionT = TypeVar('PositionT')
@@ -222,7 +223,8 @@ def build_training_batch(
     )
     policies = np.zeros((len(samples), state.action_size), dtype=np.float32)
     auxiliary_targets = tuple(
-        np.zeros((len(samples), head.action_size), dtype=np.float32) for head in store.layout.targets.auxiliary_heads
+        np.zeros((len(samples), auxiliary_head_output_size(head)), dtype=np.float32)
+        for head in store.layout.targets.auxiliary_heads
     )
     auxiliary_eligibility = tuple(np.zeros(len(samples), dtype=np.bool_) for _ in store.layout.targets.auxiliary_heads)
     for row, sample in enumerate(samples):
@@ -237,6 +239,9 @@ def build_training_batch(
             match target:
                 case EligibleNextPolicyTarget(policy=policy):
                     _write_dense_policy(auxiliary_targets[target_index][row], policy.visits)
+                    auxiliary_eligibility[target_index][row] = True
+                case EligibleRemainingGameLengthTarget(normalized_length=normalized_length):
+                    auxiliary_targets[target_index][row, 0] = normalized_length
                     auxiliary_eligibility[target_index][row] = True
     return TrainingBatch(
         states=torch.from_numpy(states),

@@ -7,7 +7,7 @@ import numpy as np
 from pydantic import Field, model_validator
 
 from src.games.representation import PackedPlaneLayout
-from src.training.targets import NextPolicyHeadLayout, TrainingTargetLayout
+from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 from src.util.frozen_model import FrozenModel
 
 ReplayDtypeField = tuple[str, str] | tuple[str, str, tuple[int, ...]]
@@ -47,6 +47,13 @@ class ReplayLayout(FrozenModel):
                             (f'auxiliary_{index}_eligible', 'u1'),
                         )
                     )
+                case RemainingGameLengthHeadLayout():
+                    fields.extend(
+                        (
+                            (f'auxiliary_{index}_value', '<f4'),
+                            (f'auxiliary_{index}_eligible', 'u1'),
+                        )
+                    )
         fields.extend(
             (
                 ('sample_weight', '<f4'),
@@ -71,17 +78,18 @@ class ReplayLayout(FrozenModel):
             'targets': {
                 'action_size': self.targets.action_size,
                 'wdl_size': self.targets.wdl_size,
-                'auxiliary_heads': [
-                    {
-                        'kind': head.kind,
-                        'action_size': head.action_size,
-                        'ply_offset': head.ply_offset,
-                    }
-                    for head in self.targets.auxiliary_heads
-                ],
+                'auxiliary_heads': [_head_digest_fields(head) for head in self.targets.auxiliary_heads],
             },
             'maximum_policy_entries': self.maximum_policy_entries,
             'dtype': self.row_dtype.descr,
         }
         encoded = json.dumps(payload, sort_keys=True, separators=(',', ':')).encode('utf-8')
         return hashlib.sha256(encoded).hexdigest()
+
+
+def _head_digest_fields(head: NextPolicyHeadLayout | RemainingGameLengthHeadLayout) -> dict[str, int | float | str]:
+    match head:
+        case NextPolicyHeadLayout(action_size=action_size, ply_offset=ply_offset):
+            return {'kind': head.kind, 'action_size': action_size, 'ply_offset': ply_offset}
+        case RemainingGameLengthHeadLayout(normalization_scale=normalization_scale):
+            return {'kind': head.kind, 'output_size': 1, 'normalization_scale': normalization_scale}

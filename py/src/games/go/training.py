@@ -10,7 +10,7 @@ from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.self_play.native_search import NativeSelfPlaySearch
 from src.training.checkpoint import CheckpointReference
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
-from src.training.objective import ResolvedTrainingObjective
+from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 
 
@@ -123,7 +123,5 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
             policy_loss_weight=configuration.policy_loss_weight.value_at(model_generation),
             value_loss_weight=configuration.value_loss_weight.value_at(model_generation),
             root_value_blend=configuration.root_value_blend.value_at(model_generation),
-            auxiliary_loss_weights=tuple(
-                target.loss_weight.value_at(model_generation) for target in configuration.auxiliary_targets
-            ),
+            auxiliary_losses=resolve_auxiliary_losses(configuration.auxiliary_targets, model_generation),
         )

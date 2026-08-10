@@ -49,14 +49,14 @@ class Network(nn.Module):
         args: NetworkParams,
         device: torch.device,
         dimensions: NetworkDimensions,
-        auxiliary_action_sizes: tuple[int, ...] = (),
+        auxiliary_output_sizes: tuple[int, ...] = (),
     ) -> None:
         super().__init__()
 
         self.device = device
         self.network_args = args
         self.dimensions = dimensions
-        self.auxiliary_action_sizes = auxiliary_action_sizes
+        self.auxiliary_output_sizes = auxiliary_output_sizes
 
         encoding_channels = dimensions.channels
         row_count = dimensions.rows
@@ -103,9 +103,9 @@ class Network(nn.Module):
                     nn.BatchNorm2d(args.num_policy_channels),
                     nn.ReLU(inplace=True),
                     nn.Flatten(),
-                    nn.Linear(args.num_policy_channels * row_count * column_count, auxiliary_action_size),
+                    nn.Linear(args.num_policy_channels * row_count * column_count, auxiliary_output_size),
                 )
-                for auxiliary_action_size in auxiliary_action_sizes
+                for auxiliary_output_size in auxiliary_output_sizes
             )
         )
 

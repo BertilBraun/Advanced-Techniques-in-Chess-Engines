@@ -11,13 +11,15 @@ import numpy.typing as npt
 from src.games.contracts import WdlTarget
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
+    EligibleRemainingGameLengthTarget,
     IneligibleNextPolicyTarget,
+    IneligibleRemainingGameLengthTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
 from src.replay.layout import ReplayLayout
 from src.self_play.completed_game import SparseSearchVisit
-from src.training.targets import NextPolicyHeadLayout
+from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 
 
 _REPLAY_MAGIC = b'AZRPLY01'
@@ -246,6 +248,11 @@ class ReplayStore:
                     row[f'auxiliary_{index}_eligible'] = 1
                 case NextPolicyHeadLayout(), IneligibleNextPolicyTarget():
                     row[f'auxiliary_{index}_eligible'] = 0
+                case RemainingGameLengthHeadLayout(), EligibleRemainingGameLengthTarget(normalized_length=value):
+                    row[f'auxiliary_{index}_value'] = value
+                    row[f'auxiliary_{index}_eligible'] = 1
+                case RemainingGameLengthHeadLayout(), IneligibleRemainingGameLengthTarget():
+                    row[f'auxiliary_{index}_eligible'] = 0
                 case _:
                     raise ValueError('Replay auxiliary target does not match its fixed layout.')
         row['sample_weight'] = sample.sample_weight
@@ -274,6 +281,13 @@ class ReplayStore:
                         )
                     else:
                         auxiliary_targets.append(IneligibleNextPolicyTarget())
+                case RemainingGameLengthHeadLayout():
+                    if int(row[f'auxiliary_{index}_eligible']):
+                        auxiliary_targets.append(
+                            EligibleRemainingGameLengthTarget(normalized_length=float(row[f'auxiliary_{index}_value']))
+                        )
+                    else:
+                        auxiliary_targets.append(IneligibleRemainingGameLengthTarget())
         wdl = row['wdl_target']
         return ReplaySample(
             encoded_state=self.layout.packed_planes.value(bytes(row['encoded_state'])),

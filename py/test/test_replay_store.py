@@ -6,6 +6,7 @@ from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlaneLayout
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
+    EligibleRemainingGameLengthTarget,
     IneligibleNextPolicyTarget,
     ReplaySample,
     SparsePolicyTarget,
@@ -13,7 +14,7 @@ from src.replay.contracts import (
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import SparseSearchVisit
-from src.training.targets import NextPolicyHeadLayout, TrainingTargetLayout
+from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 
 
 def _layout(ply_offset: int = 1) -> ReplayLayout:
@@ -22,7 +23,10 @@ def _layout(ply_offset: int = 1) -> ReplayLayout:
         targets=TrainingTargetLayout(
             action_size=10,
             wdl_size=3,
-            auxiliary_heads=(NextPolicyHeadLayout(kind='next_policy', action_size=10, ply_offset=ply_offset),),
+            auxiliary_heads=(
+                NextPolicyHeadLayout(kind='next_policy', action_size=10, ply_offset=ply_offset),
+                RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=20.0),
+            ),
         ),
         maximum_policy_entries=4,
     )
@@ -41,7 +45,10 @@ def _sample(layout: ReplayLayout, action_id: int, generation: int, auxiliary_eli
         policy=policy,
         wdl_target=WdlTarget(win=0.5, draw=0.25, loss=0.25),
         root_value=0.125,
-        auxiliary_targets=(auxiliary,),
+        auxiliary_targets=(
+            auxiliary,
+            EligibleRemainingGameLengthTarget(normalized_length=(action_id + 1) / 20),
+        ),
         sample_weight=1.5,
         source_model_generation=generation,
         source_created_at_seconds=123.0 + generation,
@@ -65,7 +72,10 @@ def test_replay_store_persists_fixed_rows_and_fifo_state(tmp_path: Path) -> None
     assert store.state.evicted_rows == 2
     assert tuple(store.sample_at(index).source_model_generation for index in range(3)) == (2, 3, 4)
     assert store.sample_at(0).policy == samples[2].policy
-    assert store.sample_at(0).auxiliary_targets == samples[2].auxiliary_targets
+    stored_auxiliary = store.sample_at(0).auxiliary_targets
+    assert stored_auxiliary[0] == samples[2].auxiliary_targets[0]
+    assert isinstance(stored_auxiliary[1], EligibleRemainingGameLengthTarget)
+    assert stored_auxiliary[1].normalized_length == pytest.approx(0.15)
     store.close()
 
     reopened = ReplayStore.open(path, layout)

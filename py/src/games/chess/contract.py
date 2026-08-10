@@ -13,7 +13,12 @@ from src.games.representation import (
     decode_packed_planes,
     encode_packed_planes,
 )
-from src.replay.contracts import EligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
+from src.replay.contracts import (
+    EligibleNextPolicyTarget,
+    EligibleRemainingGameLengthTarget,
+    ReplaySample,
+    SparsePolicyTarget,
+)
 from src.self_play.completed_game import SparseSearchVisit, TerminationReason
 
 
@@ -150,6 +155,8 @@ class ChessStateContract(GameStateContract[ChessPosition]):
             match target:
                 case EligibleNextPolicyTarget(policy=policy):
                     transformed_auxiliary.append(EligibleNextPolicyTarget(policy=transform_policy(policy)))
+                case EligibleRemainingGameLengthTarget():
+                    transformed_auxiliary.append(target)
                 case _:
                     transformed_auxiliary.append(target)
         return ReplaySample(

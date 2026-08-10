@@ -23,7 +23,7 @@ from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_a
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.composition import create_game_implementation
 from src.games.go.configuration import GoExperimentConfiguration
-from src.training.targets import build_training_target_layout
+from src.training.targets import auxiliary_head_output_size, build_training_target_layout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.training.checkpoint.paths import model_save_path
@@ -215,21 +215,21 @@ def _training_device(experiment: ExperimentConfiguration) -> torch.device:
     return torch.device('cuda', trainer_topology.rank_zero_device_id)
 
 
-def _auxiliary_action_sizes(experiment: ExperimentConfiguration) -> tuple[int, ...]:
+def _auxiliary_output_sizes(experiment: ExperimentConfiguration) -> tuple[int, ...]:
     match experiment:
         case ChessExperimentConfiguration():
             objective = experiment.chess.objective
         case GoExperimentConfiguration():
             objective = experiment.go.objective
     layout = build_training_target_layout(experiment.network_dimensions.actions, objective.auxiliary_targets)
-    return tuple(head.action_size for head in layout.auxiliary_heads)
+    return tuple(auxiliary_head_output_size(head) for head in layout.auxiliary_heads)
 
 
 def _prepare_initial_checkpoint(experiment: ExperimentConfiguration, output_path: Path, manifest_path: Path) -> Path:
     training = experiment.training
     checkpoint_path = model_save_path(0, output_path)
     device = _training_device(experiment)
-    auxiliary_action_sizes = _auxiliary_action_sizes(experiment)
+    auxiliary_output_sizes = _auxiliary_output_sizes(experiment)
     match experiment.run.resume:
         case WeightsOnlyResumeConfiguration(model_path=model_path):
             initial_model_path = _resolve_source_path(model_path)
@@ -241,7 +241,7 @@ def _prepare_initial_checkpoint(experiment: ExperimentConfiguration, output_path
                     training.network,
                     device,
                     experiment.network_dimensions,
-                    auxiliary_action_sizes,
+                    auxiliary_output_sizes,
                 )
                 save_model_and_optimizer(model, create_optimizer(model, training.trainer.optimizer), 0, output_path)
         case RandomInitializationResumeConfiguration():
@@ -252,7 +252,7 @@ def _prepare_initial_checkpoint(experiment: ExperimentConfiguration, output_path
                     training.network,
                     device,
                     experiment.network_dimensions,
-                    auxiliary_action_sizes,
+                    auxiliary_output_sizes,
                 )
                 save_model_and_optimizer(model, create_optimizer(model, training.trainer.optimizer), 0, output_path)
     return checkpoint_path

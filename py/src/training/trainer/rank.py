@@ -19,6 +19,7 @@ from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.persistence import load_model_and_optimizer, save_model_and_optimizer
 from src.training.network import Network
 from src.training.objective import ResolvedTrainingObjective
+from src.training.targets import auxiliary_head_output_size
 from src.training.configuration import TrainerTopologyParams
 from src.training.trainer.contracts import (
     RankTrainingFailure,
@@ -87,7 +88,7 @@ def _initialize_rank(
         rank=rank,
         world_size=world_size,
     )
-    auxiliary_sizes = tuple(head.action_size for head in game.target_layout.auxiliary_heads)
+    auxiliary_sizes = tuple(auxiliary_head_output_size(head) for head in game.target_layout.auxiliary_heads)
     model, optimizer = load_model_and_optimizer(
         starting_checkpoint.generation,
         configuration.training.network,
@@ -176,7 +177,7 @@ def _train_batches(
     totals = _DeviceLossTotals(
         policy=torch.zeros((), device=device),
         wdl=torch.zeros((), device=device),
-        auxiliary=torch.zeros(len(objective.auxiliary_loss_weights), device=device),
+        auxiliary=torch.zeros(len(objective.auxiliary_losses), device=device),
         total=torch.zeros((), device=device),
         gradient_norm=torch.zeros((), device=device),
     )

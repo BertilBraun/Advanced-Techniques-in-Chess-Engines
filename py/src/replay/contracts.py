@@ -33,7 +33,29 @@ class IneligibleNextPolicyTarget:
     eligible: Literal[False] = False
 
 
-AuxiliaryReplayTarget: TypeAlias = EligibleNextPolicyTarget | IneligibleNextPolicyTarget
+@dataclass(frozen=True)
+class EligibleRemainingGameLengthTarget:
+    normalized_length: float
+    kind: Literal['remaining_game_length'] = 'remaining_game_length'
+    eligible: Literal[True] = True
+
+    def __post_init__(self) -> None:
+        if self.normalized_length < 0.0:
+            raise ValueError('Normalized remaining game length must be nonnegative.')
+
+
+@dataclass(frozen=True)
+class IneligibleRemainingGameLengthTarget:
+    kind: Literal['remaining_game_length'] = 'remaining_game_length'
+    eligible: Literal[False] = False
+
+
+AuxiliaryReplayTarget: TypeAlias = (
+    EligibleNextPolicyTarget
+    | IneligibleNextPolicyTarget
+    | EligibleRemainingGameLengthTarget
+    | IneligibleRemainingGameLengthTarget
+)
 
 
 @dataclass(frozen=True)
