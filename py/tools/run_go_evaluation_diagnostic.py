@@ -32,6 +32,9 @@ from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
 @dataclass(frozen=True)
 class Arguments:
     experiment: Path
@@ -54,6 +57,11 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b''):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _project_path(path: str) -> Path:
+    candidate = Path(path)
+    return candidate if candidate.is_absolute() else PROJECT_ROOT / candidate
 
 
 def _source_revision() -> str:
@@ -84,9 +92,9 @@ def _katago_selector(
     client = KataGoClient(
         external,
         game.state,
-        Path(external.executable_path).resolve(),
-        Path(external.model_path).resolve(),
-        Path(external.analysis_configuration_path).resolve(),
+        _project_path(external.executable_path),
+        _project_path(external.model_path),
+        _project_path(external.analysis_configuration_path),
         visible_cuda_device=visible_device,
     )
     return KataGoDiagnosticSelector(engine, client)
