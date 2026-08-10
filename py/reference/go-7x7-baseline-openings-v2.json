@@ -1,0 +1,2419 @@
+{
+  "schema_version": 1,
+  "game": "go",
+  "rules_digest": "861946f0ea1786e8bcfcee0cc4b2f3a9261e1f8b2fa40b7c403bcf3f8672e56c",
+  "representation_digest": "411106ba3d3f71099240ae63808461ed09c6639d4d065809d73717dabf49b14e",
+  "random_seed": 1207,
+  "engine_identity": "KataGo analysis",
+  "engine_artifact_sha256": [
+    "2ddcaa8755c73b980e895d1466fa8589b998c47686846a995fe3a8e258b4c122",
+    "0ba27eced5180b3e3d0b898b280c541112989765e789d1eb6cd0d31b2b2c1229",
+    "00dc8744d1436cea413028caf4914952e4d056922bc8f9340d4833bdfebc6ad5"
+  ],
+  "label_search_limit": 256,
+  "expanded_actions_per_position": 8,
+  "beam_width": 512,
+  "openings": [
+    {
+      "opening_id": "opening-000",
+      "action_ids": [
+        24,
+        31,
+        25,
+        30
+      ],
+      "path_probability": 0.09765708098874294,
+      "final_position_digest": "8fd2081049e4723c526983005423478916413bdfffc1e6fd5fef98144f0e298f",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ed];W[ce])"
+    },
+    {
+      "opening_id": "opening-001",
+      "action_ids": [
+        24,
+        25,
+        31,
+        18
+      ],
+      "path_probability": 0.09644282010790381,
+      "final_position_digest": "afc1f6f4ec5cda120a25346f381a3a6b48acfe2bcd4b4d3d28434b5338f1e792",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[de];W[ec])"
+    },
+    {
+      "opening_id": "opening-002",
+      "action_ids": [
+        24,
+        25,
+        17,
+        32
+      ],
+      "path_probability": 0.09521095289041888,
+      "final_position_digest": "3dc30f3e9aff36a4e7743d2017d9759795965b9ee8bc4ac25ec7b6182c924638",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[dc];W[ee])"
+    },
+    {
+      "opening_id": "opening-003",
+      "action_ids": [
+        24,
+        23,
+        17,
+        30
+      ],
+      "path_probability": 0.09127050231110162,
+      "final_position_digest": "e961a37181b9cb2e30ba909f6624a73f994e5320ffa6cdd60f88919879f91648",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[dc];W[ce])"
+    },
+    {
+      "opening_id": "opening-004",
+      "action_ids": [
+        24,
+        23,
+        31,
+        16
+      ],
+      "path_probability": 0.0907608866322224,
+      "final_position_digest": "0f1844fea69a4e69a3817b8cf8f4184b3caf621696cb346723d1e5725b3d9124",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[de];W[cc])"
+    },
+    {
+      "opening_id": "opening-005",
+      "action_ids": [
+        24,
+        31,
+        23,
+        32
+      ],
+      "path_probability": 0.09028699736347526,
+      "final_position_digest": "69df22b794d05781c88f7bf2f344e8603aeb8e8eab6e44b4916e68ab400b524b",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[cd];W[ee])"
+    },
+    {
+      "opening_id": "opening-006",
+      "action_ids": [
+        24,
+        17,
+        25,
+        16
+      ],
+      "path_probability": 0.08916491613643338,
+      "final_position_digest": "01df8f27ea64884f35ec707766f336d61ff53d65ae965aca02677e0cb1e9c41b",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ed];W[cc])"
+    },
+    {
+      "opening_id": "opening-007",
+      "action_ids": [
+        24,
+        17,
+        23,
+        18
+      ],
+      "path_probability": 0.08834731266203896,
+      "final_position_digest": "cca4dab2e6f0f1cd21367ea01cd9af981a67185628da2783ec065d93453ee57f",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cd];W[ec])"
+    },
+    {
+      "opening_id": "opening-008",
+      "action_ids": [
+        24,
+        31,
+        23,
+        25
+      ],
+      "path_probability": 0.018689630633212412,
+      "final_position_digest": "6722add70c6c096239c6a7135590dbafd7de27ca2eef90e8970a36b05ab6109f",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[cd];W[ed])"
+    },
+    {
+      "opening_id": "opening-009",
+      "action_ids": [
+        24,
+        17,
+        23,
+        25
+      ],
+      "path_probability": 0.018264866716686284,
+      "final_position_digest": "36538728b489cf22bd25edefa241570327988c6fa1361b163294f3725591d915",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cd];W[ed])"
+    },
+    {
+      "opening_id": "opening-010",
+      "action_ids": [
+        24,
+        23,
+        31,
+        17
+      ],
+      "path_probability": 0.018155855434616727,
+      "final_position_digest": "d8f790c2514ab04eea6cd77b5c858f27641cc465f96955a5491f93d2b4705608",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[de];W[dc])"
+    },
+    {
+      "opening_id": "opening-011",
+      "action_ids": [
+        24,
+        17,
+        25,
+        23
+      ],
+      "path_probability": 0.016561582641947157,
+      "final_position_digest": "c220282570c11d4fe9c31794d8cbb09d07521234dfef552b565fc37d8d309093",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ed];W[cd])"
+    },
+    {
+      "opening_id": "opening-012",
+      "action_ids": [
+        24,
+        23,
+        17,
+        31
+      ],
+      "path_probability": 0.016113666440059793,
+      "final_position_digest": "da4e7b340e59ff8955eb02bf175f6796ff6b58f92f9be76f26b8c4081f4e5921",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[dc];W[de])"
+    },
+    {
+      "opening_id": "opening-013",
+      "action_ids": [
+        24,
+        25,
+        31,
+        17
+      ],
+      "path_probability": 0.015111159114563684,
+      "final_position_digest": "712f4e5d3d9ceef70434600226f49dbef16a8e492c967593c12059b83e16d7ee",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[de];W[dc])"
+    },
+    {
+      "opening_id": "opening-014",
+      "action_ids": [
+        24,
+        25,
+        17,
+        31
+      ],
+      "path_probability": 0.013231462481846316,
+      "final_position_digest": "756b46041c6613b4a5b9ce88ad2b598103d4ac6bdfc5d29f412150ef53f9095d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[dc];W[de])"
+    },
+    {
+      "opening_id": "opening-015",
+      "action_ids": [
+        24,
+        31,
+        25,
+        23
+      ],
+      "path_probability": 0.013225411212351103,
+      "final_position_digest": "1af4253e6097e1934a55a963b6665b6a0cfea48199995e0c11d5fe6be49e901d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ed];W[cd])"
+    },
+    {
+      "opening_id": "opening-016",
+      "action_ids": [
+        24,
+        17,
+        16,
+        25
+      ],
+      "path_probability": 0.006347147858106781,
+      "final_position_digest": "712414a68fff1ce836a4b333cca9cc6e8e90c5a304c1de97ab55ceffbd3d14ed",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cc];W[ed])"
+    },
+    {
+      "opening_id": "opening-017",
+      "action_ids": [
+        24,
+        17,
+        18,
+        23
+      ],
+      "path_probability": 0.006339335910395933,
+      "final_position_digest": "42ba8ed6eb92df2b9869cdac92a61ebdf5d98ab11da0ef96b995a94bd9c8dbfd",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ec];W[cd])"
+    },
+    {
+      "opening_id": "opening-018",
+      "action_ids": [
+        24,
+        31,
+        32,
+        23
+      ],
+      "path_probability": 0.003227776422140476,
+      "final_position_digest": "55248c80d4c2a65525709e1f6cb8f768b5af1a689e9bf2151535cacb26de2ed6",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ee];W[cd])"
+    },
+    {
+      "opening_id": "opening-019",
+      "action_ids": [
+        24,
+        31,
+        30,
+        25
+      ],
+      "path_probability": 0.0031709575063848835,
+      "final_position_digest": "c741c500a0c18b65614f78263632e3893846fb359edcf1799a2928a5db25daee",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ce];W[ed])"
+    },
+    {
+      "opening_id": "opening-020",
+      "action_ids": [
+        24,
+        25,
+        32,
+        17
+      ],
+      "path_probability": 0.003163638205176649,
+      "final_position_digest": "6c08826e397b08f10291900ded7c8345e87b00cc897b5d2fd82102854d88f5ca",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ee];W[dc])"
+    },
+    {
+      "opening_id": "opening-021",
+      "action_ids": [
+        24,
+        25,
+        18,
+        31
+      ],
+      "path_probability": 0.0030948006240180924,
+      "final_position_digest": "6579323060a53224895b79fe33d85a139fd987079698ae7fefce9edb255a5a5b",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ec];W[de])"
+    },
+    {
+      "opening_id": "opening-022",
+      "action_ids": [
+        24,
+        23,
+        30,
+        17
+      ],
+      "path_probability": 0.002807229688980033,
+      "final_position_digest": "6f809191f9ac0244f49f6856b5468408e19d0ab0cf9dcd8c1087b9a810b023ce",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[ce];W[dc])"
+    },
+    {
+      "opening_id": "opening-023",
+      "action_ids": [
+        24,
+        23,
+        16,
+        31
+      ],
+      "path_probability": 0.0027630389057784793,
+      "final_position_digest": "9cd2b26390e70cf1c42109df96f7f2e0e7686d0ec9cbac59bed2ce460f1e8958",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[cc];W[de])"
+    },
+    {
+      "opening_id": "opening-024",
+      "action_ids": [
+        24,
+        31,
+        23,
+        33
+      ],
+      "path_probability": 0.0024380941964156095,
+      "final_position_digest": "5052fc5b103be1a41ce02aa427839a6d1ec56f4f13e432297093bebd78161d88",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[cd];W[fe])"
+    },
+    {
+      "opening_id": "opening-025",
+      "action_ids": [
+        24,
+        23,
+        17,
+        37
+      ],
+      "path_probability": 0.0023653400861629887,
+      "final_position_digest": "b7460fab101c85a32c89d74bf35bd4f28f5607b1ba4ff080e9f5115da8e17eab",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[dc];W[cf])"
+    },
+    {
+      "opening_id": "opening-026",
+      "action_ids": [
+        24,
+        23,
+        31,
+        30
+      ],
+      "path_probability": 0.002078087953362731,
+      "final_position_digest": "29160236cbda5474841b7ade9aaa0bccd4e1c36c331ca85b87303e67ae98fd4e",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[de];W[ce])"
+    },
+    {
+      "opening_id": "opening-027",
+      "action_ids": [
+        24,
+        17,
+        25,
+        15
+      ],
+      "path_probability": 0.00172519721619936,
+      "final_position_digest": "6cda200c2382231196b0003798f724de93508ef6070b679a374de29ec56ba34c",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ed];W[bc])"
+    },
+    {
+      "opening_id": "opening-028",
+      "action_ids": [
+        24,
+        23,
+        31,
+        10
+      ],
+      "path_probability": 0.0016971668990240659,
+      "final_position_digest": "7c086b5b22197a5708d419ea044e0ab28de5cb8b2b12b4ccff6bcb91b947f571",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[de];W[db])"
+    },
+    {
+      "opening_id": "opening-029",
+      "action_ids": [
+        24,
+        23,
+        17,
+        38
+      ],
+      "path_probability": 0.0016202039727663171,
+      "final_position_digest": "f85e7507fc94ad13dfad1bbf18cd5d45a92a2627e9ab272ed6cddf3cc164e3ab",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[dc];W[df])"
+    },
+    {
+      "opening_id": "opening-030",
+      "action_ids": [
+        24,
+        25,
+        17,
+        38
+      ],
+      "path_probability": 0.001602963700083704,
+      "final_position_digest": "a10cffe9a6d074f6ad238f29cb5aeea70956df87dc4940995d333aef298d4d7e",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[dc];W[df])"
+    },
+    {
+      "opening_id": "opening-031",
+      "action_ids": [
+        24,
+        31,
+        23,
+        30
+      ],
+      "path_probability": 0.0015343016062273895,
+      "final_position_digest": "5c2a7d2be53cac030d708aa6fe9b82e0878aa17119ce54d476d2dda320051707",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[cd];W[ce])"
+    },
+    {
+      "opening_id": "opening-032",
+      "action_ids": [
+        24,
+        25,
+        31,
+        32
+      ],
+      "path_probability": 0.0015090351964214628,
+      "final_position_digest": "b40f0ba902b728d594bcbbd29e0ab3044ed7f79b4337965320509b43b6c38e59",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[de];W[ee])"
+    },
+    {
+      "opening_id": "opening-033",
+      "action_ids": [
+        24,
+        23,
+        17,
+        16
+      ],
+      "path_probability": 0.0014919425003724284,
+      "final_position_digest": "c781ae78f12dea8e6dabaf8b97108b623c3b304db27cdb672f16bfbee195546d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[dc];W[cc])"
+    },
+    {
+      "opening_id": "opening-034",
+      "action_ids": [
+        24,
+        25,
+        17,
+        18
+      ],
+      "path_probability": 0.0014855140689879697,
+      "final_position_digest": "7403c2757987ebbdb8ff98829de402c914f15a5b2314ef28758d6a2b16568e02",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[dc];W[ec])"
+    },
+    {
+      "opening_id": "opening-035",
+      "action_ids": [
+        24,
+        17,
+        23,
+        16
+      ],
+      "path_probability": 0.0014830175215828616,
+      "final_position_digest": "e1c7f762e8e178aff8e3e772dbd1ef5a150b37f3679e196ae9f3402185c2f773",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cd];W[cc])"
+    },
+    {
+      "opening_id": "opening-036",
+      "action_ids": [
+        24,
+        31,
+        25,
+        32
+      ],
+      "path_probability": 0.0014597856395188683,
+      "final_position_digest": "af7d92e2e4452770ed47826818958537d5e0af9dfbe27b8c90ff95ff4653c532",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ed];W[ee])"
+    },
+    {
+      "opening_id": "opening-037",
+      "action_ids": [
+        24,
+        17,
+        25,
+        18
+      ],
+      "path_probability": 0.0014487545366430692,
+      "final_position_digest": "7ed914baccf45960f712c8711dbe7b1b715a690213e9e3e74171d17a201b7e17",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ed];W[ec])"
+    },
+    {
+      "opening_id": "opening-038",
+      "action_ids": [
+        24,
+        23,
+        31,
+        15
+      ],
+      "path_probability": 0.0014297999682960098,
+      "final_position_digest": "2b2e43fe956314941a51ca138b24c14193c74b41d5ea966a9a660f1fae2e03d2",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[de];W[bc])"
+    },
+    {
+      "opening_id": "opening-039",
+      "action_ids": [
+        24,
+        25,
+        17,
+        33
+      ],
+      "path_probability": 0.00141693976290793,
+      "final_position_digest": "2ab916f40d436d89ddcd87c6af44d31cb6b89766170b290ba1a2d1c3954fc5cd",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[dc];W[fe])"
+    },
+    {
+      "opening_id": "opening-040",
+      "action_ids": [
+        24,
+        23,
+        17,
+        29
+      ],
+      "path_probability": 0.001409969389756425,
+      "final_position_digest": "c293441bc395f1aaf55074c912ed2cab907fc57a71f12f0e395a4d14a37623a3",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[dc];W[be])"
+    },
+    {
+      "opening_id": "opening-041",
+      "action_ids": [
+        24,
+        25,
+        17,
+        39
+      ],
+      "path_probability": 0.0012766925326339097,
+      "final_position_digest": "02ca08aaadf90624285bd0b8f47a1dabf3796bd50c6459b05613eb3045ebf392",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[dc];W[ef])"
+    },
+    {
+      "opening_id": "opening-042",
+      "action_ids": [
+        24,
+        17,
+        23,
+        19
+      ],
+      "path_probability": 0.0012750940748513437,
+      "final_position_digest": "8eb56e11d5d538295476fd2d1362d13f6a42b63abbb75f8a3160c3975a4d5d02",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cd];W[fc])"
+    },
+    {
+      "opening_id": "opening-043",
+      "action_ids": [
+        24,
+        31,
+        25,
+        29
+      ],
+      "path_probability": 0.001269661979397141,
+      "final_position_digest": "8c3a41e887b062dbb7284b679a117a1e15f12cb17c3a0714236a0d43ae0b8e58",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ed];W[be])"
+    },
+    {
+      "opening_id": "opening-044",
+      "action_ids": [
+        24,
+        23,
+        31,
+        9
+      ],
+      "path_probability": 0.0012333323347946614,
+      "final_position_digest": "fd954f3a8ece02a1e6ac7b178ecc593747ac8176b000f32ed2ad9217b38122c6",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[de];W[cb])"
+    },
+    {
+      "opening_id": "opening-045",
+      "action_ids": [
+        24,
+        25,
+        31,
+        10
+      ],
+      "path_probability": 0.0011451110091465042,
+      "final_position_digest": "164be91e0e339f3706ea53a945f54306c6a9d5c1d5383dd67e0c7e50430922aa",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[de];W[db])"
+    },
+    {
+      "opening_id": "opening-046",
+      "action_ids": [
+        24,
+        31,
+        23,
+        26
+      ],
+      "path_probability": 0.0011334491205286256,
+      "final_position_digest": "be9823b7d888cf437ad0869968ad3d551e5291f64ececa86d74239aa6cf0aab3",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[cd];W[fd])"
+    },
+    {
+      "opening_id": "opening-047",
+      "action_ids": [
+        24,
+        31,
+        25,
+        22
+      ],
+      "path_probability": 0.0011128051561637927,
+      "final_position_digest": "333eef91eb46b5165dfb02b880e9a3a09680839232335a2780366efd9ca4537d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ed];W[bd])"
+    },
+    {
+      "opening_id": "opening-048",
+      "action_ids": [
+        24,
+        17,
+        23,
+        26
+      ],
+      "path_probability": 0.0011121805128165366,
+      "final_position_digest": "410e27ea11cc91608f22873141e57444948b8144f1fdcb386cb992e3a1ca64bb",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cd];W[fd])"
+    },
+    {
+      "opening_id": "opening-049",
+      "action_ids": [
+        24,
+        17,
+        25,
+        22
+      ],
+      "path_probability": 0.001104511716741964,
+      "final_position_digest": "0e8ecc1bcce43b5fffe7ee9c5d48869d9b3427ed72c1e25ac554b0754ab2025d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ed];W[bd])"
+    },
+    {
+      "opening_id": "opening-050",
+      "action_ids": [
+        24,
+        31,
+        23,
+        37
+      ],
+      "path_probability": 0.0005984042495956072,
+      "final_position_digest": "778f39412241fdf3f54d38b41ca1a49b832ec7da0de6d3f0a95b0465909cef46",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[cd];W[cf])"
+    },
+    {
+      "opening_id": "opening-051",
+      "action_ids": [
+        24,
+        23,
+        17,
+        15
+      ],
+      "path_probability": 0.0005944380406086956,
+      "final_position_digest": "db2d520b98b83b6d546b23e1c50e226424f896a9212679f443b0819c5c982c93",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[dc];W[bc])"
+    },
+    {
+      "opening_id": "opening-052",
+      "action_ids": [
+        24,
+        25,
+        17,
+        19
+      ],
+      "path_probability": 0.0005923854545618746,
+      "final_position_digest": "5d287750dabcdaa02c4f6dc198c5d1982ad14b716c429421c6d716caf08d65ff",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[dc];W[fc])"
+    },
+    {
+      "opening_id": "opening-053",
+      "action_ids": [
+        24,
+        17,
+        23,
+        9
+      ],
+      "path_probability": 0.0005889636221058563,
+      "final_position_digest": "179c3bb16974fa2675fc3960f5059505738c2735e3c4f4eba0b4c3aa8e858e71",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cd];W[cb])"
+    },
+    {
+      "opening_id": "opening-054",
+      "action_ids": [
+        24,
+        31,
+        23,
+        39
+      ],
+      "path_probability": 0.0005888004455862335,
+      "final_position_digest": "ec93630a88f04a126e5565919fb0f612646278ad8d217e50b8131f1519e428d0",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[cd];W[ef])"
+    },
+    {
+      "opening_id": "opening-055",
+      "action_ids": [
+        24,
+        17,
+        25,
+        11
+      ],
+      "path_probability": 0.0005873689640435504,
+      "final_position_digest": "a12d11f04a9e4bafe52dc962b6201aefacac192a60a20f1d8fb7e0d88717d6e2",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ed];W[eb])"
+    },
+    {
+      "opening_id": "opening-056",
+      "action_ids": [
+        24,
+        25,
+        31,
+        19
+      ],
+      "path_probability": 0.0005781614473828789,
+      "final_position_digest": "f84befef85261d6bd47b7a3b9cbb724bdeb54535dc2e8e06ad928e721b8125f9",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[de];W[fc])"
+    },
+    {
+      "opening_id": "opening-057",
+      "action_ids": [
+        24,
+        17,
+        23,
+        11
+      ],
+      "path_probability": 0.0005629395105666411,
+      "final_position_digest": "da78176e1cbb97c49df66482cd54ff6cb32aee28fd01772e6532ee36f056b1e9",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cd];W[eb])"
+    },
+    {
+      "opening_id": "opening-058",
+      "action_ids": [
+        24,
+        17,
+        25,
+        9
+      ],
+      "path_probability": 0.0005600943770906808,
+      "final_position_digest": "c4548d657c7a97fd23803b4c8182780a161b6d72d3ef299e78387529ec6498ab",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ed];W[cb])"
+    },
+    {
+      "opening_id": "opening-059",
+      "action_ids": [
+        24,
+        31,
+        25,
+        37
+      ],
+      "path_probability": 0.0005449326388672951,
+      "final_position_digest": "ef6dc9290ef9f2e0fdbb92e26d0aac94de5935d99f62ee7d42ac16c153aac98d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ed];W[cf])"
+    },
+    {
+      "opening_id": "opening-060",
+      "action_ids": [
+        24,
+        25,
+        31,
+        11
+      ],
+      "path_probability": 0.0005279451351963673,
+      "final_position_digest": "9d4ac8ce5ddc84d2c25b16c339e856fef11ae5dd2d55a04d5f183ccbafb20c07",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[de];W[eb])"
+    },
+    {
+      "opening_id": "opening-061",
+      "action_ids": [
+        24,
+        25,
+        17,
+        11
+      ],
+      "path_probability": 0.0004973211191741564,
+      "final_position_digest": "81ef6b0eee6f2605a9509cf8b64b02f9d09c41a4555df0708fa00328923023aa",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[dc];W[eb])"
+    },
+    {
+      "opening_id": "opening-062",
+      "action_ids": [
+        24,
+        23,
+        17,
+        9
+      ],
+      "path_probability": 0.0004890664814883351,
+      "final_position_digest": "804dd5bb6cd065906b6a35b6cdcbad5b7dda23d2705c0dee1c413ce9088bc868",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[dc];W[cb])"
+    },
+    {
+      "opening_id": "opening-063",
+      "action_ids": [
+        24,
+        17,
+        25,
+        19
+      ],
+      "path_probability": 0.00048194903154932903,
+      "final_position_digest": "e4016c705c8e9e74c5996854e2a8a4153bd681730d3121a318566f5459e7f3bc",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ed];W[fc])"
+    },
+    {
+      "opening_id": "opening-064",
+      "action_ids": [
+        24,
+        17,
+        31,
+        16
+      ],
+      "path_probability": 0.000377875369708594,
+      "final_position_digest": "bee553671afc2c33c0032771100b95fa701124485542e398712fc20d3a849a0c",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[de];W[cc])"
+    },
+    {
+      "opening_id": "opening-065",
+      "action_ids": [
+        24,
+        17,
+        31,
+        18
+      ],
+      "path_probability": 0.000377875369708594,
+      "final_position_digest": "5fe4bee9da49ac079832c2d7d7484e45cd3ce151a2d2c8564dc7fb5040981f4c",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[de];W[ec])"
+    },
+    {
+      "opening_id": "opening-066",
+      "action_ids": [
+        24,
+        23,
+        25,
+        16
+      ],
+      "path_probability": 0.0003501918351836388,
+      "final_position_digest": "888f96c2d0a8571b0f56430e5827b5acf252ce7132b784df3fc39099da1763c1",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[ed];W[cc])"
+    },
+    {
+      "opening_id": "opening-067",
+      "action_ids": [
+        24,
+        23,
+        25,
+        30
+      ],
+      "path_probability": 0.0003501918351836388,
+      "final_position_digest": "858825d059d365e57ef85eeea11702a56c16447d07340d038f94b30aeffd8f03",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[ed];W[ce])"
+    },
+    {
+      "opening_id": "opening-068",
+      "action_ids": [
+        24,
+        10,
+        16,
+        25
+      ],
+      "path_probability": 0.00031319582170982063,
+      "final_position_digest": "3d6f28e1b8e0d98209850984836acc70b9e6ae799999f4a6896a14ea361c1824",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[cc];W[ed])"
+    },
+    {
+      "opening_id": "opening-069",
+      "action_ids": [
+        24,
+        10,
+        18,
+        23
+      ],
+      "path_probability": 0.0003122674610429231,
+      "final_position_digest": "3ccf982e503d354fe9a4458b25ade94899f530f1f5ccd590dd8f70e1793516b2",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[ec];W[cd])"
+    },
+    {
+      "opening_id": "opening-070",
+      "action_ids": [
+        24,
+        26,
+        18,
+        31
+      ],
+      "path_probability": 0.00030624144883652644,
+      "final_position_digest": "b82c0b3a2ab5e5c28cb33f0b6793b7e66bc85851625a1619df1046c1360bead9",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ec];W[de])"
+    },
+    {
+      "opening_id": "opening-071",
+      "action_ids": [
+        24,
+        26,
+        32,
+        17
+      ],
+      "path_probability": 0.00029943069110588053,
+      "final_position_digest": "cbfe781a85208e9ca7765b3257920745627d2e9319ed32b82a1722581f097323",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ee];W[dc])"
+    },
+    {
+      "opening_id": "opening-072",
+      "action_ids": [
+        24,
+        22,
+        30,
+        17
+      ],
+      "path_probability": 0.000276505300740277,
+      "final_position_digest": "aadb410d5a525157f161e57fff2eb69d0d19b16aa62c548897f991b31fce109a",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[ce];W[dc])"
+    },
+    {
+      "opening_id": "opening-073",
+      "action_ids": [
+        24,
+        38,
+        23,
+        25
+      ],
+      "path_probability": 0.0002753006977195637,
+      "final_position_digest": "b04ce3669d0c9cba8bf7e09551cbf71004704403025ae0e4e55ffc5e72fd90a9",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[cd];W[ed])"
+    },
+    {
+      "opening_id": "opening-074",
+      "action_ids": [
+        24,
+        22,
+        16,
+        31
+      ],
+      "path_probability": 0.00027525456468869403,
+      "final_position_digest": "afee36da641aa2d1290a099823c9359b0d97fc40b542e288ba3b162923e26675",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cc];W[de])"
+    },
+    {
+      "opening_id": "opening-075",
+      "action_ids": [
+        24,
+        38,
+        30,
+        25
+      ],
+      "path_probability": 0.00027035457700013516,
+      "final_position_digest": "29573b6bf30b5d2d1df4ed15c3988e212dc8f8d801c75108e15da3d6146aaf8a",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[ce];W[ed])"
+    },
+    {
+      "opening_id": "opening-076",
+      "action_ids": [
+        24,
+        38,
+        32,
+        23
+      ],
+      "path_probability": 0.0002686199256116779,
+      "final_position_digest": "d6b3bed0ea124d029cc05319f23475ec9a16bd55302480773c223133fc4fb499",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[ee];W[cd])"
+    },
+    {
+      "opening_id": "opening-077",
+      "action_ids": [
+        24,
+        38,
+        25,
+        23
+      ],
+      "path_probability": 0.00026029564926724924,
+      "final_position_digest": "a4c3c28afeffe2d78930756d8a4660de186adde4d1730476711581ffaf0d6eb7",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[ed];W[cd])"
+    },
+    {
+      "opening_id": "opening-078",
+      "action_ids": [
+        24,
+        26,
+        25,
+        19
+      ],
+      "path_probability": 0.00025198395154566453,
+      "final_position_digest": "92d3c744e9092e26d1a8f210b33e2d063ccbd6e23d9d7cce3ceb2a72102243f1",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ed];W[fc])"
+    },
+    {
+      "opening_id": "opening-079",
+      "action_ids": [
+        24,
+        26,
+        25,
+        33
+      ],
+      "path_probability": 0.00025198395154566453,
+      "final_position_digest": "68ee4af4f4a61368b878328752d59945afc304426500dd50f867cef41f1c28f9",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ed];W[fe])"
+    },
+    {
+      "opening_id": "opening-080",
+      "action_ids": [
+        24,
+        26,
+        25,
+        23
+      ],
+      "path_probability": 0.00024361929372298402,
+      "final_position_digest": "8c11867db0b1e043a9d846c9026e7fbdcb2601d76d3893abff287b74b68c668b",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ed];W[cd])"
+    },
+    {
+      "opening_id": "opening-081",
+      "action_ids": [
+        24,
+        10,
+        25,
+        23
+      ],
+      "path_probability": 0.0002411431999192996,
+      "final_position_digest": "2ceb7ceb69cabd010b52a1afc72aebeb5a3015af59757085783a6c2632010ef8",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[ed];W[cd])"
+    },
+    {
+      "opening_id": "opening-082",
+      "action_ids": [
+        24,
+        22,
+        31,
+        17
+      ],
+      "path_probability": 0.0002374599176910498,
+      "final_position_digest": "441644860a142972df22a0dc7ebd265856ba8f2be76071b263e83c4df2841dce",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[de];W[dc])"
+    },
+    {
+      "opening_id": "opening-083",
+      "action_ids": [
+        24,
+        38,
+        31,
+        37
+      ],
+      "path_probability": 0.00023046362581577177,
+      "final_position_digest": "0a699cd4ddf2f2fe70c5e9012c7630ecdad68669ca715f75c357600968ea0fd2",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[de];W[cf])"
+    },
+    {
+      "opening_id": "opening-084",
+      "action_ids": [
+        24,
+        38,
+        31,
+        39
+      ],
+      "path_probability": 0.00023046362581577177,
+      "final_position_digest": "4fb71e4253c35fecb1bc24894f100fc8d6e2f99718b9ce6959716485dd79fba5",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[de];W[ef])"
+    },
+    {
+      "opening_id": "opening-085",
+      "action_ids": [
+        24,
+        22,
+        23,
+        25
+      ],
+      "path_probability": 0.00022627782748876654,
+      "final_position_digest": "fb676a7ff25b1a695221f65d5fd3916126e3692775830cbdf90eb4a78df85383",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cd];W[ed])"
+    },
+    {
+      "opening_id": "opening-086",
+      "action_ids": [
+        24,
+        22,
+        17,
+        31
+      ],
+      "path_probability": 0.00022320145609518052,
+      "final_position_digest": "ce781d5ae9c99e5c8dca37354cb6b6bd7ec39535d826f6375114faf8d1aea8bf",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[dc];W[de])"
+    },
+    {
+      "opening_id": "opening-087",
+      "action_ids": [
+        24,
+        10,
+        23,
+        25
+      ],
+      "path_probability": 0.0002221650246723734,
+      "final_position_digest": "ce7557031623c0a315bc9cba472216c2d0dafca50ac989b2e1e2e4e72b53c259",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[cd];W[ed])"
+    },
+    {
+      "opening_id": "opening-088",
+      "action_ids": [
+        24,
+        10,
+        17,
+        9
+      ],
+      "path_probability": 0.0002173040574409294,
+      "final_position_digest": "5a2704c7728404ef222fc9808cbe71ba63aca212c51fb0df7c9df7e597e8f009",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[dc];W[cb])"
+    },
+    {
+      "opening_id": "opening-089",
+      "action_ids": [
+        24,
+        10,
+        17,
+        11
+      ],
+      "path_probability": 0.0002173040574409294,
+      "final_position_digest": "2403aae3a5a8802756d6665275db3ff84781e8d7fbf38a19d5ebf0a5ecfc8ff4",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[dc];W[eb])"
+    },
+    {
+      "opening_id": "opening-090",
+      "action_ids": [
+        24,
+        10,
+        17,
+        31
+      ],
+      "path_probability": 0.00021098167649047633,
+      "final_position_digest": "3fb30887529a50765ef8296de2e13c412ac555fa41ff8d22e588ae9b71987be9",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[dc];W[de])"
+    },
+    {
+      "opening_id": "opening-091",
+      "action_ids": [
+        24,
+        10,
+        17,
+        15
+      ],
+      "path_probability": 0.00020893520747965316,
+      "final_position_digest": "629a8229f02efd68b82ab824d6566d37633346bbfba7d2130e55ddb8ee5a3c7e",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[dc];W[bc])"
+    },
+    {
+      "opening_id": "opening-092",
+      "action_ids": [
+        24,
+        10,
+        17,
+        19
+      ],
+      "path_probability": 0.00020893520747965316,
+      "final_position_digest": "97f8a6913d7d9e8bd256e9c9b7b30ea660c308f33ba1f3c10f2a095d2bd4d0f4",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[dc];W[fc])"
+    },
+    {
+      "opening_id": "opening-093",
+      "action_ids": [
+        24,
+        26,
+        17,
+        31
+      ],
+      "path_probability": 0.0002056816915933255,
+      "final_position_digest": "24322e04948411753867ffd2f6b04cb72316207a8f5e51482afa03d3f46faadd",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[dc];W[de])"
+    },
+    {
+      "opening_id": "opening-094",
+      "action_ids": [
+        24,
+        26,
+        31,
+        17
+      ],
+      "path_probability": 0.00020265478731441446,
+      "final_position_digest": "769902873f1e235749c9f61ca997ed5fa9ea782a4cfd8928ea7a2c79293e18cd",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[de];W[dc])"
+    },
+    {
+      "opening_id": "opening-095",
+      "action_ids": [
+        24,
+        22,
+        23,
+        9
+      ],
+      "path_probability": 0.00019868792775527597,
+      "final_position_digest": "69401a7f8e1b5e199a34de4da1ea954e99cb6bc0668259fba415e85b2dd33f48",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cd];W[cb])"
+    },
+    {
+      "opening_id": "opening-096",
+      "action_ids": [
+        24,
+        22,
+        23,
+        37
+      ],
+      "path_probability": 0.00019868792775527597,
+      "final_position_digest": "e432ce5a4e61a62feb97e19469efc56f2632c876945510adda49340f81840c2c",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cd];W[cf])"
+    },
+    {
+      "opening_id": "opening-097",
+      "action_ids": [
+        24,
+        22,
+        23,
+        15
+      ],
+      "path_probability": 0.00019702372804998884,
+      "final_position_digest": "f9ad91fe56b689b23027476421717ee4d0a55b4770a62023d5281e537f910c0e",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cd];W[bc])"
+    },
+    {
+      "opening_id": "opening-098",
+      "action_ids": [
+        24,
+        22,
+        23,
+        29
+      ],
+      "path_probability": 0.00019702372804998884,
+      "final_position_digest": "015ef2f7d59f31b8d37c9e40100dcea594bf87ba9822ad6f52f06f62a4eb3834",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cd];W[be])"
+    },
+    {
+      "opening_id": "opening-099",
+      "action_ids": [
+        24,
+        26,
+        25,
+        11
+      ],
+      "path_probability": 0.00019570706682305202,
+      "final_position_digest": "0851b267de4a451f69c03834fb2668bfd2fefd76510e2ac19ea5d11e84465288",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ed];W[eb])"
+    },
+    {
+      "opening_id": "opening-100",
+      "action_ids": [
+        24,
+        26,
+        25,
+        39
+      ],
+      "path_probability": 0.00019570706682305202,
+      "final_position_digest": "4818f7b4e5a4a45695e18e6291a91f766715ef624a500663f4cbe8b4404f57e0",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ed];W[ef])"
+    },
+    {
+      "opening_id": "opening-101",
+      "action_ids": [
+        24,
+        38,
+        31,
+        17
+      ],
+      "path_probability": 0.0001867065273521549,
+      "final_position_digest": "2633d54d7376ef117b64606d764eb2ac9884d2d60fdb8bf43f4f12327f015a3f",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[de];W[dc])"
+    },
+    {
+      "opening_id": "opening-102",
+      "action_ids": [
+        24,
+        22,
+        23,
+        18
+      ],
+      "path_probability": 0.00018576134076584726,
+      "final_position_digest": "c28d5334efa8b0cca5c6968bdba1c6cc5bdc317c2ff8b22b04cfac500317eb35",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cd];W[ec])"
+    },
+    {
+      "opening_id": "opening-103",
+      "action_ids": [
+        24,
+        22,
+        23,
+        32
+      ],
+      "path_probability": 0.00018576134076584726,
+      "final_position_digest": "922b16ce0c71916ea581850e03e094da1232b185afe345f7e9815b431859f3c8",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cd];W[ee])"
+    },
+    {
+      "opening_id": "opening-104",
+      "action_ids": [
+        24,
+        38,
+        31,
+        29
+      ],
+      "path_probability": 0.00017701786677825268,
+      "final_position_digest": "02b5fdac5468e5ce2e139715f07b5eb3f5ed839304db98226c35ef8bf9a47c4b",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[de];W[be])"
+    },
+    {
+      "opening_id": "opening-105",
+      "action_ids": [
+        24,
+        38,
+        31,
+        33
+      ],
+      "path_probability": 0.00017701786677825268,
+      "final_position_digest": "75fc68846c510408623617cdf5a70829983e7ea18280778c79fa8e747d0ac052",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[de];W[fe])"
+    },
+    {
+      "opening_id": "opening-106",
+      "action_ids": [
+        24,
+        26,
+        25,
+        16
+      ],
+      "path_probability": 0.00017315344587251277,
+      "final_position_digest": "b477c2aae3da9aef532007c9c5719d701e885d4a0c902944cfe38f33a6806db1",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ed];W[cc])"
+    },
+    {
+      "opening_id": "opening-107",
+      "action_ids": [
+        24,
+        26,
+        25,
+        30
+      ],
+      "path_probability": 0.00017315344587251277,
+      "final_position_digest": "ad24e79e982aa8ce18dede82fd1316d5a72eb1a14e3f8b6ec1d9df5c254902c6",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ed];W[ce])"
+    },
+    {
+      "opening_id": "opening-108",
+      "action_ids": [
+        24,
+        10,
+        17,
+        30
+      ],
+      "path_probability": 0.00016522487350408601,
+      "final_position_digest": "a33b9f0266738d0b1fa2bcdc6756674290fdf85a057fcd57f2035f808405153f",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[dc];W[ce])"
+    },
+    {
+      "opening_id": "opening-109",
+      "action_ids": [
+        24,
+        10,
+        17,
+        32
+      ],
+      "path_probability": 0.00016522487350408601,
+      "final_position_digest": "51a7b52f9c34b1595cc3cb3af3aa722f29d04e8b3fa0287081baee96787391f4",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[dc];W[ee])"
+    },
+    {
+      "opening_id": "opening-110",
+      "action_ids": [
+        24,
+        38,
+        31,
+        16
+      ],
+      "path_probability": 0.0001625013948352391,
+      "final_position_digest": "60484eb6671c4562d08ef038d041da510b25fd2c25ab0d99659fcd04ea16dd2a",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[de];W[cc])"
+    },
+    {
+      "opening_id": "opening-111",
+      "action_ids": [
+        24,
+        38,
+        31,
+        18
+      ],
+      "path_probability": 0.0001625013948352391,
+      "final_position_digest": "9ae2eb07f41a6210ce37ffa0f6e94b87b6c0588d109671682b841b51c6f2bc85",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[de];W[ec])"
+    },
+    {
+      "opening_id": "opening-112",
+      "action_ids": [
+        24,
+        38,
+        31,
+        15
+      ],
+      "path_probability": 0.00016140386406640717,
+      "final_position_digest": "8a3929d28c0d762ccc87187faca8e107364c0778a9dd0cd3a385462809427cf0",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[de];W[bc])"
+    },
+    {
+      "opening_id": "opening-113",
+      "action_ids": [
+        24,
+        26,
+        25,
+        9
+      ],
+      "path_probability": 0.0001558128940790736,
+      "final_position_digest": "2cbc8041a4e0b99d50358b28465d6b3443b58409f09e241c91cb6f105403655d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ed];W[cb])"
+    },
+    {
+      "opening_id": "opening-114",
+      "action_ids": [
+        24,
+        22,
+        23,
+        11
+      ],
+      "path_probability": 0.00014316613238019965,
+      "final_position_digest": "b4a8e9bece82082cd9dc69f39ba0e1ff672e29d05cd85a1799083599e8be668e",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cd];W[eb])"
+    },
+    {
+      "opening_id": "opening-115",
+      "action_ids": [
+        24,
+        22,
+        31,
+        16
+      ],
+      "path_probability": 0.00013570850146583528,
+      "final_position_digest": "36e16ee83ee16c637a65b79a36449a198ba4cf4c333ba97dbe3f928e388a4f6c",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[de];W[cc])"
+    },
+    {
+      "opening_id": "opening-116",
+      "action_ids": [
+        24,
+        10,
+        23,
+        18
+      ],
+      "path_probability": 0.00013002577463091912,
+      "final_position_digest": "bf3c7f6e1d0aace61fbce393eb5ac7bca8e66780cda16a0ebeaab27a6faa9edf",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[cd];W[ec])"
+    },
+    {
+      "opening_id": "opening-117",
+      "action_ids": [
+        24,
+        10,
+        17,
+        29
+      ],
+      "path_probability": 0.00012919980740766604,
+      "final_position_digest": "34f30fc78acad37ce38a06c67ffb96bbdd1f3d56089bfbc727a38f76f9bd66bd",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[dc];W[be])"
+    },
+    {
+      "opening_id": "opening-118",
+      "action_ids": [
+        24,
+        38,
+        25,
+        30
+      ],
+      "path_probability": 0.00012627763587540813,
+      "final_position_digest": "4a2b496704dc922f11d595cab7c2c44e0578e7a3ec23991f523b8a3fabf6e755",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[ed];W[ce])"
+    },
+    {
+      "opening_id": "opening-119",
+      "action_ids": [
+        24,
+        38,
+        23,
+        32
+      ],
+      "path_probability": 0.00012211145471515932,
+      "final_position_digest": "8f6aad09953e8e356c27cb6d4cb53fc7ce36b5980aef20c4a771bfa106a24b8d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[cd];W[ee])"
+    },
+    {
+      "opening_id": "opening-120",
+      "action_ids": [
+        24,
+        10,
+        25,
+        16
+      ],
+      "path_probability": 0.00012210828234613956,
+      "final_position_digest": "ddf6deddc822053ea6164e7b168b26bae673b4a50875f90eff2497b72161ec42",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[ed];W[cc])"
+    },
+    {
+      "opening_id": "opening-121",
+      "action_ids": [
+        24,
+        22,
+        17,
+        30
+      ],
+      "path_probability": 0.00012061443543670055,
+      "final_position_digest": "3c809eeb54ff4cb3b7db2d30fdb440000aecbf004dea148518dd684c204f4836",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[dc];W[ce])"
+    },
+    {
+      "opening_id": "opening-122",
+      "action_ids": [
+        24,
+        26,
+        17,
+        32
+      ],
+      "path_probability": 0.0001032494176095139,
+      "final_position_digest": "b3c333a004d278722974e9e35ef89e5586e7427ff2e9eb69479562a5a62f8ae6",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[dc];W[ee])"
+    },
+    {
+      "opening_id": "opening-123",
+      "action_ids": [
+        24,
+        26,
+        31,
+        18
+      ],
+      "path_probability": 0.00009926241028646156,
+      "final_position_digest": "7076ad6b8048bbb82874b0bc973f6786ad4b048ed107fa6f9a86c25311a3a7f2",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[de];W[ec])"
+    },
+    {
+      "opening_id": "opening-124",
+      "action_ids": [
+        24,
+        22,
+        17,
+        37
+      ],
+      "path_probability": 0.00006322762412228193,
+      "final_position_digest": "d5d31e943c653c541c8e9e38089c151b4b786fdb312573ad9d86b8c8b634c1ac",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[dc];W[cf])"
+    },
+    {
+      "opening_id": "opening-125",
+      "action_ids": [
+        24,
+        38,
+        25,
+        22
+      ],
+      "path_probability": 0.00006046227571703929,
+      "final_position_digest": "c5513f35e76702f365d2a4e402098e47ab96ac9946cf466181c0d2518389a21d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[ed];W[bd])"
+    },
+    {
+      "opening_id": "opening-126",
+      "action_ids": [
+        24,
+        38,
+        25,
+        29
+      ],
+      "path_probability": 0.00005562708007170573,
+      "final_position_digest": "c5165c0657b9a848cf46c33b51525c23a8731429b3ee2b7d03de46fb29b0c527",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[ed];W[be])"
+    },
+    {
+      "opening_id": "opening-127",
+      "action_ids": [
+        24,
+        38,
+        23,
+        33
+      ],
+      "path_probability": 0.000055569636951164985,
+      "final_position_digest": "7e562be9b3758951e219871b3ee6ec9afe4f3eff7f14aad808b87506d755aecf",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[cd];W[fe])"
+    },
+    {
+      "opening_id": "opening-128",
+      "action_ids": [
+        24,
+        10,
+        25,
+        15
+      ],
+      "path_probability": 0.00005553146568516681,
+      "final_position_digest": "26a4391106f82e8628c1c3a35537b11b295a003c622d74a6cbb2b9a7424f01bf",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[ed];W[bc])"
+    },
+    {
+      "opening_id": "opening-129",
+      "action_ids": [
+        24,
+        17,
+        18,
+        31
+      ],
+      "path_probability": 0.00005282574645772412,
+      "final_position_digest": "8155725e7d16e18e811dd231b9dd3f8381cc7a792312a656cf5d08e48145e689",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ec];W[de])"
+    },
+    {
+      "opening_id": "opening-130",
+      "action_ids": [
+        24,
+        17,
+        16,
+        31
+      ],
+      "path_probability": 0.00005205899697263274,
+      "final_position_digest": "cf7f5dc992f15259775f3635fab878007a1e6edc69d6a248f75661c63fb31434",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cc];W[de])"
+    },
+    {
+      "opening_id": "opening-131",
+      "action_ids": [
+        24,
+        26,
+        31,
+        11
+      ],
+      "path_probability": 0.000051417162433021216,
+      "final_position_digest": "ed78c1853d197ec14325078743eea2fdfb1226b6ae5d07e0ecfa95c52992d7c7",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[de];W[eb])"
+    },
+    {
+      "opening_id": "opening-132",
+      "action_ids": [
+        24,
+        22,
+        31,
+        9
+      ],
+      "path_probability": 0.00005109197903836486,
+      "final_position_digest": "1b99ffe2cad8e5165a5355b812eefdd3dacabad1b2a041ae84d858fb44763c26",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[de];W[cb])"
+    },
+    {
+      "opening_id": "opening-133",
+      "action_ids": [
+        24,
+        10,
+        23,
+        19
+      ],
+      "path_probability": 0.00005019267332991066,
+      "final_position_digest": "76e2c1a9f540d4f8a0cf7e844cc8623d36a12c3644474751108fd436ae36c180",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[cd];W[fc])"
+    },
+    {
+      "opening_id": "opening-134",
+      "action_ids": [
+        24,
+        17,
+        18,
+        25
+      ],
+      "path_probability": 0.00004828571431941408,
+      "final_position_digest": "cfc30ed9212669deec8dfcb17edae78cb9b759e37ce4991f4f79ff18ceb726c6",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ec];W[ed])"
+    },
+    {
+      "opening_id": "opening-135",
+      "action_ids": [
+        24,
+        17,
+        18,
+        16
+      ],
+      "path_probability": 0.000048123539257094145,
+      "final_position_digest": "b81162f10dcced4ebd6928afb9fe5fa5c8c596d1e4428eeeaf9ae8ddfda21633",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ec];W[cc])"
+    },
+    {
+      "opening_id": "opening-136",
+      "action_ids": [
+        24,
+        17,
+        18,
+        11
+      ],
+      "path_probability": 0.00004810060649739527,
+      "final_position_digest": "5123f0c23104aab295d002a30b052d78b84a8dc7c2c65cd8adea0bfed6dcaf1b",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ec];W[eb])"
+    },
+    {
+      "opening_id": "opening-137",
+      "action_ids": [
+        24,
+        25,
+        18,
+        17
+      ],
+      "path_probability": 0.000048055333228423574,
+      "final_position_digest": "f93dca913e5ceb227d5d9d21bfcf12f4e27fc91c5b58381cbd6c3a58c391fb88",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ec];W[dc])"
+    },
+    {
+      "opening_id": "opening-138",
+      "action_ids": [
+        24,
+        31,
+        30,
+        23
+      ],
+      "path_probability": 0.00004784617393039774,
+      "final_position_digest": "84dd205b72e8ef8cbe2ecc84d39cdc72192cdbcef5b60d3d9657b426f16220a9",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ce];W[cd])"
+    },
+    {
+      "opening_id": "opening-139",
+      "action_ids": [
+        24,
+        17,
+        16,
+        18
+      ],
+      "path_probability": 0.000047459474521321224,
+      "final_position_digest": "af38c893ffed108e4daf005a623ceda69d585045fc3b3967ffc5779453a6233a",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cc];W[ec])"
+    },
+    {
+      "opening_id": "opening-140",
+      "action_ids": [
+        24,
+        17,
+        18,
+        32
+      ],
+      "path_probability": 0.000046420581843383884,
+      "final_position_digest": "b1e9b0e405f8f10489a9234fe4714bb6a64cc74d1015b754dbcd0e56eb8b1bc3",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[ec];W[ee])"
+    },
+    {
+      "opening_id": "opening-141",
+      "action_ids": [
+        24,
+        17,
+        16,
+        23
+      ],
+      "path_probability": 0.00004613506695602841,
+      "final_position_digest": "a3c9d7e820a1c35eb04fab54e95c9026aeb6a73839596fa88599d7029771b249",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cc];W[cd])"
+    },
+    {
+      "opening_id": "opening-142",
+      "action_ids": [
+        24,
+        26,
+        17,
+        39
+      ],
+      "path_probability": 0.00004583316335235828,
+      "final_position_digest": "21e834a44ea62f2d4d828a814baefd530ee08701b83a8744b03765552638c3e4",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[dc];W[ef])"
+    },
+    {
+      "opening_id": "opening-143",
+      "action_ids": [
+        24,
+        17,
+        16,
+        9
+      ],
+      "path_probability": 0.000045157580435307845,
+      "final_position_digest": "0c297051081d8d7543b641572b8edb08a0cfbfb871005968b5a4d065c49675d7",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cc];W[cb])"
+    },
+    {
+      "opening_id": "opening-144",
+      "action_ids": [
+        24,
+        17,
+        16,
+        30
+      ],
+      "path_probability": 0.000045133121778875114,
+      "final_position_digest": "7104cc969a7b27eb0701c5590c45e35d76489c11d2e6f8ea5ba1545701f4f848",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[dc];B[cc];W[ce])"
+    },
+    {
+      "opening_id": "opening-145",
+      "action_ids": [
+        24,
+        23,
+        16,
+        17
+      ],
+      "path_probability": 0.00004368367817055424,
+      "final_position_digest": "88039f5e7e2e27bcae84b056de3948b62b9beed9eb927a8ce2e045e19a5b1b50",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[cc];W[dc])"
+    },
+    {
+      "opening_id": "opening-146",
+      "action_ids": [
+        24,
+        10,
+        23,
+        26
+      ],
+      "path_probability": 0.000042881692214036055,
+      "final_position_digest": "8dd18cc83d7563c34813474445f742be81f6b602431761f85c43988ea15cec45",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[cd];W[fd])"
+    },
+    {
+      "opening_id": "opening-147",
+      "action_ids": [
+        24,
+        10,
+        16,
+        26
+      ],
+      "path_probability": 0.000042274830172992005,
+      "final_position_digest": "22acab65b6ec1452b99b061599dcc06306741e4527bccd8f2edb0f80132f087f",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[cc];W[fd])"
+    },
+    {
+      "opening_id": "opening-148",
+      "action_ids": [
+        24,
+        38,
+        23,
+        26
+      ],
+      "path_probability": 0.00004083879113067614,
+      "final_position_digest": "12939cb36592546914ee2607fd51a0b18fcd0566abb89fc65510e68a1185af86",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[cd];W[fd])"
+    },
+    {
+      "opening_id": "opening-149",
+      "action_ids": [
+        24,
+        38,
+        32,
+        15
+      ],
+      "path_probability": 0.00003951360132764528,
+      "final_position_digest": "9153c4c39e12c3ebdc686a0255a7e590235644963863aa59f724477cd79a9dc0",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[ee];W[bc])"
+    },
+    {
+      "opening_id": "opening-150",
+      "action_ids": [
+        24,
+        38,
+        32,
+        22
+      ],
+      "path_probability": 0.00003894800305420765,
+      "final_position_digest": "7bd207ddc2244159fc74bd7c20dca60d3cf546ce63ff322d79662a0e0bbed59d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[ee];W[bd])"
+    },
+    {
+      "opening_id": "opening-151",
+      "action_ids": [
+        24,
+        22,
+        30,
+        11
+      ],
+      "path_probability": 0.00003823585463819793,
+      "final_position_digest": "85f22e82b0b804a35f1865882ab7068db4d5648d3190c6e0805f8e56b9d2217a",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[ce];W[eb])"
+    },
+    {
+      "opening_id": "opening-152",
+      "action_ids": [
+        24,
+        26,
+        18,
+        38
+      ],
+      "path_probability": 0.00003782625807116951,
+      "final_position_digest": "8c1a19015439117ce744cc8e0d26f21b2ac8faba8903fe5077de85e5742b5578",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ec];W[df])"
+    },
+    {
+      "opening_id": "opening-153",
+      "action_ids": [
+        24,
+        10,
+        18,
+        22
+      ],
+      "path_probability": 0.00003774414287531321,
+      "final_position_digest": "7a5c5a2eef1f2b889b364fc978a9f23c1a86b2b33f659ff85c0c6245fee118d5",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[ec];W[bd])"
+    },
+    {
+      "opening_id": "opening-154",
+      "action_ids": [
+        24,
+        26,
+        32,
+        10
+      ],
+      "path_probability": 0.000037624628597244776,
+      "final_position_digest": "6fb333dd079497a8997bdf5fded4fe26de83eb13e43fc05785bb837f1dacb3ef",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ee];W[db])"
+    },
+    {
+      "opening_id": "opening-155",
+      "action_ids": [
+        24,
+        22,
+        16,
+        38
+      ],
+      "path_probability": 0.00003722347462326789,
+      "final_position_digest": "1d6a80411efdde77eba4e4e330f159449e12a2c0b2d54574230dce553a5cf467",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cc];W[df])"
+    },
+    {
+      "opening_id": "opening-156",
+      "action_ids": [
+        24,
+        22,
+        17,
+        38
+      ],
+      "path_probability": 0.00003638371684963562,
+      "final_position_digest": "c867d2924d81e7e772841d9c6c2233d8f5d036a63c106bbc6e476f2d57feaf48",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[dc];W[df])"
+    },
+    {
+      "opening_id": "opening-157",
+      "action_ids": [
+        24,
+        22,
+        31,
+        10
+      ],
+      "path_probability": 0.00003488729577295944,
+      "final_position_digest": "0b96829be1c8d4ad65a0f2978eca4c645882312c29b9316428e0888e1fda1fc1",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[de];W[db])"
+    },
+    {
+      "opening_id": "opening-158",
+      "action_ids": [
+        24,
+        10,
+        25,
+        22
+      ],
+      "path_probability": 0.00003256149068380544,
+      "final_position_digest": "86ac6cfa2f4060e61801288ff9acdf7db845ca94e3ba8f1777b352ce6fb3f85d",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[ed];W[bd])"
+    },
+    {
+      "opening_id": "opening-159",
+      "action_ids": [
+        24,
+        38,
+        30,
+        26
+      ],
+      "path_probability": 0.00003241165385898134,
+      "final_position_digest": "d84f57b9ca1c9aa9e93c9b5f2df16050adefcbe23a385010cfb055bda6785d52",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[ce];W[fd])"
+    },
+    {
+      "opening_id": "opening-160",
+      "action_ids": [
+        24,
+        22,
+        16,
+        39
+      ],
+      "path_probability": 0.00003136430608679813,
+      "final_position_digest": "7a08b07396630d388c15e2c92bd41e7a08e9a4ff81fec545c5ab95e343104544",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[cc];W[ef])"
+    },
+    {
+      "opening_id": "opening-161",
+      "action_ids": [
+        24,
+        26,
+        17,
+        38
+      ],
+      "path_probability": 0.00002977184694120472,
+      "final_position_digest": "ee9900130b9a20899514e0e2bfd10d3ffddc7c8740dbcab241111c9504541a86",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[dc];W[df])"
+    },
+    {
+      "opening_id": "opening-162",
+      "action_ids": [
+        24,
+        26,
+        31,
+        10
+      ],
+      "path_probability": 0.000029416589222970617,
+      "final_position_digest": "72445b03cc4894c345d6f5e595bf0545b89643d0c26fa790617f4ed8b21e755c",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[de];W[db])"
+    },
+    {
+      "opening_id": "opening-163",
+      "action_ids": [
+        24,
+        38,
+        30,
+        19
+      ],
+      "path_probability": 0.000029350713813157893,
+      "final_position_digest": "1020a85068dd6e5ea5fca22c6b6d735ff85ea3d2e8da22666bc9187c2d63ddf2",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[ce];W[fc])"
+    },
+    {
+      "opening_id": "opening-164",
+      "action_ids": [
+        24,
+        25,
+        18,
+        30
+      ],
+      "path_probability": 0.000027029074540989786,
+      "final_position_digest": "9f1b71b1346d18f23c4767fbd17c5d5e7e99494fb0bd8b358599ee13ac6e236e",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ec];W[ce])"
+    },
+    {
+      "opening_id": "opening-165",
+      "action_ids": [
+        24,
+        22,
+        30,
+        10
+      ],
+      "path_probability": 0.000026821858919969938,
+      "final_position_digest": "46edc02ddbaa3820d9352e815d1356bdc6b95d75812675a25c9e979b8561d552",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[ce];W[db])"
+    },
+    {
+      "opening_id": "opening-166",
+      "action_ids": [
+        24,
+        31,
+        32,
+        17
+      ],
+      "path_probability": 0.000026258848392113965,
+      "final_position_digest": "ad92750def93ec61761387c680803bbb4ca876bdfc836408a56822ec4157e774",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ee];W[dc])"
+    },
+    {
+      "opening_id": "opening-167",
+      "action_ids": [
+        24,
+        26,
+        18,
+        37
+      ],
+      "path_probability": 0.00002587550250571791,
+      "final_position_digest": "e1d3a31d94056285b459907fc5b43707648a25ea4f009cbbad1b599ad265b215",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ec];W[cf])"
+    },
+    {
+      "opening_id": "opening-168",
+      "action_ids": [
+        24,
+        25,
+        32,
+        23
+      ],
+      "path_probability": 0.00002545815059886931,
+      "final_position_digest": "2314c8cb38f82d0937d499f804ce0ba5833495d2dcee5d0446c9084e5327836a",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ee];W[cd])"
+    },
+    {
+      "opening_id": "opening-169",
+      "action_ids": [
+        24,
+        22,
+        17,
+        9
+      ],
+      "path_probability": 0.00002523978316232023,
+      "final_position_digest": "9dd6c0becea34d3210d6026253f419d8ee0184ce6201a1c1fe192b6c8fa3e092",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[dc];W[cb])"
+    },
+    {
+      "opening_id": "opening-170",
+      "action_ids": [
+        24,
+        38,
+        23,
+        29
+      ],
+      "path_probability": 0.00002502946931034926,
+      "final_position_digest": "c2941df758cccdee512557a86bb043fc15d2f02d363bbfaf77977ed5843daa6a",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[df];B[cd];W[be])"
+    },
+    {
+      "opening_id": "opening-171",
+      "action_ids": [
+        24,
+        25,
+        18,
+        23
+      ],
+      "path_probability": 0.000024262950670272023,
+      "final_position_digest": "7e723ce55b410519e5e04337fcbe4a8c6abd546800aebc02cdfcfe008e690a3e",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ec];W[cd])"
+    },
+    {
+      "opening_id": "opening-172",
+      "action_ids": [
+        24,
+        31,
+        32,
+        30
+      ],
+      "path_probability": 0.00002402962548515377,
+      "final_position_digest": "21a7d5527ef30ab12b302948fc73dc426941f05ade2787423c482afc482261f1",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ee];W[ce])"
+    },
+    {
+      "opening_id": "opening-173",
+      "action_ids": [
+        24,
+        31,
+        30,
+        17
+      ],
+      "path_probability": 0.000023871262403862174,
+      "final_position_digest": "5a0aab5c764522b1f4d2ab7eb1f29376adcb73b6392ee2151e8313078132d407",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ce];W[dc])"
+    },
+    {
+      "opening_id": "opening-174",
+      "action_ids": [
+        24,
+        31,
+        32,
+        25
+      ],
+      "path_probability": 0.000023833241134893503,
+      "final_position_digest": "0127c4d467c2d92b9c3912858fe8684fabb1c1029f5c61c9956b785481f03150",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ee];W[ed])"
+    },
+    {
+      "opening_id": "opening-175",
+      "action_ids": [
+        24,
+        31,
+        32,
+        39
+      ],
+      "path_probability": 0.00002376633693427188,
+      "final_position_digest": "b0e7f63e5f0d427cdde18ae20cb784d039ad3a120127ab18db7fd837396bcf42",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ee];W[ef])"
+    },
+    {
+      "opening_id": "opening-176",
+      "action_ids": [
+        24,
+        25,
+        32,
+        33
+      ],
+      "path_probability": 0.000023728269191214438,
+      "final_position_digest": "b4e14a26d3066b655857ef9ff003f21cd15d97b4e7018b32af53e2394ba3e275",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ee];W[fe])"
+    },
+    {
+      "opening_id": "opening-177",
+      "action_ids": [
+        24,
+        10,
+        16,
+        33
+      ],
+      "path_probability": 0.000023644036316213365,
+      "final_position_digest": "b865a09eb22de5ba28fc4aca105dc70d12b72793d117a1258be4cbdf49f271ce",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[cc];W[fe])"
+    },
+    {
+      "opening_id": "opening-178",
+      "action_ids": [
+        24,
+        10,
+        18,
+        29
+      ],
+      "path_probability": 0.00002345081181593093,
+      "final_position_digest": "3ed3ac8a13eec33d89d3687e4ce99849441a31478b09b8cb010bdf8ec2e10984",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[db];B[ec];W[be])"
+    },
+    {
+      "opening_id": "opening-179",
+      "action_ids": [
+        24,
+        25,
+        32,
+        18
+      ],
+      "path_probability": 0.000023407347988217816,
+      "final_position_digest": "5bfa1df885ad5f627a337fc5b2f32a2b979634a35debf0024aaf45c6a85f6107",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ee];W[ec])"
+    },
+    {
+      "opening_id": "opening-180",
+      "action_ids": [
+        24,
+        26,
+        32,
+        9
+      ],
+      "path_probability": 0.000023350211275791097,
+      "final_position_digest": "6832b1a7092b5517307fda358107deb5d5052b0a9d1fea06eb435d6a394fda82",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[ee];W[cb])"
+    },
+    {
+      "opening_id": "opening-181",
+      "action_ids": [
+        24,
+        25,
+        32,
+        31
+      ],
+      "path_probability": 0.000023155927603434427,
+      "final_position_digest": "e85124037a8719c2da9106654c27bcddc451cac8db08a18c96c04396cb641312",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ee];W[de])"
+    },
+    {
+      "opening_id": "opening-182",
+      "action_ids": [
+        24,
+        23,
+        16,
+        25
+      ],
+      "path_probability": 0.000022680938521205955,
+      "final_position_digest": "6ddc291b72cd5d6dce716ae77b3c6e1a9401b40fa8a8dc1d973a15dd6b346fb5",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[cc];W[ed])"
+    },
+    {
+      "opening_id": "opening-183",
+      "action_ids": [
+        24,
+        25,
+        18,
+        32
+      ],
+      "path_probability": 0.000022322185064985157,
+      "final_position_digest": "ac06955c9c25cf1c45eca5600608c6b2792c56144498c52a70c18beb8cc4e2a6",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ec];W[ee])"
+    },
+    {
+      "opening_id": "opening-184",
+      "action_ids": [
+        24,
+        25,
+        18,
+        19
+      ],
+      "path_probability": 0.00002185905912318754,
+      "final_position_digest": "88c700da2824806a4ef6a7bf71be75d3b5b57191097f7575b7e668ec79f0113c",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ec];W[fc])"
+    },
+    {
+      "opening_id": "opening-185",
+      "action_ids": [
+        24,
+        25,
+        32,
+        30
+      ],
+      "path_probability": 0.000021722177954910806,
+      "final_position_digest": "7e96abaf3a4e12534a850c5436e21c8a262d266835c7985f92be618247aea627",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ee];W[ce])"
+    },
+    {
+      "opening_id": "opening-186",
+      "action_ids": [
+        24,
+        23,
+        30,
+        25
+      ],
+      "path_probability": 0.000021694730735845825,
+      "final_position_digest": "83222603419afb47f9b0a4e48a73441f29a85259c3223451d9a25ab84cc8ffaa",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[ce];W[ed])"
+    },
+    {
+      "opening_id": "opening-187",
+      "action_ids": [
+        24,
+        31,
+        30,
+        37
+      ],
+      "path_probability": 0.00002161944014917773,
+      "final_position_digest": "0c86607020e035659c0db961c80648e5818bba07ca4297701d19fb624ad0b5a9",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ce];W[cf])"
+    },
+    {
+      "opening_id": "opening-188",
+      "action_ids": [
+        24,
+        25,
+        18,
+        16
+      ],
+      "path_probability": 0.000021430136931960033,
+      "final_position_digest": "f3adcdfb0b0a16919aa05812c61caa9f6515501a43d78c70aa3b1214aa39f191",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ec];W[cc])"
+    },
+    {
+      "opening_id": "opening-189",
+      "action_ids": [
+        24,
+        25,
+        18,
+        26
+      ],
+      "path_probability": 0.00002135071493538483,
+      "final_position_digest": "b9780598519bdd412859de331825a7b8657690d365ecffdc33f453f9b803cda1",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[ed];B[ec];W[fd])"
+    },
+    {
+      "opening_id": "opening-190",
+      "action_ids": [
+        24,
+        31,
+        30,
+        32
+      ],
+      "path_probability": 0.000021291314783936235,
+      "final_position_digest": "873831b20f68df76d20dafb970715ae3a5888dfe1c432b5ce28e29783734111b",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ce];W[ee])"
+    },
+    {
+      "opening_id": "opening-191",
+      "action_ids": [
+        24,
+        31,
+        30,
+        38
+      ],
+      "path_probability": 0.00002037366205515445,
+      "final_position_digest": "f3b273ab65019e1d68067442908d2ab62cfe97e6bbbf191bfbbdbd01c39fbf8a",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ce];W[df])"
+    },
+    {
+      "opening_id": "opening-192",
+      "action_ids": [
+        24,
+        23,
+        30,
+        31
+      ],
+      "path_probability": 0.000019945628156862388,
+      "final_position_digest": "cbd9b343cbf7b0eccc3919cc29da12bf5c82e710c06c2a0882b5d1cca1367fc2",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[ce];W[de])"
+    },
+    {
+      "opening_id": "opening-193",
+      "action_ids": [
+        24,
+        23,
+        30,
+        16
+      ],
+      "path_probability": 0.00001992958241056101,
+      "final_position_digest": "eb621035159a24808eb274ab7995411f31b0474b58176ce7dfea6ab4fe8c065f",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[ce];W[cc])"
+    },
+    {
+      "opening_id": "opening-194",
+      "action_ids": [
+        24,
+        31,
+        30,
+        16
+      ],
+      "path_probability": 0.00001970511437949705,
+      "final_position_digest": "e8a480bbf48bdc3efac998fbf2512fc913a482d02587c0149354f4c6080e62e6",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[de];B[ce];W[cc])"
+    },
+    {
+      "opening_id": "opening-195",
+      "action_ids": [
+        24,
+        23,
+        16,
+        30
+      ],
+      "path_probability": 0.00001970291570446352,
+      "final_position_digest": "238077602b977fdc5ab019e187d87914c4bca05d5049519147486fd14f2ad217",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[cc];W[ce])"
+    },
+    {
+      "opening_id": "opening-196",
+      "action_ids": [
+        24,
+        23,
+        16,
+        15
+      ],
+      "path_probability": 0.00001945659330668121,
+      "final_position_digest": "4088add2e1b7ef61d56f32e8757f6a0810ba002778b9b75ad04332b677df6996",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[cc];W[bc])"
+    },
+    {
+      "opening_id": "opening-197",
+      "action_ids": [
+        24,
+        26,
+        17,
+        11
+      ],
+      "path_probability": 0.00001916130114841648,
+      "final_position_digest": "2c8360dee48291bac16740e88a6d61683313b5355ad73bf1f9ba8679744eace3",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[fd];B[dc];W[eb])"
+    },
+    {
+      "opening_id": "opening-198",
+      "action_ids": [
+        24,
+        22,
+        31,
+        37
+      ],
+      "path_probability": 0.000019032689684436718,
+      "final_position_digest": "ef442eb3b5ae17ae5f48044617a2e2a0a235943ecd7864a51e26d87a2778ace6",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[bd];B[de];W[cf])"
+    },
+    {
+      "opening_id": "opening-199",
+      "action_ids": [
+        24,
+        23,
+        16,
+        18
+      ],
+      "path_probability": 0.000018706944015187964,
+      "final_position_digest": "2bf4d47efd8db646562ff878b4f31fc57e428841d4c9750b4c27021e515394ab",
+      "human_readable": "(;GM[1]FF[4]SZ[7]KM[7.5];B[dd];W[cd];B[cc];W[ec])"
+    }
+  ],
+  "builder_source_revision": "a40cd43fcc5b9c16b813a4a6841c6c705af45ff1"
+}

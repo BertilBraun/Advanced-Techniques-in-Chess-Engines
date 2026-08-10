@@ -12,6 +12,7 @@ import torch
 import src.evaluation.dataset as dataset_module
 from src.evaluation.dataset import (
     build_evaluation_dataset,
+    dataset_manifest_path,
     load_evaluation_dataset,
 )
 from src.evaluation.openings import build_opening_suite
@@ -20,14 +21,33 @@ from src.evaluation.configuration import (
     FixedDatasetEvaluationDefinition,
     OpeningSuiteConfiguration,
 )
-from src.evaluation.contracts import FixedDatasetEvaluationJob
+from src.evaluation.contracts import EvaluationDatasetManifest, FixedDatasetEvaluationJob, OpeningSuiteManifest
 from src.evaluation.dataset import evaluate_fixed_dataset
 from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
+from src.experiment.configuration import load_experiment_configuration
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.contracts import ReplaySample
 from src.self_play.completed_game import TerminationReason
 from src.training.checkpoint import CheckpointReference
+
+
+def test_checked_in_go_baseline_reference_artifacts_match_configuration() -> None:
+    experiment = load_experiment_configuration(Path('configs/baselines/vast-go-7x7-2gpu-4h.yaml'))
+    dataset_path = Path(experiment.evaluation.dataset.path).relative_to('py')
+    openings_path = Path(experiment.evaluation.openings.path).relative_to('py')
+    dataset_manifest = EvaluationDatasetManifest.model_validate_json(
+        dataset_manifest_path(dataset_path).read_text(encoding='utf-8')
+    )
+    opening_manifest = OpeningSuiteManifest.model_validate_json(openings_path.read_text(encoding='utf-8'))
+    engine = experiment.evaluation.engine
+    assert engine.kind == 'katago'
+
+    assert 480 <= dataset_manifest.position_count <= 520
+    assert dataset_manifest.label_search_limit == engine.label_max_visits
+    assert hashlib.sha256(dataset_path.read_bytes()).hexdigest() == dataset_manifest.data_sha256
+    assert len(opening_manifest.openings) == experiment.evaluation.openings.opening_count == 200
+    assert opening_manifest.label_search_limit == engine.label_max_visits
 
 
 @dataclass(frozen=True)
