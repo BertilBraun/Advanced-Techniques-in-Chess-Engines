@@ -60,17 +60,18 @@ Current screening policy:
   * Potentially grow the replay window over training.
   * Track replay age, sample reuse, and policy staleness.
 
-* **Optimize model publication cadence** - implemented [x] experimenting [ ] validated [ ]
+* **Optimize model publication cadence** - implemented [x] experimenting [ ] validated [✗]
 
   * Publish a new self-play model every fixed number of optimizer steps.
   * Compare frequent publication against larger, less frequent updates.
   * Very frequent publication may create overhead and unstable moving targets; infrequent publication wastes improved models.
+  * A 100-optimizer-step cadence underperformed because publication overhead exceeded the freshness benefit.
 
 ---
 
 ### Search improvements
 
-* **First-play urgency ablation** - implemented [ ] experimenting [ ] validated [ ]
+* **First-play urgency ablation** - implemented [x] experimenting [x] validated [ ]
 
   * Zero initialization.
   * Parent-value initialization.
@@ -80,7 +81,7 @@ Current screening policy:
   * Implement KataGo-style reduced-parent-value FPU first. Test the other variants only if it is competitive with
     zero initialization.
 
-* **Forced playouts with policy-target pruning** - implemented [ ] experimenting [ ] validated [ ]
+* **Forced playouts with policy-target pruning** - implemented [x] experimenting [x] validated [ ]
 
   * Force exploration of root candidates.
   * Remove visits caused only by exploration from the supervised policy target.
@@ -148,7 +149,7 @@ Current screening policy:
 
 ### Data-generation improvements
 
-* **Go-Exploit-style restart states** - implemented [ ] experimenting [ ] validated [ ]
+* **Go-Exploit-style restart states** - implemented [x] experimenting [x] validated [ ]
 
   * Start some trajectories from recent archived positions.
   * Produces shorter games, deeper-state coverage, and more independent terminal outcomes.
@@ -213,7 +214,7 @@ Current screening policy:
   * Generic across sequential games.
   * KataGo found a modest but clear benefit.
 
-* **Remaining game length** - implemented [ ] experimenting [ ] validated [ ]
+* **Remaining game length** - implemented [x] experimenting [x] validated [ ]
 
   * Predict moves or plies until termination.
   * Provides phase information.
@@ -488,9 +489,9 @@ For the main paper, keep these out of the primary method. Use them only as an up
 * Progressive simulation budget.
 * Mixed fast/full search.
 * KataGo-style reduced-parent-value FPU.
-* Forced playouts with policy-target pruning.
 * Go-Exploit-style restart states with untried-action tracking.
 * Remaining-game-length auxiliary head.
+* Forced playouts with policy-target pruning.
 * Conservative adaptive search termination after offline trace calibration.
 * Replay ratio and publication cadence.
 * Dedicated global-pooling ablation beyond the existing squeeze-excitation blocks.
@@ -506,21 +507,14 @@ Deferred from the four-hour 7x7 Go screen:
 * progressive model scaling, because shape transition and promotion overhead dominate a four-hour experiment;
 * transposition-aware graph search, because its primary value is in the later chess stage.
 
-### Twenty-four-hour experiment capacity
+### Current screening queue
 
-Four concurrent four-hour experiments require 24 runnable experiments to keep the machine occupied for 24 hours.
-The current matrix provides ten. Fill the remaining fourteen slots without combining unvalidated methods:
+The first four runs are active: baseline, learning-rate decay, constant learning rate, and mixed search with 25% full
+searches. The remaining six pre-existing single-variable screens should still run. Four additional screens are now
+configured for reduced-parent FPU, restart states, remaining game length, and forced playout pruning.
 
-* five new-method runs: reduced-parent FPU, forced playout pruning, restart states, remaining game length, and
-  conservatively calibrated adaptive termination;
-* five existing-capability runs: 100-step publication cadence, smaller replay window, larger replay window, fixed
-  128-simulation search, and fixed 512-simulation search;
-* four confirmation runs: two additional baseline seeds, one additional progressive-search seed, and one additional
-  mixed-search seed.
-
-If a new implementation is not ready before its queue slot becomes due, substitute another baseline seed rather than
-an arbitrary parameter sweep. Once the first complete four-hour results arrive, later confirmation slots may be
-redirected to the strongest single-variable candidates before they start.
+Review the first completed results before choosing another variable or allocating confirmation seeds. Adaptive search
+termination and the broader 24-hour queue decision are deferred to `TOMORROW.md`.
 
 ### Likely final system
 
