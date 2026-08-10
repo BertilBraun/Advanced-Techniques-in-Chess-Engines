@@ -68,6 +68,7 @@ class FakeInferenceStatistics:
 class FakeSearch:
     def __init__(self) -> None:
         self.generations: list[int] = []
+        self.capacity_changed = False
 
     def new_root(self, position: FakePosition) -> FakeRoot:
         return FakeRoot(position)
@@ -88,7 +89,7 @@ class FakeSearch:
 
     def update_search_schedule(self, search_parameters: ResolvedSelfPlayParameters) -> bool:
         del search_parameters
-        return True
+        return self.capacity_changed
 
     def inference_statistics(self) -> FakeInferenceStatistics:
         return FakeInferenceStatistics()
@@ -200,3 +201,25 @@ def test_worker_owns_shared_search_move_selection_and_generation_transition(tmp_
     assert game.search.generations == [1]
     assert statistics.model_generation == 1
     assert statistics.completed_searches == 9
+
+
+def test_worker_replaces_roots_when_search_arena_capacity_changes(tmp_path: Path) -> None:
+    game = FakeGame()
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=2,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path,
+    )
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.run_batch()
+    original_roots = tuple(active_game.root for active_game in worker.active_games)
+
+    game.search.capacity_changed = True
+    worker.refresh_published_model(checkpoint(tmp_path, 1))
+
+    assert all(active_game.root is not original for active_game, original in zip(worker.active_games, original_roots))
+    assert [active_game.root.position.ply for active_game in worker.active_games] == [1, 1]
+    assert [active_game.action_ids for active_game in worker.active_games] == [[0], [0]]
+    assert [active_game.root.reset_count for active_game in worker.active_games] == [0, 0]

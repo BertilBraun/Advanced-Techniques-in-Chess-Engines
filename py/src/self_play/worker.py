@@ -96,13 +96,17 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         parameters = self.game.self_play_parameters_at(checkpoint.generation)
         if self.search is None:
             self.search = self.game.create_native_search(self.device_id, checkpoint, parameters)
+            capacity_changed = False
         else:
             self.search.refresh_model(checkpoint.generation, str(checkpoint.inference_model_path))
-            self.search.update_search_schedule(self.game.native_search_parameters(parameters))
+            capacity_changed = self.search.update_search_schedule(self.game.native_search_parameters(parameters))
         self.parameters = parameters
         self.model_generation = checkpoint.generation
         if not self.active_games:
             self.active_games = [self._new_game(self.search, parameters) for _ in range(self.parallel_game_count)]
+        elif capacity_changed:
+            for active_game in self.active_games:
+                active_game.root = self.search.new_root(active_game.root.position)
         else:
             for active_game in self.active_games:
                 active_game.root.reset()
