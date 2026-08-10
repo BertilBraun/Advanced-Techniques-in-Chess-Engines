@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Iterator, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
+from types import TracebackType
 from typing import Generic, TypeVar
 import time
 
@@ -18,6 +21,14 @@ from src.training.batch import TrainingBatch
 
 
 PositionT = TypeVar('PositionT')
+
+
+@dataclass(frozen=True)
+class _PrefetchedBatch:
+    # Retain pinned source tensors until the asynchronous transfer completes.
+    host_batch: TrainingBatch
+    device_batch: TrainingBatch
+    transfer_complete: torch.cuda.Event | None
 
 
 class MappedReplayBatchLoader(Generic[PositionT]):
@@ -60,6 +71,14 @@ class MappedReplayBatchLoader(Generic[PositionT]):
         return self.rows_read / self.read_seconds if self.read_seconds > 0.0 else 0.0
 
     def __iter__(self) -> Iterator[TrainingBatch]:
+        return self._prepared_batches()
+
+    def prefetch(self, device: torch.device, uses_cuda: bool) -> PrefetchedReplayBatches:
+        if uses_cuda != (device.type == 'cuda'):
+            raise ValueError('CUDA prefetch must agree with the training device type.')
+        return PrefetchedReplayBatches(self, device, uses_cuda)
+
+    def _prepared_batches(self) -> Generator[TrainingBatch, None, None]:
         store = ReplayStore.open(self.replay.path, self.replay.layout, writable=False)
         try:
             state = store.state
@@ -98,6 +117,88 @@ class MappedReplayBatchLoader(Generic[PositionT]):
                 yield prepared
         finally:
             store.close()
+
+
+class PrefetchedReplayBatches(Iterator[TrainingBatch]):
+    def __init__(
+        self,
+        loader: MappedReplayBatchLoader,
+        device: torch.device,
+        uses_cuda: bool,
+    ) -> None:
+        self.loader = loader
+        self.device = device
+        self.uses_cuda = uses_cuda
+        self._closed = False
+        self._prepared_batches = loader._prepared_batches()
+        self._transfer_stream = torch.cuda.Stream(device=device) if uses_cuda else None
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='replay-batch-prefetch')
+        self._next_batch: Future[_PrefetchedBatch] = self._executor.submit(self._prepare_next)
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    def __iter__(self) -> PrefetchedReplayBatches:
+        return self
+
+    def __next__(self) -> TrainingBatch:
+        if self._closed:
+            raise StopIteration
+        try:
+            prefetched = self._next_batch.result()
+        except StopIteration:
+            self.close()
+            raise StopIteration from None
+        except BaseException as error:
+            self.close()
+            raise RuntimeError('Replay batch prefetch failed.') from error
+        self._next_batch = self._executor.submit(self._prepare_next)
+        self._synchronize_transfer(prefetched)
+        return prefetched.device_batch
+
+    def __enter__(self) -> PrefetchedReplayBatches:
+        return self
+
+    def __exit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._next_batch.cancel()
+        self._executor.shutdown(wait=True, cancel_futures=True)
+        if not self._next_batch.cancelled():
+            try:
+                prefetched = self._next_batch.result()
+            except BaseException:
+                pass
+            else:
+                self._synchronize_transfer(prefetched)
+        self._prepared_batches.close()
+        self._closed = True
+
+    def _prepare_next(self) -> _PrefetchedBatch:
+        host_batch = next(self._prepared_batches)
+        if not self.uses_cuda:
+            return _PrefetchedBatch(host_batch, host_batch, None)
+        transfer_stream = self._transfer_stream
+        assert transfer_stream is not None
+        with torch.cuda.device(self.device), torch.cuda.stream(transfer_stream):
+            device_batch = host_batch.to_device(self.device, non_blocking=True)
+            transfer_complete = torch.cuda.Event()
+            transfer_complete.record(transfer_stream)
+        return _PrefetchedBatch(host_batch, device_batch, transfer_complete)
+
+    @staticmethod
+    def _synchronize_transfer(prefetched: _PrefetchedBatch) -> None:
+        if prefetched.transfer_complete is not None:
+            prefetched.transfer_complete.synchronize()
 
 
 def build_training_batch(

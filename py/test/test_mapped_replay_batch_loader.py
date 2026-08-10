@@ -1,15 +1,20 @@
+from collections.abc import Sequence
 from pathlib import Path
+from threading import Event
 
 import torch
+import pytest
 
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessStateContract
 from src.games.contracts import WdlTarget
-from src.replay.batch_loader import MappedReplayBatchLoader
+import src.replay.batch_loader as batch_loader_module
+from src.replay.batch_loader import MappedReplayBatchLoader, build_training_batch
 from src.replay.contracts import EligibleNextPolicyTarget, ReplaySample, SparsePolicyTarget
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayDescription
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import SparseSearchVisit
+from src.training.batch import TrainingBatch
 from src.training.targets import NextPolicyHeadLayout, TrainingTargetLayout
 
 
@@ -101,3 +106,130 @@ def test_mapped_loader_builds_canonical_batches_and_disjoint_rank_slices(tmp_pat
     assert torch.allclose(rank_zero.wdl_targets, torch.tensor(((0.25, 0.5, 0.25),) * 2))
     assert torch.all(rank_zero.auxiliary_eligibility[0])
     assert set(rank_zero.sample_weights.tolist()).isdisjoint(rank_one.sample_weights.tolist())
+
+
+def test_prefetch_preserves_batch_order_and_exact_row_accounting(tmp_path: Path) -> None:
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, _layout(), maximum_capacity=4, logical_capacity=4)
+    for weight in (1.0, 2.0, 3.0, 4.0):
+        store.append(_sample(weight))
+    store.flush()
+    description = _description(path, store)
+    store.close()
+    common = {
+        'replay': description,
+        'state': IDENTITY_CHESS_STATE_CONTRACT,
+        'source_optimizer_step': 20,
+        'optimizer_steps': 3,
+        'global_batch_size': 4,
+        'world_size': 1,
+        'rank': 0,
+        'sampler_seed': 91,
+        'pin_memory': False,
+    }
+    synchronous_loader = MappedReplayBatchLoader(**common)
+    expected_weights = tuple(tuple(batch.sample_weights.tolist()) for batch in synchronous_loader)
+    prefetched_loader = MappedReplayBatchLoader(**common)
+
+    with prefetched_loader.prefetch(torch.device('cpu'), uses_cuda=False) as batches:
+        actual_weights = tuple(tuple(batch.sample_weights.tolist()) for batch in batches)
+
+    assert actual_weights == expected_weights
+    assert synchronous_loader.rows_read == 12
+    assert prefetched_loader.rows_read == 12
+    assert batches.closed
+
+
+def test_prefetch_prepares_next_batch_before_consumer_requests_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, _layout(), maximum_capacity=4, logical_capacity=4)
+    for weight in (1.0, 2.0, 3.0, 4.0):
+        store.append(_sample(weight))
+    store.flush()
+    description = _description(path, store)
+    store.close()
+    second_batch_started = Event()
+    allow_second_batch = Event()
+    build_count = 0
+
+    def controlled_build(
+        replay_store: ReplayStore,
+        state: ChessStateContract,
+        sample_indices: Sequence[int],
+        augmentation_indices: Sequence[int],
+    ) -> TrainingBatch:
+        nonlocal build_count
+        build_count += 1
+        if build_count == 2:
+            second_batch_started.set()
+            if not allow_second_batch.wait(timeout=5.0):
+                raise TimeoutError('Test did not release second batch construction.')
+        return build_training_batch(replay_store, state, sample_indices, augmentation_indices)
+
+    monkeypatch.setattr(batch_loader_module, 'build_training_batch', controlled_build)
+    loader = MappedReplayBatchLoader(
+        replay=description,
+        state=IDENTITY_CHESS_STATE_CONTRACT,
+        source_optimizer_step=20,
+        optimizer_steps=2,
+        global_batch_size=2,
+        world_size=1,
+        rank=0,
+        sampler_seed=91,
+        pin_memory=False,
+    )
+    batches = loader.prefetch(torch.device('cpu'), uses_cuda=False)
+
+    try:
+        first_batch = next(batches)
+        assert len(first_batch) == 2
+        assert second_batch_started.wait(timeout=1.0)
+    finally:
+        allow_second_batch.set()
+        batches.close()
+
+    assert batches.closed
+
+
+def test_prefetch_propagates_producer_failure_and_closes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, _layout(), maximum_capacity=2, logical_capacity=2)
+    store.append(_sample(1.0))
+    store.append(_sample(2.0))
+    store.flush()
+    description = _description(path, store)
+    store.close()
+
+    def fail_build(
+        replay_store: ReplayStore,
+        state: ChessStateContract,
+        sample_indices: Sequence[int],
+        augmentation_indices: Sequence[int],
+    ) -> TrainingBatch:
+        raise ValueError('broken replay row')
+
+    monkeypatch.setattr(batch_loader_module, 'build_training_batch', fail_build)
+    loader = MappedReplayBatchLoader(
+        replay=description,
+        state=IDENTITY_CHESS_STATE_CONTRACT,
+        source_optimizer_step=20,
+        optimizer_steps=1,
+        global_batch_size=2,
+        world_size=1,
+        rank=0,
+        sampler_seed=91,
+        pin_memory=False,
+    )
+    batches = loader.prefetch(torch.device('cpu'), uses_cuda=False)
+
+    with pytest.raises(RuntimeError, match='Replay batch prefetch failed') as raised:
+        next(batches)
+
+    assert isinstance(raised.value.__cause__, ValueError)
+    assert batches.closed

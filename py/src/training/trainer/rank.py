@@ -180,20 +180,20 @@ def _train_batches(
         total=torch.zeros((), device=device),
         gradient_norm=torch.zeros((), device=device),
     )
-    for batch in loader:
-        batch = batch.to_device(device, non_blocking=uses_cuda)
-        optimizer.zero_grad(set_to_none=True)
-        output = distributed_model(batch.states)
-        loss = objective.calculate_loss(output, batch)
-        loss.total.backward()
-        gradient_norm = torch.nn.utils.clip_grad_norm_(distributed_model.parameters(), maximum_gradient_norm)
-        optimizer.step()
-        totals.policy.add_(loss.policy.detach())
-        totals.wdl.add_(loss.wdl.detach())
-        totals.total.add_(loss.total.detach())
-        totals.gradient_norm.add_(gradient_norm.detach())
-        if loss.auxiliary:
-            totals.auxiliary.add_(torch.stack(tuple(auxiliary.detach() for auxiliary in loss.auxiliary)))
+    with loader.prefetch(device, uses_cuda) as prefetched_batches:
+        for batch in prefetched_batches:
+            optimizer.zero_grad(set_to_none=True)
+            output = distributed_model(batch.states)
+            loss = objective.calculate_loss(output, batch)
+            loss.total.backward()
+            gradient_norm = torch.nn.utils.clip_grad_norm_(distributed_model.parameters(), maximum_gradient_norm)
+            optimizer.step()
+            totals.policy.add_(loss.policy.detach())
+            totals.wdl.add_(loss.wdl.detach())
+            totals.total.add_(loss.total.detach())
+            totals.gradient_norm.add_(gradient_norm.detach())
+            if loss.auxiliary:
+                totals.auxiliary.add_(torch.stack(tuple(auxiliary.detach() for auxiliary in loss.auxiliary)))
     return totals
 
 
