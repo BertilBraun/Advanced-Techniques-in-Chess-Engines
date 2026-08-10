@@ -31,16 +31,10 @@ slots:
     ram_capacity_bytes: 47244640256
     log_directory: /workspace/run-control/logs/gpu-pair-d
 experiments:
-  - {experiment_id: go7-r13-00-baseline, experiment_file: ../screening/go-7x7-overnight/00-baseline.yaml, source_revision: b34c651bd4884f5a0b6e58e9138207044227114e, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go7-r13-01-learning-rate-decay, experiment_file: ../screening/go-7x7-overnight/01-learning-rate-decay.yaml, source_revision: b34c651bd4884f5a0b6e58e9138207044227114e, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go7-r13-02-learning-rate-constant-004, experiment_file: ../screening/go-7x7-overnight/02-learning-rate-constant-004.yaml, source_revision: b34c651bd4884f5a0b6e58e9138207044227114e, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go7-r13-04-mixed-search-25-full, experiment_file: ../screening/go-7x7-overnight/04-mixed-search-25-full.yaml, source_revision: b34c651bd4884f5a0b6e58e9138207044227114e, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go7-r13-06-progressive-search-64-512, experiment_file: ../screening/go-7x7-overnight/06-progressive-search-64-512.yaml, source_revision: b34c651bd4884f5a0b6e58e9138207044227114e, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go7-r13-07-root-value-blend, experiment_file: ../screening/go-7x7-overnight/07-root-value-blend.yaml, source_revision: b34c651bd4884f5a0b6e58e9138207044227114e, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go7-r13-08-replay-ratio-8, experiment_file: ../screening/go-7x7-overnight/08-replay-ratio-8.yaml, source_revision: b34c651bd4884f5a0b6e58e9138207044227114e, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go7-r13-09-tree-retention-60, experiment_file: ../screening/go-7x7-overnight/09-tree-retention-60.yaml, source_revision: b34c651bd4884f5a0b6e58e9138207044227114e, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go7-r13-10-random-opening-12, experiment_file: ../screening/go-7x7-overnight/10-random-opening-12.yaml, source_revision: b34c651bd4884f5a0b6e58e9138207044227114e, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go7-r13-11-next-policy, experiment_file: ../screening/go-7x7-overnight/11-next-policy.yaml, source_revision: b34c651bd4884f5a0b6e58e9138207044227114e, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go7-r14-12-fpu-reduction-02, experiment_file: ../screening/go-7x7-overnight/12-fpu-reduction-02.yaml, source_revision: 74cb58fabf3f9533803b76d3e3bf4cda6d39c956, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go7-r14-13-restart-states, experiment_file: ../screening/go-7x7-overnight/13-restart-states.yaml, source_revision: 74cb58fabf3f9533803b76d3e3bf4cda6d39c956, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go7-r14-14-remaining-game-length, experiment_file: ../screening/go-7x7-overnight/14-remaining-game-length.yaml, source_revision: 74cb58fabf3f9533803b76d3e3bf4cda6d39c956, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go7-r14-15-forced-playouts, experiment_file: ../screening/go-7x7-overnight/15-forced-playouts.yaml, source_revision: 74cb58fabf3f9533803b76d3e3bf4cda6d39c956, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
 summary_path: /workspace/run-control/go7-screening-summary.json
 poll_interval_seconds: 1.0
 termination_grace_seconds: 30.0
