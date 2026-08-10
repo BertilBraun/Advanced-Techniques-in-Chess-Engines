@@ -1,0 +1,54 @@
+extends: ../baselines/vast-go-7x7-2gpu-4h.yaml
+run:
+  run_name: vast-r12-go-7x7-2gpu-smoke
+  tensorboard_run_directory: vast-r12-go-7x7-2gpu-smoke
+training:
+  save_path: py/training_data/validation/vast-r12-go-7x7-2gpu-smoke
+  trainer:
+    global_batch_size: 32
+    local_batch_size: 16
+  topology:
+    trainer:
+      cpu_threads: 4
+    self_play:
+      parallel_games_per_process: 8
+  lifecycle:
+    replay:
+      capacity: {kind: constant, value: 2048}
+      maximum_capacity: 2048
+    credit:
+      replay_ratio: 1
+      optimizer_steps_per_quantum: 2
+      maximum_optimizer_steps: 1000
+  limits:
+    maximum_wall_time_seconds: 240
+    resource_telemetry_interval_seconds: 2
+evaluation:
+  cadence_seconds: 60
+  job_timeout_seconds: 120
+  maximum_concurrent_jobs: 3
+  definitions:
+    - {kind: fixed_dataset, definition_id: fixed-dataset}
+    - kind: previous_checkpoint
+      definition_id: previous-60s
+      boundary_offset: 1
+      opening_pair_count: 1
+      maximum_game_plies: 32
+      search: &smoke_search
+        searches_per_move: 2
+        parallel_searches: 1
+        exploration_constant: 1.0
+        inference:
+          inference_workers: 1
+          inference_batch_size: 8
+          outstanding_batches_per_worker: 1
+    - {kind: katago, definition_id: katago-smoke, maximum_visits: 2, opening_pair_count: 1, maximum_game_plies: 32, search: *smoke_search}
+go:
+  self_play:
+    search:
+      full_searches: {kind: constant, value: 2}
+      fast_searches: {kind: constant, value: 1}
+    inference:
+      inference_batch_size: 8
+    greedy_after_ply: {kind: constant, value: 4}
+    detailed_statistics_workers: 1
