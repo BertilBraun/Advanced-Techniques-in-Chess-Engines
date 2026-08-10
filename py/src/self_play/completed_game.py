@@ -42,26 +42,25 @@ class TerminationReason(str, Enum):
 class SearchObservation(FrozenModel):
     ply: int = Field(ge=0)
     model_generation: int = Field(ge=0)
-    visits: tuple[SparseSearchVisit, ...] = Field(min_length=1)
+    policy_target_visits: tuple[SparseSearchVisit, ...] = Field(min_length=1)
     root_value: float
     selected_action_id: int = Field(ge=0)
     full_search: bool
     sample_weight: float = Field(gt=0.0)
     search_budget: int = Field(gt=0)
-    minimum_root_visits: int = Field(ge=0)
 
     def model_post_init(self, __context: object) -> None:
         if not isfinite(self.root_value) or not -1.0 <= self.root_value <= 1.0:
             raise ValueError('Search root value must be finite and lie in [-1, 1].')
-        action_ids = tuple(visit.action_id for visit in self.visits)
+        action_ids = tuple(visit.action_id for visit in self.policy_target_visits)
         if len(set(action_ids)) != len(action_ids):
-            raise ValueError('Search visits must use unique action IDs.')
-        if sum(visit.visit_count for visit in self.visits) <= 0:
-            raise ValueError('Search visits must contain positive total visits.')
+            raise ValueError('Policy-target visits must use unique action IDs.')
+        if sum(visit.visit_count for visit in self.policy_target_visits) <= 0:
+            raise ValueError('Policy-target visits must contain positive total visits.')
 
 
 class CompletedSelfPlayGame(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     identity: GameIdentity
     created_at_seconds: float = Field(ge=0.0)
     generation_seconds: float = Field(ge=0.0)

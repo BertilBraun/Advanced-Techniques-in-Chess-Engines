@@ -51,6 +51,9 @@ class NativeSearchResult(Protocol[NativeRootT]):
     def visits(self) -> list[NativeSearchVisit]: ...
 
     @property
+    def policy_target_visits(self) -> list[NativeSearchVisit]: ...
+
+    @property
     def root(self) -> NativeRootT: ...
 
 

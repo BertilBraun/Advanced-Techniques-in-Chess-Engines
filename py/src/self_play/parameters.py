@@ -50,7 +50,7 @@ class ResolvedSelfPlayParameters:
     parallel_searches: int
     full_searches: int
     fast_searches: int
-    minimum_root_visits: int
+    forced_playout_coefficient: float
     exploration_constant: float
     fpu_reduction: float
     dirichlet_alpha: float
@@ -71,8 +71,8 @@ class ResolvedSelfPlayParameters:
             raise ValueError('Full-search budget must exceed parallel searches.')
         if self.fast_searches <= 0:
             raise ValueError('Fast-search budget must be positive.')
-        if self.minimum_root_visits < 0:
-            raise ValueError('Minimum root visits must be nonnegative.')
+        if not isfinite(self.forced_playout_coefficient) or self.forced_playout_coefficient < 0.0:
+            raise ValueError('Forced-playout coefficient must be finite and nonnegative.')
         if self.exploration_constant <= 0.0 or self.dirichlet_alpha <= 0.0:
             raise ValueError('Search constants must be positive.')
         if not isfinite(self.fpu_reduction) or self.fpu_reduction < 0.0:

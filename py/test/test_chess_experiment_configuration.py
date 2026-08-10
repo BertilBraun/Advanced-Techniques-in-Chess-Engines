@@ -17,6 +17,7 @@ from src.experiment.configuration import (
 )
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.go.configuration import GoExperimentConfiguration
+from src.self_play.configuration import EnabledForcedPlayoutConfiguration
 from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
 from src.util.frozen_model import JsonValue
 
@@ -34,6 +35,27 @@ def test_every_checked_in_experiment_uses_the_current_contract_and_dependency_lo
         configuration.run.environment.dependency_lock_sha256 == dependency_lock_sha256
         for configuration in configurations
     )
+
+
+def test_every_screening_configuration_parses() -> None:
+    paths = tuple(sorted(Path('configs/screening').rglob('*.yaml')))
+
+    assert all(load_experiment_configuration(path) for path in paths)
+
+
+def test_forced_playout_screen_resolves_canonical_coefficient() -> None:
+    configuration = load_experiment_configuration(Path('configs/screening/go-7x7-overnight/15-forced-playouts.yaml'))
+
+    assert configuration.game == 'go'
+    assert configuration.go.self_play.resolve(
+        0, configuration.go.rules.maximum_moves
+    ).forced_playout_coefficient == pytest.approx(2.0)
+
+
+@pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))
+def test_enabled_forced_playout_coefficient_must_be_positive_and_finite(coefficient: float) -> None:
+    with pytest.raises(ValidationError):
+        EnabledForcedPlayoutConfiguration.model_validate({'kind': 'enabled', 'coefficient': coefficient})
 
 
 def test_game_experiments_extend_the_shared_run_and_training_configuration() -> None:
@@ -83,7 +105,7 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
     assert configuration.chess.self_play.search.fast_searches.value_at(0) == 75
     assert configuration.chess.self_play.search.fast_searches.value_at(20) == 150
     assert configuration.chess.self_play.search.parallel_searches == 1
-    assert configuration.chess.self_play.search.minimum_root_visits.value_at(0) == 0
+    assert configuration.chess.self_play.search.forced_playouts.kind == 'disabled'
     assert configuration.chess.self_play.search.fpu_reduction.value_at(0) == pytest.approx(0.0)
     assert configuration.chess.self_play.inference.inference_workers == 2
     assert configuration.chess.self_play.inference.inference_batch_size == 64

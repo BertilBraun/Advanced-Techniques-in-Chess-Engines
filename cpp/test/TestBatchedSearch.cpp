@@ -45,6 +45,30 @@ float inferenceValue(ChessSelfPlaySearch &search) {
     return search.evaluate(boards).front().value();
 }
 
+std::uint32_t totalVisits(const std::vector<GameSearchVisit> &visits) {
+    return std::accumulate(visits.begin(), visits.end(), std::uint32_t{0},
+                           [](const std::uint32_t total, const GameSearchVisit visit) {
+                               return total + visit.visit_count;
+                           });
+}
+
+bool samePositiveVisits(const std::vector<GameSearchVisit> &actual,
+                        const std::vector<GameSearchVisit> &target) {
+    std::vector<GameSearchVisit> positive;
+    std::ranges::copy_if(actual, std::back_inserter(positive),
+                         [](const GameSearchVisit visit) { return visit.visit_count > 0; });
+    if (positive.size() != target.size()) {
+        return false;
+    }
+    for (const std::size_t index : range(positive.size())) {
+        if (positive[index].action_id != target[index].action_id ||
+            positive[index].visit_count != target[index].visit_count) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 int runBatchedSearchTests() {
@@ -59,6 +83,12 @@ int runBatchedSearchTests() {
         try {
             static_cast<void>(ChessSelfPlaySearchParameters(1, 16, 8, 1.5F, -0.1F, 0.3F, 0.25F, 0));
             throw std::runtime_error("negative FPU reduction unexpectedly validated");
+        } catch (const std::invalid_argument &) {
+        }
+        try {
+            static_cast<void>(ChessSelfPlaySearchParameters(
+                1, 16, 8, 1.5F, 0.0F, 0.3F, 0.25F, std::numeric_limits<float>::infinity()));
+            throw std::runtime_error("nonfinite forced-playout coefficient unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         const InferenceConfiguration runtimeParameters(0, modelPath.string(), InferenceDevice::Cpu);
@@ -86,6 +116,12 @@ int runBatchedSearchTests() {
                 "fast root retained virtual loss");
         require(!results.results[0].visits.empty(), "full root did not expand legal moves");
         require(!results.results[1].visits.empty(), "fast root did not expand legal moves");
+        require(
+            samePositiveVisits(results.results[0].visits, results.results[0].policy_target_visits),
+            "disabled full search changed the policy target");
+        require(
+            samePositiveVisits(results.results[1].visits, results.results[1].policy_target_visits),
+            "disabled fast search changed the policy target");
 
         const InferenceStatistics statistics = search.inferenceStatistics();
         require(statistics.evaluations == evaluationsBeforeSearch + 26,
@@ -162,6 +198,21 @@ int runBatchedSearchTests() {
         const ChessSelfPlaySearchParameters largerSchedule(1, 24, 8, 1.25F, 0.0F, 0.3F, 0.25F, 0);
         require(search.updateSearchSchedule(largerSchedule),
                 "larger schedule did not report an arena-capacity change");
+
+        const ChessSelfPlaySearchParameters forcedSchedule(1, 64, 16, 1.5F, 0.2F, 0.3F, 0.25F,
+                                                           2.0F);
+        ChessSelfPlaySearch forcedSearch(runtimeParameters, forcedSchedule, inferenceParameters);
+        const ChessSelfPlaySearchBatch forcedResults =
+            forcedSearch.search({ChessSelfPlaySearchRequest(forcedSearch.newRoot(Board{}), true),
+                                 ChessSelfPlaySearchRequest(forcedSearch.newRoot(Board{}), false)});
+        require(totalVisits(forcedResults.results[0].visits) == 64 &&
+                    totalVisits(forcedResults.results[1].visits) == 16,
+                "forced playouts changed authoritative actual visit totals");
+        require(totalVisits(forcedResults.results[0].policy_target_visits) <= 64,
+                "forced-playout target exceeded actual visits");
+        require(samePositiveVisits(forcedResults.results[1].visits,
+                                   forcedResults.results[1].policy_target_visits),
+                "fast search applied forced playouts or pruning");
 
     } catch (...) {
         std::filesystem::remove(modelPath);

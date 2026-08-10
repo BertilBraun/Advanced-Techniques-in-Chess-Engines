@@ -218,7 +218,7 @@ def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
         fpu_reduction=0.0,
         dirichlet_alpha=0.3,
         dirichlet_epsilon=0.25,
-        minimum_root_visits=0,
+        forced_playout_coefficient=0.0,
     )
     inference_parameters = BatchedInferenceParameters(
         arguments.direct_workers,

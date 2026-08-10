@@ -115,13 +115,12 @@ def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> 
     observation = SearchObservation(
         ply=0,
         model_generation=3,
-        visits=(SparseSearchVisit(action_id=7, visit_count=12),),
+        policy_target_visits=(SparseSearchVisit(action_id=7, visit_count=12),),
         root_value=0.25,
         selected_action_id=7,
         full_search=True,
         sample_weight=1.0,
         search_budget=16,
-        minimum_root_visits=0,
     )
     game = CompletedSelfPlayGame(
         identity=GameIdentity(

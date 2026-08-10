@@ -13,7 +13,7 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, TerminationReason
-from src.self_play.policy import preprocessed_search_visits
+from src.self_play.policy import ordered_search_visits
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 
 
@@ -37,9 +37,9 @@ class MaterializedGame:
 
 
 def retain_policy(observation: SearchObservation, maximum_entries: int) -> PolicyRetention:
-    ordered = preprocessed_search_visits(observation)
+    ordered = ordered_search_visits(observation)
     if not ordered:
-        raise ValueError(f'Observation at ply {observation.ply} has no visits after root-visit preprocessing.')
+        raise ValueError(f'Observation at ply {observation.ply} has no policy-target visits.')
     retained = ordered[:maximum_entries]
     discarded = ordered[maximum_entries:]
     return PolicyRetention(
@@ -134,7 +134,7 @@ def _reconstruct_trajectory(
         if observation is not None:
             if observation.selected_action_id != action_id:
                 raise ValueError(f'Observed action does not match the played action at ply {ply}.')
-            if any(visit.action_id not in legal_actions for visit in observation.visits):
+            if any(visit.action_id not in legal_actions for visit in observation.policy_target_visits):
                 raise ValueError(f'Observation at ply {ply} contains an illegal action.')
         positions.append(state.child_position(position, action_id))
     return tuple(positions)

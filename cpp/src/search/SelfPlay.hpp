@@ -27,21 +27,26 @@ struct SelfPlaySearchParameters {
     float fpu_reduction;
     float dirichlet_alpha;
     float dirichlet_epsilon;
-    std::uint32_t minimum_root_visits;
+    float forced_playout_coefficient;
 
     SelfPlaySearchParameters(std::uint32_t parallelSearches, std::uint32_t fullSearches,
                              std::uint32_t fastSearches, float explorationConstant,
                              float fpuReduction, float dirichletAlpha, float dirichletEpsilon,
-                             std::uint32_t minimumRootVisits)
+                             float forcedPlayoutCoefficient)
         : parallel_searches(parallelSearches), full_searches(fullSearches),
           fast_searches(fastSearches), exploration_constant(explorationConstant),
           fpu_reduction(fpuReduction), dirichlet_alpha(dirichletAlpha),
-          dirichlet_epsilon(dirichletEpsilon), minimum_root_visits(minimumRootVisits) {
+          dirichlet_epsilon(dirichletEpsilon),
+          forced_playout_coefficient(forcedPlayoutCoefficient) {
         if (parallel_searches == 0 || full_searches == 0 || fast_searches == 0) {
             throw std::invalid_argument("Self-play search counts must be positive");
         }
         if (!std::isfinite(fpu_reduction) || fpu_reduction < 0.0F) {
             throw std::invalid_argument("FPU reduction must be finite and nonnegative");
+        }
+        if (!std::isfinite(forced_playout_coefficient) || forced_playout_coefficient < 0.0F) {
+            throw std::invalid_argument(
+                "Forced-playout coefficient must be finite and nonnegative");
         }
     }
 
@@ -72,6 +77,7 @@ template <SearchGame Game> struct SelfPlaySearchRequest {
 template <SearchGame Game> struct SelfPlaySearchResult {
     float root_value;
     std::vector<GameSearchVisit> visits;
+    std::vector<GameSearchVisit> policy_target_visits;
     GameSearchRoot<Game> root;
 };
 
@@ -129,6 +135,8 @@ public:
                 .visit_limit = request.full_search ? m_searchParameters.full_searches
                                                    : m_searchParameters.fast_searches,
                 .add_root_noise = request.full_search,
+                .force_root_playouts =
+                    request.full_search && m_searchParameters.forced_playout_coefficient > 0.0F,
             });
         }
         GameSearchBatchResult searched = m_search->searchDetailed(engineRequests);
@@ -138,6 +146,7 @@ public:
             results.push_back({
                 .root_value = searched.results[index].root_value,
                 .visits = std::move(searched.results[index].visits),
+                .policy_target_visits = std::move(searched.results[index].policy_target_visits),
                 .root = requests[index].root,
             });
         }
@@ -198,7 +207,7 @@ private:
     [[nodiscard]] static BatchedSearchParameters
     engineParameters(const SelfPlaySearchParameters &parameters) {
         return {parameters.parallel_searches, parameters.exploration_constant,
-                parameters.fpu_reduction,     parameters.minimum_root_visits,
+                parameters.fpu_reduction,     parameters.forced_playout_coefficient,
                 parameters.dirichlet_alpha,   parameters.dirichlet_epsilon,
                 parameters.arenaCapacity()};
     }

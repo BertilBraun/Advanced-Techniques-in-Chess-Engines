@@ -8,7 +8,7 @@ from pydantic import TypeAdapter
 
 from src.self_play.completed_game import CompletedSelfPlayGame
 from src.self_play.parameters import RestartStateStartParameters
-from src.self_play.policy import preprocessed_search_visits
+from src.self_play.policy import ordered_search_visits
 
 
 ACTION_PREFIX_ADAPTER = TypeAdapter(tuple[int, ...])
@@ -239,7 +239,7 @@ def _eligible_positions(
             continue
         if abs(observation.root_value) > parameters.maximum_absolute_root_value:
             continue
-        visits = preprocessed_search_visits(observation)
+        visits = ordered_search_visits(observation)
         if not visits:
             continue
         total_visits = sum(visit.visit_count for visit in visits)

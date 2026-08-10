@@ -1,6 +1,7 @@
 #pragma once
 
 #include "games/GameConcepts.hpp"
+#include "search/ForcedPlayouts.hpp"
 #include "search/InferenceTypes.hpp"
 #include "util/py.hpp"
 
@@ -95,10 +96,15 @@ public:
 
     [[nodiscard]] std::optional<std::size_t>
     selectAvailableLeaf(const float explorationConstant, const float fpuReduction = 0.0F,
-                        const std::uint32_t minimumRootVisits = 0) {
+                        const float forcedPlayoutCoefficient = 0.0F) {
         const std::size_t edgeCount = root().children.size();
         for (const auto edgeIndex : range(edgeCount)) {
-            if (root().children[edgeIndex].visits >= minimumRootVisits) {
+            const Edge &edge = root().children[edgeIndex];
+            if (!requiresForcedRootVisit(
+                    {.prior = edge.prior,
+                     .visits = edge.visits,
+                     .child_mean_value = childMeanValue(root(), edge, fpuReduction)},
+                    root().visits, forcedPlayoutCoefficient)) {
                 continue;
             }
             const std::optional<std::size_t> leaf = selectAvailableLeaf(
@@ -108,6 +114,23 @@ public:
             }
         }
         return selectAvailableLeaf(m_rootIndex, explorationConstant, fpuReduction);
+    }
+
+    [[nodiscard]] std::vector<std::uint32_t>
+    policyTargetVisits(const float explorationConstant, const bool forcedPlayoutsEnabled) const {
+        const Node &rootNode = root();
+        std::vector<RootChildSearchStatistics> children;
+        children.reserve(rootNode.children.size());
+        for (const Edge &edge : rootNode.children) {
+            children.push_back({
+                .prior = edge.prior,
+                .visits = edge.visits,
+                .child_mean_value =
+                    edge.visits == 0 ? 0.0F : edge.value_sum / static_cast<float>(edge.visits),
+            });
+        }
+        return prunedRootPolicyVisits(children, rootNode.visits, explorationConstant,
+                                      forcedPlayoutsEnabled);
     }
 
     void expand(const std::size_t nodeIndex, const SearchInferenceResult<Game> &inferenceResult) {

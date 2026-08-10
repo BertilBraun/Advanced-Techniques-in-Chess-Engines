@@ -75,7 +75,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             parallel_searches=configuration.parallel_searches,
             full_searches=configuration.searches_per_move,
             fast_searches=configuration.searches_per_move,
-            minimum_root_visits=0,
+            forced_playout_coefficient=0.0,
             exploration_constant=configuration.exploration_constant,
             dirichlet_alpha=1.0,
             dirichlet_epsilon=0.0,

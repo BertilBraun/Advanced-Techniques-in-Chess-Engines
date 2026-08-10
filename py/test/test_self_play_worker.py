@@ -56,6 +56,7 @@ class FakeRequest:
 class FakeResult:
     root_value: float
     visits: list[FakeVisit]
+    policy_target_visits: list[FakeVisit]
     root: FakeRoot
 
 
@@ -74,6 +75,8 @@ class FakeSearch:
     def __init__(self) -> None:
         self.generations: list[int] = []
         self.capacity_changed = False
+        self.actual_visits = [FakeVisit(0, 3)]
+        self.policy_target_visits = [FakeVisit(0, 3)]
 
     def new_root(self, position: FakePosition) -> FakeRoot:
         return FakeRoot(position)
@@ -84,7 +87,15 @@ class FakeSearch:
     def search(self, requests: list[FakeRequest], collect_statistics: bool = False) -> FakeBatch:
         assert not collect_statistics
         return FakeBatch(
-            [FakeResult(0.25, [FakeVisit(0, 3)], request.root) for request in requests],
+            [
+                FakeResult(
+                    0.25,
+                    self.actual_visits,
+                    self.policy_target_visits,
+                    request.root,
+                )
+                for request in requests
+            ],
             simulations_completed=len(requests) * 3,
         )
 
@@ -152,7 +163,7 @@ class FakeGame:
             parallel_searches=1,
             full_searches=3,
             fast_searches=1,
-            minimum_root_visits=0,
+            forced_playout_coefficient=0.0,
             exploration_constant=1.0,
             fpu_reduction=0.0,
             dirichlet_alpha=0.3,
@@ -213,7 +224,8 @@ def test_worker_owns_shared_search_move_selection_and_generation_transition(tmp_
     assert [game.root.reset_count for game in worker.active_games] == [1, 1, 1]
     assert all(game.action_ids == [0] for game in worker.active_games)
     assert all(
-        game.observations[0].visits == (SparseSearchVisit(action_id=0, visit_count=3),) for game in worker.active_games
+        game.observations[0].policy_target_visits == (SparseSearchVisit(action_id=0, visit_count=3),)
+        for game in worker.active_games
     )
     assert game.search.generations == [1]
     assert statistics.model_generation == 1
@@ -240,6 +252,27 @@ def test_worker_replaces_roots_when_search_arena_capacity_changes(tmp_path: Path
     assert [active_game.root.position.ply for active_game in worker.active_games] == [1, 1]
     assert [active_game.action_ids for active_game in worker.active_games] == [[0], [0]]
     assert [active_game.root.reset_count for active_game in worker.active_games] == [0, 0]
+
+
+def test_worker_selects_from_actual_visits_and_records_pruned_target_visits(tmp_path: Path) -> None:
+    game = FakeGame()
+    game.search.actual_visits = [FakeVisit(1, 20)]
+    game.search.policy_target_visits = [FakeVisit(0, 7)]
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path,
+    )
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    worker.run_batch()
+
+    assert worker.active_games[0].action_ids == [1]
+    assert worker.active_games[0].observations[0].policy_target_visits == (
+        SparseSearchVisit(action_id=0, visit_count=7),
+    )
 
 
 class FakeOpeningRandom:
@@ -304,7 +337,7 @@ def restart_source_game() -> CompletedSelfPlayGame:
             SearchObservation(
                 ply=0,
                 model_generation=0,
-                visits=(
+                policy_target_visits=(
                     SparseSearchVisit(action_id=0, visit_count=60),
                     SparseSearchVisit(action_id=1, visit_count=30),
                     SparseSearchVisit(action_id=2, visit_count=10),
@@ -314,7 +347,6 @@ def restart_source_game() -> CompletedSelfPlayGame:
                 full_search=True,
                 sample_weight=1.0,
                 search_budget=256,
-                minimum_root_visits=0,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=1.0, loss=0.0),

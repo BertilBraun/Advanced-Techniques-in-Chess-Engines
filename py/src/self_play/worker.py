@@ -237,17 +237,23 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             selected_action_id = self._select_action(visits, ply, parameters)
         elif not request.full_search:
             raise RuntimeError('Restart roots require a full search.')
+        policy_target_visits = tuple(
+            SparseSearchVisit(action_id=visit.action_id, visit_count=visit.visit_count)
+            for visit in result.policy_target_visits
+            if visit.visit_count > 0
+        )
+        if not policy_target_visits:
+            raise RuntimeError('Native search returned an empty policy target for a nonterminal root.')
         active_game.observations.append(
             SearchObservation(
                 ply=ply,
                 model_generation=self.model_generation,
-                visits=visits,
+                policy_target_visits=policy_target_visits,
                 root_value=result.root_value,
                 selected_action_id=selected_action_id,
                 full_search=request.full_search,
                 sample_weight=parameters.primary_sample_weight,
                 search_budget=parameters.full_searches if request.full_search else parameters.fast_searches,
-                minimum_root_visits=parameters.minimum_root_visits,
             )
         )
         active_game.action_ids.append(selected_action_id)

@@ -86,13 +86,25 @@ public:
             GameSearchResult result{
                 .root_value = node.visits == 0 ? 0.0F : node.value_sum / node.visits,
                 .visits = {},
+                .policy_target_visits = {},
             };
             result.visits.reserve(node.children.size());
-            for (const auto &edge : node.children) {
+            result.policy_target_visits.reserve(node.children.size());
+            const std::vector<std::uint32_t> policyTargetVisits = root.tree().policyTargetVisits(
+                m_searchParameters.exploration_constant, task.force_root_playouts);
+            for (const auto index : range(node.children.size())) {
+                const auto &edge = node.children[index];
+                const int actionId = Game::Encoding::actionId(edge.action, node.position);
                 result.visits.push_back({
-                    .action_id = Game::Encoding::actionId(edge.action, node.position),
+                    .action_id = actionId,
                     .visit_count = edge.visits,
                 });
+                if (policyTargetVisits[index] > 0) {
+                    result.policy_target_visits.push_back({
+                        .action_id = actionId,
+                        .visit_count = policyTargetVisits[index],
+                    });
+                }
             }
             results.push_back(std::move(result));
         }
@@ -182,6 +194,7 @@ private:
         std::uint32_t in_flight;
         bool noise_pending;
         bool count_root_initialization;
+        bool force_root_playouts;
     };
 
     struct PendingLeaf {
@@ -230,6 +243,7 @@ private:
             .in_flight = 0,
             .noise_pending = request.add_root_noise && !request.root.tree().root().expanded(),
             .count_root_initialization = request.count_root_initialization,
+            .force_root_playouts = request.force_root_playouts,
         };
         task.root.tree().prepareForSearch(task.visit_limit, m_searchParameters.parallel_searches);
         if (request.add_root_noise && task.root.tree().root().expanded()) {
@@ -306,9 +320,10 @@ private:
                 countsAsSearch = task.count_root_initialization;
                 tree.node(*leaf).inference_pending = true;
             } else {
-                leaf = tree.selectAvailableLeaf(m_searchParameters.exploration_constant,
-                                                m_searchParameters.fpu_reduction,
-                                                m_searchParameters.minimum_root_visits);
+                leaf = tree.selectAvailableLeaf(
+                    m_searchParameters.exploration_constant, m_searchParameters.fpu_reduction,
+                    task.force_root_playouts ? m_searchParameters.forced_playout_coefficient
+                                             : 0.0F);
                 if (!leaf.has_value()) {
                     return false;
                 }

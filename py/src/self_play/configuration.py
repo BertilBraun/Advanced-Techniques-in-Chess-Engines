@@ -18,6 +18,33 @@ from src.self_play.parameters import (
 from src.util.frozen_model import FrozenModel
 
 
+class DisabledForcedPlayoutConfiguration(FrozenModel):
+    kind: Literal['disabled'] = 'disabled'
+
+    def resolved_coefficient(self) -> float:
+        return 0.0
+
+
+class EnabledForcedPlayoutConfiguration(FrozenModel):
+    kind: Literal['enabled'] = 'enabled'
+    coefficient: float = Field(gt=0.0)
+
+    @model_validator(mode='after')
+    def validate_coefficient(self) -> EnabledForcedPlayoutConfiguration:
+        if not isfinite(self.coefficient):
+            raise ValueError('Forced-playout coefficient must be finite.')
+        return self
+
+    def resolved_coefficient(self) -> float:
+        return self.coefficient
+
+
+ForcedPlayoutConfiguration: TypeAlias = Annotated[
+    DisabledForcedPlayoutConfiguration | EnabledForcedPlayoutConfiguration,
+    Field(discriminator='kind'),
+]
+
+
 class SelfPlaySearchParams(FrozenModel):
     full_searches: IntegerGenerationSchedule
     fast_searches: IntegerGenerationSchedule
@@ -26,7 +53,7 @@ class SelfPlaySearchParams(FrozenModel):
     dirichlet_alpha: FloatGenerationSchedule
     exploration_constant: FloatGenerationSchedule
     fpu_reduction: FloatGenerationSchedule
-    minimum_root_visits: IntegerGenerationSchedule
+    forced_playouts: ForcedPlayoutConfiguration
 
     @model_validator(mode='after')
     def validate_scheduled_values(self) -> SelfPlaySearchParams:
@@ -42,8 +69,6 @@ class SelfPlaySearchParams(FrozenModel):
             raise ValueError('Exploration constant must remain positive.')
         if any(not isfinite(value) or value < 0.0 for value in defined_schedule_values(self.fpu_reduction)):
             raise ValueError('FPU reduction must remain finite and nonnegative.')
-        if any(value < 0 for value in defined_schedule_values(self.minimum_root_visits)):
-            raise ValueError('Minimum root visits must remain nonnegative.')
         return self
 
 
@@ -147,7 +172,7 @@ class SelfPlayConfiguration(FrozenModel):
             parallel_searches=search.parallel_searches,
             full_searches=search.full_searches.value_at(model_generation),
             fast_searches=search.fast_searches.value_at(model_generation),
-            minimum_root_visits=search.minimum_root_visits.value_at(model_generation),
+            forced_playout_coefficient=search.forced_playouts.resolved_coefficient(),
             exploration_constant=search.exploration_constant.value_at(model_generation),
             fpu_reduction=search.fpu_reduction.value_at(model_generation),
             dirichlet_alpha=search.dirichlet_alpha.value_at(model_generation),

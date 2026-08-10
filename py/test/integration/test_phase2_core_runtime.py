@@ -99,7 +99,7 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
             'dirichlet_alpha': {'kind': 'constant', 'value': 0.3},
             'exploration_constant': {'kind': 'constant', 'value': 1.0},
             'fpu_reduction': {'kind': 'constant', 'value': 0.0},
-            'minimum_root_visits': {'kind': 'constant', 'value': 0},
+            'forced_playouts': {'kind': 'disabled'},
         },
         'inference': {
             'inference_workers': 1,

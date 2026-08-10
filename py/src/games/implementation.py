@@ -70,7 +70,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
             fpu_reduction=parameters.fpu_reduction,
             dirichlet_alpha=parameters.dirichlet_alpha,
             dirichlet_epsilon=parameters.dirichlet_epsilon,
-            minimum_root_visits=parameters.minimum_root_visits,
+            forced_playout_coefficient=parameters.forced_playout_coefficient,
         )
 
     @abstractmethod

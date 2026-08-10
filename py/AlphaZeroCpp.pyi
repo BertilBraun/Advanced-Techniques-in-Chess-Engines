@@ -77,6 +77,8 @@ class GameSearchResult:
     def root_value(self) -> float: ...
     @property
     def visits(self) -> list[GameSearchVisit]: ...
+    @property
+    def policy_target_visits(self) -> list[GameSearchVisit]: ...
 
 class ChessPosition:
     def __init__(self, fen: str = ...) -> None: ...
@@ -98,7 +100,7 @@ class BatchedSearchParameters:
         parallel_searches: int,
         exploration_constant: float,
         fpu_reduction: float,
-        minimum_root_visits: int,
+        forced_playout_coefficient: float,
         dirichlet_alpha: float,
         dirichlet_epsilon: float,
         tree_capacity: int,
@@ -260,6 +262,7 @@ class GoSelfPlaySearchRequest7:
 class GoSelfPlaySearchResult7:
     root_value: float
     visits: list[GameSearchVisit]
+    policy_target_visits: list[GameSearchVisit]
     root: GoSearchRoot7
 
 class GoSelfPlaySearchBatch7:
@@ -294,6 +297,7 @@ class GoSelfPlaySearchRequest9:
 class GoSelfPlaySearchResult9:
     root_value: float
     visits: list[GameSearchVisit]
+    policy_target_visits: list[GameSearchVisit]
     root: GoSearchRoot9
 
 class GoSelfPlaySearchBatch9:
@@ -558,7 +562,7 @@ class SelfPlaySearchParameters:
     dirichlet_epsilon: float
     fast_searches: int
     full_searches: int
-    minimum_root_visits: int
+    forced_playout_coefficient: float
     parallel_searches: int
     def __init__(
         self,
@@ -569,7 +573,7 @@ class SelfPlaySearchParameters:
         fpu_reduction: float,
         dirichlet_alpha: float,
         dirichlet_epsilon: float,
-        minimum_root_visits: int,
+        forced_playout_coefficient: float,
     ) -> None: ...
 
 class ChessSelfPlaySearchResult:
@@ -579,6 +583,8 @@ class ChessSelfPlaySearchResult:
     def root(self) -> ChessSearchRoot: ...
     @property
     def visits(self) -> list[GameSearchVisit]: ...
+    @property
+    def policy_target_visits(self) -> list[GameSearchVisit]: ...
 
 class ChessSelfPlaySearchBatch:
     @property

@@ -156,9 +156,8 @@ chess:
       fpu_reduction:
         kind: constant
         value: 0.0
-      minimum_root_visits:
-        kind: constant
-        value: 0
+      forced_playouts:
+        kind: disabled
     inference:
       inference_workers: 1
       inference_batch_size: 8

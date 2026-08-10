@@ -111,7 +111,7 @@ def _completed_game() -> CompletedSelfPlayGame:
             SearchObservation(
                 ply=ply,
                 model_generation=2,
-                visits=(
+                policy_target_visits=(
                     SparseSearchVisit(action_id=other_action, visit_count=3),
                     SparseSearchVisit(action_id=selected_action, visit_count=10),
                 ),
@@ -120,7 +120,6 @@ def _completed_game() -> CompletedSelfPlayGame:
                 full_search=ply != 1,
                 sample_weight=1.0,
                 search_budget=13,
-                minimum_root_visits=1,
             )
         )
     return CompletedSelfPlayGame(
@@ -153,12 +152,12 @@ def test_shared_materialization_reconstructs_perspective_and_trajectory_targets(
 
     assert len(materialized.samples) == 3
     assert materialized.policies_truncated == 5
-    assert materialized.retained_visit_mass == 45
-    assert materialized.discarded_visit_mass == 10
+    assert materialized.retained_visit_mass == 50
+    assert materialized.discarded_visit_mass == 15
     assert materialized.samples[0].wdl_target == WdlTarget(win=0.0, draw=0.0, loss=1.0)
     assert isinstance(materialized.samples[0].auxiliary_targets[0], EligibleNextPolicyTarget)
     assert isinstance(materialized.samples[-1].auxiliary_targets[0], IneligibleNextPolicyTarget)
-    assert materialized.samples[0].policy.visits[0].visit_count == 9
+    assert materialized.samples[0].policy.visits[0].visit_count == 10
 
 
 def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
@@ -175,13 +174,12 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
             SearchObservation(
                 ply=2,
                 model_generation=1,
-                visits=(SparseSearchVisit(action_id=2, visit_count=8),),
+                policy_target_visits=(SparseSearchVisit(action_id=2, visit_count=8),),
                 root_value=0.0,
                 selected_action_id=2,
                 full_search=True,
                 sample_weight=1.0,
                 search_budget=8,
-                minimum_root_visits=0,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=0.0, loss=1.0),

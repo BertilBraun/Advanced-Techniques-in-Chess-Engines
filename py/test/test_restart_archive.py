@@ -46,14 +46,13 @@ def test_restart_state_screen_resolves_canonical_parameters() -> None:
 
 def completed_game(
     identity_number: int,
-    visits: tuple[tuple[int, int], ...] = ((0, 65), (1, 40), (2, 25)),
+    visits: tuple[tuple[int, int], ...] = ((0, 55), (1, 30), (2, 15)),
     *,
     action_count: int = 15,
     observation_ply: int = 0,
     selected_action_id: int = 9,
     root_value: float = 0.3,
     full_search: bool = True,
-    minimum_root_visits: int = 10,
     model_generation: int = 1,
     created_at_seconds: float = 1.0,
 ) -> CompletedSelfPlayGame:
@@ -72,7 +71,7 @@ def completed_game(
             SearchObservation(
                 ply=observation_ply,
                 model_generation=model_generation,
-                visits=tuple(
+                policy_target_visits=tuple(
                     SparseSearchVisit(action_id=action_id, visit_count=visit_count) for action_id, visit_count in visits
                 ),
                 root_value=root_value,
@@ -80,7 +79,6 @@ def completed_game(
                 full_search=full_search,
                 sample_weight=1.0,
                 search_budget=256,
-                minimum_root_visits=minimum_root_visits,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=1.0, loss=0.0),
@@ -88,7 +86,7 @@ def completed_game(
     )
 
 
-def test_archive_uses_preprocessed_visits_and_inclusive_boundaries(tmp_path: Path) -> None:
+def test_archive_uses_recorded_target_visits_and_inclusive_boundaries(tmp_path: Path) -> None:
     archive = RestartStateArchive(tmp_path / 'restart.sqlite3')
 
     update = archive.archive_completed_game(completed_game(1), restart_parameters())
@@ -103,13 +101,13 @@ def test_archive_uses_preprocessed_visits_and_inclusive_boundaries(tmp_path: Pat
 @pytest.mark.parametrize(
     ('game', 'expected_positions'),
     (
-        (completed_game(2, visits=((0, 100), (1, 10)), minimum_root_visits=0), 0),
-        (completed_game(3, visits=((0, 30), (1, 25), (2, 20), (3, 15), (4, 10)), minimum_root_visits=0), 0),
+        (completed_game(2, visits=((0, 100), (1, 10))), 0),
+        (completed_game(3, visits=((0, 30), (1, 25), (2, 20), (3, 15), (4, 10))), 0),
         (completed_game(4, action_count=14), 0),
         (completed_game(5, root_value=0.3001), 0),
         (completed_game(6, full_search=False), 0),
-        (completed_game(7, visits=((0, 55), (1, 30), (2, 15)), minimum_root_visits=0), 1),
-        (completed_game(8, visits=((0, 45), (1, 25), (2, 20), (3, 10)), minimum_root_visits=0), 1),
+        (completed_game(7, visits=((0, 55), (1, 30), (2, 15))), 1),
+        (completed_game(8, visits=((0, 45), (1, 25), (2, 20), (3, 10))), 1),
     ),
 )
 def test_archive_eligibility_and_smallest_prefix_rules(
