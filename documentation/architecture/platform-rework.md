@@ -310,7 +310,7 @@ measurements and can be inspected or stopped early.
 
 The configured ladder includes:
 
-- the preceding 20-, 40-, and 60-minute checkpoints plus alternating older elapsed offsets;
+- the preceding 20-, 40-, and 60-minute checkpoints;
 - the same-time checkpoint from an explicit baseline run;
 - game-appropriate diagnostics and fixed external-engine levels.
 
@@ -319,6 +319,13 @@ KataGo evaluations because random play saturated too early to discriminate the s
 uses 16, 64, and 128 visits. Engine command,
 rules, komi, board size, time/search limits, concurrency, game count, and
 strength settings belong to the Go evaluation configuration.
+
+Go checkpoint and same-time baseline matches use 200 paired openings, producing 400 games per definition. KataGo
+matches retain 50 paired openings because the external engine is materially slower. A target-hardware control run
+confirmed exact 50% aggregation for deterministic model identity, 51% for KataGo-16 against itself with an interval
+containing 50%, and 44% for KataGo-16 against KataGo-128 with a paired interval below 50%. The controls rule out a
+role-swap/result-aggregation defect, demonstrate that 128 visits is stronger, and also show a very large first-player
+advantage on the current 7x7 opening suite; paired openings remain mandatory.
 
 Each checkpoint records opponent and model identity, colors, seeds or paired
 openings, search budget, raw outcomes, wins/draws/losses, score, uncertainty,
@@ -435,11 +442,12 @@ earlier phase's storage, process, or recovery design.
 | R9 | Go evaluation and elapsed checkpoint scheduling | accepted |
 | R10 | Resource-aware experiment queue | awaiting_user_review |
 | R11 | Integrated validation and benchmark preparation | in_progress |
-| R12 | Target-hardware baseline and screening experiments | pending |
+| R12 | Target-hardware baseline and screening experiments | in_progress |
 
 Current authorization: R1 through R9 and the post-R9 Python/documentation cleanup are accepted. R10 is implemented
-and `awaiting_user_review`. The user authorized R11 rented-node provisioning and integrated validation on 2026-08-09;
-R12 baseline and screening experiments remain pending and are not authorized.
+and `awaiting_user_review`. The user authorized R11 rented-node provisioning and integrated validation on 2026-08-09
+and subsequently authorized the R12 7x7 baseline and screening runs. R11 and R12 remain `in_progress` while the
+evaluation foundation and repeatable queue workflow are finalized.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -900,6 +908,8 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-10 | R9/R12 | Go evaluation controls and screening ladder | Early KataGo curves were noisy, strongly player-order dependent, and insufficiently separated; the online ladder also spent capacity on increasingly old in-run checkpoints while primary comparisons used only 50 opening pairs. | Add a focused typed diagnostic with complete per-game JSON/SGF and native/KataGo score checks. Target-hardware controls produced exact 50% deterministic model identity, KataGo-16 self-play consistent with 50%, and a statistically detectable KataGo-128 advantage over KataGo-16. Keep paired KataGo 16/64/128 matches at 50 openings; evaluate only previous 20/40/60-minute and same-time baseline checkpoints with 200 pairs (400 games) each; remove older alternating offsets. |
+| 2026-08-10 | R10/R12 | Queue ownership and result preservation | Remote-only queue YAML and a revision-specific wrapper made the desired screening order hard to inspect or change, while completed-run backups needed evaluation checkpoints but not replay payloads. | Commit the two-slot Vast screening queue and a stable approval-directory runner that resolves the child revision at launch. Continue reloading pending YAML without interrupting running entries. Add a verified queue-aware ZIP exporter containing run metadata, logs, TensorBoard, evaluations, every elapsed evaluation checkpoint, and only the latest optimizer. |
 | 2026-08-10 | R10/R12 | Interactive queue correction | A frozen startup fingerprint conflicted with the screening workflow: pending authored YAML was read again by the child at launch, so a changed pending experiment could run without the durable queue state recording or revalidating the new canonical hash, while changing the desired experiment list required terminating active work. A committed configuration-only change also advances the expected source revision embedded in the runner command. | Reload and validate the desired queue before each scheduling pass. Keep slots and lifecycle ownership immutable; allow the runner command and pending IDs to be added, removed, reordered, or updated; persist the exact command and canonical hash for launched entries; reject mutations of running or terminal IDs without stopping them; pause new launches while a reload is invalid; and optionally keep an empty queue alive for later additions. |
 | 2026-08-10 | R10/R12 | Vast compatibility | Vast GPU containers expose read-only cgroup-v1 controllers and cannot satisfy the queue's delegated cgroup-v2 contract, while the screening matrix must run through the queue on rented nodes. | Remove cgroups from queue configuration and execution. Retain exclusive CUDA sets, CPU affinity, process groups, deterministic scheduling, logs, summaries, and restart behavior. Sample aggregate RSS across the discovered process tree with `psutil`; terminate and fail a run when it exceeds its requested RAM limit. Accept that this is a sampled safety monitor rather than a kernel-hard reservation. |
 | 2026-08-09 | Compute-node runtime | Dependency decision | CUDA 13 unnecessarily excluded lower-cost CUDA 12 marketplace hosts. PyTorch 2.12.1 is the newest release with an official CUDA 12 wheel, published for CUDA 12.6; NVIDIA's CUDA 12 minor-version compatibility supports that runtime on Linux drivers 525.60.13 or newer, subject to forward-compatibility feature and GPU-generation caveats. | Lock training and fresh-node setup to PyTorch `2.12.1+cu126`, treat a Vast CUDA 12.2 advertisement as eligible when the actual driver is at least 525.60.13, and require a real import, device, native-build, self-play, and evaluation smoke test before accepting a rented host. CUDA 13 is no longer a selection requirement. |
