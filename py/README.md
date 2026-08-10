@@ -66,11 +66,9 @@ schema_version: 1
 runner:
   command:
     - python
-    - py/train.py
-    - --expected-source-revision
-    - <revision>
-    - --approval-file
-    - <approval-file>
+    - py/run_approved_experiment.py
+    - --approval-directory
+    - <approval-directory>
   experiment_path_argument: --run-config
 slots:
   - slot_id: <slot-id>
@@ -93,6 +91,10 @@ termination_grace_seconds: 10.0
 
 Paths resolve relative to the queue file. CUDA and CPU sets must not overlap between slots. A job consumes one
 complete matching slot; its exact CPU affinity and aggregate RAM limit may be smaller than the slot capacity.
+`run_approved_experiment.py` resolves the current repository revision at child launch and selects
+`<approval-directory>/<experiment-yaml-stem>.json`; the approval remains revision- and configuration-specific.
+The current four-GPU screening queue is committed at
+[`configs/queues/vast-go-7x7-screening.yaml`](configs/queues/vast-go-7x7-screening.yaml).
 
 ### Memory monitoring
 
@@ -121,6 +123,11 @@ terminal, inspect the atomic summary without modifying the queue:
 ```text
 python py/queue_experiments.py status --summary <queue-summary-json>
 ```
+
+To change future work, commit and pull changes to the queue YAML or any still-pending experiment YAML. The active
+supervisor reloads them before its next scheduling pass. Running entries keep the exact configuration hash already
+recorded in the summary. Stop the supervisor with `SIGINT` or `SIGTERM` only when active runs should also be stopped;
+ordinary queue edits do not require a restart.
 
 After selected queue entries are terminal, export their durable evidence without replay or completed games:
 
