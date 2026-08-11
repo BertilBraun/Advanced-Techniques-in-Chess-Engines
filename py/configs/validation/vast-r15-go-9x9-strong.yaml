@@ -55,6 +55,6 @@ go:
     full_search_probability: {kind: linear, start_generation: 0, end_generation: 1, start_value: 1.0, end_value: 0.25, rounding: none}
     greedy_after_ply: {kind: constant, value: 20}
     detailed_statistics_workers: 1
-  rules: {komi_half_points: 14, maximum_moves: 162}
+  rules: {komi_half_points: 14, maximum_moves: 324}
   objective:
     root_value_blend: {kind: linear, start_generation: 0, end_generation: 2, start_value: 0.0, end_value: 0.15, rounding: none}
