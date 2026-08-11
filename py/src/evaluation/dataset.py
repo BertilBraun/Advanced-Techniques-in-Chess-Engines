@@ -21,11 +21,13 @@ from src.evaluation.contracts import (
     FixedDatasetEvaluationJob,
     FixedDatasetEvaluationResult,
     KataGoBookDatasetManifest,
+    KataGoBookDatasetPositionProvenance,
 )
 from src.evaluation.engine import EnginePolicy, EnginePolicyProvider, validate_engine_policy
 from src.evaluation.inference import decode_packed_inputs
 from src.evaluation.katago_book import (
     load_katago_book_export,
+    orient_katago_book_positions,
     select_katago_book_positions,
     selection_sha256,
 )
@@ -311,15 +313,19 @@ def build_katago_book_evaluation_dataset(
         return manifest
 
     export = load_katago_book_export(export_path, configuration.source.selection.export_sha256)
-    selected = select_katago_book_positions(
-        export,
-        configuration.source.selection,
-        configuration.source.position_count,
+    selected = orient_katago_book_positions(
+        select_katago_book_positions(
+            export,
+            configuration.source.selection,
+            configuration.source.position_count,
+        )
     )
     rows: list[EvaluationDatasetRow] = []
     source_games: list[EvaluationSourceGame] = []
+    book_positions: list[KataGoBookDatasetPositionProvenance] = []
     position_digests: set[str] = set()
-    for source_game_id, book_position in enumerate(selected):
+    for source_game_id, oriented_position in enumerate(selected):
+        book_position = oriented_position.position
         position = state.initial_position()
         for action_id in book_position.action_ids:
             if action_id not in state.legal_action_ids(position):
@@ -353,6 +359,13 @@ def build_katago_book_evaluation_dataset(
                 human_readable=engine.render_game(book_position.action_ids),
             )
         )
+        book_positions.append(
+            KataGoBookDatasetPositionProvenance(
+                source_game_id=source_game_id,
+                book_node_id=book_position.node_id,
+                applied_symmetry=oriented_position.applied_symmetry,
+            )
+        )
     maximum_policy_entries = max(len(row.action_ids) for row in rows)
     if maximum_policy_entries > 255:
         raise ValueError('Evaluation dataset sparse policies cannot exceed 255 entries.')
@@ -364,6 +377,7 @@ def build_katago_book_evaluation_dataset(
         representation_digest=engine.representation_digest,
         position_count=len(resolved_rows),
         source_games=tuple(source_games),
+        book_positions=tuple(book_positions),
         engine_identity=engine.engine_identity,
         engine_artifact_sha256=engine.engine_artifact_sha256,
         label_search_limit=engine.label_search_limit,

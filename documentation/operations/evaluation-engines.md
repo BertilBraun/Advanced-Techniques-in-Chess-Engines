@@ -169,6 +169,11 @@ KataGo analysis engine at `label_max_visits`. Raw book prior `p` and cumulative 
 targets. The checked-in 7x7 v2 artifacts keep their original engine-generated provenance and are never regenerated
 or rewritten by this path.
 
+Derived book positions are assigned dihedral symmetry `selection_index modulo 8`; the complete action history and
+book-preferred action are transformed together before native legality replay. This preserves all selected strategic
+nodes while distributing 200 match openings evenly across the eight board orientations. V2 manifests record the
+orientation scheme and each position's applied symmetry.
+
 The current balance-prioritized 1,000-page export contains 791 resolved positions across plies 1 through 12. Its
 200-opening suite is selected from 333 plies-4-through-12 candidates within one point and ten percentage points of
 50% Black win probability, under tighter uncertainty bounds. The selected suite spans eight root variations and

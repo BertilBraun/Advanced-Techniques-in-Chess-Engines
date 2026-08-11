@@ -36,6 +36,7 @@ from src.evaluation.katago_book import (
     KataGoBookPageProvenance,
     KataGoBookPosition,
     canonical_json_sha256,
+    orient_katago_book_positions,
     select_katago_book_positions,
     write_katago_book_export,
 )
@@ -82,10 +83,15 @@ def test_checked_in_go_9x9_book_export_matches_configuration() -> None:
     assert len(export.positions) == 791
     openings = select_katago_book_positions(export, opening_source.selection, 200)
     assert len(openings) == 200
+    assert len({position.node_id for position in openings}) == 200
     assert {len(position.action_ids) for position in openings} == set(range(4, 13))
     assert len({position.root_variation_id for position in openings}) == 8
     assert max(abs(position.black_win_probability - 0.5) for position in openings) <= 0.0177
     assert max(abs(position.black_score) for position in openings) <= 0.52
+    oriented_openings = orient_katago_book_positions(openings)
+    assert tuple(
+        sum(position.applied_symmetry == symmetry for position in oriented_openings) for symmetry in range(8)
+    ) == (25, 25, 25, 25, 25, 25, 25, 25)
     assert len(select_katago_book_positions(export, dataset_source.selection, 500)) == 500
 
 
@@ -137,6 +143,37 @@ const moves = [{'xy': [[1, 0]], 'p': 0.5, 'wl': 0.2, 'ssM': -0.3, 'wlRad': 0.1, 
     assert len(export.positions) == 1
     assert export.positions[0].action_ids == (0,)
     assert export.positions[0].preferred_action_id == 1
+
+
+def test_katago_book_orientation_transforms_paths_and_labels_evenly() -> None:
+    source = KataGoBookPosition(
+        node_id='node',
+        root_variation_id='root',
+        action_ids=(0, 1, 9, 81),
+        path_probability=0.1,
+        black_win_probability=0.5,
+        black_score=0.0,
+        win_probability_uncertainty=0.1,
+        score_uncertainty=0.1,
+        visits=10000,
+        preferred_action_id=10,
+    )
+    oriented = orient_katago_book_positions(tuple(source for _ in range(200)))
+
+    assert tuple(sum(position.applied_symmetry == symmetry for position in oriented) for symmetry in range(8)) == (
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+        25,
+    )
+    assert oriented[2].position.action_ids == (8, 7, 17, 81)
+    assert oriented[2].position.preferred_action_id == 16
+    assert oriented[4].position.action_ids == (0, 9, 1, 81)
+    assert oriented[4].position.preferred_action_id == 10
 
 
 @dataclass(frozen=True)
@@ -198,6 +235,15 @@ class FakeState(GameStateContract[FakePosition]):
 
     def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
         return sample
+
+
+class FakeGoBookState(FakeState):
+    @property
+    def action_size(self) -> int:
+        return 82
+
+    def legal_action_ids(self, position: FakePosition) -> tuple[int, ...]:
+        return () if len(position.actions) == 60 else tuple(range(82))
 
 
 class FakeEngine:
@@ -326,28 +372,44 @@ def test_book_opening_and_dataset_builders_replay_paths_and_reuse_artifacts(tmp_
         path=str(dataset_path),
         source=KataGoBookDatasetSource(kind='katago_book', position_count=480, selection=selection),
     )
+    book_state = FakeGoBookState()
 
     openings = build_katago_book_opening_suite(
-        openings_path, export_path, openings_configuration, FakeState(), FakeEngine(), 'revision'
+        openings_path, export_path, openings_configuration, book_state, FakeEngine(), 'revision'
     )
     dataset = build_katago_book_evaluation_dataset(
-        dataset_path, export_path, dataset_configuration, FakeState(), FakeEngine(), 'revision'
+        dataset_path, export_path, dataset_configuration, book_state, FakeEngine(), 'revision'
     )
     data = load_evaluation_dataset(dataset_path, dataset)
 
     assert len(openings.openings) == 50
     assert all(len(opening.action_ids) == 5 for opening in openings.openings)
+    assert tuple(
+        sum(opening.applied_symmetry == symmetry for opening in openings.openings) for symmetry in range(8)
+    ) == (
+        7,
+        7,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+    )
     assert dataset.position_count == 480
-    assert all(int(row['top_action_id']) == 1 for row in data)
+    assert tuple(
+        sum(position.applied_symmetry == symmetry for position in dataset.book_positions) for symmetry in range(8)
+    ) == (60, 60, 60, 60, 60, 60, 60, 60)
+    assert {int(row['top_action_id']) for row in data} == {1, 7, 9, 17, 63, 71, 73, 79}
     assert (
         build_katago_book_opening_suite(
-            openings_path, export_path, openings_configuration, FakeState(), FakeEngine(), 'revision'
+            openings_path, export_path, openings_configuration, book_state, FakeEngine(), 'revision'
         )
         == openings
     )
     assert (
         build_katago_book_evaluation_dataset(
-            dataset_path, export_path, dataset_configuration, FakeState(), FakeEngine(), 'revision'
+            dataset_path, export_path, dataset_configuration, book_state, FakeEngine(), 'revision'
         )
         == dataset
     )
@@ -361,7 +423,7 @@ def test_book_opening_and_dataset_builders_replay_paths_and_reuse_artifacts(tmp_
             openings_path,
             export_path,
             changed_openings_configuration,
-            FakeState(),
+            book_state,
             FakeEngine(),
             'revision',
         )

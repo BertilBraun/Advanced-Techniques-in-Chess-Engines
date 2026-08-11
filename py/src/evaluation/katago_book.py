@@ -57,6 +57,12 @@ class KataGoBookExport(FrozenModel):
 
 
 @dataclass(frozen=True)
+class OrientedKataGoBookPosition:
+    position: KataGoBookPosition
+    applied_symmetry: int
+
+
+@dataclass(frozen=True)
 class _BookMove:
     action_id: int
     child_url: str
@@ -404,6 +410,23 @@ def select_katago_book_positions(
     if len(selected) != count:
         raise ValueError(f'KataGo book selection found {len(selected)} eligible positions; {count} required.')
     return tuple(selected)
+
+
+def orient_katago_book_positions(
+    positions: tuple[KataGoBookPosition, ...],
+) -> tuple[OrientedKataGoBookPosition, ...]:
+    return tuple(
+        OrientedKataGoBookPosition(
+            position.model_copy(
+                update={
+                    'action_ids': tuple(_transform_action(action_id, index % 8) for action_id in position.action_ids),
+                    'preferred_action_id': _transform_action(position.preferred_action_id, index % 8),
+                }
+            ),
+            index % 8,
+        )
+        for index, position in enumerate(positions)
+    )
 
 
 def canonical_json_sha256(path: Path) -> str:

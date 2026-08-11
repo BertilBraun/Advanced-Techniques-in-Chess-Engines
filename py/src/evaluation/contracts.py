@@ -42,6 +42,12 @@ class EvaluationDatasetManifest(FrozenModel):
     builder_source_revision: str = Field(min_length=1)
 
 
+class KataGoBookDatasetPositionProvenance(FrozenModel):
+    source_game_id: int = Field(ge=0)
+    book_node_id: str = Field(min_length=1)
+    applied_symmetry: int = Field(ge=0, le=7)
+
+
 class KataGoBookDatasetManifest(FrozenModel):
     schema_version: Literal[2] = 2
     game: Literal['go'] = 'go'
@@ -49,6 +55,7 @@ class KataGoBookDatasetManifest(FrozenModel):
     representation_digest: str = Field(min_length=64, max_length=64)
     position_count: int = Field(ge=480, le=520)
     source_games: tuple[EvaluationSourceGame, ...] = Field(min_length=1)
+    book_positions: tuple[KataGoBookDatasetPositionProvenance, ...] = Field(min_length=1)
     engine_identity: str = Field(min_length=1)
     engine_artifact_sha256: tuple[str, ...]
     label_search_limit: int = Field(gt=0)
@@ -63,6 +70,7 @@ class KataGoBookDatasetManifest(FrozenModel):
     book_rules: Literal['tromp-taylor'] = 'tromp-taylor'
     book_komi_half_points: Literal[14] = 14
     repository_ko_rule: Literal['simple'] = 'simple'
+    orientation_scheme: Literal['selection_index_modulo_8'] = 'selection_index_modulo_8'
     top_action_source: Literal['katago_book_preference'] = 'katago_book_preference'
     soft_policy_source: Literal['configured_katago_reanalysis'] = 'configured_katago_reanalysis'
     builder_source_revision: str = Field(min_length=1)
@@ -104,6 +112,7 @@ class KataGoBookOpeningLine(FrozenModel):
     final_position_digest: str = Field(min_length=64, max_length=64)
     human_readable: str = Field(min_length=1)
     book_node_id: str = Field(min_length=1)
+    applied_symmetry: int = Field(ge=0, le=7)
     black_win_probability: float = Field(ge=0.0, le=1.0)
     black_score: float
     win_probability_uncertainty: float = Field(ge=0.0, le=0.5)
@@ -123,6 +132,7 @@ class KataGoBookOpeningSuiteManifest(FrozenModel):
     book_rules: Literal['tromp-taylor'] = 'tromp-taylor'
     book_komi_half_points: Literal[14] = 14
     repository_ko_rule: Literal['simple'] = 'simple'
+    orientation_scheme: Literal['selection_index_modulo_8'] = 'selection_index_modulo_8'
     openings: tuple[KataGoBookOpeningLine, ...] = Field(min_length=1)
     builder_source_revision: str = Field(min_length=1)
 

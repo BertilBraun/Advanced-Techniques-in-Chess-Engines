@@ -16,6 +16,7 @@ from src.evaluation.contracts import (
 from src.evaluation.engine import EnginePolicyProvider, validate_engine_policy
 from src.evaluation.katago_book import (
     load_katago_book_export,
+    orient_katago_book_positions,
     select_katago_book_positions,
     selection_sha256,
 )
@@ -183,10 +184,13 @@ def build_katago_book_opening_suite(
         return manifest
 
     export = load_katago_book_export(export_path, configuration.source.selection.export_sha256)
-    selected = select_katago_book_positions(export, configuration.source.selection, configuration.opening_count)
+    selected = orient_katago_book_positions(
+        select_katago_book_positions(export, configuration.source.selection, configuration.opening_count)
+    )
     openings: list[KataGoBookOpeningLine] = []
     position_digests: set[str] = set()
-    for position_index, book_position in enumerate(selected):
+    for position_index, oriented_position in enumerate(selected):
+        book_position = oriented_position.position
         position = state.initial_position()
         for action_id in book_position.action_ids:
             if action_id not in state.legal_action_ids(position):
@@ -206,6 +210,7 @@ def build_katago_book_opening_suite(
                 final_position_digest=digest,
                 human_readable=engine.render_game(book_position.action_ids),
                 book_node_id=book_position.node_id,
+                applied_symmetry=oriented_position.applied_symmetry,
                 black_win_probability=book_position.black_win_probability,
                 black_score=book_position.black_score,
                 win_probability_uncertainty=book_position.win_probability_uncertainty,
