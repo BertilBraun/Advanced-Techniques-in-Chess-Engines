@@ -41,7 +41,7 @@ def test_checked_in_go7_screening_queue_records_the_terminal_r14_order() -> None
 
 def test_checked_in_go9_screening_queue_records_the_authored_ablation_order() -> None:
     assert _assert_eight_gpu_topology(Path('configs/queues/vast-go-9x9-screening.yaml')) == tuple(
-        f'go9-r15-{index:02d}-{name}'
+        f'go9-r15b-{index:02d}-{name}'
         for index, name in enumerate(
             (
                 'baseline',
