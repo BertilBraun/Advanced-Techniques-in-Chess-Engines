@@ -24,8 +24,6 @@ from src.self_play.protocol import (
     StoppedSelfPlayState,
     StoppedSelfPlayStateApplied,
 )
-from src.self_play.parameters import RestartStateStartParameters
-from src.self_play.restart_archive import RestartStateArchive
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 from src.util.tensorboard import TensorboardWriter
@@ -36,14 +34,6 @@ class SelfPlayGroup:
         self.game = game
         self._closed = False
         self._context = multiprocessing.get_context('spawn')
-        match game.self_play_parameters_at(0).start_position:
-            case RestartStateStartParameters():
-                archive = RestartStateArchive(
-                    Path(game.training.save_path) / 'completed-games' / 'restart-states.sqlite3'
-                )
-                archive.close()
-            case _:
-                pass
         topology = game.training.topology.self_play
         self._device_ids = topology.device_ids
         self._connections: list[Connection] = []

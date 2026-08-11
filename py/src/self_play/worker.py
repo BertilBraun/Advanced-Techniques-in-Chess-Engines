@@ -23,7 +23,7 @@ from src.self_play.parameters import (
     RestartStateStartParameters,
 )
 from src.self_play.native_search import NativeRequestT, NativeResultT, NativeRootT, NativeSearchT, PositionT
-from src.self_play.restart_archive import RestartStateArchive
+from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.util.tensorboard import log_scalar
 
 
@@ -67,7 +67,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         self.worker_id = worker_id
         self.device_id = device_id
         self.inbox_path = inbox_path
-        self.restart_archive_path = inbox_path.parent / 'restart-states.sqlite3'
+        self.restart_archive_path = worker_restart_archive_path(inbox_path.parent, worker_id)
         self.random = np.random.default_rng(game.training.random_seed + worker_id)
         self.process_instance_id = uuid4()
         self.next_game_number = 0

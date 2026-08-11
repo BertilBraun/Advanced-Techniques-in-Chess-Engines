@@ -15,7 +15,7 @@ from src.self_play.completed_game import (
     TerminationReason,
 )
 from src.self_play.parameters import RestartStateStartParameters
-from src.self_play.restart_archive import RestartStateArchive
+from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 
 
 def restart_parameters() -> RestartStateStartParameters:
@@ -124,36 +124,25 @@ def test_archive_eligibility_and_smallest_prefix_rules(
     archive.close()
 
 
-def test_two_connections_reserve_each_source_candidate_once_and_evict_when_exhausted(tmp_path: Path) -> None:
-    path = tmp_path / 'restart.sqlite3'
-    first = RestartStateArchive(path)
-    second = RestartStateArchive(path)
-    first.archive_completed_game(completed_game(1), restart_parameters())
+def test_worker_archives_use_distinct_stable_paths_without_shared_initialization(tmp_path: Path) -> None:
+    completed_games_path = tmp_path / 'completed-games'
+    paths = tuple(worker_restart_archive_path(completed_games_path, worker_id) for worker_id in range(24))
 
-    first_reservation = first.reserve(1, restart_parameters())
-    second_reservation = second.reserve(1, restart_parameters())
-
-    assert first_reservation is not None
-    assert second_reservation is not None
-    assert first_reservation.action_id != second_reservation.action_id
-    assert first.reserve(1, restart_parameters()) is None
-    assert first.snapshot().positions == 0
-    assert first.snapshot().exhausted_evictions == 1
-    first.close()
-    second.close()
-
-
-def test_initialized_wal_archive_allows_concurrent_worker_connections(tmp_path: Path) -> None:
-    path = tmp_path / 'restart.sqlite3'
-    initializer = RestartStateArchive(path)
-    initializer.close()
-
-    def open_and_close() -> None:
+    def open_and_close(path: Path) -> None:
         archive = RestartStateArchive(path)
         archive.close()
 
     with ThreadPoolExecutor(max_workers=24) as executor:
-        tuple(executor.map(lambda _: open_and_close(), range(24)))
+        tuple(executor.map(open_and_close, paths))
+
+    assert len(set(paths)) == 24
+    assert paths[0] == completed_games_path / 'restart-states' / 'worker-0.sqlite3'
+    assert all(path.is_file() for path in paths)
+
+
+def test_worker_archive_path_rejects_negative_worker_id(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match='nonnegative'):
+        worker_restart_archive_path(tmp_path, -1)
 
 
 def test_played_candidate_is_not_reserved_again(tmp_path: Path) -> None:

@@ -17,7 +17,7 @@ from src.self_play.parameters import (
 )
 from src.self_play.completed_game import CompletedSelfPlayGame, GameIdentity, SearchObservation
 from src.self_play.completed_game import SparseSearchVisit, TerminationReason
-from src.self_play.restart_archive import RestartStateArchive
+from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 
@@ -34,7 +34,7 @@ class FakeRoot:
     reset_count: int = 0
 
     def play(self, action_id: int) -> None:
-        assert action_id in (0, 1)
+        assert action_id in (0, 1, 2)
         self.position = FakePosition(self.position.ply + 1)
 
     def reset(self) -> None:
@@ -123,10 +123,10 @@ class FakeState:
 
     def legal_action_ids(self, position: FakePosition) -> tuple[int, ...]:
         del position
-        return (0, 1)
+        return (0, 1, 2)
 
     def child_position(self, position: FakePosition, action_id: int) -> FakePosition:
-        assert action_id in (0, 1)
+        assert action_id in (0, 1, 2)
         return FakePosition(position.ply + 1)
 
     def natural_terminal_wdl(self, position: FakePosition) -> WdlTarget | None:
@@ -366,9 +366,9 @@ def restart_source_game() -> CompletedSelfPlayGame:
                 ply=0,
                 model_generation=0,
                 policy_target_visits=(
-                    SparseSearchVisit(action_id=0, visit_count=60),
+                    SparseSearchVisit(action_id=0, visit_count=45),
                     SparseSearchVisit(action_id=1, visit_count=30),
-                    SparseSearchVisit(action_id=2, visit_count=10),
+                    SparseSearchVisit(action_id=2, visit_count=25),
                 ),
                 root_value=0.0,
                 selected_action_id=0,
@@ -419,7 +419,8 @@ def test_restart_policy_falls_back_to_exact_start_when_archive_is_empty(tmp_path
 
 def test_restart_root_runs_full_search_and_plays_reserved_candidate(tmp_path: Path) -> None:
     parameters = restart_parameters()
-    archive = RestartStateArchive(tmp_path / 'restart-states.sqlite3')
+    completed_games_path = tmp_path / 'completed-games'
+    archive = RestartStateArchive(worker_restart_archive_path(completed_games_path, 0))
     archive.archive_completed_game(restart_source_game(), parameters)
     archive.close()
     game = FakeGame(restart_parameters=parameters)
@@ -428,7 +429,7 @@ def test_restart_root_runs_full_search_and_plays_reserved_candidate(tmp_path: Pa
         parallel_game_count=1,
         worker_id=0,
         device_id=0,
-        inbox_path=tmp_path / 'inbox',
+        inbox_path=completed_games_path / 'inbox',
     )
     worker.random = cast(np.random.Generator, FakeRestartRandom(0.9))
     worker.refresh_published_model(checkpoint(tmp_path, 0))
@@ -441,3 +442,54 @@ def test_restart_root_runs_full_search_and_plays_reserved_candidate(tmp_path: Pa
     assert active_game.observations[0].selected_action_id == 1
     assert worker.restart_starts == 1
     worker.close()
+
+
+def test_restart_archives_are_private_to_each_worker_and_survive_replacement(tmp_path: Path) -> None:
+    parameters = restart_parameters()
+    completed_games_path = tmp_path / 'completed-games'
+    first_path = worker_restart_archive_path(completed_games_path, 0)
+    archive = RestartStateArchive(first_path)
+    archive.archive_completed_game(restart_source_game(), parameters)
+    archive.close()
+
+    first_worker = SelfPlayWorker(
+        cast(GameImplementation, FakeGame(restart_parameters=parameters)),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=completed_games_path / 'inbox',
+    )
+    other_worker = SelfPlayWorker(
+        cast(GameImplementation, FakeGame(restart_parameters=parameters)),
+        parallel_game_count=1,
+        worker_id=1,
+        device_id=0,
+        inbox_path=completed_games_path / 'inbox',
+    )
+    first_worker.random = cast(np.random.Generator, FakeRestartRandom(0.9))
+    other_worker.random = cast(np.random.Generator, FakeRestartRandom(0.9))
+
+    first_worker.refresh_published_model(checkpoint(tmp_path, 0))
+    other_worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    assert first_worker.restart_archive_path == first_path
+    assert first_worker.restart_starts == 1
+    assert other_worker.restart_archive_path == worker_restart_archive_path(completed_games_path, 1)
+    assert other_worker.restart_starts == 0
+    assert other_worker.empty_restart_fallbacks == 1
+    first_worker.close()
+    other_worker.close()
+
+    replacement = SelfPlayWorker(
+        cast(GameImplementation, FakeGame(restart_parameters=parameters)),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=completed_games_path / 'inbox',
+    )
+    replacement.random = cast(np.random.Generator, FakeRestartRandom(0.9))
+    replacement.refresh_published_model(checkpoint(tmp_path, 0))
+
+    assert replacement.restart_archive_path == first_path
+    assert replacement.restart_starts == 1
+    replacement.close()

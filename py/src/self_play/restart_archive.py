@@ -51,12 +51,8 @@ class _ArchivePosition:
 class RestartStateArchive:
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(path, timeout=30.0, isolation_level=None)
-        self.connection.execute('PRAGMA busy_timeout = 30000')
+        self.connection = sqlite3.connect(path, isolation_level=None)
         self.connection.execute('PRAGMA foreign_keys = ON')
-        journal_mode = str(self.connection.execute('PRAGMA journal_mode').fetchone()[0])
-        if journal_mode.casefold() != 'wal':
-            self.connection.execute('PRAGMA journal_mode = WAL')
         self.connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS restart_position (
@@ -228,6 +224,12 @@ class RestartStateArchive:
     def _counter(self, name: str) -> int:
         row = self.connection.execute('SELECT value FROM restart_counter WHERE name = ?', (name,)).fetchone()
         return 0 if row is None else int(row[0])
+
+
+def worker_restart_archive_path(completed_games_path: Path, worker_id: int) -> Path:
+    if worker_id < 0:
+        raise ValueError('Self-play worker ID must be nonnegative.')
+    return completed_games_path / 'restart-states' / f'worker-{worker_id}.sqlite3'
 
 
 def _eligible_positions(
