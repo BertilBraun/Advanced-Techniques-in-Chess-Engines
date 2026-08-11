@@ -25,7 +25,7 @@ training:
     replay: {capacity: {kind: constant, value: 256}, maximum_capacity: 256, maximum_policy_entries: 82}
     credit: {replay_ratio: 4, optimizer_steps_per_quantum: 1, maximum_optimizer_steps: 8, retained_checkpoint_interval_generations: 1}
     inference_retention: {recent_checkpoint_count: 8, milestone_interval: 1}
-  limits: {hourly_price: 0.4608888889, maximum_cost: 0.05, maximum_wall_time_seconds: 300, maximum_open_file_count: 32768, maximum_host_ram_percent: 90.0, minimum_free_disk_gib: 10.0, resource_telemetry_interval_seconds: 1.0}
+  limits: {hourly_price: 0.11522222222222215, maximum_cost: 0.01, maximum_wall_time_seconds: 300, maximum_open_file_count: 32768, maximum_host_ram_percent: 90.0, minimum_free_disk_gib: 10.0, resource_telemetry_interval_seconds: 1.0}
   random_seed: 1515
 evaluation:
   cadence_seconds: 20
