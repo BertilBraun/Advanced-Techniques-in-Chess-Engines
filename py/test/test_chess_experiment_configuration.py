@@ -74,6 +74,30 @@ def test_global_pooling_screen_replaces_baseline_squeeze_excitation() -> None:
     )
 
 
+def test_go9_strong_baseline_resolves_the_authored_search_progression() -> None:
+    configuration = load_experiment_configuration(Path('configs/screening/go-9x9-strong/00-baseline.yaml'))
+
+    assert isinstance(configuration.training.network.residual_context, GlobalPoolingResidualContext)
+    assert configuration.training.trainer.learning_rate.value_at(0) == pytest.approx(0.01)
+    assert configuration.training.trainer.learning_rate.value_at(150) == pytest.approx(0.001)
+    initial = configuration.go.self_play.resolve(0, configuration.go.rules.maximum_moves)
+    mixed = configuration.go.self_play.resolve(25, configuration.go.rules.maximum_moves)
+    mature = configuration.go.self_play.resolve(50, configuration.go.rules.maximum_moves)
+    assert (initial.full_searches, initial.fast_searches, initial.full_search_probability) == (64, 16, 1.0)
+    assert (mixed.full_searches, mixed.fast_searches, mixed.full_search_probability) == (160, 40, 0.25)
+    assert (mature.full_searches, mature.fast_searches, mature.full_search_probability) == (256, 64, 0.25)
+    assert isinstance(initial.first_play_urgency, ReducedParentValueFirstPlayUrgencyParameters)
+    assert initial.first_play_urgency.reduction == pytest.approx(0.2)
+    assert initial.forced_playout_coefficient == pytest.approx(2.0)
+    assert initial.retained_root_visit_fraction == pytest.approx(0.6)
+    assert configuration.go.objective.root_value_blend.value_at(29) == pytest.approx(0.0)
+    assert configuration.go.objective.root_value_blend.value_at(75) == pytest.approx(0.15)
+    assert tuple(target.kind for target in configuration.go.objective.auxiliary_targets) == (
+        'next_policy',
+        'remaining_game_length',
+    )
+
+
 def test_forced_playout_screen_resolves_canonical_coefficient() -> None:
     configuration = load_experiment_configuration(Path('configs/screening/go-7x7-overnight/15-forced-playouts.yaml'))
 

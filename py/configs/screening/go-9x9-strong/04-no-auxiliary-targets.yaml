@@ -1,0 +1,9 @@
+extends: 00-baseline.yaml
+run:
+  run_name: go9-strong-04-no-auxiliary-targets
+  tensorboard_run_directory: go9-strong-04-no-auxiliary-targets
+training:
+  save_path: py/training_data/screening/go9-strong/04-no-auxiliary-targets
+go:
+  objective:
+    auxiliary_targets: []

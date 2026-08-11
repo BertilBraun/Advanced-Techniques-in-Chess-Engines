@@ -4,3 +4,5 @@ run:
   tensorboard_run_directory: go9-model-size-00-medium-8x96
 training:
   save_path: py/training_data/screening/go9-model-size/00-medium-8x96
+  network:
+    residual_context: {kind: squeeze_excitation, placement: every_second_block}

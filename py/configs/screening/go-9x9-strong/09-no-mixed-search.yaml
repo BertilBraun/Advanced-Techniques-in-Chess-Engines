@@ -1,0 +1,9 @@
+extends: 00-baseline.yaml
+run:
+  run_name: go9-strong-09-no-mixed-search
+  tensorboard_run_directory: go9-strong-09-no-mixed-search
+training:
+  save_path: py/training_data/screening/go9-strong/09-no-mixed-search
+go:
+  self_play:
+    full_search_probability: {kind: constant, value: 1.0}

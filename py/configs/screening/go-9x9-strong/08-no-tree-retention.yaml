@@ -1,0 +1,9 @@
+extends: 00-baseline.yaml
+run:
+  run_name: go9-strong-08-no-tree-retention
+  tensorboard_run_directory: go9-strong-08-no-tree-retention
+training:
+  save_path: py/training_data/screening/go9-strong/08-no-tree-retention
+go:
+  self_play:
+    retained_root_visit_fraction: {kind: constant, value: 0.0}

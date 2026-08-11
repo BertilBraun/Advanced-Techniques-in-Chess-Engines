@@ -23,12 +23,12 @@ run:
     minimum_open_file_soft_limit: 32768
 training:
   save_path: py/training_data/baselines/vast-go-9x9-2gpu-4h
-  network: {num_layers: 8, hidden_size: 96, residual_context: {kind: squeeze_excitation, placement: every_second_block}, num_policy_channels: 2, num_value_channels: 1, value_fc_size: 32}
+  network: {num_layers: 8, hidden_size: 96, residual_context: {kind: global_pooling, placement: every_second_block}, num_policy_channels: 2, num_value_channels: 1, value_fc_size: 32}
   trainer:
     global_batch_size: 1024
     local_batch_size: 512
     optimizer: adamw
-    learning_rate: {kind: constant, value: 0.002}
+    learning_rate: {kind: linear, start_generation: 0, end_generation: 150, start_value: 0.01, end_value: 0.001, rounding: none}
     max_grad_norm: 1.0
     duplicate_multiplicity_weight_cap:
   topology:
@@ -92,15 +92,15 @@ evaluation:
         inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 1}
     - {kind: previous_checkpoint, definition_id: previous-40m, boundary_offset: 2, opening_pair_count: 200, maximum_game_plies: 324, search: *evaluation_search}
     - {kind: previous_checkpoint, definition_id: previous-60m, boundary_offset: 3, opening_pair_count: 200, maximum_game_plies: 324, search: *evaluation_search}
-    - {kind: reference_checkpoint, definition_id: same-time-baseline, manifest_path: py/training_data/screening/go9-model-size/00-medium-8x96/evaluations/reference-checkpoints.json, opening_pair_count: 200, maximum_game_plies: 324, search: *evaluation_search}
+    - {kind: reference_checkpoint, definition_id: same-time-baseline, manifest_path: py/training_data/screening/go9-strong/00-baseline/evaluations/reference-checkpoints.json, opening_pair_count: 200, maximum_game_plies: 324, search: *evaluation_search}
     - {kind: katago, definition_id: katago-96, maximum_visits: 96, opening_pair_count: 50, maximum_game_plies: 324, search: *evaluation_search}
 go:
   self_play:
-    search: {full_searches: {kind: constant, value: 256}, fast_searches: {kind: constant, value: 64}, parallel_searches: 1, dirichlet_epsilon: {kind: constant, value: 0.25}, dirichlet_alpha: {kind: constant, value: 0.3}, exploration_constant: {kind: constant, value: 1.5}, first_play_urgency: {kind: zero}, forced_playouts: {kind: disabled}}
+    search: {full_searches: {kind: linear, start_generation: 0, end_generation: 50, start_value: 64, end_value: 256, rounding: nearest}, fast_searches: {kind: linear, start_generation: 0, end_generation: 50, start_value: 16, end_value: 64, rounding: nearest}, parallel_searches: 1, dirichlet_epsilon: {kind: constant, value: 0.25}, dirichlet_alpha: {kind: constant, value: 0.3}, exploration_constant: {kind: constant, value: 1.5}, first_play_urgency: {kind: reduced_parent_value, reduction: {kind: constant, value: 0.2}}, forced_playouts: {kind: enabled, coefficient: 2.0}}
     inference: {inference_workers: 1, inference_batch_size: 128, outstanding_batches_per_worker: 2}
-    start_position: {kind: random_opening, maximum_plies: {kind: constant, value: 0}}
-    full_search_probability: {kind: constant, value: 1.0}
-    retained_root_visit_fraction: {kind: constant, value: 0.0}
+    start_position: {kind: restart_state, true_start_probability: 0.5, candidate_visit_mass: 0.85, minimum_candidates: 2, maximum_candidates: 3, maximum_absolute_root_value: 0.3, minimum_remaining_plies: 15, maximum_archive_positions: 50000, maximum_age_generations: 20}
+    full_search_probability: {kind: linear, start_generation: 0, end_generation: 25, start_value: 1.0, end_value: 0.25, rounding: none}
+    retained_root_visit_fraction: {kind: constant, value: 0.6}
     greedy_after_ply: {kind: constant, value: 60}
     starting_temperature: {kind: constant, value: 1.0}
     final_temperature: {kind: constant, value: 0.1}
@@ -108,4 +108,10 @@ go:
     detailed_statistics_workers: 1
   rules: {komi_half_points: 14, maximum_moves: 324}
   representation: {board_size: 9, history_length: 8, binary_channel_count: 16, scalar_channel_count: 1, canonical_player_perspective: true}
-  objective: {policy_loss_weight: {kind: constant, value: 1.0}, value_loss_weight: {kind: constant, value: 1.0}, root_value_blend: {kind: constant, value: 0.0}, auxiliary_targets: []}
+  objective:
+    policy_loss_weight: {kind: constant, value: 1.0}
+    value_loss_weight: {kind: constant, value: 1.0}
+    root_value_blend: {kind: linear, start_generation: 30, end_generation: 75, start_value: 0.0, end_value: 0.15, rounding: none}
+    auxiliary_targets:
+      - {kind: next_policy, ply_offset: 1, loss_weight: {kind: constant, value: 0.1}}
+      - {kind: remaining_game_length, loss_weight: {kind: constant, value: 0.1}}
