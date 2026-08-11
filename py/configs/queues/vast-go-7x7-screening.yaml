@@ -37,6 +37,8 @@ experiments:
   - {experiment_id: go7-r14-14-remaining-game-length, experiment_file: ../screening/go-7x7-overnight/14-remaining-game-length.yaml, source_revision: 74cb58fabf3f9533803b76d3e3bf4cda6d39c956, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
   - {experiment_id: go7-r14-15-forced-playouts, experiment_file: ../screening/go-7x7-overnight/15-forced-playouts.yaml, source_revision: 74cb58fabf3f9533803b76d3e3bf4cda6d39c956, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
   - {experiment_id: go7-r14-14b-remaining-game-length, experiment_file: ../screening/go-7x7-overnight/14b-remaining-game-length.yaml, source_revision: aefd113d69d02b75a0175bd3be2a7c2f9776e54f, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go7-r14-12b-fpu-reduction-02, experiment_file: ../screening/go-7x7-overnight/12b-fpu-reduction-02.yaml, source_revision: 95de55767da5467bfa4d5484fa7a1a6ef3de4117, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go7-r14-15b-forced-playouts, experiment_file: ../screening/go-7x7-overnight/15b-forced-playouts.yaml, source_revision: 95de55767da5467bfa4d5484fa7a1a6ef3de4117, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
 summary_path: /workspace/run-control/r14/go7-screening-summary.json
 poll_interval_seconds: 1.0
 termination_grace_seconds: 30.0
