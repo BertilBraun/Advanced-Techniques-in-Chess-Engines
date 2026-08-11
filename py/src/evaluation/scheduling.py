@@ -16,6 +16,7 @@ from src.evaluation.configuration import (
     RandomOpponentEvaluationDefinition,
     ReferenceCheckpointEvaluationDefinition,
     StockfishEvaluationDefinition,
+    StockfishFixedNodesEvaluationDefinition,
 )
 from src.evaluation.contracts import (
     CheckpointOpponent,
@@ -28,6 +29,7 @@ from src.evaluation.contracts import (
     MatchEvaluationJob,
     RandomOpponent,
     StockfishOpponent,
+    StockfishFixedNodesOpponent,
 )
 from src.experiment.configuration import ExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
@@ -103,6 +105,7 @@ def _match_job(
     | PreviousCheckpointEvaluationDefinition
     | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
+    | StockfishFixedNodesEvaluationDefinition
     | KataGoEvaluationDefinition,
     opponent: EvaluationOpponent,
     context: _EvaluationJobContext,
@@ -172,6 +175,12 @@ def _job_for_definition(
             )
         case StockfishEvaluationDefinition(skill_level=skill_level):
             return _match_job(definition, StockfishOpponent(kind='stockfish', skill_level=skill_level), context)
+        case StockfishFixedNodesEvaluationDefinition():
+            return _match_job(
+                definition,
+                StockfishFixedNodesOpponent(kind='stockfish_fixed_nodes'),
+                context,
+            )
         case KataGoEvaluationDefinition(maximum_visits=maximum_visits):
             return _match_job(
                 definition,

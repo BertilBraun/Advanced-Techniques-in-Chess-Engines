@@ -14,6 +14,7 @@ from src.evaluation.configuration import (
     RandomOpponentEvaluationDefinition,
     ReferenceCheckpointEvaluationDefinition,
     StockfishEvaluationDefinition,
+    StockfishFixedNodesEvaluationDefinition,
 )
 from src.evaluation.contracts import (
     CandidateOutcome,
@@ -95,6 +96,8 @@ def _definition_search(job: MatchEvaluationJob) -> EvaluationSearchConfiguration
         case ReferenceCheckpointEvaluationDefinition(search=search):
             return search
         case StockfishEvaluationDefinition(search=search):
+            return search
+        case StockfishFixedNodesEvaluationDefinition(search=search):
             return search
         case KataGoEvaluationDefinition(search=search):
             return search
@@ -214,7 +217,7 @@ def _choose_opponent_actions(
                 active_match.random_generator.choice(state.legal_action_ids(active_match.position))
                 for active_match in opponent_turns
             )
-        case 'stockfish' | 'katago':
+        case 'stockfish' | 'stockfish_fixed_nodes' | 'katago':
             if external_engine is None:
                 raise ValueError('External-engine match requires one job-local engine.')
             return external_engine.choose_actions(

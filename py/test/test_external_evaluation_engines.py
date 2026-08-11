@@ -49,6 +49,17 @@ class FakeStockfishEngine:
             {'pv': [chess.Move.from_uci('d2d4')], 'score': chess.engine.PovScore(chess.engine.Cp(20), board.turn)},
         ]
 
+    def play(
+        self,
+        board: chess.Board,
+        limit: chess.engine.Limit,
+        ponder: bool,
+    ) -> chess.engine.PlayResult:
+        assert board.fen() == chess.STARTING_FEN
+        assert limit.nodes == 10
+        assert ponder is False
+        return chess.engine.PlayResult(chess.Move.from_uci('e2e4'), None)
+
     def quit(self) -> None:
         pass
 
@@ -78,6 +89,36 @@ def test_stockfish_multipv_scores_form_normalized_policy(monkeypatch: pytest.Mon
     assert sum(entry.probability for entry in policy.entries) == pytest.approx(1.0)
     assert policy.selected_action_id == 1
     assert engine.configurations[0] == {'Threads': 1, 'Hash': 16, 'UCI_ShowWDL': True}
+
+
+def test_stockfish_full_strength_match_never_configures_skill_level(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    executable = tmp_path / 'stockfish'
+    executable.write_bytes(b'engine')
+    engine = FakeStockfishEngine()
+    monkeypatch.setattr(chess.engine.SimpleEngine, 'popen_uci', lambda path: engine)
+    configuration = StockfishEngineConfiguration(
+        kind='stockfish',
+        executable_path=str(executable),
+        label_nodes=100,
+        match_nodes=10,
+        threads=1,
+        hash_mib=16,
+        multi_pv=2,
+        policy_softmax_temperature=0.2,
+    )
+    state = type(
+        'FakeState', (), {'representation': type('R', (), {'channels': 1, 'rows': 1, 'columns': 1})(), 'action_size': 3}
+    )()
+
+    client = StockfishClient(configuration, state, executable)
+    action_id = client.choose_action_at_full_strength(FakeChessPosition())
+    client.close()
+
+    assert action_id == 1
+    assert all('Skill Level' not in configured for configured in engine.configurations)
 
 
 @pytest.mark.parametrize('board_size', (7, 9))

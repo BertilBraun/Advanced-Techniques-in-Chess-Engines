@@ -111,11 +111,18 @@ class StockfishClient:
             scored_actions[0][0],
         )
 
-    def choose_action(self, position: ChessPosition, skill_level: int) -> int:
+    def choose_action_at_skill_level(self, position: ChessPosition, skill_level: int) -> int:
         self._engine.configure({'Skill Level': skill_level})
+        return self._play_fixed_nodes(position)
+
+    def choose_action_at_full_strength(self, position: ChessPosition) -> int:
+        return self._play_fixed_nodes(position)
+
+    def _play_fixed_nodes(self, position: ChessPosition) -> int:
         result = self._engine.play(
             chess.Board(position.fen),
             chess.engine.Limit(nodes=self.configuration.match_nodes),
+            ponder=False,
         )
         if result.move is None:
             raise ValueError('Stockfish returned no move for a nonterminal position.')
@@ -160,7 +167,24 @@ class StockfishMatchEngine:
     ) -> tuple[int, ...]:
         if len(positions) != len(action_sequences):
             raise ValueError('Stockfish match positions and histories must have equal lengths.')
-        return tuple(self.client.choose_action(position, self.skill_level) for position in positions)
+        return tuple(self.client.choose_action_at_skill_level(position, self.skill_level) for position in positions)
+
+    def close(self) -> None:
+        self.client.close()
+
+
+class StockfishFixedNodesMatchEngine:
+    def __init__(self, client: StockfishClient) -> None:
+        self.client = client
+
+    def choose_actions(
+        self,
+        positions: tuple[ChessPosition, ...],
+        action_sequences: tuple[tuple[int, ...], ...],
+    ) -> tuple[int, ...]:
+        if len(positions) != len(action_sequences):
+            raise ValueError('Stockfish match positions and histories must have equal lengths.')
+        return tuple(self.client.choose_action_at_full_strength(position) for position in positions)
 
     def close(self) -> None:
         self.client.close()

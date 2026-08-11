@@ -162,13 +162,17 @@ class StockfishOpponent(FrozenModel):
     skill_level: int = Field(ge=0, le=20)
 
 
+class StockfishFixedNodesOpponent(FrozenModel):
+    kind: Literal['stockfish_fixed_nodes']
+
+
 class KataGoOpponent(FrozenModel):
     kind: Literal['katago']
     maximum_visits: int = Field(gt=0)
 
 
 EvaluationOpponent: TypeAlias = Annotated[
-    RandomOpponent | CheckpointOpponent | StockfishOpponent | KataGoOpponent,
+    RandomOpponent | CheckpointOpponent | StockfishOpponent | StockfishFixedNodesOpponent | KataGoOpponent,
     Field(discriminator='kind'),
 ]
 
@@ -205,6 +209,7 @@ class MatchEvaluationJob(FrozenModel):
             'previous_checkpoint': 'checkpoint',
             'reference_checkpoint': 'checkpoint',
             'stockfish': 'stockfish',
+            'stockfish_fixed_nodes': 'stockfish_fixed_nodes',
             'katago': 'katago',
         }[self.definition.kind]
         if self.opponent.kind != expected_opponent:

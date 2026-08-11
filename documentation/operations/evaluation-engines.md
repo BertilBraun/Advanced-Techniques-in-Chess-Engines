@@ -36,6 +36,13 @@ alternative is
 [`stockfish-ubuntu-x86-64-avx2.tar`](https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-ubuntu-x86-64-avx2.tar),
 SHA-256 `536c0c2c0cf06450df0bfb5e876ef0d3119950703a8f143627f990c7b5417964`.
 
+Chess match definitions distinguish restricted `stockfish` opponents from the unrestricted
+`stockfish_fixed_nodes` opponent. A `stockfish` definition sets its explicit UCI `Skill Level`; a
+`stockfish_fixed_nodes` definition never sends that option and runs Stockfish at its default strength for the
+engine configuration's fixed `match_nodes` budget. Both paths disable pondering, use the configured thread and hash
+limits, and play the same paired opening suite. Keep the kinds separate rather than encoding unrestricted strength
+as a missing or sentinel skill level.
+
 ## Local WSL installation
 
 Use WSL 2 with an x86-64 Linux distribution. Install the small bootstrap prerequisites using the distribution's

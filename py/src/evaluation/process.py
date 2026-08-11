@@ -22,7 +22,7 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.util.atomic_file import write_text_atomically
 
 if TYPE_CHECKING:
-    from src.games.chess.stockfish import StockfishMatchEngine
+    from src.games.chess.stockfish import StockfishFixedNodesMatchEngine, StockfishMatchEngine
     from src.games.composition import ConfiguredGame
     from src.games.go.katago import KataGoMatchEngine
 
@@ -109,8 +109,8 @@ def _create_external_match_engine(
     experiment: ExperimentConfiguration,
     job: MatchEvaluationJob,
     game: ConfiguredGame,
-) -> StockfishMatchEngine | KataGoMatchEngine | None:
-    from src.games.chess.stockfish import StockfishMatchEngine
+) -> StockfishFixedNodesMatchEngine | StockfishMatchEngine | KataGoMatchEngine | None:
+    from src.games.chess.stockfish import StockfishFixedNodesMatchEngine, StockfishMatchEngine
     from src.games.go.katago import KataGoMatchEngine
 
     match job.opponent.kind:
@@ -128,6 +128,18 @@ def _create_external_match_engine(
                 resolve_project_path(engine_configuration.executable_path),
             )
             return StockfishMatchEngine(client, job.opponent.skill_level)
+        case 'stockfish_fixed_nodes':
+            from src.games.chess.stockfish import StockfishClient
+
+            engine_configuration = experiment.evaluation.engine
+            if not isinstance(engine_configuration, StockfishEngineConfiguration):
+                raise ValueError('Stockfish fixed-node job requires Stockfish engine configuration.')
+            client = StockfishClient(
+                engine_configuration,
+                game.state,
+                resolve_project_path(engine_configuration.executable_path),
+            )
+            return StockfishFixedNodesMatchEngine(client)
         case 'katago':
             from src.games.go.katago import KataGoClient
 

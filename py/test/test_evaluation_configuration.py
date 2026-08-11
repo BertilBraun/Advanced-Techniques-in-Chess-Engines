@@ -3,8 +3,15 @@ from pathlib import Path
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from src.evaluation.configuration import EvaluationConfiguration
-from src.evaluation.contracts import MatchEvaluationJob, OpeningLine, RandomOpponent
+from src.evaluation.configuration import EvaluationConfiguration, StockfishFixedNodesEvaluationDefinition
+from src.evaluation.contracts import (
+    EvaluationJob,
+    MatchEvaluationJob,
+    OpeningLine,
+    RandomOpponent,
+    StockfishFixedNodesOpponent,
+)
+from src.evaluation.scheduling import ScheduledEvaluationSuite, jobs_for_suite
 from src.experiment.configuration import load_experiment_configuration
 from src.training.checkpoint import CheckpointReference
 
@@ -99,3 +106,46 @@ def test_resolved_match_opponent_must_match_its_definition() -> None:
             random_seed=0,
             result_path=Path('result.json'),
         )
+
+
+def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opponent(tmp_path: Path) -> None:
+    experiment = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    skill_definition = next(
+        definition for definition in experiment.evaluation.definitions if definition.kind == 'stockfish'
+    )
+    definition_payload = skill_definition.model_dump(mode='json')
+    definition_payload['kind'] = 'stockfish_fixed_nodes'
+    definition_payload['definition_id'] = 'stockfish-fixed-nodes'
+    del definition_payload['skill_level']
+    evaluation_payload = experiment.evaluation.model_dump(mode='json')
+    evaluation_payload['definitions'].append(definition_payload)
+    evaluation = EvaluationConfiguration.model_validate(evaluation_payload)
+    round_tripped = EvaluationConfiguration.model_validate_json(evaluation.model_dump_json())
+    fixed_definition = round_tripped.definitions[-1]
+
+    assert isinstance(fixed_definition, StockfishFixedNodesEvaluationDefinition)
+    assert 'skill_level' not in fixed_definition.model_dump()
+
+    configured_experiment = experiment.model_copy(update={'evaluation': round_tripped})
+    checkpoint = CheckpointReference(
+        generation=1,
+        manifest_path=tmp_path / 'checkpoint.json',
+        model_path=tmp_path / 'model.pt',
+        optimizer_path=tmp_path / 'optimizer.pt',
+        inference_model_path=tmp_path / 'inference.pt',
+        inference_model_sha256='0' * 64,
+    )
+    jobs, _ = jobs_for_suite(
+        configured_experiment,
+        tmp_path,
+        tmp_path / 'results',
+        ScheduledEvaluationSuite(boundary_seconds=1200, checkpoint=checkpoint),
+        (),
+        0,
+    )
+    job = next(job for job in jobs if job.definition.kind == 'stockfish_fixed_nodes')
+
+    assert isinstance(job, MatchEvaluationJob)
+    assert isinstance(job.opponent, StockfishFixedNodesOpponent)
+    serialized_job = TypeAdapter(EvaluationJob).validate_json(job.model_dump_json()).model_dump(mode='json')
+    assert serialized_job['opponent'] == {'kind': 'stockfish_fixed_nodes'}

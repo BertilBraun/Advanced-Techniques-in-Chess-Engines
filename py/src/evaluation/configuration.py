@@ -160,6 +160,12 @@ class StockfishEvaluationDefinition(PairedMatchEvaluationDefinition):
     search: EvaluationSearchConfiguration
 
 
+class StockfishFixedNodesEvaluationDefinition(PairedMatchEvaluationDefinition):
+    kind: Literal['stockfish_fixed_nodes']
+    definition_id: str = Field(min_length=1)
+    search: EvaluationSearchConfiguration
+
+
 class KataGoEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['katago']
     definition_id: str = Field(min_length=1)
@@ -174,6 +180,7 @@ EvaluationDefinition: TypeAlias = Annotated[
     | PreviousCheckpointEvaluationDefinition
     | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
+    | StockfishFixedNodesEvaluationDefinition
     | KataGoEvaluationDefinition,
     Field(discriminator='kind'),
 ]
@@ -184,6 +191,7 @@ MatchEvaluationDefinition: TypeAlias = Annotated[
     | PreviousCheckpointEvaluationDefinition
     | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
+    | StockfishFixedNodesEvaluationDefinition
     | KataGoEvaluationDefinition,
     Field(discriminator='kind'),
 ]
@@ -209,7 +217,9 @@ class EvaluationConfiguration(FrozenModel):
             raise ValueError('Evaluation must contain one fixed-dataset definition.')
         if self.engine.kind == 'stockfish' and any(definition.kind == 'katago' for definition in self.definitions):
             raise ValueError('Stockfish evaluation configuration cannot contain a KataGo opponent.')
-        if self.engine.kind == 'katago' and any(definition.kind == 'stockfish' for definition in self.definitions):
+        if self.engine.kind == 'katago' and any(
+            definition.kind in ('stockfish', 'stockfish_fixed_nodes') for definition in self.definitions
+        ):
             raise ValueError('KataGo evaluation configuration cannot contain a Stockfish opponent.')
         match_definitions = tuple(
             definition for definition in self.definitions if isinstance(definition, PairedMatchEvaluationDefinition)
