@@ -74,8 +74,14 @@ class KataGoBookOpeningSource(FrozenModel):
     selection: KataGoBookSelectionConfiguration
 
 
+class ChessBookOpeningSource(FrozenModel):
+    kind: Literal['chess_book']
+    selection_path: str = Field(min_length=1)
+    selection_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
 OpeningSuiteSource: TypeAlias = Annotated[
-    EngineBeamOpeningSource | KataGoBookOpeningSource,
+    EngineBeamOpeningSource | KataGoBookOpeningSource | ChessBookOpeningSource,
     Field(discriminator='kind'),
 ]
 

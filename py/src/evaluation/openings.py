@@ -6,8 +6,10 @@ from math import exp, log
 from pathlib import Path
 from typing import Generic, TypeVar
 
-from src.evaluation.configuration import EngineBeamOpeningSource, OpeningSuiteConfiguration
+from src.evaluation.configuration import ChessBookOpeningSource, EngineBeamOpeningSource, OpeningSuiteConfiguration
 from src.evaluation.contracts import (
+    ChessBookOpeningLine,
+    ChessBookOpeningSuiteManifest,
     KataGoBookOpeningLine,
     KataGoBookOpeningSuiteManifest,
     OpeningLine,
@@ -21,6 +23,7 @@ from src.evaluation.katago_book import (
     selection_sha256,
 )
 from src.games.contracts import GameStateContract
+from src.games.chess.contract import ChessPosition, ChessStateContract
 from src.util.atomic_file import write_text_atomically
 
 
@@ -153,6 +156,95 @@ def build_opening_suite(
         expanded_actions_per_position=configuration.source.expanded_actions_per_position,
         beam_width=configuration.source.beam_width,
         openings=openings,
+        builder_source_revision=builder_source_revision,
+    )
+    write_text_atomically(path, manifest.model_dump_json(indent=2) + '\n')
+    return manifest
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _parse_chess_book_selection(path: Path) -> tuple[tuple[str, tuple[str, ...], str], ...]:
+    rows: list[tuple[str, tuple[str, ...], str]] = []
+    for line_number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), start=1):
+        if not line or line.startswith('#'):
+            continue
+        columns = line.split('\t')
+        if len(columns) != 3:
+            raise ValueError(f'Chess book selection line {line_number} must contain three tab-separated columns.')
+        opening_id, moves, expected_fen = columns
+        action_uci = tuple(moves.split())
+        if not opening_id or not action_uci or not expected_fen:
+            raise ValueError(f'Chess book selection line {line_number} contains an empty field.')
+        rows.append((opening_id, action_uci, expected_fen))
+    if len({opening_id for opening_id, _, _ in rows}) != len(rows):
+        raise ValueError('Chess book opening IDs must be unique.')
+    return tuple(rows)
+
+
+def _replay_chess_book_line(
+    state: ChessStateContract,
+    opening_id: str,
+    moves_uci: tuple[str, ...],
+    expected_fen: str,
+) -> ChessBookOpeningLine:
+    position: ChessPosition = state.initial_position()
+    action_ids: list[int] = []
+    for move_uci in moves_uci:
+        action_id = position.action_id_from_uci(move_uci)
+        if action_id not in state.legal_action_ids(position):
+            raise ValueError(f'Chess book opening {opening_id!r} contains illegal move {move_uci!r}.')
+        action_ids.append(action_id)
+        position = state.child_position(position, action_id)
+    if position.fen != expected_fen:
+        raise ValueError(f'Chess book opening {opening_id!r} does not reproduce its expected FEN.')
+    if state.natural_terminal_wdl(position) is not None:
+        raise ValueError(f'Chess book opening {opening_id!r} ends in a terminal position.')
+    return ChessBookOpeningLine(
+        opening_id=opening_id,
+        action_ids=tuple(action_ids),
+        final_position_digest=_position_digest(state, position),
+        human_readable=' '.join(moves_uci),
+    )
+
+
+def build_chess_book_opening_suite(
+    path: Path,
+    selection_path: Path,
+    configuration: OpeningSuiteConfiguration,
+    state: ChessStateContract,
+    builder_source_revision: str,
+) -> ChessBookOpeningSuiteManifest:
+    source = configuration.source
+    if not isinstance(source, ChessBookOpeningSource):
+        raise ValueError('Chess book opening builder requires a chess-book source.')
+    if not selection_path.is_file() or _file_sha256(selection_path) != source.selection_sha256:
+        raise ValueError('Chess book selection is missing or does not match its configured SHA-256.')
+    if path.exists():
+        manifest = ChessBookOpeningSuiteManifest.model_validate_json(path.read_text(encoding='utf-8'))
+        expected = (
+            manifest.rules_digest == state.rules_digest
+            and manifest.representation_digest == state.representation_digest
+            and manifest.selection_sha256 == source.selection_sha256
+            and len(manifest.openings) == configuration.opening_count
+        )
+        if not expected:
+            raise ValueError('Existing chess book opening suite does not match its configured immutable provenance.')
+        return manifest
+    rows = _parse_chess_book_selection(selection_path)
+    if len(rows) != configuration.opening_count:
+        raise ValueError('Chess book selection count does not match the configured opening count.')
+    manifest = ChessBookOpeningSuiteManifest(
+        rules_digest=state.rules_digest,
+        representation_digest=state.representation_digest,
+        selection_sha256=source.selection_sha256,
+        openings=tuple(_replay_chess_book_line(state, *row) for row in rows),
         builder_source_revision=builder_source_revision,
     )
     write_text_atomically(path, manifest.model_dump_json(indent=2) + '\n')

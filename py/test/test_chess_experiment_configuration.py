@@ -206,6 +206,43 @@ def test_experiment_owns_training_configuration_without_an_adapter() -> None:
     assert CHESS_TRAINING is CHESS_EXPERIMENT.training
 
 
+def test_eight_gpu_chess_production_configuration_resolves_authored_curriculum() -> None:
+    configuration = load_chess_experiment_configuration(Path('configs/production/vast-chess-8gpu-1d.yaml'))
+    trainer = configuration.training.trainer
+    topology = configuration.training.topology
+    credit = configuration.training.lifecycle.credit
+    self_play = configuration.chess.self_play
+
+    assert topology.trainer.ddp_device_ids == (0, 1, 2, 3)
+    assert trainer.global_batch_size == 2048
+    assert trainer.local_batch_size == 512
+    assert len(topology.self_play.device_ids) == 24
+    assert topology.self_play.node_ids_to_pause_during_training == (1, 2, 4, 5, 7, 8, 10, 11)
+    assert credit.replay_ratio == 8
+    assert credit.optimizer_steps_per_quantum == 400
+    assert tuple(
+        self_play.search.full_searches.value_at(generation) for generation in (0, 5, 10, 20, 35, 135, 235)
+    ) == (
+        200,
+        300,
+        400,
+        500,
+        600,
+        700,
+        800,
+    )
+    assert tuple(self_play.search.fast_searches.value_at(generation) for generation in (0, 5, 10, 20, 35, 235)) == (
+        50,
+        75,
+        100,
+        125,
+        150,
+        150,
+    )
+    assert configuration.evaluation.openings.source.kind == 'chess_book'
+    assert sum(definition.kind == 'stockfish_fixed_nodes' for definition in configuration.evaluation.definitions) == 1
+
+
 def test_experiment_queue_validation_loads_multiple_experiments() -> None:
     configurations = validate_experiment_queue((CHESS_EXPERIMENT_TEMPLATE_PATH, CHESS_EXPERIMENT_TEMPLATE_PATH))
 

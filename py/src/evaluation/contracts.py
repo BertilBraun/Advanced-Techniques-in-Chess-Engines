@@ -134,7 +134,26 @@ class KataGoBookOpeningSuiteManifest(FrozenModel):
     builder_source_revision: str = Field(min_length=1)
 
 
-AnyOpeningSuiteManifest: TypeAlias = OpeningSuiteManifest | KataGoBookOpeningSuiteManifest
+class ChessBookOpeningLine(FrozenModel):
+    opening_id: str = Field(min_length=1)
+    action_ids: tuple[int, ...] = Field(min_length=1)
+    final_position_digest: str = Field(min_length=64, max_length=64)
+    human_readable: str = Field(min_length=1)
+
+
+class ChessBookOpeningSuiteManifest(FrozenModel):
+    schema_version: Literal[3] = 3
+    game: Literal['chess'] = 'chess'
+    rules_digest: str = Field(min_length=64, max_length=64)
+    representation_digest: str = Field(min_length=64, max_length=64)
+    selection_sha256: str = Field(min_length=64, max_length=64)
+    openings: tuple[ChessBookOpeningLine, ...] = Field(min_length=1)
+    builder_source_revision: str = Field(min_length=1)
+
+
+AnyOpeningSuiteManifest: TypeAlias = (
+    OpeningSuiteManifest | KataGoBookOpeningSuiteManifest | ChessBookOpeningSuiteManifest
+)
 OPENING_SUITE_MANIFEST_ADAPTER = TypeAdapter(Annotated[AnyOpeningSuiteManifest, Field(discriminator='schema_version')])
 
 

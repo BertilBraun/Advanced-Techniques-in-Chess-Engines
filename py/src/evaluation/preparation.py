@@ -8,7 +8,11 @@ from src.evaluation.dataset import (
     build_katago_book_evaluation_dataset,
     dataset_manifest_path,
 )
-from src.evaluation.openings import build_katago_book_opening_suite, build_opening_suite
+from src.evaluation.openings import (
+    build_chess_book_opening_suite,
+    build_katago_book_opening_suite,
+    build_opening_suite,
+)
 from src.evaluation.contracts import AnyEvaluationDatasetManifest, AnyOpeningSuiteManifest
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.chess.configuration import ChessExperimentConfiguration
@@ -100,6 +104,16 @@ def prepare_evaluation_artifacts(
                     evaluation.openings,
                     game.state,
                     engine,
+                    source_revision,
+                )
+            case source if source.kind == 'chess_book':
+                if not isinstance(game, ChessImplementation):
+                    raise ValueError('Chess book openings require the chess game implementation.')
+                opening_manifest = build_chess_book_opening_suite(
+                    opening_path,
+                    _resolve_source_path(source_root, source.selection_path),
+                    evaluation.openings,
+                    game.state,
                     source_revision,
                 )
             case source:
