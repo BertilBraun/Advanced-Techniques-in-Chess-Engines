@@ -13,6 +13,7 @@ from pathlib import Path
 import psutil
 import torch
 
+from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
 from src.experiment.base_configuration import (
     RandomInitializationResumeConfiguration,
     WeightsOnlyResumeConfiguration,
@@ -267,11 +268,24 @@ def _run_manifest(
         evaluation_dataset_sha256=_sha256(artifacts.dataset_path),
         evaluation_dataset_manifest_sha256=_sha256(artifacts.dataset_manifest_path),
         opening_suite_manifest_sha256=_sha256(artifacts.opening_manifest_path),
-        evaluation_engine_artifact_sha256=artifacts.dataset_manifest.engine_artifact_sha256,
+        evaluation_engine_artifact_sha256=_evaluation_engine_artifact_sha256(experiment),
         open_file_soft_limit=environment.open_file_soft_limit,
         torch_version=torch.__version__,
         cuda_version=torch.version.cuda,
     )
+
+
+def _evaluation_engine_artifact_sha256(experiment: ExperimentConfiguration) -> tuple[str, ...]:
+    match experiment.evaluation.engine:
+        case StockfishEngineConfiguration(executable_path=executable_path):
+            paths = (executable_path,)
+        case KataGoEngineConfiguration(
+            executable_path=executable_path,
+            model_path=model_path,
+            analysis_configuration_path=analysis_configuration_path,
+        ):
+            paths = (executable_path, model_path, analysis_configuration_path)
+    return tuple(_sha256(_resolve_source_path(path)) for path in paths)
 
 
 def prepare_experiment_training_run(
