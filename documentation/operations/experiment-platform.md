@@ -123,7 +123,7 @@ Use the node's supported supervisor instead of a detached shell. The supervised 
 
 ```bash
 /workspace/alphazero-engine-venv/bin/python py/queue_experiments.py run \
-  --queue-config /workspace/run-control/r15b/go9-screening-live.yaml
+  --queue-config /workspace/run-control/r15c/go9-screening-live.yaml
 ```
 
 For a baseline-first launch, materialize the committed queue outside Git with absolute experiment paths and exact
@@ -138,7 +138,7 @@ Start and inspect the supervisor with the node's `supervisorctl`:
 supervisorctl start experiment-queue
 supervisorctl status experiment-queue
 /workspace/alphazero-engine-venv/bin/python py/queue_experiments.py status \
-  --summary /workspace/run-control/r15b/go9-screening-summary.json
+  --summary /workspace/run-control/r15c/go9-screening-summary.json
 ```
 
 Update only pending work by atomically replacing the live queue file. Stop with

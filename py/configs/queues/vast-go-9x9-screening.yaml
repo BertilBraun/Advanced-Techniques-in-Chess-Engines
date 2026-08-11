@@ -15,36 +15,36 @@ slots:
     cuda_devices: [0, 1]
     cpu_affinity: [24, 25, 26, 27, 28, 29, 30, 31, 56, 57, 58, 59, 60, 61, 62, 63]
     ram_capacity_bytes: 47244640256
-    log_directory: /workspace/run-control/r15b/logs/gpu-pair-a
+    log_directory: /workspace/run-control/r15c/logs/gpu-pair-a
   - slot_id: gpu-pair-b
     cuda_devices: [2, 3]
     cpu_affinity: [16, 17, 18, 19, 20, 21, 22, 23, 48, 49, 50, 51, 52, 53, 54, 55]
     ram_capacity_bytes: 47244640256
-    log_directory: /workspace/run-control/r15b/logs/gpu-pair-b
+    log_directory: /workspace/run-control/r15c/logs/gpu-pair-b
   - slot_id: gpu-pair-c
     cuda_devices: [4, 5]
     cpu_affinity: [8, 9, 10, 11, 12, 13, 14, 15, 40, 41, 42, 43, 44, 45, 46, 47]
     ram_capacity_bytes: 47244640256
-    log_directory: /workspace/run-control/r15b/logs/gpu-pair-c
+    log_directory: /workspace/run-control/r15c/logs/gpu-pair-c
   - slot_id: gpu-pair-d
     cuda_devices: [6, 7]
     cpu_affinity: [0, 1, 2, 3, 4, 5, 6, 7, 32, 33, 34, 35, 36, 37, 38, 39]
     ram_capacity_bytes: 47244640256
-    log_directory: /workspace/run-control/r15b/logs/gpu-pair-d
+    log_directory: /workspace/run-control/r15c/logs/gpu-pair-d
 experiments:
-  - {experiment_id: go9-r15b-00-baseline, experiment_file: ../screening/go-9x9-strong/00-baseline.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-01-zero-fpu, experiment_file: ../screening/go-9x9-strong/01-zero-fpu.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-02-no-forced-playouts, experiment_file: ../screening/go-9x9-strong/02-no-forced-playouts.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-03-squeeze-excitation, experiment_file: ../screening/go-9x9-strong/03-squeeze-excitation.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-04-no-auxiliary-targets, experiment_file: ../screening/go-9x9-strong/04-no-auxiliary-targets.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-05-no-root-value-blend, experiment_file: ../screening/go-9x9-strong/05-no-root-value-blend.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-06-true-starts-only, experiment_file: ../screening/go-9x9-strong/06-true-starts-only.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-07-fixed-search-budgets, experiment_file: ../screening/go-9x9-strong/07-fixed-search-budgets.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-08-no-tree-retention, experiment_file: ../screening/go-9x9-strong/08-no-tree-retention.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-09-no-mixed-search, experiment_file: ../screening/go-9x9-strong/09-no-mixed-search.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-10-replay-ratio-8, experiment_file: ../screening/go-9x9-strong/10-replay-ratio-8.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15b-11-constant-learning-rate-007, experiment_file: ../screening/go-9x9-strong/11-constant-learning-rate-007.yaml, source_revision: 6041a096389218168e299dd5e118f3ebd077a716, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-summary_path: /workspace/run-control/r15b/go9-screening-summary.json
+  - {experiment_id: go9-r15c-00-baseline, experiment_file: ../screening/go-9x9-strong/00-baseline.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-01-zero-fpu, experiment_file: ../screening/go-9x9-strong/01-zero-fpu.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-02-no-forced-playouts, experiment_file: ../screening/go-9x9-strong/02-no-forced-playouts.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-03-squeeze-excitation, experiment_file: ../screening/go-9x9-strong/03-squeeze-excitation.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-04-no-auxiliary-targets, experiment_file: ../screening/go-9x9-strong/04-no-auxiliary-targets.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-05-no-root-value-blend, experiment_file: ../screening/go-9x9-strong/05-no-root-value-blend.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-06-true-starts-only, experiment_file: ../screening/go-9x9-strong/06-true-starts-only.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-07-fixed-search-budgets, experiment_file: ../screening/go-9x9-strong/07-fixed-search-budgets.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-08-no-tree-retention, experiment_file: ../screening/go-9x9-strong/08-no-tree-retention.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-09-no-mixed-search, experiment_file: ../screening/go-9x9-strong/09-no-mixed-search.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-10-replay-ratio-8, experiment_file: ../screening/go-9x9-strong/10-replay-ratio-8.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+  - {experiment_id: go9-r15c-11-constant-learning-rate-007, experiment_file: ../screening/go-9x9-strong/11-constant-learning-rate-007.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
+summary_path: /workspace/run-control/r15c/go9-screening-summary.json
 poll_interval_seconds: 1.0
 termination_grace_seconds: 30.0
 wait_for_updates_when_empty: true
