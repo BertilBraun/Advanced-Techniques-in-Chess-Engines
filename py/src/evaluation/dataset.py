@@ -12,15 +12,23 @@ import numpy as np
 import numpy.typing as npt
 import torch
 
-from src.evaluation.configuration import EvaluationDatasetConfiguration
+from src.evaluation.configuration import EngineSelfPlayDatasetSource, EvaluationDatasetConfiguration
 from src.evaluation.contracts import (
+    AnyEvaluationDatasetManifest,
+    EVALUATION_DATASET_MANIFEST_ADAPTER,
     EvaluationDatasetManifest,
     EvaluationSourceGame,
     FixedDatasetEvaluationJob,
     FixedDatasetEvaluationResult,
+    KataGoBookDatasetManifest,
 )
 from src.evaluation.engine import EnginePolicy, EnginePolicyProvider, validate_engine_policy
 from src.evaluation.inference import decode_packed_inputs
+from src.evaluation.katago_book import (
+    load_katago_book_export,
+    select_katago_book_positions,
+    selection_sha256,
+)
 from src.games.contracts import GameStateContract
 from src.util.atomic_file import write_text_atomically
 
@@ -124,6 +132,8 @@ def _load_existing_dataset(
     state: GameStateContract[PositionT],
     engine: EnginePolicyProvider[PositionT],
 ) -> EvaluationDatasetManifest | None:
+    if not isinstance(configuration.source, EngineSelfPlayDatasetSource):
+        raise ValueError('Engine self-play dataset loader requires an engine-self-play source.')
     if not path.exists() and not manifest_path.exists():
         return None
     if not path.exists() or not manifest_path.exists():
@@ -135,8 +145,8 @@ def _load_existing_dataset(
         manifest.game == engine.game_name
         and manifest.rules_digest == engine.rules_digest
         and manifest.representation_digest == engine.representation_digest
-        and manifest.random_seed == configuration.random_seed
-        and manifest.move_sampling_temperature == configuration.move_sampling_temperature
+        and manifest.random_seed == configuration.source.random_seed
+        and manifest.move_sampling_temperature == configuration.source.move_sampling_temperature
         and manifest.engine_identity == engine.engine_identity
         and manifest.engine_artifact_sha256 == engine.engine_artifact_sha256
         and manifest.label_search_limit == engine.label_search_limit
@@ -155,6 +165,8 @@ def _generate_source_game(
     engine: EnginePolicyProvider[PositionT],
     generator: random.Random,
 ) -> _GeneratedSourceGame:
+    if not isinstance(configuration.source, EngineSelfPlayDatasetSource):
+        raise ValueError('Engine self-play dataset builder requires an engine-self-play source.')
     position = state.initial_position()
     action_ids: tuple[int, ...] = ()
     retained_positions: list[_RetainedDatasetPosition] = []
@@ -179,7 +191,7 @@ def _generate_source_game(
                     ),
                 )
             )
-        selected_action = _sample_action(policy, configuration.move_sampling_temperature, generator)
+        selected_action = _sample_action(policy, configuration.source.move_sampling_temperature, generator)
         position = state.child_position(position, selected_action)
         action_ids = (*action_ids, selected_action)
         ply += 1
@@ -198,8 +210,10 @@ def _collect_dataset_rows(
     state: GameStateContract[PositionT],
     engine: EnginePolicyProvider[PositionT],
 ) -> tuple[tuple[EvaluationDatasetRow, ...], tuple[EvaluationSourceGame, ...], int]:
-    generator = random.Random(configuration.random_seed)
-    retained_offset = configuration.random_seed % RETAINED_PLY_INTERVAL
+    if not isinstance(configuration.source, EngineSelfPlayDatasetSource):
+        raise ValueError('Engine self-play dataset builder requires an engine-self-play source.')
+    generator = random.Random(configuration.source.random_seed)
+    retained_offset = configuration.source.random_seed % RETAINED_PLY_INTERVAL
     rows: list[EvaluationDatasetRow] = []
     source_games: list[EvaluationSourceGame] = []
     position_digests: set[str] = set()
@@ -231,6 +245,8 @@ def build_evaluation_dataset(
     engine: EnginePolicyProvider[PositionT],
     builder_source_revision: str,
 ) -> EvaluationDatasetManifest:
+    if not isinstance(configuration.source, EngineSelfPlayDatasetSource):
+        raise ValueError('Engine self-play dataset builder requires an engine-self-play source.')
     manifest_path = dataset_manifest_path(path)
     existing = _load_existing_dataset(path, manifest_path, configuration, state, engine)
     if existing is not None:
@@ -248,8 +264,8 @@ def build_evaluation_dataset(
         position_count=len(resolved_rows),
         source_games=source_games,
         retained_ply_offset=retained_offset,
-        random_seed=configuration.random_seed,
-        move_sampling_temperature=configuration.move_sampling_temperature,
+        random_seed=configuration.source.random_seed,
+        move_sampling_temperature=configuration.source.move_sampling_temperature,
         engine_identity=engine.engine_identity,
         engine_artifact_sha256=engine.engine_artifact_sha256,
         label_search_limit=engine.label_search_limit,
@@ -263,9 +279,111 @@ def build_evaluation_dataset(
     return manifest
 
 
+def build_katago_book_evaluation_dataset(
+    path: Path,
+    export_path: Path,
+    configuration: EvaluationDatasetConfiguration,
+    state: GameStateContract[PositionT],
+    engine: EnginePolicyProvider[PositionT],
+    builder_source_revision: str,
+) -> KataGoBookDatasetManifest:
+    if configuration.source.kind != 'katago_book':
+        raise ValueError('KataGo book dataset builder requires a book source.')
+    selection_digest = selection_sha256(configuration.source.selection)
+    manifest_path = dataset_manifest_path(path)
+    if path.exists() or manifest_path.exists():
+        if not path.exists() or not manifest_path.exists():
+            raise ValueError('Evaluation dataset data and manifest must either both exist or both be absent.')
+        manifest = KataGoBookDatasetManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
+        expected = (
+            _file_sha256(path) == manifest.data_sha256
+            and manifest.rules_digest == engine.rules_digest
+            and manifest.representation_digest == engine.representation_digest
+            and manifest.engine_identity == engine.engine_identity
+            and manifest.engine_artifact_sha256 == engine.engine_artifact_sha256
+            and manifest.label_search_limit == engine.label_search_limit
+            and manifest.book_export_sha256 == configuration.source.selection.export_sha256
+            and manifest.book_selection_sha256 == selection_digest
+            and manifest.position_count == configuration.source.position_count
+        )
+        if not expected:
+            raise ValueError('Existing book evaluation dataset does not match its configured immutable provenance.')
+        return manifest
+
+    export = load_katago_book_export(export_path, configuration.source.selection.export_sha256)
+    selected = select_katago_book_positions(
+        export,
+        configuration.source.selection,
+        configuration.source.position_count,
+    )
+    rows: list[EvaluationDatasetRow] = []
+    source_games: list[EvaluationSourceGame] = []
+    position_digests: set[str] = set()
+    for source_game_id, book_position in enumerate(selected):
+        position = state.initial_position()
+        for action_id in book_position.action_ids:
+            if action_id not in state.legal_action_ids(position):
+                raise ValueError(f'KataGo book path contains illegal action {action_id}.')
+            position = state.child_position(position, action_id)
+        if state.natural_terminal_wdl(position) is not None:
+            raise ValueError('KataGo book dataset path ends at a natural terminal position.')
+        legal_actions = state.legal_action_ids(position)
+        if book_position.preferred_action_id not in legal_actions:
+            raise ValueError('KataGo book preferred action is illegal under the configured game rules.')
+        digest = _position_digest(state, position)
+        if digest in position_digests:
+            raise ValueError('KataGo book selection produced duplicate native dataset positions.')
+        position_digests.add(digest)
+        policy = validate_engine_policy(engine.policy(position, book_position.action_ids), legal_actions)
+        ordered_entries = tuple(sorted(policy.entries, key=lambda entry: (-entry.probability, entry.action_id)))
+        rows.append(
+            EvaluationDatasetRow(
+                packed_state=state.encode_network_input(position).payload,
+                action_ids=tuple(entry.action_id for entry in ordered_entries),
+                probabilities=tuple(entry.probability for entry in ordered_entries),
+                top_action_id=book_position.preferred_action_id,
+                source_game_id=source_game_id,
+                ply=len(book_position.action_ids),
+            )
+        )
+        source_games.append(
+            EvaluationSourceGame(
+                source_game_id=source_game_id,
+                action_ids=book_position.action_ids,
+                human_readable=engine.render_game(book_position.action_ids),
+            )
+        )
+    maximum_policy_entries = max(len(row.action_ids) for row in rows)
+    if maximum_policy_entries > 255:
+        raise ValueError('Evaluation dataset sparse policies cannot exceed 255 entries.')
+    dtype = _dataset_dtype(state.packed_plane_layout.payload_bytes, maximum_policy_entries)
+    resolved_rows = tuple(rows)
+    _write_dataset(path, resolved_rows, dtype)
+    manifest = KataGoBookDatasetManifest(
+        rules_digest=engine.rules_digest,
+        representation_digest=engine.representation_digest,
+        position_count=len(resolved_rows),
+        source_games=tuple(source_games),
+        engine_identity=engine.engine_identity,
+        engine_artifact_sha256=engine.engine_artifact_sha256,
+        label_search_limit=engine.label_search_limit,
+        maximum_policy_entries=maximum_policy_entries,
+        packed_payload_bytes=state.packed_plane_layout.payload_bytes,
+        row_layout_digest=_layout_digest(dtype),
+        data_sha256=_file_sha256(path),
+        book_export_sha256=configuration.source.selection.export_sha256,
+        book_selection_sha256=selection_digest,
+        book_source_root_url=export.source_root_url,
+        book_source_updated_on=export.source_updated_on,
+        builder_source_revision=builder_source_revision,
+    )
+    write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')
+    return manifest
+
+
 def load_evaluation_dataset(
     path: Path,
-    manifest: EvaluationDatasetManifest,
+    manifest: AnyEvaluationDatasetManifest,
 ) -> npt.NDArray[np.void]:
     dtype = _dataset_dtype(manifest.packed_payload_bytes, manifest.maximum_policy_entries)
     if _layout_digest(dtype) != manifest.row_layout_digest:
@@ -286,7 +404,7 @@ def evaluate_fixed_dataset(
     if batch_size <= 0:
         raise ValueError('Evaluation dataset batch size must be positive.')
     started_at = time.monotonic()
-    manifest = EvaluationDatasetManifest.model_validate_json(
+    manifest = EVALUATION_DATASET_MANIFEST_ADAPTER.validate_json(
         dataset_manifest_path(dataset_path).read_text(encoding='utf-8')
     )
     data = load_evaluation_dataset(dataset_path, manifest)

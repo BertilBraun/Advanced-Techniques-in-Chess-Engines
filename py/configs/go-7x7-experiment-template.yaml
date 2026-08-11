@@ -38,8 +38,8 @@ evaluation:
   shutdown_grace_seconds: 30
   bootstrap_samples: 10000
   maximum_concurrent_jobs: 10
-  dataset: {path: py/reference/go-7x7-evaluation-v1.bin, random_seed: 0, move_sampling_temperature: 1.0}
-  openings: {path: py/reference/go-7x7-openings-v1.json, random_seed: 0, opening_count: 50, expanded_actions_per_position: 8, beam_width: 512}
+  dataset: {path: py/reference/go-7x7-evaluation-v1.bin, source: {kind: engine_self_play, random_seed: 0, move_sampling_temperature: 1.0}}
+  openings: {path: py/reference/go-7x7-openings-v1.json, opening_count: 50, source: {kind: engine_beam, random_seed: 0, expanded_actions_per_position: 8, beam_width: 512}}
   engine: {kind: katago, executable_path: engines/katago, model_path: engines/katago.bin.gz, analysis_configuration_path: engines/katago-analysis.cfg, label_max_visits: 256}
   definitions:
     - kind: fixed_dataset

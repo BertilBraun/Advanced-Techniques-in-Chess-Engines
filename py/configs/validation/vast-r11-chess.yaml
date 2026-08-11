@@ -90,14 +90,11 @@ evaluation:
   bootstrap_samples: 100
   dataset:
     path: py/reference/vast-r11-chess-evaluation-v1.bin
-    random_seed: 1111
-    move_sampling_temperature: 1.0
+    source: {kind: engine_self_play, random_seed: 1111, move_sampling_temperature: 1.0}
   openings:
     path: py/reference/vast-r11-chess-openings-v1.json
-    random_seed: 1111
     opening_count: 1
-    expanded_actions_per_position: 3
-    beam_width: 81
+    source: {kind: engine_beam, random_seed: 1111, expanded_actions_per_position: 3, beam_width: 81}
   engine:
     kind: stockfish
     executable_path: engines/stockfish

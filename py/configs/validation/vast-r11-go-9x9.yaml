@@ -90,14 +90,11 @@ evaluation:
   bootstrap_samples: 100
   dataset:
     path: py/reference/vast-r11-go-9x9-evaluation-v2.bin
-    random_seed: 1109
-    move_sampling_temperature: 2.0
+    source: {kind: engine_self_play, random_seed: 1109, move_sampling_temperature: 2.0}
   openings:
     path: py/reference/vast-r11-go-9x9-openings-v2.json
-    random_seed: 1109
     opening_count: 1
-    expanded_actions_per_position: 3
-    beam_width: 81
+    source: {kind: engine_beam, random_seed: 1109, expanded_actions_per_position: 3, beam_width: 81}
   engine:
     kind: katago
     executable_path: engines/katago

@@ -147,6 +147,35 @@ nodes do not repeat the expensive engine preparation. New versions are generated
 and replace the previous checked-in version. Other generated reference artifacts remain outside Git unless explicitly
 promoted in the same way. There is intentionally no install-time or implicit global dataset cache.
 
+### KataGo 9x9 book inputs
+
+The 9x9 evaluation path may use a checked-in compact export from the official
+[KataGo 9x9 Tromp-Taylor, komi-7 book](https://katagobooks.org/book9x9tt/root/root.html). Generate that export only
+through `py/fetch_katago_book_export.py`, with explicit depth and page bounds. The export records the official book
+date and the URL and SHA-256 of every fetched page; experiment configuration pins the complete export SHA-256.
+Artifact preparation performs no network access.
+
+Book positions are filtered by ply, Black score, Black win probability, uncertainty, and visits, then selected
+deterministically across root variations and ply depths. Every path is replayed through the configured native game
+before use. Each resolved export record keeps one exact fetched URL, symmetry, and action path together so a
+transposed node cannot combine one path with a preferred move transformed under another orientation. The published
+book uses positional-superko Tromp-Taylor rules while the current native game uses simple
+ko with area scoring. The bounded early paths are accepted only when legal under the native rules; the manifest
+records both rule identities and must not be described as supporting arbitrary deep Tromp-Taylor transpositions.
+
+Opening manifests retain the selected path and book balance evidence. For the fixed dataset, top-action accuracy
+uses the book's first-ranked move. Policy cross-entropy uses a fresh searched policy from the configured pinned
+KataGo analysis engine at `label_max_visits`. Raw book prior `p` and cumulative `v`/`av` fields are not policy
+targets. The checked-in 7x7 v2 artifacts keep their original engine-generated provenance and are never regenerated
+or rewritten by this path.
+
+The current balance-prioritized 1,000-page export contains 791 resolved positions across plies 1 through 12. Its
+200-opening suite is selected from 333 plies-4-through-12 candidates within one point and ten percentage points of
+50% Black win probability, under tighter uncertainty bounds. The selected suite spans eight root variations and
+every ply from 4 through 12; its maximum Black win-probability deviation is 1.77 percentage points and maximum
+absolute Black score is 0.52 points. The 500-row policy-only dataset uses a wider filter because its metrics do not
+play games or consume position values; it still selects the best-balanced eligible rows first.
+
 ## Licensing and redistribution
 
 - Stockfish is GPLv3. Running it locally imposes no source-distribution step, but redistributing its binary requires

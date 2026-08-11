@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from datetime import date
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import Field, model_validator
+from pydantic import Field, TypeAdapter, model_validator
 
 from src.evaluation.configuration import (
     FixedDatasetEvaluationDefinition,
@@ -41,6 +42,38 @@ class EvaluationDatasetManifest(FrozenModel):
     builder_source_revision: str = Field(min_length=1)
 
 
+class KataGoBookDatasetManifest(FrozenModel):
+    schema_version: Literal[2] = 2
+    game: Literal['go'] = 'go'
+    rules_digest: str = Field(min_length=64, max_length=64)
+    representation_digest: str = Field(min_length=64, max_length=64)
+    position_count: int = Field(ge=480, le=520)
+    source_games: tuple[EvaluationSourceGame, ...] = Field(min_length=1)
+    engine_identity: str = Field(min_length=1)
+    engine_artifact_sha256: tuple[str, ...]
+    label_search_limit: int = Field(gt=0)
+    maximum_policy_entries: int = Field(gt=0, le=255)
+    packed_payload_bytes: int = Field(gt=0)
+    row_layout_digest: str = Field(min_length=64, max_length=64)
+    data_sha256: str = Field(min_length=64, max_length=64)
+    book_export_sha256: str = Field(min_length=64, max_length=64)
+    book_selection_sha256: str = Field(min_length=64, max_length=64)
+    book_source_root_url: str = Field(min_length=1)
+    book_source_updated_on: date
+    book_rules: Literal['tromp-taylor'] = 'tromp-taylor'
+    book_komi_half_points: Literal[14] = 14
+    repository_ko_rule: Literal['simple'] = 'simple'
+    top_action_source: Literal['katago_book_preference'] = 'katago_book_preference'
+    soft_policy_source: Literal['configured_katago_reanalysis'] = 'configured_katago_reanalysis'
+    builder_source_revision: str = Field(min_length=1)
+
+
+AnyEvaluationDatasetManifest: TypeAlias = EvaluationDatasetManifest | KataGoBookDatasetManifest
+EVALUATION_DATASET_MANIFEST_ADAPTER = TypeAdapter(
+    Annotated[AnyEvaluationDatasetManifest, Field(discriminator='schema_version')]
+)
+
+
 class OpeningLine(FrozenModel):
     opening_id: str = Field(min_length=1)
     action_ids: tuple[int, ...] = Field(min_length=4, max_length=4)
@@ -62,6 +95,40 @@ class OpeningSuiteManifest(FrozenModel):
     beam_width: int = Field(gt=0)
     openings: tuple[OpeningLine, ...] = Field(min_length=1)
     builder_source_revision: str = Field(min_length=1)
+
+
+class KataGoBookOpeningLine(FrozenModel):
+    opening_id: str = Field(min_length=1)
+    action_ids: tuple[int, ...] = Field(min_length=1)
+    path_probability: float = Field(ge=0.0, le=1.0)
+    final_position_digest: str = Field(min_length=64, max_length=64)
+    human_readable: str = Field(min_length=1)
+    book_node_id: str = Field(min_length=1)
+    black_win_probability: float = Field(ge=0.0, le=1.0)
+    black_score: float
+    win_probability_uncertainty: float = Field(ge=0.0, le=0.5)
+    score_uncertainty: float = Field(ge=0.0)
+    book_visits: int = Field(gt=0)
+
+
+class KataGoBookOpeningSuiteManifest(FrozenModel):
+    schema_version: Literal[2] = 2
+    game: Literal['go'] = 'go'
+    rules_digest: str = Field(min_length=64, max_length=64)
+    representation_digest: str = Field(min_length=64, max_length=64)
+    book_export_sha256: str = Field(min_length=64, max_length=64)
+    book_selection_sha256: str = Field(min_length=64, max_length=64)
+    book_source_root_url: str = Field(min_length=1)
+    book_source_updated_on: date
+    book_rules: Literal['tromp-taylor'] = 'tromp-taylor'
+    book_komi_half_points: Literal[14] = 14
+    repository_ko_rule: Literal['simple'] = 'simple'
+    openings: tuple[KataGoBookOpeningLine, ...] = Field(min_length=1)
+    builder_source_revision: str = Field(min_length=1)
+
+
+AnyOpeningSuiteManifest: TypeAlias = OpeningSuiteManifest | KataGoBookOpeningSuiteManifest
+OPENING_SUITE_MANIFEST_ADAPTER = TypeAdapter(Annotated[AnyOpeningSuiteManifest, Field(discriminator='schema_version')])
 
 
 class ElapsedCheckpointReference(FrozenModel):

@@ -21,7 +21,7 @@ from src.evaluation.contracts import (
     EvaluationTerminationReason,
     MatchEvaluationJob,
     MatchEvaluationResult,
-    OpeningSuiteManifest,
+    AnyOpeningSuiteManifest,
 )
 from src.evaluation.inference import PolicyActionSelector
 from src.evaluation.statistics import aggregate_match
@@ -108,7 +108,7 @@ def _maximum_game_plies(job: MatchEvaluationJob) -> int:
 
 def _build_matches(
     state: GameStateContract[PositionT],
-    openings: OpeningSuiteManifest,
+    openings: AnyOpeningSuiteManifest,
     opening_pair_count: int,
     random_seed: int,
 ) -> list[_ActiveMatch[PositionT]]:
@@ -315,7 +315,7 @@ def _advance_matches(
 def run_match(
     job: MatchEvaluationJob,
     game: GameImplementation[PositionT, NativeSearchT],
-    openings: OpeningSuiteManifest,
+    openings: AnyOpeningSuiteManifest,
     bootstrap_samples: int,
     external_engine: ExternalMatchEngine[PositionT] | None,
     device_type: Literal['cpu', 'cuda'],

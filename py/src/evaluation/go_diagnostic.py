@@ -15,7 +15,7 @@ from src.evaluation.contracts import (
     EvaluationGameResult,
     EvaluationTerminationReason,
     MatchAggregate,
-    OpeningSuiteManifest,
+    AnyOpeningSuiteManifest,
 )
 from src.evaluation.match import SearchActionSelector
 from src.evaluation.statistics import aggregate_match
@@ -215,7 +215,7 @@ class _CompletedDiagnosticGame:
 
 def _build_games(
     state: GoStateContract,
-    openings: OpeningSuiteManifest,
+    openings: AnyOpeningSuiteManifest,
     opening_count: int,
     random_seed: int,
 ) -> list[_ActiveDiagnosticGame]:
@@ -381,7 +381,7 @@ def _final_estimates(
 def run_go_diagnostic_match(
     diagnostic_id: str,
     state: GoStateContract,
-    openings: OpeningSuiteManifest,
+    openings: AnyOpeningSuiteManifest,
     opening_count: int,
     measured: DiagnosticActionSelector,
     opponent: DiagnosticActionSelector,

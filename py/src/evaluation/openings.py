@@ -6,9 +6,19 @@ from math import exp, log
 from pathlib import Path
 from typing import Generic, TypeVar
 
-from src.evaluation.configuration import OpeningSuiteConfiguration
-from src.evaluation.contracts import OpeningLine, OpeningSuiteManifest
+from src.evaluation.configuration import EngineBeamOpeningSource, OpeningSuiteConfiguration
+from src.evaluation.contracts import (
+    KataGoBookOpeningLine,
+    KataGoBookOpeningSuiteManifest,
+    OpeningLine,
+    OpeningSuiteManifest,
+)
 from src.evaluation.engine import EnginePolicyProvider, validate_engine_policy
+from src.evaluation.katago_book import (
+    load_katago_book_export,
+    select_katago_book_positions,
+    selection_sha256,
+)
 from src.games.contracts import GameStateContract
 from src.util.atomic_file import write_text_atomically
 
@@ -40,12 +50,12 @@ def _load_existing_opening_suite(
         manifest.game == engine.game_name
         and manifest.rules_digest == engine.rules_digest
         and manifest.representation_digest == engine.representation_digest
-        and manifest.random_seed == configuration.random_seed
+        and manifest.random_seed == configuration.source.random_seed
         and manifest.engine_identity == engine.engine_identity
         and manifest.engine_artifact_sha256 == engine.engine_artifact_sha256
         and manifest.label_search_limit == engine.label_search_limit
-        and manifest.expanded_actions_per_position == configuration.expanded_actions_per_position
-        and manifest.beam_width == configuration.beam_width
+        and manifest.expanded_actions_per_position == configuration.source.expanded_actions_per_position
+        and manifest.beam_width == configuration.source.beam_width
         and len(manifest.openings) == configuration.opening_count
     )
     if not expected:
@@ -66,7 +76,7 @@ def _expand_frontier(
         expanded_entries = sorted(
             policy.entries,
             key=lambda entry: (-entry.probability, entry.action_id),
-        )[: configuration.expanded_actions_per_position]
+        )[: configuration.source.expanded_actions_per_position]
         for entry in expanded_entries:
             child = state.child_position(candidate.position, entry.action_id)
             if state.natural_terminal_wdl(child) is not None:
@@ -88,7 +98,7 @@ def _expand_frontier(
         sorted(
             candidates_by_position.values(),
             key=lambda candidate: (-candidate.log_probability, candidate.action_ids),
-        )[: configuration.beam_width]
+        )[: configuration.source.beam_width]
     )
 
 
@@ -120,6 +130,8 @@ def build_opening_suite(
     engine: EnginePolicyProvider[PositionT],
     builder_source_revision: str,
 ) -> OpeningSuiteManifest:
+    if not isinstance(configuration.source, EngineBeamOpeningSource):
+        raise ValueError('Engine-guided opening builder requires an engine-beam source.')
     existing = _load_existing_opening_suite(path, configuration, engine)
     if existing is not None:
         return existing
@@ -133,13 +145,82 @@ def build_opening_suite(
         game=engine.game_name,
         rules_digest=engine.rules_digest,
         representation_digest=engine.representation_digest,
-        random_seed=configuration.random_seed,
+        random_seed=configuration.source.random_seed,
         engine_identity=engine.engine_identity,
         engine_artifact_sha256=engine.engine_artifact_sha256,
         label_search_limit=engine.label_search_limit,
-        expanded_actions_per_position=configuration.expanded_actions_per_position,
-        beam_width=configuration.beam_width,
+        expanded_actions_per_position=configuration.source.expanded_actions_per_position,
+        beam_width=configuration.source.beam_width,
         openings=openings,
+        builder_source_revision=builder_source_revision,
+    )
+    write_text_atomically(path, manifest.model_dump_json(indent=2) + '\n')
+    return manifest
+
+
+def build_katago_book_opening_suite(
+    path: Path,
+    export_path: Path,
+    configuration: OpeningSuiteConfiguration,
+    state: GameStateContract[PositionT],
+    engine: EnginePolicyProvider[PositionT],
+    builder_source_revision: str,
+) -> KataGoBookOpeningSuiteManifest:
+    if configuration.source.kind != 'katago_book':
+        raise ValueError('KataGo book opening builder requires a book source.')
+    selection_digest = selection_sha256(configuration.source.selection)
+    if path.exists():
+        manifest = KataGoBookOpeningSuiteManifest.model_validate_json(path.read_text(encoding='utf-8'))
+        expected = (
+            manifest.rules_digest == engine.rules_digest
+            and manifest.representation_digest == engine.representation_digest
+            and manifest.book_export_sha256 == configuration.source.selection.export_sha256
+            and manifest.book_selection_sha256 == selection_digest
+            and len(manifest.openings) == configuration.opening_count
+        )
+        if not expected:
+            raise ValueError('Existing book opening suite does not match its configured immutable provenance.')
+        return manifest
+
+    export = load_katago_book_export(export_path, configuration.source.selection.export_sha256)
+    selected = select_katago_book_positions(export, configuration.source.selection, configuration.opening_count)
+    openings: list[KataGoBookOpeningLine] = []
+    position_digests: set[str] = set()
+    for position_index, book_position in enumerate(selected):
+        position = state.initial_position()
+        for action_id in book_position.action_ids:
+            if action_id not in state.legal_action_ids(position):
+                raise ValueError(f'KataGo book path contains illegal action {action_id}.')
+            position = state.child_position(position, action_id)
+        if state.natural_terminal_wdl(position) is not None:
+            raise ValueError('KataGo book opening ends at a natural terminal position.')
+        digest = _position_digest(state, position)
+        if digest in position_digests:
+            raise ValueError('KataGo book selection produced duplicate native positions.')
+        position_digests.add(digest)
+        openings.append(
+            KataGoBookOpeningLine(
+                opening_id=f'opening-{position_index:03d}',
+                action_ids=book_position.action_ids,
+                path_probability=book_position.path_probability,
+                final_position_digest=digest,
+                human_readable=engine.render_game(book_position.action_ids),
+                book_node_id=book_position.node_id,
+                black_win_probability=book_position.black_win_probability,
+                black_score=book_position.black_score,
+                win_probability_uncertainty=book_position.win_probability_uncertainty,
+                score_uncertainty=book_position.score_uncertainty,
+                book_visits=book_position.visits,
+            )
+        )
+    manifest = KataGoBookOpeningSuiteManifest(
+        rules_digest=engine.rules_digest,
+        representation_digest=engine.representation_digest,
+        book_export_sha256=configuration.source.selection.export_sha256,
+        book_selection_sha256=selection_digest,
+        book_source_root_url=export.source_root_url,
+        book_source_updated_on=export.source_updated_on,
+        openings=tuple(openings),
         builder_source_revision=builder_source_revision,
     )
     write_text_atomically(path, manifest.model_dump_json(indent=2) + '\n')

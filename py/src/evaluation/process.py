@@ -16,7 +16,7 @@ from src.evaluation.contracts import (
     FailedEvaluationResult,
     FixedDatasetEvaluationJob,
     MatchEvaluationJob,
-    OpeningSuiteManifest,
+    OPENING_SUITE_MANIFEST_ADAPTER,
 )
 from src.experiment.configuration import ExperimentConfiguration
 from src.util.atomic_file import write_text_atomically
@@ -73,7 +73,7 @@ def run_evaluation_job(experiment: ExperimentConfiguration, job: EvaluationJob) 
             case MatchEvaluationJob():
                 from src.evaluation.match import run_match
 
-                openings = OpeningSuiteManifest.model_validate_json(
+                openings = OPENING_SUITE_MANIFEST_ADAPTER.validate_json(
                     resolve_project_path(experiment.evaluation.openings.path).read_text(encoding='utf-8')
                 )
                 external_engine = _create_external_match_engine(experiment, job, game)

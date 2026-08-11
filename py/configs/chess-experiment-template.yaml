@@ -97,14 +97,11 @@ evaluation:
   maximum_concurrent_jobs: 10
   dataset:
     path: py/reference/chess-evaluation-v1.bin
-    random_seed: 0
-    move_sampling_temperature: 1.0
+    source: {kind: engine_self_play, random_seed: 0, move_sampling_temperature: 1.0}
   openings:
     path: py/reference/chess-openings-v1.json
-    random_seed: 0
     opening_count: 50
-    expanded_actions_per_position: 8
-    beam_width: 512
+    source: {kind: engine_beam, random_seed: 0, expanded_actions_per_position: 8, beam_width: 512}
   engine:
     kind: stockfish
     executable_path: engines/stockfish

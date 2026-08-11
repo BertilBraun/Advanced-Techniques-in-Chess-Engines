@@ -3,9 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.evaluation.dataset import build_evaluation_dataset, dataset_manifest_path
-from src.evaluation.openings import build_opening_suite
-from src.evaluation.contracts import EvaluationDatasetManifest, OpeningSuiteManifest
+from src.evaluation.dataset import (
+    build_evaluation_dataset,
+    build_katago_book_evaluation_dataset,
+    dataset_manifest_path,
+)
+from src.evaluation.openings import build_katago_book_opening_suite, build_opening_suite
+from src.evaluation.contracts import AnyEvaluationDatasetManifest, AnyOpeningSuiteManifest
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.stockfish import StockfishClient
@@ -20,9 +24,9 @@ from src.games.go.training import GoImplementation
 class PreparedEvaluationArtifacts:
     dataset_path: Path
     dataset_manifest_path: Path
-    dataset_manifest: EvaluationDatasetManifest
+    dataset_manifest: AnyEvaluationDatasetManifest
     opening_manifest_path: Path
-    opening_manifest: OpeningSuiteManifest
+    opening_manifest: AnyOpeningSuiteManifest
 
 
 def _resolve_source_path(source_root: Path, configured_path: str) -> Path:
@@ -61,20 +65,42 @@ def prepare_evaluation_artifacts(
         case _:
             raise ValueError('Experiment and game implementations do not match.')
     try:
-        opening_manifest = build_opening_suite(
-            opening_path,
-            evaluation.openings,
-            game.state,
-            engine,
-            source_revision,
-        )
-        dataset_manifest = build_evaluation_dataset(
-            dataset_path,
-            evaluation.dataset,
-            game.state,
-            engine,
-            source_revision,
-        )
+        match evaluation.openings.source:
+            case source if source.kind == 'engine_beam':
+                opening_manifest = build_opening_suite(
+                    opening_path,
+                    evaluation.openings,
+                    game.state,
+                    engine,
+                    source_revision,
+                )
+            case source:
+                opening_manifest = build_katago_book_opening_suite(
+                    opening_path,
+                    _resolve_source_path(source_root, source.selection.export_path),
+                    evaluation.openings,
+                    game.state,
+                    engine,
+                    source_revision,
+                )
+        match evaluation.dataset.source:
+            case source if source.kind == 'engine_self_play':
+                dataset_manifest = build_evaluation_dataset(
+                    dataset_path,
+                    evaluation.dataset,
+                    game.state,
+                    engine,
+                    source_revision,
+                )
+            case source:
+                dataset_manifest = build_katago_book_evaluation_dataset(
+                    dataset_path,
+                    _resolve_source_path(source_root, source.selection.export_path),
+                    evaluation.dataset,
+                    game.state,
+                    engine,
+                    source_revision,
+                )
     finally:
         engine.close()
     return PreparedEvaluationArtifacts(

@@ -38,8 +38,36 @@ evaluation:
   shutdown_grace_seconds: 30
   bootstrap_samples: 10000
   maximum_concurrent_jobs: 10
-  dataset: {path: py/reference/go-9x9-evaluation-v1.bin, random_seed: 0, move_sampling_temperature: 1.0}
-  openings: {path: py/reference/go-9x9-openings-v1.json, random_seed: 0, opening_count: 50, expanded_actions_per_position: 8, beam_width: 512}
+  dataset:
+    path: py/reference/go-9x9-book-evaluation-v1.bin
+    source:
+      kind: katago_book
+      position_count: 500
+      selection:
+        export_path: py/reference/go-9x9-katago-book-20260226-v1.json
+        export_sha256: 784c88115230fb16bdd295b19dac6a817a3af331bb196e389126be4238bacbd2
+        minimum_ply: 4
+        maximum_ply: 12
+        maximum_absolute_black_score: 7.0
+        maximum_black_win_probability_deviation: 0.5
+        maximum_win_probability_uncertainty: 0.3
+        maximum_score_uncertainty: 6.0
+        minimum_visits: 10000
+  openings:
+    path: py/reference/go-9x9-book-openings-v1.json
+    opening_count: 200
+    source:
+      kind: katago_book
+      selection:
+        export_path: py/reference/go-9x9-katago-book-20260226-v1.json
+        export_sha256: 784c88115230fb16bdd295b19dac6a817a3af331bb196e389126be4238bacbd2
+        minimum_ply: 4
+        maximum_ply: 12
+        maximum_absolute_black_score: 1.0
+        maximum_black_win_probability_deviation: 0.1
+        maximum_win_probability_uncertainty: 0.15
+        maximum_score_uncertainty: 1.5
+        minimum_visits: 10000
   engine: {kind: katago, executable_path: engines/katago, model_path: engines/katago.bin.gz, analysis_configuration_path: engines/katago-analysis.cfg, label_max_visits: 256}
   definitions:
     - kind: fixed_dataset
@@ -47,6 +75,7 @@ evaluation:
     - kind: previous_checkpoint
       definition_id: previous-20m
       boundary_offset: 1
+      opening_pair_count: 200
       maximum_game_plies: 324
       search: &evaluation_search
         searches_per_move: 96
@@ -59,16 +88,19 @@ evaluation:
     - kind: previous_checkpoint
       definition_id: previous-40m
       boundary_offset: 2
+      opening_pair_count: 200
       maximum_game_plies: 324
       search: *evaluation_search
     - kind: previous_checkpoint
       definition_id: previous-60m
       boundary_offset: 3
+      opening_pair_count: 200
       maximum_game_plies: 324
       search: *evaluation_search
     - kind: katago
       definition_id: katago-64
       maximum_visits: 64
+      opening_pair_count: 50
       maximum_game_plies: 324
       search: *evaluation_search
 go:
@@ -82,6 +114,6 @@ go:
     starting_temperature: {kind: constant, value: 1.0}
     final_temperature: {kind: constant, value: 0.1}
     primary_sample_weight: {kind: constant, value: 1.0}
-  rules: {komi_half_points: 15, maximum_moves: 324}
+  rules: {komi_half_points: 14, maximum_moves: 324}
   representation: {board_size: 9, history_length: 8, binary_channel_count: 16, scalar_channel_count: 1, canonical_player_perspective: true}
   objective: {policy_loss_weight: {kind: constant, value: 1.0}, value_loss_weight: {kind: constant, value: 1.0}, root_value_blend: {kind: constant, value: 0.0}, auxiliary_targets: []}

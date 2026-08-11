@@ -166,6 +166,17 @@ python py/prepare_evaluation_artifacts.py --run-config <experiment-yaml>
 Existing artifacts are reused only when their complete engine, rules, representation, search-limit, and generation
 provenance matches the configuration.
 
+For a bounded official 9x9 KataGo-book export, run from `py`:
+
+```text
+python fetch_katago_book_export.py --output reference/go-9x9-katago-book-20260226-v1.json --maximum-depth 12 --maximum-pages 1000
+```
+
+Review the recorded page URLs/hashes and pin the printed export SHA-256 in both 9x9 book source configurations.
+The opening suite selects balanced, diverse book paths. The fixed dataset uses the book-preferred move for
+top-action accuracy and the configured KataGo engine's searched policy for cross-entropy. Normal artifact
+preparation is offline and never refetches the book.
+
 The run command exits zero only when every experiment completed successfully and exits one when any experiment
 failed. On `SIGINT` or `SIGTERM`, it sends `SIGTERM` to each active process group, waits the configured grace period,
 forcibly kills any remaining tracked descendants, and records failures before exiting. Completed and failed entries

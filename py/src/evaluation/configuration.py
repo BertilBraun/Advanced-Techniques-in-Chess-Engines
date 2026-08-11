@@ -21,22 +21,73 @@ class EvaluationSearchConfiguration(FrozenModel):
         return self
 
 
-class EvaluationDatasetConfiguration(FrozenModel):
-    path: str = Field(min_length=1)
+class EngineSelfPlayDatasetSource(FrozenModel):
+    kind: Literal['engine_self_play']
     random_seed: int = Field(ge=0)
     move_sampling_temperature: float = Field(gt=0.0)
 
 
-class OpeningSuiteConfiguration(FrozenModel):
+class KataGoBookSelectionConfiguration(FrozenModel):
+    export_path: str = Field(min_length=1)
+    export_sha256: str = Field(min_length=64, max_length=64)
+    minimum_ply: int = Field(ge=1)
+    maximum_ply: int = Field(gt=1)
+    maximum_absolute_black_score: float = Field(gt=0.0)
+    maximum_black_win_probability_deviation: float = Field(gt=0.0, le=0.5)
+    maximum_win_probability_uncertainty: float = Field(gt=0.0, le=0.5)
+    maximum_score_uncertainty: float = Field(gt=0.0)
+    minimum_visits: int = Field(gt=0)
+
+    @model_validator(mode='after')
+    def validate_ply_range(self) -> KataGoBookSelectionConfiguration:
+        if self.maximum_ply < self.minimum_ply:
+            raise ValueError('KataGo book maximum ply must not precede minimum ply.')
+        return self
+
+
+class KataGoBookDatasetSource(FrozenModel):
+    kind: Literal['katago_book']
+    position_count: int = Field(ge=480, le=520)
+    selection: KataGoBookSelectionConfiguration
+
+
+EvaluationDatasetSource: TypeAlias = Annotated[
+    EngineSelfPlayDatasetSource | KataGoBookDatasetSource,
+    Field(discriminator='kind'),
+]
+
+
+class EvaluationDatasetConfiguration(FrozenModel):
     path: str = Field(min_length=1)
+    source: EvaluationDatasetSource
+
+
+class EngineBeamOpeningSource(FrozenModel):
+    kind: Literal['engine_beam']
     random_seed: int = Field(ge=0)
-    opening_count: int = Field(default=50, gt=0)
     expanded_actions_per_position: int = Field(default=8, gt=0)
     beam_width: int = Field(default=512, gt=0)
 
+
+class KataGoBookOpeningSource(FrozenModel):
+    kind: Literal['katago_book']
+    selection: KataGoBookSelectionConfiguration
+
+
+OpeningSuiteSource: TypeAlias = Annotated[
+    EngineBeamOpeningSource | KataGoBookOpeningSource,
+    Field(discriminator='kind'),
+]
+
+
+class OpeningSuiteConfiguration(FrozenModel):
+    path: str = Field(min_length=1)
+    opening_count: int = Field(default=50, gt=0)
+    source: OpeningSuiteSource
+
     @model_validator(mode='after')
     def validate_beam(self) -> OpeningSuiteConfiguration:
-        if self.beam_width < self.opening_count:
+        if self.source.kind == 'engine_beam' and self.source.beam_width < self.opening_count:
             raise ValueError('Opening beam width must cover every requested opening.')
         return self
 
