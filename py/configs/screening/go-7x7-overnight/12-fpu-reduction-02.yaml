@@ -7,4 +7,6 @@ training:
 go:
   self_play:
     search:
-      fpu_reduction: {kind: constant, value: 0.2}
+      first_play_urgency:
+        kind: reduced_parent_value
+        reduction: {kind: constant, value: 0.2}

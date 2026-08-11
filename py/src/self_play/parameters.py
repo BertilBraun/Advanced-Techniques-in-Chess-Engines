@@ -44,6 +44,33 @@ StartPositionParameters: TypeAlias = RandomOpeningStartParameters | RestartState
 
 
 @dataclass(frozen=True)
+class ZeroFirstPlayUrgencyParameters:
+    kind: Literal['zero'] = 'zero'
+
+
+@dataclass(frozen=True)
+class ParentValueFirstPlayUrgencyParameters:
+    kind: Literal['parent_value'] = 'parent_value'
+
+
+@dataclass(frozen=True)
+class ReducedParentValueFirstPlayUrgencyParameters:
+    reduction: float
+    kind: Literal['reduced_parent_value'] = 'reduced_parent_value'
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.reduction) or self.reduction <= 0.0:
+            raise ValueError('Reduced-parent FPU reduction must be finite and positive.')
+
+
+FirstPlayUrgencyParameters: TypeAlias = (
+    ZeroFirstPlayUrgencyParameters
+    | ParentValueFirstPlayUrgencyParameters
+    | ReducedParentValueFirstPlayUrgencyParameters
+)
+
+
+@dataclass(frozen=True)
 class ResolvedSelfPlayParameters:
     start_position: StartPositionParameters
     full_search_probability: float
@@ -52,7 +79,7 @@ class ResolvedSelfPlayParameters:
     fast_searches: int
     forced_playout_coefficient: float
     exploration_constant: float
-    fpu_reduction: float
+    first_play_urgency: FirstPlayUrgencyParameters
     dirichlet_alpha: float
     dirichlet_epsilon: float
     retained_root_visit_fraction: float
@@ -75,8 +102,6 @@ class ResolvedSelfPlayParameters:
             raise ValueError('Forced-playout coefficient must be finite and nonnegative.')
         if self.exploration_constant <= 0.0 or self.dirichlet_alpha <= 0.0:
             raise ValueError('Search constants must be positive.')
-        if not isfinite(self.fpu_reduction) or self.fpu_reduction < 0.0:
-            raise ValueError('FPU reduction must be finite and nonnegative.')
         if not 0.0 <= self.dirichlet_epsilon <= 1.0:
             raise ValueError('Dirichlet epsilon must lie in [0, 1].')
         if not 0.0 <= self.retained_root_visit_fraction <= 1.0:

@@ -23,30 +23,18 @@ struct SelfPlaySearchParameters {
     std::uint32_t parallel_searches;
     std::uint32_t full_searches;
     std::uint32_t fast_searches;
-    float exploration_constant;
-    float fpu_reduction;
+    TreeSearchParameters tree_search;
     float dirichlet_alpha;
     float dirichlet_epsilon;
-    float forced_playout_coefficient;
 
     SelfPlaySearchParameters(std::uint32_t parallelSearches, std::uint32_t fullSearches,
-                             std::uint32_t fastSearches, float explorationConstant,
-                             float fpuReduction, float dirichletAlpha, float dirichletEpsilon,
-                             float forcedPlayoutCoefficient)
+                             std::uint32_t fastSearches, TreeSearchParameters treeSearch,
+                             float dirichletAlpha, float dirichletEpsilon)
         : parallel_searches(parallelSearches), full_searches(fullSearches),
-          fast_searches(fastSearches), exploration_constant(explorationConstant),
-          fpu_reduction(fpuReduction), dirichlet_alpha(dirichletAlpha),
-          dirichlet_epsilon(dirichletEpsilon),
-          forced_playout_coefficient(forcedPlayoutCoefficient) {
+          fast_searches(fastSearches), tree_search(treeSearch), dirichlet_alpha(dirichletAlpha),
+          dirichlet_epsilon(dirichletEpsilon) {
         if (parallel_searches == 0 || full_searches == 0 || fast_searches == 0) {
             throw std::invalid_argument("Self-play search counts must be positive");
-        }
-        if (!std::isfinite(fpu_reduction) || fpu_reduction < 0.0F) {
-            throw std::invalid_argument("FPU reduction must be finite and nonnegative");
-        }
-        if (!std::isfinite(forced_playout_coefficient) || forced_playout_coefficient < 0.0F) {
-            throw std::invalid_argument(
-                "Forced-playout coefficient must be finite and nonnegative");
         }
     }
 
@@ -136,7 +124,8 @@ public:
                                                    : m_searchParameters.fast_searches,
                 .add_root_noise = request.full_search,
                 .force_root_playouts =
-                    request.full_search && m_searchParameters.forced_playout_coefficient > 0.0F,
+                    request.full_search &&
+                    m_searchParameters.tree_search.forced_playout_coefficient > 0.0F,
             });
         }
         GameSearchBatchResult searched = m_search->searchDetailed(engineRequests);
@@ -206,10 +195,8 @@ private:
 
     [[nodiscard]] static BatchedSearchParameters
     engineParameters(const SelfPlaySearchParameters &parameters) {
-        return {parameters.parallel_searches, parameters.exploration_constant,
-                parameters.fpu_reduction,     parameters.forced_playout_coefficient,
-                parameters.dirichlet_alpha,   parameters.dirichlet_epsilon,
-                parameters.arenaCapacity()};
+        return {parameters.parallel_searches, parameters.tree_search, parameters.dirichlet_alpha,
+                parameters.dirichlet_epsilon, parameters.arenaCapacity()};
     }
 
     [[nodiscard]] static SelfPlaySearchStatistics treeStatistics(const Root &root) {

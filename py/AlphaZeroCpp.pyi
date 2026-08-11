@@ -24,6 +24,8 @@ __all__ = [
     'GameSearchResult',
     'GameSearchVisit',
     'GameAnalysisResult',
+    'FirstPlayUrgencyKind',
+    'FirstPlayUrgencyParameters',
     'GoAreaScore',
     'GoAnalysis7',
     'GoAnalysis9',
@@ -47,6 +49,7 @@ __all__ = [
     'InferenceDevice',
     'InferenceConfiguration',
     'InferenceStatistics',
+    'TreeSearchParameters',
     'WdlPrediction',
     'encode_board_packed_bytes',
     'mirror_chess_action_id',
@@ -98,13 +101,32 @@ class BatchedSearchParameters:
     def __init__(
         self,
         parallel_searches: int,
-        exploration_constant: float,
-        fpu_reduction: float,
-        forced_playout_coefficient: float,
+        tree_search: TreeSearchParameters,
         dirichlet_alpha: float,
         dirichlet_epsilon: float,
         tree_capacity: int,
     ) -> None: ...
+
+class FirstPlayUrgencyKind:
+    ZERO: FirstPlayUrgencyKind
+    PARENT_VALUE: FirstPlayUrgencyKind
+    REDUCED_PARENT_VALUE: FirstPlayUrgencyKind
+
+class FirstPlayUrgencyParameters:
+    def __init__(self, kind: FirstPlayUrgencyKind, reduction: float = 0.0) -> None: ...
+    kind: FirstPlayUrgencyKind
+    reduction: float
+
+class TreeSearchParameters:
+    def __init__(
+        self,
+        exploration_constant: float,
+        first_play_urgency: FirstPlayUrgencyParameters,
+        forced_playout_coefficient: float,
+    ) -> None: ...
+    exploration_constant: float
+    first_play_urgency: FirstPlayUrgencyParameters
+    forced_playout_coefficient: float
 
 class BatchedInferenceParameters:
     def __init__(
@@ -556,24 +578,20 @@ class ChessSearchRoot:
     def position(self) -> ChessPosition: ...
 
 class SelfPlaySearchParameters:
-    exploration_constant: float
-    fpu_reduction: float
+    tree_search: TreeSearchParameters
     dirichlet_alpha: float
     dirichlet_epsilon: float
     fast_searches: int
     full_searches: int
-    forced_playout_coefficient: float
     parallel_searches: int
     def __init__(
         self,
         parallel_searches: int,
         full_searches: int,
         fast_searches: int,
-        exploration_constant: float,
-        fpu_reduction: float,
+        tree_search: TreeSearchParameters,
         dirichlet_alpha: float,
         dirichlet_epsilon: float,
-        forced_playout_coefficient: float,
     ) -> None: ...
 
 class ChessSelfPlaySearchResult:

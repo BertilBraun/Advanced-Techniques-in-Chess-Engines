@@ -19,6 +19,23 @@ void bind_search(py::module_ &module) {
         .value("CPU", InferenceDevice::Cpu)
         .value("CUDA", InferenceDevice::Cuda);
 
+    py::enum_<FirstPlayUrgencyKind>(module, "FirstPlayUrgencyKind")
+        .value("ZERO", FirstPlayUrgencyKind::Zero)
+        .value("PARENT_VALUE", FirstPlayUrgencyKind::ParentValue)
+        .value("REDUCED_PARENT_VALUE", FirstPlayUrgencyKind::ReducedParentValue);
+
+    py::class_<FirstPlayUrgencyParameters>(module, "FirstPlayUrgencyParameters")
+        .def(py::init<FirstPlayUrgencyKind, float>(), py::arg("kind"), py::arg("reduction") = 0.0F)
+        .def_readonly("kind", &FirstPlayUrgencyParameters::kind)
+        .def_readonly("reduction", &FirstPlayUrgencyParameters::reduction);
+    py::class_<TreeSearchParameters>(module, "TreeSearchParameters")
+        .def(py::init<float, FirstPlayUrgencyParameters, float>(), py::arg("exploration_constant"),
+             py::arg("first_play_urgency"), py::arg("forced_playout_coefficient"))
+        .def_readonly("exploration_constant", &TreeSearchParameters::exploration_constant)
+        .def_readonly("first_play_urgency", &TreeSearchParameters::first_play_urgency)
+        .def_readonly("forced_playout_coefficient",
+                      &TreeSearchParameters::forced_playout_coefficient);
+
     py::class_<InferenceConfiguration>(module, "InferenceConfiguration")
         .def(py::init<int, std::string, InferenceDevice>(), py::arg("device_id"),
              py::arg("model_path"), py::arg("device") = InferenceDevice::Auto)
@@ -69,10 +86,9 @@ void bind_search(py::module_ &module) {
         .def_readonly("visits", &GameSearchResult::visits)
         .def_readonly("policy_target_visits", &GameSearchResult::policy_target_visits);
     py::class_<BatchedSearchParameters>(module, "BatchedSearchParameters")
-        .def(py::init<std::uint32_t, float, float, float, float, float, std::size_t>(),
-             py::arg("parallel_searches"), py::arg("exploration_constant"),
-             py::arg("fpu_reduction"), py::arg("forced_playout_coefficient"),
-             py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"), py::arg("tree_capacity"));
+        .def(py::init<std::uint32_t, TreeSearchParameters, float, float, std::size_t>(),
+             py::arg("parallel_searches"), py::arg("tree_search"), py::arg("dirichlet_alpha"),
+             py::arg("dirichlet_epsilon"), py::arg("tree_capacity"));
     py::class_<BatchedInferenceParameters>(module, "BatchedInferenceParameters")
         .def(py::init<std::size_t, std::size_t, std::size_t>(), py::arg("workers"),
              py::arg("batch_size"), py::arg("outstanding_batches_per_worker"))
@@ -87,20 +103,16 @@ void bind_search(py::module_ &module) {
         .def_readonly("exploration_constant", &AnalysisParameters::exploration_constant)
         .def_readonly("inference", &AnalysisParameters::inference);
     py::class_<SelfPlaySearchParameters>(module, "SelfPlaySearchParameters")
-        .def(py::init<std::uint32_t, std::uint32_t, std::uint32_t, float, float, float, float,
+        .def(py::init<std::uint32_t, std::uint32_t, std::uint32_t, TreeSearchParameters, float,
                       float>(),
              py::arg("parallel_searches"), py::arg("full_searches"), py::arg("fast_searches"),
-             py::arg("exploration_constant"), py::arg("fpu_reduction"), py::arg("dirichlet_alpha"),
-             py::arg("dirichlet_epsilon"), py::arg("forced_playout_coefficient"))
+             py::arg("tree_search"), py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"))
         .def_readwrite("parallel_searches", &SelfPlaySearchParameters::parallel_searches)
         .def_readwrite("full_searches", &SelfPlaySearchParameters::full_searches)
         .def_readwrite("fast_searches", &SelfPlaySearchParameters::fast_searches)
-        .def_readwrite("exploration_constant", &SelfPlaySearchParameters::exploration_constant)
-        .def_readwrite("fpu_reduction", &SelfPlaySearchParameters::fpu_reduction)
+        .def_readwrite("tree_search", &SelfPlaySearchParameters::tree_search)
         .def_readwrite("dirichlet_alpha", &SelfPlaySearchParameters::dirichlet_alpha)
-        .def_readwrite("dirichlet_epsilon", &SelfPlaySearchParameters::dirichlet_epsilon)
-        .def_readwrite("forced_playout_coefficient",
-                       &SelfPlaySearchParameters::forced_playout_coefficient);
+        .def_readwrite("dirichlet_epsilon", &SelfPlaySearchParameters::dirichlet_epsilon);
     py::class_<SelfPlaySearchStatistics>(module, "SelfPlaySearchStatistics")
         .def_readonly("average_depth", &SelfPlaySearchStatistics::average_depth)
         .def_readonly("average_entropy", &SelfPlaySearchStatistics::average_entropy)

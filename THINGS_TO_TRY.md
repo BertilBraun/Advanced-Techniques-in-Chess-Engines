@@ -75,11 +75,14 @@ Current screening policy:
 
   * Zero initialization.
   * Parent-value initialization.
-  * KataGo-style reduced parent value.
+  * Reduced parent value with an explicit fixed reduction.
   * Mean visited-child Q with pessimistic virtual evidence.
   * Especially important for low simulation budgets.
-  * Implement KataGo-style reduced-parent-value FPU first. Test the other variants only if it is competitive with
-    zero initialization.
+  * The first 7x7 R14 implementation accidentally made parent-value FPU the meaning of a zero reduction, so every
+    second-round run changed FPU relative to the true-zero R13 baseline. Do not use those runs as clean
+    single-variable evidence.
+  * The current typed modes restore zero as the baseline and expose parent-value and reduced-parent-value FPU as
+    separate treatments. Do not call the fixed-reduction treatment KataGo-style without matching its full formula.
 
 * **Forced playouts with policy-target pruning** - implemented [x] experimenting [x] validated [ ]
 

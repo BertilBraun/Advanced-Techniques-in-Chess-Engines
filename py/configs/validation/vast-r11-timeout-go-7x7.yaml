@@ -147,9 +147,8 @@ go:
       exploration_constant:
         kind: constant
         value: 1.5
-      fpu_reduction:
-        kind: constant
-        value: 0.0
+      first_play_urgency:
+        kind: zero
       forced_playouts:
         kind: disabled
     inference:

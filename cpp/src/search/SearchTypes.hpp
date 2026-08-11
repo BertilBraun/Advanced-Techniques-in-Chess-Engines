@@ -3,6 +3,7 @@
 #include "games/GameConcepts.hpp"
 #include "search/InferenceTypes.hpp"
 #include "search/SearchTree.hpp"
+#include "search/tree/TreeSearchParameters.hpp"
 
 #include <cmath>
 #include <cstddef>
@@ -37,26 +38,20 @@ struct GameSearchBatchResult {
 
 struct BatchedSearchParameters {
     std::uint32_t parallel_searches;
-    float exploration_constant;
-    float fpu_reduction;
-    float forced_playout_coefficient;
+    TreeSearchParameters tree_search;
     float dirichlet_alpha;
     float dirichlet_epsilon;
     std::size_t tree_capacity;
 
-    BatchedSearchParameters(std::uint32_t parallelSearches, float explorationConstant,
-                            float fpuReduction, float forcedPlayoutCoefficient,
+    BatchedSearchParameters(std::uint32_t parallelSearches, TreeSearchParameters treeSearch,
                             float dirichletAlpha, float dirichletEpsilon, std::size_t treeCapacity)
-        : parallel_searches(parallelSearches), exploration_constant(explorationConstant),
-          fpu_reduction(fpuReduction), forced_playout_coefficient(forcedPlayoutCoefficient),
+        : parallel_searches(parallelSearches), tree_search(treeSearch),
           dirichlet_alpha(dirichletAlpha), dirichlet_epsilon(dirichletEpsilon),
           tree_capacity(treeCapacity) {
         if (parallel_searches == 0 || tree_capacity == 0) {
             throw std::invalid_argument("Batched search counts and tree capacity must be positive");
         }
-        if (exploration_constant <= 0.0F || !std::isfinite(fpu_reduction) || fpu_reduction < 0.0F ||
-            !std::isfinite(forced_playout_coefficient) || forced_playout_coefficient < 0.0F ||
-            dirichlet_alpha <= 0.0F || dirichlet_epsilon < 0.0F || dirichlet_epsilon > 1.0F) {
+        if (dirichlet_alpha <= 0.0F || dirichlet_epsilon < 0.0F || dirichlet_epsilon > 1.0F) {
             throw std::invalid_argument("Batched search constants are outside their valid range");
         }
     }

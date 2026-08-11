@@ -18,6 +18,12 @@ from src.experiment.configuration import (
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.configuration import EnabledForcedPlayoutConfiguration
+from src.self_play.parameters import (
+    FirstPlayUrgencyParameters,
+    ParentValueFirstPlayUrgencyParameters,
+    ReducedParentValueFirstPlayUrgencyParameters,
+    ZeroFirstPlayUrgencyParameters,
+)
 from src.training.network import (
     GlobalPoolingResidualContext,
     ResidualContextPlacement,
@@ -131,7 +137,7 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
     assert configuration.chess.self_play.search.fast_searches.value_at(20) == 150
     assert configuration.chess.self_play.search.parallel_searches == 1
     assert configuration.chess.self_play.search.forced_playouts.kind == 'disabled'
-    assert configuration.chess.self_play.search.fpu_reduction.value_at(0) == pytest.approx(0.0)
+    assert configuration.chess.self_play.search.first_play_urgency.kind == 'zero'
     assert configuration.chess.self_play.inference.inference_workers == 2
     assert configuration.chess.self_play.inference.inference_batch_size == 64
     assert configuration.chess.self_play.inference.outstanding_batches_per_worker == 2
@@ -183,6 +189,30 @@ def test_go_experiments_resolve_deterministically(path: Path, board_size: int, a
     assert load_experiment_configuration(path) == configuration
 
 
+@pytest.mark.parametrize(
+    ('authored', 'expected'),
+    (
+        ({'kind': 'zero'}, ZeroFirstPlayUrgencyParameters()),
+        ({'kind': 'parent_value'}, ParentValueFirstPlayUrgencyParameters()),
+        (
+            {'kind': 'reduced_parent_value', 'reduction': {'kind': 'constant', 'value': 0.2}},
+            ReducedParentValueFirstPlayUrgencyParameters(reduction=0.2),
+        ),
+    ),
+)
+def test_first_play_urgency_modes_resolve_explicitly(
+    authored: JsonValue,
+    expected: FirstPlayUrgencyParameters,
+) -> None:
+    candidate = yaml.safe_load(Path('configs/go-9x9-experiment-template.yaml').read_text(encoding='utf-8'))
+    candidate['go']['self_play']['search']['first_play_urgency'] = authored
+    configuration = GoExperimentConfiguration.model_validate(candidate)
+
+    resolved = configuration.go.self_play.resolve(0, configuration.go.rules.maximum_moves)
+
+    assert resolved.first_play_urgency == expected
+
+
 def test_queue_validation_supports_both_games() -> None:
     configurations = validate_experiment_queue(
         (
@@ -206,9 +236,9 @@ def test_queue_validation_supports_both_games() -> None:
             'must remain in',
         ),
         (
-            ('go', 'self_play', 'search', 'fpu_reduction'),
-            {'kind': 'constant', 'value': -0.1},
-            'FPU reduction must remain finite and nonnegative',
+            ('go', 'self_play', 'search', 'first_play_urgency'),
+            {'kind': 'reduced_parent_value', 'reduction': {'kind': 'constant', 'value': -0.1}},
+            'Reduced-parent FPU reduction must remain finite and positive',
         ),
         (('go', 'self_play', 'maximum_game_plies'), 200, 'Extra inputs are not permitted'),
     ),

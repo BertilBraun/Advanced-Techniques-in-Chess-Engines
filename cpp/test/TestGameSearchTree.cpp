@@ -35,6 +35,13 @@ GoTree makeGoTree(const std::size_t capacity, const float turnDiscount = 1.0F) {
                   capacity, turnDiscount);
 }
 
+TreeSearchParameters zeroTreeSearch(const float explorationConstant,
+                                    const float forcedPlayoutCoefficient = 0.0F) {
+    return TreeSearchParameters(explorationConstant,
+                                FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
+                                forcedPlayoutCoefficient);
+}
+
 void expandRoot(GoTree &tree, const std::size_t edgeCount) {
     const std::vector<Go7Game::Action> legalActions = Go7Game::legalActions(tree.root().position);
     require(legalActions.size() >= edgeCount, "Go fixture does not have enough root actions");
@@ -49,7 +56,7 @@ std::size_t materializeRootEdge(GoTree &tree, const std::size_t selectedEdge) {
     for (const auto index : range(tree.root().children.size())) {
         tree.root().children[index].prior = index == selectedEdge ? 1.0F : 0.0F;
     }
-    const std::optional<std::size_t> selected = tree.selectAvailableLeaf(1000.0F);
+    const std::optional<std::size_t> selected = tree.selectAvailableLeaf(zeroTreeSearch(1000.0F));
     require(selected.has_value(), "Go fixture could not materialize a root edge");
     require(tree.node(*selected).parent_index == tree.rootIndex(),
             "Go fixture selected below the root");
@@ -147,7 +154,8 @@ void testReservationLifecycle() {
     requireNear(tree.root().virtual_loss, 1.0F, "Reservation did not add virtual loss to the root");
     requireNear(tree.root().children[0].virtual_loss, 1.0F,
                 "Reservation did not add virtual loss to the incoming edge");
-    require(!tree.selectAvailableLeaf(1.0F).has_value(), "Selection reused the only reserved leaf");
+    require(!tree.selectAvailableLeaf(zeroTreeSearch(1.0F)).has_value(),
+            "Selection reused the only reserved leaf");
 
     tree.cancelReservation(child);
     require(!tree.node(child).inference_pending && tree.root().visits == 0 &&
@@ -184,10 +192,10 @@ void testRecursiveDiscount() {
 
     tree.node(childIndex).children[0].prior = 1.0F;
     tree.node(childIndex).children[1].prior = 0.0F;
-    const std::size_t firstGrandchild = *tree.selectAvailableLeaf(1000.0F);
+    const std::size_t firstGrandchild = *tree.selectAvailableLeaf(zeroTreeSearch(1000.0F));
     tree.node(childIndex).children[0].prior = 0.0F;
     tree.node(childIndex).children[1].prior = 1.0F;
-    const std::size_t secondGrandchild = *tree.selectAvailableLeaf(1000.0F);
+    const std::size_t secondGrandchild = *tree.selectAvailableLeaf(zeroTreeSearch(1000.0F));
 
     tree.root().visits = 9;
     tree.root().value_sum = -0.9F;
@@ -285,7 +293,7 @@ template <SearchGame Game> void exercise_tree(typename Game::State position) {
     tree.expand(tree.rootIndex(), inference);
     require(tree.root().children.size() == Game::legalActions(tree.root().position).size(),
             "Shared game tree did not create every legal edge");
-    const std::size_t leaf = *tree.selectAvailableLeaf(1.5F);
+    const std::size_t leaf = *tree.selectAvailableLeaf(zeroTreeSearch(1.5F));
     require(leaf != tree.rootIndex(), "Shared game tree did not materialize a child");
     tree.backPropagate(leaf, 0.5F);
     require(tree.root().visits == 1, "Shared game tree did not backpropagate to the root");
@@ -301,7 +309,8 @@ template <SearchGame Game> void exercise_tree(typename Game::State position) {
     require(tree.root().visits == 0, "Shared game tree reset retained old statistics");
 }
 
-std::size_t selectedRootEdgeAfterOneVisit(const float rootValue, const float fpuReduction,
+std::size_t selectedRootEdgeAfterOneVisit(const float rootValue,
+                                          const FirstPlayUrgencyParameters firstPlayUrgency,
                                           const float forcedPlayoutCoefficient = 0.0F) {
     GameSearchTree<Go7Game> tree(
         GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}), 1, 64);
@@ -311,11 +320,12 @@ std::size_t selectedRootEdgeAfterOneVisit(const float rootValue, const float fpu
         inference.actions.emplace_back(action, 1.0F / static_cast<float>(legalActions.size()));
     }
     tree.expand(tree.rootIndex(), inference);
-    const std::size_t firstLeaf = *tree.selectAvailableLeaf(0.1F);
+    const std::size_t firstLeaf = *tree.selectAvailableLeaf(zeroTreeSearch(0.1F));
     tree.backPropagate(firstLeaf, -rootValue);
 
+    const TreeSearchParameters parameters(0.1F, firstPlayUrgency, forcedPlayoutCoefficient);
     const std::size_t selectedLeaf =
-        *tree.selectAvailableLeaf(0.1F, fpuReduction, forcedPlayoutCoefficient);
+        *tree.selectAvailableLeaf(parameters, forcedPlayoutCoefficient > 0.0F);
     return *tree.node(selectedLeaf).parent_edge_index;
 }
 
@@ -384,11 +394,23 @@ int runGameSearchTreeTests() {
         exercise_tree<Go9Game>(
             GoPosition<9>(GoRules{.komi_half_points = 15, .maximum_moves = 324}));
         for (const float rootValue : {-0.8F, 0.8F}) {
-            require(selectedRootEdgeAfterOneVisit(rootValue, 0.0F) != 0,
-                    "Zero FPU reduction did not preserve the unvisited-child preference");
-            require(selectedRootEdgeAfterOneVisit(rootValue, 0.2F) == 0,
+            const std::size_t zeroSelection = selectedRootEdgeAfterOneVisit(
+                rootValue, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero));
+            require((rootValue > 0.0F && zeroSelection == 0) ||
+                        (rootValue < 0.0F && zeroSelection != 0),
+                    "Zero FPU did not remain independent of the parent value");
+            require(selectedRootEdgeAfterOneVisit(
+                        rootValue, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::ParentValue)) !=
+                        0,
+                    "Parent-value FPU did not preserve the unvisited-child preference");
+            require(selectedRootEdgeAfterOneVisit(
+                        rootValue, FirstPlayUrgencyParameters(
+                                       FirstPlayUrgencyKind::ReducedParentValue, 0.2F)) == 0,
                     "Reduced-parent FPU did not use the parent-value perspective");
-            require(selectedRootEdgeAfterOneVisit(rootValue, 0.2F, 2.0F) != 0,
+            require(selectedRootEdgeAfterOneVisit(
+                        rootValue,
+                        FirstPlayUrgencyParameters(FirstPlayUrgencyKind::ReducedParentValue, 0.2F),
+                        2.0F) != 0,
                     "Forced root playouts did not override ordinary FPU selection");
         }
         std::cout << "Shared chess and Go search-tree tests passed\n";

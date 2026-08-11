@@ -7,7 +7,12 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration
-from src.self_play.parameters import ResolvedSelfPlayParameters
+from src.self_play.parameters import (
+    ParentValueFirstPlayUrgencyParameters,
+    ReducedParentValueFirstPlayUrgencyParameters,
+    ResolvedSelfPlayParameters,
+    ZeroFirstPlayUrgencyParameters,
+)
 from src.training.configuration import TrainingArgs
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import TrainingTargetLayout
@@ -60,17 +65,35 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
         raise NotImplementedError
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:
-        from AlphaZeroCpp import SelfPlaySearchParameters
+        from AlphaZeroCpp import (
+            FirstPlayUrgencyKind,
+            FirstPlayUrgencyParameters,
+            SelfPlaySearchParameters,
+            TreeSearchParameters,
+        )
+
+        match parameters.first_play_urgency:
+            case ZeroFirstPlayUrgencyParameters():
+                first_play_urgency = FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO)
+            case ParentValueFirstPlayUrgencyParameters():
+                first_play_urgency = FirstPlayUrgencyParameters(FirstPlayUrgencyKind.PARENT_VALUE)
+            case ReducedParentValueFirstPlayUrgencyParameters(reduction=reduction):
+                first_play_urgency = FirstPlayUrgencyParameters(
+                    FirstPlayUrgencyKind.REDUCED_PARENT_VALUE,
+                    reduction,
+                )
 
         return SelfPlaySearchParameters(
             parallel_searches=parameters.parallel_searches,
             full_searches=parameters.full_searches,
             fast_searches=parameters.fast_searches,
-            exploration_constant=parameters.exploration_constant,
-            fpu_reduction=parameters.fpu_reduction,
+            tree_search=TreeSearchParameters(
+                exploration_constant=parameters.exploration_constant,
+                first_play_urgency=first_play_urgency,
+                forced_playout_coefficient=parameters.forced_playout_coefficient,
+            ),
             dirichlet_alpha=parameters.dirichlet_alpha,
             dirichlet_epsilon=parameters.dirichlet_epsilon,
-            forced_playout_coefficient=parameters.forced_playout_coefficient,
         )
 
     @abstractmethod

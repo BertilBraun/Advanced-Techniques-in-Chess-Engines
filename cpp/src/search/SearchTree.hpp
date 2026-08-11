@@ -5,6 +5,7 @@
 #include "search/InferenceTypes.hpp"
 #include "search/tree/RetainedStatistics.hpp"
 #include "search/tree/TreeArena.hpp"
+#include "search/tree/TreeSearchParameters.hpp"
 #include "search/tree/TreeTypes.hpp"
 #include "util/py.hpp"
 
@@ -48,26 +49,26 @@ public:
     [[nodiscard]] std::size_t totalChildCount() const noexcept { return m_arena.totalChildCount(); }
 
     [[nodiscard]] std::optional<std::size_t>
-    selectAvailableLeaf(const float explorationConstant, const float fpuReduction = 0.0F,
-                        const float forcedPlayoutCoefficient = 0.0F) {
+    selectAvailableLeaf(const TreeSearchParameters &parameters,
+                        const bool forceRootPlayouts = false) {
         const std::size_t edgeCount = root().children.size();
         for (const auto edgeIndex : range(edgeCount)) {
             const Edge &edge = root().children[edgeIndex];
             if (!requiresForcedRootVisit(
                     {.prior = edge.prior,
                      .visits = edge.visits,
-                     .child_mean_value = childMeanValue(root(), edge, fpuReduction)},
-                    root().visits, forcedPlayoutCoefficient)) {
+                     .child_mean_value = -edgeValueForParent(root(), edge, parameters)},
+                    root().visits,
+                    forceRootPlayouts ? parameters.forced_playout_coefficient : 0.0F)) {
                 continue;
             }
             const std::optional<std::size_t> leaf =
-                selectAvailableLeaf(m_arena.materializeChild(rootIndex(), edgeIndex),
-                                    explorationConstant, fpuReduction);
+                selectAvailableLeaf(m_arena.materializeChild(rootIndex(), edgeIndex), parameters);
             if (leaf.has_value()) {
                 return leaf;
             }
         }
-        return selectAvailableLeaf(rootIndex(), explorationConstant, fpuReduction);
+        return selectAvailableLeaf(rootIndex(), parameters);
     }
 
     [[nodiscard]] std::vector<std::uint32_t>
@@ -225,9 +226,8 @@ private:
     search_tree_detail::TreeArena<Game> m_arena;
     float m_turnDiscount;
 
-    [[nodiscard]] std::optional<std::size_t> selectAvailableLeaf(const std::size_t nodeIndex,
-                                                                 const float explorationConstant,
-                                                                 const float fpuReduction) {
+    [[nodiscard]] std::optional<std::size_t>
+    selectAvailableLeaf(const std::size_t nodeIndex, const TreeSearchParameters &parameters) {
         if (!node(nodeIndex).expanded()) {
             return node(nodeIndex).inference_pending ? std::nullopt
                                                      : std::optional<std::size_t>(nodeIndex);
@@ -245,17 +245,17 @@ private:
                     continue;
                 }
                 const Edge &edge = node(nodeIndex).children[index];
-                const float meanValue = childMeanValue(node(nodeIndex), edge, fpuReduction);
-                const float score = -meanValue + explorationConstant * edge.prior * parentScale /
-                                                     (1.0F + edge.visits);
+                const float score = edgeValueForParent(node(nodeIndex), edge, parameters) +
+                                    parameters.exploration_constant * edge.prior * parentScale /
+                                        (1.0F + edge.visits);
                 if (score > bestScore) {
                     bestScore = score;
                     bestIndex = index;
                 }
             }
             attempted[bestIndex] = true;
-            const std::optional<std::size_t> leaf = selectAvailableLeaf(
-                m_arena.materializeChild(nodeIndex, bestIndex), explorationConstant, fpuReduction);
+            const std::optional<std::size_t> leaf =
+                selectAvailableLeaf(m_arena.materializeChild(nodeIndex, bestIndex), parameters);
             if (leaf.has_value()) {
                 return leaf;
             }
@@ -263,14 +263,14 @@ private:
         return std::nullopt;
     }
 
-    [[nodiscard]] static float childMeanValue(const Node &parent, const Edge &edge,
-                                              const float fpuReduction) {
+    [[nodiscard]] static float edgeValueForParent(const Node &parent, const Edge &edge,
+                                                  const TreeSearchParameters &parameters) {
         if (edge.visits > 0) {
-            return (edge.value_sum + edge.virtual_loss) / static_cast<float>(edge.visits);
+            return -(edge.value_sum + edge.virtual_loss) / static_cast<float>(edge.visits);
         }
         const float parentMean =
             parent.visits == 0 ? 0.0F : parent.value_sum / static_cast<float>(parent.visits);
-        return -parentMean + fpuReduction;
+        return parameters.first_play_urgency.unvisitedParentValue(parentMean);
     }
 
     void updatePath(std::size_t nodeIndex, const int visitDelta, float value,

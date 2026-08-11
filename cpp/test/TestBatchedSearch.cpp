@@ -10,6 +10,14 @@ using ChessSelfPlaySearchRequest = SelfPlaySearchRequest<ChessGame>;
 using ChessSelfPlaySearchBatch = SelfPlaySearchBatch<ChessGame>;
 using ChessInferenceResult = SearchInferenceResult<ChessGame>;
 
+TreeSearchParameters
+treeSearchParameters(const float explorationConstant,
+                     const FirstPlayUrgencyParameters firstPlayUrgency =
+                         FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
+                     const float forcedPlayoutCoefficient = 0.0F) {
+    return TreeSearchParameters(explorationConstant, firstPlayUrgency, forcedPlayoutCoefficient);
+}
+
 std::filesystem::path createTestModel(const std::string &name, const float win, const float draw,
                                       const float loss, const bool validOutput = true) {
     torch::jit::script::Module model("batched_search_test");
@@ -81,18 +89,32 @@ int runBatchedSearchTests() {
         createTestModel("invalid", 0.5F, 0.5F, 0.0F, false);
     try {
         try {
-            static_cast<void>(ChessSelfPlaySearchParameters(1, 16, 8, 1.5F, -0.1F, 0.3F, 0.25F, 0));
+            static_cast<void>(
+                FirstPlayUrgencyParameters(FirstPlayUrgencyKind::ReducedParentValue, -0.1F));
             throw std::runtime_error("negative FPU reduction unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         try {
-            static_cast<void>(ChessSelfPlaySearchParameters(
-                1, 16, 8, 1.5F, 0.0F, 0.3F, 0.25F, std::numeric_limits<float>::infinity()));
+            static_cast<void>(FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero, 0.1F));
+            throw std::runtime_error("zero FPU unexpectedly accepted a reduction");
+        } catch (const std::invalid_argument &) {
+        }
+        try {
+            static_cast<void>(
+                FirstPlayUrgencyParameters(FirstPlayUrgencyKind::ReducedParentValue, 0.0F));
+            throw std::runtime_error("reduced-parent FPU unexpectedly accepted zero reduction");
+        } catch (const std::invalid_argument &) {
+        }
+        try {
+            static_cast<void>(
+                treeSearchParameters(1.5F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
+                                     std::numeric_limits<float>::infinity()));
             throw std::runtime_error("nonfinite forced-playout coefficient unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         const InferenceConfiguration runtimeParameters(0, modelPath.string(), InferenceDevice::Cpu);
-        const ChessSelfPlaySearchParameters searchParameters(1, 16, 8, 1.5F, 0.0F, 0.3F, 0.25F, 0);
+        const ChessSelfPlaySearchParameters searchParameters(1, 16, 8, treeSearchParameters(1.5F),
+                                                             0.3F, 0.25F);
         const BatchedInferenceParameters inferenceParameters(2, 4, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
         require(search.modelGeneration() == 7, "search lost its initial model generation");
@@ -191,16 +213,21 @@ int runBatchedSearchTests() {
         }
         require(search.modelGeneration() == 28, "repeated refresh lost model generation");
 
-        const ChessSelfPlaySearchParameters sameCapacitySchedule(1, 16, 7, 1.25F, 0.0F, 0.3F, 0.25F,
-                                                                 0);
+        const ChessSelfPlaySearchParameters sameCapacitySchedule(
+            1, 16, 7, treeSearchParameters(1.25F), 0.3F, 0.25F);
         require(!search.updateSearchSchedule(sameCapacitySchedule),
                 "equal-capacity schedule incorrectly required root replacement");
-        const ChessSelfPlaySearchParameters largerSchedule(1, 24, 8, 1.25F, 0.0F, 0.3F, 0.25F, 0);
+        const ChessSelfPlaySearchParameters largerSchedule(1, 24, 8, treeSearchParameters(1.25F),
+                                                           0.3F, 0.25F);
         require(search.updateSearchSchedule(largerSchedule),
                 "larger schedule did not report an arena-capacity change");
 
-        const ChessSelfPlaySearchParameters forcedSchedule(1, 64, 16, 1.5F, 0.2F, 0.3F, 0.25F,
-                                                           2.0F);
+        const ChessSelfPlaySearchParameters forcedSchedule(
+            1, 64, 16,
+            treeSearchParameters(
+                1.5F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::ReducedParentValue, 0.2F),
+                2.0F),
+            0.3F, 0.25F);
         ChessSelfPlaySearch forcedSearch(runtimeParameters, forcedSchedule, inferenceParameters);
         const ChessSelfPlaySearchBatch forcedResults =
             forcedSearch.search({ChessSelfPlaySearchRequest(forcedSearch.newRoot(Board{}), true),

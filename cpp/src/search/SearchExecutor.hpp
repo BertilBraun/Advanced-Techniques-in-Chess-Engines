@@ -91,7 +91,7 @@ public:
             result.visits.reserve(node.children.size());
             result.policy_target_visits.reserve(node.children.size());
             const std::vector<std::uint32_t> policyTargetVisits = root.tree().policyTargetVisits(
-                m_searchParameters.exploration_constant, task.force_root_playouts);
+                m_searchParameters.tree_search.exploration_constant, task.force_root_playouts);
             for (const auto index : range(node.children.size())) {
                 const auto &edge = node.children[index];
                 const int actionId = Game::Encoding::actionId(edge.action, node.position);
@@ -320,10 +320,8 @@ private:
                 countsAsSearch = task.count_root_initialization;
                 tree.node(*leaf).inference_pending = true;
             } else {
-                leaf = tree.selectAvailableLeaf(
-                    m_searchParameters.exploration_constant, m_searchParameters.fpu_reduction,
-                    task.force_root_playouts ? m_searchParameters.forced_playout_coefficient
-                                             : 0.0F);
+                leaf = tree.selectAvailableLeaf(m_searchParameters.tree_search,
+                                                task.force_root_playouts);
                 if (!leaf.has_value()) {
                     return false;
                 }

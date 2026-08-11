@@ -9,8 +9,12 @@ import pytest
 
 from src.games.implementation import GameImplementation
 from src.games.contracts import WdlTarget
-from src.self_play.parameters import RandomOpeningStartParameters, ResolvedSelfPlayParameters
-from src.self_play.parameters import RestartStateStartParameters
+from src.self_play.parameters import (
+    RandomOpeningStartParameters,
+    ResolvedSelfPlayParameters,
+    RestartStateStartParameters,
+    ZeroFirstPlayUrgencyParameters,
+)
 from src.self_play.completed_game import CompletedSelfPlayGame, GameIdentity, SearchObservation
 from src.self_play.completed_game import SparseSearchVisit, TerminationReason
 from src.self_play.restart_archive import RestartStateArchive
@@ -165,7 +169,7 @@ class FakeGame:
             fast_searches=1,
             forced_playout_coefficient=0.0,
             exploration_constant=1.0,
-            fpu_reduction=0.0,
+            first_play_urgency=ZeroFirstPlayUrgencyParameters(),
             dirichlet_alpha=0.3,
             dirichlet_epsilon=0.25,
             retained_root_visit_fraction=0.5,

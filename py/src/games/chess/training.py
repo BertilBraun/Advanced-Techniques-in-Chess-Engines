@@ -9,7 +9,7 @@ from src.experiment.generation_schedule import defined_schedule_values
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
-from src.self_play.parameters import ResolvedSelfPlayParameters
+from src.self_play.parameters import ResolvedSelfPlayParameters, ZeroFirstPlayUrgencyParameters
 from src.self_play.native_search import NativeSelfPlaySearch
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
@@ -80,6 +80,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             fast_searches=configuration.searches_per_move,
             forced_playout_coefficient=0.0,
             exploration_constant=configuration.exploration_constant,
+            first_play_urgency=ZeroFirstPlayUrgencyParameters(),
             dirichlet_alpha=1.0,
             dirichlet_epsilon=0.0,
         )

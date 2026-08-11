@@ -105,7 +105,7 @@ evaluation:
       search: *evaluation_search
 go:
   self_play:
-    search: {full_searches: {kind: constant, value: 256}, fast_searches: {kind: constant, value: 64}, parallel_searches: 1, dirichlet_epsilon: {kind: constant, value: 0.25}, dirichlet_alpha: {kind: constant, value: 0.3}, exploration_constant: {kind: constant, value: 1.5}, fpu_reduction: {kind: constant, value: 0.0}, forced_playouts: {kind: disabled}}
+    search: {full_searches: {kind: constant, value: 256}, fast_searches: {kind: constant, value: 64}, parallel_searches: 1, dirichlet_epsilon: {kind: constant, value: 0.25}, dirichlet_alpha: {kind: constant, value: 0.3}, exploration_constant: {kind: constant, value: 1.5}, first_play_urgency: {kind: zero}, forced_playouts: {kind: disabled}}
     inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 2}
     start_position: {kind: random_opening, maximum_plies: {kind: constant, value: 0}}
     full_search_probability: {kind: constant, value: 1.0}

@@ -11,9 +11,12 @@ from src.experiment.generation_schedule import (
     defined_schedule_values,
 )
 from src.self_play.parameters import (
+    ParentValueFirstPlayUrgencyParameters,
     RandomOpeningStartParameters,
+    ReducedParentValueFirstPlayUrgencyParameters,
     ResolvedSelfPlayParameters,
     RestartStateStartParameters,
+    ZeroFirstPlayUrgencyParameters,
 )
 from src.util.frozen_model import FrozenModel
 
@@ -45,6 +48,44 @@ ForcedPlayoutConfiguration: TypeAlias = Annotated[
 ]
 
 
+class ZeroFirstPlayUrgencyConfiguration(FrozenModel):
+    kind: Literal['zero'] = 'zero'
+
+    def resolve(self, model_generation: int) -> ZeroFirstPlayUrgencyParameters:
+        del model_generation
+        return ZeroFirstPlayUrgencyParameters()
+
+
+class ParentValueFirstPlayUrgencyConfiguration(FrozenModel):
+    kind: Literal['parent_value'] = 'parent_value'
+
+    def resolve(self, model_generation: int) -> ParentValueFirstPlayUrgencyParameters:
+        del model_generation
+        return ParentValueFirstPlayUrgencyParameters()
+
+
+class ReducedParentValueFirstPlayUrgencyConfiguration(FrozenModel):
+    kind: Literal['reduced_parent_value'] = 'reduced_parent_value'
+    reduction: FloatGenerationSchedule
+
+    @model_validator(mode='after')
+    def validate_reduction(self) -> ReducedParentValueFirstPlayUrgencyConfiguration:
+        if any(not isfinite(value) or value <= 0.0 for value in defined_schedule_values(self.reduction)):
+            raise ValueError('Reduced-parent FPU reduction must remain finite and positive.')
+        return self
+
+    def resolve(self, model_generation: int) -> ReducedParentValueFirstPlayUrgencyParameters:
+        return ReducedParentValueFirstPlayUrgencyParameters(reduction=self.reduction.value_at(model_generation))
+
+
+FirstPlayUrgencyConfiguration: TypeAlias = Annotated[
+    ZeroFirstPlayUrgencyConfiguration
+    | ParentValueFirstPlayUrgencyConfiguration
+    | ReducedParentValueFirstPlayUrgencyConfiguration,
+    Field(discriminator='kind'),
+]
+
+
 class SelfPlaySearchParams(FrozenModel):
     full_searches: IntegerGenerationSchedule
     fast_searches: IntegerGenerationSchedule
@@ -52,7 +93,7 @@ class SelfPlaySearchParams(FrozenModel):
     dirichlet_epsilon: FloatGenerationSchedule
     dirichlet_alpha: FloatGenerationSchedule
     exploration_constant: FloatGenerationSchedule
-    fpu_reduction: FloatGenerationSchedule
+    first_play_urgency: FirstPlayUrgencyConfiguration
     forced_playouts: ForcedPlayoutConfiguration
 
     @model_validator(mode='after')
@@ -67,8 +108,6 @@ class SelfPlaySearchParams(FrozenModel):
             raise ValueError('Dirichlet alpha must remain positive.')
         if any(value <= 0.0 for value in defined_schedule_values(self.exploration_constant)):
             raise ValueError('Exploration constant must remain positive.')
-        if any(not isfinite(value) or value < 0.0 for value in defined_schedule_values(self.fpu_reduction)):
-            raise ValueError('FPU reduction must remain finite and nonnegative.')
         return self
 
 
@@ -174,7 +213,7 @@ class SelfPlayConfiguration(FrozenModel):
             fast_searches=search.fast_searches.value_at(model_generation),
             forced_playout_coefficient=search.forced_playouts.resolved_coefficient(),
             exploration_constant=search.exploration_constant.value_at(model_generation),
-            fpu_reduction=search.fpu_reduction.value_at(model_generation),
+            first_play_urgency=search.first_play_urgency.resolve(model_generation),
             dirichlet_alpha=search.dirichlet_alpha.value_at(model_generation),
             dirichlet_epsilon=search.dirichlet_epsilon.value_at(model_generation),
             retained_root_visit_fraction=self.retained_root_visit_fraction.value_at(model_generation),

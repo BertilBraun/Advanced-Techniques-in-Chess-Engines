@@ -15,9 +15,12 @@ from AlphaZeroCpp import (
     BatchedInferenceParameters,
     ChessSearchRoot,
     ChessSelfPlaySearch,
-    SelfPlaySearchParameters,
     ChessSelfPlaySearchRequest,
+    FirstPlayUrgencyKind,
+    FirstPlayUrgencyParameters,
     InferenceConfiguration,
+    SelfPlaySearchParameters,
+    TreeSearchParameters,
 )
 
 
@@ -181,11 +184,13 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             args.parallel_searches,
             args.searches,
             args.searches,
-            1.0,
-            0.0,
+            TreeSearchParameters(
+                1.0,
+                FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO),
+                0.0,
+            ),
             0.3,
             0.0,
-            0,
         ),
         BatchedInferenceParameters(1, args.maximum_batch_size, 1),
     )

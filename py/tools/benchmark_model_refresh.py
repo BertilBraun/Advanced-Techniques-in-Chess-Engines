@@ -16,9 +16,12 @@ from AlphaZeroCpp import (
     BatchedInferenceParameters,
     ChessSearchRoot,
     ChessSelfPlaySearch,
-    SelfPlaySearchParameters,
     ChessSelfPlaySearchRequest,
+    FirstPlayUrgencyKind,
+    FirstPlayUrgencyParameters,
     InferenceConfiguration,
+    SelfPlaySearchParameters,
+    TreeSearchParameters,
 )
 
 
@@ -214,11 +217,13 @@ def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
         parallel_searches=arguments.parallel_searches,
         full_searches=arguments.searches,
         fast_searches=arguments.searches,
-        exploration_constant=2.0,
-        fpu_reduction=0.0,
+        tree_search=TreeSearchParameters(
+            exploration_constant=2.0,
+            first_play_urgency=FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO),
+            forced_playout_coefficient=0.0,
+        ),
         dirichlet_alpha=0.3,
         dirichlet_epsilon=0.25,
-        forced_playout_coefficient=0.0,
     )
     inference_parameters = BatchedInferenceParameters(
         arguments.direct_workers,

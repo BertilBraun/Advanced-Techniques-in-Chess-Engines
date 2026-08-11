@@ -6,7 +6,7 @@ from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.contract import GoStateContract, NativeGoPosition
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
-from src.self_play.parameters import ResolvedSelfPlayParameters
+from src.self_play.parameters import ResolvedSelfPlayParameters, ZeroFirstPlayUrgencyParameters
 from src.self_play.native_search import NativeSelfPlaySearch
 from src.training.checkpoint import CheckpointReference
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
@@ -75,6 +75,7 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
             fast_searches=configuration.searches_per_move,
             forced_playout_coefficient=0.0,
             exploration_constant=configuration.exploration_constant,
+            first_play_urgency=ZeroFirstPlayUrgencyParameters(),
             dirichlet_alpha=1.0,
             dirichlet_epsilon=0.0,
         )
