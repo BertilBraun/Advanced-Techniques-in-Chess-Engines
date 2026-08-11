@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 from enum import Enum
+from typing import Annotated, Literal, TypeAlias
 
 import torch
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from torch import nn, Tensor
 
@@ -11,26 +14,50 @@ from src.util.frozen_model import FrozenModel
 from src.util.log import log
 
 
-class SEPlacement(str, Enum):
-    DISABLED = 'disabled'
+class ResidualContextPlacement(str, Enum):
     EVERY_BLOCK = 'every_block'
     EVERY_SECOND_BLOCK = 'every_second_block'
 
     def applies_to(self, block_index: int) -> bool:
-        if self is SEPlacement.DISABLED:
-            return False
-        if self is SEPlacement.EVERY_BLOCK:
+        if self is ResidualContextPlacement.EVERY_BLOCK:
             return True
         return block_index % 2 == 1
+
+
+class DisabledResidualContext(FrozenModel):
+    kind: Literal['disabled'] = 'disabled'
+
+
+class SqueezeExcitationResidualContext(FrozenModel):
+    kind: Literal['squeeze_excitation'] = 'squeeze_excitation'
+    placement: ResidualContextPlacement
+
+
+class GlobalPoolingResidualContext(FrozenModel):
+    kind: Literal['global_pooling'] = 'global_pooling'
+    placement: ResidualContextPlacement
+
+
+ResidualContextConfiguration: TypeAlias = Annotated[
+    DisabledResidualContext | SqueezeExcitationResidualContext | GlobalPoolingResidualContext,
+    Field(discriminator='kind'),
+]
 
 
 class NetworkParams(FrozenModel):
     num_layers: int = Field(gt=0)
     hidden_size: int = Field(gt=0)
-    se_placement: SEPlacement = SEPlacement.DISABLED
+    residual_context: ResidualContextConfiguration = DisabledResidualContext()
     num_policy_channels: int = Field(default=4, gt=0)
     num_value_channels: int = Field(default=2, gt=0)
     value_fc_size: int = Field(default=48, gt=0)
+
+    @model_validator(mode='after')
+    def validate_global_pooling_width(self) -> NetworkParams:
+        match self.residual_context:
+            case GlobalPoolingResidualContext() if self.hidden_size < 2:
+                raise ValueError('Global-pooling residual blocks require at least two hidden channels.')
+        return self
 
 
 class Network(nn.Module):
@@ -71,10 +98,7 @@ class Network(nn.Module):
 
         self.backBone = nn.ModuleList(
             [
-                ResBlock(
-                    args.hidden_size,
-                    use_squeeze_excitation=args.se_placement.applies_to(block_index),
-                )
+                _build_residual_block(args.hidden_size, args.residual_context, block_index)
                 for block_index in range(args.num_layers)
             ]
         )
@@ -205,6 +229,62 @@ class ResBlock(nn.Module):
         x = x + residual
         x = self.relu2(x)
         return x
+
+
+class GlobalPoolingBias(nn.Module):
+    def __init__(self, global_channels: int, local_channels: int) -> None:
+        super().__init__()
+        self.projection = nn.Linear(global_channels * 2, local_channels)
+
+    def forward(self, local_features: Tensor, global_features: Tensor) -> Tensor:
+        # A board-size-scaled copy of the mean is redundant for fixed-size models.
+        means = torch.mean(global_features, dim=(2, 3))
+        maxima = torch.amax(global_features, dim=(2, 3))
+        biases = self.projection(torch.cat((means, maxima), dim=1))
+        return local_features + biases[:, :, None, None]
+
+
+class GlobalPoolingResBlock(nn.Module):
+    def __init__(self, num_hidden: int) -> None:
+        super().__init__()
+        self.global_channels = max(1, num_hidden // 4)
+        local_channels = num_hidden - self.global_channels
+        self.conv_block1 = nn.Sequential(
+            nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(num_hidden),
+            nn.ReLU(),
+        )
+        self.global_pooling_bias = GlobalPoolingBias(self.global_channels, local_channels)
+        self.conv_block2 = nn.Sequential(
+            nn.Conv2d(local_channels, num_hidden, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(num_hidden),
+        )
+        self.relu2 = nn.ReLU()
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        features = self.conv_block1(inputs)
+        global_features = features[:, : self.global_channels]
+        local_features = features[:, self.global_channels :]
+        biased_features = self.global_pooling_bias(local_features, global_features)
+        return self.relu2(self.conv_block2(biased_features) + inputs)
+
+
+def _build_residual_block(
+    hidden_channels: int,
+    residual_context: ResidualContextConfiguration,
+    block_index: int,
+) -> nn.Module:
+    match residual_context:
+        case DisabledResidualContext():
+            return ResBlock(hidden_channels)
+        case SqueezeExcitationResidualContext(placement=placement):
+            return ResBlock(hidden_channels, use_squeeze_excitation=placement.applies_to(block_index))
+        case GlobalPoolingResidualContext(placement=placement):
+            return (
+                GlobalPoolingResBlock(hidden_channels)
+                if placement.applies_to(block_index)
+                else ResBlock(hidden_channels)
+            )
 
 
 class SqueezeExcitation(nn.Module):

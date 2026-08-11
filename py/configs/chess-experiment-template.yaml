@@ -27,7 +27,7 @@ training:
   network:
     num_layers: 12
     hidden_size: 112
-    se_placement: every_second_block
+    residual_context: {kind: squeeze_excitation, placement: every_second_block}
     num_policy_channels: 4
     num_value_channels: 2
     value_fc_size: 48

@@ -1,0 +1,8 @@
+extends: 00-medium-8x96.yaml
+run:
+  run_name: go9-model-size-03-global-pooling-8x96
+  tensorboard_run_directory: go9-model-size-03-global-pooling-8x96
+training:
+  save_path: py/training_data/screening/go9-model-size/03-global-pooling-8x96
+  network:
+    residual_context: {kind: global_pooling, placement: every_second_block}

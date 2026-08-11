@@ -18,6 +18,11 @@ from src.experiment.configuration import (
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.configuration import EnabledForcedPlayoutConfiguration
+from src.training.network import (
+    GlobalPoolingResidualContext,
+    ResidualContextPlacement,
+    SqueezeExcitationResidualContext,
+)
 from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
 from src.util.frozen_model import JsonValue
 
@@ -41,6 +46,26 @@ def test_every_screening_configuration_parses() -> None:
     paths = tuple(sorted(Path('configs/screening').rglob('*.yaml')))
 
     assert all(load_experiment_configuration(path) for path in paths)
+
+
+def test_global_pooling_screen_replaces_baseline_squeeze_excitation() -> None:
+    baseline = load_experiment_configuration(Path('configs/screening/go-9x9-model-size/00-medium-8x96.yaml'))
+    global_pooling = load_experiment_configuration(
+        Path('configs/screening/go-9x9-model-size/03-global-pooling-8x96.yaml')
+    )
+
+    assert baseline.training.network.residual_context == SqueezeExcitationResidualContext(
+        placement=ResidualContextPlacement.EVERY_SECOND_BLOCK
+    )
+    assert global_pooling.training.network.residual_context == GlobalPoolingResidualContext(
+        placement=ResidualContextPlacement.EVERY_SECOND_BLOCK
+    )
+    assert (
+        global_pooling.training.network.model_copy(
+            update={'residual_context': baseline.training.network.residual_context}
+        )
+        == baseline.training.network
+    )
 
 
 def test_forced_playout_screen_resolves_canonical_coefficient() -> None:

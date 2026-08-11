@@ -1,17 +1,35 @@
 from pathlib import Path
 
+import pytest
 import torch
 
 from src.games.representation import NetworkDimensions
-from src.training.network import Network, NetworkParams, SEPlacement
+from src.training.network import (
+    DisabledResidualContext,
+    GlobalPoolingResidualContext,
+    Network,
+    NetworkParams,
+    ResidualContextConfiguration,
+    ResidualContextPlacement,
+)
 from src.training.checkpoint.persistence import create_optimizer, load_model, save_model_and_optimizer
 
 
-def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    'residual_context',
+    (
+        DisabledResidualContext(),
+        GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_BLOCK),
+    ),
+)
+def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them(
+    tmp_path: Path,
+    residual_context: ResidualContextConfiguration,
+) -> None:
     parameters = NetworkParams(
         num_layers=1,
         hidden_size=8,
-        se_placement=SEPlacement.DISABLED,
+        residual_context=residual_context,
         num_policy_channels=2,
         num_value_channels=2,
         value_fc_size=8,

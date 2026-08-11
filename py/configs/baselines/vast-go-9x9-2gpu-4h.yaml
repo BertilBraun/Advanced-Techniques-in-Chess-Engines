@@ -23,7 +23,7 @@ run:
     minimum_open_file_soft_limit: 32768
 training:
   save_path: py/training_data/baselines/vast-go-9x9-2gpu-4h
-  network: {num_layers: 8, hidden_size: 96, se_placement: every_second_block, num_policy_channels: 2, num_value_channels: 1, value_fc_size: 32}
+  network: {num_layers: 8, hidden_size: 96, residual_context: {kind: squeeze_excitation, placement: every_second_block}, num_policy_channels: 2, num_value_channels: 1, value_fc_size: 32}
   trainer:
     global_batch_size: 1024
     local_batch_size: 512

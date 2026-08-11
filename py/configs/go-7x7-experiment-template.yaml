@@ -16,7 +16,7 @@ run:
     minimum_open_file_soft_limit: 1024
 training:
   save_path: py/training_data/go-7x7
-  network: {num_layers: 6, hidden_size: 64, se_placement: every_second_block, num_policy_channels: 2, num_value_channels: 1, value_fc_size: 32}
+  network: {num_layers: 6, hidden_size: 64, residual_context: {kind: squeeze_excitation, placement: every_second_block}, num_policy_channels: 2, num_value_channels: 1, value_fc_size: 32}
   trainer:
     global_batch_size: 256
     local_batch_size: 256

@@ -1,9 +1,22 @@
+import pytest
 import torch
+from pydantic import ValidationError
 
 from torch import Tensor, nn
 
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
-from src.training.network import Network, NetworkParams, ResBlock, SEPlacement, SqueezeExcitation
+from src.training.network import (
+    DisabledResidualContext,
+    GlobalPoolingBias,
+    GlobalPoolingResBlock,
+    GlobalPoolingResidualContext,
+    Network,
+    NetworkParams,
+    ResBlock,
+    ResidualContextPlacement,
+    SqueezeExcitation,
+    SqueezeExcitationResidualContext,
+)
 
 
 class Multiply(nn.Module):
@@ -21,6 +34,10 @@ def squeeze_excitation_blocks(network: Network) -> tuple[bool, ...]:
         for block in network.backBone
         if isinstance(block, ResBlock)
     )
+
+
+def global_pooling_blocks(network: Network) -> tuple[bool, ...]:
+    return tuple(isinstance(block, GlobalPoolingResBlock) for block in network.backBone)
 
 
 def test_squeeze_excitation_is_inside_residual_branch_before_skip_addition() -> None:
@@ -44,17 +61,29 @@ def test_squeeze_excitation_uses_reduction_sixteen() -> None:
 
 def test_squeeze_excitation_placement_modes() -> None:
     disabled = Network(
-        NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.DISABLED),
+        NetworkParams(num_layers=4, hidden_size=16, residual_context=DisabledResidualContext()),
         torch.device('cpu'),
         CHESS_NETWORK_DIMENSIONS,
     )
     every_block = Network(
-        NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.EVERY_BLOCK),
+        NetworkParams(
+            num_layers=4,
+            hidden_size=16,
+            residual_context=SqueezeExcitationResidualContext(
+                placement=ResidualContextPlacement.EVERY_BLOCK,
+            ),
+        ),
         torch.device('cpu'),
         CHESS_NETWORK_DIMENSIONS,
     )
     every_second_block = Network(
-        NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.EVERY_SECOND_BLOCK),
+        NetworkParams(
+            num_layers=4,
+            hidden_size=16,
+            residual_context=SqueezeExcitationResidualContext(
+                placement=ResidualContextPlacement.EVERY_SECOND_BLOCK,
+            ),
+        ),
         torch.device('cpu'),
         CHESS_NETWORK_DIMENSIONS,
     )
@@ -63,3 +92,54 @@ def test_squeeze_excitation_placement_modes() -> None:
     assert squeeze_excitation_blocks(disabled) == (False, False, False, False)
     assert squeeze_excitation_blocks(every_block) == (True, True, True, True)
     assert squeeze_excitation_blocks(every_second_block) == (False, True, False, True)
+
+
+def test_global_pooling_uses_channel_means_and_maxima_as_additive_biases() -> None:
+    pooling = GlobalPoolingBias(global_channels=2, local_channels=2)
+    with torch.no_grad():
+        pooling.projection.weight.copy_(
+            torch.tensor(
+                (
+                    (1.0, 0.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0, 0.0),
+                )
+            )
+        )
+        pooling.projection.bias.zero_()
+    local_features = torch.zeros((1, 2, 2, 2))
+    global_features = torch.tensor(((((1.0, 3.0), (5.0, 7.0)), ((2.0, 4.0), (6.0, 8.0))),))
+
+    output = pooling(local_features, global_features)
+
+    assert torch.equal(output[0, 0], torch.full((2, 2), 4.0))
+    assert torch.equal(output[0, 1], torch.full((2, 2), 7.0))
+
+
+def test_global_pooling_placement_uses_one_quarter_of_channels() -> None:
+    network = Network(
+        NetworkParams(
+            num_layers=4,
+            hidden_size=16,
+            residual_context=GlobalPoolingResidualContext(
+                placement=ResidualContextPlacement.EVERY_SECOND_BLOCK,
+            ),
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+    )
+
+    assert global_pooling_blocks(network) == (False, True, False, True)
+    blocks = tuple(block for block in network.backBone if isinstance(block, GlobalPoolingResBlock))
+    assert tuple(block.global_channels for block in blocks) == (4, 4)
+    assert tuple(block.conv_block2[0].in_channels for block in blocks) == (12, 12)
+
+
+def test_global_pooling_requires_distinct_global_and_local_channels() -> None:
+    with pytest.raises(ValidationError):
+        NetworkParams(
+            num_layers=1,
+            hidden_size=1,
+            residual_context=GlobalPoolingResidualContext(
+                placement=ResidualContextPlacement.EVERY_BLOCK,
+            ),
+        )
