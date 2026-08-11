@@ -222,7 +222,7 @@ def test_eight_gpu_chess_production_configuration_resolves_authored_curriculum()
     assert credit.optimizer_steps_per_quantum == 400
     assert self_play.search.forced_playouts.kind == 'enabled'
     assert self_play.search.forced_playouts.coefficient == pytest.approx(1.5)
-    assert self_play.greedy_after_ply.value_at(0) == 150
+    assert self_play.greedy_after_ply.value_at(0) == 200
     assert tuple(
         self_play.search.full_searches.value_at(generation) for generation in (0, 5, 10, 20, 35, 135, 235)
     ) == (

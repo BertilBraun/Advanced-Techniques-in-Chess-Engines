@@ -155,7 +155,7 @@ chess:
       maximum_age_generations: 20
     full_search_probability: {kind: linear, start_generation: 0, end_generation: 25, start_value: 1.0, end_value: 0.25, rounding: none}
     retained_root_visit_fraction: {kind: constant, value: 0.6}
-    greedy_after_ply: {kind: constant, value: 150}
+    greedy_after_ply: {kind: constant, value: 200}
     maximum_game_plies: {kind: linear, start_generation: 0, end_generation: 50, start_value: 200, end_value: 600, rounding: nearest}
     force_fast_search_after_ply: {kind: constant, value: 250}
     starting_temperature: {kind: constant, value: 1.3}
