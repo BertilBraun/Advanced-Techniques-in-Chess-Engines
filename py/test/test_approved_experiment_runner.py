@@ -44,10 +44,6 @@ def test_checked_in_go9_screening_queue_records_the_authored_ablation_order() ->
         f'go9-r15c-{index:02d}-{name}'
         for index, name in enumerate(
             (
-                'baseline',
-                'zero-fpu',
-                'no-forced-playouts',
-                'squeeze-excitation',
                 'no-auxiliary-targets',
                 'no-root-value-blend',
                 'true-starts-only',
@@ -56,6 +52,7 @@ def test_checked_in_go9_screening_queue_records_the_authored_ablation_order() ->
                 'no-mixed-search',
                 'replay-ratio-8',
                 'constant-learning-rate-007',
-            )
+            ),
+            start=4,
         )
     )

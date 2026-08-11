@@ -32,10 +32,6 @@ slots:
     ram_capacity_bytes: 47244640256
     log_directory: /workspace/run-control/r15c/logs/gpu-pair-d
 experiments:
-  - {experiment_id: go9-r15c-00-baseline, experiment_file: ../screening/go-9x9-strong/00-baseline.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15c-01-zero-fpu, experiment_file: ../screening/go-9x9-strong/01-zero-fpu.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15c-02-no-forced-playouts, experiment_file: ../screening/go-9x9-strong/02-no-forced-playouts.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
-  - {experiment_id: go9-r15c-03-squeeze-excitation, experiment_file: ../screening/go-9x9-strong/03-squeeze-excitation.yaml, source_revision: 5658413dd3b7406aa59691c9e94575ad8f26b562, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
   - {experiment_id: go9-r15c-04-no-auxiliary-targets, experiment_file: ../screening/go-9x9-strong/04-no-auxiliary-targets.yaml, source_revision: a5ed6d5a6d3214b32e85d43c9b9e531ff3e538d4, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
   - {experiment_id: go9-r15c-05-no-root-value-blend, experiment_file: ../screening/go-9x9-strong/05-no-root-value-blend.yaml, source_revision: a5ed6d5a6d3214b32e85d43c9b9e531ff3e538d4, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}
   - {experiment_id: go9-r15c-06-true-starts-only, experiment_file: ../screening/go-9x9-strong/06-true-starts-only.yaml, source_revision: a5ed6d5a6d3214b32e85d43c9b9e531ff3e538d4, resources: {cuda_device_count: 2, cpu_core_count: 16, ram_limit_bytes: 47244640256}}

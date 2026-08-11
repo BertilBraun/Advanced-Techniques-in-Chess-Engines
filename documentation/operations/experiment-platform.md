@@ -113,7 +113,10 @@ entries:
 Pulling or otherwise advancing the control checkout does not change any running experiment, and it does not
 implicitly advance a pending entry: change the pending `source_revision` and its approval explicitly. Pending
 entries may be added, removed, reordered, or revised through live reload; never change the identity of a running or
-terminal entry. Setup and compilation happen after slot assignment and therefore occupy that slot briefly.
+terminal entry. When an active entry's inherited configuration has changed in the control checkout, omit that entry
+from the live desired YAML; its immutable process and identity remain in the durable summary. Keep only pending
+entries in the desired YAML before reloading against the advanced checkout. Setup and compilation happen after slot
+assignment and therefore occupy that slot briefly.
 
 On success, the supervisor waits for tracked descendants to exit, preserves configuration and workspace provenance
 under the central runtime root, and removes the disposable worktree. It deliberately retains worktrees for failed,
