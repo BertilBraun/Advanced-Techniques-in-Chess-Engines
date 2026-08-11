@@ -1,4 +1,5 @@
 from dataclasses import replace
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from uuid import UUID
 
@@ -140,6 +141,19 @@ def test_two_connections_reserve_each_source_candidate_once_and_evict_when_exhau
     assert first.snapshot().exhausted_evictions == 1
     first.close()
     second.close()
+
+
+def test_initialized_wal_archive_allows_concurrent_worker_connections(tmp_path: Path) -> None:
+    path = tmp_path / 'restart.sqlite3'
+    initializer = RestartStateArchive(path)
+    initializer.close()
+
+    def open_and_close() -> None:
+        archive = RestartStateArchive(path)
+        archive.close()
+
+    with ThreadPoolExecutor(max_workers=24) as executor:
+        tuple(executor.map(lambda _: open_and_close(), range(24)))
 
 
 def test_played_candidate_is_not_reserved_again(tmp_path: Path) -> None:

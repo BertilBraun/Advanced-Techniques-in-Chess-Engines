@@ -52,8 +52,11 @@ class RestartStateArchive:
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(path, timeout=30.0, isolation_level=None)
+        self.connection.execute('PRAGMA busy_timeout = 30000')
         self.connection.execute('PRAGMA foreign_keys = ON')
-        self.connection.execute('PRAGMA journal_mode = WAL')
+        journal_mode = str(self.connection.execute('PRAGMA journal_mode').fetchone()[0])
+        if journal_mode.casefold() != 'wal':
+            self.connection.execute('PRAGMA journal_mode = WAL')
         self.connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS restart_position (
