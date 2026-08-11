@@ -1,0 +1,6 @@
+extends: 14-remaining-game-length.yaml
+run:
+  run_name: go7-overnight-14b-remaining-game-length
+  tensorboard_run_directory: go7-overnight-14b-remaining-game-length
+training:
+  save_path: py/training_data/screening/go7-overnight/14b-remaining-game-length
