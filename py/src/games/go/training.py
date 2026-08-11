@@ -45,6 +45,7 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
         return build_training_target_layout(
             self.network_dimensions.actions,
             self.configuration.go.objective.auxiliary_targets,
+            self.configuration.go.rules.maximum_moves,
         )
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:

@@ -254,6 +254,14 @@ def build_training_batch(
         auxiliary_targets=tuple(torch.from_numpy(target) for target in auxiliary_targets),
         auxiliary_eligibility=tuple(torch.from_numpy(mask) for mask in auxiliary_eligibility),
         sample_weights=torch.tensor([sample.sample_weight for sample in samples], dtype=torch.float32),
+        source_model_generations=torch.tensor(
+            [sample.source_model_generation for sample in samples],
+            dtype=torch.int64,
+        ),
+        source_created_at_seconds=torch.tensor(
+            [sample.source_created_at_seconds for sample in samples],
+            dtype=torch.float64,
+        ),
     )
 
 

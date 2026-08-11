@@ -210,14 +210,13 @@ def test_remaining_game_length_layout_is_a_scalar_target() -> None:
             'auxiliary_targets': [
                 {
                     'kind': 'remaining_game_length',
-                    'normalization_scale': 256,
                     'loss_weight': {'kind': 'constant', 'value': 0.15},
                 }
             ]
         }
     )
 
-    layout = build_training_target_layout(CHESS_STATE_CONTRACT.action_size, objective.auxiliary_targets)
+    layout = build_training_target_layout(CHESS_STATE_CONTRACT.action_size, objective.auxiliary_targets, 256)
 
     assert layout.auxiliary_heads == (
         RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=256),
@@ -273,6 +272,8 @@ def test_canonical_batch_and_model_output_are_the_objective_boundary() -> None:
         auxiliary_targets=(),
         auxiliary_eligibility=(),
         sample_weights=torch.ones(2),
+        source_model_generations=torch.zeros(2, dtype=torch.int64),
+        source_created_at_seconds=torch.zeros(2, dtype=torch.float64),
     )
     output = TrainingModelOutput(
         policy_logits=torch.tensor(((2.0, 0.0), (0.0, 2.0))),
@@ -301,6 +302,8 @@ def test_remaining_game_length_uses_masked_smooth_l1_loss() -> None:
         auxiliary_targets=(torch.tensor(((0.5,), (1.0,))),),
         auxiliary_eligibility=(torch.tensor((True, False)),),
         sample_weights=torch.ones(2),
+        source_model_generations=torch.zeros(2, dtype=torch.int64),
+        source_created_at_seconds=torch.zeros(2, dtype=torch.float64),
     )
     output = TrainingModelOutput(
         policy_logits=torch.zeros((2, 2)),
@@ -329,6 +332,8 @@ def test_next_policy_auxiliary_still_uses_masked_cross_entropy() -> None:
         auxiliary_targets=(torch.tensor(((1.0, 0.0), (0.0, 1.0))),),
         auxiliary_eligibility=(torch.tensor((True, False)),),
         sample_weights=torch.ones(2),
+        source_model_generations=torch.zeros(2, dtype=torch.int64),
+        source_created_at_seconds=torch.zeros(2, dtype=torch.float64),
     )
     output = TrainingModelOutput(
         policy_logits=torch.zeros((2, 2)),

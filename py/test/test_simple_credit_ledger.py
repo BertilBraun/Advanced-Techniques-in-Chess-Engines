@@ -7,6 +7,30 @@ from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedger
 from src.training.trainer import TrainingQuantumResult, TrainingStatistics
+from src.training.distributions import PolicyTrainingDistribution, TrainingDistributionSnapshot
+
+
+def _empty_distributions() -> TrainingDistributionSnapshot:
+    policy = PolicyTrainingDistribution(
+        loss=(),
+        target_top1_mass=(),
+        target_top2_mass=(),
+        target_top3_mass=(),
+        target_entropy=(),
+        prediction_entropy=(),
+    )
+    return TrainingDistributionSnapshot(
+        policy=policy,
+        wdl_loss=(),
+        root_value=(),
+        terminal_value=(),
+        predicted_value=(),
+        value_absolute_error=(),
+        sample_weight=(),
+        replay_generation_age=(),
+        replay_age_seconds=(),
+        auxiliary=(),
+    )
 
 
 def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:
@@ -46,6 +70,7 @@ def test_credit_ledger_persists_only_approximate_counters_and_active_checkpoint(
             replay_rows_per_second=1.0,
             training_samples_per_second=1.0,
             elapsed_seconds=1.0,
+            distributions=_empty_distributions(),
         ),
     )
     ledger.commit_quantum(result)

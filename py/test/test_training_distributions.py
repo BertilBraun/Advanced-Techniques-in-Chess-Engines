@@ -1,0 +1,82 @@
+import pytest
+import torch
+
+from src.training.batch import TrainingBatch, TrainingModelOutput
+from src.training.distributions import RemainingGameLengthTrainingDistribution, capture_training_distributions
+from src.training.objective import ResolvedRemainingGameLengthLoss, ResolvedTrainingObjective
+
+
+def test_training_distributions_capture_targets_predictions_losses_and_replay_age() -> None:
+    batch = TrainingBatch(
+        states=torch.zeros((2, 1)),
+        policy_targets=torch.tensor(((0.6, 0.3, 0.1), (0.5, 0.5, 0.0))),
+        wdl_targets=torch.tensor(((1.0, 0.0, 0.0), (0.0, 0.0, 1.0))),
+        root_values=torch.tensor((0.25, -0.5)),
+        auxiliary_targets=(torch.tensor(((0.75,), (0.25,))),),
+        auxiliary_eligibility=(torch.tensor((True, False)),),
+        sample_weights=torch.tensor((1.0, 2.0)),
+        source_model_generations=torch.tensor((7, 9)),
+        source_created_at_seconds=torch.tensor((90.0, 95.0), dtype=torch.float64),
+    )
+    output = TrainingModelOutput(
+        policy_logits=torch.log(torch.tensor(((0.5, 0.3, 0.2), (0.4, 0.4, 0.2)))),
+        wdl_logits=torch.log(torch.tensor(((0.8, 0.1, 0.1), (0.1, 0.2, 0.7)))),
+        auxiliary_logits=(torch.tensor(((0.5,), (100.0,))),),
+    )
+    objective = ResolvedTrainingObjective(
+        policy_loss_weight=1.0,
+        value_loss_weight=1.0,
+        root_value_blend=0.0,
+        auxiliary_losses=(ResolvedRemainingGameLengthLoss(weight=0.15),),
+    )
+
+    distributions = capture_training_distributions(
+        output,
+        batch,
+        objective,
+        source_generation=10,
+        captured_at_seconds=100.0,
+    )
+
+    assert distributions.policy.target_top1_mass == pytest.approx((0.6, 0.5))
+    assert distributions.policy.target_top2_mass == pytest.approx((0.9, 1.0))
+    assert distributions.policy.target_top3_mass == pytest.approx((1.0, 1.0))
+    assert distributions.terminal_value == pytest.approx((1.0, -1.0))
+    assert distributions.predicted_value == pytest.approx((0.7, -0.6))
+    assert distributions.replay_generation_age == pytest.approx((3.0, 1.0))
+    assert distributions.replay_age_seconds == pytest.approx((10.0, 5.0))
+    auxiliary = distributions.auxiliary[0]
+    assert isinstance(auxiliary, RemainingGameLengthTrainingDistribution)
+    assert auxiliary.target == pytest.approx((0.75,))
+    assert auxiliary.prediction == pytest.approx((0.5,))
+    assert auxiliary.absolute_error == pytest.approx((0.25,))
+
+
+def test_training_distribution_capture_is_bounded() -> None:
+    batch = TrainingBatch(
+        states=torch.zeros((3, 1)),
+        policy_targets=torch.tensor(((1.0, 0.0),) * 3),
+        wdl_targets=torch.tensor(((0.0, 1.0, 0.0),) * 3),
+        root_values=torch.zeros(3),
+        auxiliary_targets=(),
+        auxiliary_eligibility=(),
+        sample_weights=torch.ones(3),
+        source_model_generations=torch.zeros(3, dtype=torch.int64),
+        source_created_at_seconds=torch.zeros(3, dtype=torch.float64),
+    )
+    output = TrainingModelOutput(
+        policy_logits=torch.zeros((3, 2)),
+        wdl_logits=torch.zeros((3, 3)),
+        auxiliary_logits=(),
+    )
+    objective = ResolvedTrainingObjective(
+        policy_loss_weight=1.0,
+        value_loss_weight=1.0,
+        root_value_blend=0.0,
+        auxiliary_losses=(),
+    )
+
+    distributions = capture_training_distributions(output, batch, objective, 0, 0.0, maximum_rows=2)
+
+    assert len(distributions.policy.loss) == 2
+    assert len(distributions.wdl_loss) == 2

@@ -21,6 +21,8 @@ class TrainingBatch:
     auxiliary_targets: tuple[torch.Tensor, ...]
     auxiliary_eligibility: tuple[torch.Tensor, ...]
     sample_weights: torch.Tensor
+    source_model_generations: torch.Tensor
+    source_created_at_seconds: torch.Tensor
 
     def __post_init__(self) -> None:
         if len(self.auxiliary_targets) != len(self.auxiliary_eligibility):
@@ -38,6 +40,8 @@ class TrainingBatch:
             auxiliary_targets=tuple(target.pin_memory() for target in self.auxiliary_targets),
             auxiliary_eligibility=tuple(mask.pin_memory() for mask in self.auxiliary_eligibility),
             sample_weights=self.sample_weights.pin_memory(),
+            source_model_generations=self.source_model_generations.pin_memory(),
+            source_created_at_seconds=self.source_created_at_seconds.pin_memory(),
         )
 
     def to_device(self, device: torch.device, non_blocking: bool) -> TrainingBatch:
@@ -53,6 +57,8 @@ class TrainingBatch:
                 mask.to(device=device, non_blocking=non_blocking) for mask in self.auxiliary_eligibility
             ),
             sample_weights=self.sample_weights.to(device=device, non_blocking=non_blocking),
+            source_model_generations=self.source_model_generations.to(device=device, non_blocking=non_blocking),
+            source_created_at_seconds=self.source_created_at_seconds.to(device=device, non_blocking=non_blocking),
         )
 
 

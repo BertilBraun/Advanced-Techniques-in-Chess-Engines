@@ -5,6 +5,7 @@ from src.replay.manager import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective
 from src.training.progress import TrainingProgress
+from src.training.distributions import TrainingDistributionSnapshot
 from src.util.frozen_model import FrozenModel
 
 
@@ -41,6 +42,7 @@ class RankTrainingResult(FrozenModel):
     replay_read_seconds: float
     elapsed_seconds: float
     checkpoint: CheckpointReference | None
+    distributions: TrainingDistributionSnapshot | None
 
 
 class RankTrainingFailure(FrozenModel):
@@ -67,6 +69,7 @@ class TrainingStatistics:
     replay_rows_per_second: float
     training_samples_per_second: float
     elapsed_seconds: float
+    distributions: TrainingDistributionSnapshot
 
 
 @dataclass(frozen=True)

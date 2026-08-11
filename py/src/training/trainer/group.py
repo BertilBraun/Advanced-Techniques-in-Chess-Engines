@@ -102,6 +102,8 @@ class TrainerGroup:
             raise RuntimeError('Rank zero did not return the completed checkpoint.')
         if any(result.checkpoint is not None for result in results[1:]):
             raise RuntimeError('Only rank zero may return a checkpoint.')
+        if rank_zero.distributions is None or any(result.distributions is not None for result in results[1:]):
+            raise RuntimeError('Only rank zero must return training distributions.')
         auxiliary_count = len(rank_zero.auxiliary_losses)
         if any(len(result.auxiliary_losses) != auxiliary_count for result in results):
             raise RuntimeError('Trainer ranks disagree about auxiliary statistics.')
@@ -109,6 +111,8 @@ class TrainerGroup:
 
     def _aggregate_statistics(self, results: tuple[RankTrainingResult, ...]) -> TrainingStatistics:
         auxiliary_count = len(results[0].auxiliary_losses)
+        distributions = results[0].distributions
+        assert distributions is not None
         return TrainingStatistics(
             policy_loss=_mean(tuple(result.policy_loss for result in results)),
             wdl_loss=_mean(tuple(result.wdl_loss for result in results)),
@@ -127,6 +131,7 @@ class TrainerGroup:
                 / max(result.elapsed_seconds for result in results)
             ),
             elapsed_seconds=max(result.elapsed_seconds for result in results),
+            distributions=distributions,
         )
 
     def close(self) -> None:

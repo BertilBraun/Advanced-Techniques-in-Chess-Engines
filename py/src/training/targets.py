@@ -23,7 +23,6 @@ class NextPolicyTargetConfiguration(FrozenModel):
 
 class RemainingGameLengthTargetConfiguration(FrozenModel):
     kind: Literal['remaining_game_length'] = 'remaining_game_length'
-    normalization_scale: float = Field(gt=0.0)
     loss_weight: FloatGenerationSchedule
 
     @model_validator(mode='after')
@@ -86,17 +85,20 @@ class TrainingTargetLayout:
 def build_training_target_layout(
     action_size: int,
     auxiliary_targets: tuple[AuxiliaryTargetConfiguration, ...],
+    maximum_game_plies: int | None = None,
 ) -> TrainingTargetLayout:
     heads: list[AuxiliaryHeadLayout] = []
     for target in auxiliary_targets:
         match target:
             case NextPolicyTargetConfiguration(ply_offset=ply_offset):
                 heads.append(NextPolicyHeadLayout(kind='next_policy', action_size=action_size, ply_offset=ply_offset))
-            case RemainingGameLengthTargetConfiguration(normalization_scale=normalization_scale):
+            case RemainingGameLengthTargetConfiguration():
+                if maximum_game_plies is None:
+                    raise ValueError('Remaining-game-length targets require a configured maximum game length.')
                 heads.append(
                     RemainingGameLengthHeadLayout(
                         kind='remaining_game_length',
-                        normalization_scale=normalization_scale,
+                        normalization_scale=float(maximum_game_plies),
                     )
                 )
     return TrainingTargetLayout(action_size=action_size, wdl_size=3, auxiliary_heads=tuple(heads))

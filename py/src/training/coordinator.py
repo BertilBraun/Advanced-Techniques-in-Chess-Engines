@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import time
 
+import numpy as np
+
 from src.evaluation.manager import EvaluationManager
 from src.games.implementation import GameImplementation
 from src.replay.layout import ReplayLayout
@@ -16,11 +18,18 @@ from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.retention import CheckpointRetention
 from src.training.credit_ledger import CreditLedger
 from src.training.self_play_group import SelfPlayGroup
+from src.training.distributions import (
+    NextPolicyTrainingDistribution,
+    PolicyTrainingDistribution,
+    RemainingGameLengthTrainingDistribution,
+    TrainingDistributionSnapshot,
+)
+from src.training.targets import AuxiliaryHeadLayout, NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 from src.training.telemetry import training_lifecycle_telemetry
 from src.training.trainer import TrainerGroup, TrainingQuantumResult
 from src.training.run_limits import RunLimitMonitor
 from src.util.log import log
-from src.util.tensorboard import log_scalar
+from src.util.tensorboard import log_histogram, log_scalar
 
 
 class Coordinator:
@@ -161,6 +170,15 @@ class Coordinator:
         log_scalar('training/wdl_loss', statistics.wdl_loss, generation)
         log_scalar('training/total_loss', statistics.total_loss, generation)
         log_scalar('training/gradient_norm', statistics.gradient_norm, generation)
+        for index, (head, auxiliary_loss) in enumerate(
+            zip(self.game.target_layout.auxiliary_heads, statistics.auxiliary_losses, strict=True)
+        ):
+            log_scalar(f'training/auxiliary/{_auxiliary_name(index, head)}/loss', auxiliary_loss, generation)
+        _record_training_distributions(
+            statistics.distributions,
+            self.game.target_layout.auxiliary_heads,
+            generation,
+        )
         log_scalar('throughput/replay_rows_per_second', statistics.replay_rows_per_second, generation)
         log_scalar('throughput/training_samples_per_second', statistics.training_samples_per_second, generation)
         log_scalar('training/optimizer_steps', result.completed_optimizer_steps, generation)
@@ -198,3 +216,72 @@ class Coordinator:
             f'observed-replay-ratio={lifecycle.observed_replay_ratio:.3f}, '
             f'replay={lifecycle.live_replay_rows}/{lifecycle.logical_replay_capacity}'
         )
+
+
+def _record_training_distributions(
+    distributions: TrainingDistributionSnapshot,
+    auxiliary_heads: tuple[AuxiliaryHeadLayout, ...],
+    generation: int,
+) -> None:
+    _record_policy_distribution('training/distribution/policy', distributions.policy, generation)
+    _log_values('training/distribution/wdl_loss', distributions.wdl_loss, generation)
+    _log_values('training/distribution/root_value', distributions.root_value, generation, log_mean=True)
+    _log_values('training/distribution/terminal_value', distributions.terminal_value, generation, log_mean=True)
+    _log_values('training/distribution/predicted_value', distributions.predicted_value, generation, log_mean=True)
+    _log_values(
+        'training/distribution/value_absolute_error',
+        distributions.value_absolute_error,
+        generation,
+        log_mean=True,
+    )
+    _log_values('training/distribution/sample_weight', distributions.sample_weight, generation)
+    _log_values(
+        'replay/distribution/generation_age',
+        distributions.replay_generation_age,
+        generation,
+        log_mean=True,
+    )
+    _log_values('replay/distribution/age_seconds', distributions.replay_age_seconds, generation, log_mean=True)
+    for index, (head, auxiliary) in enumerate(zip(auxiliary_heads, distributions.auxiliary, strict=True)):
+        prefix = f'training/auxiliary/{_auxiliary_name(index, head)}'
+        match auxiliary:
+            case NextPolicyTrainingDistribution(policy=policy):
+                _record_policy_distribution(prefix, policy, generation)
+            case RemainingGameLengthTrainingDistribution(
+                target=target,
+                prediction=prediction,
+                absolute_error=absolute_error,
+            ):
+                _log_values(f'{prefix}/target', target, generation, log_mean=True)
+                _log_values(f'{prefix}/prediction', prediction, generation, log_mean=True)
+                _log_values(f'{prefix}/absolute_error', absolute_error, generation, log_mean=True)
+
+
+def _record_policy_distribution(
+    prefix: str,
+    policy: PolicyTrainingDistribution,
+    generation: int,
+) -> None:
+    _log_values(f'{prefix}/loss', policy.loss, generation)
+    _log_values(f'{prefix}/target_top1_mass', policy.target_top1_mass, generation, log_mean=True)
+    _log_values(f'{prefix}/target_top2_mass', policy.target_top2_mass, generation, log_mean=True)
+    _log_values(f'{prefix}/target_top3_mass', policy.target_top3_mass, generation, log_mean=True)
+    _log_values(f'{prefix}/target_entropy', policy.target_entropy, generation, log_mean=True)
+    _log_values(f'{prefix}/prediction_entropy', policy.prediction_entropy, generation, log_mean=True)
+
+
+def _log_values(name: str, values: tuple[float, ...], generation: int, log_mean: bool = False) -> None:
+    if not values:
+        return
+    array = np.asarray(values, dtype=np.float32)
+    log_histogram(name, array, generation)
+    if log_mean:
+        log_scalar(f'{name}_mean', float(array.mean()), generation)
+
+
+def _auxiliary_name(index: int, head: AuxiliaryHeadLayout) -> str:
+    match head:
+        case NextPolicyHeadLayout(ply_offset=ply_offset):
+            return f'{index}-next-policy-ply-{ply_offset}'
+        case RemainingGameLengthHeadLayout():
+            return f'{index}-remaining-game-length'

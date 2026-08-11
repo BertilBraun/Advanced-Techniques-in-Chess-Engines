@@ -20,10 +20,8 @@ from src.experiment.base_configuration import (
 from src.experiment.configuration import ExperimentConfiguration, experiment_configuration_sha256
 from src.evaluation.preparation import PreparedEvaluationArtifacts, prepare_evaluation_artifacts
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
-from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.composition import create_game_implementation
-from src.games.go.configuration import GoExperimentConfiguration
-from src.training.targets import auxiliary_head_output_size, build_training_target_layout
+from src.training.targets import auxiliary_head_output_size
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.training.checkpoint.paths import model_save_path
@@ -216,12 +214,7 @@ def _training_device(experiment: ExperimentConfiguration) -> torch.device:
 
 
 def _auxiliary_output_sizes(experiment: ExperimentConfiguration) -> tuple[int, ...]:
-    match experiment:
-        case ChessExperimentConfiguration():
-            objective = experiment.chess.objective
-        case GoExperimentConfiguration():
-            objective = experiment.go.objective
-    layout = build_training_target_layout(experiment.network_dimensions.actions, objective.auxiliary_targets)
+    layout = create_game_implementation(experiment).target_layout
     return tuple(auxiliary_head_output_size(head) for head in layout.auxiliary_heads)
 
 

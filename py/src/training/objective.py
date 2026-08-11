@@ -24,6 +24,14 @@ def _scalar_to_wdl(scores: torch.Tensor) -> torch.Tensor:
     return torch.stack((wins + remainders / 3, remainders / 3, losses + remainders / 3), dim=-1)
 
 
+def blended_wdl_targets(
+    terminal_targets: torch.Tensor,
+    root_values: torch.Tensor,
+    root_value_blend: float,
+) -> torch.Tensor:
+    return torch.lerp(terminal_targets, _scalar_to_wdl(root_values), root_value_blend)
+
+
 @dataclass(frozen=True)
 class ObjectiveLoss:
     policy: torch.Tensor
@@ -80,11 +88,7 @@ class ResolvedTrainingObjective(FrozenModel):
         sample_weights = batch.sample_weights / batch.sample_weights.mean()
         policy_rows = functional.cross_entropy(output.policy_logits, batch.policy_targets, reduction='none')
         policy_loss = (policy_rows * sample_weights).mean()
-        blended_wdl = torch.lerp(
-            batch.wdl_targets,
-            _scalar_to_wdl(batch.root_values),
-            self.root_value_blend,
-        )
+        blended_wdl = blended_wdl_targets(batch.wdl_targets, batch.root_values, self.root_value_blend)
         wdl_rows = functional.cross_entropy(output.wdl_logits, blended_wdl, reduction='none')
         wdl_loss = (wdl_rows * sample_weights).mean()
         auxiliary_losses = tuple(

@@ -20,6 +20,7 @@ from src.training.checkpoint.persistence import load_model_and_optimizer, save_m
 from src.training.network import Network
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import auxiliary_head_output_size
+from src.training.distributions import TrainingDistributionSnapshot, capture_training_distributions
 from src.training.configuration import TrainerTopologyParams
 from src.training.trainer.contracts import (
     RankTrainingFailure,
@@ -65,6 +66,12 @@ class _DeviceLossTotals:
     auxiliary: torch.Tensor
     total: torch.Tensor
     gradient_norm: torch.Tensor
+
+
+@dataclass(frozen=True)
+class _TrainingBatchResult:
+    totals: _DeviceLossTotals
+    distributions: TrainingDistributionSnapshot | None
 
 
 def _initialize_rank(
@@ -173,7 +180,9 @@ def _train_batches(
     uses_cuda: bool,
     maximum_gradient_norm: float,
     objective: ResolvedTrainingObjective,
-) -> _DeviceLossTotals:
+    collect_distributions: bool,
+    source_generation: int,
+) -> _TrainingBatchResult:
     totals = _DeviceLossTotals(
         policy=torch.zeros((), device=device),
         wdl=torch.zeros((), device=device),
@@ -181,11 +190,20 @@ def _train_batches(
         total=torch.zeros((), device=device),
         gradient_norm=torch.zeros((), device=device),
     )
+    distributions = None
     with loader.prefetch(device, uses_cuda) as prefetched_batches:
         for batch in prefetched_batches:
             optimizer.zero_grad(set_to_none=True)
             output = distributed_model(batch.states)
             loss = objective.calculate_loss(output, batch)
+            if collect_distributions and distributions is None:
+                distributions = capture_training_distributions(
+                    output,
+                    batch,
+                    objective,
+                    source_generation,
+                    time.time(),
+                )
             loss.total.backward()
             gradient_norm = torch.nn.utils.clip_grad_norm_(distributed_model.parameters(), maximum_gradient_norm)
             optimizer.step()
@@ -195,7 +213,7 @@ def _train_batches(
             totals.gradient_norm.add_(gradient_norm.detach())
             if loss.auxiliary:
                 totals.auxiliary.add_(torch.stack(tuple(auxiliary.detach() for auxiliary in loss.auxiliary)))
-    return totals
+    return _TrainingBatchResult(totals, distributions)
 
 
 def _resolve_loss_totals(totals: _DeviceLossTotals) -> _LossTotals:
@@ -257,17 +275,18 @@ def train_rank_quantum(
         sampler_seed=configuration.training.random_seed,
         pin_memory=uses_cuda,
     )
-    totals = _resolve_loss_totals(
-        _train_batches(
-            loader,
-            ddp,
-            optimizer,
-            device,
-            uses_cuda,
-            configuration.training.trainer.max_grad_norm,
-            command.parameters.objective,
-        )
+    training_result = _train_batches(
+        loader,
+        ddp,
+        optimizer,
+        device,
+        uses_cuda,
+        configuration.training.trainer.max_grad_norm,
+        command.parameters.objective,
+        collect_distributions=rank == 0,
+        source_generation=command.source_progress.model_generation,
     )
+    totals = _resolve_loss_totals(training_result.totals)
     checkpoint = _save_rank_checkpoint(rank, model, optimizer, command, configuration.training.save_path)
     distributed.barrier()
     divisor = float(optimizer_steps)
@@ -283,4 +302,5 @@ def train_rank_quantum(
         replay_read_seconds=loader.read_seconds,
         elapsed_seconds=time.perf_counter() - started_at,
         checkpoint=checkpoint,
+        distributions=training_result.distributions,
     )
