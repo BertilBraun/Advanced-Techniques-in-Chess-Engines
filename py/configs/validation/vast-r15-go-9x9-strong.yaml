@@ -1,0 +1,60 @@
+extends: ../screening/go-9x9-strong/00-baseline.yaml
+run:
+  run_name: vast-r15-go-9x9-strong-smoke
+  tensorboard_run_directory: vast-r15-go-9x9-strong-smoke
+  stage: systems_pilot
+  hardware:
+    provider_name: vast.ai
+    offer_id: instance-47400225-machine-112617-host-115630
+    gpu_model: NVIDIA GeForce RTX 3060
+    gpu_count: 2
+    logical_cpu_count: 16
+    minimum_ram_gib: 20
+    minimum_disk_gib: 20
+training:
+  save_path: py/training_data/validation/vast-r15-go-9x9-strong
+  network: {num_layers: 2, hidden_size: 32, residual_context: {kind: global_pooling, placement: every_second_block}, num_policy_channels: 2, num_value_channels: 1, value_fc_size: 16}
+  trainer:
+    global_batch_size: 32
+    local_batch_size: 16
+  topology:
+    trainer: {device_type: cuda, process_group_backend: nccl, rank_zero_device_id: 0, ddp_device_ids: [0, 1], cpu_threads: 4, interop_threads: 1}
+    self_play: {device_ids: [0, 0, 0, 0, 1, 1, 1, 1], parallel_games_per_process: 32, tensorboard_processes: 1, node_ids_to_pause_during_training: [1, 2, 3, 5, 6, 7]}
+    evaluation: {device_cycle: [0, 1]}
+  lifecycle:
+    replay: {capacity: {kind: constant, value: 256}, maximum_capacity: 256, maximum_policy_entries: 82}
+    credit: {replay_ratio: 4, optimizer_steps_per_quantum: 1, maximum_optimizer_steps: 8, retained_checkpoint_interval_generations: 1}
+    inference_retention: {recent_checkpoint_count: 8, milestone_interval: 1}
+  limits: {hourly_price: 0.4608888889, maximum_cost: 0.05, maximum_wall_time_seconds: 300, maximum_open_file_count: 32768, maximum_host_ram_percent: 90.0, minimum_free_disk_gib: 10.0, resource_telemetry_interval_seconds: 1.0}
+  random_seed: 1515
+evaluation:
+  cadence_seconds: 20
+  job_timeout_seconds: 120
+  shutdown_grace_seconds: 10
+  bootstrap_samples: 64
+  maximum_concurrent_jobs: 4
+  definitions:
+    - {kind: fixed_dataset, definition_id: fixed-dataset}
+    - kind: previous_checkpoint
+      definition_id: previous-boundary
+      boundary_offset: 1
+      opening_pair_count: 1
+      maximum_game_plies: 40
+      search: &smoke_search
+        searches_per_move: 2
+        parallel_searches: 1
+        exploration_constant: 1.0
+        inference: {inference_workers: 1, inference_batch_size: 4, outstanding_batches_per_worker: 1}
+    - {kind: katago, definition_id: katago-smoke, maximum_visits: 2, opening_pair_count: 1, maximum_game_plies: 40, search: *smoke_search}
+go:
+  self_play:
+    search:
+      full_searches: {kind: linear, start_generation: 0, end_generation: 2, start_value: 8, end_value: 16, rounding: nearest}
+      fast_searches: {kind: linear, start_generation: 0, end_generation: 2, start_value: 2, end_value: 4, rounding: nearest}
+    start_position: {kind: restart_state, true_start_probability: 0.5, candidate_visit_mass: 0.9, minimum_candidates: 2, maximum_candidates: 4, maximum_absolute_root_value: 0.9, minimum_remaining_plies: 5, maximum_archive_positions: 1000, maximum_age_generations: 8}
+    full_search_probability: {kind: linear, start_generation: 0, end_generation: 1, start_value: 1.0, end_value: 0.25, rounding: none}
+    greedy_after_ply: {kind: constant, value: 20}
+    detailed_statistics_workers: 1
+  rules: {komi_half_points: 14, maximum_moves: 162}
+  objective:
+    root_value_blend: {kind: linear, start_generation: 0, end_generation: 2, start_value: 0.0, end_value: 0.15, rounding: none}
