@@ -10,7 +10,7 @@ import torch.distributed as distributed
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 
-from src.experiment.configuration import ExperimentConfiguration
+from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration_json
 from src.games.composition import create_game_implementation
 from src.games.implementation import GameImplementation
 from src.replay.batch_loader import MappedReplayBatchLoader
@@ -155,10 +155,11 @@ def trainer_rank_main(
     rank: int,
     world_size: int,
     rendezvous_port: int,
-    configuration: ExperimentConfiguration,
+    configuration_json: str,
     starting_checkpoint: CheckpointReference,
 ) -> None:
     try:
+        configuration = load_experiment_configuration_json(configuration_json)
         runtime = _initialize_rank(rank, world_size, rendezvous_port, configuration, starting_checkpoint)
         _run_rank_commands(connection, rank, world_size, configuration, runtime)
     except BaseException as error:

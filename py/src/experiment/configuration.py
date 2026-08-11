@@ -18,13 +18,18 @@ ExperimentConfiguration: TypeAlias = Annotated[
     ChessExperimentConfiguration | GoExperimentConfiguration,
     Field(discriminator='game'),
 ]
+EXPERIMENT_CONFIGURATION_ADAPTER = TypeAdapter(ExperimentConfiguration)
 
 JSON_MAPPING_ADAPTER = TypeAdapter(dict[str, JsonValue])
 
 
 def load_experiment_configuration(path: Path) -> ExperimentConfiguration:
     resolved, _ = _load_experiment_mapping(path.resolve(), ())
-    return TypeAdapter(ExperimentConfiguration).validate_python(resolved)
+    return EXPERIMENT_CONFIGURATION_ADAPTER.validate_python(resolved)
+
+
+def load_experiment_configuration_json(payload: str) -> ExperimentConfiguration:
+    return EXPERIMENT_CONFIGURATION_ADAPTER.validate_json(payload)
 
 
 def experiment_configuration_source_paths(path: Path) -> tuple[Path, ...]:

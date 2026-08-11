@@ -164,11 +164,16 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
         return cast(GameImplementation, fake_game)
 
     monkeypatch.setattr(self_play_group_module, 'create_game_implementation', create_game)
+    monkeypatch.setattr(
+        self_play_group_module,
+        'load_experiment_configuration_json',
+        lambda payload: cast(ExperimentConfiguration, fake_game),
+    )
     context = multiprocessing.get_context('spawn')
     parent, child = context.Pipe(duplex=True)
     process = Thread(
         target=_self_play_worker_main,
-        args=(child, 0, 0, cast(ExperimentConfiguration, fake_game)),
+        args=(child, 0, 0, '{}'),
     )
     process.start()
 

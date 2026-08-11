@@ -11,7 +11,7 @@ import torch
 
 from src.games.implementation import GameImplementation
 from src.games.composition import create_game_implementation
-from src.experiment.configuration import ExperimentConfiguration
+from src.experiment.configuration import load_experiment_configuration_json
 from src.self_play.protocol import (
     PausedSelfPlayState,
     PausedSelfPlayStateApplied,
@@ -117,7 +117,7 @@ class SelfPlayGroup:
         parent, child = self._context.Pipe(duplex=True)
         process = self._context.Process(
             target=_self_play_worker_main,
-            args=(child, worker_id, device_id, self.game.configuration),
+            args=(child, worker_id, device_id, self.game.configuration.model_dump_json()),
             name=f'self-play-worker-{worker_id}',
         )
         process.start()
@@ -203,8 +203,9 @@ def _self_play_worker_main(
     connection: Connection,
     worker_id: int,
     device_id: int,
-    configuration: ExperimentConfiguration,
+    configuration_json: str,
 ) -> None:
+    configuration = load_experiment_configuration_json(configuration_json)
     game = create_game_implementation(configuration)
     seed = game.training.random_seed + worker_id
     random.seed(seed)

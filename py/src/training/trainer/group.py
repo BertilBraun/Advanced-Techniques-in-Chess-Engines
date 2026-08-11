@@ -50,7 +50,7 @@ class TrainerGroup:
                     rank,
                     self.world_size,
                     rendezvous_port,
-                    configuration,
+                    configuration.model_dump_json(),
                     starting_checkpoint,
                 ),
                 name=f'trainer-rank-{rank}',
