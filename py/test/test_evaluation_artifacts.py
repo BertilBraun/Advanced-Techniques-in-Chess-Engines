@@ -28,7 +28,13 @@ from src.evaluation.configuration import (
     KataGoBookSelectionConfiguration,
     OpeningSuiteConfiguration,
 )
-from src.evaluation.contracts import EvaluationDatasetManifest, FixedDatasetEvaluationJob, OpeningSuiteManifest
+from src.evaluation.contracts import (
+    EvaluationDatasetManifest,
+    FixedDatasetEvaluationJob,
+    KataGoBookDatasetManifest,
+    KataGoBookOpeningSuiteManifest,
+    OpeningSuiteManifest,
+)
 from src.evaluation.dataset import evaluate_fixed_dataset
 from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
 from src.evaluation.katago_book import (
@@ -96,6 +102,27 @@ def test_checked_in_go_9x9_book_export_matches_configuration() -> None:
         sum(position.applied_symmetry == symmetry for position in oriented_openings) for symmetry in range(8)
     ) == (25, 25, 25, 25, 25, 25, 25, 25)
     assert len(select_katago_book_positions(export, dataset_source.selection, 500)) == 500
+
+
+def test_checked_in_go_9x9_derived_artifacts_use_book_policy_and_production_rules() -> None:
+    experiment = load_experiment_configuration(Path('configs/baselines/vast-go-9x9-2gpu-4h.yaml'))
+    dataset_path = Path(experiment.evaluation.dataset.path).relative_to('py')
+    openings_path = Path(experiment.evaluation.openings.path).relative_to('py')
+    dataset_manifest = KataGoBookDatasetManifest.model_validate_json(
+        dataset_manifest_path(dataset_path).read_text(encoding='utf-8')
+    )
+    opening_manifest = KataGoBookOpeningSuiteManifest.model_validate_json(openings_path.read_text(encoding='utf-8'))
+    dataset_source = experiment.evaluation.dataset.source
+    opening_source = experiment.evaluation.openings.source
+    assert dataset_source.kind == opening_source.kind == 'katago_book'
+
+    assert dataset_manifest.position_count == dataset_source.position_count == 500
+    assert dataset_manifest.soft_policy_source == 'katago_book_prior'
+    assert dataset_manifest.book_export_sha256 == dataset_source.selection.export_sha256
+    assert hashlib.sha256(dataset_path.read_bytes()).hexdigest() == dataset_manifest.data_sha256
+    assert len(opening_manifest.openings) == experiment.evaluation.openings.opening_count == 200
+    assert opening_manifest.book_export_sha256 == opening_source.selection.export_sha256
+    assert opening_manifest.rules_digest == dataset_manifest.rules_digest
 
 
 def test_katago_book_crawl_parses_bounded_official_page_graph(monkeypatch: pytest.MonkeyPatch) -> None:
