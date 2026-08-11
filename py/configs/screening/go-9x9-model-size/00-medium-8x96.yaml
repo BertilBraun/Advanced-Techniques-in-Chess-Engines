@@ -1,0 +1,6 @@
+extends: ../../baselines/vast-go-9x9-2gpu-4h.yaml
+run:
+  run_name: go9-model-size-00-medium-8x96
+  tensorboard_run_directory: go9-model-size-00-medium-8x96
+training:
+  save_path: py/training_data/screening/go9-model-size/00-medium-8x96

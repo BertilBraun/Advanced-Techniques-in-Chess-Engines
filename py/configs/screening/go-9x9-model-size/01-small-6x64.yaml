@@ -1,0 +1,9 @@
+extends: 00-medium-8x96.yaml
+run:
+  run_name: go9-model-size-01-small-6x64
+  tensorboard_run_directory: go9-model-size-01-small-6x64
+training:
+  save_path: py/training_data/screening/go9-model-size/01-small-6x64
+  network:
+    num_layers: 6
+    hidden_size: 64
