@@ -88,6 +88,7 @@ class ResolvedSelfPlayParameters:
     greedy_after_ply: int
     maximum_game_plies: int | None
     primary_sample_weight: float
+    force_fast_search_after_ply: int | None = None
 
     def __post_init__(self) -> None:
         if not 0.0 < self.full_search_probability <= 1.0:
@@ -112,6 +113,8 @@ class ResolvedSelfPlayParameters:
             raise ValueError('Final self-play temperature cannot exceed the starting temperature.')
         if self.greedy_after_ply <= 0:
             raise ValueError('Greedy ply must be positive.')
+        if self.force_fast_search_after_ply is not None and self.force_fast_search_after_ply <= 0:
+            raise ValueError('Forced-fast-search ply must be positive.')
         match self.start_position:
             case RandomOpeningStartParameters(maximum_plies=maximum_plies):
                 if self.maximum_game_plies is not None and self.maximum_game_plies <= maximum_plies:

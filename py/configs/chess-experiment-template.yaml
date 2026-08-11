@@ -178,7 +178,16 @@ chess:
       inference_workers: 2
       inference_batch_size: 64
       outstanding_batches_per_worker: 2
-    start_position: {kind: random_opening, maximum_plies: {kind: constant, value: 0}}
+    start_position:
+      kind: restart_state
+      true_start_probability: 0.5
+      candidate_visit_mass: 0.85
+      minimum_candidates: 2
+      maximum_candidates: 3
+      maximum_absolute_root_value: 0.8
+      minimum_remaining_plies: 15
+      maximum_archive_positions: 50000
+      maximum_age_generations: 20
     full_search_probability: {kind: constant, value: 0.25}
     retained_root_visit_fraction: {kind: constant, value: 0.6}
     greedy_after_ply: {kind: constant, value: 50}
@@ -187,8 +196,9 @@ chess:
       start_generation: 0
       end_generation: 50
       start_value: 200
-      end_value: 400
+      end_value: 600
       rounding: nearest
+    force_fast_search_after_ply: {kind: constant, value: 250}
     starting_temperature: {kind: constant, value: 1.3}
     final_temperature: {kind: constant, value: 0.1}
     primary_sample_weight: {kind: constant, value: 1.0}

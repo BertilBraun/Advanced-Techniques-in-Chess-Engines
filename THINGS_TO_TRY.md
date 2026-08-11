@@ -34,6 +34,15 @@ Current screening policy:
   * Train policy primarily from full-search positions.
   * Goal: more completed games and more independent value targets per hour.
 
+* **Fast natural-outcome continuation** - implemented [x] experimenting [ ] validated [ ]
+
+  * Optionally force fast searches after a configured ply while retaining the independently scheduled emergency cap.
+  * Fast continuation uses the existing greedy late-game selection, noise-free fast search, and tree reuse.
+  * Fast observations stay out of replay but carry the natural terminal outcome back to earlier full-search samples.
+  * A restart beyond the cutoff retains one full search at its reserved branch root before entering fast continuation.
+  * The chess template starts continuation at ply 250 while its game-specific material-adjudication cap grows from
+    200 to 600 plies.
+
 * **Adaptive search termination** - implemented [ ] experimenting [ ] validated [ ]
 
   * Stop before the nominal simulation cap when one move is clearly dominant.

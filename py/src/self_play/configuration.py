@@ -179,6 +179,7 @@ class SelfPlayConfiguration(FrozenModel):
     starting_temperature: FloatGenerationSchedule
     final_temperature: FloatGenerationSchedule
     primary_sample_weight: FloatGenerationSchedule
+    force_fast_search_after_ply: IntegerGenerationSchedule | None = None
     detailed_statistics_workers: int = Field(default=1, ge=0)
 
     @model_validator(mode='after')
@@ -191,6 +192,10 @@ class SelfPlayConfiguration(FrozenModel):
                 raise ValueError(f'{name} must remain positive.')
         if any(value <= 0 for value in defined_schedule_values(self.greedy_after_ply)):
             raise ValueError('Greedy ply must remain positive.')
+        if self.force_fast_search_after_ply is not None and any(
+            value <= 0 for value in defined_schedule_values(self.force_fast_search_after_ply)
+        ):
+            raise ValueError('Forced-fast-search ply must remain positive.')
         if any(not 0.0 < value <= 1.0 for value in defined_schedule_values(self.full_search_probability)):
             raise ValueError('Full-search probability must remain in (0, 1].')
         if any(not 0.0 <= value <= 1.0 for value in defined_schedule_values(self.retained_root_visit_fraction)):
@@ -222,4 +227,9 @@ class SelfPlayConfiguration(FrozenModel):
             greedy_after_ply=self.greedy_after_ply.value_at(model_generation),
             maximum_game_plies=maximum_game_plies,
             primary_sample_weight=self.primary_sample_weight.value_at(model_generation),
+            force_fast_search_after_ply=(
+                None
+                if self.force_fast_search_after_ply is None
+                else self.force_fast_search_after_ply.value_at(model_generation)
+            ),
         )

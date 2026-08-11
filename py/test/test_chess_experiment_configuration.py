@@ -172,8 +172,13 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
     assert configuration.evaluation.engine.hash_mib == 1024
     assert configuration.chess.self_play.maximum_game_plies is not None
     assert configuration.chess.self_play.maximum_game_plies.value_at(0) == 200
-    assert configuration.chess.self_play.maximum_game_plies.value_at(25) == 300
-    assert configuration.chess.self_play.maximum_game_plies.value_at(50) == 400
+    assert configuration.chess.self_play.maximum_game_plies.value_at(25) == 400
+    assert configuration.chess.self_play.maximum_game_plies.value_at(50) == 600
+    assert configuration.chess.self_play.force_fast_search_after_ply is not None
+    assert configuration.chess.self_play.force_fast_search_after_ply.value_at(0) == 250
+    start_position = configuration.chess.self_play.start_position
+    assert start_position.kind == 'restart_state'
+    assert start_position.maximum_absolute_root_value == pytest.approx(0.8)
     assert configuration.chess.objective.root_value_blend.value_at(9) == pytest.approx(0.0)
     assert configuration.chess.objective.root_value_blend.value_at(20) == pytest.approx(0.075)
     assert configuration.chess.objective.root_value_blend.value_at(30) == pytest.approx(0.15)

@@ -78,6 +78,7 @@ class FakeInferenceStatistics:
 class FakeSearch:
     def __init__(self) -> None:
         self.generations: list[int] = []
+        self.request_batches: list[tuple[FakeRequest, ...]] = []
         self.capacity_changed = False
         self.actual_visits = [FakeVisit(0, 3)]
         self.policy_target_visits = [FakeVisit(0, 3)]
@@ -90,6 +91,7 @@ class FakeSearch:
 
     def search(self, requests: list[FakeRequest], collect_statistics: bool = False) -> FakeBatch:
         assert not collect_statistics
+        self.request_batches.append(tuple(requests))
         return FakeBatch(
             [
                 FakeResult(
@@ -149,10 +151,12 @@ class FakeGame:
         self,
         maximum_random_opening_plies: int = 0,
         restart_parameters: RestartStateStartParameters | None = None,
+        force_fast_search_after_ply: int | None = None,
     ) -> None:
         self.search = FakeSearch()
         self.maximum_random_opening_plies = maximum_random_opening_plies
         self.restart_parameters = restart_parameters
+        self.force_fast_search_after_ply = force_fast_search_after_ply
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
         del model_generation
@@ -178,6 +182,7 @@ class FakeGame:
             greedy_after_ply=1,
             maximum_game_plies=None,
             primary_sample_weight=1.0,
+            force_fast_search_after_ply=self.force_fast_search_after_ply,
         )
 
     def create_native_search(
@@ -256,6 +261,25 @@ def test_worker_replaces_roots_when_search_arena_capacity_changes(tmp_path: Path
     assert [active_game.root.position.ply for active_game in worker.active_games] == [1, 1]
     assert [active_game.action_ids for active_game in worker.active_games] == [[0], [0]]
     assert [active_game.root.reset_count for active_game in worker.active_games] == [0, 0]
+
+
+def test_worker_forces_fast_searches_after_configured_ply(tmp_path: Path) -> None:
+    game = FakeGame(force_fast_search_after_ply=1)
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path,
+    )
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    worker.run_batch()
+    worker.run_batch()
+
+    assert game.search.request_batches[0][0].full_search
+    assert not game.search.request_batches[1][0].full_search
+    assert [observation.full_search for observation in worker.active_games[0].observations] == [True, False]
 
 
 def test_worker_selects_from_actual_visits_and_records_pruned_target_visits(tmp_path: Path) -> None:

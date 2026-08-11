@@ -85,9 +85,12 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         search, parameters = self._loaded_runtime()
         requests: list[NativeRequestT] = []
         for active_game in self.active_games:
-            full_search = (
-                active_game.reserved_restart_action_id is not None
-                or self.random.random() < parameters.full_search_probability
+            continuation_forces_fast_search = (
+                parameters.force_fast_search_after_ply is not None
+                and len(active_game.action_ids) >= parameters.force_fast_search_after_ply
+            )
+            full_search = active_game.reserved_restart_action_id is not None or (
+                not continuation_forces_fast_search and self.random.random() < parameters.full_search_probability
             )
             if full_search:
                 active_game.root.discount(parameters.retained_root_visit_fraction)
