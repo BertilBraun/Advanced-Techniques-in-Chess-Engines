@@ -134,6 +134,43 @@ void testLocalAndZeroVisitRetention() {
             "Zero retention left child statistics attached");
 }
 
+void testReservationLifecycle() {
+    GoTree tree = makeGoTree(4, 0.5F);
+    expandRoot(tree, 1);
+    const std::size_t child = materializeRootEdge(tree, 0);
+
+    tree.reserve(child);
+    require(tree.node(child).inference_pending, "Reservation did not mark the selected leaf");
+    require(tree.root().visits == 1 && tree.root().children[0].visits == 1 &&
+                tree.node(child).visits == 1,
+            "Reservation did not add one visit along the complete path");
+    requireNear(tree.root().virtual_loss, 1.0F, "Reservation did not add virtual loss to the root");
+    requireNear(tree.root().children[0].virtual_loss, 1.0F,
+                "Reservation did not add virtual loss to the incoming edge");
+    require(!tree.selectAvailableLeaf(1.0F).has_value(), "Selection reused the only reserved leaf");
+
+    tree.cancelReservation(child);
+    require(!tree.node(child).inference_pending && tree.root().visits == 0 &&
+                tree.root().children[0].visits == 0 && tree.node(child).visits == 0,
+            "Cancellation did not restore path visits and pending state");
+    requireNear(tree.root().virtual_loss, 0.0F, "Cancellation did not remove root virtual loss");
+    requireNear(tree.root().children[0].virtual_loss, 0.0F,
+                "Cancellation did not remove edge virtual loss");
+
+    tree.reserve(child);
+    tree.completeReservation(child, 0.8F);
+    require(!tree.node(child).inference_pending && tree.root().visits == 1 &&
+                tree.root().children[0].visits == 1 && tree.node(child).visits == 1,
+            "Completion did not retain the reserved visit");
+    requireNear(tree.node(child).value_sum, 0.8F,
+                "Completion did not back up the leaf-perspective value");
+    requireNear(tree.root().children[0].value_sum, 0.8F,
+                "Completion did not back up the incoming-edge value");
+    requireNear(tree.root().value_sum, -0.4F,
+                "Completion did not apply player perspective and turn discount");
+    requireNear(tree.root().virtual_loss, 0.0F, "Completion did not remove root virtual loss");
+}
+
 void testRecursiveDiscount() {
     GoTree tree = makeGoTree(8);
     expandRoot(tree, 1);
@@ -337,6 +374,7 @@ int runGameSearchTreeTests() {
         testForcedPlayoutMath();
         testConsistentDiscount();
         testLocalAndZeroVisitRetention();
+        testReservationLifecycle();
         testRecursiveDiscount();
         testImportancePruningAndRematerialization();
         testFreshRootNoiseUsesRawPriors();
