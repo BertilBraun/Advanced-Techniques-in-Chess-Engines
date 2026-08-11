@@ -43,7 +43,7 @@ training:
   random_seed: 1209
 evaluation:
   cadence_seconds: 1200
-  job_timeout_seconds: 1200
+  job_timeout_seconds: 1800
   shutdown_grace_seconds: 30
   bootstrap_samples: 10000
   maximum_concurrent_jobs: 10
@@ -83,17 +83,17 @@ evaluation:
     - kind: previous_checkpoint
       definition_id: previous-20m
       boundary_offset: 1
-      opening_pair_count: 200
+      opening_pair_count: 100
       maximum_game_plies: 324
       search: &evaluation_search
-        searches_per_move: 96
+        searches_per_move: 64
         parallel_searches: 1
         exploration_constant: 1.0
         inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 1}
-    - {kind: previous_checkpoint, definition_id: previous-40m, boundary_offset: 2, opening_pair_count: 200, maximum_game_plies: 324, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-60m, boundary_offset: 3, opening_pair_count: 200, maximum_game_plies: 324, search: *evaluation_search}
-    - {kind: reference_checkpoint, definition_id: same-time-baseline, manifest_path: py/training_data/screening/go9-strong/00-baseline/evaluations/reference-checkpoints.json, opening_pair_count: 200, maximum_game_plies: 324, search: *evaluation_search}
-    - {kind: katago, definition_id: katago-96, maximum_visits: 96, opening_pair_count: 50, maximum_game_plies: 324, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-40m, boundary_offset: 2, opening_pair_count: 100, maximum_game_plies: 324, search: *evaluation_search}
+    - {kind: previous_checkpoint, definition_id: previous-60m, boundary_offset: 3, opening_pair_count: 100, maximum_game_plies: 324, search: *evaluation_search}
+    - {kind: reference_checkpoint, definition_id: same-time-baseline, manifest_path: py/training_data/screening/go9-strong/00-baseline/evaluations/reference-checkpoints.json, opening_pair_count: 100, maximum_game_plies: 324, search: *evaluation_search}
+    - {kind: katago, definition_id: katago-64, maximum_visits: 64, opening_pair_count: 50, maximum_game_plies: 324, search: *evaluation_search}
 go:
   self_play:
     search: {full_searches: {kind: linear, start_generation: 0, end_generation: 50, start_value: 64, end_value: 256, rounding: nearest}, fast_searches: {kind: linear, start_generation: 0, end_generation: 50, start_value: 16, end_value: 64, rounding: nearest}, parallel_searches: 1, dirichlet_epsilon: {kind: constant, value: 0.25}, dirichlet_alpha: {kind: constant, value: 0.3}, exploration_constant: {kind: constant, value: 1.5}, first_play_urgency: {kind: reduced_parent_value, reduction: {kind: constant, value: 0.2}}, forced_playouts: {kind: enabled, coefficient: 2.0}}

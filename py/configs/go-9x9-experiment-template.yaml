@@ -34,7 +34,7 @@ training:
   random_seed: 0
 evaluation:
   cadence_seconds: 1200
-  job_timeout_seconds: 1200
+  job_timeout_seconds: 1800
   shutdown_grace_seconds: 30
   bootstrap_samples: 10000
   maximum_concurrent_jobs: 10
@@ -75,10 +75,10 @@ evaluation:
     - kind: previous_checkpoint
       definition_id: previous-20m
       boundary_offset: 1
-      opening_pair_count: 200
+      opening_pair_count: 100
       maximum_game_plies: 324
       search: &evaluation_search
-        searches_per_move: 96
+        searches_per_move: 64
         parallel_searches: 1
         exploration_constant: 1.0
         inference:
@@ -88,13 +88,13 @@ evaluation:
     - kind: previous_checkpoint
       definition_id: previous-40m
       boundary_offset: 2
-      opening_pair_count: 200
+      opening_pair_count: 100
       maximum_game_plies: 324
       search: *evaluation_search
     - kind: previous_checkpoint
       definition_id: previous-60m
       boundary_offset: 3
-      opening_pair_count: 200
+      opening_pair_count: 100
       maximum_game_plies: 324
       search: *evaluation_search
     - kind: katago

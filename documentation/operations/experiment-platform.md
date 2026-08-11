@@ -35,10 +35,11 @@ and records a durable outcome on clean shutdown. Six of eight self-play workers 
 in the current two-GPU baseline.
 
 Evaluation belongs to the coordinator and is scheduled by elapsed 20-minute boundaries. Jobs are asynchronous,
-device-cycled, limited to ten concurrent jobs, and individually time out after 20 minutes. The 9x9 ladder contains
+device-cycled, limited to ten concurrent jobs, and individually time out after 30 minutes. The timeout bounds each
+job independently and does not change the 20-minute scheduling cadence. The 9x9 ladder contains
 the book-derived fixed dataset; previous 20-, 40-, and 60-minute checkpoints; the same-time baseline; and KataGo at
-96 visits.
-Checkpoint and same-time matches use 200 paired openings (400 games); KataGo uses 50 pairs (100 games). The checked-in
+64 visits. All match participants search 64 times per move. Checkpoint and same-time matches use 100 paired openings
+(200 games); KataGo uses 50 pairs (100 games). The checked-in
 v2 dataset and openings are immutable and must be reused, never regenerated. Exact engine assets, checksums, and
 artifact preparation checks are in [Evaluation engines](evaluation-engines.md).
 

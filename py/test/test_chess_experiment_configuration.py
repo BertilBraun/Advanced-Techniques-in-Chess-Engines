@@ -77,6 +77,17 @@ def test_global_pooling_screen_replaces_baseline_squeeze_excitation() -> None:
 def test_go9_strong_baseline_resolves_the_authored_search_progression() -> None:
     configuration = load_experiment_configuration(Path('configs/screening/go-9x9-strong/00-baseline.yaml'))
 
+    assert configuration.evaluation.cadence_seconds == 1200
+    assert configuration.evaluation.job_timeout_seconds == 1800
+    match_definitions = tuple(
+        definition for definition in configuration.evaluation.definitions if definition.kind != 'fixed_dataset'
+    )
+    assert all(definition.search.searches_per_move == 64 for definition in match_definitions)
+    assert tuple(definition.opening_pair_count for definition in match_definitions) == (100, 100, 100, 100, 50)
+    katago_definition = match_definitions[-1]
+    assert katago_definition.kind == 'katago'
+    assert katago_definition.definition_id == 'katago-64'
+    assert katago_definition.maximum_visits == 64
     assert isinstance(configuration.training.network.residual_context, GlobalPoolingResidualContext)
     assert configuration.training.trainer.learning_rate.value_at(0) == pytest.approx(0.01)
     assert configuration.training.trainer.learning_rate.value_at(150) == pytest.approx(0.001)
