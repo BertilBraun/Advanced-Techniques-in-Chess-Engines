@@ -49,16 +49,13 @@ class KataGoBookDatasetPositionProvenance(FrozenModel):
 
 
 class KataGoBookDatasetManifest(FrozenModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     game: Literal['go'] = 'go'
     rules_digest: str = Field(min_length=64, max_length=64)
     representation_digest: str = Field(min_length=64, max_length=64)
     position_count: int = Field(ge=480, le=520)
     source_games: tuple[EvaluationSourceGame, ...] = Field(min_length=1)
     book_positions: tuple[KataGoBookDatasetPositionProvenance, ...] = Field(min_length=1)
-    engine_identity: str = Field(min_length=1)
-    engine_artifact_sha256: tuple[str, ...]
-    label_search_limit: int = Field(gt=0)
     maximum_policy_entries: int = Field(gt=0, le=255)
     packed_payload_bytes: int = Field(gt=0)
     row_layout_digest: str = Field(min_length=64, max_length=64)
@@ -72,7 +69,7 @@ class KataGoBookDatasetManifest(FrozenModel):
     repository_ko_rule: Literal['simple'] = 'simple'
     orientation_scheme: Literal['selection_index_modulo_8'] = 'selection_index_modulo_8'
     top_action_source: Literal['katago_book_preference'] = 'katago_book_preference'
-    soft_policy_source: Literal['configured_katago_reanalysis'] = 'configured_katago_reanalysis'
+    soft_policy_source: Literal['katago_book_prior'] = 'katago_book_prior'
     builder_source_revision: str = Field(min_length=1)
 
 

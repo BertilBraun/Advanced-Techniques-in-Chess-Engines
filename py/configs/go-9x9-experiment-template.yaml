@@ -44,8 +44,8 @@ evaluation:
       kind: katago_book
       position_count: 500
       selection:
-        export_path: py/reference/go-9x9-katago-book-20260226-v1.json
-        export_sha256: 784c88115230fb16bdd295b19dac6a817a3af331bb196e389126be4238bacbd2
+        export_path: py/reference/go-9x9-katago-book-20260226-v2.json
+        export_sha256: e1f1fe4acb40e830a3f8a3762a6c5ec0b3a7586b3ce2063508f7d2eed436c1ef
         minimum_ply: 4
         maximum_ply: 12
         maximum_absolute_black_score: 7.0
@@ -59,8 +59,8 @@ evaluation:
     source:
       kind: katago_book
       selection:
-        export_path: py/reference/go-9x9-katago-book-20260226-v1.json
-        export_sha256: 784c88115230fb16bdd295b19dac6a817a3af331bb196e389126be4238bacbd2
+        export_path: py/reference/go-9x9-katago-book-20260226-v2.json
+        export_sha256: e1f1fe4acb40e830a3f8a3762a6c5ec0b3a7586b3ce2063508f7d2eed436c1ef
         minimum_ply: 4
         maximum_ply: 12
         maximum_absolute_black_score: 1.0

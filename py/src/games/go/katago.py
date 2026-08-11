@@ -144,6 +144,43 @@ def action_id_to_sgf(action_id: int, board_size: int) -> str:
     return f'{chr(ord("a") + action_id % board_size)}{chr(ord("a") + action_id // board_size)}'
 
 
+@dataclass(frozen=True)
+class GoEvaluationArtifactMetadata:
+    state: GoStateContract
+
+    @property
+    def game_name(self) -> str:
+        return 'go'
+
+    @property
+    def rules_digest(self) -> str:
+        return _digest_payload(
+            {
+                'rules': 'chinese',
+                'board_size': self.state.board_size,
+                'komi_half_points': self.state.komi_half_points,
+                'maximum_moves': self.state.maximum_moves or self.state.board_size**2 * 4,
+            }
+        )
+
+    @property
+    def representation_digest(self) -> str:
+        return _digest_payload(
+            {
+                'channels': self.state.channels,
+                'board_size': self.state.board_size,
+                'actions': self.state.action_size,
+            }
+        )
+
+    def render_game(self, action_ids: tuple[int, ...]) -> str:
+        moves = ''.join(
+            f';{"B" if ply % 2 == 0 else "W"}[{action_id_to_sgf(action_id, self.state.board_size)}]'
+            for ply, action_id in enumerate(action_ids)
+        )
+        return f'(;GM[1]FF[4]SZ[{self.state.board_size}]KM[{self.state.komi_half_points / 2.0}]{moves})'
+
+
 def _process_environment(visible_cuda_device: int | None) -> dict[str, str] | None:
     if visible_cuda_device is None:
         return None

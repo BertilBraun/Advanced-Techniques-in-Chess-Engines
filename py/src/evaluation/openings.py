@@ -13,7 +13,7 @@ from src.evaluation.contracts import (
     OpeningLine,
     OpeningSuiteManifest,
 )
-from src.evaluation.engine import EnginePolicyProvider, validate_engine_policy
+from src.evaluation.engine import EnginePolicyProvider, EvaluationArtifactMetadata, validate_engine_policy
 from src.evaluation.katago_book import (
     load_katago_book_export,
     orient_katago_book_positions,
@@ -164,7 +164,7 @@ def build_katago_book_opening_suite(
     export_path: Path,
     configuration: OpeningSuiteConfiguration,
     state: GameStateContract[PositionT],
-    engine: EnginePolicyProvider[PositionT],
+    engine: EvaluationArtifactMetadata[PositionT],
     builder_source_revision: str,
 ) -> KataGoBookOpeningSuiteManifest:
     if configuration.source.kind != 'katago_book':

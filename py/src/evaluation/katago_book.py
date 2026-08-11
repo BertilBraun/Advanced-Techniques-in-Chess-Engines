@@ -30,6 +30,11 @@ class KataGoBookPageProvenance(FrozenModel):
     sha256: str = Field(min_length=64, max_length=64)
 
 
+class KataGoBookPolicyEntry(FrozenModel):
+    action_id: int = Field(ge=0)
+    probability: float = Field(gt=0.0, le=1.0)
+
+
 class KataGoBookPosition(FrozenModel):
     node_id: str = Field(min_length=1)
     root_variation_id: str = Field(min_length=1)
@@ -41,10 +46,11 @@ class KataGoBookPosition(FrozenModel):
     score_uncertainty: float = Field(ge=0.0)
     visits: int = Field(gt=0)
     preferred_action_id: int = Field(ge=0)
+    policy: tuple[KataGoBookPolicyEntry, ...] = Field(min_length=1)
 
 
 class KataGoBookExport(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     source_root_url: str = Field(min_length=1)
     source_updated_on: date
     board_size: Literal[9] = 9
@@ -65,8 +71,8 @@ class OrientedKataGoBookPosition:
 @dataclass(frozen=True)
 class _BookMove:
     action_id: int
-    child_url: str
-    child_symmetry: int
+    child_url: str | None
+    child_symmetry: int | None
     policy_prior: float
     black_win_probability: float
     black_score: float
@@ -81,6 +87,19 @@ class _BookPage:
     url: str
     sha256: str
     moves: tuple[_BookMove, ...]
+
+    def normalized_policy(self) -> tuple[KataGoBookPolicyEntry, ...]:
+        positive_moves = tuple(move for move in self.moves if move.policy_prior > 0.0)
+        total_probability = sum(move.policy_prior for move in positive_moves)
+        if total_probability <= 0.0:
+            raise ValueError('KataGo book page contains no positive policy priors.')
+        return tuple(
+            KataGoBookPolicyEntry(
+                action_id=move.action_id,
+                probability=move.policy_prior / total_probability,
+            )
+            for move in positive_moves
+        )
 
 
 @dataclass(frozen=True)
@@ -185,12 +204,15 @@ def _parse_book_page(url: str, content: bytes, current_symmetry: int) -> _BookPa
             child_link = links.get(canonical_action)
             child_symmetry = link_symmetries.get(canonical_action)
             if not isinstance(child_link, str) or not isinstance(child_symmetry, int):
-                continue
+                child_link = None
+                child_symmetry = None
             parsed_moves.append(
                 _BookMove(
                     action_id=_transform_action(canonical_action, current_symmetry),
-                    child_url=urljoin(url, child_link),
-                    child_symmetry=_compose_symmetry(child_symmetry, current_symmetry),
+                    child_url=None if child_link is None else urljoin(url, child_link),
+                    child_symmetry=(
+                        None if child_symmetry is None else _compose_symmetry(child_symmetry, current_symmetry)
+                    ),
                     policy_prior=max(float(raw_move['p']), 0.0),
                     black_win_probability=0.5 * (1.0 - float(raw_move['wl'])),
                     black_score=-float(raw_move['ssM']),
@@ -220,6 +242,7 @@ def crawl_official_9x9_book(
     maximum_depth: int,
     maximum_pages: int,
     progress: Callable[[int, int], None] | None = None,
+    page_reader: Callable[[str], bytes] | None = None,
 ) -> KataGoBookExport:
     if maximum_depth <= 0 or maximum_pages <= 0:
         raise ValueError('KataGo book crawl bounds must be positive.')
@@ -231,6 +254,7 @@ def crawl_official_9x9_book(
     fetched: dict[str, _BookPage] = {}
     page_content_by_url: dict[str, bytes] = {}
     positions_by_node: dict[str, KataGoBookPosition] = {}
+    discovered_nodes: set[str] = set()
     resolved_preferred_nodes: set[str] = set()
     while queue and len(fetched) < maximum_pages:
         queued_root_pages, queued_bucket_pages, _, _, _, entry = heapq.heappop(queue)
@@ -254,7 +278,7 @@ def crawl_official_9x9_book(
             continue
         content = page_content_by_url.get(entry.url)
         if content is None:
-            content = _fetch_page_content(entry.url)
+            content = _fetch_page_content(entry.url) if page_reader is None else page_reader(entry.url)
             page_content_by_url[entry.url] = content
         page = _parse_book_page(entry.url, content, entry.symmetry)
         fetched[entry.url] = page
@@ -262,7 +286,7 @@ def crawl_official_9x9_book(
             fetched_pages_by_root[entry.root_variation_id] += 1
             fetched_pages_by_bucket[(entry.root_variation_id, len(entry.action_ids))] += 1
         if progress is not None and len(fetched) % 100 == 0:
-            progress(len(fetched), len(positions_by_node))
+            progress(len(fetched), len(discovered_nodes))
         node_id = urlparse(entry.url).path
         preferred_moves = tuple(move for move in page.moves if move.preference_index == 0)
         if entry.root_variation_id is not None and preferred_moves:
@@ -277,35 +301,20 @@ def crawl_official_9x9_book(
                 score_uncertainty=entry.score_uncertainty,
                 visits=entry.visits,
                 preferred_action_id=min(move.action_id for move in preferred_moves),
+                policy=page.normalized_policy(),
             )
             resolved_preferred_nodes.add(node_id)
         if len(entry.action_ids) >= maximum_depth:
             continue
         for move in page.moves:
+            if move.child_url is None or move.child_symmetry is None:
+                continue
             action_ids = (*entry.action_ids, move.action_id)
             child_path = urlparse(move.child_url).path
             node_id = child_path
             root_variation_id = entry.root_variation_id or child_path
             path_probability = entry.path_probability * move.policy_prior
-            candidate = KataGoBookPosition(
-                node_id=node_id,
-                root_variation_id=root_variation_id,
-                action_ids=action_ids,
-                path_probability=path_probability,
-                black_win_probability=move.black_win_probability,
-                black_score=move.black_score,
-                win_probability_uncertainty=move.win_probability_uncertainty,
-                score_uncertainty=move.score_uncertainty,
-                visits=move.visits,
-                preferred_action_id=move.action_id,
-            )
-            previous = positions_by_node.get(node_id)
-            if node_id not in resolved_preferred_nodes and (
-                previous is None
-                or (candidate.path_probability, tuple(-value for value in action_ids))
-                > (previous.path_probability, tuple(-value for value in previous.action_ids))
-            ):
-                positions_by_node[node_id] = candidate
+            discovered_nodes.add(node_id)
             child_entry = _CrawlEntry(
                 move.child_url,
                 move.child_symmetry,
@@ -421,6 +430,10 @@ def orient_katago_book_positions(
                 update={
                     'action_ids': tuple(_transform_action(action_id, index % 8) for action_id in position.action_ids),
                     'preferred_action_id': _transform_action(position.preferred_action_id, index % 8),
+                    'policy': tuple(
+                        entry.model_copy(update={'action_id': _transform_action(entry.action_id, index % 8)})
+                        for entry in position.policy
+                    ),
                 }
             ),
             index % 8,

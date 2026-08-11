@@ -155,6 +155,25 @@ through `py/fetch_katago_book_export.py`, with explicit depth and page bounds. T
 date and the URL and SHA-256 of every fetched page; experiment configuration pins the complete export SHA-256.
 Artifact preparation performs no network access.
 
+The current v2 export was read from the official
+`https://katagobooks.org/downloads/book9x9tt-20260226.tar.gz` archive. The downloaded 1,405,673,423-byte archive had
+SHA-256 `b724e295c8a529185b09d29a14866abfcf5660b0e39acc8bc9101cbab5b1b9db`; the publisher did not provide that
+checksum, so treat it as measured provenance. Extract the archive once, map `/book9x9tt/<path>` URLs to
+`html/<path>`, and run the same depth-12, 1,000-page bounded crawler against those local files. The checked-in compact
+export retains all 1,000 page hashes, 999 resolved positions, and their positive book priors; it is not limited to
+the 200 openings or 500 dataset rows selected by the current configuration. The large archive and extracted tree are
+temporary preparation inputs and should be deleted after the compact export is hashed, committed, and copied off an
+ephemeral node.
+
+```bash
+tar -xzf book9x9tt-20260226.tar.gz -C book9x9tt-20260226-extracted
+python py/fetch_katago_book_export.py \
+  --archive-html-root book9x9tt-20260226-extracted/html \
+  --output py/reference/go-9x9-katago-book-20260226-v2.json \
+  --maximum-depth 12 \
+  --maximum-pages 1000
+```
+
 Book positions are filtered by ply, Black score, Black win probability, uncertainty, and visits, then selected
 deterministically across root variations and ply depths. Every path is replayed through the configured native game
 before use. Each resolved export record keeps one exact fetched URL, symmetry, and action path together so a
@@ -164,22 +183,21 @@ ko with area scoring. The bounded early paths are accepted only when legal under
 records both rule identities and must not be described as supporting arbitrary deep Tromp-Taylor transpositions.
 
 Opening manifests retain the selected path and book balance evidence. For the fixed dataset, top-action accuracy
-uses the book's first-ranked move. Policy cross-entropy uses a fresh searched policy from the configured pinned
-KataGo analysis engine at `label_max_visits`. Raw book prior `p` and cumulative `v`/`av` fields are not policy
-targets. The checked-in 7x7 v2 artifacts keep their original engine-generated provenance and are never regenerated
-or rewritten by this path.
+uses the book's first-ranked move and policy cross-entropy uses the normalized positive `p` values published on that
+same book page. The sparse target omits priors rounded to zero by the book export; cumulative `v` and `av` fields are
+not policy targets. Book artifact preparation is therefore offline and does not start KataGo. The checked-in 7x7 v2
+artifacts keep their original engine-generated provenance and are never regenerated or rewritten by this path.
 
 Derived book positions are assigned dihedral symmetry `selection_index modulo 8`; the complete action history and
 book-preferred action are transformed together before native legality replay. This preserves all selected strategic
 nodes while distributing 200 match openings evenly across the eight board orientations. V2 manifests record the
 orientation scheme and each position's applied symmetry.
 
-The current balance-prioritized 1,000-page export contains 791 resolved positions across plies 1 through 12. Its
-200-opening suite is selected from 333 plies-4-through-12 candidates within one point and ten percentage points of
-50% Black win probability, under tighter uncertainty bounds. The selected suite spans eight root variations and
-every ply from 4 through 12; its maximum Black win-probability deviation is 1.77 percentage points and maximum
-absolute Black score is 0.52 points. The 500-row policy-only dataset uses a wider filter because its metrics do not
-play games or consume position values; it still selects the best-balanced eligible rows first.
+The current archive-backed, balance-prioritized 1,000-page export contains 999 resolved positions. Its selected
+200-opening suite spans eight root variations and every ply from 4 through 12; every selected position is within the
+configured one-point and ten-percentage-point balance thresholds, with maximum absolute Black score 0.52 points.
+The 500-row policy-only dataset uses a wider filter because its metrics do not play games or consume position values;
+it still selects the best-balanced eligible rows first.
 
 ## Licensing and redistribution
 

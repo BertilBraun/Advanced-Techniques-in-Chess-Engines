@@ -63,6 +63,19 @@ class EnginePolicyProvider(Protocol, Generic[PositionT]):
     def close(self) -> None: ...
 
 
+class EvaluationArtifactMetadata(Protocol, Generic[PositionT]):
+    @property
+    def game_name(self) -> str: ...
+
+    @property
+    def rules_digest(self) -> str: ...
+
+    @property
+    def representation_digest(self) -> str: ...
+
+    def render_game(self, action_ids: tuple[int, ...]) -> str: ...
+
+
 def validate_engine_policy(policy: EnginePolicy, legal_actions: tuple[int, ...]) -> EnginePolicy:
     legal = set(legal_actions)
     if any(entry.action_id not in legal for entry in policy.entries):

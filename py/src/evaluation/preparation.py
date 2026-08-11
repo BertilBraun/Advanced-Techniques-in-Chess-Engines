@@ -16,7 +16,7 @@ from src.games.chess.stockfish import StockfishClient
 from src.games.chess.training import ChessImplementation
 from src.games.composition import ConfiguredGame
 from src.games.go.configuration import GoExperimentConfiguration
-from src.games.go.katago import KataGoClient
+from src.games.go.katago import GoEvaluationArtifactMetadata, KataGoClient
 from src.games.go.training import GoImplementation
 
 
@@ -43,6 +43,34 @@ def prepare_evaluation_artifacts(
     evaluation = experiment.evaluation
     dataset_path = _resolve_source_path(source_root, evaluation.dataset.path)
     opening_path = _resolve_source_path(source_root, evaluation.openings.path)
+    match experiment, game, evaluation.openings.source, evaluation.dataset.source:
+        case GoExperimentConfiguration(), GoImplementation(), opening_source, dataset_source if (
+            opening_source.kind == 'katago_book' and dataset_source.kind == 'katago_book'
+        ):
+            metadata = GoEvaluationArtifactMetadata(game.state)
+            opening_manifest = build_katago_book_opening_suite(
+                opening_path,
+                _resolve_source_path(source_root, opening_source.selection.export_path),
+                evaluation.openings,
+                game.state,
+                metadata,
+                source_revision,
+            )
+            dataset_manifest = build_katago_book_evaluation_dataset(
+                dataset_path,
+                _resolve_source_path(source_root, dataset_source.selection.export_path),
+                evaluation.dataset,
+                game.state,
+                metadata,
+                source_revision,
+            )
+            return PreparedEvaluationArtifacts(
+                dataset_path=dataset_path,
+                dataset_manifest_path=dataset_manifest_path(dataset_path),
+                dataset_manifest=dataset_manifest,
+                opening_manifest_path=opening_path,
+                opening_manifest=opening_manifest,
+            )
     match experiment, game, evaluation.engine:
         case ChessExperimentConfiguration(), ChessImplementation(), engine_configuration:
             if engine_configuration.kind != 'stockfish':

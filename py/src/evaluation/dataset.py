@@ -23,7 +23,13 @@ from src.evaluation.contracts import (
     KataGoBookDatasetManifest,
     KataGoBookDatasetPositionProvenance,
 )
-from src.evaluation.engine import EnginePolicy, EnginePolicyProvider, validate_engine_policy
+from src.evaluation.engine import (
+    EnginePolicy,
+    EnginePolicyEntry,
+    EnginePolicyProvider,
+    EvaluationArtifactMetadata,
+    validate_engine_policy,
+)
 from src.evaluation.inference import decode_packed_inputs
 from src.evaluation.katago_book import (
     load_katago_book_export,
@@ -286,7 +292,7 @@ def build_katago_book_evaluation_dataset(
     export_path: Path,
     configuration: EvaluationDatasetConfiguration,
     state: GameStateContract[PositionT],
-    engine: EnginePolicyProvider[PositionT],
+    engine: EvaluationArtifactMetadata[PositionT],
     builder_source_revision: str,
 ) -> KataGoBookDatasetManifest:
     if configuration.source.kind != 'katago_book':
@@ -301,9 +307,6 @@ def build_katago_book_evaluation_dataset(
             _file_sha256(path) == manifest.data_sha256
             and manifest.rules_digest == engine.rules_digest
             and manifest.representation_digest == engine.representation_digest
-            and manifest.engine_identity == engine.engine_identity
-            and manifest.engine_artifact_sha256 == engine.engine_artifact_sha256
-            and manifest.label_search_limit == engine.label_search_limit
             and manifest.book_export_sha256 == configuration.source.selection.export_sha256
             and manifest.book_selection_sha256 == selection_digest
             and manifest.position_count == configuration.source.position_count
@@ -340,7 +343,16 @@ def build_katago_book_evaluation_dataset(
         if digest in position_digests:
             raise ValueError('KataGo book selection produced duplicate native dataset positions.')
         position_digests.add(digest)
-        policy = validate_engine_policy(engine.policy(position, book_position.action_ids), legal_actions)
+        policy = validate_engine_policy(
+            EnginePolicy(
+                entries=tuple(
+                    EnginePolicyEntry(action_id=entry.action_id, probability=entry.probability)
+                    for entry in book_position.policy
+                ),
+                selected_action_id=book_position.preferred_action_id,
+            ),
+            legal_actions,
+        )
         ordered_entries = tuple(sorted(policy.entries, key=lambda entry: (-entry.probability, entry.action_id)))
         rows.append(
             EvaluationDatasetRow(
@@ -378,9 +390,6 @@ def build_katago_book_evaluation_dataset(
         position_count=len(resolved_rows),
         source_games=tuple(source_games),
         book_positions=tuple(book_positions),
-        engine_identity=engine.engine_identity,
-        engine_artifact_sha256=engine.engine_artifact_sha256,
-        label_search_limit=engine.label_search_limit,
         maximum_policy_entries=maximum_policy_entries,
         packed_payload_bytes=state.packed_plane_layout.payload_bytes,
         row_layout_digest=_layout_digest(dtype),

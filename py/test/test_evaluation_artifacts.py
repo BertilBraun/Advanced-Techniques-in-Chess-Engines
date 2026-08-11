@@ -34,6 +34,7 @@ from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
 from src.evaluation.katago_book import (
     KataGoBookExport,
     KataGoBookPageProvenance,
+    KataGoBookPolicyEntry,
     KataGoBookPosition,
     canonical_json_sha256,
     orient_katago_book_positions,
@@ -80,13 +81,15 @@ def test_checked_in_go_9x9_book_export_matches_configuration() -> None:
     assert export.source_root_url == 'https://katagobooks.org/book9x9tt/root/root.html'
     assert export.source_updated_on.isoformat() == '2026-02-26'
     assert len(export.pages) == 1000
-    assert len(export.positions) == 791
+    assert len(export.positions) == 999
+    assert all(position.policy for position in export.positions)
+    assert all(abs(sum(entry.probability for entry in position.policy) - 1.0) <= 1e-6 for position in export.positions)
     openings = select_katago_book_positions(export, opening_source.selection, 200)
     assert len(openings) == 200
     assert len({position.node_id for position in openings}) == 200
     assert {len(position.action_ids) for position in openings} == set(range(4, 13))
     assert len({position.root_variation_id for position in openings}) == 8
-    assert max(abs(position.black_win_probability - 0.5) for position in openings) <= 0.0177
+    assert max(abs(position.black_win_probability - 0.5) for position in openings) <= 0.1
     assert max(abs(position.black_score) for position in openings) <= 0.52
     oriented_openings = orient_katago_book_positions(openings)
     assert tuple(
@@ -101,7 +104,10 @@ const linkSyms = {0: 0};
 const moves = [{'xy': [[0, 0]], 'p': 0.4, 'wl': 0.0, 'ssM': 0.0, 'wlRad': 0.1, 'sRad': 0.2, 'v': 20000}];"""
     child = b"""const links = {1: 'grandchild.html'};
 const linkSyms = {1: 0};
-const moves = [{'xy': [[1, 0]], 'p': 0.5, 'wl': 0.2, 'ssM': -0.3, 'wlRad': 0.1, 'sRad': 0.2, 'v': 18000}];"""
+const moves = [
+{'xy': [[1, 0]], 'p': 0.5, 'wl': 0.2, 'ssM': -0.3, 'wlRad': 0.1, 'sRad': 0.2, 'v': 18000},
+{'xy': [[2, 0]], 'p': 0.25, 'wl': 0.3, 'ssM': -0.2, 'wlRad': 0.1, 'sRad': 0.2, 'v': 12000}
+];"""
     content_by_url = {
         katago_book_module.OFFICIAL_9X9_TT_ROOT_URL: root,
         'https://katagobooks.org/book9x9tt/root/child.html': child,
@@ -118,6 +124,8 @@ const moves = [{'xy': [[1, 0]], 'p': 0.5, 'wl': 0.2, 'ssM': -0.3, 'wlRad': 0.1, 
     assert export.positions[0].action_ids == (0,)
     assert export.positions[0].preferred_action_id == 1
     assert export.positions[0].black_win_probability == 0.5
+    assert tuple(entry.action_id for entry in export.positions[0].policy) == (1, 2)
+    assert tuple(entry.probability for entry in export.positions[0].policy) == pytest.approx((2 / 3, 1 / 3))
 
 
 def test_katago_book_crawl_keeps_transposed_path_and_preferred_move_atomic(
@@ -157,6 +165,10 @@ def test_katago_book_orientation_transforms_paths_and_labels_evenly() -> None:
         score_uncertainty=0.1,
         visits=10000,
         preferred_action_id=10,
+        policy=(
+            KataGoBookPolicyEntry(action_id=10, probability=0.75),
+            KataGoBookPolicyEntry(action_id=11, probability=0.25),
+        ),
     )
     oriented = orient_katago_book_positions(tuple(source for _ in range(200)))
 
@@ -265,6 +277,15 @@ class FakeEngine:
         pass
 
 
+class FakeBookMetadata:
+    game_name = 'go'
+    rules_digest = '1' * 64
+    representation_digest = '2' * 64
+
+    def render_game(self, action_ids: tuple[int, ...]) -> str:
+        return ' '.join(str(action_id) for action_id in action_ids)
+
+
 class TerminalWithLegalMovesState(FakeState):
     def legal_action_ids(self, position: FakePosition) -> tuple[int, ...]:
         return (0, 1, 2, 3)
@@ -314,6 +335,10 @@ def _book_export(position_count: int = 500) -> KataGoBookExport:
                 score_uncertainty=0.1,
                 visits=10000,
                 preferred_action_id=1,
+                policy=(
+                    KataGoBookPolicyEntry(action_id=1, probability=0.75),
+                    KataGoBookPolicyEntry(action_id=2, probability=0.25),
+                ),
             )
             for index in range(position_count)
         ),
@@ -373,12 +398,13 @@ def test_book_opening_and_dataset_builders_replay_paths_and_reuse_artifacts(tmp_
         source=KataGoBookDatasetSource(kind='katago_book', position_count=480, selection=selection),
     )
     book_state = FakeGoBookState()
+    book_metadata = FakeBookMetadata()
 
     openings = build_katago_book_opening_suite(
-        openings_path, export_path, openings_configuration, book_state, FakeEngine(), 'revision'
+        openings_path, export_path, openings_configuration, book_state, book_metadata, 'revision'
     )
     dataset = build_katago_book_evaluation_dataset(
-        dataset_path, export_path, dataset_configuration, book_state, FakeEngine(), 'revision'
+        dataset_path, export_path, dataset_configuration, book_state, book_metadata, 'revision'
     )
     data = load_evaluation_dataset(dataset_path, dataset)
 
@@ -401,15 +427,17 @@ def test_book_opening_and_dataset_builders_replay_paths_and_reuse_artifacts(tmp_
         sum(position.applied_symmetry == symmetry for position in dataset.book_positions) for symmetry in range(8)
     ) == (60, 60, 60, 60, 60, 60, 60, 60)
     assert {int(row['top_action_id']) for row in data} == {1, 7, 9, 17, 63, 71, 73, 79}
+    assert {int(row['policy_count']) for row in data} == {2}
+    assert all(tuple(row['probabilities'][:2]) == pytest.approx((0.75, 0.25)) for row in data)
     assert (
         build_katago_book_opening_suite(
-            openings_path, export_path, openings_configuration, book_state, FakeEngine(), 'revision'
+            openings_path, export_path, openings_configuration, book_state, book_metadata, 'revision'
         )
         == openings
     )
     assert (
         build_katago_book_evaluation_dataset(
-            dataset_path, export_path, dataset_configuration, book_state, FakeEngine(), 'revision'
+            dataset_path, export_path, dataset_configuration, book_state, book_metadata, 'revision'
         )
         == dataset
     )
@@ -424,7 +452,7 @@ def test_book_opening_and_dataset_builders_replay_paths_and_reuse_artifacts(tmp_
             export_path,
             changed_openings_configuration,
             book_state,
-            FakeEngine(),
+            book_metadata,
             'revision',
         )
 
