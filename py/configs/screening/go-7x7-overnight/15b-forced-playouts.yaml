@@ -1,0 +1,6 @@
+extends: 15-forced-playouts.yaml
+run:
+  run_name: go7-overnight-15b-forced-playouts
+  tensorboard_run_directory: go7-overnight-15b-forced-playouts
+training:
+  save_path: py/training_data/screening/go7-overnight/15b-forced-playouts

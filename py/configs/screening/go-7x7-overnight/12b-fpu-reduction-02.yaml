@@ -1,0 +1,6 @@
+extends: 12-fpu-reduction-02.yaml
+run:
+  run_name: go7-overnight-12b-fpu-reduction-02
+  tensorboard_run_directory: go7-overnight-12b-fpu-reduction-02
+training:
+  save_path: py/training_data/screening/go7-overnight/12b-fpu-reduction-02

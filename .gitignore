@@ -30,7 +30,7 @@ cpp/libtorch**/**
 /cpp/compile_commands.json
 /.codex-diagnostics/
 /downloaded-training-artifacts/
-/engines/
+/engines
 
 !documentation/**
 /py/training_data/
