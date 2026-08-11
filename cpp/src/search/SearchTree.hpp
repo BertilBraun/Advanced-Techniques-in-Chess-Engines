@@ -9,11 +9,16 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <optional>
+#include <queue>
 #include <random>
+#include <ranges>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -204,7 +209,7 @@ public:
         }
         for (const auto index : range(rootNode.children.size())) {
             rootNode.children[index].prior =
-                std::lerp(rootNode.children[index].prior, noise[index] / sum, epsilon);
+                std::lerp(rootNode.children[index].raw_prior, noise[index] / sum, epsilon);
         }
     }
 
@@ -278,16 +283,11 @@ public:
         if (retainedFraction < 0.0F || retainedFraction > 1.0F) {
             throw std::invalid_argument("Game search discount must be in [0, 1]");
         }
-        for (std::optional<Node> &slot : m_nodes) {
-            if (!slot.has_value()) {
-                continue;
-            }
-            discountStatistics(slot->visits, slot->value_sum, retainedFraction);
-            for (Edge &edge : slot->children) {
-                discountStatistics(edge.visits, edge.value_sum, retainedFraction);
-            }
-        }
-        const std::size_t liveNodeLimit = static_cast<std::size_t>(root().visits) + 1;
+        requireIdleTree();
+        const std::uint32_t retainedRootVisits = static_cast<std::uint32_t>(
+            static_cast<double>(root().visits) * static_cast<double>(retainedFraction));
+        retainSubtree(m_rootIndex, retainedRootVisits);
+        const std::size_t liveNodeLimit = static_cast<std::size_t>(retainedRootVisits) + 1;
         pruneToLiveNodeLimit(std::max<std::size_t>(1, liveNodeLimit));
     }
 
@@ -430,7 +430,11 @@ private:
         }
         const Position child = Game::childState(node(parentIndex).position, edge.action);
         const std::size_t childIndex = allocateNode(child, parentIndex, edgeIndex);
-        node(parentIndex).children[edgeIndex].child_index = childIndex;
+        Edge &retainedEdge = node(parentIndex).children[edgeIndex];
+        Node &childNode = node(childIndex);
+        childNode.visits = retainedEdge.visits;
+        childNode.value_sum = retainedEdge.value_sum;
+        retainedEdge.child_index = childIndex;
         return childIndex;
     }
 
@@ -493,39 +497,204 @@ private:
         if (m_liveNodeCount <= liveNodeLimit) {
             return;
         }
-        std::vector<std::pair<std::size_t, bool>> pending = {{m_rootIndex, false}};
-        std::vector<std::size_t> postOrder;
+        requireIdleTree();
+        using PruneCandidate = std::tuple<std::uint32_t, int, std::size_t, std::size_t>;
+        std::priority_queue<PruneCandidate, std::vector<PruneCandidate>,
+                            std::greater<PruneCandidate>>
+            candidates;
+        std::vector<std::size_t> materializedChildCounts(m_nodes.size(), 0);
+        std::vector<std::size_t> traversalOrders(m_nodes.size(), 0);
+        std::vector<std::size_t> pending = {m_rootIndex};
+        std::size_t traversalOrder = 0;
         while (!pending.empty()) {
-            const auto [currentIndex, visited] = pending.back();
+            const std::size_t currentIndex = pending.back();
             pending.pop_back();
-            if (visited) {
-                if (currentIndex != m_rootIndex) {
-                    postOrder.push_back(currentIndex);
-                }
-                continue;
-            }
-            pending.emplace_back(currentIndex, true);
-            for (const Edge &edge : node(currentIndex).children) {
+            for (const Edge &edge : std::ranges::reverse_view(node(currentIndex).children)) {
                 if (edge.child_index.has_value()) {
-                    pending.emplace_back(*edge.child_index, false);
+                    ++materializedChildCounts[currentIndex];
+                    traversalOrders[*edge.child_index] = ++traversalOrder;
+                    pending.push_back(*edge.child_index);
                 }
             }
         }
-        for (const std::size_t index : postOrder) {
-            if (m_liveNodeCount <= liveNodeLimit) {
-                break;
+
+        for (const auto index : range(m_nodes.size())) {
+            if (index == m_rootIndex || !m_nodes[index].has_value() ||
+                materializedChildCounts[index] != 0) {
+                continue;
             }
-            Node &pruned = node(index);
-            node(*pruned.parent_index).children[*pruned.parent_edge_index].child_index.reset();
+            candidates.emplace(node(index).visits, -nodeDepth(index), traversalOrders[index],
+                               index);
+        }
+
+        while (m_liveNodeCount > liveNodeLimit) {
+            if (candidates.empty()) {
+                throw std::logic_error("Game search tree has no prunable leaf");
+            }
+            const auto [visits, negativeDepth, order, index] = candidates.top();
+            static_cast<void>(visits);
+            static_cast<void>(negativeDepth);
+            static_cast<void>(order);
+            candidates.pop();
+            if (!m_nodes[index].has_value() || materializedChildCounts[index] != 0) {
+                continue;
+            }
+            const Node &pruned = node(index);
+            const std::size_t parentIndex = *pruned.parent_index;
+            node(parentIndex).children[*pruned.parent_edge_index].child_index.reset();
             releaseNode(index);
+            --materializedChildCounts[parentIndex];
+            if (parentIndex != m_rootIndex && materializedChildCounts[parentIndex] == 0) {
+                candidates.emplace(node(parentIndex).visits, -nodeDepth(parentIndex),
+                                   traversalOrders[parentIndex], parentIndex);
+            }
         }
     }
 
-    static void discountStatistics(std::uint32_t &visits, float &valueSum,
-                                   const float retainedFraction) {
-        visits = static_cast<std::uint32_t>(static_cast<float>(visits) * retainedFraction);
-        valueSum *= retainedFraction;
-        valueSum = std::clamp(valueSum, -static_cast<float>(visits), static_cast<float>(visits));
+    void requireIdleTree() const {
+        for (const std::optional<Node> &slot : m_nodes) {
+            if (!slot.has_value()) {
+                continue;
+            }
+            if (slot->inference_pending || slot->virtual_loss != 0.0F) {
+                throw std::logic_error("Cannot retain or prune a game search with pending work");
+            }
+            for (const Edge &edge : slot->children) {
+                if (edge.virtual_loss != 0.0F) {
+                    throw std::logic_error(
+                        "Cannot retain or prune a game search with pending work");
+                }
+            }
+        }
+    }
+
+    [[nodiscard]] int nodeDepth(std::size_t index) const {
+        int depth = 0;
+        while (index != m_rootIndex) {
+            const Node &selected = node(index);
+            index = *selected.parent_index;
+            ++depth;
+        }
+        return depth;
+    }
+
+    [[nodiscard]] static std::vector<std::uint32_t>
+    allocateRetainedVisits(const std::vector<std::uint32_t> &bucketVisits,
+                           const std::uint32_t retainedVisits) {
+        const std::uint64_t totalVisits =
+            std::accumulate(bucketVisits.begin(), bucketVisits.end(), std::uint64_t{0});
+        if (retainedVisits > totalVisits) {
+            throw std::logic_error("Retained game-search visits exceed original visits");
+        }
+        std::vector<std::uint32_t> result(bucketVisits.size(), 0);
+        if (totalVisits == 0) {
+            return result;
+        }
+        struct Remainder {
+            std::uint64_t amount;
+            std::uint32_t original_visits;
+            std::size_t index;
+        };
+        std::vector<Remainder> remainders;
+        remainders.reserve(bucketVisits.size());
+        std::uint64_t allocated = 0;
+        for (const auto index : range(bucketVisits.size())) {
+            const std::uint64_t numerator =
+                static_cast<std::uint64_t>(bucketVisits[index]) * retainedVisits;
+            result[index] = static_cast<std::uint32_t>(numerator / totalVisits);
+            allocated += result[index];
+            remainders.push_back({
+                .amount = numerator % totalVisits,
+                .original_visits = bucketVisits[index],
+                .index = index,
+            });
+        }
+        std::ranges::sort(remainders, [](const Remainder &left, const Remainder &right) {
+            if (left.amount != right.amount) {
+                return left.amount > right.amount;
+            }
+            if (left.original_visits != right.original_visits) {
+                return left.original_visits > right.original_visits;
+            }
+            return left.index < right.index;
+        });
+        for (std::uint64_t offset = 0; offset < retainedVisits - allocated; ++offset) {
+            ++result[remainders[offset].index];
+        }
+        return result;
+    }
+
+    [[nodiscard]] static float retainValueSum(const float originalValueSum,
+                                              const std::uint32_t originalVisits,
+                                              const std::uint32_t retainedVisits) {
+        if (originalVisits == 0 || retainedVisits == 0) {
+            return 0.0F;
+        }
+        const float retained = originalValueSum * static_cast<float>(retainedVisits) /
+                               static_cast<float>(originalVisits);
+        return std::clamp(retained, -static_cast<float>(retainedVisits),
+                          static_cast<float>(retainedVisits));
+    }
+
+    void retainSubtree(const std::size_t nodeIndex, const std::uint32_t retainedVisits) {
+        Node &selected = node(nodeIndex);
+        const std::uint32_t originalVisits = selected.visits;
+        std::uint64_t childVisits = 0;
+        float childValueSum = 0.0F;
+        for (const Edge &edge : selected.children) {
+            childVisits += edge.visits;
+            childValueSum += edge.value_sum;
+        }
+        if (childVisits > originalVisits) {
+            throw std::logic_error("Game-search child visits exceed parent visits");
+        }
+        const std::uint32_t localVisits = originalVisits - static_cast<std::uint32_t>(childVisits);
+        const float localValueSum = selected.value_sum + m_turnDiscount * childValueSum;
+        std::vector<std::uint32_t> buckets;
+        buckets.reserve(selected.children.size() + 1);
+        buckets.push_back(localVisits);
+        for (const Edge &edge : selected.children) {
+            buckets.push_back(edge.visits);
+        }
+        const std::vector<std::uint32_t> retainedBuckets =
+            allocateRetainedVisits(buckets, retainedVisits);
+        const float retainedLocalValue =
+            retainValueSum(localValueSum, localVisits, retainedBuckets.front());
+
+        float retainedChildValueSum = 0.0F;
+        for (const auto edgeIndex : range(selected.children.size())) {
+            Edge &edge = node(nodeIndex).children[edgeIndex];
+            const std::uint32_t originalEdgeVisits = edge.visits;
+            const float originalEdgeValue = edge.value_sum;
+            const std::uint32_t retainedEdgeVisits = retainedBuckets[edgeIndex + 1];
+            if (edge.child_index.has_value()) {
+                const std::size_t childIndex = *edge.child_index;
+                const Node &child = node(childIndex);
+                if (child.visits != originalEdgeVisits ||
+                    std::abs(child.value_sum - originalEdgeValue) > 1e-4F) {
+                    throw std::logic_error(
+                        "Materialized game-search child disagrees with its incoming edge");
+                }
+                if (retainedEdgeVisits == 0) {
+                    reclaimSubtree(childIndex);
+                    node(nodeIndex).children[edgeIndex].child_index.reset();
+                    edge.visits = 0;
+                    edge.value_sum = 0.0F;
+                } else {
+                    retainSubtree(childIndex, retainedEdgeVisits);
+                    edge.visits = node(childIndex).visits;
+                    edge.value_sum = node(childIndex).value_sum;
+                }
+            } else {
+                edge.visits = retainedEdgeVisits;
+                edge.value_sum =
+                    retainValueSum(originalEdgeValue, originalEdgeVisits, retainedEdgeVisits);
+            }
+            retainedChildValueSum += edge.value_sum;
+        }
+        Node &retained = node(nodeIndex);
+        retained.visits = retainedVisits;
+        retained.value_sum = retainedLocalValue - m_turnDiscount * retainedChildValueSum;
     }
 };
 
