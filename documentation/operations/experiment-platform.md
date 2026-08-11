@@ -164,9 +164,12 @@ ssh -i C:\path\to\vast_key -p SSH_PORT root@HOST `
   -L 6006:localhost:16006
 ```
 
-Open `http://localhost:6006`. Evaluation custom scalars group match W/D/L and scores, dataset accuracy/cross-entropy,
-and one combined duration chart. Compare experiments on elapsed time, with optimizer steps and generations at each
-boundary as supporting context.
+Open `http://localhost:6006`. Core training cards contain losses, optimizer progress, learning rate, gradient norm,
+and quantum duration. Auxiliary heads, training distributions, and replay distributions have separate diagnostic
+groups. The settings group records every generation-scheduled training, replay, self-play, and objective value.
+Evaluation custom scalars group match W/D/L and score plus dataset accuracy/cross-entropy; player-side scores,
+durations, optimizer steps, and generations are evaluation metadata. Compare experiments on elapsed time, with the
+metadata at each boundary as supporting context.
 
 ## Result export and validation checklist
 

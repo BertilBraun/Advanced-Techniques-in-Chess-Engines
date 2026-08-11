@@ -377,9 +377,9 @@ class EvaluationManager:
         definition_id = result.job.definition.definition_id
         generation = result.job.candidate.generation
         optimizer_steps = generation * self.experiment.training.lifecycle.credit.optimizer_steps_per_quantum
-        log_scalar('evaluation/progress/model_generation', generation, step)
-        log_scalar('evaluation/progress/optimizer_steps', optimizer_steps, step)
-        log_scalar(f'evaluation/{definition_id}/duration_seconds', result.duration_seconds, step)
+        log_scalar('evaluation_metadata/progress/model_generation', generation, step)
+        log_scalar('evaluation_metadata/progress/optimizer_steps', optimizer_steps, step)
+        log_scalar(f'evaluation_metadata/{definition_id}/duration_seconds', result.duration_seconds, step)
         match result.kind:
             case 'fixed_dataset':
                 log_scalar(
@@ -402,9 +402,15 @@ class EvaluationManager:
                 log_scalar(f'evaluation/{definition_id}/wins', result.aggregate.wins, step)
                 log_scalar(f'evaluation/{definition_id}/draws', result.aggregate.draws, step)
                 log_scalar(f'evaluation/{definition_id}/losses', result.aggregate.losses, step)
-                log_scalar(f'evaluation/{definition_id}/first_player_score', result.aggregate.first_player_score, step)
                 log_scalar(
-                    f'evaluation/{definition_id}/second_player_score', result.aggregate.second_player_score, step
+                    f'evaluation_metadata/{definition_id}/first_player_score',
+                    result.aggregate.first_player_score,
+                    step,
+                )
+                log_scalar(
+                    f'evaluation_metadata/{definition_id}/second_player_score',
+                    result.aggregate.second_player_score,
+                    step,
                 )
                 log(
                     f'Evaluation {definition_id} at {step}s: '

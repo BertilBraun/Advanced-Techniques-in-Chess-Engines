@@ -158,14 +158,23 @@ def test_custom_scalar_layout_groups_discovered_evaluation_definitions(tmp_path:
         ('draws', 0.0),
         ('losses', 88.0),
         ('score', 0.12),
+    ):
+        write_scalar(evaluation_directory, f'evaluation/katago-16/{metric}', 1_200, value, wall_time=10.0)
+    for metric, value in (
         ('first_player_score', 0.0),
         ('second_player_score', 0.24),
         ('duration_seconds', 80.0),
     ):
-        write_scalar(evaluation_directory, f'evaluation/katago-16/{metric}', 1_200, value, wall_time=10.0)
+        write_scalar(
+            evaluation_directory,
+            f'evaluation_metadata/katago-16/{metric}',
+            1_200,
+            value,
+            wall_time=10.0,
+        )
     write_scalar(
         evaluation_directory,
-        'evaluation/previous-20m/duration_seconds',
+        'evaluation_metadata/previous-20m/duration_seconds',
         1_200,
         70.0,
         wall_time=10.0,
@@ -175,21 +184,21 @@ def test_custom_scalar_layout_groups_discovered_evaluation_definitions(tmp_path:
 
     layout = custom_scalar_layout(output_root)
     match_category = next(category for category in layout.category if category.title == 'Evaluation matches')
-    assert tuple(chart.title for chart in match_category.chart) == ('katago-16 W/D/L', 'katago-16 scores')
+    assert tuple(chart.title for chart in match_category.chart) == ('katago-16 W/D/L', 'katago-16 score')
     assert tuple(match_category.chart[0].multiline.tag) == (
         'coordinator/evaluation/katago-16/wins',
         'coordinator/evaluation/katago-16/draws',
         'coordinator/evaluation/katago-16/losses',
     )
-    assert tuple(match_category.chart[1].multiline.tag) == (
-        'coordinator/evaluation/katago-16/score',
-        'coordinator/evaluation/katago-16/first_player_score',
-        'coordinator/evaluation/katago-16/second_player_score',
+    assert tuple(match_category.chart[1].multiline.tag) == ('coordinator/evaluation/katago-16/score',)
+    metadata_category = next(category for category in layout.category if category.title == 'Evaluation metadata')
+    assert tuple(metadata_category.chart[0].multiline.tag) == (
+        'coordinator/evaluation_metadata/katago-16/first_player_score',
+        'coordinator/evaluation_metadata/katago-16/second_player_score',
     )
-    timing_category = next(category for category in layout.category if category.title == 'Evaluation timing')
-    assert tuple(timing_category.chart[0].multiline.tag) == (
-        'coordinator/evaluation/katago-16/duration_seconds',
-        'coordinator/evaluation/previous-20m/duration_seconds',
+    assert tuple(metadata_category.chart[1].multiline.tag) == (
+        'coordinator/evaluation_metadata/katago-16/duration_seconds',
+        'coordinator/evaluation_metadata/previous-20m/duration_seconds',
     )
 
 
@@ -256,8 +265,8 @@ def test_watched_consolidation_updates_layout_for_new_definition(tmp_path: Path)
         consolidator.close()
 
     layout = custom_scalar_layout(output_root)
-    timing_category = next(category for category in layout.category if category.title == 'Evaluation timing')
-    assert tuple(timing_category.chart[0].multiline.tag) == (
+    metadata_category = next(category for category in layout.category if category.title == 'Evaluation metadata')
+    assert tuple(metadata_category.chart[0].multiline.tag) == (
         'evaluation/katago-16/duration_seconds',
         'evaluation/same-time-baseline/duration_seconds',
     )

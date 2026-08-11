@@ -153,7 +153,7 @@ def test_manager_writes_compact_evaluation_layout_to_raw_coordinator_log(
     search_random_charts = tuple(chart for chart in match_category.chart if chart.title.startswith('search-random '))
     assert tuple(chart.title for chart in search_random_charts) == (
         'search-random W/D/L',
-        'search-random scores',
+        'search-random score',
     )
     assert tuple(search_random_charts[0].multiline.tag) == (
         'evaluation/search-random/wins',
@@ -165,9 +165,16 @@ def test_manager_writes_compact_evaluation_layout_to_raw_coordinator_log(
         'Top-action accuracy',
         'Policy cross-entropy',
     )
-    timing_category = next(category for category in layout.category if category.title == 'Evaluation timing')
-    assert len(timing_category.chart) == 1
-    assert len(timing_category.chart[0].multiline.tag) == len(experiment.evaluation.definitions)
+    metadata_category = next(category for category in layout.category if category.title == 'Evaluation metadata')
+    player_score_chart = next(
+        chart for chart in metadata_category.chart if chart.title == 'search-random player scores'
+    )
+    assert tuple(player_score_chart.multiline.tag) == (
+        'evaluation_metadata/search-random/first_player_score',
+        'evaluation_metadata/search-random/second_player_score',
+    )
+    duration_chart = next(chart for chart in metadata_category.chart if chart.title == 'Duration (seconds)')
+    assert len(duration_chart.multiline.tag) == len(experiment.evaluation.definitions)
 
 
 def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
@@ -188,10 +195,10 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     assert tuple(job.device_id for job in first_jobs) == (2, 5, 2, 5, 2, 5, 2)
     assert all(process.started for process in context.processes)
 
-    scalar_steps: list[int | None] = []
+    scalar_events: list[tuple[str, int | None]] = []
     monkeypatch.setattr(
         'src.evaluation.manager.log_scalar',
-        lambda name, value, step: scalar_steps.append(step),
+        lambda name, value, step: scalar_events.append((name, step)),
     )
     dataset_job = next(job for job in first_jobs if isinstance(job, FixedDatasetEvaluationJob))
     write_evaluation_result(
@@ -209,7 +216,13 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
     dataset_process = next(process for process in context.processes if process.args[1] == dataset_job)
     dataset_process.exitcode = 0
     assert manager.collect_completed_jobs()[0].job == dataset_job
-    assert scalar_steps == [20, 20, 20, 20, 20]
+    assert scalar_events == [
+        ('evaluation_metadata/progress/model_generation', 20),
+        ('evaluation_metadata/progress/optimizer_steps', 20),
+        ('evaluation_metadata/fixed-dataset/duration_seconds', 20),
+        ('evaluation/fixed-dataset/top_action_accuracy', 20),
+        ('evaluation/fixed-dataset/policy_cross_entropy', 20),
+    ]
 
     clock.now = 41.0
     second_jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 3))

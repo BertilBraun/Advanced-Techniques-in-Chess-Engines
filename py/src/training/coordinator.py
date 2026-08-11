@@ -26,6 +26,7 @@ from src.training.distributions import (
 )
 from src.training.targets import AuxiliaryHeadLayout, NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 from src.training.telemetry import training_lifecycle_telemetry
+from src.training.tensorboard import scheduled_settings_at
 from src.training.trainer import TrainerGroup, TrainingQuantumResult
 from src.training.run_limits import RunLimitMonitor
 from src.util.log import log
@@ -67,6 +68,7 @@ class Coordinator:
         self.latest_completed_model_version = self.ledger.model_generation
         self.final_stop_reason: str | None = None
         self._credit_wait_started_at = time.perf_counter()
+        self._record_scheduled_settings(self.ledger.model_generation)
 
     def run(self) -> None:
         try:
@@ -165,7 +167,6 @@ class Coordinator:
             self.replay_manager.description(),
             training.trainer.global_batch_size,
         )
-        self_play = self.game.self_play_parameters_at(source_generation)
         log_scalar('training/policy_loss', statistics.policy_loss, generation)
         log_scalar('training/wdl_loss', statistics.wdl_loss, generation)
         log_scalar('training/total_loss', statistics.total_loss, generation)
@@ -173,7 +174,7 @@ class Coordinator:
         for index, (head, auxiliary_loss) in enumerate(
             zip(self.game.target_layout.auxiliary_heads, statistics.auxiliary_losses, strict=True)
         ):
-            log_scalar(f'training/auxiliary/{_auxiliary_name(index, head)}/loss', auxiliary_loss, generation)
+            log_scalar(f'training_auxiliary/{_auxiliary_name(index, head)}/loss', auxiliary_loss, generation)
         _record_training_distributions(
             statistics.distributions,
             self.game.target_layout.auxiliary_heads,
@@ -199,14 +200,7 @@ class Coordinator:
         log_scalar('replay/live_rows', lifecycle.live_replay_rows, generation)
         log_scalar('replay/logical_capacity', lifecycle.logical_replay_capacity, generation)
         log_scalar('replay/fill_fraction', lifecycle.replay_fill_fraction, generation)
-        log_scalar('self_play/full_searches', self_play.full_searches, generation)
-        log_scalar('self_play/fast_searches', self_play.fast_searches, generation)
-        log_scalar('self_play/full_search_probability', self_play.full_search_probability, generation)
-        log_scalar(
-            'training/root_value_blend',
-            self.game.training_objective_at(source_generation).root_value_blend,
-            generation,
-        )
+        self._record_scheduled_settings(generation)
         log(
             f'Completed generation {generation}: loss={statistics.total_loss:.4f}, '
             f'replay={statistics.replay_rows_per_second:.0f} rows/s, '
@@ -217,33 +211,37 @@ class Coordinator:
             f'replay={lifecycle.live_replay_rows}/{lifecycle.logical_replay_capacity}'
         )
 
+    def _record_scheduled_settings(self, generation: int) -> None:
+        for setting in scheduled_settings_at(self.configuration, generation):
+            log_scalar(setting.tag, setting.value, generation)
+
 
 def _record_training_distributions(
     distributions: TrainingDistributionSnapshot,
     auxiliary_heads: tuple[AuxiliaryHeadLayout, ...],
     generation: int,
 ) -> None:
-    _record_policy_distribution('training/distribution/policy', distributions.policy, generation)
-    _log_values('training/distribution/wdl_loss', distributions.wdl_loss, generation)
-    _log_values('training/distribution/root_value', distributions.root_value, generation, log_mean=True)
-    _log_values('training/distribution/terminal_value', distributions.terminal_value, generation, log_mean=True)
-    _log_values('training/distribution/predicted_value', distributions.predicted_value, generation, log_mean=True)
+    _record_policy_distribution('training_diagnostics/policy', distributions.policy, generation)
+    _log_values('training_diagnostics/wdl_loss', distributions.wdl_loss, generation)
+    _log_values('training_diagnostics/root_value', distributions.root_value, generation, log_mean=True)
+    _log_values('training_diagnostics/terminal_value', distributions.terminal_value, generation, log_mean=True)
+    _log_values('training_diagnostics/predicted_value', distributions.predicted_value, generation, log_mean=True)
     _log_values(
-        'training/distribution/value_absolute_error',
+        'training_diagnostics/value_absolute_error',
         distributions.value_absolute_error,
         generation,
         log_mean=True,
     )
-    _log_values('training/distribution/sample_weight', distributions.sample_weight, generation)
+    _log_values('training_diagnostics/sample_weight', distributions.sample_weight, generation)
     _log_values(
-        'replay/distribution/generation_age',
+        'replay_diagnostics/generation_age',
         distributions.replay_generation_age,
         generation,
         log_mean=True,
     )
-    _log_values('replay/distribution/age_seconds', distributions.replay_age_seconds, generation, log_mean=True)
+    _log_values('replay_diagnostics/age_seconds', distributions.replay_age_seconds, generation, log_mean=True)
     for index, (head, auxiliary) in enumerate(zip(auxiliary_heads, distributions.auxiliary, strict=True)):
-        prefix = f'training/auxiliary/{_auxiliary_name(index, head)}'
+        prefix = f'training_auxiliary/{_auxiliary_name(index, head)}'
         match auxiliary:
             case NextPolicyTrainingDistribution(policy=policy):
                 _record_policy_distribution(prefix, policy, generation)
