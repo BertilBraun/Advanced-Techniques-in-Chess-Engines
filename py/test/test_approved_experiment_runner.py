@@ -12,8 +12,8 @@ def test_approval_path_is_selected_from_authored_configuration_name(tmp_path: Pa
     )
 
 
-def test_checked_in_screening_queue_owns_four_resource_slots_and_pending_order() -> None:
-    configuration = load_queue_configuration(Path('configs/queues/vast-go-7x7-screening.yaml'))
+def _assert_eight_gpu_topology(configuration_path: Path) -> tuple[str, ...]:
+    configuration = load_queue_configuration(configuration_path)
 
     assert tuple(slot.cuda_devices for slot in configuration.slots) == ((0, 1), (2, 3), (4, 5), (6, 7))
     assert tuple(slot.cpu_affinity for slot in configuration.slots) == (
@@ -22,16 +22,40 @@ def test_checked_in_screening_queue_owns_four_resource_slots_and_pending_order()
         (8, 9, 10, 11, 12, 13, 14, 15, 40, 41, 42, 43, 44, 45, 46, 47),
         (0, 1, 2, 3, 4, 5, 6, 7, 32, 33, 34, 35, 36, 37, 38, 39),
     )
-    assert tuple(experiment.experiment_id for experiment in configuration.experiments) == (
-        'go7-r13-00-baseline',
-        'go7-r13-01-learning-rate-decay',
-        'go7-r13-02-learning-rate-constant-004',
-        'go7-r13-04-mixed-search-25-full',
-        'go7-r13-06-progressive-search-64-512',
-        'go7-r13-07-root-value-blend',
-        'go7-r13-08-replay-ratio-8',
-        'go7-r13-09-tree-retention-60',
-        'go7-r13-10-random-opening-12',
-        'go7-r13-11-next-policy',
-    )
     assert configuration.wait_for_updates_when_empty
+    return tuple(experiment.experiment_id for experiment in configuration.experiments)
+
+
+def test_checked_in_go7_screening_queue_records_the_terminal_r14_order() -> None:
+    assert _assert_eight_gpu_topology(Path('configs/queues/vast-go-7x7-screening.yaml')) == (
+        'go7-r14-12-fpu-reduction-02',
+        'go7-r14-13-restart-states',
+        'go7-r14-14-remaining-game-length',
+        'go7-r14-15-forced-playouts',
+        'go7-r14-14b-remaining-game-length',
+        'go7-r14-12b-fpu-reduction-02',
+        'go7-r14-15b-forced-playouts',
+        'go7-r14-13b-restart-states',
+    )
+
+
+def test_checked_in_go9_screening_queue_records_the_authored_ablation_order() -> None:
+    assert _assert_eight_gpu_topology(Path('configs/queues/vast-go-9x9-screening.yaml')) == tuple(
+        f'go9-r15-{index:02d}-{name}'
+        for index, name in enumerate(
+            (
+                'baseline',
+                'zero-fpu',
+                'no-forced-playouts',
+                'squeeze-excitation',
+                'no-auxiliary-targets',
+                'no-root-value-blend',
+                'true-starts-only',
+                'fixed-search-budgets',
+                'no-tree-retention',
+                'no-mixed-search',
+                'replay-ratio-8',
+                'constant-learning-rate-007',
+            )
+        )
+    )

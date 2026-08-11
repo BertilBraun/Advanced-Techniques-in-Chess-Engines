@@ -42,8 +42,8 @@ are always required.
 From the Windows development host:
 
 ```powershell
-scp -i C:\Users\berti\.ssh\codex_vast_ed25519 -P 56488 `
-  root@171.101.230.38:/workspace/exports/SCREENING-results.zip `
+scp -i C:\Users\berti\.ssh\codex_vast_ed25519 -P 39529 `
+  root@1.193.139.91:/workspace/exports/SCREENING-results.zip `
   C:\Projects\Papers\projects\advanced-techniques-chess-engines\evidence\
 ```
 

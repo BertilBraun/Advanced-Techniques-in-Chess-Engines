@@ -14,10 +14,17 @@ mode.
 
 Experiment YAML has one canonical resolved form. A small authored override may use `extends`; paths resolve relative
 to the child YAML, mappings merge recursively, lists replace, and changing a base invalidates every dependent
-approval. The production baseline is `py/configs/baselines/vast-go-7x7-2gpu-4h.yaml`, the one-variable overrides are
-under `py/configs/screening/go-7x7-overnight`, and the canonical queue is
-`py/configs/queues/vast-go-7x7-screening.yaml`. See [`py/README.md`](../../py/README.md) for the schema and entry-point
+approval. The current production baseline is `py/configs/baselines/vast-go-9x9-2gpu-4h.yaml`, its removal
+ablations are under `py/configs/screening/go-9x9-strong`, and the canonical queue is
+`py/configs/queues/vast-go-9x9-screening.yaml`. See [`py/README.md`](../../py/README.md) for the schema and entry-point
 details.
+
+The 9x9 baseline is an integrated wall-clock recipe rather than a minimal algorithmic control: 8x96 global-pooling
+network, AdamW `0.01` to `0.001` through generation 150, full searches 64 to 256 and fast searches 16 to 64 through
+generation 50, full-search probability 1.0 to 0.25 through generation 25, 0.6 tree retention, balanced restart
+states, reduced-parent FPU 0.2, forced playouts, delayed root-value blending to 0.15, and next-policy plus
+remaining-length auxiliary heads. Challengers remove one treatment at a time; fixed-budget, no-mixed-search,
+replay-ratio-8, and constant-LR-0.007 runs complete the authored twelve-run campaign.
 
 ## Training and evaluation lifecycle
 
@@ -28,14 +35,15 @@ and records a durable outcome on clean shutdown. Six of eight self-play workers 
 in the current two-GPU baseline.
 
 Evaluation belongs to the coordinator and is scheduled by elapsed 20-minute boundaries. Jobs are asynchronous,
-device-cycled, limited to ten concurrent jobs, and individually time out after 20 minutes. The ladder contains the
-fixed dataset; previous 20-, 40-, and 60-minute checkpoints; the same-time baseline; and KataGo at 64 visits.
+device-cycled, limited to ten concurrent jobs, and individually time out after 20 minutes. The 9x9 ladder contains
+the book-derived fixed dataset; previous 20-, 40-, and 60-minute checkpoints; the same-time baseline; and KataGo at
+96 visits.
 Checkpoint and same-time matches use 200 paired openings (400 games); KataGo uses 50 pairs (100 games). The checked-in
 v2 dataset and openings are immutable and must be reused, never regenerated. Exact engine assets, checksums, and
 artifact preparation checks are in [Evaluation engines](evaluation-engines.md).
 
 For a screening campaign, run a fresh baseline first. Its
-`py/training_data/screening/go7-overnight/00-baseline/evaluations/reference-checkpoints.json` and referenced
+`py/training_data/screening/go9-strong/00-baseline/evaluations/reference-checkpoints.json` and referenced
 checkpoints are the only runtime same-time baseline. Historical archives are analysis evidence, not runtime input.
 Give the baseline roughly two to five minutes of lead before adding challengers, then confirm at their first
 boundary that `same-time-baseline` jobs were scheduled rather than skipped.
@@ -115,7 +123,7 @@ Use the node's supported supervisor instead of a detached shell. The supervised 
 
 ```bash
 /workspace/alphazero-engine-venv/bin/python py/queue_experiments.py run \
-  --queue-config /workspace/run-control/go7-screening-live.yaml
+  --queue-config /workspace/run-control/r15/go9-screening-live.yaml
 ```
 
 For a baseline-first launch, materialize the committed queue outside Git with absolute experiment paths and exact
@@ -130,7 +138,7 @@ Start and inspect the supervisor with the node's `supervisorctl`:
 supervisorctl start experiment-queue
 supervisorctl status experiment-queue
 /workspace/alphazero-engine-venv/bin/python py/queue_experiments.py status \
-  --summary /workspace/run-control/go7-screening-summary.json
+  --summary /workspace/run-control/r15/go9-screening-summary.json
 ```
 
 Update only pending work by atomically replacing the live queue file. Stop with
@@ -179,7 +187,7 @@ Before launch, verify:
 
 After completion, verify terminal outcomes, every due evaluation result or explicit failure, archive manifest and
 ZIP integrity, elapsed-time comparisons against the fresh same-time baseline and previous checkpoints, fixed-dataset
-metrics, KataGo-64, replay/credit balance, throughput, and resource contention. Do not promote a feature
+metrics, KataGo-96, replay/credit balance, throughput, and resource contention. Do not promote a feature
 automatically; report the evidence for a user decision. Detailed prior-node validation evidence remains in
 [R11 Vast integrated validation](vast-r11-validation.md), and the historical baseline rationale is in
 [Go 7x7 two-GPU training baseline](../benchmarks/go-7x7-two-gpu-training-baseline.md).
