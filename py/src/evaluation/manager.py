@@ -270,7 +270,7 @@ class EvaluationManager:
     def _launch(self, job: EvaluationJob) -> bool:
         process = self.process_context.Process(
             target=run_evaluation_job,
-            args=(self.experiment, job),
+            args=(self.experiment.model_dump_json(), job.model_dump_json()),
             name=f'evaluation-{job.job_id}',
         )
         try:

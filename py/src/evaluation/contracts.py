@@ -240,6 +240,7 @@ EvaluationJob: TypeAlias = Annotated[
     FixedDatasetEvaluationJob | MatchEvaluationJob,
     Field(discriminator='kind'),
 ]
+EVALUATION_JOB_ADAPTER = TypeAdapter(EvaluationJob)
 
 
 class CandidateOutcome(str, Enum):

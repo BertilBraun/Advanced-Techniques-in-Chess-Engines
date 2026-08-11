@@ -11,14 +11,14 @@ from typing import TYPE_CHECKING
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
 from src.evaluation.contracts import (
     EvaluationFailurePhase,
-    EvaluationJob,
+    EVALUATION_JOB_ADAPTER,
     EvaluationResult,
     FailedEvaluationResult,
     FixedDatasetEvaluationJob,
     MatchEvaluationJob,
     OPENING_SUITE_MANIFEST_ADAPTER,
 )
-from src.experiment.configuration import ExperimentConfiguration
+from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration_json
 from src.util.atomic_file import write_text_atomically
 
 if TYPE_CHECKING:
@@ -47,7 +47,9 @@ def write_evaluation_result(result: EvaluationResult, path: Path) -> None:
     write_text_atomically(path, result.model_dump_json(indent=2) + '\n')
 
 
-def run_evaluation_job(experiment: ExperimentConfiguration, job: EvaluationJob) -> None:
+def run_evaluation_job(experiment_json: str, job_json: str) -> None:
+    experiment = load_experiment_configuration_json(experiment_json)
+    job = EVALUATION_JOB_ADAPTER.validate_json(job_json)
     if os.name == 'posix':
         os.setpgrp()
     started_at = time.monotonic()

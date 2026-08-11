@@ -1,6 +1,7 @@
 from collections.abc import Callable
 import hashlib
 from pathlib import Path
+import pickle
 
 import pytest
 from pydantic import TypeAdapter
@@ -10,6 +11,7 @@ from tensorboard.plugins.custom_scalar import layout_pb2
 from src.evaluation.contracts import (
     CheckpointOpponent,
     EvaluationFailurePhase,
+    EVALUATION_JOB_ADAPTER,
     EvaluationReferenceManifest,
     EvaluationResult,
     FailedEvaluationResult,
@@ -213,7 +215,12 @@ def test_manager_schedules_boundary_checkpoint_and_cycles_devices(
         ),
         dataset_job.result_path,
     )
-    dataset_process = next(process for process in context.processes if process.args[1] == dataset_job)
+    dataset_process = next(
+        process for process in context.processes if EVALUATION_JOB_ADAPTER.validate_json(process.args[1]) == dataset_job
+    )
+    assert isinstance(dataset_process.args[0], str)
+    assert isinstance(dataset_process.args[1], str)
+    pickle.dumps(dataset_process.args)
     dataset_process.exitcode = 0
     assert manager.collect_completed_jobs()[0].job == dataset_job
     assert scalar_events == [
