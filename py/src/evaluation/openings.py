@@ -219,6 +219,7 @@ def build_chess_book_opening_suite(
     selection_path: Path,
     configuration: OpeningSuiteConfiguration,
     state: ChessStateContract,
+    metadata: EvaluationArtifactMetadata[ChessPosition],
     builder_source_revision: str,
 ) -> ChessBookOpeningSuiteManifest:
     source = configuration.source
@@ -229,8 +230,8 @@ def build_chess_book_opening_suite(
     if path.exists():
         manifest = ChessBookOpeningSuiteManifest.model_validate_json(path.read_text(encoding='utf-8'))
         expected = (
-            manifest.rules_digest == state.rules_digest
-            and manifest.representation_digest == state.representation_digest
+            manifest.rules_digest == metadata.rules_digest
+            and manifest.representation_digest == metadata.representation_digest
             and manifest.selection_sha256 == source.selection_sha256
             and len(manifest.openings) == configuration.opening_count
         )
@@ -241,8 +242,8 @@ def build_chess_book_opening_suite(
     if len(rows) != configuration.opening_count:
         raise ValueError('Chess book selection count does not match the configured opening count.')
     manifest = ChessBookOpeningSuiteManifest(
-        rules_digest=state.rules_digest,
-        representation_digest=state.representation_digest,
+        rules_digest=metadata.rules_digest,
+        representation_digest=metadata.representation_digest,
         selection_sha256=source.selection_sha256,
         openings=tuple(_replay_chess_book_line(state, *row) for row in rows),
         builder_source_revision=builder_source_revision,

@@ -114,6 +114,7 @@ def prepare_evaluation_artifacts(
                     _resolve_source_path(source_root, source.selection_path),
                     evaluation.openings,
                     game.state,
+                    engine,
                     source_revision,
                 )
             case source:
