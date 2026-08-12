@@ -12,7 +12,8 @@ training:
     learning_rate:
       kind: staged
       stages:
-        - {start_generation: 0, value: 0.0035}
+        - {start_generation: 0, value: 0.005}
+        - {start_generation: 100, value: 0.0035}
         - {start_generation: 300, value: 0.002}
     max_grad_norm: 0.5
   topology:

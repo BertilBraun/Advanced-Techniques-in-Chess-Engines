@@ -254,6 +254,10 @@ def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> N
     assert topology.self_play.device_ids == (0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7)
     assert topology.self_play.parallel_games_per_process == 512
     assert topology.self_play.node_ids_to_pause_during_training == (1, 3, 5, 7, 9, 11, 13, 15)
+    learning_rate = configuration.training.trainer.learning_rate
+    assert tuple(learning_rate.value_at(generation) for generation in (0, 99, 100, 299, 300, 500)) == pytest.approx(
+        (0.005, 0.005, 0.0035, 0.0035, 0.002, 0.002)
+    )
     resignation = self_play.resignation
     assert resignation.kind == 'calibrated'
     assert resignation.first_production_generation == 50
