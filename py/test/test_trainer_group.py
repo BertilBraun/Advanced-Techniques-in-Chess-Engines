@@ -18,6 +18,7 @@ from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
+from src.training.configuration import TrainingCompilation, TrainingPrecision
 from src.training.network import Network
 import src.training.trainer.rank as trainer_rank
 from src.training.trainer.rank import DistributedTrainingModel
@@ -187,9 +188,56 @@ def test_distributed_training_disables_per_forward_buffer_broadcast(monkeypatch:
     distributed_model = trainer_rank._create_distributed_model(
         model,
         configuration.training.topology.trainer,
+        TrainingCompilation.DISABLED,
         device_id=0,
     )
     captured = cast(CapturedDistributedModel, distributed_model)
 
     assert captured.device_ids is None
     assert captured.broadcast_buffers is False
+
+
+def test_distributed_training_compiles_only_the_training_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
+    configuration = load_experiment_configuration(
+        Path(__file__).parents[1] / 'configs' / 'chess-experiment-template.yaml'
+    )
+    game = ChessImplementation(configuration)
+    model = Network(configuration.training.network, torch.device('cpu'), game.network_dimensions)
+    compiled_modules: list[nn.Module] = []
+
+    def compile_model(module: nn.Module) -> nn.Module:
+        compiled_modules.append(module)
+        return module
+
+    class CapturedDistributedModel:
+        def __init__(
+            self,
+            module: nn.Module,
+            device_ids: list[int] | None,
+            broadcast_buffers: bool,
+        ) -> None:
+            self.module = module
+            self.device_ids = device_ids
+            self.broadcast_buffers = broadcast_buffers
+
+    monkeypatch.setattr(trainer_rank.torch, 'compile', compile_model)
+    monkeypatch.setattr(trainer_rank, 'DistributedDataParallel', CapturedDistributedModel)
+
+    trainer_rank._create_distributed_model(
+        model,
+        configuration.training.topology.trainer,
+        TrainingCompilation.DEFAULT,
+        device_id=0,
+    )
+
+    assert len(compiled_modules) == 1
+    assert isinstance(compiled_modules[0], DistributedTrainingModel)
+    assert compiled_modules[0].model is model
+
+
+def test_bfloat16_training_requires_cuda(tmp_path: Path) -> None:
+    configuration = _configuration(tmp_path)
+    trainer = configuration.training.trainer.validated_copy(update={'precision': TrainingPrecision.BFLOAT16})
+
+    with pytest.raises(ValueError, match='Bfloat16 mixed-precision training requires CUDA'):
+        configuration.training.validated_copy(update={'trainer': trainer.model_dump(mode='json')})

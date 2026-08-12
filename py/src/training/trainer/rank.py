@@ -21,7 +21,7 @@ from src.training.network import Network
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import auxiliary_head_output_size
 from src.training.distributions import TrainingDistributionSnapshot, capture_training_distributions
-from src.training.configuration import TrainerTopologyParams
+from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
 from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
@@ -105,17 +105,26 @@ def _initialize_rank(
         game.network_dimensions,
         auxiliary_sizes,
     )
-    distributed_model = _create_distributed_model(model, topology, device_id)
+    distributed_model = _create_distributed_model(
+        model,
+        topology,
+        configuration.training.trainer.compilation,
+        device_id,
+    )
     return _RankRuntime(game, model, distributed_model, optimizer, device)
 
 
 def _create_distributed_model(
     model: Network,
     topology: TrainerTopologyParams,
+    compilation: TrainingCompilation,
     device_id: int,
 ) -> DistributedDataParallel:
+    training_model: nn.Module = DistributedTrainingModel(model)
+    if compilation is TrainingCompilation.DEFAULT:
+        training_model = torch.compile(training_model)
     return DistributedDataParallel(
-        DistributedTrainingModel(model),
+        training_model,
         device_ids=None if topology.device_type == 'cpu' else [device_id],
         broadcast_buffers=False,
     )
@@ -183,6 +192,7 @@ def _train_batches(
     objective: ResolvedTrainingObjective,
     collect_distributions: bool,
     source_generation: int,
+    precision: TrainingPrecision,
 ) -> _TrainingBatchResult:
     totals = _DeviceLossTotals(
         policy=torch.zeros((), device=device),
@@ -195,8 +205,13 @@ def _train_batches(
     with loader.prefetch(device, uses_cuda) as prefetched_batches:
         for batch in prefetched_batches:
             optimizer.zero_grad(set_to_none=True)
-            output = distributed_model(batch.states)
-            loss = objective.calculate_loss(output, batch)
+            with torch.autocast(
+                device_type=device.type,
+                dtype=torch.bfloat16,
+                enabled=precision is TrainingPrecision.BFLOAT16,
+            ):
+                output = distributed_model(batch.states)
+                loss = objective.calculate_loss(output, batch)
             if collect_distributions and distributions is None:
                 distributions = capture_training_distributions(
                     output,
@@ -286,6 +301,7 @@ def train_rank_quantum(
         command.parameters.objective,
         collect_distributions=rank == 0,
         source_generation=command.source_progress.model_generation,
+        precision=configuration.training.trainer.precision,
     )
     totals = _resolve_loss_totals(training_result.totals)
     checkpoint = _save_rank_checkpoint(rank, model, optimizer, command, configuration.training.save_path)

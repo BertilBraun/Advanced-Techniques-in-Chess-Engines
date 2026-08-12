@@ -21,6 +21,8 @@ training:
     global_batch_size: 256
     local_batch_size: 256
     optimizer: adamw
+    precision: float32
+    compilation: disabled
     learning_rate: {kind: constant, value: 0.002}
   topology:
     trainer: {device_type: cpu, process_group_backend: gloo, rank_zero_device_id: 0, ddp_device_ids: [0], cpu_threads: 1, interop_threads: 1}

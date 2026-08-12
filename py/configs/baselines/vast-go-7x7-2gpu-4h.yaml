@@ -35,6 +35,8 @@ training:
     global_batch_size: 1024
     local_batch_size: 512
     optimizer: adamw
+    precision: float32
+    compilation: disabled
     learning_rate: {kind: constant, value: 0.002}
     max_grad_norm: 1.0
     duplicate_multiplicity_weight_cap:

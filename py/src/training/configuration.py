@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from enum import Enum
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -99,10 +100,22 @@ class CreditTrainingParams(FrozenModel):
 OptimizerType = Literal['adamw', 'sgd']
 
 
+class TrainingPrecision(str, Enum):
+    FLOAT32 = 'float32'
+    BFLOAT16 = 'bfloat16'
+
+
+class TrainingCompilation(str, Enum):
+    DISABLED = 'disabled'
+    DEFAULT = 'default'
+
+
 class TrainingParams(FrozenModel):
     global_batch_size: int = Field(gt=0)
     local_batch_size: int = Field(gt=0)
     optimizer: OptimizerType
+    precision: TrainingPrecision
+    compilation: TrainingCompilation
     learning_rate: FloatGenerationSchedule
     max_grad_norm: float = Field(default=0.5, gt=0.0)
     duplicate_multiplicity_weight_cap: float | None = Field(default=None, ge=1.0)
@@ -157,6 +170,8 @@ class TrainingArgs(FrozenModel):
             raise ValueError('Every scheduled replay capacity must contain at least one global batch.')
         if any(value <= 0.0 for value in defined_schedule_values(self.trainer.learning_rate)):
             raise ValueError('Learning rate must remain positive.')
+        if self.trainer.precision is TrainingPrecision.BFLOAT16 and self.topology.trainer.device_type != 'cuda':
+            raise ValueError('Bfloat16 mixed-precision training requires CUDA.')
         maximum_generation = credit.maximum_optimizer_steps // credit.optimizer_steps_per_quantum
         if maximum_generation > 4_294_967_295:
             raise ValueError('Maximum model generation must fit uint32 replay metadata.')
