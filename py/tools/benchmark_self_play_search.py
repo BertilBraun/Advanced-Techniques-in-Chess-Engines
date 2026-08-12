@@ -152,7 +152,15 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         }
     )
     topology = experiment.training.topology.validated_copy(update={'trainer': trainer.model_dump(mode='json')})
-    training = experiment.training.validated_copy(update={'topology': topology.model_dump(mode='json')})
+    training_parameters = experiment.training.trainer.validated_copy(
+        update={'local_batch_size': experiment.training.trainer.global_batch_size}
+    )
+    training = experiment.training.validated_copy(
+        update={
+            'trainer': training_parameters.model_dump(mode='json'),
+            'topology': topology.model_dump(mode='json'),
+        }
+    )
     experiment = experiment.validated_copy(update={'training': training.model_dump(mode='json')})
     game = create_game_implementation(experiment)
     with tempfile.TemporaryDirectory(prefix='self-play-search-benchmark-') as temporary_directory:

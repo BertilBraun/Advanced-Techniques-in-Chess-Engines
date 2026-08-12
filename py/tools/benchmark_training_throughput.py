@@ -26,6 +26,8 @@ class Arguments:
     checkpoint_generation: int
     device_ids: tuple[int, ...]
     optimizer_steps: int
+    quantum_count: int
+    global_batch_size: int | None
     output_directory: Path
 
 
@@ -36,6 +38,7 @@ class TrainingThroughputBenchmarkResult(FrozenModel):
     global_batch_size: int
     local_batch_size: int
     optimizer_steps: int
+    quantum_count: int
     replay_rows: int
     initialization_and_training_seconds: float
     training_quantum_seconds: float
@@ -57,17 +60,20 @@ def _stage_checkpoint(source: CheckpointReference, destination: Path) -> Checkpo
 def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
     configuration = load_experiment_configuration_json(arguments.resolved_configuration.read_text(encoding='utf-8'))
     world_size = len(arguments.device_ids)
-    global_batch_size = configuration.training.trainer.global_batch_size
+    global_batch_size = arguments.global_batch_size or configuration.training.trainer.global_batch_size
     if global_batch_size % world_size:
         raise ValueError('Global batch size must divide evenly over the requested devices.')
 
-    benchmark_directory = arguments.output_directory / f'ddp-{world_size}-gpu'
+    benchmark_directory = arguments.output_directory / f'ddp-{world_size}-gpu-batch-{global_batch_size}'
     checkpoint = _stage_checkpoint(
         CheckpointReference.load(arguments.run_directory, arguments.checkpoint_generation),
         benchmark_directory,
     )
     trainer = configuration.training.trainer.validated_copy(
-        update={'local_batch_size': global_batch_size // world_size}
+        update={
+            'global_batch_size': global_batch_size,
+            'local_batch_size': global_batch_size // world_size,
+        }
     )
     trainer_topology = configuration.training.topology.trainer.validated_copy(
         update={
@@ -115,13 +121,13 @@ def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
     started_at = time.perf_counter()
     trainer_group = TrainerGroup(benchmark_configuration, game, checkpoint)
     try:
-        result = trainer_group.train_quantum(
-            replay,
-            TrainingProgress(
-                completed_optimizer_steps=arguments.checkpoint_generation * arguments.optimizer_steps,
-                optimizer_steps_per_generation=arguments.optimizer_steps,
-            ),
+        progress = TrainingProgress(
+            completed_optimizer_steps=arguments.checkpoint_generation * arguments.optimizer_steps,
+            optimizer_steps_per_generation=arguments.optimizer_steps,
         )
+        for _ in range(arguments.quantum_count):
+            result = trainer_group.train_quantum(replay, progress)
+            progress = progress.next_generation
     finally:
         trainer_group.close()
     elapsed_seconds = time.perf_counter() - started_at
@@ -132,6 +138,7 @@ def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
         global_batch_size=global_batch_size,
         local_batch_size=global_batch_size // world_size,
         optimizer_steps=arguments.optimizer_steps,
+        quantum_count=arguments.quantum_count,
         replay_rows=replay.size,
         initialization_and_training_seconds=elapsed_seconds,
         training_quantum_seconds=result.statistics.elapsed_seconds,
@@ -153,6 +160,8 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--checkpoint-generation', required=True, type=int)
     parser.add_argument('--device-ids', required=True, nargs='+', type=int)
     parser.add_argument('--optimizer-steps', default=200, type=int)
+    parser.add_argument('--quantum-count', default=1, type=int)
+    parser.add_argument('--global-batch-size', type=int)
     parser.add_argument('--output-directory', required=True, type=Path)
     namespace = parser.parse_args()
     arguments = Arguments(
@@ -161,14 +170,21 @@ def parse_arguments() -> Arguments:
         checkpoint_generation=namespace.checkpoint_generation,
         device_ids=tuple(namespace.device_ids),
         optimizer_steps=namespace.optimizer_steps,
+        quantum_count=namespace.quantum_count,
+        global_batch_size=namespace.global_batch_size,
         output_directory=namespace.output_directory,
     )
     if not arguments.resolved_configuration.is_file():
         raise ValueError(f'Resolved configuration does not exist: {arguments.resolved_configuration}')
     if not arguments.run_directory.is_dir():
         raise ValueError(f'Run directory does not exist: {arguments.run_directory}')
-    if arguments.checkpoint_generation < 0 or arguments.optimizer_steps <= 0:
-        raise ValueError('Checkpoint generation must be nonnegative and optimizer steps must be positive.')
+    if (
+        arguments.checkpoint_generation < 0
+        or arguments.optimizer_steps <= 0
+        or arguments.quantum_count <= 0
+        or (arguments.global_batch_size is not None and arguments.global_batch_size <= 0)
+    ):
+        raise ValueError('Checkpoint generation must be nonnegative and benchmark sizes must be positive.')
     if not arguments.device_ids or len(set(arguments.device_ids)) != len(arguments.device_ids):
         raise ValueError('Device IDs must be nonempty and unique.')
     if any(device_id < 0 for device_id in arguments.device_ids):
