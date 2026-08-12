@@ -15,6 +15,7 @@ from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 from src.self_play.configuration import BatchedInferenceParams
+from src.self_play.resignation import CalibratedResignationConfiguration
 
 
 if TYPE_CHECKING:
@@ -58,6 +59,15 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             else configuration.maximum_game_plies.value_at(model_generation)
         )
         return configuration.resolve(model_generation, maximum_game_plies)
+
+    @property
+    def resignation_configuration(self) -> CalibratedResignationConfiguration | None:
+        configuration = self.self_play_configuration.resignation
+        match configuration:
+            case CalibratedResignationConfiguration():
+                return configuration
+            case _:
+                return None
 
     def create_native_search(
         self,

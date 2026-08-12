@@ -18,6 +18,10 @@ from src.self_play.parameters import (
 from src.self_play.completed_game import CompletedSelfPlayGame, GameIdentity, SearchObservation
 from src.self_play.completed_game import SparseSearchVisit, TerminationReason
 from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
+from src.self_play.resignation import (
+    CalibratedResignationConfiguration,
+    PublishedResignationPolicy,
+)
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 
@@ -59,6 +63,9 @@ class FakeRequest:
 @dataclass(frozen=True)
 class FakeResult:
     root_value: float
+    highest_visited_child_action_id: int
+    highest_visited_child_visit_count: int
+    highest_visited_child_q: float
     visits: list[FakeVisit]
     policy_target_visits: list[FakeVisit]
     root: FakeRoot
@@ -82,6 +89,8 @@ class FakeSearch:
         self.capacity_changed = False
         self.actual_visits = [FakeVisit(0, 3)]
         self.policy_target_visits = [FakeVisit(0, 3)]
+        self.root_value = 0.25
+        self.highest_visited_child_q = 0.2
 
     def new_root(self, position: FakePosition) -> FakeRoot:
         return FakeRoot(position)
@@ -95,7 +104,10 @@ class FakeSearch:
         return FakeBatch(
             [
                 FakeResult(
-                    0.25,
+                    self.root_value,
+                    self.actual_visits[0].action_id,
+                    self.actual_visits[0].visit_count,
+                    self.highest_visited_child_q,
                     self.actual_visits,
                     self.policy_target_visits,
                     request.root,
@@ -152,14 +164,15 @@ class FakeGame:
         maximum_random_opening_plies: int = 0,
         restart_parameters: RestartStateStartParameters | None = None,
         force_fast_search_after_ply: int | None = None,
+        resignation_configuration: CalibratedResignationConfiguration | None = None,
     ) -> None:
         self.search = FakeSearch()
         self.maximum_random_opening_plies = maximum_random_opening_plies
         self.restart_parameters = restart_parameters
         self.force_fast_search_after_ply = force_fast_search_after_ply
+        self.resignation_configuration = resignation_configuration
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
-        del model_generation
         start_position = self.restart_parameters
         if start_position is None:
             start_position = RandomOpeningStartParameters(
@@ -208,6 +221,21 @@ def checkpoint(path: Path, generation: int) -> CheckpointReference:
         optimizer_path=path / f'optimizer_{generation}.pt',
         inference_model_path=inference_path,
         inference_model_sha256=hashlib.sha256(inference_path.read_bytes()).hexdigest(),
+    )
+
+
+def resignation_configuration(continuation_probability: float) -> CalibratedResignationConfiguration:
+    return CalibratedResignationConfiguration(
+        first_production_generation=50,
+        false_nonloss_rate_ceiling=0.03,
+        continuation_game_probability=continuation_probability,
+        triggered_game_window=2000,
+        candidate_threshold_minimum=-0.99,
+        candidate_threshold_maximum=-0.70,
+        candidate_threshold_step=0.01,
+        minimum_evidence_trigger_count=100,
+        confidence_level=0.95,
+        maximum_relaxation_per_generation=0.01,
     )
 
 
@@ -303,6 +331,54 @@ def test_worker_selects_from_actual_visits_and_records_pruned_target_visits(tmp_
     )
 
 
+def test_worker_resigns_with_frozen_published_threshold(tmp_path: Path) -> None:
+    game = FakeGame(resignation_configuration=resignation_configuration(0.1))
+    game.search.root_value = -0.9
+    game.search.highest_visited_child_q = -0.9
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path,
+    )
+    worker.update_resignation_policy(PublishedResignationPolicy(threshold=-0.85))
+    worker.refresh_published_model(checkpoint(tmp_path, 50))
+    worker.active_games[0].is_resignation_continuation = False
+
+    worker.run_batch()
+
+    completed = CompletedSelfPlayGame.model_validate_json(next(tmp_path.glob('*.json')).read_text(encoding='utf-8'))
+    assert completed.termination_reason is TerminationReason.RESIGNATION
+    assert completed.action_ids == ()
+    assert completed.observations[-1].selected_action_id is None
+    assert completed.final_wdl == WdlTarget(win=0.0, draw=0.0, loss=1.0)
+
+
+def test_continuation_game_never_resigns_and_keeps_creation_threshold(tmp_path: Path) -> None:
+    game = FakeGame(resignation_configuration=resignation_configuration(1.0))
+    game.search.root_value = -0.9
+    game.search.highest_visited_child_q = -0.9
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path,
+    )
+    worker.update_resignation_policy(PublishedResignationPolicy(threshold=-0.85))
+    worker.refresh_published_model(checkpoint(tmp_path, 50))
+    active = worker.active_games[0]
+    worker.update_resignation_policy(PublishedResignationPolicy(threshold=-0.80))
+
+    worker.run_batch()
+
+    assert worker.active_games[0] is active
+    assert active.is_resignation_continuation is True
+    assert active.resignation_threshold == pytest.approx(-0.85)
+    assert active.action_ids == [0]
+
+
 class FakeOpeningRandom:
     def __init__(self, opening_lengths: tuple[int, ...]) -> None:
         self.opening_lengths = iter(opening_lengths)
@@ -371,6 +447,9 @@ def restart_source_game() -> CompletedSelfPlayGame:
                     SparseSearchVisit(action_id=2, visit_count=25),
                 ),
                 root_value=0.0,
+                highest_visited_child_action_id=0,
+                highest_visited_child_visit_count=45,
+                highest_visited_child_q=0.0,
                 selected_action_id=0,
                 full_search=True,
                 sample_weight=1.0,

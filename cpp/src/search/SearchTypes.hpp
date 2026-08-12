@@ -19,6 +19,9 @@ struct GameSearchVisit {
 };
 struct GameSearchResult {
     float root_value;
+    int highest_visited_child_action_id;
+    std::uint32_t highest_visited_child_visit_count;
+    float highest_visited_child_q;
     std::vector<GameSearchVisit> visits;
     std::vector<GameSearchVisit> policy_target_visits;
 };

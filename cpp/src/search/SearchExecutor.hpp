@@ -85,11 +85,15 @@ public:
             const auto &node = root.tree().root();
             GameSearchResult result{
                 .root_value = node.visits == 0 ? 0.0F : node.value_sum / node.visits,
+                .highest_visited_child_action_id = -1,
+                .highest_visited_child_visit_count = 0,
+                .highest_visited_child_q = 0.0F,
                 .visits = {},
                 .policy_target_visits = {},
             };
             result.visits.reserve(node.children.size());
             result.policy_target_visits.reserve(node.children.size());
+            std::uint32_t highestChildVisits = 0;
             const std::vector<std::uint32_t> policyTargetVisits = root.tree().policyTargetVisits(
                 m_searchParameters.tree_search.exploration_constant, task.force_root_playouts);
             for (const auto index : range(node.children.size())) {
@@ -105,6 +109,19 @@ public:
                         .visit_count = policyTargetVisits[index],
                     });
                 }
+                if (edge.visits > 0 &&
+                    (edge.visits > highestChildVisits ||
+                     (edge.visits == highestChildVisits &&
+                      actionId < result.highest_visited_child_action_id))) {
+                    highestChildVisits = edge.visits;
+                    result.highest_visited_child_action_id = actionId;
+                    result.highest_visited_child_visit_count = edge.visits;
+                    result.highest_visited_child_q =
+                        -edge.value_sum / static_cast<float>(edge.visits);
+                }
+            }
+            if (result.highest_visited_child_action_id < 0) {
+                throw std::logic_error("Completed search has no visited child");
             }
             results.push_back(std::move(result));
         }

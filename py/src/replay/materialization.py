@@ -137,6 +137,12 @@ def _reconstruct_trajectory(
             if any(visit.action_id not in legal_actions for visit in observation.policy_target_visits):
                 raise ValueError(f'Observation at ply {ply} contains an illegal action.')
         positions.append(state.child_position(position, action_id))
+    for observation in game.observations:
+        legal_actions = state.legal_action_ids(positions[observation.ply])
+        if any(visit.action_id not in legal_actions for visit in observation.policy_target_visits):
+            raise ValueError(f'Observation at ply {observation.ply} contains an illegal action.')
+        if observation.highest_visited_child_action_id not in legal_actions:
+            raise ValueError(f'Observation at ply {observation.ply} has an illegal highest-visited child.')
     return tuple(positions)
 
 
@@ -155,6 +161,8 @@ def _validate_result(
         case TerminationReason.RESIGNATION:
             if state.natural_terminal_wdl(final_position) is not None:
                 raise ValueError('Resigned game should have been recorded as a natural terminal result.')
+            if not _same_wdl(game.final_wdl, WdlTarget(win=0.0, draw=0.0, loss=1.0)):
+                raise ValueError('Resignation must record a loss for the player to move.')
             return
     if not _same_wdl(expected, game.final_wdl):
         raise ValueError('Completed-game result disagrees with the reconstructed final position.')

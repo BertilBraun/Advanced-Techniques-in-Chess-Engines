@@ -14,6 +14,7 @@ from src.self_play.protocol import (
     RunningSelfPlayState,
     StatisticsLevel,
 )
+from src.self_play.resignation import PublishedResignationPolicy, ResignationCalibrator
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.retention import CheckpointRetention
 from src.training.credit_ledger import CreditLedger
@@ -48,6 +49,14 @@ class Coordinator:
             training.trainer.global_batch_size,
             generation_zero,
         )
+        resignation_configuration = game.resignation_configuration
+        self.resignation_calibrator = (
+            None
+            if resignation_configuration is None
+            else ResignationCalibrator(run_path / 'resignation' / 'calibration.json', resignation_configuration)
+        )
+        if self.resignation_calibrator is not None:
+            self.resignation_calibrator.advance_generation(self.ledger.model_generation)
         replay_layout = ReplayLayout(
             packed_planes=game.state.packed_plane_layout,
             targets=game.target_layout,
@@ -59,6 +68,7 @@ class Coordinator:
             replay_layout,
             training.lifecycle.replay,
             self.ledger.model_generation,
+            self.resignation_calibrator,
         )
         self.trainer_group = TrainerGroup(self.configuration, game, self.ledger.state.active_checkpoint)
         self.self_play_group = SelfPlayGroup(game)
@@ -76,7 +86,10 @@ class Coordinator:
             while not self.ledger.training_complete:
                 self.evaluation_manager.collect_completed_jobs()
                 self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
-                restarted_workers = self.self_play_group.restart_exited_workers(self.ledger.state.active_checkpoint)
+                restarted_workers = self.self_play_group.restart_exited_workers(
+                    self.ledger.state.active_checkpoint,
+                    self._resignation_policy(),
+                )
                 for worker_id in restarted_workers:
                     log(f'Restarted self-play worker {worker_id} at generation {self.ledger.model_generation}.')
                 self.final_stop_reason = self.run_limit_monitor.stop_reason()
@@ -97,7 +110,10 @@ class Coordinator:
     def _start_self_play(self) -> None:
         checkpoint = self.ledger.state.active_checkpoint
         responses = self.self_play_group.apply(
-            tuple(RunningSelfPlayState(checkpoint=checkpoint) for _ in range(self.self_play_group.worker_count))
+            tuple(
+                RunningSelfPlayState(checkpoint=checkpoint, resignation_policy=self._resignation_policy())
+                for _ in range(self.self_play_group.worker_count)
+            )
         )
         if any(response.kind != 'running' for response in responses):
             raise RuntimeError('Self-play workers did not enter the running state.')
@@ -107,6 +123,8 @@ class Coordinator:
         generation = self.ledger.model_generation
         ingestion = self.replay_manager.ingest_available_games(generation)
         self.ledger.add_samples(ingestion.samples_added, generation)
+        if ingestion.games_ingested:
+            self._record_resignation_diagnostics(generation)
 
     def _train_quantum(self) -> None:
         credit_wait_seconds = time.perf_counter() - self._credit_wait_started_at
@@ -121,7 +139,10 @@ class Coordinator:
         if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
             resumed = self.self_play_group.apply_to_workers(
                 paused_worker_ids,
-                RunningSelfPlayState(checkpoint=self.ledger.state.active_checkpoint),
+                RunningSelfPlayState(
+                    checkpoint=self.ledger.state.active_checkpoint,
+                    resignation_policy=self._resignation_policy(),
+                ),
             )
             if any(response.kind != 'running' for response in resumed):
                 raise RuntimeError('Selected self-play workers did not resume after a cancelled training quantum.')
@@ -129,11 +150,16 @@ class Coordinator:
         result = self.trainer_group.train_quantum(self.replay_manager.description(), self.ledger.progress)
         self.ledger.commit_quantum(result)
         self.latest_completed_model_version = self.ledger.model_generation
+        self._ingest_available_games()
+        if self.resignation_calibrator is not None:
+            self.resignation_calibrator.advance_generation(self.ledger.model_generation)
+            self._record_resignation_diagnostics(self.ledger.model_generation)
         self._record_training_statistics(result, credit_wait_seconds)
         detailed_workers = self._detailed_statistics_workers()
         desired_states = tuple(
             RunningSelfPlayState(
                 checkpoint=result.checkpoint,
+                resignation_policy=self._resignation_policy(),
                 completed_generation_statistics=(
                     StatisticsLevel.DETAILED if worker_id < detailed_workers else StatisticsLevel.BASIC
                 ),
@@ -145,6 +171,29 @@ class Coordinator:
             raise RuntimeError('Self-play workers did not apply the trained checkpoint.')
         self._apply_checkpoint_retention()
         self._credit_wait_started_at = time.perf_counter()
+
+    def _resignation_policy(self) -> PublishedResignationPolicy:
+        if self.resignation_calibrator is None:
+            return PublishedResignationPolicy()
+        return self.resignation_calibrator.published_policy(self.ledger.model_generation)
+
+    def _record_resignation_diagnostics(self, generation: int) -> None:
+        if self.resignation_calibrator is None:
+            return
+        diagnostics = self.resignation_calibrator.diagnostics()
+        if diagnostics.selected_threshold is not None:
+            log_scalar('resignation/selected_threshold', diagnostics.selected_threshold, generation)
+        log_scalar('resignation/selected_threshold_safe', int(diagnostics.selected_threshold_safe), generation)
+        log_scalar('resignation/continuation_games', diagnostics.continuation_games, generation)
+        log_scalar('resignation/audit_triggers', diagnostics.audit_triggers, generation)
+        log_scalar('resignation/false_nonlosses', diagnostics.false_nonlosses, generation)
+        log_scalar('resignation/false_nonloss_rate', diagnostics.false_nonloss_rate, generation)
+        log_scalar('resignation/false_nonloss_upper_bound', diagnostics.false_nonloss_upper_bound, generation)
+        log_scalar('resignation/actual_resignations', diagnostics.actual_resignations, generation)
+        if diagnostics.average_trigger_ply is not None:
+            log_scalar('resignation/average_trigger_ply', diagnostics.average_trigger_ply, generation)
+        if diagnostics.average_saved_plies is not None:
+            log_scalar('resignation/average_saved_plies', diagnostics.average_saved_plies, generation)
 
     def _apply_checkpoint_retention(self) -> None:
         self.checkpoint_retention.apply(

@@ -25,6 +25,7 @@ from src.self_play.protocol import (
     StoppedSelfPlayStateApplied,
 )
 from src.self_play.worker import SelfPlayWorker
+from src.self_play.resignation import PublishedResignationPolicy
 from src.training.checkpoint import CheckpointReference
 from src.util.tensorboard import TensorboardWriter
 
@@ -72,7 +73,11 @@ class SelfPlayGroup:
             connection.send(desired_state)
         return tuple(self._receive(connection) for connection in selected_connections)
 
-    def restart_exited_workers(self, checkpoint: CheckpointReference) -> tuple[int, ...]:
+    def restart_exited_workers(
+        self,
+        checkpoint: CheckpointReference,
+        resignation_policy: PublishedResignationPolicy,
+    ) -> tuple[int, ...]:
         if self._closed:
             raise RuntimeError('Self-play group is closed.')
         restarted_worker_ids: list[int] = []
@@ -84,7 +89,7 @@ class SelfPlayGroup:
             connection, replacement = self._start_worker(worker_id, self._device_ids[worker_id])
             self._connections[worker_id] = connection
             self._processes[worker_id] = replacement
-            connection.send(RunningSelfPlayState(checkpoint=checkpoint))
+            connection.send(RunningSelfPlayState(checkpoint=checkpoint, resignation_policy=resignation_policy))
             response = self._receive(connection)
             if response.kind != 'running':
                 raise RuntimeError(f'Restarted self-play worker {worker_id} did not enter the running state.')
@@ -152,6 +157,7 @@ class _SelfPlayProcessRuntime:
         checkpoint = desired_state.checkpoint
         self._validate_checkpoint_transition(checkpoint, desired_state.completed_generation_statistics)
         statistics = self._completed_generation_statistics(desired_state.completed_generation_statistics)
+        self.worker.update_resignation_policy(desired_state.resignation_policy)
         self._load_checkpoint(checkpoint)
         self.running = True
         return RunningSelfPlayStateApplied(

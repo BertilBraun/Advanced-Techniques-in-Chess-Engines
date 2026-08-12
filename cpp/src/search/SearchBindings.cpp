@@ -83,6 +83,11 @@ void bind_search(py::module_ &module) {
         .def_readonly("visit_count", &GameSearchVisit::visit_count);
     py::class_<GameSearchResult>(module, "GameSearchResult")
         .def_readonly("root_value", &GameSearchResult::root_value)
+        .def_readonly("highest_visited_child_action_id",
+                      &GameSearchResult::highest_visited_child_action_id)
+        .def_readonly("highest_visited_child_visit_count",
+                      &GameSearchResult::highest_visited_child_visit_count)
+        .def_readonly("highest_visited_child_q", &GameSearchResult::highest_visited_child_q)
         .def_readonly("visits", &GameSearchResult::visits)
         .def_readonly("policy_target_visits", &GameSearchResult::policy_target_visits);
     py::class_<BatchedSearchParameters>(module, "BatchedSearchParameters")

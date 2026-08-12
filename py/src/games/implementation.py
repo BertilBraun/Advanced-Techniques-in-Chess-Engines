@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from src.self_play.native_search import NativeSelfPlaySearch
     from src.evaluation.configuration import EvaluationSearchConfiguration
     from src.training.checkpoint import CheckpointReference
+    from src.self_play.resignation import CalibratedResignationConfiguration
 
 
 PositionT = TypeVar('PositionT')
@@ -63,6 +64,10 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
     @abstractmethod
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
         raise NotImplementedError
+
+    @property
+    def resignation_configuration(self) -> CalibratedResignationConfiguration | None:
+        return None
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:
         from AlphaZeroCpp import (

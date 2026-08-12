@@ -24,6 +24,10 @@ from src.self_play.parameters import (
 )
 from src.self_play.native_search import NativeRequestT, NativeResultT, NativeRootT, NativeSearchT, PositionT
 from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
+from src.self_play.resignation import (
+    CalibratedResignationConfiguration,
+    PublishedResignationPolicy,
+)
 from src.util.tensorboard import log_scalar
 
 
@@ -42,6 +46,8 @@ class ActiveSelfPlayGame(Generic[NativeRootT]):
     action_ids: list[int] = field(default_factory=list)
     observations: list[SearchObservation] = field(default_factory=list)
     reserved_restart_action_id: int | None = None
+    is_resignation_continuation: bool = False
+    resignation_threshold: float | None = None
 
 
 @dataclass(frozen=True)
@@ -80,6 +86,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         self.true_starts = 0
         self.restart_starts = 0
         self.empty_restart_fallbacks = 0
+        self.resignation_policy = PublishedResignationPolicy()
 
     def run_batch(self) -> None:
         search, parameters = self._loaded_runtime()
@@ -130,6 +137,9 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             for active_game in self.active_games:
                 active_game.root.reset()
 
+    def update_resignation_policy(self, policy: PublishedResignationPolicy) -> None:
+        self.resignation_policy = policy
+
     def snapshot_statistics(self) -> SelfPlayStatisticsSnapshot:
         search, _ = self._loaded_runtime()
         assert self.model_generation is not None
@@ -174,7 +184,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
                 if self.game.state.natural_terminal_wdl(position) is not None:
                     break
             if self.game.state.natural_terminal_wdl(position) is None:
-                return ActiveSelfPlayGame(
+                return self._active_game(
                     identity=self._next_identity(),
                     root=search.new_root(position),
                     started_at_seconds=time.time(),
@@ -204,7 +214,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if reserved.action_id not in self.game.state.legal_action_ids(position):
             raise RuntimeError('Restart archive contains an illegal reserved action.')
         self.restart_starts += 1
-        return ActiveSelfPlayGame(
+        return self._active_game(
             identity=self._next_identity(),
             root=search.new_root(position),
             started_at_seconds=time.time(),
@@ -213,7 +223,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         )
 
     def _new_true_start_game(self, search: NativeSearchT) -> ActiveSelfPlayGame[NativeRootT]:
-        return ActiveSelfPlayGame(
+        return self._active_game(
             identity=self._next_identity(),
             root=search.new_root(self.game.state.initial_position()),
             started_at_seconds=time.time(),
@@ -235,10 +245,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if not visits:
             raise RuntimeError('Native search returned no visited action for a nonterminal root.')
         ply = len(active_game.action_ids)
-        selected_action_id = active_game.reserved_restart_action_id
-        if selected_action_id is None:
-            selected_action_id = self._select_action(visits, ply, parameters)
-        elif not request.full_search:
+        if active_game.reserved_restart_action_id is not None and not request.full_search:
             raise RuntimeError('Restart roots require a full search.')
         policy_target_visits = tuple(
             SparseSearchVisit(action_id=visit.action_id, visit_count=visit.visit_count)
@@ -247,18 +254,36 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         )
         if not policy_target_visits:
             raise RuntimeError('Native search returned an empty policy target for a nonterminal root.')
-        active_game.observations.append(
-            SearchObservation(
-                ply=ply,
-                model_generation=self.model_generation,
-                policy_target_visits=policy_target_visits,
-                root_value=result.root_value,
-                selected_action_id=selected_action_id,
-                full_search=request.full_search,
-                sample_weight=parameters.primary_sample_weight,
-                search_budget=parameters.full_searches if request.full_search else parameters.fast_searches,
-            )
+        resignation_triggered = (
+            not active_game.is_resignation_continuation
+            and active_game.resignation_threshold is not None
+            and result.root_value <= active_game.resignation_threshold
+            and result.highest_visited_child_q <= active_game.resignation_threshold
         )
+        selected_action_id = active_game.reserved_restart_action_id
+        if selected_action_id is None and not resignation_triggered:
+            selected_action_id = self._select_action(visits, ply, parameters)
+        observation = SearchObservation(
+            ply=ply,
+            model_generation=self.model_generation,
+            policy_target_visits=policy_target_visits,
+            root_value=result.root_value,
+            highest_visited_child_action_id=result.highest_visited_child_action_id,
+            highest_visited_child_visit_count=result.highest_visited_child_visit_count,
+            highest_visited_child_q=result.highest_visited_child_q,
+            selected_action_id=None if resignation_triggered else selected_action_id,
+            full_search=request.full_search,
+            sample_weight=parameters.primary_sample_weight,
+            search_budget=parameters.full_searches if request.full_search else parameters.fast_searches,
+        )
+        active_game.observations.append(observation)
+        if resignation_triggered:
+            return self._complete(
+                active_game,
+                WdlTarget(win=0.0, draw=0.0, loss=1.0),
+                TerminationReason.RESIGNATION,
+            )
+        assert selected_action_id is not None
         active_game.action_ids.append(selected_action_id)
         active_game.reserved_restart_action_id = None
         active_game.root = result.root
@@ -303,6 +328,31 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             observations=tuple(active_game.observations),
             final_wdl=final_wdl,
             termination_reason=reason,
+            is_resignation_continuation=active_game.is_resignation_continuation,
+            resignation_threshold=active_game.resignation_threshold,
+        )
+
+    def _active_game(
+        self,
+        identity: GameIdentity,
+        root: NativeRootT,
+        started_at_seconds: float,
+        action_ids: list[int] | None = None,
+        reserved_restart_action_id: int | None = None,
+    ) -> ActiveSelfPlayGame[NativeRootT]:
+        configuration = self.game.resignation_configuration
+        is_continuation = (
+            isinstance(configuration, CalibratedResignationConfiguration)
+            and self.random.random() < configuration.continuation_game_probability
+        )
+        return ActiveSelfPlayGame(
+            identity=identity,
+            root=root,
+            started_at_seconds=started_at_seconds,
+            action_ids=[] if action_ids is None else action_ids,
+            reserved_restart_action_id=reserved_restart_action_id,
+            is_resignation_continuation=is_continuation,
+            resignation_threshold=self.resignation_policy.threshold,
         )
 
     def _loaded_runtime(self) -> tuple[NativeSearchT, ResolvedSelfPlayParameters]:

@@ -10,6 +10,7 @@ from src.replay.layout import ReplayLayout
 from src.replay.materialization import materialize_completed_game
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import CompletedSelfPlayGame
+from src.self_play.resignation import ResignationCalibrator
 from src.replay.configuration import ReplayConfiguration
 from src.util.frozen_model import FrozenModel
 
@@ -49,6 +50,7 @@ class ReplayManager(Generic[PositionT]):
         store: ReplayStore,
         state: GameStateContract[PositionT],
         configuration: ReplayConfiguration,
+        resignation_calibrator: ResignationCalibrator | None,
     ) -> None:
         if store.layout.packed_planes != state.packed_plane_layout:
             raise ValueError('Replay layout does not match the game packed-plane representation.')
@@ -62,6 +64,7 @@ class ReplayManager(Generic[PositionT]):
         self.store = store
         self.state = state
         self.configuration = configuration
+        self.resignation_calibrator = resignation_calibrator
 
     @classmethod
     def open(
@@ -71,6 +74,7 @@ class ReplayManager(Generic[PositionT]):
         layout: ReplayLayout,
         configuration: ReplayConfiguration,
         model_generation: int,
+        resignation_calibrator: ResignationCalibrator | None = None,
     ) -> ReplayManager[PositionT]:
         replay_path = run_path / 'replay.bin'
         if replay_path.exists():
@@ -82,7 +86,7 @@ class ReplayManager(Generic[PositionT]):
                 configuration.maximum_capacity,
                 configuration.capacity_at(model_generation),
             )
-        return cls(run_path / 'completed-games' / 'inbox', store, state, configuration)
+        return cls(run_path / 'completed-games' / 'inbox', store, state, configuration, resignation_calibrator)
 
     @property
     def live_samples(self) -> int:
@@ -109,6 +113,8 @@ class ReplayManager(Generic[PositionT]):
             )
             for sample in materialized.samples:
                 self.store.append(sample)
+            if self.resignation_calibrator is not None:
+                self.resignation_calibrator.observe_completed_game(game)
             path.unlink()
             games_ingested += 1
             samples_added += len(materialized.samples)

@@ -21,6 +21,7 @@ from src.self_play.protocol import (
     StoppedSelfPlayState,
     StoppedSelfPlayStateApplied,
 )
+from src.self_play.resignation import PublishedResignationPolicy
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import SelfPlayTopologyParams
 from src.training.self_play_group import SelfPlayGroup, _self_play_worker_main
@@ -73,6 +74,9 @@ class _Worker:
 
     def refresh_published_model(self, checkpoint: CheckpointReference) -> None:
         self.generation = checkpoint.generation
+
+    def update_resignation_policy(self, policy: PublishedResignationPolicy) -> None:
+        assert policy == PublishedResignationPolicy()
 
     def snapshot_statistics(self) -> None:
         assert self.generation == 0
@@ -238,7 +242,7 @@ def test_group_restarts_only_exited_workers_at_active_checkpoint(
 
     monkeypatch.setattr(group, '_start_worker', start_worker)
 
-    assert group.restart_exited_workers(checkpoint) == (1,)
+    assert group.restart_exited_workers(checkpoint, PublishedResignationPolicy()) == (1,)
     assert exited_process.joined
     assert exited_connection.closed
     assert replacement_connection.sent == [RunningSelfPlayState(checkpoint=checkpoint)]
