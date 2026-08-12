@@ -251,11 +251,15 @@ def test_eight_gpu_chess_production_configuration_resolves_authored_curriculum()
 def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> None:
     configuration = load_chess_experiment_configuration(CHESS_R3_EXPERIMENT_PATH)
     topology = configuration.training.topology
+    lifecycle = configuration.training.lifecycle
     self_play = configuration.chess.self_play
 
     assert topology.self_play.device_ids == (0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7)
     assert topology.self_play.parallel_games_per_process == 512
-    assert topology.self_play.node_ids_to_pause_during_training == (1, 3, 5, 7, 9, 11, 13, 15)
+    assert topology.self_play.node_ids_to_pause_during_training == tuple(range(16))
+    assert lifecycle.credit.optimizer_steps_per_quantum == 1000
+    assert lifecycle.credit.unique_samples_per_quantum(configuration.training.trainer.global_batch_size) == 256_000
+    assert lifecycle.replay.capacity.value_at(0) == 300_000
     assert tuple(self_play.greedy_after_ply.value_at(generation) for generation in (0, 79, 80, 149, 150, 500)) == (
         60,
         60,
@@ -270,8 +274,8 @@ def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> N
     )
     replay = configuration.training.lifecycle.replay
     assert tuple(replay.capacity_at(generation) for generation in (0, 50, 100, 500)) == (
-        200_000,
-        1_100_000,
+        300_000,
+        1_150_000,
         2_000_000,
         2_000_000,
     )

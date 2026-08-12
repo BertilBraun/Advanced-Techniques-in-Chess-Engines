@@ -56,7 +56,7 @@ training:
       device_ids: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]
       parallel_games_per_process: 512
       tensorboard_processes: 1
-      node_ids_to_pause_during_training: [1, 3, 5, 7, 9, 11, 13, 15]
+      node_ids_to_pause_during_training: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     evaluation: {device_cycle: [4, 5, 6, 7]}
   lifecycle:
     replay:
@@ -64,14 +64,14 @@ training:
         kind: linear
         start_generation: 0
         end_generation: 100
-        start_value: 200000
+        start_value: 300000
         end_value: 2000000
         rounding: nearest
       maximum_capacity: 2000000
       maximum_policy_entries: 60
     credit:
       replay_ratio: 8
-      optimizer_steps_per_quantum: 500
+      optimizer_steps_per_quantum: 1000
       maximum_optimizer_steps: 1000000000
       retained_checkpoint_interval_generations: 6
     inference_retention: {recent_checkpoint_count: 22, milestone_interval: 20}
