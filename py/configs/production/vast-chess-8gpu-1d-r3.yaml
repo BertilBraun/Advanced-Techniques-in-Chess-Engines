@@ -69,6 +69,12 @@ chess:
       maximum_archive_positions: 50000
       maximum_age_generations: 40
     full_search_probability: {kind: linear, start_generation: 0, end_generation: 50, start_value: 1.0, end_value: 0.25, rounding: none}
+    greedy_after_ply:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 60}
+        - {start_generation: 80, value: 80}
+        - {start_generation: 150, value: 100}
     maximum_game_plies:
       kind: staged
       stages:
