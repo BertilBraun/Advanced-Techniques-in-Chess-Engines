@@ -6,6 +6,7 @@ from typing import Annotated, Literal, TypeAlias
 from pydantic import Field
 
 from src.training.checkpoint import CheckpointReference
+from src.self_play.resignation import PublishedResignationPolicy
 from src.util.frozen_model import FrozenModel
 
 
@@ -23,6 +24,7 @@ class SelfPlayStatistics(FrozenModel):
 class RunningSelfPlayState(FrozenModel):
     kind: Literal['running'] = 'running'
     checkpoint: CheckpointReference
+    resignation_policy: PublishedResignationPolicy = PublishedResignationPolicy()
     completed_generation_statistics: StatisticsLevel | None = None
 
 

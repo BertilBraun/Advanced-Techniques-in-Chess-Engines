@@ -135,6 +135,7 @@ evaluation:
       search: *evaluation_search
 chess:
   self_play:
+    resignation: {kind: disabled}
     search:
       full_searches:
         kind: constant

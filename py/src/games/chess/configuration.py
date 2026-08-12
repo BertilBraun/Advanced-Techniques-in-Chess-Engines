@@ -9,12 +9,14 @@ from src.experiment.generation_schedule import IntegerGenerationSchedule
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration
+from src.self_play.resignation import ResignationConfiguration
 from src.training.configuration import TrainingObjectiveConfiguration
 from src.util.frozen_model import FrozenModel
 
 
 class ChessSelfPlayConfiguration(SelfPlayConfiguration):
     maximum_game_plies: IntegerGenerationSchedule | None = None
+    resignation: ResignationConfiguration
 
 
 class ChessConfiguration(FrozenModel):

@@ -138,6 +138,22 @@ int runBatchedSearchTests() {
                 "fast root retained virtual loss");
         require(!results.results[0].visits.empty(), "full root did not expand legal moves");
         require(!results.results[1].visits.empty(), "fast root did not expand legal moves");
+        for (const auto &result : results.results) {
+            const auto highestVisit = std::ranges::max_element(
+                result.visits, {}, [](const GameSearchVisit &visit) { return visit.visit_count; });
+            require(highestVisit != result.visits.end(), "search did not expose a highest-visited child");
+            require(result.highest_visited_child_visit_count == highestVisit->visit_count,
+                    "search exposed the wrong highest-child visit count");
+            const auto &rootNode = result.root.tree().root();
+            const auto edge = std::ranges::find_if(rootNode.children, [&](const auto &candidate) {
+                return ChessGame::Encoding::actionId(candidate.action, rootNode.position) ==
+                       result.highest_visited_child_action_id;
+            });
+            require(edge != rootNode.children.end(), "highest-visited child action is absent from the root");
+            require(std::abs(result.highest_visited_child_q +
+                             edge->value_sum / static_cast<float>(edge->visits)) < 1e-6F,
+                    "highest-visited child Q was not oriented to the root player");
+        }
         require(
             samePositiveVisits(results.results[0].visits, results.results[0].policy_target_visits),
             "disabled full search changed the policy target");

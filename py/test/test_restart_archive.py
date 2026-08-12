@@ -76,6 +76,9 @@ def completed_game(
                     SparseSearchVisit(action_id=action_id, visit_count=visit_count) for action_id, visit_count in visits
                 ),
                 root_value=root_value,
+                highest_visited_child_action_id=max(visits, key=lambda item: item[1])[0],
+                highest_visited_child_visit_count=max(item[1] for item in visits),
+                highest_visited_child_q=root_value,
                 selected_action_id=selected_action_id,
                 full_search=full_search,
                 sample_weight=1.0,

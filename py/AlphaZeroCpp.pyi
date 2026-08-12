@@ -79,6 +79,12 @@ class GameSearchResult:
     @property
     def root_value(self) -> float: ...
     @property
+    def highest_visited_child_action_id(self) -> int: ...
+    @property
+    def highest_visited_child_visit_count(self) -> int: ...
+    @property
+    def highest_visited_child_q(self) -> float: ...
+    @property
     def visits(self) -> list[GameSearchVisit]: ...
     @property
     def policy_target_visits(self) -> list[GameSearchVisit]: ...
@@ -283,6 +289,9 @@ class GoSelfPlaySearchRequest7:
 
 class GoSelfPlaySearchResult7:
     root_value: float
+    highest_visited_child_action_id: int
+    highest_visited_child_visit_count: int
+    highest_visited_child_q: float
     visits: list[GameSearchVisit]
     policy_target_visits: list[GameSearchVisit]
     root: GoSearchRoot7
@@ -318,6 +327,9 @@ class GoSelfPlaySearchRequest9:
 
 class GoSelfPlaySearchResult9:
     root_value: float
+    highest_visited_child_action_id: int
+    highest_visited_child_visit_count: int
+    highest_visited_child_q: float
     visits: list[GameSearchVisit]
     policy_target_visits: list[GameSearchVisit]
     root: GoSearchRoot9
@@ -597,6 +609,12 @@ class SelfPlaySearchParameters:
 class ChessSelfPlaySearchResult:
     @property
     def root_value(self) -> float: ...
+    @property
+    def highest_visited_child_action_id(self) -> int: ...
+    @property
+    def highest_visited_child_visit_count(self) -> int: ...
+    @property
+    def highest_visited_child_q(self) -> float: ...
     @property
     def root(self) -> ChessSearchRoot: ...
     @property

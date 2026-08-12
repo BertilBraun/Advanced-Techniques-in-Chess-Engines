@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.experiment.configuration import (
     experiment_configuration_sha256,
+    experiment_configuration_source_paths,
     load_experiment_configuration,
     load_chess_experiment_configuration,
     validate_experiment_queue,
@@ -34,6 +35,7 @@ from src.util.frozen_model import JsonValue
 
 
 CHESS_EXPERIMENT_TEMPLATE_PATH = Path('configs/chess-experiment-template.yaml')
+CHESS_R3_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-1d-r3.yaml')
 
 
 def test_every_checked_in_experiment_uses_the_current_contract_and_dependency_lock() -> None:
@@ -247,7 +249,7 @@ def test_eight_gpu_chess_production_configuration_resolves_authored_curriculum()
 
 
 def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> None:
-    configuration = load_chess_experiment_configuration(Path('configs/production/vast-chess-8gpu-1d-r3.yaml'))
+    configuration = load_chess_experiment_configuration(CHESS_R3_EXPERIMENT_PATH)
     topology = configuration.training.topology
     self_play = configuration.chess.self_play
 
@@ -262,12 +264,41 @@ def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> N
         100,
         100,
     )
+    learning_rate = configuration.training.trainer.learning_rate
+    assert tuple(learning_rate.value_at(generation) for generation in (0, 99, 100, 299, 300, 500)) == pytest.approx(
+        (0.005, 0.005, 0.0035, 0.0035, 0.002, 0.002)
+    )
+    replay = configuration.training.lifecycle.replay
+    assert tuple(replay.capacity_at(generation) for generation in (0, 50, 100, 500)) == (
+        200_000,
+        1_100_000,
+        2_000_000,
+        2_000_000,
+    )
+    assert replay.maximum_capacity == 2_000_000
+    resignation = self_play.resignation
+    assert resignation.kind == 'calibrated'
+    assert resignation.first_production_generation == 50
+    assert resignation.false_nonloss_rate_ceiling == pytest.approx(0.03)
+    assert resignation.continuation_game_probability == pytest.approx(0.10)
+    assert resignation.triggered_game_window == 2000
+    assert resignation.candidate_thresholds == pytest.approx(tuple(-0.99 + index * 0.01 for index in range(30)))
+    assert resignation.minimum_evidence_trigger_count == 100
+    assert resignation.confidence_level == pytest.approx(0.95)
+    assert resignation.maximum_relaxation_per_generation == pytest.approx(0.01)
     assert self_play.maximum_game_plies is not None
     assert tuple(
         self_play.maximum_game_plies.value_at(generation) for generation in (0, 39, 40, 60, 80, 100, 120, 150, 180, 500)
     ) == (150, 150, 160, 180, 200, 250, 300, 350, 400, 400)
     assert self_play.force_fast_search_after_ply is not None
     assert self_play.force_fast_search_after_ply.value_at(0) == 200
+
+
+def test_eight_gpu_chess_r3_configuration_is_fully_self_declared() -> None:
+    configuration = load_chess_experiment_configuration(CHESS_R3_EXPERIMENT_PATH)
+
+    assert experiment_configuration_source_paths(CHESS_R3_EXPERIMENT_PATH) == (CHESS_R3_EXPERIMENT_PATH.resolve(),)
+    assert configuration.model_dump(exclude_unset=True) == configuration.model_dump()
 
 
 def test_experiment_queue_validation_loads_multiple_experiments() -> None:

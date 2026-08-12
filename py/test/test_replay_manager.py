@@ -24,6 +24,7 @@ from src.self_play.completed_game import (
     publish_completed_self_play_game,
 )
 from src.replay.configuration import ReplayConfiguration
+from src.self_play.resignation import CalibratedResignationConfiguration, ResignationCalibrator
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 
 
@@ -116,6 +117,9 @@ def _completed_game() -> CompletedSelfPlayGame:
                     SparseSearchVisit(action_id=selected_action, visit_count=10),
                 ),
                 root_value=0.25,
+                highest_visited_child_action_id=selected_action,
+                highest_visited_child_visit_count=10,
+                highest_visited_child_q=0.2,
                 selected_action_id=selected_action,
                 full_search=ply != 1,
                 sample_weight=1.0,
@@ -176,6 +180,9 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
                 model_generation=1,
                 policy_target_visits=(SparseSearchVisit(action_id=2, visit_count=8),),
                 root_value=0.0,
+                highest_visited_child_action_id=2,
+                highest_visited_child_visit_count=8,
+                highest_visited_child_q=0.0,
                 selected_action_id=2,
                 full_search=True,
                 sample_weight=1.0,
@@ -280,3 +287,58 @@ def test_replay_manager_keeps_malformed_game_for_inspection(tmp_path: Path) -> N
 
     assert malformed.exists()
     manager.close()
+
+
+def test_replay_ingestion_updates_central_resignation_state(tmp_path: Path) -> None:
+    game = _completed_game().model_copy(
+        update={
+            'is_resignation_continuation': True,
+            'observations': tuple(
+                observation.model_copy(update={'root_value': -0.99, 'highest_visited_child_q': -0.99})
+                for observation in _completed_game().observations
+            ),
+        }
+    )
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    publish_completed_self_play_game(inbox, game)
+    replay_configuration = ReplayConfiguration(
+        capacity={'kind': 'constant', 'value': 4},
+        maximum_capacity=4,
+        maximum_policy_entries=1,
+    )
+    layout = ReplayLayout(
+        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
+        targets=_target_layout(),
+        maximum_policy_entries=1,
+    )
+    resignation_configuration = CalibratedResignationConfiguration(
+        first_production_generation=50,
+        false_nonloss_rate_ceiling=0.99,
+        continuation_game_probability=0.1,
+        triggered_game_window=2000,
+        candidate_threshold_minimum=-0.99,
+        candidate_threshold_maximum=-0.70,
+        candidate_threshold_step=0.01,
+        minimum_evidence_trigger_count=1,
+        confidence_level=0.95,
+        maximum_relaxation_per_generation=0.01,
+    )
+    calibration_path = tmp_path / 'resignation' / 'calibration.json'
+    calibrator = ResignationCalibrator(calibration_path, resignation_configuration)
+    manager = ReplayManager.open(
+        tmp_path,
+        LINEAR_STATE_CONTRACT,
+        layout,
+        replay_configuration,
+        model_generation=2,
+        resignation_calibrator=calibrator,
+    )
+
+    manager.ingest_available_games(2)
+    calibrator.advance_generation(50)
+    manager.close()
+
+    restarted = ResignationCalibrator(calibration_path, resignation_configuration)
+    assert restarted.state.completed_continuation_games == 1
+    assert restarted.state.broadest_candidate_triggers == 1
+    assert restarted.published_policy(50).threshold == pytest.approx(-0.99)

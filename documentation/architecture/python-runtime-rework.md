@@ -1653,9 +1653,15 @@ transition remains unambiguous during materialization. Visit-count preprocessing
 minimum root visits, removes nonpositive results, and applies deterministic top-N retention independently to every
 primary or auxiliary sparse policy.
 
-Resignation calibration, material adjudication, disagreement-prefix starts, and other future research policies do not
-expand the base state or search boundary. They are added only when scheduled experiments require them and must be
-modeled as explicit configured policies around the shared turn algorithm.
+Chess resignation is an explicit calibrated self-play policy around this shared turn algorithm. Each completed
+search records the root value and the highest-visited child's exact Q converted to the root-player perspective.
+Workers deterministically designate continuation games and freeze both that designation and the coordinator-published
+threshold when creating a game. Continuation games never resign. The coordinator-owned calibrator journals completed
+game identities centrally, evaluates every configured threshold counterfactually over a rolling window of triggered
+continuation games, and atomically persists its versioned state. It recalibrates only after a training quantum is
+committed, then sends the one published threshold with the next generation's running state to every worker. Unsafe
+tightening is immediate; less-conservative movement is generation-rate-limited. Material adjudication,
+disagreement-prefix starts, and other future research policies follow the same explicit-policy rule.
 
 ### Shared replay and training boundary
 
@@ -1672,7 +1678,7 @@ class TerminationReason(StrEnum):
 
 
 class CompletedSelfPlayGame(FrozenModel):
-    schema_version: Literal[1]
+    schema_version: Literal[3]
     identity: GameIdentity
     created_at_seconds: float
     generation_seconds: float
@@ -1680,6 +1686,8 @@ class CompletedSelfPlayGame(FrozenModel):
     observations: tuple[SearchObservation, ...]
     final_wdl: WdlTarget
     termination_reason: TerminationReason
+    is_resignation_continuation: bool
+    resignation_threshold: float | None
 ```
 
 `final_wdl` is from the player-to-move perspective of the final position. Observations are sorted by unique ply,
