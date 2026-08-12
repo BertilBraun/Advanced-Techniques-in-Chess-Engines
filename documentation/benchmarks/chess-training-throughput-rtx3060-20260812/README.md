@@ -106,9 +106,8 @@ batches, so the coordinator is waiting for batch boundaries; it is not losing ti
 also validates and loads the JIT model, collects generation statistics, and rebuilds worker search state.
 
 The effective generation-70 wall-clock presentation rate was therefore about 3,346 samples/s, far below the
-reported hot-loop rate. Coordinator telemetry now records pause acknowledgement, final ingestion, checkpoint
-application, retention, and total transition time independently so subsequent production generations expose this
-cost directly.
+reported hot-loop rate. The standalone transition benchmark retains the phase measurements; the production
+coordinator intentionally keeps only its normal training and credit telemetry.
 
 The run accumulated a presentation backlog early: available presentations reached roughly 10 million and were
 7.85 million at generation 70, while observed replay ratio was 6.563 rather than the configured 8. The backlog was
