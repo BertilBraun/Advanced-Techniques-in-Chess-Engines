@@ -248,8 +248,12 @@ def test_eight_gpu_chess_production_configuration_resolves_authored_curriculum()
 
 def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> None:
     configuration = load_chess_experiment_configuration(Path('configs/production/vast-chess-8gpu-1d-r3.yaml'))
+    topology = configuration.training.topology
     self_play = configuration.chess.self_play
 
+    assert topology.self_play.device_ids == (0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7)
+    assert topology.self_play.parallel_games_per_process == 512
+    assert topology.self_play.node_ids_to_pause_during_training == (1, 3, 5, 7, 9, 11, 13, 15)
     assert self_play.maximum_game_plies is not None
     assert tuple(
         self_play.maximum_game_plies.value_at(generation) for generation in (0, 39, 40, 60, 80, 100, 120, 150, 180, 500)
