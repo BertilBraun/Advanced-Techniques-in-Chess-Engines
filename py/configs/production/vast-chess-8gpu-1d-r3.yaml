@@ -29,10 +29,10 @@ training:
         kind: linear
         start_generation: 0
         end_generation: 100
-        start_value: 192000
-        end_value: 960000
+        start_value: 200000
+        end_value: 2000000
         rounding: nearest
-      maximum_capacity: 960000
+      maximum_capacity: 2000000
     credit:
       replay_ratio: 8
       optimizer_steps_per_quantum: 500

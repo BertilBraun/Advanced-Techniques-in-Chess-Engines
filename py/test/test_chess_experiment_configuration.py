@@ -258,6 +258,14 @@ def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> N
     assert tuple(learning_rate.value_at(generation) for generation in (0, 99, 100, 299, 300, 500)) == pytest.approx(
         (0.005, 0.005, 0.0035, 0.0035, 0.002, 0.002)
     )
+    replay = configuration.training.lifecycle.replay
+    assert tuple(replay.capacity_at(generation) for generation in (0, 50, 100, 500)) == (
+        200_000,
+        1_100_000,
+        2_000_000,
+        2_000_000,
+    )
+    assert replay.maximum_capacity == 2_000_000
     resignation = self_play.resignation
     assert resignation.kind == 'calibrated'
     assert resignation.first_production_generation == 50
