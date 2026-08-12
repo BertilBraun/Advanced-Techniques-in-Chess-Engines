@@ -67,6 +67,17 @@ chess:
       maximum_archive_positions: 50000
       maximum_age_generations: 40
     full_search_probability: {kind: linear, start_generation: 0, end_generation: 50, start_value: 1.0, end_value: 0.25, rounding: none}
-    maximum_game_plies: {kind: linear, start_generation: 0, end_generation: 100, start_value: 200, end_value: 600, rounding: nearest}
+    maximum_game_plies:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 150}
+        - {start_generation: 40, value: 160}
+        - {start_generation: 60, value: 180}
+        - {start_generation: 80, value: 200}
+        - {start_generation: 100, value: 250}
+        - {start_generation: 120, value: 300}
+        - {start_generation: 150, value: 350}
+        - {start_generation: 180, value: 400}
+    force_fast_search_after_ply: {kind: constant, value: 200}
   objective:
     root_value_blend: {kind: linear, start_generation: 40, end_generation: 80, start_value: 0.0, end_value: 0.15, rounding: none}

@@ -246,6 +246,18 @@ def test_eight_gpu_chess_production_configuration_resolves_authored_curriculum()
     assert sum(definition.kind == 'stockfish_fixed_nodes' for definition in configuration.evaluation.definitions) == 1
 
 
+def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> None:
+    configuration = load_chess_experiment_configuration(Path('configs/production/vast-chess-8gpu-1d-r3.yaml'))
+    self_play = configuration.chess.self_play
+
+    assert self_play.maximum_game_plies is not None
+    assert tuple(
+        self_play.maximum_game_plies.value_at(generation) for generation in (0, 39, 40, 60, 80, 100, 120, 150, 180, 500)
+    ) == (150, 150, 160, 180, 200, 250, 300, 350, 400, 400)
+    assert self_play.force_fast_search_after_ply is not None
+    assert self_play.force_fast_search_after_ply.value_at(0) == 200
+
+
 def test_experiment_queue_validation_loads_multiple_experiments() -> None:
     configurations = validate_experiment_queue((CHESS_EXPERIMENT_TEMPLATE_PATH, CHESS_EXPERIMENT_TEMPLATE_PATH))
 
