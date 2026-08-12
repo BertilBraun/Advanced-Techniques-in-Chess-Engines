@@ -6,13 +6,14 @@ from pathlib import Path
 import shutil
 import time
 
-from src.experiment.configuration import load_experiment_configuration_json
+from src.experiment.configuration import load_experiment_configuration
 from src.games.composition import create_game_implementation
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayDescription
 from src.replay.store import ReplayStore
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.contracts import read_checkpoint_manifest
+from src.training.configuration import TrainingCompilation, TrainingPrecision
 from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
 from src.util.atomic_file import write_text_atomically
@@ -28,6 +29,8 @@ class Arguments:
     optimizer_steps: int
     quantum_count: int
     global_batch_size: int | None
+    precision: TrainingPrecision
+    compilation: TrainingCompilation
     output_directory: Path
 
 
@@ -39,6 +42,8 @@ class TrainingThroughputBenchmarkResult(FrozenModel):
     local_batch_size: int
     optimizer_steps: int
     quantum_count: int
+    precision: TrainingPrecision
+    compilation: TrainingCompilation
     replay_rows: int
     initialization_and_training_seconds: float
     training_quantum_seconds: float
@@ -58,7 +63,7 @@ def _stage_checkpoint(source: CheckpointReference, destination: Path) -> Checkpo
 
 
 def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
-    configuration = load_experiment_configuration_json(arguments.resolved_configuration.read_text(encoding='utf-8'))
+    configuration = load_experiment_configuration(arguments.resolved_configuration)
     world_size = len(arguments.device_ids)
     global_batch_size = arguments.global_batch_size or configuration.training.trainer.global_batch_size
     if global_batch_size % world_size:
@@ -73,6 +78,8 @@ def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
         update={
             'global_batch_size': global_batch_size,
             'local_batch_size': global_batch_size // world_size,
+            'precision': arguments.precision,
+            'compilation': arguments.compilation,
         }
     )
     trainer_topology = configuration.training.topology.trainer.validated_copy(
@@ -139,6 +146,8 @@ def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
         local_batch_size=global_batch_size // world_size,
         optimizer_steps=arguments.optimizer_steps,
         quantum_count=arguments.quantum_count,
+        precision=arguments.precision,
+        compilation=arguments.compilation,
         replay_rows=replay.size,
         initialization_and_training_seconds=elapsed_seconds,
         training_quantum_seconds=result.statistics.elapsed_seconds,
@@ -162,6 +171,18 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--optimizer-steps', default=200, type=int)
     parser.add_argument('--quantum-count', default=1, type=int)
     parser.add_argument('--global-batch-size', type=int)
+    parser.add_argument(
+        '--precision',
+        choices=tuple(precision.value for precision in TrainingPrecision),
+        required=True,
+        type=TrainingPrecision,
+    )
+    parser.add_argument(
+        '--compilation',
+        choices=tuple(compilation.value for compilation in TrainingCompilation),
+        required=True,
+        type=TrainingCompilation,
+    )
     parser.add_argument('--output-directory', required=True, type=Path)
     namespace = parser.parse_args()
     arguments = Arguments(
@@ -172,6 +193,8 @@ def parse_arguments() -> Arguments:
         optimizer_steps=namespace.optimizer_steps,
         quantum_count=namespace.quantum_count,
         global_batch_size=namespace.global_batch_size,
+        precision=namespace.precision,
+        compilation=namespace.compilation,
         output_directory=namespace.output_directory,
     )
     if not arguments.resolved_configuration.is_file():

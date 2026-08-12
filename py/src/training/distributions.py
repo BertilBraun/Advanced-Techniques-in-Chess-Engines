@@ -63,9 +63,9 @@ def capture_training_distributions(
         raise ValueError('Training distribution sample size must be positive.')
     row_count = min(len(batch), maximum_rows)
     rows = slice(0, row_count)
-    policy_logits = output.policy_logits[rows]
+    policy_logits = output.policy_logits[rows].float()
     policy_targets = batch.policy_targets[rows]
-    wdl_logits = output.wdl_logits[rows]
+    wdl_logits = output.wdl_logits[rows].float()
     wdl_targets = batch.wdl_targets[rows]
     root_values = batch.root_values[rows]
     policy = _policy_distribution(policy_logits, policy_targets)
@@ -78,7 +78,7 @@ def capture_training_distributions(
     generation_ages = source_generation - batch.source_model_generations[rows]
     replay_ages = captured_at_seconds - batch.source_created_at_seconds[rows]
     auxiliary = tuple(
-        _auxiliary_distribution(prediction[rows], target[rows], eligibility[rows], configuration.kind)
+        _auxiliary_distribution(prediction[rows].float(), target[rows], eligibility[rows], configuration.kind)
         for prediction, target, eligibility, configuration in zip(
             output.auxiliary_logits,
             batch.auxiliary_targets,

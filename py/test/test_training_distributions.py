@@ -80,3 +80,33 @@ def test_training_distribution_capture_is_bounded() -> None:
 
     assert len(distributions.policy.loss) == 2
     assert len(distributions.wdl_loss) == 2
+
+
+def test_training_distribution_capture_promotes_mixed_precision_predictions() -> None:
+    batch = TrainingBatch(
+        states=torch.zeros((1, 1)),
+        policy_targets=torch.tensor(((1.0, 0.0),)),
+        wdl_targets=torch.tensor(((1.0, 0.0, 0.0),)),
+        root_values=torch.zeros(1),
+        auxiliary_targets=(),
+        auxiliary_eligibility=(),
+        sample_weights=torch.ones(1),
+        source_model_generations=torch.zeros(1, dtype=torch.int64),
+        source_created_at_seconds=torch.zeros(1, dtype=torch.float64),
+    )
+    output = TrainingModelOutput(
+        policy_logits=torch.zeros((1, 2), dtype=torch.bfloat16),
+        wdl_logits=torch.zeros((1, 3), dtype=torch.bfloat16),
+        auxiliary_logits=(),
+    )
+    objective = ResolvedTrainingObjective(
+        policy_loss_weight=1.0,
+        value_loss_weight=1.0,
+        root_value_blend=0.0,
+        auxiliary_losses=(),
+    )
+
+    distributions = capture_training_distributions(output, batch, objective, 0, 0.0)
+
+    assert distributions.predicted_value == pytest.approx((0.0,))
+    assert distributions.policy.prediction_entropy == pytest.approx((0.693147,), rel=1e-5)

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
+import traceback
 
 import torch
 import torch.distributed as distributed
@@ -171,9 +172,9 @@ def trainer_rank_main(
         configuration = load_experiment_configuration_json(configuration_json)
         runtime = _initialize_rank(rank, world_size, rendezvous_port, configuration, starting_checkpoint)
         _run_rank_commands(connection, rank, world_size, configuration, runtime)
-    except BaseException as error:
+    except BaseException:
         try:
-            connection.send(RankTrainingFailure(rank=rank, error=f'{type(error).__name__}: {error}'))
+            connection.send(RankTrainingFailure(rank=rank, error=traceback.format_exc()))
         except (BrokenPipeError, EOFError):
             pass
     finally:
