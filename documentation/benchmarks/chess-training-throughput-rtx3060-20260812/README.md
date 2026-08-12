@@ -11,6 +11,23 @@ The node has eight 12-GiB RTX 3060 GPUs, 64 logical AMD EPYC 7452 CPUs under a 6
 generation-70 model and optimizer, the 729,600-row production mmap replay, deterministic disjoint rank sampling,
 pinned-memory prefetch, the production objective, gradient clipping, AdamW, NCCL DDP, and checkpoint export.
 
+## Selected outcome
+
+The selected eight-GPU recipe uses global/local batch 2,048/256, BF16 autocast, compilation disabled, and one active
+self-play worker per GPU during each unchanged 500-step training quantum. Its measured training throughput is 6,252
+samples/s while the eight active workers sustain 169,157 searches/s.
+
+The four-GPU, global-batch-1,024 reference reaches 4,449 samples/s in isolation. The selected result is 1,803
+samples/s, or 40.5%, higher despite concurrent self-play, but this is an end-to-end recipe comparison rather than a
+controlled attribution: it combines the DDP topology, batch size, worker allocation, and precision changes. Within
+the selected topology and contention workload alone, BF16 raises throughput from 5,726 to 6,252 samples/s, a gain
+of 526 samples/s or 9.2% over FP32.
+
+The old pause barrier cost 17.96 seconds in the selected worker topology. Making pause a one-way command removes
+that wait from the coordinator's critical path; checkpoint application remains acknowledged and measured 17.74
+seconds. The resulting reduction from a 35.71-second combined transition to approximately 17.74 seconds is a
+projection until confirmed by a production generation using the asynchronous protocol.
+
 ## Fixed-batch DDP scaling
 
 The comparable sweep fixes global batch size at 1,024 and runs 200 optimizer steps. Each result is one fresh
