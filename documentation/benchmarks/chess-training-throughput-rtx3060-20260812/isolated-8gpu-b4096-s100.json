@@ -1,0 +1,23 @@
+{
+  "checkpoint_generation": 70,
+  "device_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "world_size": 8,
+  "global_batch_size": 4096,
+  "local_batch_size": 512,
+  "optimizer_steps": 100,
+  "replay_rows": 729600,
+  "initialization_and_training_seconds": 51.10439773398684,
+  "training_quantum_seconds": 41.47295241500251,
+  "replay_rows_per_second": 14898.78760580723,
+  "training_samples_per_second": 9876.316397764595,
+  "output_checkpoint_generation": 71
+}
