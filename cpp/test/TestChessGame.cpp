@@ -61,6 +61,13 @@ int runChessGameTests() {
             "Insufficient material must be terminal");
     require(ChessGame::terminalValue(insufficientMaterial) == 0.0F,
             "Insufficient material must be a draw");
+
+    const Board promotedWhiteMaterial("QQQQQQQQ/8/8/8/8/8/8/4K2k w - - 0 1");
+    require(promotedWhiteMaterial.approximateResultScore() == 1.0,
+            "Promoted white material must remain within the WDL scalar range");
+    const Board promotedBlackMaterial("4k2K/8/8/8/8/8/8/qqqqqqqq b - - 0 1");
+    require(promotedBlackMaterial.approximateResultScore() == -1.0,
+            "Promoted black material must remain within the WDL scalar range");
     std::cout << "Chess game tests passed\n";
     return 0;
 }

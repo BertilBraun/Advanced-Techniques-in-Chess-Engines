@@ -189,7 +189,9 @@ double Board::approximateResultScore() const {
 
         materialValue += (white_count - black_count) * PIECE_VALUE[pt];
     }
-    return static_cast<double>(materialValue) / static_cast<double>(MAX_MATERIAL_VALUE);
+    const double normalizedMaterial =
+        static_cast<double>(materialValue) / static_cast<double>(MAX_MATERIAL_VALUE);
+    return std::clamp(normalizedMaterial, -1.0, 1.0);
 }
 
 std::string Board::repr() const {
