@@ -110,12 +110,23 @@ The command fetches Git objects, creates the detached worktree, projects the exi
 Python/Torch ABI, CUDA runtime, architecture, and compiler identity. A Python-, configuration-, or documentation-only
 revision therefore reuses `AlphaZeroCpp` without compiling. A changed C++ tree builds once using the bootstrap
 checkout's already-downloaded CMake dependency sources; concurrent slots with the same native identity serialize on
-one cache entry and then reuse it. CMake also uses `ccache` automatically when the node provides it, which speeds up
-the remaining changed-C++ builds.
+one cache entry and then reuse it. A native cache miss automatically configures and builds C++ inside the preparation
+script; agents do not run CMake separately. The fresh-node bootstrap installs `ccache`, the CMake project detects it
+automatically, and changed-C++ revisions reuse compatible compilation units. The bootstrap also seeds the native
+artifact cache from its initial Release build.
+
+The bootstrap virtual environment is reused while `py/requirements-training.lock` is unchanged. A revision that
+changes the lock requires a new locked environment, but the package manager's download cache still avoids fetching
+unchanged wheels. Do not point a changed-lock experiment at an environment created for a different lock.
 
 The queue calls the same worktree preparation script, so direct runs and queued runs have the same cache behavior.
 Approvals and supervisor definitions remain explicit because they bind a scientific run to its exact revision,
 configuration, node, cost, paths, and process ownership; native-build caching does not weaken those gates.
+
+In short, later deployment is: prepare the exact revision with the one command above, create/install its fresh
+approval and exact-path supervisor definition, then run `supervisorctl reread`, `supervisorctl update`, and
+`supervisorctl start PROGRAM_NAME`. Ordinary stop/resume of an unchanged deployment needs only
+`supervisorctl stop PROGRAM_NAME` and `supervisorctl start PROGRAM_NAME`.
 
 ### Add new code while experiments are running
 

@@ -9,6 +9,7 @@ virtual_environment="${ENGINE_VIRTUAL_ENVIRONMENT:-${repository_directory}-venv}
 python_command="${ENGINE_PYTHON:-python3}"
 uv_version="${ENGINE_UV_VERSION:-0.11.14}"
 open_file_soft_limit="${ENGINE_OPEN_FILE_SOFT_LIMIT:-65536}"
+install_ccache="${ENGINE_INSTALL_CCACHE:-1}"
 
 if [[ $# -eq 0 ]]; then
     echo "Usage: setup_remote.sh COMMAND [ARGUMENT ...]" >&2
@@ -22,6 +23,18 @@ for required_command in git cmake "${python_command}"; do
         exit 1
     fi
 done
+if [[ "${install_ccache}" != 0 && "${install_ccache}" != 1 ]]; then
+    echo "ENGINE_INSTALL_CCACHE must be 0 or 1." >&2
+    exit 1
+fi
+if [[ "${install_ccache}" == 1 ]] && ! command -v ccache >/dev/null 2>&1; then
+    if [[ "$(id -u)" -ne 0 ]] || ! command -v apt-get >/dev/null 2>&1; then
+        echo "Automatic ccache installation requires root and apt-get; set ENGINE_INSTALL_CCACHE=0 to opt out." >&2
+        exit 1
+    fi
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends ccache
+fi
 
 if ! [[ "${open_file_soft_limit}" =~ ^[1-9][0-9]*$ ]]; then
     echo "ENGINE_OPEN_FILE_SOFT_LIMIT must be a positive integer." >&2
@@ -74,6 +87,9 @@ ENGINE_EVALUATION_DIRECTORY="${repository_directory}/engines" \
     "${repository_directory}/deployment/install_evaluation_engines.sh"
 ENGINE_EVALUATION_DIRECTORY="${repository_directory}/engines" \
     "${repository_directory}/deployment/smoke_evaluation_engines.sh"
+ENGINE_SOURCE_ROOT="${repository_directory}" \
+ENGINE_TRUST_EXISTING_NATIVE_BUILD=1 \
+    "${repository_directory}/deployment/prepare_experiment_worktree.sh"
 
 if [[ -n "$(git -C "${repository_directory}" status --porcelain)" ]]; then
     echo "The checkout changed while installing or building; refusing to start the runner." >&2

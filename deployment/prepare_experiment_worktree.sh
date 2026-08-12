@@ -39,6 +39,8 @@ if [[ -L "${engine_projection}" ]]; then
         echo "Existing engine projection targets the wrong directory: ${engine_projection}" >&2
         exit 1
     fi
+elif [[ -d "${engine_projection}" && "$(readlink -f "${engine_projection}")" == "$(readlink -f "${engine_directory}")" ]]; then
+    :
 elif [[ -e "${engine_projection}" ]]; then
     echo "Engine projection already exists and is not a symlink: ${engine_projection}" >&2
     exit 1
