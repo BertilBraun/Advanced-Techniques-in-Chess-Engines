@@ -2,9 +2,7 @@ schema_version: 2
 runner:
   command: [/workspace/alphazero-engine-venv/bin/python, py/run_approved_experiment.py, --approval-directory, /workspace/approvals]
   setup_commands:
-    - [cmake, -E, create_symlink, /workspace/alphazero-engine/engines, engines]
-    - [cmake, -S, cpp, -B, cpp/build, -DCMAKE_BUILD_TYPE=Release, -DPython3_EXECUTABLE=/workspace/alphazero-engine-venv/bin/python, -DFETCHCONTENT_SOURCE_DIR_PYBIND11=/workspace/alphazero-engine/cpp/build/_deps/pybind11-src, -DFETCHCONTENT_SOURCE_DIR_STOCKFISH=/workspace/alphazero-engine/cpp/build/_deps/stockfish-src, -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON=/workspace/alphazero-engine/cpp/build/_deps/nlohmann_json-src]
-    - [cmake, --build, cpp/build, --parallel]
+    - [deployment/prepare_experiment_worktree.sh]
   experiment_path_argument: --run-config
 repository_directory: /workspace/alphazero-engine
 worktree_root: /workspace/experiment-worktrees

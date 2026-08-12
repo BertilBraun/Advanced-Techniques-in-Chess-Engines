@@ -96,6 +96,27 @@ The supervisor snapshots its queue-owned Linux launch helpers into the persisten
 Future launches use that immutable supervisor snapshot, not helper files in the pullable control checkout. Desired
 queue YAML and pending experiment YAML remain the only intentionally live-read control-checkout inputs.
 
+### Prepare a revision efficiently
+
+Python dependencies and evaluation engines belong to the fresh-node bootstrap and are reused by every later
+revision. They are not reinstalled for a new experiment worktree. Prepare a detached revision with one command:
+
+```bash
+deployment/create_experiment_worktree.sh FULL_COMMIT_SHA /workspace/chess-run-source/RUN_WORKTREE
+```
+
+The command fetches Git objects, creates the detached worktree, projects the existing engine directory, and invokes
+`deployment/prepare_experiment_worktree.sh`. Native artifacts are cached by the exact `cpp` Git tree plus the
+Python/Torch ABI, CUDA runtime, architecture, and compiler identity. A Python-, configuration-, or documentation-only
+revision therefore reuses `AlphaZeroCpp` without compiling. A changed C++ tree builds once using the bootstrap
+checkout's already-downloaded CMake dependency sources; concurrent slots with the same native identity serialize on
+one cache entry and then reuse it. CMake also uses `ccache` automatically when the node provides it, which speeds up
+the remaining changed-C++ builds.
+
+The queue calls the same worktree preparation script, so direct runs and queued runs have the same cache behavior.
+Approvals and supervisor definitions remain explicit because they bind a scientific run to its exact revision,
+configuration, node, cost, paths, and process ownership; native-build caching does not weaken those gates.
+
 ### Add new code while experiments are running
 
 Active experiments no longer pin the control checkout. To make a new implementation available to later queue
@@ -160,7 +181,8 @@ children progressing in games, credits, optimizer steps, generations, checkpoint
 ratio and available-quantum fraction together, and distinguish credit waits from training time. Check GPU memory,
 temperature, power, and utilization across self-play, DDP, and evaluation contention.
 
-The node TensorBoard service listens on port 16006 and watches `/workspace`. Forward it separately, for example:
+The node TensorBoard service listens on port 16006 and watches the curated `/workspace/tensorboard` root. Forward it
+separately, for example:
 
 ```powershell
 ssh -i C:\path\to\vast_key -p SSH_PORT root@HOST `
