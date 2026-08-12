@@ -10,7 +10,6 @@ from src.games.implementation import GameImplementation
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayManager
 from src.self_play.protocol import (
-    PausedSelfPlayState,
     RunningSelfPlayState,
     StatisticsLevel,
 )
@@ -111,12 +110,7 @@ class Coordinator:
     def _train_quantum(self) -> None:
         credit_wait_seconds = time.perf_counter() - self._credit_wait_started_at
         paused_worker_ids = self.configuration.training.topology.self_play.node_ids_to_pause_during_training
-        paused = self.self_play_group.apply_to_workers(
-            paused_worker_ids,
-            PausedSelfPlayState(),
-        )
-        if any(response.kind != 'paused' for response in paused):
-            raise RuntimeError('Selected self-play workers did not enter the paused state.')
+        self.self_play_group.request_pause(paused_worker_ids)
         self._ingest_available_games()
         if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
             resumed = self.self_play_group.apply_to_workers(

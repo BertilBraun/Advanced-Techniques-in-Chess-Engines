@@ -9,7 +9,7 @@ import time
 
 from src.experiment.configuration import load_experiment_configuration
 from src.games.composition import create_game_implementation
-from src.self_play.protocol import PausedSelfPlayState, RunningSelfPlayState, StatisticsLevel
+from src.self_play.protocol import RunningSelfPlayState, StatisticsLevel
 from src.training.checkpoint import CheckpointReference
 from src.training.self_play_group import SelfPlayGroup
 
@@ -21,6 +21,7 @@ class Arguments:
     source_generation: int
     target_generation: int
     settle_seconds: float
+    checkpoint_delay_seconds: float
     output: Path
 
 
@@ -30,7 +31,7 @@ class TransitionBenchmarkResult:
     paused_worker_ids: tuple[int, ...]
     active_worker_ids: tuple[int, ...]
     initial_checkpoint_application_seconds: float
-    pause_acknowledgement_seconds: float
+    pause_dispatch_seconds: float
     target_checkpoint_application_seconds: float
 
 
@@ -64,10 +65,9 @@ def run_benchmark(arguments: Arguments) -> TransitionBenchmarkResult:
             )
             time.sleep(arguments.settle_seconds)
             started_at = time.perf_counter()
-            paused = group.apply_to_workers(paused_worker_ids, PausedSelfPlayState())
+            group.request_pause(paused_worker_ids)
             pause_seconds = time.perf_counter() - started_at
-            if any(response.kind != 'paused' for response in paused):
-                raise RuntimeError('Selected self-play workers did not enter the paused state.')
+            time.sleep(arguments.checkpoint_delay_seconds)
             target_seconds = _elapsed_apply(
                 group,
                 tuple(
@@ -85,7 +85,7 @@ def run_benchmark(arguments: Arguments) -> TransitionBenchmarkResult:
         paused_worker_ids=paused_worker_ids,
         active_worker_ids=active_worker_ids,
         initial_checkpoint_application_seconds=initial_seconds,
-        pause_acknowledgement_seconds=pause_seconds,
+        pause_dispatch_seconds=pause_seconds,
         target_checkpoint_application_seconds=target_seconds,
     )
 
@@ -97,6 +97,7 @@ def _parse_arguments() -> Arguments:
     parser.add_argument('--source-generation', type=int, required=True)
     parser.add_argument('--target-generation', type=int, required=True)
     parser.add_argument('--settle-seconds', type=float, default=10.0)
+    parser.add_argument('--checkpoint-delay-seconds', type=float, default=30.0)
     parser.add_argument('--output', type=Path, required=True)
     namespace = parser.parse_args()
     return Arguments(
@@ -105,6 +106,7 @@ def _parse_arguments() -> Arguments:
         source_generation=namespace.source_generation,
         target_generation=namespace.target_generation,
         settle_seconds=namespace.settle_seconds,
+        checkpoint_delay_seconds=namespace.checkpoint_delay_seconds,
         output=namespace.output,
     )
 

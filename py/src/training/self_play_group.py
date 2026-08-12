@@ -13,8 +13,8 @@ from src.games.implementation import GameImplementation
 from src.games.composition import create_game_implementation
 from src.experiment.configuration import load_experiment_configuration_json
 from src.self_play.protocol import (
+    AcknowledgedSelfPlayDesiredState,
     PausedSelfPlayState,
-    PausedSelfPlayStateApplied,
     RunningSelfPlayState,
     RunningSelfPlayStateApplied,
     SelfPlayDesiredState,
@@ -47,7 +47,10 @@ class SelfPlayGroup:
     def worker_count(self) -> int:
         return len(self._connections)
 
-    def apply(self, desired_states: tuple[SelfPlayDesiredState, ...]) -> tuple[SelfPlayStateApplied, ...]:
+    def apply(
+        self,
+        desired_states: tuple[AcknowledgedSelfPlayDesiredState, ...],
+    ) -> tuple[SelfPlayStateApplied, ...]:
         if self._closed:
             raise RuntimeError('Self-play group is closed.')
         if len(desired_states) != self.worker_count:
@@ -59,18 +62,18 @@ class SelfPlayGroup:
     def apply_to_workers(
         self,
         worker_ids: tuple[int, ...],
-        desired_state: SelfPlayDesiredState,
+        desired_state: RunningSelfPlayState,
     ) -> tuple[SelfPlayStateApplied, ...]:
         if self._closed:
             raise RuntimeError('Self-play group is closed.')
-        if len(set(worker_ids)) != len(worker_ids):
-            raise ValueError('Selected self-play worker IDs must be unique.')
-        if any(worker_id < 0 or worker_id >= self.worker_count for worker_id in worker_ids):
-            raise ValueError('Selected self-play worker ID is outside the worker range.')
-        selected_connections = tuple(self._connections[worker_id] for worker_id in worker_ids)
+        selected_connections = self._connections_for_workers(worker_ids)
         for connection in selected_connections:
             connection.send(desired_state)
         return tuple(self._receive(connection) for connection in selected_connections)
+
+    def request_pause(self, worker_ids: tuple[int, ...]) -> None:
+        for connection in self._connections_for_workers(worker_ids):
+            connection.send(PausedSelfPlayState())
 
     def restart_exited_workers(self, checkpoint: CheckpointReference) -> tuple[int, ...]:
         if self._closed:
@@ -113,6 +116,13 @@ class SelfPlayGroup:
             raise RuntimeError('Self-play worker connection closed unexpectedly.') from error
         return response
 
+    def _connections_for_workers(self, worker_ids: tuple[int, ...]) -> tuple[Connection, ...]:
+        if len(set(worker_ids)) != len(worker_ids):
+            raise ValueError('Selected self-play worker IDs must be unique.')
+        if any(worker_id < 0 or worker_id >= self.worker_count for worker_id in worker_ids):
+            raise ValueError('Selected self-play worker ID is outside the worker range.')
+        return tuple(self._connections[worker_id] for worker_id in worker_ids)
+
     def _start_worker(self, worker_id: int, device_id: int) -> tuple[Connection, BaseProcess]:
         parent, child = self._context.Pipe(duplex=True)
         process = self._context.Process(
@@ -138,11 +148,11 @@ class _SelfPlayProcessRuntime:
         self.worker.run_batch()
         self.completed_search_batches += 1
 
-    def apply(self, desired_state: SelfPlayDesiredState) -> SelfPlayStateApplied:
+    def apply(self, desired_state: SelfPlayDesiredState) -> SelfPlayStateApplied | None:
         match desired_state:
             case PausedSelfPlayState():
                 self.running = False
-                return PausedSelfPlayStateApplied(worker_id=self.worker_id)
+                return None
             case StoppedSelfPlayState():
                 return StoppedSelfPlayStateApplied(worker_id=self.worker_id)
             case RunningSelfPlayState():
@@ -230,6 +240,8 @@ def _self_play_worker_main(
                     continue
                 desired_state: SelfPlayDesiredState = connection.recv()
                 applied_state = runtime.apply(desired_state)
+                if applied_state is None:
+                    continue
                 connection.send(applied_state)
                 match applied_state:
                     case StoppedSelfPlayStateApplied():

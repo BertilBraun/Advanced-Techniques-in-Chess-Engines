@@ -38,6 +38,7 @@ SelfPlayDesiredState: TypeAlias = Annotated[
     RunningSelfPlayState | PausedSelfPlayState | StoppedSelfPlayState,
     Field(discriminator='kind'),
 ]
+AcknowledgedSelfPlayDesiredState: TypeAlias = RunningSelfPlayState | StoppedSelfPlayState
 
 
 class RunningSelfPlayStateApplied(FrozenModel):
@@ -48,17 +49,12 @@ class RunningSelfPlayStateApplied(FrozenModel):
     completed_generation_statistics: SelfPlayStatistics | None
 
 
-class PausedSelfPlayStateApplied(FrozenModel):
-    kind: Literal['paused'] = 'paused'
-    worker_id: int
-
-
 class StoppedSelfPlayStateApplied(FrozenModel):
     kind: Literal['stopped'] = 'stopped'
     worker_id: int
 
 
 SelfPlayStateApplied: TypeAlias = Annotated[
-    RunningSelfPlayStateApplied | PausedSelfPlayStateApplied | StoppedSelfPlayStateApplied,
+    RunningSelfPlayStateApplied | StoppedSelfPlayStateApplied,
     Field(discriminator='kind'),
 ]
