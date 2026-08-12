@@ -31,9 +31,9 @@ rank relative to DDP synchronization and fixed per-step overhead.
 
 ## Self-play contention
 
-The contention workload is the production active subset: three self-play processes per GPU on GPUs `[4,5,6,7]`,
-1,024 games per process, two inference workers, batch 64, and two outstanding batches per worker. DDP uses the same
-production replay and batch 1,024.
+The original contention workload is the r2 production active subset: three self-play processes per GPU on GPUs
+`[4,5,6,7]`, 1,024 games per process, two inference workers, batch 64, and two outstanding batches per worker. DDP
+uses the same production replay and batch 1,024.
 
 | DDP case | Optimizer steps | Replay rows/s | Training samples/s | Change from isolated |
 | --- | ---: | ---: | ---: | ---: |
@@ -47,6 +47,11 @@ window, with mean inference batch 61.98/64, 2,508% aggregate process CPU, and 28
 contains the controlled four- and eight-GPU training intervals, so it is evidence for continued high self-play
 throughput under the experiment load, not an isolated self-play baseline or a clean measurement of the eight-GPU
 DDP effect on self-play.
+
+The selected topology instead kept one self-play worker active on every GPU while four 500-step, eight-rank DDP
+trials ran. Those eight workers sustained 169,157 searches/s over 1,209 seconds, completed 204.6 million searches,
+and averaged 60.66 positions per inference call. This is the directly relevant self-play result for the proposed
+pause-16/keep-8-active topology.
 
 ## Batch-size sweep
 
@@ -67,18 +72,43 @@ Batch 8,192 adds only 5.6% over 4,096 on eight GPUs, so the hardware throughput 
 are systems measurements, not authorization to change optimization semantics: a larger batch changes update count,
 gradient noise, replay consumption per step, and likely the appropriate learning-rate schedule.
 
+## Mixed precision and compilation
+
+The selected-mode sweep fixes eight DDP ranks, global/local batch 2,048/256, and 500 optimizer steps. Exactly one
+self-play worker remained active on every GPU for the entire sweep. Each trial starts fresh from generation 70 and
+publishes a generation-71 eager and JIT checkpoint.
+
+| Precision | `torch.compile` | Quantum seconds | Training samples/s | Change from eager FP32 |
+| --- | --- | ---: | ---: | ---: |
+| FP32 | disabled | 178.85 | 5,726 | reference |
+| BF16 autocast | disabled | 163.80 | 6,252 | +9.2% |
+| FP32 | default | 220.57 | 4,643 | -18.9% |
+| BF16 autocast | default | 218.35 | 4,690 | -18.1% |
+
+BF16 autocast is the fastest tested mode and saves 15.1 seconds per quantum. Compilation is a clear regression on
+this network and hardware. The compiled trials also reported a DDP gradient-stride mismatch for a 1x1 parameter and
+that the RTX 3060 has too few streaming multiprocessors for max-autotune GEMM. Compilation remains configurable for
+future models or PyTorch releases, but it should be disabled for this run. Training compilation does not replace or
+alter JIT inference export: rank zero saves the canonical eager model, and checkpoint publication scripts a fresh
+inference model exactly as before.
+
 ## End-to-end production timing
 
 Generation 70 reported 5,367 hot-loop samples/s and 14.6 seconds of credit wait. Its 512,000 presentations imply a
 95.4-second trainer quantum. The log interval from generation 69 to 70 was 153 seconds, leaving approximately
-43 seconds outside both reported training and credit wait. The coordinator path shows that this uninstrumented time
-is the barrier that pauses selected workers, a final replay ingestion, applying the new checkpoint to all 24
-self-play workers, collecting generation statistics, resetting search trees, and checkpoint retention.
+43 seconds outside both reported training and credit wait.
+
+A direct reproduction with the real 24-worker group and generation-69/70 JIT checkpoints accounts for essentially
+all of it. The r2 pause-12 topology spent 17.33 seconds waiting for pause acknowledgements and 24.50 seconds applying
+the next checkpoint to all workers: 41.84 seconds combined. The proposed pause-16 topology measured 17.96 seconds
+and 17.74 seconds respectively: 35.71 seconds combined. Workers only inspect commands between whole self-play
+batches, so the coordinator is waiting for batch boundaries; it is not losing time in DDP. Applying a new checkpoint
+also validates and loads the JIT model, collects generation statistics, and rebuilds worker search state.
 
 The effective generation-70 wall-clock presentation rate was therefore about 3,346 samples/s, far below the
-reported hot-loop rate. A production self-play worker batch takes roughly 25 seconds in the contention harness, so
-waiting for every worker to reach a model-refresh boundary plausibly explains most of the 43-second gap. Exact phase
-timers should be added before attributing the whole gap to one operation.
+reported hot-loop rate. Coordinator telemetry now records pause acknowledgement, final ingestion, checkpoint
+application, retention, and total transition time independently so subsequent production generations expose this
+cost directly.
 
 The run accumulated a presentation backlog early: available presentations reached roughly 10 million and were
 7.85 million at generation 70, while observed replay ratio was 6.563 rather than the configured 8. The backlog was
@@ -93,16 +123,15 @@ up at shutdown even though it had not met the cumulative target ratio.
 3. CPU/self-play contention costs the four-rank trainer about 17-19%, primarily visible as reduced replay-loader
    throughput. The loader is not the isolated ceiling: at eight GPUs it supplies about 14-15k rows/s while training
    consumes at most 10.4k samples/s.
-4. Eight-rank DDP at batch 1,024 is not worthwhile while self-play remains active. Eight ranks become useful at
-   global batch 4,096 or larger, preferably with all self-play workers paused during the training phase.
-5. The next production-safe experiment is four ranks with global/local batch 2,048/512, followed by a learning-curve
-   check because this restores the original authored batch but changes the r2 optimization recipe.
-6. The next orchestration experiment is a longer optimizer quantum, such as 1,000 steps, to amortize the roughly
-   43-second model-refresh barrier. This trades lower overhead for older self-play models and less frequent
-   checkpoints and therefore needs elapsed-strength validation.
-7. Add explicit coordinator timers for pause acknowledgement, final ingestion, DDP, checkpoint application,
-   statistics collection, and retention. Mixed precision and `torch.compile` are promising separate experiments;
-   neither was measured here and neither should be presented as an established gain.
+4. Eight-rank DDP is useful at global batch 2,048 when only one worker remains active per GPU: eager BF16 reaches
+   6,252 samples/s while those workers collectively sustain 169,157 searches/s.
+5. The selected training mode is eight ranks, global/local batch 2,048/256, BF16 autocast, compilation disabled,
+   pause worker IDs `[1,2,4,5,7,8,10,11,13,14,16,17,19,20,22,23]`, and the unchanged 500-step quantum.
+6. The missing time is a synchronous self-play transition barrier, not an unidentified trainer stall. Removing
+   acknowledgement without another consistency protocol would allow games from stale generations to cross the
+   checkpoint boundary. Reducing worker batch granularity is the safer follow-up experiment.
+7. The checked-in `vast-chess-8gpu-1d-r3.yaml` captures the selected recipe. It remains an explicitly approved clean
+   run and was not launched during benchmarking.
 
 Raw JSON files in this directory contain every summarized DDP result and the complete self-play manifest and worker
 summary. The authoritative remote evidence remains under `/workspace/training-benchmarks` while the ephemeral node

@@ -1,0 +1,72 @@
+extends: vast-chess-8gpu-1d.yaml
+run:
+  run_name: vast-chess-8gpu-1d-r3
+  tensorboard_run_directory: vast-chess-8gpu-1d-r3
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-1d-r3
+  trainer:
+    global_batch_size: 2048
+    local_batch_size: 256
+    precision: bfloat16
+    compilation: disabled
+    learning_rate:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 0.0035}
+        - {start_generation: 300, value: 0.002}
+    max_grad_norm: 0.5
+  topology:
+    trainer:
+      ddp_device_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+    self_play:
+      node_ids_to_pause_during_training: [1, 2, 4, 5, 7, 8, 10, 11, 13, 14, 16, 17, 19, 20, 22, 23]
+  lifecycle:
+    replay:
+      capacity:
+        kind: linear
+        start_generation: 0
+        end_generation: 100
+        start_value: 192000
+        end_value: 960000
+        rounding: nearest
+      maximum_capacity: 960000
+    credit:
+      replay_ratio: 8
+      optimizer_steps_per_quantum: 500
+      retained_checkpoint_interval_generations: 6
+    inference_retention: {recent_checkpoint_count: 22, milestone_interval: 20}
+chess:
+  self_play:
+    search:
+      full_searches:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 200}
+          - {start_generation: 10, value: 300}
+          - {start_generation: 20, value: 400}
+          - {start_generation: 40, value: 500}
+          - {start_generation: 70, value: 600}
+          - {start_generation: 270, value: 700}
+          - {start_generation: 470, value: 800}
+      fast_searches:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 50}
+          - {start_generation: 10, value: 75}
+          - {start_generation: 20, value: 100}
+          - {start_generation: 40, value: 125}
+          - {start_generation: 70, value: 150}
+    start_position:
+      kind: restart_state
+      true_start_probability: 0.5
+      candidate_visit_mass: 0.85
+      minimum_candidates: 2
+      maximum_candidates: 3
+      maximum_absolute_root_value: 0.8
+      minimum_remaining_plies: 15
+      maximum_archive_positions: 50000
+      maximum_age_generations: 40
+    full_search_probability: {kind: linear, start_generation: 0, end_generation: 50, start_value: 1.0, end_value: 0.25, rounding: none}
+    maximum_game_plies: {kind: linear, start_generation: 0, end_generation: 100, start_value: 200, end_value: 600, rounding: nearest}
+  objective:
+    root_value_blend: {kind: linear, start_generation: 40, end_generation: 80, start_value: 0.0, end_value: 0.15, rounding: none}

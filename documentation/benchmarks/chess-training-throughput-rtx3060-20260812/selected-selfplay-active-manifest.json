@@ -1,0 +1,23 @@
+{
+  "timestamp_utc": "20260812T133403Z",
+  "source_revision": "4889318405f22cd4f2d95038b0c7f5674a9e0760",
+  "game": "chess",
+  "model": {
+    "path": "/workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-1d-r2/model_70.jit.pt",
+    "sha256": "fd28a92cfd459ef1c7cd028421c220574baeb14931970a63082f15e6bb5f1328"
+  },
+  "run_config": "/workspace/chess-run-source/vast-chess-8gpu-1d-r2-48893184/py/configs/production/vast-chess-8gpu-1d-r2.yaml",
+  "topology": {
+    "gpu_count": 8,
+    "processes_per_gpu": 1,
+    "parallel_games_per_process": 1024,
+    "total_parallel_games": 8192,
+    "pin_workers_to_cpus": false,
+    "cpus_per_process": 4
+  },
+  "workload": {
+    "generation": 70,
+    "warmup_batches": 1,
+    "duration_seconds": 1200
+  }
+}
