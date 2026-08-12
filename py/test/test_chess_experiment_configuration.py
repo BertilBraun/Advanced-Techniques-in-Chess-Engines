@@ -259,8 +259,23 @@ def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> N
     assert topology.self_play.node_ids_to_pause_during_training == tuple(range(16))
     assert lifecycle.credit.optimizer_steps_per_quantum == 1000
     assert lifecycle.credit.unique_samples_per_quantum(configuration.training.trainer.global_batch_size) == 256_000
+    assert lifecycle.credit.retained_checkpoint_interval_generations == 3
+    assert lifecycle.inference_retention.recent_checkpoint_count == 11
+    assert lifecycle.inference_retention.milestone_interval == 10
     assert lifecycle.replay.capacity.value_at(0) == 300_000
-    assert tuple(self_play.greedy_after_ply.value_at(generation) for generation in (0, 79, 80, 149, 150, 500)) == (
+    assert tuple(
+        self_play.search.full_searches.value_at(generation) for generation in (0, 5, 15, 25, 45, 180, 315)
+    ) == (200, 300, 400, 500, 600, 700, 800)
+    assert tuple(self_play.search.fast_searches.value_at(generation) for generation in (0, 5, 15, 25, 45)) == (
+        50,
+        75,
+        100,
+        125,
+        150,
+    )
+    assert self_play.start_position.maximum_age_generations == 20
+    assert self_play.full_search_probability.value_at(35) == pytest.approx(0.25)
+    assert tuple(self_play.greedy_after_ply.value_at(generation) for generation in (0, 54, 55, 99, 100, 500)) == (
         60,
         60,
         80,
@@ -269,11 +284,11 @@ def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> N
         100,
     )
     learning_rate = configuration.training.trainer.learning_rate
-    assert tuple(learning_rate.value_at(generation) for generation in (0, 99, 100, 299, 300, 500)) == pytest.approx(
+    assert tuple(learning_rate.value_at(generation) for generation in (0, 49, 50, 149, 150, 500)) == pytest.approx(
         (0.005, 0.005, 0.0035, 0.0035, 0.002, 0.002)
     )
     replay = configuration.training.lifecycle.replay
-    assert tuple(replay.capacity_at(generation) for generation in (0, 50, 100, 500)) == (
+    assert tuple(replay.capacity_at(generation) for generation in (0, 25, 50, 500)) == (
         300_000,
         1_150_000,
         2_000_000,
@@ -282,20 +297,22 @@ def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> N
     assert replay.maximum_capacity == 2_000_000
     resignation = self_play.resignation
     assert resignation.kind == 'calibrated'
-    assert resignation.first_production_generation == 50
+    assert resignation.first_production_generation == 35
     assert resignation.false_nonloss_rate_ceiling == pytest.approx(0.03)
     assert resignation.continuation_game_probability == pytest.approx(0.10)
     assert resignation.triggered_game_window == 2000
     assert resignation.candidate_thresholds == pytest.approx(tuple(-0.99 + index * 0.01 for index in range(30)))
     assert resignation.minimum_evidence_trigger_count == 100
     assert resignation.confidence_level == pytest.approx(0.95)
-    assert resignation.maximum_relaxation_per_generation == pytest.approx(0.01)
+    assert resignation.maximum_relaxation_per_generation == pytest.approx(0.02)
     assert self_play.maximum_game_plies is not None
     assert tuple(
-        self_play.maximum_game_plies.value_at(generation) for generation in (0, 39, 40, 60, 80, 100, 120, 150, 180, 500)
+        self_play.maximum_game_plies.value_at(generation) for generation in (0, 24, 25, 40, 55, 70, 80, 100, 120, 500)
     ) == (150, 150, 160, 180, 200, 250, 300, 350, 400, 400)
     assert self_play.force_fast_search_after_ply is not None
     assert self_play.force_fast_search_after_ply.value_at(0) == 200
+    assert configuration.chess.objective.root_value_blend.value_at(25) == pytest.approx(0.0)
+    assert configuration.chess.objective.root_value_blend.value_at(55) == pytest.approx(0.15)
 
 
 def test_eight_gpu_chess_r3_configuration_is_fully_self_declared() -> None:

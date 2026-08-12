@@ -40,8 +40,8 @@ training:
       kind: staged
       stages:
         - {start_generation: 0, value: 0.005}
-        - {start_generation: 100, value: 0.0035}
-        - {start_generation: 300, value: 0.002}
+        - {start_generation: 50, value: 0.0035}
+        - {start_generation: 150, value: 0.002}
     max_grad_norm: 0.5
     duplicate_multiplicity_weight_cap:
   topology:
@@ -63,7 +63,7 @@ training:
       capacity:
         kind: linear
         start_generation: 0
-        end_generation: 100
+        end_generation: 50
         start_value: 300000
         end_value: 2000000
         rounding: nearest
@@ -73,8 +73,8 @@ training:
       replay_ratio: 8
       optimizer_steps_per_quantum: 1000
       maximum_optimizer_steps: 1000000000
-      retained_checkpoint_interval_generations: 6
-    inference_retention: {recent_checkpoint_count: 22, milestone_interval: 20}
+      retained_checkpoint_interval_generations: 3
+    inference_retention: {recent_checkpoint_count: 11, milestone_interval: 10}
   limits:
     hourly_price: 0.4608888888888886
     maximum_cost: 12.0
@@ -134,7 +134,7 @@ chess:
   self_play:
     resignation:
       kind: calibrated
-      first_production_generation: 50
+      first_production_generation: 35
       false_nonloss_rate_ceiling: 0.03
       continuation_game_probability: 0.10
       triggered_game_window: 2000
@@ -143,26 +143,26 @@ chess:
       candidate_threshold_step: 0.01
       minimum_evidence_trigger_count: 100
       confidence_level: 0.95
-      maximum_relaxation_per_generation: 0.01
+      maximum_relaxation_per_generation: 0.02
     search:
       full_searches:
         kind: staged
         stages:
           - {start_generation: 0, value: 200}
-          - {start_generation: 10, value: 300}
-          - {start_generation: 20, value: 400}
-          - {start_generation: 40, value: 500}
-          - {start_generation: 70, value: 600}
-          - {start_generation: 270, value: 700}
-          - {start_generation: 470, value: 800}
+          - {start_generation: 5, value: 300}
+          - {start_generation: 15, value: 400}
+          - {start_generation: 25, value: 500}
+          - {start_generation: 45, value: 600}
+          - {start_generation: 180, value: 700}
+          - {start_generation: 315, value: 800}
       fast_searches:
         kind: staged
         stages:
           - {start_generation: 0, value: 50}
-          - {start_generation: 10, value: 75}
-          - {start_generation: 20, value: 100}
-          - {start_generation: 40, value: 125}
-          - {start_generation: 70, value: 150}
+          - {start_generation: 5, value: 75}
+          - {start_generation: 15, value: 100}
+          - {start_generation: 25, value: 125}
+          - {start_generation: 45, value: 150}
       parallel_searches: 1
       dirichlet_epsilon: {kind: constant, value: 0.25}
       dirichlet_alpha: {kind: constant, value: 0.3}
@@ -179,26 +179,26 @@ chess:
       maximum_absolute_root_value: 0.8
       minimum_remaining_plies: 15
       maximum_archive_positions: 50000
-      maximum_age_generations: 40
-    full_search_probability: {kind: linear, start_generation: 0, end_generation: 50, start_value: 1.0, end_value: 0.25, rounding: none}
+      maximum_age_generations: 20
+    full_search_probability: {kind: linear, start_generation: 0, end_generation: 35, start_value: 1.0, end_value: 0.25, rounding: none}
     retained_root_visit_fraction: {kind: constant, value: 0.6}
     greedy_after_ply:
       kind: staged
       stages:
         - {start_generation: 0, value: 60}
-        - {start_generation: 80, value: 80}
-        - {start_generation: 150, value: 100}
+        - {start_generation: 55, value: 80}
+        - {start_generation: 100, value: 100}
     maximum_game_plies:
       kind: staged
       stages:
         - {start_generation: 0, value: 150}
-        - {start_generation: 40, value: 160}
-        - {start_generation: 60, value: 180}
-        - {start_generation: 80, value: 200}
-        - {start_generation: 100, value: 250}
-        - {start_generation: 120, value: 300}
-        - {start_generation: 150, value: 350}
-        - {start_generation: 180, value: 400}
+        - {start_generation: 25, value: 160}
+        - {start_generation: 40, value: 180}
+        - {start_generation: 55, value: 200}
+        - {start_generation: 70, value: 250}
+        - {start_generation: 80, value: 300}
+        - {start_generation: 100, value: 350}
+        - {start_generation: 120, value: 400}
     force_fast_search_after_ply: {kind: constant, value: 200}
     starting_temperature: {kind: constant, value: 1.3}
     final_temperature: {kind: constant, value: 0.1}
@@ -207,7 +207,7 @@ chess:
   objective:
     policy_loss_weight: {kind: constant, value: 1.0}
     value_loss_weight: {kind: constant, value: 1.0}
-    root_value_blend: {kind: linear, start_generation: 40, end_generation: 80, start_value: 0.0, end_value: 0.15, rounding: none}
+    root_value_blend: {kind: linear, start_generation: 25, end_generation: 55, start_value: 0.0, end_value: 0.15, rounding: none}
     auxiliary_targets:
       - {kind: next_policy, ply_offset: 1, loss_weight: {kind: constant, value: 0.1}}
       - {kind: remaining_game_length, loss_weight: {kind: constant, value: 0.1}}
