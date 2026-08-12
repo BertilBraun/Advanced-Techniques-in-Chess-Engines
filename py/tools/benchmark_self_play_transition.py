@@ -21,7 +21,6 @@ class Arguments:
     source_generation: int
     target_generation: int
     settle_seconds: float
-    checkpoint_delay_seconds: float
     output: Path
 
 
@@ -67,7 +66,7 @@ def run_benchmark(arguments: Arguments) -> TransitionBenchmarkResult:
             started_at = time.perf_counter()
             group.request_pause(paused_worker_ids)
             pause_seconds = time.perf_counter() - started_at
-            time.sleep(arguments.checkpoint_delay_seconds)
+            time.sleep(arguments.settle_seconds)
             target_seconds = _elapsed_apply(
                 group,
                 tuple(
@@ -97,7 +96,6 @@ def _parse_arguments() -> Arguments:
     parser.add_argument('--source-generation', type=int, required=True)
     parser.add_argument('--target-generation', type=int, required=True)
     parser.add_argument('--settle-seconds', type=float, default=10.0)
-    parser.add_argument('--checkpoint-delay-seconds', type=float, default=30.0)
     parser.add_argument('--output', type=Path, required=True)
     namespace = parser.parse_args()
     return Arguments(
@@ -106,7 +104,6 @@ def _parse_arguments() -> Arguments:
         source_generation=namespace.source_generation,
         target_generation=namespace.target_generation,
         settle_seconds=namespace.settle_seconds,
-        checkpoint_delay_seconds=namespace.checkpoint_delay_seconds,
         output=namespace.output,
     )
 

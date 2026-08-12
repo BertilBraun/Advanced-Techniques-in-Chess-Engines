@@ -105,12 +105,6 @@ and 17.74 seconds respectively: 35.71 seconds combined. Workers only inspect com
 batches, so the coordinator is waiting for batch boundaries; it is not losing time in DDP. Applying a new checkpoint
 also validates and loads the JIT model, collects generation statistics, and rebuilds worker search state.
 
-Pause is now a one-way command: the coordinator dispatches it and starts DDP without waiting for workers to finish
-their current self-play batches. Pause produces no pipe response, so the following checkpoint acknowledgement cannot
-be confused with a stale pause acknowledgement. Checkpoint application remains a barrier because its response
-confirms the loaded generation and inference hash and returns completed-generation statistics. This removes the
-measured 17.96-second pause barrier from the critical path while accepting brief self-play/DDP overlap.
-
 The effective generation-70 wall-clock presentation rate was therefore about 3,346 samples/s, far below the
 reported hot-loop rate. The standalone transition benchmark retains the phase measurements; the production
 coordinator intentionally keeps only its normal training and credit telemetry.

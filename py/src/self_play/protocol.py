@@ -38,7 +38,6 @@ SelfPlayDesiredState: TypeAlias = Annotated[
     RunningSelfPlayState | PausedSelfPlayState | StoppedSelfPlayState,
     Field(discriminator='kind'),
 ]
-AcknowledgedSelfPlayDesiredState: TypeAlias = RunningSelfPlayState | StoppedSelfPlayState
 
 
 class RunningSelfPlayStateApplied(FrozenModel):

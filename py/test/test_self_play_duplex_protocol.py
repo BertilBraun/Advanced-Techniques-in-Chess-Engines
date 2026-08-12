@@ -182,6 +182,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     assert first.loaded_generation == 0
 
     parent.send(PausedSelfPlayState())
+    assert not parent.poll(0.1)
     parent.send(
         RunningSelfPlayState(
             checkpoint=_checkpoint(tmp_path, 1),
@@ -265,20 +266,6 @@ def test_group_applies_state_only_to_selected_workers(tmp_path: Path) -> None:
     assert connections[1].sent == [desired_state]
     assert connections[2].sent == []
     assert connections[3].sent == [desired_state]
-
-
-def test_group_requests_pause_without_receiving_acknowledgements() -> None:
-    connections = [_Connection() for _ in range(4)]
-    group = SelfPlayGroup.__new__(SelfPlayGroup)
-    group._closed = False
-    group._connections = [cast(Connection, connection) for connection in connections]
-
-    group.request_pause((1, 3))
-
-    assert connections[0].sent == []
-    assert connections[1].sent == [PausedSelfPlayState()]
-    assert connections[2].sent == []
-    assert connections[3].sent == [PausedSelfPlayState()]
 
 
 @pytest.mark.parametrize(

@@ -13,7 +13,6 @@ from src.games.implementation import GameImplementation
 from src.games.composition import create_game_implementation
 from src.experiment.configuration import load_experiment_configuration_json
 from src.self_play.protocol import (
-    AcknowledgedSelfPlayDesiredState,
     PausedSelfPlayState,
     RunningSelfPlayState,
     RunningSelfPlayStateApplied,
@@ -49,7 +48,7 @@ class SelfPlayGroup:
 
     def apply(
         self,
-        desired_states: tuple[AcknowledgedSelfPlayDesiredState, ...],
+        desired_states: tuple[RunningSelfPlayState | StoppedSelfPlayState, ...],
     ) -> tuple[SelfPlayStateApplied, ...]:
         if self._closed:
             raise RuntimeError('Self-play group is closed.')
@@ -64,8 +63,6 @@ class SelfPlayGroup:
         worker_ids: tuple[int, ...],
         desired_state: RunningSelfPlayState,
     ) -> tuple[SelfPlayStateApplied, ...]:
-        if self._closed:
-            raise RuntimeError('Self-play group is closed.')
         selected_connections = self._connections_for_workers(worker_ids)
         for connection in selected_connections:
             connection.send(desired_state)
@@ -117,6 +114,8 @@ class SelfPlayGroup:
         return response
 
     def _connections_for_workers(self, worker_ids: tuple[int, ...]) -> tuple[Connection, ...]:
+        if self._closed:
+            raise RuntimeError('Self-play group is closed.')
         if len(set(worker_ids)) != len(worker_ids):
             raise ValueError('Selected self-play worker IDs must be unique.')
         if any(worker_id < 0 or worker_id >= self.worker_count for worker_id in worker_ids):
