@@ -79,7 +79,7 @@ class ChessWebPlay:
             download_model_artifacts,
         )
         from deployment.web.backend.service import GameService
-        from src.games.chess.interactive.analysis import CountedMctsAnalysis
+        from src.games.chess.interactive.analysis import CountedMctsAnalysis, PolicyAnalysis
         from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
         from src.games.chess.interactive.engine import InteractiveEngine
 
@@ -106,7 +106,7 @@ class ChessWebPlay:
             InteractiveEngineConfiguration(model_path=str(model_path), inference_target=InferenceTarget.CUDA)
         )
         for _ in range(_GPU_SINGLE_POSITION_WARMUPS):
-            engine.new_game(chess.STARTING_FEN, ()).analyze(CountedMctsAnalysis(searches=1))
+            engine.new_game(chess.STARTING_FEN, ()).analyze(PolicyAnalysis())
         warmup_result = engine.new_game(chess.STARTING_FEN, ()).analyze(
             CountedMctsAnalysis(searches=_GPU_WARMUP_SEARCHES)
         )
