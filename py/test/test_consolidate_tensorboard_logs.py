@@ -118,6 +118,43 @@ def test_evaluation_outcome_overlays_preserve_other_summaries_in_root_run(tmp_pa
     assert scalar_values(outcome_run, 'coordinator/evaluation/stockfish-level-0') == (20.0,)
 
 
+def test_preserved_source_layout_keeps_original_groups_and_colored_runs(tmp_path: Path) -> None:
+    source_run_directory = tmp_path / 'source-run'
+    output_root = tmp_path / 'output'
+    write_scalar(source_run_directory / 'coordinator', 'credit/available_presentations', 1, 10.0, wall_time=10.0)
+    write_scalar(source_run_directory / 'gpu_usage', 'gpu/0/load', 1, 80.0, wall_time=10.0)
+    write_scalar(
+        source_run_directory / 'self_play' / '100',
+        'restart_states/positions',
+        1,
+        20.0,
+        wall_time=10.0,
+    )
+    for series_name, value in (('wins', 20.0), ('draws', 70.0), ('losses', 10.0)):
+        write_scalar(
+            source_run_directory / 'coordinator',
+            f'evaluation/stockfish-level-0/{series_name}',
+            1_200,
+            value,
+            wall_time=10.0,
+        )
+
+    consolidate_once(
+        source_run_directory,
+        output_root,
+        single_run_source=True,
+        evaluation_outcome_overlays=True,
+        preserve_source_layout=True,
+    )
+
+    assert scalar_values(output_root / 'coordinator', 'credit/available_presentations') == (10.0,)
+    assert scalar_values(output_root / 'gpu_usage', 'gpu/0/load') == (80.0,)
+    assert scalar_values(output_root / 'self_play', 'restart_states/positions') == (20.0,)
+    for series_name, expected_value in (('wins', 20.0), ('draws', 70.0), ('losses', 10.0)):
+        outcome_run = output_root / 'coordinator' / 'evaluation' / 'stockfish-level-0' / series_name
+        assert scalar_values(outcome_run, 'evaluation/stockfish-level-0') == (expected_value,)
+
+
 def test_consolidation_selects_one_self_play_process_per_fragment(tmp_path: Path) -> None:
     source_root = tmp_path / 'source'
     output_root = tmp_path / 'output'

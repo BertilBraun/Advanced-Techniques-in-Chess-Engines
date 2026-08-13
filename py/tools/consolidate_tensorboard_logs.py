@@ -42,6 +42,8 @@ class SummaryState:
     value_sha256: str
     serialized_value: bytes
     time_series_tag: str
+    source_layout_run_name: str
+    source_layout_tag: str
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--custom-layout-only', action='store_true')
     parser.add_argument('--time-series-view', action='store_true')
     parser.add_argument('--evaluation-outcome-overlays', action='store_true')
+    parser.add_argument('--preserve-source-layout', action='store_true')
     parser.add_argument('--single-run-source', action='store_true')
     return parser.parse_args()
 
@@ -246,6 +249,27 @@ def time_series_route(canonical_summary_tag: str, grouped_summary_tag: str) -> T
     return TimeSeriesRoute(run_name=canonical_summary_tag, tag=grouped_summary_tag)
 
 
+def source_layout_route(
+    source_root: Path,
+    event_file: Path,
+    original_tag: str,
+    single_run_source: bool,
+) -> TimeSeriesRoute:
+    relative_parts = _event_relative_parts(source_root, event_file, single_run_source)
+    category = relative_parts[1]
+    writer_directory_parts = relative_parts[2:-1]
+    if (
+        category in {'self_play', 'cpu_usage_self_play', 'cpu_usage_trainer'}
+        and writer_directory_parts
+        and writer_directory_parts[0].isdigit()
+    ):
+        writer_directory_parts = writer_directory_parts[1:]
+    return TimeSeriesRoute(
+        run_name=str(Path(category, *writer_directory_parts)),
+        tag=original_tag,
+    )
+
+
 def _plugin_name(value: summary_pb2.Summary.Value) -> str:
     if value.HasField('metadata') and value.metadata.HasField('plugin_data'):
         return value.metadata.plugin_data.plugin_name
@@ -371,15 +395,21 @@ class TensorboardLogConsolidator:
         time_series_view: bool = False,
         single_run_source: bool = False,
         evaluation_outcome_overlays: bool = False,
+        preserve_source_layout: bool = False,
     ) -> None:
         self.source_root, self.output_root = _validate_paths(source_root, output_root)
         if time_series_view and evaluation_outcome_overlays:
             raise ValueError('Time-series view and evaluation outcome overlays are mutually exclusive.')
+        if preserve_source_layout and not single_run_source:
+            raise ValueError('Preserving the source layout requires a single-run source directory.')
         self.time_series_view = time_series_view
         self.single_run_source = single_run_source
         self.evaluation_outcome_overlays = evaluation_outcome_overlays
+        self.preserve_source_layout = preserve_source_layout
         self.writer = (
-            None if time_series_view else EventFileWriter(str(self.output_root), max_queue_size=1_000, flush_secs=10)
+            None
+            if time_series_view or preserve_source_layout
+            else EventFileWriter(str(self.output_root), max_queue_size=1_000, flush_secs=10)
         )
         self.time_series_writers: dict[str, EventFileWriter] = {}
         self.written_custom_scalar_layout: bytes | None = None
@@ -456,6 +486,12 @@ class TensorboardLogConsolidator:
             original_value.tag,
             self.single_run_source,
         )
+        source_route = source_layout_route(
+            self.source_root,
+            event_file,
+            original_value.tag,
+            self.single_run_source,
+        )
         identity = _summary_identity(consolidated_value.tag, event.step, consolidated_value)
         serialized_value = consolidated_value.SerializeToString()
         value_sha256 = hashlib.sha256(serialized_value).hexdigest()
@@ -472,6 +508,8 @@ class TensorboardLogConsolidator:
             value_sha256=value_sha256,
             serialized_value=serialized_value,
             time_series_tag=grouped_summary_tag,
+            source_layout_run_name=source_route.run_name,
+            source_layout_tag=source_route.tag,
         )
 
     def _emit_changed_summaries(self) -> None:
@@ -485,7 +523,12 @@ class TensorboardLogConsolidator:
             key=lambda item: (item[1].wall_time, item[0].step, item[0].tag),
         ):
             consolidated_value = summary_pb2.Summary.Value.FromString(state.serialized_value)
-            writer, output_tag = self._writer_and_tag(identity.tag, state.time_series_tag)
+            writer, output_tag = self._writer_and_tag(
+                identity.tag,
+                state.time_series_tag,
+                state.source_layout_run_name,
+                state.source_layout_tag,
+            )
             consolidated_value.tag = output_tag
             writer.add_event(
                 event_pb2.Event(
@@ -501,7 +544,30 @@ class TensorboardLogConsolidator:
         self,
         canonical_summary_tag: str,
         grouped_summary_tag: str,
+        source_layout_run_name: str,
+        source_layout_tag: str,
     ) -> tuple[EventFileWriter, str]:
+        if self.preserve_source_layout:
+            run_name = source_layout_run_name
+            output_tag = source_layout_tag
+            evaluation_match = EVALUATION_TAG_PATTERN.fullmatch(source_layout_tag)
+            if (
+                self.evaluation_outcome_overlays
+                and evaluation_match is not None
+                and evaluation_match.group(3) in MATCH_OUTCOME_METRICS
+            ):
+                evaluation_prefix, definition_id, metric = evaluation_match.groups()
+                run_name = str(Path(source_layout_run_name, evaluation_prefix, definition_id, metric))
+                output_tag = f'{evaluation_prefix}/{definition_id}'
+            writer = self.time_series_writers.get(run_name)
+            if writer is None:
+                writer = EventFileWriter(
+                    str(self.output_root / Path(run_name)),
+                    max_queue_size=1_000,
+                    flush_secs=10,
+                )
+                self.time_series_writers[run_name] = writer
+            return writer, output_tag
         if not self.time_series_view:
             if self.evaluation_outcome_overlays and canonical_summary_tag.endswith(
                 tuple(f'/{metric}' for metric in MATCH_OUTCOME_METRICS)
@@ -579,6 +645,7 @@ def consolidate_once(
     time_series_view: bool = False,
     single_run_source: bool = False,
     evaluation_outcome_overlays: bool = False,
+    preserve_source_layout: bool = False,
 ) -> ConsolidationManifest:
     consolidator = TensorboardLogConsolidator(
         source_root,
@@ -586,6 +653,7 @@ def consolidate_once(
         time_series_view,
         single_run_source,
         evaluation_outcome_overlays,
+        preserve_source_layout,
     )
     try:
         return consolidator.scan()
@@ -600,6 +668,7 @@ def watch(
     time_series_view: bool = False,
     single_run_source: bool = False,
     evaluation_outcome_overlays: bool = False,
+    preserve_source_layout: bool = False,
 ) -> None:
     if interval_seconds <= 0:
         raise ValueError('Watch interval must be positive.')
@@ -612,6 +681,7 @@ def watch(
         time_series_view,
         single_run_source,
         evaluation_outcome_overlays,
+        preserve_source_layout,
     )
     try:
         while not stop_signal.requested:
@@ -635,6 +705,7 @@ def main() -> None:
             arguments.time_series_view,
             arguments.single_run_source,
             arguments.evaluation_outcome_overlays,
+            arguments.preserve_source_layout,
         )
         print(manifest.model_dump_json(indent=2))
         return
@@ -645,6 +716,7 @@ def main() -> None:
         arguments.time_series_view,
         arguments.single_run_source,
         arguments.evaluation_outcome_overlays,
+        arguments.preserve_source_layout,
     )
 
 
