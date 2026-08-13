@@ -110,6 +110,31 @@ constexpr std::int64_t tensorSize(const std::size_t size) noexcept {
 }
 } // namespace
 
+void InferenceCompletion::record() {
+#ifdef USE_CUDA
+    if (m_usesCuda) {
+        m_cudaEvent.record();
+    }
+#endif
+}
+
+bool InferenceCompletion::isCompleted() const {
+#ifdef USE_CUDA
+    if (m_usesCuda) {
+        return m_cudaEvent.query();
+    }
+#endif
+    return true;
+}
+
+void InferenceCompletion::synchronize() const {
+#ifdef USE_CUDA
+    if (m_usesCuda) {
+        m_cudaEvent.synchronize();
+    }
+#endif
+}
+
 InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDevice device,
                                  const int deviceId, const size_t maximumBatchSize,
                                  const bool useDedicatedCudaStream,
@@ -134,9 +159,7 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
         throw std::runtime_error("Dedicated CUDA streams require a CUDA-enabled native build");
     }
 #endif
-    m_deviceInput = torch::empty({tensorSize(maximumBatchSize), tensorSize(dimensions.channels),
-                                  tensorSize(dimensions.rows), tensorSize(dimensions.columns)},
-                                 torch::TensorOptions().device(m_device).dtype(m_torchDtype));
+    m_deviceInput = createDeviceInputBuffer();
 }
 
 torch::Tensor InferenceRunner::createInputBuffer() const {
@@ -144,6 +167,12 @@ torch::Tensor InferenceRunner::createInputBuffer() const {
         {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.channels),
          tensorSize(m_dimensions.rows), tensorSize(m_dimensions.columns)},
         torch::TensorOptions().device(torch::kCPU).dtype(torch::kInt8).pinned_memory(usesCuda()));
+}
+
+torch::Tensor InferenceRunner::createDeviceInputBuffer() const {
+    return torch::empty({tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.channels),
+                         tensorSize(m_dimensions.rows), tensorSize(m_dimensions.columns)},
+                        torch::TensorOptions().device(m_device).dtype(m_torchDtype));
 }
 
 InferenceOutput InferenceRunner::createOutputBuffer() const {
@@ -157,8 +186,9 @@ InferenceOutput InferenceRunner::createOutputBuffer() const {
     };
 }
 
-void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size_t batchSize,
-                                  InferenceOutput &output) {
+void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards,
+                                  const torch::Tensor &deviceInputBuffer, const size_t batchSize,
+                                  InferenceOutput &output, InferenceCompletion &completion) {
     if (batchSize == 0 || batchSize > m_maximumBatchSize) {
         throw std::invalid_argument("Inference batch size is outside runner capacity");
     }
@@ -185,25 +215,40 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size
         streamGuard.emplace(*m_cudaStream);
     }
 #endif
-    const torch::Tensor source = encodedBoards.narrow(0, 0, static_cast<int64_t>(batchSize));
-    torch::Tensor deviceInput = m_deviceInput.narrow(0, 0, static_cast<int64_t>(batchSize));
-    deviceInput.copy_(source, usesCuda());
+    try {
+        const torch::Tensor source = encodedBoards.narrow(0, 0, static_cast<int64_t>(batchSize));
+        torch::Tensor deviceInput = deviceInputBuffer.narrow(0, 0, static_cast<int64_t>(batchSize));
+        deviceInput.copy_(source, usesCuda());
 
-    m_modelInputs[0] = deviceInput;
-    const torch::jit::IValue modelOutput = m_model->forward(m_modelInputs);
-    const auto outputTuple = modelOutput.toTuple();
-    if (outputTuple->elements().size() != 2) {
-        throw std::runtime_error("Inference model must return policy and WDL tensors");
-    }
-    const torch::Tensor policies = outputTuple->elements()[0].toTensor();
-    const torch::Tensor outcomes = outputTuple->elements()[1].toTensor();
-    output.policies.narrow(0, 0, static_cast<int64_t>(batchSize)).copy_(policies, usesCuda());
-    output.outcomes.narrow(0, 0, static_cast<int64_t>(batchSize)).copy_(outcomes, usesCuda());
+        m_modelInputs[0] = deviceInput;
+        const torch::jit::IValue modelOutput = m_model->forward(m_modelInputs);
+        const auto outputTuple = modelOutput.toTuple();
+        if (outputTuple->elements().size() != 2) {
+            throw std::runtime_error("Inference model must return policy and WDL tensors");
+        }
+        const torch::Tensor policies = outputTuple->elements()[0].toTensor();
+        const torch::Tensor outcomes = outputTuple->elements()[1].toTensor();
+        output.policies.narrow(0, 0, static_cast<int64_t>(batchSize)).copy_(policies, usesCuda());
+        output.outcomes.narrow(0, 0, static_cast<int64_t>(batchSize)).copy_(outcomes, usesCuda());
+        completion.record();
+    } catch (...) {
 #ifdef USE_CUDA
-    if (usesCuda()) {
-        at::cuda::getCurrentCUDAStream(m_device.index()).synchronize();
-    }
+        if (usesCuda()) {
+            try {
+                at::cuda::getCurrentCUDAStream(m_device.index()).synchronize();
+            } catch (...) {
+            }
+        }
 #endif
+        throw;
+    }
+}
+
+void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size_t batchSize,
+                                  InferenceOutput &output) {
+    InferenceCompletion completion(usesCuda());
+    forwardInto(encodedBoards, m_deviceInput, batchSize, output, completion);
+    completion.synchronize();
 }
 
 PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
@@ -232,8 +277,9 @@ InferencePipeline::InferencePipeline(const std::string &modelPath, const Inferen
     }
     m_slots.resize(slotCount);
     for (const auto index : range(slotCount)) {
-        auto slot = std::make_unique<Slot>();
+        auto slot = std::make_unique<Slot>(m_runner.usesCuda());
         slot->input = m_runner.createInputBuffer();
+        slot->deviceInput = m_runner.createDeviceInputBuffer();
         slot->output = m_runner.createOutputBuffer();
         m_slots[index] = std::move(slot);
     }
@@ -248,6 +294,12 @@ InferencePipeline::~InferencePipeline() {
     }
     if (m_inferenceThread.joinable()) {
         m_inferenceThread.join();
+    }
+    for (const std::unique_ptr<Slot> &slot : m_slots) {
+        try {
+            slot->completion.synchronize();
+        } catch (...) {
+        }
     }
 }
 
@@ -303,7 +355,8 @@ bool InferencePipeline::isCompleted(const size_t slotIndex) const {
         return false;
     }
     const SlotState state = slotAt(slotIndex).state.load(std::memory_order_acquire);
-    return state == SlotState::Complete || state == SlotState::Failed;
+    return state == SlotState::Failed ||
+           (state == SlotState::Complete && slotAt(slotIndex).completion.isCompleted());
 }
 
 InferenceOutput InferencePipeline::waitCompletedOutput(const size_t slotIndex) {
@@ -327,6 +380,14 @@ InferenceOutput InferencePipeline::waitCompletedOutput(const size_t slotIndex) {
         slot.state.notify_one();
         m_consumerCursor = (m_consumerCursor + 1) % m_slots.size();
         std::rethrow_exception(exception);
+    }
+    try {
+        slot.completion.synchronize();
+    } catch (...) {
+        slot.state.store(SlotState::Empty, std::memory_order_release);
+        slot.state.notify_one();
+        m_consumerCursor = (m_consumerCursor + 1) % m_slots.size();
+        throw;
     }
     return {
         .policies = slot.output.policies.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
@@ -380,7 +441,8 @@ void InferencePipeline::inferenceLoop() {
         slot.state.store(SlotState::Running, std::memory_order_release);
         try {
             Stopwatch inferenceTimer;
-            m_runner.forwardInto(slot.input, slot.batchSize, slot.output);
+            m_runner.forwardInto(slot.input, slot.deviceInput, slot.batchSize, slot.output,
+                                 slot.completion);
             m_statistics.inference_nanoseconds.fetch_add(inferenceTimer.elapsedNanoseconds(),
                                                          std::memory_order_relaxed);
             slot.state.store(SlotState::Complete, std::memory_order_release);

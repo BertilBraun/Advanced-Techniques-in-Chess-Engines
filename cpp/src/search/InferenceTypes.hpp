@@ -46,6 +46,7 @@ struct InferenceStatistics {
     std::uint64_t resultProcessingNanoseconds = 0;
     std::uint64_t treeBackupNanoseconds = 0;
     std::uint64_t treeOwnerWaitNanoseconds = 0;
+    // CUDA inference time measures host submission; event synchronization is tree-owner wait.
     std::uint64_t inferenceNanoseconds = 0;
     float workerUtilization = 0.0F;
 };

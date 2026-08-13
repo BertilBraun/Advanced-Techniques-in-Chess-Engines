@@ -15,6 +15,7 @@
 
 #ifdef USE_CUDA
 #include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAEvent.h>
 #include <c10/cuda/CUDAGuard.h>
 #endif
 
@@ -23,6 +24,21 @@
 struct InferenceOutput {
     torch::Tensor policies;
     torch::Tensor outcomes;
+};
+
+class InferenceCompletion {
+public:
+    explicit InferenceCompletion(bool usesCuda) noexcept : m_usesCuda(usesCuda) {}
+
+    void record();
+    [[nodiscard]] bool isCompleted() const;
+    void synchronize() const;
+
+private:
+    const bool m_usesCuda;
+#ifdef USE_CUDA
+    c10::cuda::CUDAEvent m_cudaEvent;
+#endif
 };
 
 template <SearchGame Game>
@@ -39,7 +55,10 @@ public:
                     InferenceDimensions dimensions);
 
     [[nodiscard]] torch::Tensor createInputBuffer() const;
+    [[nodiscard]] torch::Tensor createDeviceInputBuffer() const;
     [[nodiscard]] InferenceOutput createOutputBuffer() const;
+    void forwardInto(const torch::Tensor &encodedBoards, const torch::Tensor &deviceInputBuffer,
+                     size_t batchSize, InferenceOutput &output, InferenceCompletion &completion);
     void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize, InferenceOutput &output);
     [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
     void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
@@ -120,8 +139,12 @@ private:
     enum class SlotState : uint8_t { Empty, Filling, Ready, Running, Complete, Failed, Stopped };
 
     struct Slot {
+        explicit Slot(const bool usesCuda) : completion(usesCuda) {}
+
         torch::Tensor input;
+        torch::Tensor deviceInput;
         InferenceOutput output;
+        InferenceCompletion completion;
         std::exception_ptr exception;
         size_t batchSize = 0;
         std::atomic<SlotState> state = SlotState::Empty;
