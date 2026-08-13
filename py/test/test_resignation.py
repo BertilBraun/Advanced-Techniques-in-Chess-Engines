@@ -1,4 +1,6 @@
 from pathlib import Path
+import sqlite3
+from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
@@ -17,6 +19,7 @@ from src.self_play.resignation import (
     ResignationCalibrator,
     one_sided_binomial_upper_bound,
 )
+import src.self_play.resignation as resignation_module
 
 
 def configuration(**updates: float | int) -> CalibratedResignationConfiguration:
@@ -73,6 +76,15 @@ def completed_continuation(
     )
 
 
+def observe_completed_games(
+    calibrator: ResignationCalibrator,
+    *games: CompletedSelfPlayGame,
+) -> None:
+    with calibrator.calibration_batch() as calibration_batch:
+        for game in games:
+            calibration_batch.observe_completed_game(game)
+
+
 def test_configuration_rejects_extra_fields_and_misaligned_grid() -> None:
     with pytest.raises(ValidationError, match='extra_forbidden'):
         configuration(unknown=1)
@@ -87,7 +99,7 @@ def test_exact_one_sided_binomial_bound_matches_three_percent_gate() -> None:
 
 def test_calibration_requires_both_root_and_exact_child_q(tmp_path: Path) -> None:
     calibrator = ResignationCalibrator(tmp_path / 'calibration.json', configuration(minimum_evidence_trigger_count=1))
-    calibrator.observe_completed_game(completed_continuation(0, root_value=-0.95, child_q=-0.69))
+    observe_completed_games(calibrator, completed_continuation(0, root_value=-0.95, child_q=-0.69))
     assert calibrator.state.triggered_continuation_games == ()
 
 
@@ -100,7 +112,7 @@ def test_adjudicated_continuation_is_not_calibration_evidence(tmp_path: Path) ->
         }
     )
 
-    calibrator.observe_completed_game(adjudicated)
+    observe_completed_games(calibrator, adjudicated)
     calibrator.advance_generation(50)
 
     assert calibrator.state.completed_continuation_games == 1
@@ -110,16 +122,15 @@ def test_adjudicated_continuation_is_not_calibration_evidence(tmp_path: Path) ->
 
 def test_calibration_selects_grid_candidate_and_counts_draw_as_false_nonloss(tmp_path: Path) -> None:
     calibrator = ResignationCalibrator(tmp_path / 'calibration.json', configuration())
-    for game_number in range(99):
-        calibrator.observe_completed_game(completed_continuation(game_number))
-    calibrator.observe_completed_game(
+    observe_completed_games(
+        calibrator,
+        *(completed_continuation(game_number) for game_number in range(99)),
         completed_continuation(99, final_wdl=WdlTarget(win=0.0, draw=1.0, loss=0.0)),
     )
     assert calibrator.state.selected_threshold is None
 
     safe = ResignationCalibrator(tmp_path / 'safe.json', configuration())
-    for game_number in range(100):
-        safe.observe_completed_game(completed_continuation(game_number))
+    observe_completed_games(safe, *(completed_continuation(game_number) for game_number in range(100)))
     safe.advance_generation(49)
     assert safe.state.selected_threshold == pytest.approx(-0.99)
     assert safe.published_policy(49).threshold is None
@@ -135,8 +146,7 @@ def test_triggered_window_and_generation_relaxation_cap(tmp_path: Path) -> None:
             false_nonloss_rate_ceiling=0.99,
         ),
     )
-    for game_number in range(5):
-        calibrator.observe_completed_game(completed_continuation(game_number))
+    observe_completed_games(calibrator, *(completed_continuation(game_number) for game_number in range(5)))
     calibrator.advance_generation(10)
     assert tuple(item.game_identity.rsplit(':', 1)[-1] for item in calibrator.state.triggered_continuation_games) == (
         '2',
@@ -156,13 +166,45 @@ def test_central_state_persists_across_restart(tmp_path: Path) -> None:
     path = tmp_path / 'calibration.json'
     parameters = configuration(minimum_evidence_trigger_count=1)
     first = ResignationCalibrator(path, parameters)
-    first.observe_completed_game(completed_continuation(0))
+    observe_completed_games(first, completed_continuation(0))
     first.advance_generation(50)
 
     restarted = ResignationCalibrator(path, parameters)
     assert restarted.state == first.state
     assert restarted.published_policy(50) == first.published_policy(50)
 
-    restarted.observe_completed_game(completed_continuation(0))
+    observe_completed_games(restarted, completed_continuation(0))
     assert restarted.state.completed_continuation_games == 1
     assert restarted.state.broadest_candidate_triggers == 1
+
+
+def test_calibration_batch_uses_one_transaction_and_state_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / 'calibration.json'
+    calibrator = ResignationCalibrator(path, configuration())
+    statements: list[str] = []
+    connect = sqlite3.connect
+
+    def traced_connect(database: Path) -> sqlite3.Connection:
+        journal = connect(database)
+        journal.set_trace_callback(statements.append)
+        return journal
+
+    state_writer = MagicMock(wraps=resignation_module.write_text_atomically)
+    monkeypatch.setattr(resignation_module.sqlite3, 'connect', traced_connect)
+    monkeypatch.setattr(resignation_module, 'write_text_atomically', state_writer)
+
+    observe_completed_games(
+        calibrator,
+        completed_continuation(0),
+        completed_continuation(1),
+        completed_continuation(0),
+    )
+
+    transaction_statements = tuple(statement for statement in statements if statement in {'BEGIN ', 'COMMIT'})
+    assert transaction_statements == ('BEGIN ', 'COMMIT')
+    assert state_writer.call_count == 1
+    assert calibrator.state.completed_continuation_games == 2
+    assert calibrator.state.broadest_candidate_triggers == 2

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from hashlib import sha256
 from math import exp, isfinite, lgamma, log, log1p
 from pathlib import Path
 import sqlite3
-from typing import Annotated, Literal, TypeAlias
+from typing import Annotated, Iterator, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 
@@ -137,6 +138,59 @@ def resignation_predicate(observation: SearchObservation, threshold: float) -> b
     return observation.root_value <= threshold and observation.highest_visited_child_q <= threshold
 
 
+class ResignationCalibrationBatch:
+    def __init__(
+        self,
+        configuration: CalibratedResignationConfiguration,
+        state: ResignationCalibrationState,
+        journal: sqlite3.Connection,
+    ) -> None:
+        self.configuration = configuration
+        self.state = state
+        self.journal = journal
+        self.has_changes = False
+
+    def observe_completed_game(self, game: CompletedSelfPlayGame) -> None:
+        triggered = _continuation_evidence(game, self.configuration) if game.is_resignation_continuation else None
+        cursor = self.journal.execute(
+            """
+            INSERT OR IGNORE INTO completed_games (
+                game_identity,
+                continuation,
+                actual_resignation,
+                triggered_evidence
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (
+                game.identity.archive_key,
+                int(game.is_resignation_continuation),
+                int(game.termination_reason is TerminationReason.RESIGNATION),
+                None if triggered is None else triggered.model_dump_json(),
+            ),
+        )
+        if cursor.rowcount != 1:
+            return
+        state = self.state
+        rolling = state.triggered_continuation_games
+        if triggered is not None:
+            rolling = (*rolling, triggered)[-self.configuration.triggered_game_window :]
+        self.state = ResignationCalibrationState(
+            configuration_sha256=state.configuration_sha256,
+            selected_threshold=state.selected_threshold,
+            selected_threshold_safe=state.selected_threshold_safe,
+            last_relaxation_generation=state.last_relaxation_generation,
+            triggered_continuation_games=rolling,
+            completed_continuation_games=state.completed_continuation_games + int(game.is_resignation_continuation),
+            actual_resignations=state.actual_resignations
+            + int(game.termination_reason is TerminationReason.RESIGNATION),
+            broadest_candidate_triggers=state.broadest_candidate_triggers + int(triggered is not None),
+            false_nonlosses_at_selected_threshold=state.false_nonlosses_at_selected_threshold,
+            selected_trigger_ply_total=state.selected_trigger_ply_total,
+            selected_saved_ply_total=state.selected_saved_ply_total,
+        )
+        self.has_changes = True
+
+
 class ResignationCalibrator:
     def __init__(self, path: Path, configuration: CalibratedResignationConfiguration) -> None:
         self.path = path
@@ -155,32 +209,21 @@ class ResignationCalibrator:
         )
         return PublishedResignationPolicy(threshold=threshold)
 
-    def observe_completed_game(
-        self,
-        game: CompletedSelfPlayGame,
-    ) -> None:
-        state = self.state
-        triggered = _continuation_evidence(game, self.configuration) if game.is_resignation_continuation else None
-        if not self._journal_game(game, triggered):
-            return
-        rolling = state.triggered_continuation_games
-        if triggered is not None:
-            rolling = (*rolling, triggered)[-self.configuration.triggered_game_window :]
-        self.state = ResignationCalibrationState(
-            configuration_sha256=state.configuration_sha256,
-            selected_threshold=state.selected_threshold,
-            selected_threshold_safe=state.selected_threshold_safe,
-            last_relaxation_generation=state.last_relaxation_generation,
-            triggered_continuation_games=rolling,
-            completed_continuation_games=state.completed_continuation_games + int(game.is_resignation_continuation),
-            actual_resignations=state.actual_resignations
-            + int(game.termination_reason is TerminationReason.RESIGNATION),
-            broadest_candidate_triggers=state.broadest_candidate_triggers + int(triggered is not None),
-            false_nonlosses_at_selected_threshold=state.false_nonlosses_at_selected_threshold,
-            selected_trigger_ply_total=state.selected_trigger_ply_total,
-            selected_saved_ply_total=state.selected_saved_ply_total,
-        )
-        self._save()
+    @contextmanager
+    def calibration_batch(self) -> Iterator[ResignationCalibrationBatch]:
+        journal = sqlite3.connect(self._journal_path)
+        batch = ResignationCalibrationBatch(self.configuration, self.state, journal)
+        try:
+            yield batch
+            journal.commit()
+        except BaseException:
+            journal.rollback()
+            raise
+        finally:
+            journal.close()
+        if batch.has_changes:
+            self.state = batch.state
+            self._save()
 
     def advance_generation(self, model_generation: int) -> None:
         self._recalibrate(model_generation)
@@ -317,30 +360,6 @@ class ResignationCalibrator:
                 )
             elif row[0] != self._configuration_sha256:
                 raise ValueError('Resignation calibration journal belongs to a different configuration.')
-
-    def _journal_game(
-        self,
-        game: CompletedSelfPlayGame,
-        triggered: TriggeredContinuationGame | None,
-    ) -> bool:
-        with sqlite3.connect(self._journal_path) as journal:
-            cursor = journal.execute(
-                """
-                INSERT OR IGNORE INTO completed_games (
-                    game_identity,
-                    continuation,
-                    actual_resignation,
-                    triggered_evidence
-                ) VALUES (?, ?, ?, ?)
-                """,
-                (
-                    game.identity.archive_key,
-                    int(game.is_resignation_continuation),
-                    int(game.termination_reason is TerminationReason.RESIGNATION),
-                    None if triggered is None else triggered.model_dump_json(),
-                ),
-            )
-            return cursor.rowcount == 1
 
     def _recover_observation_state(self) -> None:
         with sqlite3.connect(self._journal_path) as journal:

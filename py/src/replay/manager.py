@@ -10,7 +10,7 @@ from src.replay.layout import ReplayLayout
 from src.replay.materialization import materialize_completed_game
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import CompletedSelfPlayGame
-from src.self_play.resignation import ResignationCalibrator
+from src.self_play.resignation import ResignationCalibrationBatch, ResignationCalibrator
 from src.replay.configuration import ReplayConfiguration
 from src.util.frozen_model import FrozenModel
 
@@ -93,6 +93,16 @@ class ReplayManager(Generic[PositionT]):
         return self.store.state.size
 
     def ingest_available_games(self, model_generation: int) -> ReplayIngestion:
+        if self.resignation_calibrator is None:
+            return self._ingest_available_games(model_generation, None)
+        with self.resignation_calibrator.calibration_batch() as calibration_batch:
+            return self._ingest_available_games(model_generation, calibration_batch)
+
+    def _ingest_available_games(
+        self,
+        model_generation: int,
+        calibration_batch: ResignationCalibrationBatch | None,
+    ) -> ReplayIngestion:
         started_at = time.perf_counter()
         before = self.store.state
         self.store.set_logical_capacity(self.configuration.capacity_at(model_generation))
@@ -113,8 +123,8 @@ class ReplayManager(Generic[PositionT]):
             )
             for sample in materialized.samples:
                 self.store.append(sample)
-            if self.resignation_calibrator is not None:
-                self.resignation_calibrator.observe_completed_game(game)
+            if calibration_batch is not None:
+                calibration_batch.observe_completed_game(game)
             path.unlink()
             games_ingested += 1
             samples_added += len(materialized.samples)
