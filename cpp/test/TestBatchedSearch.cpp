@@ -77,6 +77,23 @@ bool samePositiveVisits(const std::vector<GameSearchVisit> &actual,
     return true;
 }
 
+ChessSelfPlaySearchBatch searchRequests(ChessSelfPlaySearch &search,
+                                        const std::vector<bool> &fullSearches) {
+    std::vector<ChessSelfPlaySearchRequest> requests;
+    requests.reserve(fullSearches.size());
+    for (const bool fullSearch : fullSearches) {
+        requests.emplace_back(search.newRoot(Board{}), fullSearch);
+    }
+    ChessSelfPlaySearchBatch batch = search.search(requests);
+    require(batch.results.size() == requests.size(),
+            "staged search returned the wrong result count");
+    for (const std::size_t index : range(requests.size())) {
+        require(&batch.results[index].root.tree() == &requests[index].root.tree(),
+                "staged search changed deterministic result ordering");
+    }
+    return batch;
+}
+
 } // namespace
 
 int runBatchedSearchTests() {
@@ -256,6 +273,69 @@ int runBatchedSearchTests() {
         require(samePositiveVisits(forcedResults.results[1].visits,
                                    forcedResults.results[1].policy_target_visits),
                 "fast search applied forced playouts or pruning");
+
+        require(initialFastSearchAdmissionCount(8, 4, 1) == 2,
+                "4:1 mixed admission selected the wrong initial fast count");
+        require(initialFastSearchAdmissionCount(5, 4, 1) == 2,
+                "non-integral mixed admission did not round up");
+        require(initialFastSearchAdmissionCount(7, 4, 4) == 7,
+                "equal budgets did not admit every fast search");
+        require(initialFastSearchAdmissionCount(0, 4, 1) == 0,
+                "all-full admission unexpectedly created fast work");
+
+        const ChessSelfPlaySearchParameters stagedParameters(1, 4, 1, treeSearchParameters(1.5F),
+                                                             0.3F, 0.25F);
+        ChessSelfPlaySearch stagedSearch(runtimeParameters, stagedParameters, inferenceParameters);
+        const std::vector<bool> mixedKinds = {false, true, false, false, true, false, false};
+        const ChessSelfPlaySearchBatch mixedResults = searchRequests(stagedSearch, mixedKinds);
+        require(mixedResults.simulations_completed == 13,
+                "4:1 staged search completed the wrong simulation count");
+        for (const std::size_t index : range(mixedKinds.size())) {
+            const std::uint32_t expectedVisits = mixedKinds[index] ? 4U : 1U;
+            require(mixedResults.results[index].root.visits() == expectedVisits,
+                    "4:1 staged search missed a request budget");
+        }
+
+        ChessSelfPlaySearch allFullSearch(runtimeParameters, stagedParameters, inferenceParameters);
+        const ChessSelfPlaySearchBatch allFullResults =
+            searchRequests(allFullSearch, {true, true, true});
+        require(allFullResults.simulations_completed == 12,
+                "all-full search completed the wrong simulation count");
+
+        ChessSelfPlaySearch allFastSearch(runtimeParameters, stagedParameters, inferenceParameters);
+        const ChessSelfPlaySearchBatch allFastResults =
+            searchRequests(allFastSearch, {false, false, false, false, false});
+        require(allFastResults.simulations_completed == 5,
+                "all-fast search completed the wrong simulation count");
+
+        const ChessSelfPlaySearchParameters equalParameters(1, 4, 4, treeSearchParameters(1.5F),
+                                                            0.3F, 0.25F);
+        ChessSelfPlaySearch equalSearch(runtimeParameters, equalParameters, inferenceParameters);
+        const ChessSelfPlaySearchBatch equalResults =
+            searchRequests(equalSearch, {false, true, false, true});
+        require(equalResults.simulations_completed == 16,
+                "equal-budget search completed the wrong simulation count");
+
+        ChessSelfPlaySearch terminalSearch(runtimeParameters, stagedParameters,
+                                           inferenceParameters);
+        std::vector<ChessSelfPlaySearchRequest> terminalRequests = {
+            ChessSelfPlaySearchRequest(terminalSearch.newRoot(Board{}), true),
+            ChessSelfPlaySearchRequest(terminalSearch.newRoot(Board{}), false),
+            ChessSelfPlaySearchRequest(terminalSearch.newRoot(Board{}), false),
+            ChessSelfPlaySearchRequest(terminalSearch.newRoot(Board{}), false),
+            ChessSelfPlaySearchRequest(terminalSearch.newRoot(Board{}), false),
+            ChessSelfPlaySearchRequest(
+                terminalSearch.newRoot(Board("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1")), false),
+        };
+        try {
+            static_cast<void>(terminalSearch.search(terminalRequests));
+            throw std::runtime_error("terminal staged search unexpectedly returned a move");
+        } catch (const std::logic_error &error) {
+            require(std::string(error.what()) == "Completed search has no visited child",
+                    "terminal staged search changed its error semantics");
+        }
+        require(terminalRequests.back().root.visits() == 1,
+                "waiting terminal request was not incrementally admitted");
 
     } catch (...) {
         std::filesystem::remove(modelPath);

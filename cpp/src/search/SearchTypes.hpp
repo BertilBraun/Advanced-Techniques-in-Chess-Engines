@@ -26,12 +26,30 @@ struct GameSearchResult {
     std::vector<GameSearchVisit> policy_target_visits;
 };
 
+enum class SearchAdmission { Immediate, InitialFast, WaitingFast };
+
+[[nodiscard]] inline std::size_t
+initialFastSearchAdmissionCount(const std::size_t fastSearchCount,
+                                const std::uint32_t fullSearchBudget,
+                                const std::uint32_t fastSearchBudget) {
+    if (fastSearchCount == 0 || fastSearchBudget >= fullSearchBudget) {
+        return fastSearchCount;
+    }
+    const std::size_t quotient = fastSearchCount / fullSearchBudget;
+    const std::uint64_t remainder = fastSearchCount % fullSearchBudget;
+    const std::uint64_t remainderProduct = remainder * fastSearchBudget;
+    const std::size_t roundedRemainder =
+        static_cast<std::size_t>((remainderProduct + fullSearchBudget - 1U) / fullSearchBudget);
+    return quotient * fastSearchBudget + roundedRemainder;
+}
+
 template <SearchGame Game> struct GameSearchRequest {
     GameSearchRoot<Game> root;
     std::uint32_t visit_limit;
     bool add_root_noise;
     bool force_root_playouts = false;
     bool count_root_initialization = false;
+    SearchAdmission admission = SearchAdmission::Immediate;
 };
 
 struct GameSearchBatchResult {

@@ -63,8 +63,12 @@ public:
         std::size_t completionCursor = 0;
         try {
             while (true) {
+                const bool admittedWaitingSearch = admitWaitingFastSearches(tasks);
                 const std::optional<std::size_t> workerIndex = freeWorker();
                 if (workerIndex.has_value() && issueBatch(tasks, *workerIndex)) {
+                    continue;
+                }
+                if (admitWaitingFastSearches(tasks) || admittedWaitingSearch) {
                     continue;
                 }
                 if (!hasPending()) {
@@ -212,6 +216,9 @@ private:
         bool noise_pending;
         bool count_root_initialization;
         bool force_root_playouts;
+        bool admitted;
+        bool staged_fast_search;
+        bool completion_recorded;
     };
 
     struct PendingLeaf {
@@ -261,6 +268,9 @@ private:
             .noise_pending = request.add_root_noise && !request.root.tree().root().expanded(),
             .count_root_initialization = request.count_root_initialization,
             .force_root_playouts = request.force_root_playouts,
+            .admitted = request.admission != SearchAdmission::WaitingFast,
+            .staged_fast_search = request.admission != SearchAdmission::Immediate,
+            .completion_recorded = false,
         };
         task.root.tree().prepareForSearch(task.visit_limit, m_searchParameters.parallel_searches);
         if (request.add_root_noise && task.root.tree().root().expanded()) {
@@ -304,6 +314,9 @@ private:
         for (const auto offset : range(tasks.size())) {
             const std::size_t index = (m_nextTask + offset) % tasks.size();
             const RootTask &task = tasks[index];
+            if (!task.admitted) {
+                continue;
+            }
             if (!task.root.tree().root().expanded() && task.in_flight != 0) {
                 continue;
             }
@@ -314,6 +327,25 @@ private:
             }
         }
         return std::nullopt;
+    }
+
+    [[nodiscard]] bool admitWaitingFastSearches(std::vector<RootTask> &tasks) {
+        bool admitted = false;
+        for (RootTask &completedTask : tasks) {
+            if (!completedTask.staged_fast_search || !completedTask.admitted ||
+                completedTask.completion_recorded || completedTask.in_flight != 0 ||
+                completedTask.root.visits() < completedTask.visit_limit) {
+                continue;
+            }
+            completedTask.completion_recorded = true;
+            const auto waiting =
+                std::ranges::find_if(tasks, [](const RootTask &task) { return !task.admitted; });
+            if (waiting != tasks.end()) {
+                waiting->admitted = true;
+                admitted = true;
+            }
+        }
+        return admitted;
     }
 
     [[nodiscard]] bool appendInferenceLeaf(std::vector<RootTask> &tasks,

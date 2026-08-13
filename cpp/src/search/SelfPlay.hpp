@@ -114,12 +114,28 @@ public:
                 .simulations_completed = 0,
             };
         }
+        const std::size_t fullSearchCount =
+            static_cast<std::size_t>(std::ranges::count(requests, true, &Request::full_search));
+        const std::size_t fastSearchCount = requests.size() - fullSearchCount;
+        const std::size_t initiallyAdmittedFastSearches =
+            fullSearchCount == 0
+                ? fastSearchCount
+                : initialFastSearchAdmissionCount(fastSearchCount, m_searchParameters.full_searches,
+                                                  m_searchParameters.fast_searches);
+        std::size_t admittedFastSearches = 0;
         std::vector<GameSearchRequest<Game>> engineRequests;
         engineRequests.reserve(requests.size());
         for (const Request &request : requests) {
             if (request.root.tree().capacity() != m_arenaCapacity) {
                 throw std::invalid_argument(
                     "Root arena capacity does not match self-play search parameters");
+            }
+            SearchAdmission admission = SearchAdmission::Immediate;
+            if (!request.full_search && initiallyAdmittedFastSearches < fastSearchCount) {
+                admission = admittedFastSearches < initiallyAdmittedFastSearches
+                                ? SearchAdmission::InitialFast
+                                : SearchAdmission::WaitingFast;
+                ++admittedFastSearches;
             }
             engineRequests.push_back({
                 .root = request.root,
@@ -129,6 +145,7 @@ public:
                 .force_root_playouts =
                     request.full_search &&
                     m_searchParameters.tree_search.forced_playout_coefficient > 0.0F,
+                .admission = admission,
             });
         }
         GameSearchBatchResult searched = m_search->searchDetailed(engineRequests);
