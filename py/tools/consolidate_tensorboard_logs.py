@@ -16,7 +16,11 @@ from tensorboard.compat.proto import event_pb2, summary_pb2, tensor_pb2, tensor_
 from tensorboard.plugins.custom_scalar import layout_pb2
 from tensorboard.summary.writer.event_file_writer import EventFileWriter
 
-from src.evaluation.tensorboard import discovered_evaluation_tensorboard_categories
+from src.evaluation.tensorboard import (
+    EVALUATION_TAG_PATTERN,
+    MATCH_OUTCOME_METRICS,
+    discovered_evaluation_tensorboard_categories,
+)
 from src.util.tensorboard import TensorboardCustomScalarCategory, TensorboardMultilineChart
 
 
@@ -103,6 +107,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--watch-interval-seconds', type=float)
     parser.add_argument('--custom-layout-only', action='store_true')
     parser.add_argument('--time-series-view', action='store_true')
+    parser.add_argument('--evaluation-outcome-overlays', action='store_true')
+    parser.add_argument('--single-run-source', action='store_true')
     return parser.parse_args()
 
 
@@ -119,7 +125,9 @@ def _validate_paths(source_root: Path, output_root: Path) -> tuple[Path, Path]:
     return resolved_source_root, resolved_output_root
 
 
-def _run_directories(source_root: Path) -> tuple[Path, ...]:
+def _run_directories(source_root: Path, single_run_source: bool) -> tuple[Path, ...]:
+    if single_run_source:
+        return (source_root,)
     run_directories = tuple(
         path for path in source_root.iterdir() if path.is_dir() and RUN_NAME_PATTERN.fullmatch(path.name) is not None
     )
@@ -136,11 +144,16 @@ def _representative_self_play_process(run_directory: Path) -> int | None:
     return min(process_ids, default=None)
 
 
-def select_event_files(source_root: Path) -> EventFileSelection:
+def _event_relative_parts(source_root: Path, event_file: Path, single_run_source: bool) -> tuple[str, ...]:
+    relative_parts = event_file.relative_to(source_root).parts
+    return ('run_0', *relative_parts) if single_run_source else relative_parts
+
+
+def select_event_files(source_root: Path, single_run_source: bool = False) -> EventFileSelection:
     all_event_files = tuple(source_root.rglob(EVENT_FILE_PATTERN))
     representative_processes = tuple(
-        (run_directory.name, process_id)
-        for run_directory in _run_directories(source_root)
+        ('run_0' if single_run_source else run_directory.name, process_id)
+        for run_directory in _run_directories(source_root, single_run_source)
         if (process_id := _representative_self_play_process(run_directory)) is not None
     )
     representative_process_by_run = dict(representative_processes)
@@ -148,7 +161,7 @@ def select_event_files(source_root: Path) -> EventFileSelection:
     selected_event_files: list[Path] = []
     skipped_self_play_event_file_count = 0
     for event_file in all_event_files:
-        relative_parts = event_file.relative_to(source_root).parts
+        relative_parts = _event_relative_parts(source_root, event_file, single_run_source)
         if len(relative_parts) >= 4 and relative_parts[1] == 'self_play' and relative_parts[2].isdigit():
             representative_process_id = representative_process_by_run[relative_parts[0]]
             if int(relative_parts[2]) != representative_process_id:
@@ -165,8 +178,13 @@ def select_event_files(source_root: Path) -> EventFileSelection:
     )
 
 
-def _expanded_summary_tag(source_root: Path, event_file: Path, original_tag: str) -> str:
-    relative_parts = event_file.relative_to(source_root).parts
+def _expanded_summary_tag(
+    source_root: Path,
+    event_file: Path,
+    original_tag: str,
+    single_run_source: bool,
+) -> str:
+    relative_parts = _event_relative_parts(source_root, event_file, single_run_source)
     if len(relative_parts) < 2:
         raise ValueError(f'Event file is not inside a run directory: {event_file}')
     category = relative_parts[1]
@@ -207,14 +225,21 @@ def _namespaced_tag(category: str, summary_tag: str) -> str:
             return f'{category}/{summary_tag}'
 
 
-def canonical_tag(source_root: Path, event_file: Path, original_tag: str) -> str:
-    category = event_file.relative_to(source_root).parts[1]
-    return _namespaced_tag(category, _expanded_summary_tag(source_root, event_file, original_tag))
+def canonical_tag(source_root: Path, event_file: Path, original_tag: str, single_run_source: bool = False) -> str:
+    category = _event_relative_parts(source_root, event_file, single_run_source)[1]
+    return _namespaced_tag(
+        category,
+        _expanded_summary_tag(source_root, event_file, original_tag, single_run_source),
+    )
 
 
-def time_series_tag(source_root: Path, event_file: Path, original_tag: str) -> str:
-    category = event_file.relative_to(source_root).parts[1]
-    return _namespaced_tag(category, original_tag)
+def time_series_tag(source_root: Path, event_file: Path, original_tag: str, single_run_source: bool = False) -> str:
+    category = _event_relative_parts(source_root, event_file, single_run_source)[1]
+    grouped_tag = original_tag
+    evaluation_match = EVALUATION_TAG_PATTERN.fullmatch(original_tag)
+    if evaluation_match is not None and evaluation_match.group(3) in MATCH_OUTCOME_METRICS:
+        grouped_tag = '/'.join(evaluation_match.groups()[:2])
+    return _namespaced_tag(category, grouped_tag)
 
 
 def time_series_route(canonical_summary_tag: str, grouped_summary_tag: str) -> TimeSeriesRoute:
@@ -339,9 +364,20 @@ def _summary_identity(
 
 
 class TensorboardLogConsolidator:
-    def __init__(self, source_root: Path, output_root: Path, time_series_view: bool = False) -> None:
+    def __init__(
+        self,
+        source_root: Path,
+        output_root: Path,
+        time_series_view: bool = False,
+        single_run_source: bool = False,
+        evaluation_outcome_overlays: bool = False,
+    ) -> None:
         self.source_root, self.output_root = _validate_paths(source_root, output_root)
+        if time_series_view and evaluation_outcome_overlays:
+            raise ValueError('Time-series view and evaluation outcome overlays are mutually exclusive.')
         self.time_series_view = time_series_view
+        self.single_run_source = single_run_source
+        self.evaluation_outcome_overlays = evaluation_outcome_overlays
         self.writer = (
             None if time_series_view else EventFileWriter(str(self.output_root), max_queue_size=1_000, flush_secs=10)
         )
@@ -361,7 +397,7 @@ class TensorboardLogConsolidator:
             writer.close()
 
     def scan(self) -> ConsolidationManifest:
-        selection = select_event_files(self.source_root)
+        selection = select_event_files(self.source_root, self.single_run_source)
         for event_file in selection.event_files:
             fingerprint = EventFileFingerprint(
                 size_bytes=event_file.stat().st_size,
@@ -393,7 +429,7 @@ class TensorboardLogConsolidator:
             if not event.HasField('summary'):
                 continue
             for original_value in event.summary.value:
-                category = event_file.relative_to(self.source_root).parts[1]
+                category = _event_relative_parts(self.source_root, event_file, self.single_run_source)[1]
                 is_evaluation_summary = original_value.tag.startswith('evaluation/summaries/')
                 if _plugin_name(original_value) == 'text' and category != 'training_args' and not is_evaluation_summary:
                     self.excluded_text_summary_count += 1
@@ -408,8 +444,18 @@ class TensorboardLogConsolidator:
     ) -> None:
         consolidated_value = summary_pb2.Summary.Value()
         consolidated_value.CopyFrom(original_value)
-        consolidated_value.tag = canonical_tag(self.source_root, event_file, original_value.tag)
-        grouped_summary_tag = time_series_tag(self.source_root, event_file, original_value.tag)
+        consolidated_value.tag = canonical_tag(
+            self.source_root,
+            event_file,
+            original_value.tag,
+            self.single_run_source,
+        )
+        grouped_summary_tag = time_series_tag(
+            self.source_root,
+            event_file,
+            original_value.tag,
+            self.single_run_source,
+        )
         identity = _summary_identity(consolidated_value.tag, event.step, consolidated_value)
         serialized_value = consolidated_value.SerializeToString()
         value_sha256 = hashlib.sha256(serialized_value).hexdigest()
@@ -457,6 +503,19 @@ class TensorboardLogConsolidator:
         grouped_summary_tag: str,
     ) -> tuple[EventFileWriter, str]:
         if not self.time_series_view:
+            if self.evaluation_outcome_overlays and canonical_summary_tag.endswith(
+                tuple(f'/{metric}' for metric in MATCH_OUTCOME_METRICS)
+            ):
+                route = time_series_route(canonical_summary_tag, grouped_summary_tag)
+                writer = self.time_series_writers.get(route.run_name)
+                if writer is None:
+                    writer = EventFileWriter(
+                        str(self.output_root / Path(route.run_name)),
+                        max_queue_size=1_000,
+                        flush_secs=10,
+                    )
+                    self.time_series_writers[route.run_name] = writer
+                return writer, route.tag
             assert self.writer is not None
             return self.writer, canonical_summary_tag
         route = time_series_route(canonical_summary_tag, grouped_summary_tag)
@@ -518,8 +577,16 @@ def consolidate_once(
     source_root: Path,
     output_root: Path,
     time_series_view: bool = False,
+    single_run_source: bool = False,
+    evaluation_outcome_overlays: bool = False,
 ) -> ConsolidationManifest:
-    consolidator = TensorboardLogConsolidator(source_root, output_root, time_series_view)
+    consolidator = TensorboardLogConsolidator(
+        source_root,
+        output_root,
+        time_series_view,
+        single_run_source,
+        evaluation_outcome_overlays,
+    )
     try:
         return consolidator.scan()
     finally:
@@ -531,13 +598,21 @@ def watch(
     output_root: Path,
     interval_seconds: float,
     time_series_view: bool = False,
+    single_run_source: bool = False,
+    evaluation_outcome_overlays: bool = False,
 ) -> None:
     if interval_seconds <= 0:
         raise ValueError('Watch interval must be positive.')
     stop_signal = StopSignal()
     signal.signal(signal.SIGTERM, stop_signal.request)
     signal.signal(signal.SIGINT, stop_signal.request)
-    consolidator = TensorboardLogConsolidator(source_root, output_root, time_series_view)
+    consolidator = TensorboardLogConsolidator(
+        source_root,
+        output_root,
+        time_series_view,
+        single_run_source,
+        evaluation_outcome_overlays,
+    )
     try:
         while not stop_signal.requested:
             consolidator.scan()
@@ -558,6 +633,8 @@ def main() -> None:
             arguments.source_root,
             arguments.output_root,
             arguments.time_series_view,
+            arguments.single_run_source,
+            arguments.evaluation_outcome_overlays,
         )
         print(manifest.model_dump_json(indent=2))
         return
@@ -566,6 +643,8 @@ def main() -> None:
         arguments.output_root,
         arguments.watch_interval_seconds,
         arguments.time_series_view,
+        arguments.single_run_source,
+        arguments.evaluation_outcome_overlays,
     )
 
 

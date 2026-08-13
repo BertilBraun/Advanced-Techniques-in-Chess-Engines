@@ -53,6 +53,71 @@ def test_consolidation_merges_run_fragments_and_keeps_newest_duplicate(tmp_path:
     assert manifest.tags[0].maximum_step == 5
 
 
+def test_consolidation_accepts_one_run_directory_as_source(tmp_path: Path) -> None:
+    source_run_directory = tmp_path / 'source-run'
+    output_root = tmp_path / 'output'
+    for series_name, value in (('wins', 20.0), ('draws', 70.0), ('losses', 10.0)):
+        write_scalar(
+            source_run_directory / 'coordinator',
+            f'evaluation/stockfish-level-0/{series_name}',
+            1_200,
+            value,
+            wall_time=10.0,
+        )
+    write_scalar(
+        source_run_directory / 'self_play' / '100',
+        'mcts/average_search_depth',
+        1,
+        4.0,
+        wall_time=10.0,
+    )
+
+    manifest = consolidate_once(
+        source_run_directory,
+        output_root,
+        time_series_view=True,
+        single_run_source=True,
+    )
+
+    for series_name, expected_value in (('wins', 20.0), ('draws', 70.0), ('losses', 10.0)):
+        run_directory = output_root / 'coordinator' / 'evaluation' / 'stockfish-level-0' / series_name
+        assert scalar_values(run_directory, 'coordinator/evaluation/stockfish-level-0') == (expected_value,)
+    assert manifest.selected_event_file_count == 4
+    assert manifest.representative_self_play_processes[0].process_id == 100
+
+
+def test_evaluation_outcome_overlays_preserve_other_summaries_in_root_run(tmp_path: Path) -> None:
+    source_run_directory = tmp_path / 'source-run'
+    output_root = tmp_path / 'output'
+    write_scalar(source_run_directory / 'coordinator', 'training/total_loss', 1, 2.0, wall_time=10.0)
+    write_scalar(
+        source_run_directory / 'coordinator',
+        'evaluation/stockfish-level-0/wins',
+        1_200,
+        20.0,
+        wall_time=10.0,
+    )
+    write_scalar(
+        source_run_directory / 'coordinator',
+        'evaluation/stockfish-level-0/score',
+        1_200,
+        0.2,
+        wall_time=10.0,
+    )
+
+    consolidate_once(
+        source_run_directory,
+        output_root,
+        single_run_source=True,
+        evaluation_outcome_overlays=True,
+    )
+
+    assert scalar_values(output_root, 'coordinator/training/total_loss') == (2.0,)
+    assert scalar_values(output_root, 'coordinator/evaluation/stockfish-level-0/score') == pytest.approx((0.2,))
+    outcome_run = output_root / 'coordinator' / 'evaluation' / 'stockfish-level-0' / 'wins'
+    assert scalar_values(outcome_run, 'coordinator/evaluation/stockfish-level-0') == (20.0,)
+
+
 def test_consolidation_selects_one_self_play_process_per_fragment(tmp_path: Path) -> None:
     source_root = tmp_path / 'source'
     output_root = tmp_path / 'output'
