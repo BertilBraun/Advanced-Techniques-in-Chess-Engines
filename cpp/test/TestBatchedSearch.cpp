@@ -60,23 +60,6 @@ std::uint32_t totalVisits(const std::vector<GameSearchVisit> &visits) {
                            });
 }
 
-bool samePositiveVisits(const std::vector<GameSearchVisit> &actual,
-                        const std::vector<GameSearchVisit> &target) {
-    std::vector<GameSearchVisit> positive;
-    std::ranges::copy_if(actual, std::back_inserter(positive),
-                         [](const GameSearchVisit visit) { return visit.visit_count > 0; });
-    if (positive.size() != target.size()) {
-        return false;
-    }
-    for (const std::size_t index : range(positive.size())) {
-        if (positive[index].action_id != target[index].action_id ||
-            positive[index].visit_count != target[index].visit_count) {
-            return false;
-        }
-    }
-    return true;
-}
-
 ChessSelfPlaySearchBatch searchRequests(ChessSelfPlaySearch &search,
                                         const std::vector<bool> &fullSearches) {
     std::vector<ChessSelfPlaySearchRequest> requests;
@@ -153,12 +136,18 @@ int runBatchedSearchTests() {
                 "full root retained virtual loss");
         require(results.results[1].root.tree().root().virtual_loss == 0.0F,
                 "fast root retained virtual loss");
-        require(!results.results[0].visits.empty(), "full root did not expand legal moves");
-        require(!results.results[1].visits.empty(), "fast root did not expand legal moves");
+        require(!results.results[0].search_visits.empty(), "full root did not expand legal moves");
+        require(!results.results[1].search_visits.empty(), "fast root did not expand legal moves");
         for (const auto &result : results.results) {
+            require(std::ranges::all_of(result.search_visits, [](const GameSearchVisit &visit) {
+                        return visit.visit_count > 0;
+                    }),
+                    "search result exposed zero-visit children");
             const auto highestVisit = std::ranges::max_element(
-                result.visits, {}, [](const GameSearchVisit &visit) { return visit.visit_count; });
-            require(highestVisit != result.visits.end(), "search did not expose a highest-visited child");
+                result.search_visits, {},
+                [](const GameSearchVisit &visit) { return visit.visit_count; });
+            require(highestVisit != result.search_visits.end(),
+                    "search did not expose a highest-visited child");
             require(result.highest_visited_child_visit_count == highestVisit->visit_count,
                     "search exposed the wrong highest-child visit count");
             const auto &rootNode = result.root.tree().root();
@@ -172,10 +161,10 @@ int runBatchedSearchTests() {
                     "highest-visited child Q was not oriented to the root player");
         }
         require(
-            samePositiveVisits(results.results[0].visits, results.results[0].policy_target_visits),
+            results.results[0].search_visits == results.results[0].policy_target_visits,
             "disabled full search changed the policy target");
         require(
-            samePositiveVisits(results.results[1].visits, results.results[1].policy_target_visits),
+            results.results[1].search_visits == results.results[1].policy_target_visits,
             "disabled fast search changed the policy target");
 
         const InferenceStatistics statistics = search.inferenceStatistics();
@@ -265,13 +254,13 @@ int runBatchedSearchTests() {
         const ChessSelfPlaySearchBatch forcedResults =
             forcedSearch.search({ChessSelfPlaySearchRequest(forcedSearch.newRoot(Board{}), true),
                                  ChessSelfPlaySearchRequest(forcedSearch.newRoot(Board{}), false)});
-        require(totalVisits(forcedResults.results[0].visits) == 64 &&
-                    totalVisits(forcedResults.results[1].visits) == 16,
+        require(totalVisits(forcedResults.results[0].search_visits) == 64 &&
+                    totalVisits(forcedResults.results[1].search_visits) == 16,
                 "forced playouts changed authoritative actual visit totals");
         require(totalVisits(forcedResults.results[0].policy_target_visits) <= 64,
                 "forced-playout target exceeded actual visits");
-        require(samePositiveVisits(forcedResults.results[1].visits,
-                                   forcedResults.results[1].policy_target_visits),
+        require(forcedResults.results[1].search_visits ==
+                    forcedResults.results[1].policy_target_visits,
                 "fast search applied forced playouts or pruning");
 
         require(initialFastSearchAdmissionCount(8, 2, 4, 1, 4) == 2,

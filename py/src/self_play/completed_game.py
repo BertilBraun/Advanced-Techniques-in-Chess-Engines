@@ -1,16 +1,47 @@
 from __future__ import annotations
 
-from pathlib import Path
 from enum import Enum
 from math import isfinite
-from typing import Literal
+from pathlib import Path
+from typing import Annotated, Literal, TypeAlias, TypedDict
 from uuid import UUID
 
-from pydantic import Field
+from AlphaZeroCpp import GameSearchVisit
+from pydantic import BeforeValidator, ConfigDict, Field, PlainSerializer
 
+from src.games.contracts import WdlTarget
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
-from src.games.contracts import WdlTarget
+
+
+class _SerializedGameSearchVisit(TypedDict):
+    action_id: int
+    visit_count: int
+
+
+def _deserialize_game_search_visit(
+    value: GameSearchVisit | _SerializedGameSearchVisit,
+) -> GameSearchVisit:
+    if isinstance(value, GameSearchVisit):
+        return value
+    if set(value) != {'action_id', 'visit_count'}:
+        raise ValueError('Serialized search visits require action_id and visit_count only.')
+    action_id = value['action_id']
+    visit_count = value['visit_count']
+    if type(action_id) is not int or type(visit_count) is not int:
+        raise ValueError('Serialized search visit fields must be integers.')
+    return GameSearchVisit(action_id=action_id, visit_count=visit_count)
+
+
+def _serialize_game_search_visit(visit: GameSearchVisit) -> _SerializedGameSearchVisit:
+    return {'action_id': visit.action_id, 'visit_count': visit.visit_count}
+
+
+SerializedGameSearchVisit: TypeAlias = Annotated[
+    GameSearchVisit,
+    BeforeValidator(_deserialize_game_search_visit),
+    PlainSerializer(_serialize_game_search_visit, return_type=_SerializedGameSearchVisit),
+]
 
 
 class GameIdentity(FrozenModel):
@@ -27,11 +58,6 @@ class GameIdentity(FrozenModel):
         return f'{self.worker_id}:{self.process_instance_id}:{self.game_number}'
 
 
-class SparseSearchVisit(FrozenModel):
-    action_id: int = Field(ge=0)
-    visit_count: int = Field(gt=0)
-
-
 class TerminationReason(str, Enum):
     NATURAL = 'natural'
     MAXIMUM_PLIES = 'maximum_plies'
@@ -40,9 +66,11 @@ class TerminationReason(str, Enum):
 
 
 class SearchObservation(FrozenModel):
+    model_config = ConfigDict(frozen=True, extra='forbid', arbitrary_types_allowed=True)
+
     ply: int = Field(ge=0)
     model_generation: int = Field(ge=0)
-    policy_target_visits: tuple[SparseSearchVisit, ...] = Field(min_length=1)
+    policy_target_visits: tuple[SerializedGameSearchVisit, ...] = Field(min_length=1)
     root_value: float
     highest_visited_child_action_id: int = Field(ge=0)
     highest_visited_child_visit_count: int = Field(gt=0)
@@ -57,11 +85,6 @@ class SearchObservation(FrozenModel):
             raise ValueError('Search root value must be finite and lie in [-1, 1].')
         if not isfinite(self.highest_visited_child_q) or not -1.0 <= self.highest_visited_child_q <= 1.0:
             raise ValueError('Highest-visited child Q must be finite and lie in [-1, 1].')
-        action_ids = tuple(visit.action_id for visit in self.policy_target_visits)
-        if len(set(action_ids)) != len(action_ids):
-            raise ValueError('Policy-target visits must use unique action IDs.')
-        if sum(visit.visit_count for visit in self.policy_target_visits) <= 0:
-            raise ValueError('Policy-target visits must contain positive total visits.')
 
 
 class CompletedSelfPlayGame(FrozenModel):

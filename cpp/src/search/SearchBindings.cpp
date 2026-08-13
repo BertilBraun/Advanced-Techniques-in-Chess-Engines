@@ -79,8 +79,24 @@ void bind_search(py::module_ &module) {
     module.attr("OutcomeProbabilities") = module.attr("WdlPrediction");
 
     py::class_<GameSearchVisit>(module, "GameSearchVisit")
+        .def(
+            py::init([](const int actionId, const std::uint32_t visitCount) {
+                if (actionId < 0) {
+                    throw py::value_error("Search visit action ID must be nonnegative");
+                }
+                if (visitCount == 0) {
+                    throw py::value_error("Search visit count must be positive");
+                }
+                return GameSearchVisit{.action_id = actionId, .visit_count = visitCount};
+            }),
+            py::arg("action_id"), py::arg("visit_count"))
         .def_readonly("action_id", &GameSearchVisit::action_id)
-        .def_readonly("visit_count", &GameSearchVisit::visit_count);
+        .def_readonly("visit_count", &GameSearchVisit::visit_count)
+        .def(py::self == py::self)
+        .def("__repr__", [](const GameSearchVisit &visit) {
+            return "GameSearchVisit(action_id=" + std::to_string(visit.action_id) +
+                   ", visit_count=" + std::to_string(visit.visit_count) + ")";
+        });
     py::class_<GameSearchResult>(module, "GameSearchResult")
         .def_readonly("root_value", &GameSearchResult::root_value)
         .def_readonly("highest_visited_child_action_id",
@@ -88,7 +104,7 @@ void bind_search(py::module_ &module) {
         .def_readonly("highest_visited_child_visit_count",
                       &GameSearchResult::highest_visited_child_visit_count)
         .def_readonly("highest_visited_child_q", &GameSearchResult::highest_visited_child_q)
-        .def_readonly("visits", &GameSearchResult::visits)
+        .def_readonly("search_visits", &GameSearchResult::search_visits)
         .def_readonly("policy_target_visits", &GameSearchResult::policy_target_visits);
     py::class_<BatchedSearchParameters>(module, "BatchedSearchParameters")
         .def(py::init<std::uint32_t, TreeSearchParameters, float, float, std::size_t>(),

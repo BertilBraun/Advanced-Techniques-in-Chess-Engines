@@ -58,7 +58,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def_readonly("highest_visited_child_action_id", &Result::highest_visited_child_action_id)
         .def_readonly("highest_visited_child_visit_count", &Result::highest_visited_child_visit_count)
         .def_readonly("highest_visited_child_q", &Result::highest_visited_child_q)
-        .def_readonly("visits", &Result::visits)
+        .def_readonly("search_visits", &Result::search_visits)
         .def_readonly("policy_target_visits", &Result::policy_target_visits)
         .def_readonly("root", &Result::root);
     py::class_<Batch>(module, names.batch)

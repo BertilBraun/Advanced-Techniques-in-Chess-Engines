@@ -18,7 +18,7 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.replay.layout import ReplayLayout
-from src.self_play.completed_game import SparseSearchVisit
+from AlphaZeroCpp import GameSearchVisit
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 
 
@@ -307,7 +307,7 @@ class ReplayStore:
         visits = row[f'{prefix}_visit_counts'][:count]
         return SparsePolicyTarget(
             visits=tuple(
-                SparseSearchVisit(action_id=int(action), visit_count=int(visit_count))
+                GameSearchVisit(action_id=int(action), visit_count=int(visit_count))
                 for action, visit_count in zip(actions, visits)
             )
         )

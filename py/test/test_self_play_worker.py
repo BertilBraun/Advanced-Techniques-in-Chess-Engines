@@ -6,6 +6,7 @@ from uuid import UUID
 
 import numpy as np
 import pytest
+from AlphaZeroCpp import GameSearchVisit
 
 from src.games.implementation import GameImplementation
 from src.games.contracts import WdlTarget
@@ -16,7 +17,7 @@ from src.self_play.parameters import (
     ZeroFirstPlayUrgencyParameters,
 )
 from src.self_play.completed_game import CompletedSelfPlayGame, GameIdentity, SearchObservation
-from src.self_play.completed_game import SparseSearchVisit, TerminationReason
+from src.self_play.completed_game import TerminationReason
 from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.self_play.resignation import (
     CalibratedResignationConfiguration,
@@ -49,12 +50,6 @@ class FakeRoot:
 
 
 @dataclass(frozen=True)
-class FakeVisit:
-    action_id: int
-    visit_count: int
-
-
-@dataclass(frozen=True)
 class FakeRequest:
     root: FakeRoot
     full_search: bool
@@ -66,8 +61,8 @@ class FakeResult:
     highest_visited_child_action_id: int
     highest_visited_child_visit_count: int
     highest_visited_child_q: float
-    visits: list[FakeVisit]
-    policy_target_visits: list[FakeVisit]
+    search_visits: list[GameSearchVisit]
+    policy_target_visits: list[GameSearchVisit]
     root: FakeRoot
 
 
@@ -87,8 +82,8 @@ class FakeSearch:
         self.generations: list[int] = []
         self.request_batches: list[tuple[FakeRequest, ...]] = []
         self.capacity_changed = False
-        self.actual_visits = [FakeVisit(0, 3)]
-        self.policy_target_visits = [FakeVisit(0, 3)]
+        self.search_visits = [GameSearchVisit(0, 3)]
+        self.policy_target_visits = [GameSearchVisit(0, 3)]
         self.root_value = 0.25
         self.highest_visited_child_q = 0.2
 
@@ -105,10 +100,10 @@ class FakeSearch:
             [
                 FakeResult(
                     self.root_value,
-                    self.actual_visits[0].action_id,
-                    self.actual_visits[0].visit_count,
+                    self.search_visits[0].action_id,
+                    self.search_visits[0].visit_count,
                     self.highest_visited_child_q,
-                    self.actual_visits,
+                    self.search_visits,
                     self.policy_target_visits,
                     request.root,
                 )
@@ -261,7 +256,7 @@ def test_worker_owns_shared_search_move_selection_and_generation_transition(tmp_
     assert [game.root.reset_count for game in worker.active_games] == [1, 1, 1]
     assert all(game.action_ids == [0] for game in worker.active_games)
     assert all(
-        game.observations[0].policy_target_visits == (SparseSearchVisit(action_id=0, visit_count=3),)
+        game.observations[0].policy_target_visits == (GameSearchVisit(action_id=0, visit_count=3),)
         for game in worker.active_games
     )
     assert game.search.generations == [1]
@@ -312,8 +307,8 @@ def test_worker_forces_fast_searches_after_configured_ply(tmp_path: Path) -> Non
 
 def test_worker_selects_from_actual_visits_and_records_pruned_target_visits(tmp_path: Path) -> None:
     game = FakeGame()
-    game.search.actual_visits = [FakeVisit(1, 20)]
-    game.search.policy_target_visits = [FakeVisit(0, 7)]
+    game.search.search_visits = [GameSearchVisit(1, 20)]
+    game.search.policy_target_visits = [GameSearchVisit(0, 7)]
     worker = SelfPlayWorker(
         cast(GameImplementation, game),
         parallel_game_count=1,
@@ -326,9 +321,7 @@ def test_worker_selects_from_actual_visits_and_records_pruned_target_visits(tmp_
     worker.run_batch()
 
     assert worker.active_games[0].action_ids == [1]
-    assert worker.active_games[0].observations[0].policy_target_visits == (
-        SparseSearchVisit(action_id=0, visit_count=7),
-    )
+    assert worker.active_games[0].observations[0].policy_target_visits == (GameSearchVisit(action_id=0, visit_count=7),)
 
 
 def test_worker_resigns_with_frozen_published_threshold(tmp_path: Path) -> None:
@@ -442,9 +435,9 @@ def restart_source_game() -> CompletedSelfPlayGame:
                 ply=0,
                 model_generation=0,
                 policy_target_visits=(
-                    SparseSearchVisit(action_id=0, visit_count=45),
-                    SparseSearchVisit(action_id=1, visit_count=30),
-                    SparseSearchVisit(action_id=2, visit_count=25),
+                    GameSearchVisit(action_id=0, visit_count=45),
+                    GameSearchVisit(action_id=1, visit_count=30),
+                    GameSearchVisit(action_id=2, visit_count=25),
                 ),
                 root_value=0.0,
                 highest_visited_child_action_id=0,

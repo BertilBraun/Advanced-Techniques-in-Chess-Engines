@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+from AlphaZeroCpp import GameSearchVisit
 
 from src.experiment.configuration import load_experiment_configuration
 from src.games.contracts import WdlTarget
@@ -11,7 +12,6 @@ from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
-    SparseSearchVisit,
     TerminationReason,
 )
 from src.self_play.parameters import RestartStateStartParameters
@@ -73,7 +73,7 @@ def completed_game(
                 ply=observation_ply,
                 model_generation=model_generation,
                 policy_target_visits=tuple(
-                    SparseSearchVisit(action_id=action_id, visit_count=visit_count) for action_id, visit_count in visits
+                    GameSearchVisit(action_id=action_id, visit_count=visit_count) for action_id, visit_count in visits
                 ),
                 root_value=root_value,
                 highest_visited_child_action_id=max(visits, key=lambda item: item[1])[0],

@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+from AlphaZeroCpp import GameSearchVisit
 
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
@@ -19,7 +20,6 @@ from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
-    SparseSearchVisit,
     TerminationReason,
     publish_completed_self_play_game,
 )
@@ -113,8 +113,8 @@ def _completed_game() -> CompletedSelfPlayGame:
                 ply=ply,
                 model_generation=2,
                 policy_target_visits=(
-                    SparseSearchVisit(action_id=other_action, visit_count=3),
-                    SparseSearchVisit(action_id=selected_action, visit_count=10),
+                    GameSearchVisit(action_id=other_action, visit_count=3),
+                    GameSearchVisit(action_id=selected_action, visit_count=10),
                 ),
                 root_value=0.25,
                 highest_visited_child_action_id=selected_action,
@@ -178,7 +178,7 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
             SearchObservation(
                 ply=2,
                 model_generation=1,
-                policy_target_visits=(SparseSearchVisit(action_id=2, visit_count=8),),
+                policy_target_visits=(GameSearchVisit(action_id=2, visit_count=8),),
                 root_value=0.0,
                 highest_visited_child_action_id=2,
                 highest_visited_child_visit_count=8,

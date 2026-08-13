@@ -67,7 +67,7 @@ template <SearchGame Game> struct SelfPlaySearchResult {
     int highest_visited_child_action_id;
     std::uint32_t highest_visited_child_visit_count;
     float highest_visited_child_q;
-    std::vector<GameSearchVisit> visits;
+    std::vector<GameSearchVisit> search_visits;
     std::vector<GameSearchVisit> policy_target_visits;
     GameSearchRoot<Game> root;
 };
@@ -161,7 +161,7 @@ public:
                 .highest_visited_child_visit_count =
                     searched.results[index].highest_visited_child_visit_count,
                 .highest_visited_child_q = searched.results[index].highest_visited_child_q,
-                .visits = std::move(searched.results[index].visits),
+                .search_visits = std::move(searched.results[index].search_visits),
                 .policy_target_visits = std::move(searched.results[index].policy_target_visits),
                 .root = requests[index].root,
             });

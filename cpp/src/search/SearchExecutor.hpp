@@ -92,10 +92,10 @@ public:
                 .highest_visited_child_action_id = -1,
                 .highest_visited_child_visit_count = 0,
                 .highest_visited_child_q = 0.0F,
-                .visits = {},
+                .search_visits = {},
                 .policy_target_visits = {},
             };
-            result.visits.reserve(node.children.size());
+            result.search_visits.reserve(node.children.size());
             result.policy_target_visits.reserve(node.children.size());
             std::uint32_t highestChildVisits = 0;
             const std::vector<std::uint32_t> policyTargetVisits = root.tree().policyTargetVisits(
@@ -103,10 +103,12 @@ public:
             for (const auto index : range(node.children.size())) {
                 const auto &edge = node.children[index];
                 const int actionId = Game::Encoding::actionId(edge.action, node.position);
-                result.visits.push_back({
-                    .action_id = actionId,
-                    .visit_count = edge.visits,
-                });
+                if (edge.visits > 0) {
+                    result.search_visits.push_back({
+                        .action_id = actionId,
+                        .visit_count = edge.visits,
+                    });
+                }
                 if (policyTargetVisits[index] > 0) {
                     result.policy_target_visits.push_back({
                         .action_id = actionId,

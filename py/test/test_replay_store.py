@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from AlphaZeroCpp import GameSearchVisit
 
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlaneLayout
@@ -13,7 +14,6 @@ from src.replay.contracts import (
 )
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
-from src.self_play.completed_game import SparseSearchVisit
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 
 
@@ -35,8 +35,8 @@ def _layout(ply_offset: int = 1) -> ReplayLayout:
 def _sample(layout: ReplayLayout, action_id: int, generation: int, auxiliary_eligible: bool = True) -> ReplaySample:
     policy = SparsePolicyTarget(
         visits=(
-            SparseSearchVisit(action_id=action_id, visit_count=7),
-            SparseSearchVisit(action_id=(action_id + 1) % 10, visit_count=3),
+            GameSearchVisit(action_id=action_id, visit_count=7),
+            GameSearchVisit(action_id=(action_id + 1) % 10, visit_count=3),
         )
     )
     auxiliary = EligibleNextPolicyTarget(policy=policy) if auxiliary_eligible else IneligibleNextPolicyTarget()
@@ -102,7 +102,7 @@ def test_replay_store_rejects_sparse_policy_beyond_fixed_width(tmp_path: Path) -
     store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=2, logical_capacity=2)
     sample = _sample(layout, 0, 0)
     oversized_policy = SparsePolicyTarget(
-        visits=tuple(SparseSearchVisit(action_id=action_id, visit_count=1) for action_id in range(5))
+        visits=tuple(GameSearchVisit(action_id=action_id, visit_count=1) for action_id in range(5))
     )
     oversized = ReplaySample(
         encoded_state=sample.encoded_state,

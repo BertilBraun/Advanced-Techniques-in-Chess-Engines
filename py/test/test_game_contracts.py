@@ -3,6 +3,7 @@ from uuid import UUID
 
 import pytest
 import torch
+from AlphaZeroCpp import GameSearchVisit
 from pydantic import ValidationError
 
 from src.experiment.configuration import load_experiment_configuration
@@ -21,7 +22,6 @@ from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
-    SparseSearchVisit,
     TerminationReason,
     publish_completed_self_play_game,
 )
@@ -115,7 +115,7 @@ def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> 
     observation = SearchObservation(
         ply=0,
         model_generation=3,
-        policy_target_visits=(SparseSearchVisit(action_id=7, visit_count=12),),
+        policy_target_visits=(GameSearchVisit(action_id=7, visit_count=12),),
         root_value=0.25,
         highest_visited_child_action_id=7,
         highest_visited_child_visit_count=12,
@@ -195,7 +195,7 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
 
 
 def test_next_policy_eligibility_is_explicit_and_uses_future_action_space() -> None:
-    future_policy = SparsePolicyTarget(visits=(SparseSearchVisit(action_id=42, visit_count=10),))
+    future_policy = SparsePolicyTarget(visits=(GameSearchVisit(action_id=42, visit_count=10),))
 
     eligible = EligibleNextPolicyTarget(policy=future_policy)
     terminal_tail = IneligibleNextPolicyTarget()
@@ -227,15 +227,22 @@ def test_remaining_game_length_layout_is_a_scalar_target() -> None:
 
 
 def test_search_observation_rejects_zero_visit_entries() -> None:
-    with pytest.raises(ValidationError, match='greater than 0'):
-        SparseSearchVisit(action_id=1, visit_count=0)
+    with pytest.raises(ValueError, match='positive'):
+        GameSearchVisit(action_id=1, visit_count=0)
+
+
+def test_native_search_visit_has_readable_value_semantics() -> None:
+    visit = GameSearchVisit(action_id=7, visit_count=12)
+
+    assert visit == GameSearchVisit(action_id=7, visit_count=12)
+    assert repr(visit) == 'GameSearchVisit(action_id=7, visit_count=12)'
 
 
 def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_together() -> None:
     pytest.importorskip('AlphaZeroCpp')
     position = CHESS_STATE_CONTRACT.initial_position()
     action_id = CHESS_STATE_CONTRACT.legal_action_ids(position)[0]
-    policy = SparsePolicyTarget(visits=(SparseSearchVisit(action_id=action_id, visit_count=3),))
+    policy = SparsePolicyTarget(visits=(GameSearchVisit(action_id=action_id, visit_count=3),))
     sample = ReplaySample(
         encoded_state=CHESS_STATE_CONTRACT.encode_network_input(position),
         policy=policy,

@@ -4,6 +4,7 @@ from threading import Event
 
 import torch
 import pytest
+from AlphaZeroCpp import GameSearchVisit
 
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessStateContract
 from src.games.contracts import WdlTarget
@@ -18,7 +19,6 @@ from src.replay.contracts import (
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayDescription
 from src.replay.store import ReplayStore
-from src.self_play.completed_game import SparseSearchVisit
 from src.training.batch import TrainingBatch
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 
@@ -56,8 +56,8 @@ def _layout() -> ReplayLayout:
 def _sample(weight: float) -> ReplaySample:
     primary = SparsePolicyTarget(
         visits=(
-            SparseSearchVisit(action_id=0, visit_count=3),
-            SparseSearchVisit(action_id=1, visit_count=1),
+            GameSearchVisit(action_id=0, visit_count=3),
+            GameSearchVisit(action_id=1, visit_count=1),
         )
     )
     return ReplaySample(

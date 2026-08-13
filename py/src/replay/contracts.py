@@ -3,14 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, TypeAlias
 
+from AlphaZeroCpp import GameSearchVisit
+
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlanePayload
-from src.self_play.completed_game import SparseSearchVisit
 
 
 @dataclass(frozen=True)
 class SparsePolicyTarget:
-    visits: tuple[SparseSearchVisit, ...]
+    visits: tuple[GameSearchVisit, ...]
 
     def __post_init__(self) -> None:
         if not self.visits or any(visit.visit_count <= 0 for visit in self.visits):

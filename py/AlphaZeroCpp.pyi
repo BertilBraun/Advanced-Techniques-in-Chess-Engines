@@ -70,10 +70,13 @@ class InferenceDimensions:
     def outcomes(self) -> int: ...
 
 class GameSearchVisit:
+    def __init__(self, action_id: int, visit_count: int) -> None: ...
     @property
     def action_id(self) -> int: ...
     @property
     def visit_count(self) -> int: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __repr__(self) -> str: ...
 
 class GameSearchResult:
     @property
@@ -85,7 +88,7 @@ class GameSearchResult:
     @property
     def highest_visited_child_q(self) -> float: ...
     @property
-    def visits(self) -> list[GameSearchVisit]: ...
+    def search_visits(self) -> list[GameSearchVisit]: ...
     @property
     def policy_target_visits(self) -> list[GameSearchVisit]: ...
 
@@ -292,7 +295,7 @@ class GoSelfPlaySearchResult7:
     highest_visited_child_action_id: int
     highest_visited_child_visit_count: int
     highest_visited_child_q: float
-    visits: list[GameSearchVisit]
+    search_visits: list[GameSearchVisit]
     policy_target_visits: list[GameSearchVisit]
     root: GoSearchRoot7
 
@@ -330,7 +333,7 @@ class GoSelfPlaySearchResult9:
     highest_visited_child_action_id: int
     highest_visited_child_visit_count: int
     highest_visited_child_q: float
-    visits: list[GameSearchVisit]
+    search_visits: list[GameSearchVisit]
     policy_target_visits: list[GameSearchVisit]
     root: GoSearchRoot9
 
@@ -618,7 +621,7 @@ class ChessSelfPlaySearchResult:
     @property
     def root(self) -> ChessSearchRoot: ...
     @property
-    def visits(self) -> list[GameSearchVisit]: ...
+    def search_visits(self) -> list[GameSearchVisit]: ...
     @property
     def policy_target_visits(self) -> list[GameSearchVisit]: ...
 

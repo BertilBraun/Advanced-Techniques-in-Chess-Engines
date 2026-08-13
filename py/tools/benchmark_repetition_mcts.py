@@ -157,7 +157,7 @@ def run_search_steps(
 
         next_roots: list[ChessSearchRoot] = []
         for opening_index, result in enumerate(search_results.results):
-            root = choose_root(result.root, result.visits)
+            root = choose_root(result.root, result.search_visits)
             if root.is_terminal:
                 terminal_roots += 1
                 root = search.new_root(openings[opening_index])

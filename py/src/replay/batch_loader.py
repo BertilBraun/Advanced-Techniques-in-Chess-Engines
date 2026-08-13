@@ -16,7 +16,7 @@ from src.games.representation import decode_packed_planes
 from src.replay.contracts import EligibleNextPolicyTarget, EligibleRemainingGameLengthTarget
 from src.replay.manager import ReplayDescription
 from src.replay.store import ReplayStore
-from src.self_play.completed_game import SparseSearchVisit
+from AlphaZeroCpp import GameSearchVisit
 from src.training.batch import TrainingBatch
 from src.training.targets import auxiliary_head_output_size
 
@@ -267,7 +267,7 @@ def build_training_batch(
 
 def _write_dense_policy(
     destination: npt.NDArray[np.float32],
-    visits: Sequence[SparseSearchVisit],
+    visits: Sequence[GameSearchVisit],
 ) -> None:
     total_visits = sum(visit.visit_count for visit in visits)
     for visit in visits:

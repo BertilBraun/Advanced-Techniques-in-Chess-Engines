@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import InferenceStatistics, SelfPlaySearchParameters
+    from AlphaZeroCpp import GameSearchVisit, InferenceStatistics, SelfPlaySearchParameters
 
 
 PositionT = TypeVar('PositionT')
@@ -11,14 +11,6 @@ NativeRootT = TypeVar('NativeRootT', bound='NativeSearchRoot')
 NativeRequestT = TypeVar('NativeRequestT', bound='NativeSearchRequest')
 NativeResultT = TypeVar('NativeResultT', bound='NativeSearchResult')
 NativeSearchT = TypeVar('NativeSearchT', bound='NativeSelfPlaySearch')
-
-
-class NativeSearchVisit(Protocol):
-    @property
-    def action_id(self) -> int: ...
-
-    @property
-    def visit_count(self) -> int: ...
 
 
 class NativeSearchRoot(Protocol[PositionT]):
@@ -57,10 +49,10 @@ class NativeSearchResult(Protocol[NativeRootT]):
     def highest_visited_child_q(self) -> float: ...
 
     @property
-    def visits(self) -> list[NativeSearchVisit]: ...
+    def search_visits(self) -> list[GameSearchVisit]: ...
 
     @property
-    def policy_target_visits(self) -> list[NativeSearchVisit]: ...
+    def policy_target_visits(self) -> list[GameSearchVisit]: ...
 
     @property
     def root(self) -> NativeRootT: ...

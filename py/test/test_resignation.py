@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
+from AlphaZeroCpp import GameSearchVisit
 from pydantic import ValidationError
 
 from src.games.contracts import WdlTarget
@@ -11,7 +12,6 @@ from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
-    SparseSearchVisit,
     TerminationReason,
 )
 from src.self_play.resignation import (
@@ -59,7 +59,7 @@ def completed_continuation(
             SearchObservation(
                 ply=0,
                 model_generation=10,
-                policy_target_visits=(SparseSearchVisit(action_id=0, visit_count=20),),
+                policy_target_visits=(GameSearchVisit(action_id=0, visit_count=20),),
                 root_value=root_value,
                 highest_visited_child_action_id=0,
                 highest_visited_child_visit_count=20,

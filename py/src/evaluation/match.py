@@ -61,9 +61,11 @@ class SearchActionSelector(Generic[PositionT]):
         batch = self.search.search([self.search.request(root, True) for root in roots])
         selected = []
         for result in batch.results:
-            if not result.visits:
+            if not result.search_visits:
                 raise RuntimeError('Evaluation search returned no visits for a nonterminal position.')
-            selected.append(min(result.visits, key=lambda visit: (-visit.visit_count, visit.action_id)).action_id)
+            selected.append(
+                min(result.search_visits, key=lambda visit: (-visit.visit_count, visit.action_id)).action_id
+            )
         return tuple(selected)
 
 

@@ -1534,7 +1534,8 @@ NativeSearchRequest
 
 NativeSearchResult
     root_value
-    visits
+    search_visits
+    policy_target_visits
     root
 ```
 
@@ -1635,7 +1636,9 @@ The ordinary turn algorithm is fully specified:
 5. a full-search position is primary-sample eligible; a fast-search position is not, but its observation is retained;
 6. before a full search, retained root visits are discounted by the configured retained fraction; fast searches may
    reuse their retained root unchanged;
-7. the native batch returns positive sparse visit counts and a scalar root value for every nonterminal root;
+7. the native batch returns positive sparse `search_visits`, used for action selection, and
+   `policy_target_visits`, with unsupported forced-playout exploration removed for training, plus a scalar root
+   value for every nonterminal root;
 8. before the configured greedy ply, the action is sampled from raw visit counts raised to inverse temperature; the
    temperature interpolates from the resolved starting value to the resolved final value over that ply range;
 9. at and after the greedy ply, the greatest visit count wins with ascending action ID as the deterministic tie

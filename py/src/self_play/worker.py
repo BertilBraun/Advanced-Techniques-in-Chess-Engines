@@ -13,7 +13,6 @@ from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
-    SparseSearchVisit,
     TerminationReason,
     publish_completed_self_play_game,
 )
@@ -32,7 +31,7 @@ from src.util.tensorboard import log_scalar
 
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import InferenceStatistics
+    from AlphaZeroCpp import GameSearchVisit, InferenceStatistics
 
     from src.games.implementation import GameImplementation
     from src.training.checkpoint import CheckpointReference
@@ -237,21 +236,13 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         parameters: ResolvedSelfPlayParameters,
     ) -> CompletedSelfPlayGame | None:
         assert self.model_generation is not None
-        visits = tuple(
-            SparseSearchVisit(action_id=visit.action_id, visit_count=visit.visit_count)
-            for visit in result.visits
-            if visit.visit_count > 0
-        )
-        if not visits:
+        search_visits = tuple(result.search_visits)
+        if not search_visits:
             raise RuntimeError('Native search returned no visited action for a nonterminal root.')
         ply = len(active_game.action_ids)
         if active_game.reserved_restart_action_id is not None and not request.full_search:
             raise RuntimeError('Restart roots require a full search.')
-        policy_target_visits = tuple(
-            SparseSearchVisit(action_id=visit.action_id, visit_count=visit.visit_count)
-            for visit in result.policy_target_visits
-            if visit.visit_count > 0
-        )
+        policy_target_visits = tuple(result.policy_target_visits)
         if not policy_target_visits:
             raise RuntimeError('Native search returned an empty policy target for a nonterminal root.')
         resignation_triggered = (
@@ -262,7 +253,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         )
         selected_action_id = active_game.reserved_restart_action_id
         if selected_action_id is None and not resignation_triggered:
-            selected_action_id = self._select_action(visits, ply, parameters)
+            selected_action_id = self._select_action(search_visits, ply, parameters)
         observation = SearchObservation(
             ply=ply,
             model_generation=self.model_generation,
@@ -298,7 +289,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
 
     def _select_action(
         self,
-        visits: tuple[SparseSearchVisit, ...],
+        visits: tuple[GameSearchVisit, ...],
         ply: int,
         parameters: ResolvedSelfPlayParameters,
     ) -> int:

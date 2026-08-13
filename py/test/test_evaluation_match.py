@@ -96,7 +96,7 @@ class FakeVisit:
 
 @dataclass(frozen=True)
 class FakeResult:
-    visits: tuple[FakeVisit, ...]
+    search_visits: tuple[FakeVisit, ...]
 
 
 @dataclass(frozen=True)

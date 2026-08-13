@@ -3,6 +3,7 @@ from typing import cast
 
 import torch
 import pytest
+from AlphaZeroCpp import GameSearchVisit
 from torch import nn
 
 from src.experiment.configuration import load_experiment_configuration
@@ -13,7 +14,6 @@ from src.replay.contracts import ReplaySample, SparsePolicyTarget
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayDescription
 from src.replay.store import ReplayStore
-from src.self_play.completed_game import SparseSearchVisit
 from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
@@ -107,8 +107,8 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
                 encoded_state=game.state.packed_plane_layout.value(bytes(game.state.packed_plane_layout.payload_bytes)),
                 policy=SparsePolicyTarget(
                     visits=(
-                        SparseSearchVisit(action_id=0, visit_count=3),
-                        SparseSearchVisit(action_id=1, visit_count=1),
+                        GameSearchVisit(action_id=0, visit_count=3),
+                        GameSearchVisit(action_id=1, visit_count=1),
                     )
                 ),
                 wdl_target=WdlTarget(win=0.0, draw=1.0, loss=0.0),
