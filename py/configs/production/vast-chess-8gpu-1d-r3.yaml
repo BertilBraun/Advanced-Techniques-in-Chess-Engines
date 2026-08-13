@@ -72,11 +72,14 @@ training:
     credit:
       replay_ratio: 8
       optimizer_steps_per_quantum: 500
+      maximum_optimizer_steps: null
       retained_checkpoint_interval_generations: 6
       self_play_backpressure_quanta: 5
     inference_retention: {recent_checkpoint_count: 22, milestone_interval: 20}
   limits:
     hourly_price: 0.4608888888888886
+    maximum_cost: null
+    maximum_wall_time_seconds: null
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
     minimum_free_disk_gib: 20.0
