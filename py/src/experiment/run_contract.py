@@ -53,7 +53,7 @@ class ApprovalRecord(FrozenModel):
     offer_id: str
     hourly_price: float
     maximum_cost: float | None
-    maximum_wall_time_minutes: int
+    maximum_wall_time_minutes: int | None
 
     @model_validator(mode='after')
     def validate_approval_timestamp(self) -> ApprovalRecord:

@@ -87,6 +87,13 @@ def test_credit_ledger_persists_only_approximate_counters_and_active_checkpoint(
     assert restarted.state.active_checkpoint == result.checkpoint
 
 
+def test_credit_ledger_without_optimizer_limit_never_completes(tmp_path: Path) -> None:
+    parameters = _parameters().model_copy(update={'maximum_optimizer_steps': None})
+    ledger = CreditLedger(tmp_path, parameters, global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
+
+    assert not ledger.training_complete
+
+
 def test_credit_ledger_adopts_one_complete_checkpoint_after_interrupted_commit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

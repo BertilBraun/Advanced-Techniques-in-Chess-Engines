@@ -52,6 +52,20 @@ def test_run_limit_monitor_enforces_time_and_cost(
     assert monitor.stop_reason() == expected
 
 
+def test_run_limit_monitor_allows_unbounded_time_and_cost(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured_limits = limits(maximum_cost=None, maximum_wall_time_seconds=None)
+    monkeypatch.setattr(run_limits_module.time, 'monotonic', lambda: 1_000_000.0)
+    monkeypatch.setattr(run_limits_module, 'process_tree_open_file_counts', lambda process: (0, 0))
+    monkeypatch.setattr(run_limits_module.psutil, 'virtual_memory', lambda: MemoryUsage(0.0))
+    monkeypatch.setattr(run_limits_module.psutil, 'disk_usage', lambda path: DiskUsage(100 * 2**30))
+    monitor = RunLimitMonitor(configured_limits, tmp_path, 0.0, psutil.Process())
+
+    assert monitor.stop_reason() is None
+
+
 def test_run_limit_monitor_enforces_host_resources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(run_limits_module.time, 'monotonic', lambda: 1.0)
     monkeypatch.setattr(run_limits_module, 'process_tree_open_file_counts', lambda process: (100, 100))

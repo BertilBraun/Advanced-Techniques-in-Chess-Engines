@@ -141,7 +141,8 @@ def _validate_approval(
         and approval.offer_id == run.hardware.offer_id
         and approval.hourly_price == limits.hourly_price
         and approval.maximum_cost == limits.maximum_cost
-        and approval.maximum_wall_time_minutes == int(limits.maximum_wall_time_seconds / 60)
+        and approval.maximum_wall_time_minutes
+        == (None if limits.maximum_wall_time_seconds is None else int(limits.maximum_wall_time_seconds / 60))
     )
     if not expected:
         raise ValueError('Approval does not match the requested experiment.')

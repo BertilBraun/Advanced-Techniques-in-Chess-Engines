@@ -260,8 +260,11 @@ def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> N
         worker_id for worker_id in range(16) if worker_id % 2 != 0
     )
     assert lifecycle.credit.optimizer_steps_per_quantum == 500
+    assert lifecycle.credit.maximum_optimizer_steps is None
     assert lifecycle.credit.unique_samples_per_quantum(configuration.training.trainer.global_batch_size) == 128_000
     assert lifecycle.credit.retained_checkpoint_interval_generations == 6
+    assert configuration.training.limits.maximum_cost is None
+    assert configuration.training.limits.maximum_wall_time_seconds is None
     assert lifecycle.inference_retention.recent_checkpoint_count == 22
     assert lifecycle.inference_retention.milestone_interval == 20
     assert lifecycle.replay.capacity.value_at(0) == 300_000

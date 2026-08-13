@@ -78,7 +78,8 @@ class CreditLedger:
 
     @property
     def training_complete(self) -> bool:
-        return self._state.completed_optimizer_steps >= self.parameters.maximum_optimizer_steps
+        maximum_optimizer_steps = self.parameters.maximum_optimizer_steps
+        return maximum_optimizer_steps is not None and self._state.completed_optimizer_steps >= maximum_optimizer_steps
 
     def can_train_quantum(self, live_samples: int) -> bool:
         required = self.parameters.presentation_credits_per_quantum(self.global_batch_size)

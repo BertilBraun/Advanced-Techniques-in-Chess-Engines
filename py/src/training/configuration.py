@@ -76,13 +76,13 @@ class InferenceRetentionParams(FrozenModel):
 class CreditTrainingParams(FrozenModel):
     replay_ratio: Decimal = Field(gt=0)
     optimizer_steps_per_quantum: int = Field(gt=0)
-    maximum_optimizer_steps: int = Field(gt=0)
+    maximum_optimizer_steps: int | None = Field(default=None, gt=0)
     retained_checkpoint_interval_generations: int = Field(gt=0)
     self_play_backpressure_quanta: int = Field(gt=0)
 
     @model_validator(mode='after')
     def validate_schedule(self) -> CreditTrainingParams:
-        if self.maximum_optimizer_steps % self.optimizer_steps_per_quantum:
+        if self.maximum_optimizer_steps is not None and self.maximum_optimizer_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Maximum optimizer steps must contain complete training quanta.')
         return self
 
@@ -179,9 +179,10 @@ class TrainingArgs(FrozenModel):
             raise ValueError('Learning rate must remain positive.')
         if self.trainer.precision is TrainingPrecision.BFLOAT16 and self.topology.trainer.device_type != 'cuda':
             raise ValueError('Bfloat16 mixed-precision training requires CUDA.')
-        maximum_generation = credit.maximum_optimizer_steps // credit.optimizer_steps_per_quantum
-        if maximum_generation > 4_294_967_295:
-            raise ValueError('Maximum model generation must fit uint32 replay metadata.')
+        if credit.maximum_optimizer_steps is not None:
+            maximum_generation = credit.maximum_optimizer_steps // credit.optimizer_steps_per_quantum
+            if maximum_generation > 4_294_967_295:
+                raise ValueError('Maximum model generation must fit uint32 replay metadata.')
         return self
 
     def validate_game(self, action_size: int, self_play: SelfPlayConfiguration) -> None:

@@ -11,7 +11,7 @@ from src.util.frozen_model import FrozenModel
 class RuntimeLimits(FrozenModel):
     hourly_price: float = Field(ge=0.0)
     maximum_cost: float | None = Field(default=None, gt=0.0)
-    maximum_wall_time_seconds: float = Field(gt=0.0)
+    maximum_wall_time_seconds: float | None = Field(default=None, gt=0.0)
     maximum_open_file_count: int = Field(gt=0)
     maximum_host_ram_percent: float = Field(gt=0.0, le=100.0)
     minimum_free_disk_gib: float = Field(ge=0.0)
@@ -55,7 +55,10 @@ class RunLimitMonitor:
 
     def stop_reason(self) -> str | None:
         elapsed_seconds = time.monotonic() - self.run_started_at
-        if elapsed_seconds >= self.limits.maximum_wall_time_seconds:
+        if (
+            self.limits.maximum_wall_time_seconds is not None
+            and elapsed_seconds >= self.limits.maximum_wall_time_seconds
+        ):
             return 'maximum wall time reached'
         cost = estimated_cost(self.limits.hourly_price, elapsed_seconds)
         if self.limits.maximum_cost is not None and cost >= self.limits.maximum_cost:
