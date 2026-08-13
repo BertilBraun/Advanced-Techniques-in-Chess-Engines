@@ -110,6 +110,8 @@ constexpr std::int64_t tensorSize(const std::size_t size) noexcept {
 }
 } // namespace
 
+InferenceCompletion::~InferenceCompletion() noexcept { waitWithoutThrowing(); }
+
 void InferenceCompletion::record() {
 #ifdef USE_CUDA
     if (m_usesCuda) {
@@ -118,7 +120,7 @@ void InferenceCompletion::record() {
 #endif
 }
 
-bool InferenceCompletion::isCompleted() const {
+bool InferenceCompletion::ready() const {
 #ifdef USE_CUDA
     if (m_usesCuda) {
         return m_cudaEvent.query();
@@ -127,12 +129,28 @@ bool InferenceCompletion::isCompleted() const {
     return true;
 }
 
-void InferenceCompletion::synchronize() const {
+void InferenceCompletion::wait() const {
 #ifdef USE_CUDA
     if (m_usesCuda) {
         m_cudaEvent.synchronize();
     }
 #endif
+}
+
+void InferenceCompletion::finishFailedSubmission() noexcept {
+    // Drain work enqueued before the failure so its slot buffers can be reused safely.
+    try {
+        record();
+        wait();
+    } catch (...) {
+    }
+}
+
+void InferenceCompletion::waitWithoutThrowing() const noexcept {
+    try {
+        wait();
+    } catch (...) {
+    }
 }
 
 InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDevice device,
@@ -232,14 +250,7 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards,
         output.outcomes.narrow(0, 0, static_cast<int64_t>(batchSize)).copy_(outcomes, usesCuda());
         completion.record();
     } catch (...) {
-#ifdef USE_CUDA
-        if (usesCuda()) {
-            try {
-                at::cuda::getCurrentCUDAStream(m_device.index()).synchronize();
-            } catch (...) {
-            }
-        }
-#endif
+        completion.finishFailedSubmission();
         throw;
     }
 }
@@ -248,7 +259,7 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size
                                   InferenceOutput &output) {
     InferenceCompletion completion(usesCuda());
     forwardInto(encodedBoards, m_deviceInput, batchSize, output, completion);
-    completion.synchronize();
+    completion.wait();
 }
 
 PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
@@ -294,12 +305,6 @@ InferencePipeline::~InferencePipeline() {
     }
     if (m_inferenceThread.joinable()) {
         m_inferenceThread.join();
-    }
-    for (const std::unique_ptr<Slot> &slot : m_slots) {
-        try {
-            slot->completion.synchronize();
-        } catch (...) {
-        }
     }
 }
 
@@ -356,7 +361,7 @@ bool InferencePipeline::isCompleted(const size_t slotIndex) const {
     }
     const SlotState state = slotAt(slotIndex).state.load(std::memory_order_acquire);
     return state == SlotState::Failed ||
-           (state == SlotState::Complete && slotAt(slotIndex).completion.isCompleted());
+           (state == SlotState::Complete && slotAt(slotIndex).completion.ready());
 }
 
 InferenceOutput InferencePipeline::waitCompletedOutput(const size_t slotIndex) {
@@ -374,20 +379,12 @@ InferenceOutput InferencePipeline::waitCompletedOutput(const size_t slotIndex) {
         state = slot.state.load(std::memory_order_acquire);
     }
     if (state == SlotState::Failed) {
-        const std::exception_ptr exception = slot.exception;
-        slot.exception = nullptr;
-        slot.state.store(SlotState::Empty, std::memory_order_release);
-        slot.state.notify_one();
-        m_consumerCursor = (m_consumerCursor + 1) % m_slots.size();
-        std::rethrow_exception(exception);
+        releaseAndRethrow(slotIndex, std::exchange(slot.exception, nullptr));
     }
     try {
-        slot.completion.synchronize();
+        slot.completion.wait();
     } catch (...) {
-        slot.state.store(SlotState::Empty, std::memory_order_release);
-        slot.state.notify_one();
-        m_consumerCursor = (m_consumerCursor + 1) % m_slots.size();
-        throw;
+        releaseAndRethrow(slotIndex, std::current_exception());
     }
     return {
         .policies = slot.output.policies.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
@@ -408,9 +405,21 @@ void InferencePipeline::release(const size_t slotIndex) {
     if (slot.state.load(std::memory_order_acquire) != SlotState::Complete) {
         throw std::logic_error("Inference slot has not completed");
     }
+    resetSlot(slotIndex);
+}
+
+void InferencePipeline::resetSlot(const size_t slotIndex) {
+    Slot &slot = slotAt(slotIndex);
     slot.state.store(SlotState::Empty, std::memory_order_release);
     slot.state.notify_one();
     m_consumerCursor = (m_consumerCursor + 1) % m_slots.size();
+}
+
+void InferencePipeline::releaseAndRethrow(const size_t slotIndex,
+                                          const std::exception_ptr exception) {
+    assert(exception != nullptr);
+    resetSlot(slotIndex);
+    std::rethrow_exception(exception);
 }
 
 PreparedInferenceModel InferencePipeline::prepareModelRefresh(const std::string &modelPath) const {

@@ -29,12 +29,19 @@ struct InferenceOutput {
 class InferenceCompletion {
 public:
     explicit InferenceCompletion(bool usesCuda) noexcept : m_usesCuda(usesCuda) {}
+    ~InferenceCompletion() noexcept;
+
+    InferenceCompletion(const InferenceCompletion &) = delete;
+    InferenceCompletion &operator=(const InferenceCompletion &) = delete;
 
     void record();
-    [[nodiscard]] bool isCompleted() const;
-    void synchronize() const;
+    [[nodiscard]] bool ready() const;
+    void wait() const;
+    void finishFailedSubmission() noexcept;
 
 private:
+    void waitWithoutThrowing() const noexcept;
+
     const bool m_usesCuda;
 #ifdef USE_CUDA
     c10::cuda::CUDAEvent m_cudaEvent;
@@ -55,10 +62,7 @@ public:
                     InferenceDimensions dimensions);
 
     [[nodiscard]] torch::Tensor createInputBuffer() const;
-    [[nodiscard]] torch::Tensor createDeviceInputBuffer() const;
     [[nodiscard]] InferenceOutput createOutputBuffer() const;
-    void forwardInto(const torch::Tensor &encodedBoards, const torch::Tensor &deviceInputBuffer,
-                     size_t batchSize, InferenceOutput &output, InferenceCompletion &completion);
     void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize, InferenceOutput &output);
     [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
     void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
@@ -67,6 +71,12 @@ public:
     [[nodiscard]] bool usesCuda() const noexcept { return m_device.is_cuda(); }
 
 private:
+    friend class InferencePipeline;
+
+    [[nodiscard]] torch::Tensor createDeviceInputBuffer() const;
+    void forwardInto(const torch::Tensor &encodedBoards, const torch::Tensor &deviceInputBuffer,
+                     size_t batchSize, InferenceOutput &output, InferenceCompletion &completion);
+
     const torch::Device m_device;
     const torch::Dtype m_torchDtype;
     const size_t m_maximumBatchSize;
@@ -144,6 +154,7 @@ private:
         torch::Tensor input;
         torch::Tensor deviceInput;
         InferenceOutput output;
+        // Destruction drains the event before the preceding slot buffers are released.
         InferenceCompletion completion;
         std::exception_ptr exception;
         size_t batchSize = 0;
@@ -167,6 +178,8 @@ private:
     void inferenceLoop();
     [[nodiscard]] InferenceOutput waitCompletedOutput(size_t slotIndex);
     void release(size_t slotIndex);
+    void resetSlot(size_t slotIndex);
+    [[noreturn]] void releaseAndRethrow(size_t slotIndex, std::exception_ptr exception);
     [[nodiscard]] Slot &slotAt(size_t slotIndex);
     [[nodiscard]] const Slot &slotAt(size_t slotIndex) const;
 };
