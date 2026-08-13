@@ -431,12 +431,19 @@ def test_manager_relaunches_unfinished_jobs_after_restart(tmp_path: Path) -> Non
     candidate.inference_model_path.write_bytes(b'model')
 
     restarted_context = FakeProcessContext()
-    EvaluationManager(
+    restarted_clock = FakeClock()
+    restarted_manager = EvaluationManager(
         experiment_configuration(tmp_path),
         candidate,
-        FakeClock(),
+        restarted_clock,
         restarted_context,
     )
 
     assert len(restarted_context.processes) == len(jobs)
     assert all(process.started for process in restarted_context.processes)
+
+    restarted_clock.now = 20.0
+    resumed_jobs = restarted_manager.schedule_due_jobs(checkpoint(tmp_path, 2))
+
+    assert {job.boundary_seconds for job in resumed_jobs} == {40}
+    assert {job.candidate.generation for job in resumed_jobs} == {1}

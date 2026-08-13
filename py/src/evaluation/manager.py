@@ -40,9 +40,8 @@ from src.util.tensorboard import log_custom_scalar_layout, log_scalar, log_text
 
 
 class EvaluationManagerState(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     accumulated_elapsed_seconds: float = Field(ge=0.0)
-    next_boundary_seconds: int = Field(gt=0)
     next_device_index: int = Field(ge=0)
     checkpoint_publications: tuple[CheckpointPublication, ...]
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...]
@@ -95,7 +94,6 @@ class EvaluationManager:
             self._elapsed_at_session_start = 0.0
             self._state = EvaluationManagerState(
                 accumulated_elapsed_seconds=0.0,
-                next_boundary_seconds=self.configuration.cadence_seconds,
                 next_device_index=0,
                 checkpoint_publications=(CheckpointPublication(elapsed_seconds=0.0, checkpoint=starting_checkpoint),),
                 scheduled_suites=(),
@@ -160,10 +158,10 @@ class EvaluationManager:
         elapsed_seconds = self.elapsed_seconds
         self._record_checkpoint_publication(checkpoint, elapsed_seconds)
         scheduled: list[EvaluationJob] = []
-        next_boundary = self._state.next_boundary_seconds
-        while next_boundary <= elapsed_seconds:
-            candidate = checkpoint_at(self._state.checkpoint_publications, next_boundary)
-            suite = ScheduledEvaluationSuite(boundary_seconds=next_boundary, checkpoint=candidate)
+        boundary_seconds = (len(self._state.scheduled_suites) + 1) * self.configuration.cadence_seconds
+        while boundary_seconds <= elapsed_seconds:
+            candidate = checkpoint_at(self._state.checkpoint_publications, boundary_seconds)
+            suite = ScheduledEvaluationSuite(boundary_seconds=boundary_seconds, checkpoint=candidate)
             jobs, next_device_index = jobs_for_suite(
                 self.experiment,
                 self.run_path,
@@ -174,7 +172,6 @@ class EvaluationManager:
             )
             self._state = self._state.model_copy(
                 update={
-                    'next_boundary_seconds': next_boundary + self.configuration.cadence_seconds,
                     'next_device_index': next_device_index,
                     'scheduled_suites': (*self._state.scheduled_suites, suite),
                     'pending_jobs': (*self._state.pending_jobs, *jobs),
@@ -183,11 +180,8 @@ class EvaluationManager:
             self._save_state()
             self._launch_available_jobs()
             scheduled.extend(jobs)
-            next_boundary += self.configuration.cadence_seconds
+            boundary_seconds += self.configuration.cadence_seconds
         return tuple(scheduled)
-
-    def seconds_until_next_boundary(self) -> float:
-        return max(0.0, self._state.next_boundary_seconds - self.elapsed_seconds)
 
     @property
     def required_checkpoint_generations(self) -> tuple[int, ...]:
