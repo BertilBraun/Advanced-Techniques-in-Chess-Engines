@@ -21,7 +21,7 @@ image = (
     .apt_install('build-essential', 'cmake', 'git')
     .pip_install_from_requirements(str(_REPOSITORY_ROOT / 'deployment' / 'web' / 'backend' / 'requirements-modal.txt'))
     .pip_install(
-        'torch==2.7.1',
+        'torch==2.12.1',
         index_url='https://download.pytorch.org/whl/cu126',
     )
     .add_local_dir(
