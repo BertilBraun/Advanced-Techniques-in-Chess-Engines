@@ -254,10 +254,10 @@ def test_eight_gpu_chess_r3_configuration_resolves_game_length_curriculum() -> N
     lifecycle = configuration.training.lifecycle
     self_play = configuration.chess.self_play
 
-    assert topology.self_play.device_ids == tuple(device_id for device_id in range(8) for _ in range(3))
+    assert topology.self_play.device_ids == tuple(device_id for device_id in range(8) for _ in range(2))
     assert topology.self_play.parallel_games_per_process == 512
     assert topology.self_play.node_ids_to_pause_during_training == tuple(
-        worker_id for worker_id in range(24) if worker_id % 3 != 0
+        worker_id for worker_id in range(16) if worker_id % 2 != 0
     )
     assert lifecycle.credit.optimizer_steps_per_quantum == 500
     assert lifecycle.credit.unique_samples_per_quantum(configuration.training.trainer.global_batch_size) == 128_000
