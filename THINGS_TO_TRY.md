@@ -45,9 +45,13 @@ Current screening policy:
 
 * **Adaptive search termination** - implemented [ ] experimenting [ ] validated [ ]
 
-  * Stop before the nominal simulation cap when one move is clearly dominant.
-  * Require a minimum search count, visit dominance, Q-margin, and possibly an unrecoverable visit lead.
-  * Calibrate offline against full-search traces before training with it.
+  * Deferred after the 2026-08-13 chess R3 audit of 634 games and 43,572 searches.
+  * Final-visit proxies suggested 6.38-8.55% of total nominal search limits might be avoidable, corresponding to a
+    rough 4-8% wall-time inclination rather than a measured saving.
+  * Written games lack temporal search traces, so safe stopping points and late leader changes are not identifiable.
+  * The modest opportunity does not currently justify instrumentation, implementation complexity, or degradation of
+    policy and next-policy targets. Revisit only if search becomes a dominant bottleneck.
+  * [Audit and reproducible methodology](documentation/benchmarks/adaptive-search-termination-r3-20260813/README.md).
 
 * **Progressive model scaling** - implemented [ ] experimenting [ ] validated [ ]
 
@@ -127,8 +131,7 @@ Current screening policy:
   * Spend more search on high-entropy or close-value positions.
   * Spend less on obvious positions.
   * More principled than a globally fixed simulation cap.
-  * Deferred because calibrated adaptive termination captures the immediate benefit without a separate difficulty
-    estimator.
+  * Deferred with adaptive termination because the measured opportunity does not currently justify either mechanism.
 
 * **Tree reuse across moves** - implemented [x] experimenting [x] validated [ ]
 
@@ -514,7 +517,8 @@ For the main paper, keep these out of the primary method. Use them only as an up
 
 Deferred from the four-hour 7x7 Go screen:
 
-* dynamic simulation budgets, because adaptive termination is the simpler evidence-driven mechanism;
+* dynamic simulation budgets and adaptive termination, because their measured opportunity does not justify the
+  complexity and training-target risk;
 * Gumbel and sequential halving, because full-search targets currently use 64-512 simulations;
 * progressive model scaling, because shape transition and promotion overhead dominate a four-hour experiment;
 * transposition-aware graph search, because its primary value is in the later chess stage.
@@ -526,13 +530,12 @@ searches. The remaining six pre-existing single-variable screens should still ru
 configured for reduced-parent FPU, restart states, remaining game length, and forced playout pruning.
 
 Review the first completed results before choosing another variable or allocating confirmation seeds. Adaptive search
-termination and the broader 24-hour queue decision are deferred to `TOMORROW.md`.
+termination is deferred after the chess R3 audit; the broader 24-hour queue decision remains in `TOMORROW.md`.
 
 ### Likely final system
 
 * Progressive simulation schedule.
 * Mixed fast/full searches.
-* Conservative adaptive early stopping.
 * Strong FPU initialization.
 * Forced root exploration with pruned policy targets.
 * Archive-based restart states with controlled branch coverage.

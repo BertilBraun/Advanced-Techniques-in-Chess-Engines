@@ -12,16 +12,22 @@ Do not transfer thresholds or conclusions from 7x7. Prefer samples produced afte
 - Select the architecture that gives the best elapsed-time training result. Treat fixed-visit match strength as quality per search, not strength per second; retain throughput when judging the larger model.
 - Check whether 9x9 still has a strong first-player advantage and an unusually easy value target before using it as a chess proxy.
 
-## Adaptive search termination
+## Adaptive search termination — deferred
 
-First decide whether final 9x9 search targets are concentrated enough to justify deeper instrumentation.
+The 2026-08-13 chess R3 audit covered 634 completed games and 43,572 recorded searches. Extrapolating final visit
+distributions suggested that heuristic rules might avoid 15.33-20.55% of nominal fast-search limits, but only
+6.38-8.55% of nominal limits across all searches when no unsupported full-search savings are assumed. The rough
+wall-time inclination is about 4-8%, not a measurement.
 
-- From late replay samples, measure top-1, cumulative top-2 and top-3 policy mass, entropy, effective candidate count, and the gap between the first and second moves. Report distributions by ply range and model generation.
-- Estimate the fraction of positions ending with a clearly dominant move, for example top-1 mass above 0.70, 0.80, and 0.90. Also measure diffuse positions; a decisive root value is not evidence that the move choice is settled.
-- Do not infer an exact safe stopping point from the final target alone. A final sharp target can still have changed late in the search, while a final diffuse target generally rules early stopping out.
-- If only a small fraction of positions are sharp, defer the feature. If the fraction is material, add bounded trace instrumentation in a later change for selected full searches at intermediate visit counts such as 32, 64, 96, 128, 192, and 256.
-- With traces, test whether the leader, visit gap, and top-k mass remain stable, and calculate target divergence and simulations saved. Prefer an exact unrecoverable visit-lead rule before heuristic value or Q thresholds.
-- Any eventual experiment must log requested and completed simulations and compare equal elapsed time against spending the saved compute on ordinary self-play.
+Written games contain only final visit distributions, not intermediate leaders or visit trajectories. They therefore
+cannot identify a safe stopping point or measure late leader changes. Early termination would also alter policy and
+next-policy targets even when the final top move is obvious, and could interact with temperature sampling, root-value
+blending, resignation calibration, batching, and the staged fast/full scheduler.
+
+Decision: do not implement or prioritize trace instrumentation now. Revisit only if search becomes a dominant
+bottleneck after larger optimizations are exhausted. Any reconsideration requires bounded shadow traces at
+intermediate visit counts and an equal-wall-time test that measures target divergence as well as compute saved. See
+the [R3 adaptive-termination audit](documentation/benchmarks/adaptive-search-termination-r3-20260813/README.md).
 
 ## Resignation
 
@@ -63,4 +69,7 @@ Decide whether replay targets are old enough, different enough, and long-lived e
 
 ## Decision output
 
-Produce one short report with the raw measurements, uncertainty, and one of three decisions for each topic: implement next, instrument first, or defer. Keep adaptive termination, resignation, deduplication, and reanalysis as separate decisions; none should be implemented merely because it helped or looked promising on 7x7.
+Produce one short report with the raw measurements, uncertainty, and one of three decisions for each unresolved topic:
+implement next, instrument first, or defer. Adaptive termination is already deferred by the chess R3 audit above.
+Keep resignation, deduplication, and reanalysis as separate decisions; none should be implemented merely because it
+helped or looked promising on 7x7.
