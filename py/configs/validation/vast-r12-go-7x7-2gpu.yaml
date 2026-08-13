@@ -20,6 +20,7 @@ training:
       replay_ratio: 1
       optimizer_steps_per_quantum: 2
       maximum_optimizer_steps: 1000
+      self_play_backpressure_quanta: 5
   limits:
     maximum_wall_time_seconds: 240
     resource_telemetry_interval_seconds: 2

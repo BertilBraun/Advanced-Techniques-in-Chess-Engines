@@ -78,6 +78,7 @@ class CreditTrainingParams(FrozenModel):
     optimizer_steps_per_quantum: int = Field(gt=0)
     maximum_optimizer_steps: int = Field(gt=0)
     retained_checkpoint_interval_generations: int = Field(gt=0)
+    self_play_backpressure_quanta: int = Field(gt=0)
 
     @model_validator(mode='after')
     def validate_schedule(self) -> CreditTrainingParams:
@@ -95,6 +96,12 @@ class CreditTrainingParams(FrozenModel):
         if required_samples != required_samples.to_integral_value():
             raise ValueError('Replay ratio must produce an integral unique-sample quantum.')
         return int(required_samples)
+
+    def requires_self_play_backpressure(self, available_credits: Decimal, global_batch_size: int) -> bool:
+        threshold = Decimal(
+            self.presentation_credits_per_quantum(global_batch_size) * self.self_play_backpressure_quanta
+        )
+        return available_credits > threshold
 
 
 OptimizerType = Literal['adamw', 'sgd']

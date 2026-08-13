@@ -30,7 +30,7 @@ training:
     evaluation: {device_cycle: [0]}
   lifecycle:
     replay: {capacity: {kind: linear, start_generation: 0, end_generation: 200, start_value: 100000, end_value: 2500000, rounding: nearest}, maximum_capacity: 2500000, maximum_policy_entries: 50}
-    credit: {replay_ratio: 8, optimizer_steps_per_quantum: 100, maximum_optimizer_steps: 100000, retained_checkpoint_interval_generations: 1}
+    credit: {replay_ratio: 8, optimizer_steps_per_quantum: 100, maximum_optimizer_steps: 100000, retained_checkpoint_interval_generations: 1, self_play_backpressure_quanta: 5}
     inference_retention: {recent_checkpoint_count: 11, milestone_interval: 10}
   limits: {hourly_price: 1.0, maximum_wall_time_seconds: 21600, maximum_open_file_count: 32768, maximum_host_ram_percent: 95.0, minimum_free_disk_gib: 0.1, resource_telemetry_interval_seconds: 5.0}
   random_seed: 0

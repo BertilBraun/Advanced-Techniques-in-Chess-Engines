@@ -73,6 +73,7 @@ training:
       optimizer_steps_per_quantum: 1
       maximum_optimizer_steps: 5
       retained_checkpoint_interval_generations: 1
+      self_play_backpressure_quanta: 5
     inference_retention:
       recent_checkpoint_count: 6
       milestone_interval: 1

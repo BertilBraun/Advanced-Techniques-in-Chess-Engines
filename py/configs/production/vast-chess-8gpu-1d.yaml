@@ -62,6 +62,7 @@ training:
       optimizer_steps_per_quantum: 400
       maximum_optimizer_steps: 1000000000
       retained_checkpoint_interval_generations: 3
+      self_play_backpressure_quanta: 5
     inference_retention: {recent_checkpoint_count: 11, milestone_interval: 10}
   limits:
     hourly_price: 0.4608888888888886

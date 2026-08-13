@@ -50,6 +50,7 @@ def _parameters() -> CreditTrainingParams:
         optimizer_steps_per_quantum=4,
         maximum_optimizer_steps=8,
         retained_checkpoint_interval_generations=1,
+        self_play_backpressure_quanta=5,
     )
 
 

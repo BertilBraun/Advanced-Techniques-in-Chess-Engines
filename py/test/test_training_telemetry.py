@@ -1,6 +1,8 @@
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from src.games.representation import PackedPlaneLayout
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayDescription
@@ -31,6 +33,7 @@ def test_training_lifecycle_telemetry_reports_credit_backlog_and_observed_ratio(
         optimizer_steps_per_quantum=500,
         maximum_optimizer_steps=1_000_000,
         retained_checkpoint_interval_generations=1,
+        self_play_backpressure_quanta=5,
     )
     replay = ReplayDescription(
         path=Path('replay.bin'),
@@ -57,3 +60,22 @@ def test_training_lifecycle_telemetry_reports_credit_backlog_and_observed_ratio(
     assert telemetry.live_replay_rows == 100
     assert telemetry.logical_replay_capacity == 250
     assert telemetry.replay_fill_fraction == 0.4
+
+
+@pytest.mark.parametrize(
+    ('available_credits', 'expected'),
+    ((5_120_000, False), (5_120_001, True)),
+)
+def test_self_play_backpressure_starts_above_configured_quantum_surplus(
+    available_credits: int,
+    expected: bool,
+) -> None:
+    credit = CreditTrainingParams(
+        replay_ratio=Decimal(8),
+        optimizer_steps_per_quantum=500,
+        maximum_optimizer_steps=1_000_000,
+        retained_checkpoint_interval_generations=1,
+        self_play_backpressure_quanta=5,
+    )
+
+    assert credit.requires_self_play_backpressure(Decimal(available_credits), global_batch_size=2048) is expected

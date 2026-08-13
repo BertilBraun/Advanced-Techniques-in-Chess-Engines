@@ -76,6 +76,7 @@ class Coordinator:
         self._apply_checkpoint_retention()
         self.latest_completed_model_version = self.ledger.model_generation
         self.final_stop_reason: str | None = None
+        self._backpressure_pause_requested = False
         self._credit_wait_started_at = time.perf_counter()
         self._record_scheduled_settings(self.ledger.model_generation)
 
@@ -94,9 +95,11 @@ class Coordinator:
                 self.final_stop_reason = self.run_limit_monitor.stop_reason()
                 if self.final_stop_reason is not None:
                     break
+                self._apply_self_play_backpressure()
                 self._ingest_available_games()
+                self._apply_self_play_backpressure()
                 if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
-                    time.sleep(min(0.1, self.evaluation_manager.seconds_until_next_boundary()))
+                    time.sleep(0.1)
                     continue
                 self._train_quantum()
         finally:
@@ -127,20 +130,8 @@ class Coordinator:
 
     def _train_quantum(self) -> None:
         credit_wait_seconds = time.perf_counter() - self._credit_wait_started_at
-        paused_worker_ids = self.configuration.training.topology.self_play.node_ids_to_pause_during_training
+        paused_worker_ids = self._training_pause_worker_ids()
         self.self_play_group.request_pause(paused_worker_ids)
-        self._ingest_available_games()
-        if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
-            resumed = self.self_play_group.apply_to_workers(
-                paused_worker_ids,
-                RunningSelfPlayState(
-                    checkpoint=self.ledger.state.active_checkpoint,
-                    resignation_policy=self._resignation_policy(),
-                ),
-            )
-            if any(response.kind != 'running' for response in resumed):
-                raise RuntimeError('Selected self-play workers did not resume after a cancelled training quantum.')
-            return
         result = self.trainer_group.train_quantum(self.replay_manager.description(), self.ledger.progress)
         self.ledger.commit_quantum(result)
         self.latest_completed_model_version = self.ledger.model_generation
@@ -163,8 +154,30 @@ class Coordinator:
         applied = self.self_play_group.apply(desired_states)
         if any(response.kind != 'running' for response in applied):
             raise RuntimeError('Self-play workers did not apply the trained checkpoint.')
+        self._backpressure_pause_requested = False
+        self._apply_self_play_backpressure()
         self._apply_checkpoint_retention()
         self._credit_wait_started_at = time.perf_counter()
+
+    def _training_pause_worker_ids(self) -> tuple[int, ...]:
+        if self._backpressure_pause_requested:
+            return ()
+        if self._self_play_backpressure_required():
+            return tuple(range(self.self_play_group.worker_count))
+        return self.configuration.training.topology.self_play.node_ids_to_pause_during_training
+
+    def _apply_self_play_backpressure(self) -> None:
+        if not self._self_play_backpressure_required() or self._backpressure_pause_requested:
+            return
+        self.self_play_group.request_pause(tuple(range(self.self_play_group.worker_count)))
+        self._backpressure_pause_requested = True
+
+    def _self_play_backpressure_required(self) -> bool:
+        training = self.configuration.training
+        return training.lifecycle.credit.requires_self_play_backpressure(
+            self.ledger.state.available_credits,
+            training.trainer.global_batch_size,
+        )
 
     def _resignation_policy(self) -> PublishedResignationPolicy:
         if self.resignation_calibrator is None:
