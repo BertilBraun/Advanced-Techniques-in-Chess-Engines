@@ -39,6 +39,8 @@ The 2026-08-13 follow-up used the same stopped-r2 generation-70 model, 600/150 s
 probability, eight RTX 3060 GPUs, one warm-up batch, and a requested 90-second sample. These measurements include
 the CUDA completion-event changes from `10893aa0` and `75b30f7c`. They compare only against this follow-up's own
 ratio-admission control because the earlier topology table predates those CUDA changes.
+The objective was to use known mixed-search budgets to preserve throughput with fewer concurrent games and hence
+shorter game-completion latency; full-batch percentage was diagnostic evidence, not the optimization target.
 
 | Admission/topology | Searches/s | Delta vs control | Mean batch | Full batches | GPU utilization | Mean power | Searches/game/s |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -51,6 +53,21 @@ Capacity fill retains the budget-ratio floor, then admits enough additional fast
 inference capacity after all full requests have been admitted. Waiting fast requests are still released one at a
 time when active fast requests complete. The public Python `search(requests)` call, result order, CUDA
 synchronization, and terminal/error/statistics lifecycle are unchanged.
+
+For one 512-game process, 25% full searches means 128 full and 384 fast requests in expectation; the realized count
+varies because the choice is random. With capacity for 256 outstanding positions, the idealized new-root schedule
+starts all 128 full requests plus 128 fast requests. Each fast completion immediately admits one waiter, producing
+three successively admitted cohorts of 128 fast requests. In equivalent visit progress, the active population is 256
+through 450 visits, after which only the 128 full requests remain until 600 visits. The waiting-fast pool empties
+near 300 visits and the last fast cohort finishes near 450 visits. This is a calculation model, not a four-wave
+implementation: admission happens per completed fast request, and retained roots begin with unequal visit counts.
+
+Across the four 150-visit intervals, that ideal population supplies seven of eight possible 128-root half-capacity
+blocks: `(3 x 256 + 1 x 128) / (4 x 256) = 87.5%`. Expressed over all potential 64-position batch opportunities,
+including idle opportunities, this is `7/8 x 64 = 56` positions. It would still produce a reported mean inference
+batch of 64 if every submitted call were full, because an idle opportunity creates no model call. The measured
+49.91 mean therefore shows that submitted calls themselves were frequently partial; the planned full-search tail
+alone cannot explain it.
 
 The small throughput gain and nearly unchanged mean batch size are plausible and do not by themselves indicate an
 implementation defect. The policy fills an initial request-count target, not a persistent queue of inference-ready
