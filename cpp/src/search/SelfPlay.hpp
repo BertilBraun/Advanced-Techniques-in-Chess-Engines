@@ -117,11 +117,13 @@ public:
         const std::size_t fullSearchCount =
             static_cast<std::size_t>(std::ranges::count(requests, true, &Request::full_search));
         const std::size_t fastSearchCount = requests.size() - fullSearchCount;
+        const std::size_t inferenceCapacity = m_inferenceParameters.workers *
+                                              m_inferenceParameters.batch_size *
+                                              m_inferenceParameters.outstanding_batches_per_worker;
         const std::size_t initiallyAdmittedFastSearches =
-            fullSearchCount == 0
-                ? fastSearchCount
-                : initialFastSearchAdmissionCount(fastSearchCount, m_searchParameters.full_searches,
-                                                  m_searchParameters.fast_searches);
+            initialFastSearchAdmissionCount(fastSearchCount, fullSearchCount,
+                                            m_searchParameters.full_searches,
+                                            m_searchParameters.fast_searches, inferenceCapacity);
         std::size_t admittedFastSearches = 0;
         std::vector<GameSearchRequest<Game>> engineRequests;
         engineRequests.reserve(requests.size());

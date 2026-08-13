@@ -5,6 +5,7 @@
 #include "search/SearchTree.hpp"
 #include "search/tree/TreeSearchParameters.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -30,9 +31,11 @@ enum class SearchAdmission { Immediate, InitialFast, WaitingFast };
 
 [[nodiscard]] inline std::size_t
 initialFastSearchAdmissionCount(const std::size_t fastSearchCount,
+                                const std::size_t fullSearchCount,
                                 const std::uint32_t fullSearchBudget,
-                                const std::uint32_t fastSearchBudget) {
-    if (fastSearchCount == 0 || fastSearchBudget >= fullSearchBudget) {
+                                const std::uint32_t fastSearchBudget,
+                                const std::size_t inferenceCapacity) {
+    if (fastSearchCount == 0 || fullSearchCount == 0 || fastSearchBudget >= fullSearchBudget) {
         return fastSearchCount;
     }
     const std::size_t quotient = fastSearchCount / fullSearchBudget;
@@ -40,7 +43,12 @@ initialFastSearchAdmissionCount(const std::size_t fastSearchCount,
     const std::uint64_t remainderProduct = remainder * fastSearchBudget;
     const std::size_t roundedRemainder =
         static_cast<std::size_t>((remainderProduct + fullSearchBudget - 1U) / fullSearchBudget);
-    return quotient * fastSearchBudget + roundedRemainder;
+    const std::size_t ratioBasedFastSearches = quotient * fastSearchBudget + roundedRemainder;
+    const std::size_t capacityBasedFastSearches =
+        inferenceCapacity > fullSearchCount
+            ? std::min(fastSearchCount, inferenceCapacity - fullSearchCount)
+            : 0;
+    return std::max(ratioBasedFastSearches, capacityBasedFastSearches);
 }
 
 template <SearchGame Game> struct GameSearchRequest {

@@ -274,14 +274,20 @@ int runBatchedSearchTests() {
                                    forcedResults.results[1].policy_target_visits),
                 "fast search applied forced playouts or pruning");
 
-        require(initialFastSearchAdmissionCount(8, 4, 1) == 2,
+        require(initialFastSearchAdmissionCount(8, 2, 4, 1, 4) == 2,
                 "4:1 mixed admission selected the wrong initial fast count");
-        require(initialFastSearchAdmissionCount(5, 4, 1) == 2,
+        require(initialFastSearchAdmissionCount(5, 2, 4, 1, 4) == 2,
                 "non-integral mixed admission did not round up");
-        require(initialFastSearchAdmissionCount(7, 4, 4) == 7,
+        require(initialFastSearchAdmissionCount(7, 2, 4, 4, 4) == 7,
                 "equal budgets did not admit every fast search");
-        require(initialFastSearchAdmissionCount(0, 4, 1) == 0,
+        require(initialFastSearchAdmissionCount(0, 3, 4, 1, 4) == 0,
                 "all-full admission unexpectedly created fast work");
+        require(initialFastSearchAdmissionCount(7, 0, 4, 1, 4) == 7,
+                "all-fast admission did not admit every search");
+        require(initialFastSearchAdmissionCount(384, 128, 600, 150, 256) == 128,
+                "capacity-fill admission did not fill the configured inference slots");
+        require(initialFastSearchAdmissionCount(384, 256, 600, 150, 256) == 96,
+                "capacity-fill admission incorrectly displaced ratio-based work");
 
         const ChessSelfPlaySearchParameters stagedParameters(1, 4, 1, treeSearchParameters(1.5F),
                                                              0.3F, 0.25F);
