@@ -40,7 +40,7 @@ image = (
         _REPOSITORY_ROOT / 'py',
         f'{_REMOTE_ROOT}/py',
         copy=True,
-        ignore=['test/**', '**/__pycache__/**', '*.pt', '*.pyd', '*.so'],
+        ignore=['test/**', '.pytest_cache/**', '**/__pycache__/**', '*.pt', '*.pyd', '*.so'],
     )
     .add_local_dir(
         _REPOSITORY_ROOT / 'deployment',
