@@ -65,6 +65,7 @@ class TensorboardSourceSegment:
     source_root: Path
     minimum_wall_time: float | None = None
     maximum_wall_time: float | None = None
+    evaluation_step_offset: int = 0
 
 
 @dataclass(frozen=True)
@@ -97,12 +98,13 @@ class SourceSegmentSummary(BaseModel):
     source_root: str
     minimum_wall_time: float | None
     maximum_wall_time: float | None
+    evaluation_step_offset: int
 
 
 class ConsolidationManifest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    schema_version: int = 2
+    schema_version: int = 3
     generated_at_utc: datetime
     source_segments: tuple[SourceSegmentSummary, ...]
     output_root: str
@@ -123,8 +125,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         '--source-segment',
         action='append',
-        nargs=3,
-        metavar=('SOURCE_ROOT', 'MINIMUM_WALL_TIME', 'MAXIMUM_WALL_TIME'),
+        nargs=4,
+        metavar=('SOURCE_ROOT', 'MINIMUM_WALL_TIME', 'MAXIMUM_WALL_TIME', 'EVALUATION_STEP_OFFSET'),
     )
     parser.add_argument('--output-root', required=True, type=Path)
     parser.add_argument('--watch-interval-seconds', type=float)
@@ -149,8 +151,14 @@ def _source_segments(arguments: argparse.Namespace) -> tuple[TensorboardSourceSe
                 source_root=Path(raw_source_root),
                 minimum_wall_time=_optional_wall_time(raw_minimum_wall_time),
                 maximum_wall_time=_optional_wall_time(raw_maximum_wall_time),
+                evaluation_step_offset=int(raw_evaluation_step_offset),
             )
-            for raw_source_root, raw_minimum_wall_time, raw_maximum_wall_time in arguments.source_segment
+            for (
+                raw_source_root,
+                raw_minimum_wall_time,
+                raw_maximum_wall_time,
+                raw_evaluation_step_offset,
+            ) in arguments.source_segment
         )
     if arguments.source_root is None:
         raise ValueError('--source-root or --source-segment is required unless --custom-layout-only is selected.')
@@ -182,6 +190,7 @@ def _validate_paths(
                 source_root=resolved_source_root,
                 minimum_wall_time=source_segment.minimum_wall_time,
                 maximum_wall_time=source_segment.maximum_wall_time,
+                evaluation_step_offset=source_segment.evaluation_step_offset,
             )
         )
     if resolved_output_root.exists() and any(resolved_output_root.iterdir()):
@@ -541,11 +550,11 @@ class TensorboardLogConsolidator:
                 if _plugin_name(original_value) == 'text' and category != 'training_args' and not is_evaluation_summary:
                     self.excluded_text_summary_count += 1
                     continue
-                self._select_if_newer(source_segment.source_root, event_file, event, original_value)
+                self._select_if_newer(source_segment, event_file, event, original_value)
 
     def _select_if_newer(
         self,
-        source_root: Path,
+        source_segment: TensorboardSourceSegment,
         event_file: Path,
         event: event_pb2.Event,
         original_value: summary_pb2.Summary.Value,
@@ -553,24 +562,27 @@ class TensorboardLogConsolidator:
         consolidated_value = summary_pb2.Summary.Value()
         consolidated_value.CopyFrom(original_value)
         consolidated_value.tag = canonical_tag(
-            source_root,
+            source_segment.source_root,
             event_file,
             original_value.tag,
             self.single_run_source,
         )
         grouped_summary_tag = time_series_tag(
-            source_root,
+            source_segment.source_root,
             event_file,
             original_value.tag,
             self.single_run_source,
         )
         source_route = source_layout_route(
-            source_root,
+            source_segment.source_root,
             event_file,
             original_value.tag,
             self.single_run_source,
         )
-        identity = _summary_identity(consolidated_value.tag, event.step, consolidated_value)
+        adjusted_step = event.step
+        if original_value.tag.startswith(('evaluation/', 'evaluation_metadata/')):
+            adjusted_step += source_segment.evaluation_step_offset
+        identity = _summary_identity(consolidated_value.tag, adjusted_step, consolidated_value)
         serialized_value = consolidated_value.SerializeToString()
         value_sha256 = hashlib.sha256(serialized_value).hexdigest()
         previous_state = self.summary_states.get(identity)
@@ -701,6 +713,7 @@ class TensorboardLogConsolidator:
                     source_root=str(source_segment.source_root),
                     minimum_wall_time=source_segment.minimum_wall_time,
                     maximum_wall_time=source_segment.maximum_wall_time,
+                    evaluation_step_offset=source_segment.evaluation_step_offset,
                 )
                 for source_segment in self.source_segments
             ),

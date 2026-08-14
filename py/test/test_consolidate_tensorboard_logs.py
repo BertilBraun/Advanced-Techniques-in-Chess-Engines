@@ -98,6 +98,20 @@ def test_consolidation_stitches_run_segments_at_wall_time_boundary(tmp_path: Pat
     write_scalar(first_source / 'coordinator', 'training/loss', 151, 9.0, wall_time=30.0)
     write_scalar(second_source / 'coordinator', 'training/loss', 150, 1.4, wall_time=40.0)
     write_scalar(second_source / 'coordinator', 'training/loss', 151, 1.3, wall_time=50.0)
+    write_scalar(
+        first_source / 'coordinator',
+        'evaluation/stockfish-level-3/score',
+        55_200,
+        0.4,
+        wall_time=15.0,
+    )
+    write_scalar(
+        second_source / 'coordinator',
+        'evaluation/stockfish-level-3/score',
+        1_200,
+        0.5,
+        wall_time=45.0,
+    )
 
     manifest = consolidate_once(
         None,
@@ -106,17 +120,23 @@ def test_consolidation_stitches_run_segments_at_wall_time_boundary(tmp_path: Pat
         preserve_source_layout=True,
         source_segments=(
             TensorboardSourceSegment(first_source, maximum_wall_time=20.0),
-            TensorboardSourceSegment(second_source, minimum_wall_time=20.0),
+            TensorboardSourceSegment(second_source, minimum_wall_time=20.0, evaluation_step_offset=55_200),
         ),
     )
 
     assert scalar_values(output_root / 'coordinator', 'training/loss') == pytest.approx((1.5, 1.4, 1.3))
+    evaluation_accumulator = EventAccumulator(str(output_root / 'coordinator'))
+    evaluation_accumulator.Reload()
+    evaluation_events = evaluation_accumulator.Scalars('evaluation/stockfish-level-3/score')
+    assert tuple(event.step for event in evaluation_events) == (55_200, 56_400)
+    assert tuple(event.value for event in evaluation_events) == pytest.approx((0.4, 0.5))
     assert tuple(segment.source_root for segment in manifest.source_segments) == (
         str(first_source.resolve()),
         str(second_source.resolve()),
     )
     assert manifest.source_segments[0].maximum_wall_time == 20.0
     assert manifest.source_segments[1].minimum_wall_time == 20.0
+    assert manifest.source_segments[1].evaluation_step_offset == 55_200
 
 
 def test_evaluation_outcome_overlays_preserve_other_summaries_in_root_run(tmp_path: Path) -> None:
