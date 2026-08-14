@@ -338,6 +338,7 @@ def test_eight_gpu_chess_r4_configuration_resolves_checkpoint_continuation() -> 
     )
     assert configuration.run.run_name == 'vast-chess-8gpu-1d-r4'
     assert configuration.run.stage.value == 'continuation'
+    assert configuration.run.hardware.minimum_disk_gib == pytest.approx(65)
     assert configuration.run.resume.mode == 'checkpoint'
     assert configuration.run.resume.generation == 150
     assert configuration.training.save_path.endswith('vast-chess-8gpu-1d-r4')

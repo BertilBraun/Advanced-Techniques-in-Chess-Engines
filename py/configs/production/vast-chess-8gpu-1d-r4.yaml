@@ -4,6 +4,8 @@ run:
   run_name: vast-chess-8gpu-1d-r4
   tensorboard_run_directory: vast-chess-8gpu-1d-r4
   stage: continuation
+  hardware:
+    minimum_disk_gib: 65
   resume:
     mode: checkpoint
     checkpoint_manifest_path: /workspace/chess-restart-artifacts/vast-chess-8gpu-1d-r3-generation-150/checkpoint_150.json
