@@ -115,15 +115,15 @@ public:
                         .visit_count = policyTargetVisits[index],
                     });
                 }
-                if (edge.visits > 0 &&
-                    (edge.visits > highestChildVisits ||
-                     (edge.visits == highestChildVisits &&
-                      actionId < result.highest_visited_child_action_id))) {
+                if (edge.visits > 0 && (edge.visits > highestChildVisits ||
+                                        (edge.visits == highestChildVisits &&
+                                         actionId < result.highest_visited_child_action_id))) {
                     highestChildVisits = edge.visits;
                     result.highest_visited_child_action_id = actionId;
                     result.highest_visited_child_visit_count = edge.visits;
-                    result.highest_visited_child_q =
-                        -edge.value_sum / static_cast<float>(edge.visits);
+                    result.highest_visited_child_q = -root.tree().valueDiscountPerPly() *
+                                                     edge.value_sum /
+                                                     static_cast<float>(edge.visits);
                 }
             }
             if (result.highest_visited_child_action_id < 0) {
@@ -262,6 +262,11 @@ private:
     std::uint64_t m_searchWallNanoseconds = 0;
 
     [[nodiscard]] RootTask createTask(const GameSearchRequest<Game> &request) {
+        if (request.root.tree().valueDiscountPerPly() !=
+            m_searchParameters.tree_search.value_discount_per_ply) {
+            throw std::invalid_argument(
+                "Root value discount does not match the active search parameters");
+        }
         RootTask task{
             .root = request.root,
             .starting_visits = request.root.visits(),

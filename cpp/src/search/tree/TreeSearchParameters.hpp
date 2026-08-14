@@ -40,18 +40,24 @@ struct TreeSearchParameters {
     float exploration_constant;
     FirstPlayUrgencyParameters first_play_urgency;
     float forced_playout_coefficient;
+    float value_discount_per_ply;
 
     TreeSearchParameters(const float explorationConstant,
                          FirstPlayUrgencyParameters firstPlayUrgency,
-                         const float forcedPlayoutCoefficient)
+                         const float forcedPlayoutCoefficient, const float valueDiscountPerPly)
         : exploration_constant(explorationConstant), first_play_urgency(firstPlayUrgency),
-          forced_playout_coefficient(forcedPlayoutCoefficient) {
+          forced_playout_coefficient(forcedPlayoutCoefficient),
+          value_discount_per_ply(valueDiscountPerPly) {
         if (!std::isfinite(exploration_constant) || exploration_constant <= 0.0F) {
             throw std::invalid_argument("Exploration constant must be finite and positive");
         }
         if (!std::isfinite(forced_playout_coefficient) || forced_playout_coefficient < 0.0F) {
             throw std::invalid_argument(
                 "Forced-playout coefficient must be finite and nonnegative");
+        }
+        if (!std::isfinite(value_discount_per_ply) || value_discount_per_ply <= 0.0F ||
+            value_discount_per_ply > 1.0F) {
+            throw std::invalid_argument("Value discount per ply must be finite and in (0, 1]");
         }
     }
 };

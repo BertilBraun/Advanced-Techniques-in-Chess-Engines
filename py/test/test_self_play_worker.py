@@ -190,6 +190,7 @@ class FakeGame:
             greedy_after_ply=1,
             maximum_game_plies=None,
             primary_sample_weight=1.0,
+            value_discount_per_ply=1.0,
             force_fast_search_after_ply=self.force_fast_search_after_ply,
         )
 

@@ -48,3 +48,4 @@ chess:
     force_fast_search_after_ply: {kind: constant, value: 160}
   objective:
     root_value_blend: {kind: constant, value: 0.10}
+    value_discount_per_ply: {kind: constant, value: 0.9985}

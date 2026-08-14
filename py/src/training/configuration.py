@@ -132,6 +132,7 @@ class TrainingObjectiveConfiguration(FrozenModel):
     policy_loss_weight: FloatGenerationSchedule
     value_loss_weight: FloatGenerationSchedule
     root_value_blend: FloatGenerationSchedule
+    value_discount_per_ply: FloatGenerationSchedule
     auxiliary_targets: tuple[AuxiliaryTargetConfiguration, ...] = ()
 
     @model_validator(mode='after')
@@ -144,6 +145,8 @@ class TrainingObjectiveConfiguration(FrozenModel):
                 raise ValueError(f'{name} must remain nonnegative.')
         if any(not 0.0 <= value <= 1.0 for value in defined_schedule_values(self.root_value_blend)):
             raise ValueError('Root-value blend must remain in [0, 1].')
+        if any(not 0.0 < value <= 1.0 for value in defined_schedule_values(self.value_discount_per_ply)):
+            raise ValueError('Value discount per ply must remain in (0, 1].')
         return self
 
 

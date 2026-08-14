@@ -88,6 +88,7 @@ class ResolvedSelfPlayParameters:
     greedy_after_ply: int
     maximum_game_plies: int | None
     primary_sample_weight: float
+    value_discount_per_ply: float
     force_fast_search_after_ply: int | None = None
 
     def __post_init__(self) -> None:
@@ -123,3 +124,5 @@ class ResolvedSelfPlayParameters:
                 pass
         if self.primary_sample_weight <= 0.0:
             raise ValueError('Primary sample weight must be positive.')
+        if not isfinite(self.value_discount_per_ply) or not 0.0 < self.value_discount_per_ply <= 1.0:
+            raise ValueError('Value discount per ply must be finite and lie in (0, 1].')

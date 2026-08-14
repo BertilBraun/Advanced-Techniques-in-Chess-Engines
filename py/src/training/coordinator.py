@@ -71,6 +71,7 @@ class Coordinator:
             replay_layout,
             training.lifecycle.replay,
             self.ledger.model_generation,
+            game.value_discount_per_ply,
             self.resignation_calibrator,
         )
         self.trainer_group = TrainerGroup(self.configuration, game, self.ledger.state.active_checkpoint)

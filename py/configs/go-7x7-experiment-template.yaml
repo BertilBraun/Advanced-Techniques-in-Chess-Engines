@@ -86,4 +86,4 @@ go:
     primary_sample_weight: {kind: constant, value: 1.0}
   rules: {komi_half_points: 15, maximum_moves: 196}
   representation: {board_size: 7, history_length: 8, binary_channel_count: 16, scalar_channel_count: 1, canonical_player_perspective: true}
-  objective: {policy_loss_weight: {kind: constant, value: 1.0}, value_loss_weight: {kind: constant, value: 1.0}, root_value_blend: {kind: constant, value: 0.0}, auxiliary_targets: []}
+  objective: {policy_loss_weight: {kind: constant, value: 1.0}, value_loss_weight: {kind: constant, value: 1.0}, root_value_blend: {kind: constant, value: 0.0}, value_discount_per_ply: {kind: constant, value: 1.0}, auxiliary_targets: []}

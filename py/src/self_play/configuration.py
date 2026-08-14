@@ -208,6 +208,7 @@ class SelfPlayConfiguration(FrozenModel):
         self,
         model_generation: int,
         maximum_game_plies: int | None,
+        value_discount_per_ply: float,
     ) -> ResolvedSelfPlayParameters:
         search = self.search
         return ResolvedSelfPlayParameters(
@@ -227,6 +228,7 @@ class SelfPlayConfiguration(FrozenModel):
             greedy_after_ply=self.greedy_after_ply.value_at(model_generation),
             maximum_game_plies=maximum_game_plies,
             primary_sample_weight=self.primary_sample_weight.value_at(model_generation),
+            value_discount_per_ply=value_discount_per_ply,
             force_fast_search_after_ply=(
                 None
                 if self.force_fast_search_after_ply is None

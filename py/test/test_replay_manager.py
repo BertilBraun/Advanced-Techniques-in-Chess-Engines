@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 from AlphaZeroCpp import GameSearchVisit
 
+from src.experiment.generation_schedule import ConstantSchedule
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.contracts import (
@@ -99,6 +100,7 @@ class LinearStateContract(GameStateContract[LinearPosition]):
 
 
 LINEAR_STATE_CONTRACT = LinearStateContract()
+UNDISCOUNTED_VALUES = ConstantSchedule[float](value=1.0)
 
 
 def _completed_game() -> CompletedSelfPlayGame:
@@ -152,7 +154,13 @@ def _target_layout() -> TrainingTargetLayout:
 
 
 def test_shared_materialization_reconstructs_perspective_and_trajectory_targets() -> None:
-    materialized = materialize_completed_game(_completed_game(), LINEAR_STATE_CONTRACT, _target_layout(), 1)
+    materialized = materialize_completed_game(
+        _completed_game(),
+        LINEAR_STATE_CONTRACT,
+        _target_layout(),
+        1,
+        UNDISCOUNTED_VALUES,
+    )
 
     assert len(materialized.samples) == 3
     assert materialized.policies_truncated == 5
@@ -194,7 +202,13 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
     )
     targets = TrainingTargetLayout(action_size=3, wdl_size=3, auxiliary_heads=())
 
-    materialized = materialize_completed_game(game, LINEAR_STATE_CONTRACT, targets, maximum_policy_entries=3)
+    materialized = materialize_completed_game(
+        game,
+        LINEAR_STATE_CONTRACT,
+        targets,
+        maximum_policy_entries=3,
+        value_discount_per_ply=UNDISCOUNTED_VALUES,
+    )
 
     assert len(materialized.samples) == 1
     assert materialized.samples[0].encoded_state == LINEAR_STATE_CONTRACT.encode_network_input(LinearPosition((0, 1)))
@@ -212,7 +226,13 @@ def test_remaining_game_length_uses_exact_completed_trajectory_boundary() -> Non
         ),
     )
 
-    materialized = materialize_completed_game(_completed_game(), LINEAR_STATE_CONTRACT, targets, 3)
+    materialized = materialize_completed_game(
+        _completed_game(),
+        LINEAR_STATE_CONTRACT,
+        targets,
+        3,
+        UNDISCOUNTED_VALUES,
+    )
 
     assert tuple(
         target.normalized_length
@@ -220,6 +240,24 @@ def test_remaining_game_length_uses_exact_completed_trajectory_boundary() -> Non
         for target in sample.auxiliary_targets
         if isinstance(target, EligibleRemainingGameLengthTarget)
     ) == pytest.approx((1.0, 0.5, 0.25))
+
+
+def test_materialization_uniformly_blurs_wdl_by_actual_remaining_game_plies() -> None:
+    materialized = materialize_completed_game(
+        _completed_game(),
+        LINEAR_STATE_CONTRACT,
+        _target_layout(),
+        3,
+        ConstantSchedule[float](value=0.5),
+    )
+
+    assert materialized.samples[0].wdl_target == WdlTarget(win=0.3125, draw=0.3125, loss=0.375)
+    assert materialized.samples[1].wdl_target == WdlTarget(win=0.25, draw=0.25, loss=0.5)
+    assert materialized.samples[2].wdl_target == WdlTarget(
+        win=2.0 / 3.0,
+        draw=1.0 / 6.0,
+        loss=1.0 / 6.0,
+    )
 
 
 def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> None:
@@ -246,7 +284,14 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
         targets=_target_layout(),
         maximum_policy_entries=1,
     )
-    manager = ReplayManager.open(tmp_path, LINEAR_STATE_CONTRACT, layout, configuration, model_generation=2)
+    manager = ReplayManager.open(
+        tmp_path,
+        LINEAR_STATE_CONTRACT,
+        layout,
+        configuration,
+        model_generation=2,
+        value_discount_per_ply=UNDISCOUNTED_VALUES,
+    )
 
     ingestion = manager.ingest_available_games(2)
 
@@ -260,7 +305,14 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
     assert description.size == 4
     manager.close()
 
-    reopened = ReplayManager.open(tmp_path, LINEAR_STATE_CONTRACT, layout, configuration, model_generation=2)
+    reopened = ReplayManager.open(
+        tmp_path,
+        LINEAR_STATE_CONTRACT,
+        layout,
+        configuration,
+        model_generation=2,
+        value_discount_per_ply=UNDISCOUNTED_VALUES,
+    )
     assert reopened.live_samples == 4
     reopened.close()
 
@@ -280,7 +332,14 @@ def test_replay_manager_keeps_malformed_game_for_inspection(tmp_path: Path) -> N
         targets=_target_layout(),
         maximum_policy_entries=1,
     )
-    manager = ReplayManager.open(tmp_path, LINEAR_STATE_CONTRACT, layout, configuration, model_generation=0)
+    manager = ReplayManager.open(
+        tmp_path,
+        LINEAR_STATE_CONTRACT,
+        layout,
+        configuration,
+        model_generation=0,
+        value_discount_per_ply=UNDISCOUNTED_VALUES,
+    )
 
     with pytest.raises(ValueError):
         manager.ingest_available_games(0)
@@ -331,6 +390,7 @@ def test_replay_ingestion_updates_central_resignation_state(tmp_path: Path) -> N
         layout,
         replay_configuration,
         model_generation=2,
+        value_discount_per_ply=UNDISCOUNTED_VALUES,
         resignation_calibrator=calibrator,
     )
 

@@ -5,7 +5,7 @@
 #include <utility>
 
 ChessSearchRoot createChessSearchRoot(Board board, const std::uint32_t arenaCapacity) {
-    return ChessSearchRoot(std::move(board), arenaCapacity, 0, ChessGame::searchTurnDiscount());
+    return ChessSearchRoot(std::move(board), arenaCapacity);
 }
 
 std::vector<ChessSearchChild> chessSearchChildren(const ChessSearchRoot &root) {

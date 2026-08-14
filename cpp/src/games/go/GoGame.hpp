@@ -13,8 +13,6 @@ template <std::size_t BoardSize, std::size_t HistoryLength = 8> struct GoGame {
     using Action = GoAction<BoardSize>;
     using Encoding = GoEncoding<BoardSize, HistoryLength>;
 
-    [[nodiscard]] static constexpr float searchTurnDiscount() noexcept { return 1.0F; }
-
     [[nodiscard]] static State childState(const State &parent, const Action action) {
         return parent.child(action);
     }

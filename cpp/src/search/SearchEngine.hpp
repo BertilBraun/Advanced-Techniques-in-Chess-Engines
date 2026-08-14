@@ -21,16 +21,16 @@ public:
     BatchedGameSearch(const std::string &modelPath, const InferenceDevice device,
                       const int deviceId, const BatchedInferenceParameters inferenceParameters,
                       const BatchedSearchParameters searchParameters,
-                      const std::uint64_t modelGeneration, const bool resetTreesOnRefresh = true,
-                      const float turnDiscount = 1.0F)
+                      const std::uint64_t modelGeneration, const bool resetTreesOnRefresh = true)
         : m_executor(modelPath, device, deviceId, inferenceParameters, searchParameters),
           m_searchParameters(searchParameters), m_modelGeneration(modelGeneration),
-          m_resetTreesOnRefresh(resetTreesOnRefresh), m_turnDiscount(turnDiscount) {}
+          m_resetTreesOnRefresh(resetTreesOnRefresh),
+          m_valueDiscountPerPly(searchParameters.tree_search.value_discount_per_ply) {}
 
     [[nodiscard]] Root newRoot(typename Game::State position,
                                const std::size_t maximumCapacity = 0) {
         Root root(std::move(position), m_searchParameters.tree_capacity, maximumCapacity,
-                  m_turnDiscount);
+                  m_valueDiscountPerPly);
         m_trees.push_back(root.sharedTree());
         return root;
     }
@@ -51,6 +51,7 @@ public:
 
     void updateSearchParameters(const BatchedSearchParameters parameters) {
         m_searchParameters = parameters;
+        m_valueDiscountPerPly = parameters.tree_search.value_discount_per_ply;
         m_executor.updateSearchParameters(parameters);
     }
 
@@ -73,7 +74,7 @@ private:
     std::uint64_t m_modelGeneration;
     std::vector<std::weak_ptr<Tree>> m_trees;
     bool m_resetTreesOnRefresh;
-    float m_turnDiscount;
+    float m_valueDiscountPerPly;
 
     void resetActiveTrees() {
         for (const std::weak_ptr<Tree> &tree : m_trees) {

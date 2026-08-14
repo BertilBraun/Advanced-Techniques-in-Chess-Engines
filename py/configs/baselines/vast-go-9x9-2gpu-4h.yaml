@@ -114,6 +114,7 @@ go:
     policy_loss_weight: {kind: constant, value: 1.0}
     value_loss_weight: {kind: constant, value: 1.0}
     root_value_blend: {kind: linear, start_generation: 30, end_generation: 75, start_value: 0.0, end_value: 0.15, rounding: none}
+    value_discount_per_ply: {kind: constant, value: 1.0}
     auxiliary_targets:
       - {kind: next_policy, ply_offset: 1, loss_weight: {kind: constant, value: 0.1}}
-      - {kind: remaining_game_length, loss_weight: {kind: constant, value: 0.1}}
+      - {kind: remaining_game_length, loss_weight: {kind: constant, value: 0.1}, normalization_scale: 324}

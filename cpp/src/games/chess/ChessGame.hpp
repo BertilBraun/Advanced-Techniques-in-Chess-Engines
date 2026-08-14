@@ -12,8 +12,6 @@ struct ChessGame {
     using Action = ChessAction;
     using Encoding = ChessEncoding;
 
-    [[nodiscard]] static constexpr float searchTurnDiscount() noexcept { return 0.99F; }
-
     [[nodiscard]] static State childState(const State &parent, const Action action) {
         State child(parent);
         child.makeMove(action.move);

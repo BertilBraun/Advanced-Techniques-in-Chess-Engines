@@ -79,6 +79,7 @@ def main() -> None:
                 1.0,
                 FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO),
                 0.0,
+                1.0,
             ),
             0.3,
             0.0,

@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 from typing import Generic, TypeVar
 
+from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract
 from src.replay.layout import ReplayLayout
 from src.replay.materialization import materialize_completed_game
@@ -50,6 +51,7 @@ class ReplayManager(Generic[PositionT]):
         store: ReplayStore,
         state: GameStateContract[PositionT],
         configuration: ReplayConfiguration,
+        value_discount_per_ply: FloatGenerationSchedule,
         resignation_calibrator: ResignationCalibrator | None,
     ) -> None:
         if store.layout.packed_planes != state.packed_plane_layout:
@@ -64,6 +66,7 @@ class ReplayManager(Generic[PositionT]):
         self.store = store
         self.state = state
         self.configuration = configuration
+        self.value_discount_per_ply = value_discount_per_ply
         self.resignation_calibrator = resignation_calibrator
 
     @classmethod
@@ -74,6 +77,7 @@ class ReplayManager(Generic[PositionT]):
         layout: ReplayLayout,
         configuration: ReplayConfiguration,
         model_generation: int,
+        value_discount_per_ply: FloatGenerationSchedule,
         resignation_calibrator: ResignationCalibrator | None = None,
     ) -> ReplayManager[PositionT]:
         replay_path = run_path / 'replay.bin'
@@ -86,7 +90,14 @@ class ReplayManager(Generic[PositionT]):
                 configuration.maximum_capacity,
                 configuration.capacity_at(model_generation),
             )
-        return cls(run_path / 'completed-games' / 'inbox', store, state, configuration, resignation_calibrator)
+        return cls(
+            run_path / 'completed-games' / 'inbox',
+            store,
+            state,
+            configuration,
+            value_discount_per_ply,
+            resignation_calibrator,
+        )
 
     @property
     def live_samples(self) -> int:
@@ -120,6 +131,7 @@ class ReplayManager(Generic[PositionT]):
                 self.state,
                 self.store.layout.targets,
                 self.store.layout.maximum_policy_entries,
+                self.value_discount_per_ply,
             )
             for sample in materialized.samples:
                 self.store.append(sample)

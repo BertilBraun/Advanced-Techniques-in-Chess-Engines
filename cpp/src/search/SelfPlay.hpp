@@ -96,8 +96,7 @@ public:
           m_search(std::make_unique<BatchedGameSearch<Game>>(
               m_runtimeParameters.model_path, m_runtimeParameters.device,
               m_runtimeParameters.device_id, m_inferenceParameters,
-              engineParameters(m_searchParameters), initialModelGeneration, true,
-              Game::searchTurnDiscount())) {}
+              engineParameters(m_searchParameters), initialModelGeneration, true)) {}
 
     [[nodiscard]] Root newRoot(Position position) const {
         const std::shared_lock lock(m_operationMutex);
@@ -120,10 +119,9 @@ public:
         const std::size_t inferenceCapacity = m_inferenceParameters.workers *
                                               m_inferenceParameters.batch_size *
                                               m_inferenceParameters.outstanding_batches_per_worker;
-        const std::size_t initiallyAdmittedFastSearches =
-            initialFastSearchAdmissionCount(fastSearchCount, fullSearchCount,
-                                            m_searchParameters.full_searches,
-                                            m_searchParameters.fast_searches, inferenceCapacity);
+        const std::size_t initiallyAdmittedFastSearches = initialFastSearchAdmissionCount(
+            fastSearchCount, fullSearchCount, m_searchParameters.full_searches,
+            m_searchParameters.fast_searches, inferenceCapacity);
         std::size_t admittedFastSearches = 0;
         std::vector<GameSearchRequest<Game>> engineRequests;
         engineRequests.reserve(requests.size());
@@ -200,10 +198,12 @@ public:
         const std::unique_lock lock(m_operationMutex);
         const std::uint32_t updatedCapacity = parameters.arenaCapacity();
         const bool capacityChanged = updatedCapacity != m_arenaCapacity;
+        const bool valueDiscountChanged = parameters.tree_search.value_discount_per_ply !=
+                                          m_searchParameters.tree_search.value_discount_per_ply;
         m_searchParameters = parameters;
         m_arenaCapacity = updatedCapacity;
         m_search->updateSearchParameters(engineParameters(m_searchParameters));
-        return capacityChanged;
+        return capacityChanged || valueDiscountChanged;
     }
 
     [[nodiscard]] std::vector<SearchInferenceResult<Game>>

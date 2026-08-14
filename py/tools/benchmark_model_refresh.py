@@ -221,6 +221,7 @@ def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
             exploration_constant=2.0,
             first_play_urgency=FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO),
             forced_playout_coefficient=0.0,
+            value_discount_per_ply=1.0,
         ),
         dirichlet_alpha=0.3,
         dirichlet_epsilon=0.25,

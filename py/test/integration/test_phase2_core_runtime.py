@@ -178,6 +178,7 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
         replay_layout,
         configuration.training.lifecycle.replay,
         model_generation=0,
+        value_discount_per_ply=game.value_discount_per_ply,
     )
     ingestion = replay_manager.ingest_available_games(0)
     description = replay_manager.description()

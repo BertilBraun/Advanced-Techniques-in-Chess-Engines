@@ -36,7 +36,7 @@ def test_restart_state_screen_resolves_canonical_parameters() -> None:
     configuration = load_experiment_configuration(Path('configs/screening/go-7x7-overnight/13-restart-states.yaml'))
     assert configuration.game == 'go'
 
-    parameters = configuration.go.self_play.resolve(0, configuration.go.rules.maximum_moves)
+    parameters = configuration.go.self_play.resolve(0, configuration.go.rules.maximum_moves, 1.0)
 
     match parameters.start_position:
         case RestartStateStartParameters() as start_position:

@@ -213,13 +213,14 @@ def test_remaining_game_length_layout_is_a_scalar_target() -> None:
             'auxiliary_targets': [
                 {
                     'kind': 'remaining_game_length',
+                    'normalization_scale': 256,
                     'loss_weight': {'kind': 'constant', 'value': 0.15},
                 }
             ]
         }
     )
 
-    layout = build_training_target_layout(CHESS_STATE_CONTRACT.action_size, objective.auxiliary_targets, 256)
+    layout = build_training_target_layout(CHESS_STATE_CONTRACT.action_size, objective.auxiliary_targets)
 
     assert layout.auxiliary_heads == (
         RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=256),

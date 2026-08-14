@@ -30,16 +30,16 @@ void requireNear(const float actual, const float expected, const char *message) 
 
 using GoTree = GameSearchTree<Go7Game>;
 
-GoTree makeGoTree(const std::size_t capacity, const float turnDiscount = 1.0F) {
+GoTree makeGoTree(const std::size_t capacity, const float valueDiscountPerPly = 1.0F) {
     return GoTree(GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}), capacity,
-                  capacity, turnDiscount);
+                  capacity, valueDiscountPerPly);
 }
 
 TreeSearchParameters zeroTreeSearch(const float explorationConstant,
                                     const float forcedPlayoutCoefficient = 0.0F) {
     return TreeSearchParameters(explorationConstant,
                                 FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
-                                forcedPlayoutCoefficient);
+                                forcedPlayoutCoefficient, 1.0F);
 }
 
 void expandRoot(GoTree &tree, const std::size_t edgeCount) {
@@ -175,7 +175,7 @@ void testReservationLifecycle() {
     requireNear(tree.root().children[0].value_sum, 0.8F,
                 "Completion did not back up the incoming-edge value");
     requireNear(tree.root().value_sum, -0.4F,
-                "Completion did not apply player perspective and turn discount");
+                "Completion did not apply player perspective and value discount");
     requireNear(tree.root().virtual_loss, 0.0F, "Completion did not remove root virtual loss");
 }
 
@@ -323,7 +323,7 @@ std::size_t selectedRootEdgeAfterOneVisit(const float rootValue,
     const std::size_t firstLeaf = *tree.selectAvailableLeaf(zeroTreeSearch(0.1F));
     tree.backPropagate(firstLeaf, -rootValue);
 
-    const TreeSearchParameters parameters(0.1F, firstPlayUrgency, forcedPlayoutCoefficient);
+    const TreeSearchParameters parameters(0.1F, firstPlayUrgency, forcedPlayoutCoefficient, 1.0F);
     const std::size_t selectedLeaf =
         *tree.selectAvailableLeaf(parameters, forcedPlayoutCoefficient > 0.0F);
     return *tree.node(selectedLeaf).parent_edge_index;

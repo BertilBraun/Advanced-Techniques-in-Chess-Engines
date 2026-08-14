@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from math import isclose
 from typing import TypeVar
 
+from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract, WdlTarget
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
@@ -55,6 +56,7 @@ def materialize_completed_game(
     state: GameStateContract[PositionT],
     targets: TrainingTargetLayout,
     maximum_policy_entries: int,
+    value_discount_per_ply: FloatGenerationSchedule,
 ) -> MaterializedGame:
     if targets.action_size != state.action_size:
         raise ValueError('Training target action count does not match the game state contract.')
@@ -99,11 +101,14 @@ def materialize_completed_game(
 
         position = positions[observation.ply]
         position_wdl = game.final_wdl if state.current_player(position) == final_player else game.final_wdl.reversed()
+        remaining_plies = len(game.action_ids) - observation.ply
+        discount = value_discount_per_ply.value_at(observation.model_generation) ** remaining_plies
+        discounted_position_wdl = _uniformly_blurred_wdl(position_wdl, discount)
         samples.append(
             ReplaySample(
                 encoded_state=state.encode_network_input(position),
                 policy=primary.policy,
-                wdl_target=position_wdl,
+                wdl_target=discounted_position_wdl,
                 root_value=observation.root_value,
                 auxiliary_targets=tuple(auxiliary_targets),
                 sample_weight=observation.sample_weight,
@@ -116,6 +121,15 @@ def materialize_completed_game(
         policies_truncated=policies_truncated,
         retained_visit_mass=retained_visit_mass,
         discarded_visit_mass=discarded_visit_mass,
+    )
+
+
+def _uniformly_blurred_wdl(target: WdlTarget, retained_weight: float) -> WdlTarget:
+    uniform_weight = (1.0 - retained_weight) / 3.0
+    return WdlTarget(
+        win=retained_weight * target.win + uniform_weight,
+        draw=retained_weight * target.draw + uniform_weight,
+        loss=retained_weight * target.loss + uniform_weight,
     )
 
 

@@ -75,7 +75,7 @@ allocateRetainedVisits(const std::vector<std::uint32_t> &bucketVisits,
 
 template <SearchGame Game>
 void retainSubtree(TreeArena<Game> &arena, const std::size_t nodeIndex,
-                   const std::uint32_t retainedVisits, const float turnDiscount) {
+                   const std::uint32_t retainedVisits, const float valueDiscountPerPly) {
     using Edge = GameSearchEdge<typename Game::Action>;
     GameSearchNode<Game> &selected = arena.node(nodeIndex);
     const std::uint32_t originalVisits = selected.visits;
@@ -89,7 +89,7 @@ void retainSubtree(TreeArena<Game> &arena, const std::size_t nodeIndex,
         throw std::logic_error("Game-search child visits exceed parent visits");
     }
     const std::uint32_t localVisits = originalVisits - static_cast<std::uint32_t>(childVisits);
-    const float localValueSum = selected.value_sum + turnDiscount * childValueSum;
+    const float localValueSum = selected.value_sum + valueDiscountPerPly * childValueSum;
     std::vector<std::uint32_t> buckets;
     buckets.reserve(selected.children.size() + 1);
     buckets.push_back(localVisits);
@@ -121,7 +121,7 @@ void retainSubtree(TreeArena<Game> &arena, const std::size_t nodeIndex,
                 edge.visits = 0;
                 edge.value_sum = 0.0F;
             } else {
-                retainSubtree(arena, childIndex, retainedEdgeVisits, turnDiscount);
+                retainSubtree(arena, childIndex, retainedEdgeVisits, valueDiscountPerPly);
                 edge.visits = arena.node(childIndex).visits;
                 edge.value_sum = arena.node(childIndex).value_sum;
             }
@@ -134,7 +134,7 @@ void retainSubtree(TreeArena<Game> &arena, const std::size_t nodeIndex,
     }
     GameSearchNode<Game> &retained = arena.node(nodeIndex);
     retained.visits = retainedVisits;
-    retained.value_sum = retainedLocalValue - turnDiscount * retainedChildValueSum;
+    retained.value_sum = retainedLocalValue - valueDiscountPerPly * retainedChildValueSum;
 }
 
 } // namespace search_tree_detail

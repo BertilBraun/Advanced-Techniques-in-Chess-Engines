@@ -15,7 +15,6 @@ concept GameRules =
         { Game::legalActions(state) } -> std::same_as<std::vector<typename Game::Action>>;
         { Game::isTerminal(state) } -> std::same_as<bool>;
         { Game::terminalValue(state) } -> std::same_as<float>;
-        { Game::searchTurnDiscount() } -> std::same_as<float>;
     };
 
 template <typename Game>

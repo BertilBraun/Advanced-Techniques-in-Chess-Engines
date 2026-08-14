@@ -17,6 +17,7 @@ from src.experiment.configuration import (
     write_resolved_chess_experiment,
 )
 from src.games.chess.configuration import ChessExperimentConfiguration
+from src.games.chess.training import ChessImplementation
 from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.configuration import EnabledForcedPlayoutConfiguration
 from src.self_play.parameters import (
@@ -94,9 +95,9 @@ def test_go9_strong_baseline_resolves_the_authored_search_progression() -> None:
     assert isinstance(configuration.training.network.residual_context, GlobalPoolingResidualContext)
     assert configuration.training.trainer.learning_rate.value_at(0) == pytest.approx(0.01)
     assert configuration.training.trainer.learning_rate.value_at(150) == pytest.approx(0.001)
-    initial = configuration.go.self_play.resolve(0, configuration.go.rules.maximum_moves)
-    mixed = configuration.go.self_play.resolve(25, configuration.go.rules.maximum_moves)
-    mature = configuration.go.self_play.resolve(50, configuration.go.rules.maximum_moves)
+    initial = configuration.go.self_play.resolve(0, configuration.go.rules.maximum_moves, 1.0)
+    mixed = configuration.go.self_play.resolve(25, configuration.go.rules.maximum_moves, 1.0)
+    mature = configuration.go.self_play.resolve(50, configuration.go.rules.maximum_moves, 1.0)
     assert (initial.full_searches, initial.fast_searches, initial.full_search_probability) == (64, 16, 1.0)
     assert (mixed.full_searches, mixed.fast_searches, mixed.full_search_probability) == (160, 40, 0.25)
     assert (mature.full_searches, mature.fast_searches, mature.full_search_probability) == (256, 64, 0.25)
@@ -117,7 +118,7 @@ def test_forced_playout_screen_resolves_canonical_coefficient() -> None:
 
     assert configuration.game == 'go'
     assert configuration.go.self_play.resolve(
-        0, configuration.go.rules.maximum_moves
+        0, configuration.go.rules.maximum_moves, 1.0
     ).forced_playout_coefficient == pytest.approx(2.0)
 
 
@@ -364,6 +365,13 @@ def test_eight_gpu_chess_r4_configuration_resolves_checkpoint_continuation() -> 
     assert self_play.force_fast_search_after_ply is not None
     assert self_play.force_fast_search_after_ply.value_at(150) == 160
     assert configuration.chess.objective.root_value_blend.value_at(150) == pytest.approx(0.10)
+    assert configuration.chess.objective.value_discount_per_ply.value_at(150) == pytest.approx(0.9985)
+    assert ChessImplementation(configuration).self_play_parameters_at(150).value_discount_per_ply == pytest.approx(
+        0.9985
+    )
+    remaining_length = configuration.chess.objective.auxiliary_targets[1]
+    assert remaining_length.kind == 'remaining_game_length'
+    assert remaining_length.normalization_scale == pytest.approx(400.0)
 
 
 def test_experiment_queue_validation_loads_multiple_experiments() -> None:
@@ -408,7 +416,7 @@ def test_first_play_urgency_modes_resolve_explicitly(
     candidate['go']['self_play']['search']['first_play_urgency'] = authored
     configuration = GoExperimentConfiguration.model_validate(candidate)
 
-    resolved = configuration.go.self_play.resolve(0, configuration.go.rules.maximum_moves)
+    resolved = configuration.go.self_play.resolve(0, configuration.go.rules.maximum_moves, 1.0)
 
     assert resolved.first_play_urgency == expected
 
@@ -433,6 +441,11 @@ def test_queue_validation_supports_both_games() -> None:
         (
             ('go', 'objective', 'root_value_blend'),
             {'kind': 'constant', 'value': 1.5},
+            'must remain in',
+        ),
+        (
+            ('go', 'objective', 'value_discount_per_ply'),
+            {'kind': 'constant', 'value': 0.0},
             'must remain in',
         ),
         (

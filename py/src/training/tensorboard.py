@@ -129,6 +129,10 @@ def _objective_settings_at(
             'settings/training/root_value_blend',
             configuration.root_value_blend.value_at(model_generation),
         ),
+        ScheduledSetting(
+            'settings/training/value_discount_per_ply',
+            configuration.value_discount_per_ply.value_at(model_generation),
+        ),
     ]
     for index, target in enumerate(configuration.auxiliary_targets):
         match target:

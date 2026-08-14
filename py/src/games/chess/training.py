@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
 from src.evaluation.configuration import EvaluationSearchConfiguration
-from src.experiment.generation_schedule import defined_schedule_values
+from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
@@ -44,12 +44,14 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
 
     @property
     def target_layout(self) -> TrainingTargetLayout:
-        maximum_game_plies = self.configuration.chess.self_play.maximum_game_plies
         return build_training_target_layout(
             self.network_dimensions.actions,
             self.configuration.chess.objective.auxiliary_targets,
-            None if maximum_game_plies is None else max(defined_schedule_values(maximum_game_plies)),
         )
+
+    @property
+    def value_discount_per_ply(self) -> FloatGenerationSchedule:
+        return self.configuration.chess.objective.value_discount_per_ply
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
         configuration = self.self_play_configuration
@@ -58,7 +60,11 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             if configuration.maximum_game_plies is None
             else configuration.maximum_game_plies.value_at(model_generation)
         )
-        return configuration.resolve(model_generation, maximum_game_plies)
+        return configuration.resolve(
+            model_generation,
+            maximum_game_plies,
+            self.value_discount_per_ply.value_at(model_generation),
+        )
 
     @property
     def resignation_configuration(self) -> CalibratedResignationConfiguration | None:

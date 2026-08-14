@@ -199,4 +199,7 @@ chess:
     root_value_blend:
       kind: constant
       value: 0.0
+    value_discount_per_ply:
+      kind: constant
+      value: 1.0
     auxiliary_targets: []

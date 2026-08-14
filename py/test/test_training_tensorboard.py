@@ -29,6 +29,7 @@ def test_scheduled_settings_include_every_generation_schedule() -> None:
         'settings/training/policy_loss_weight',
         'settings/training/value_loss_weight',
         'settings/training/root_value_blend',
+        'settings/training/value_discount_per_ply',
         'settings/training/auxiliary/0-next-policy-ply-1/loss_weight',
         'settings/training/auxiliary/1-remaining-game-length/loss_weight',
     }

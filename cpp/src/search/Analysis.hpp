@@ -73,9 +73,9 @@ public:
                        parameters.parallel_searches,
                        TreeSearchParameters(parameters.exploration_constant,
                                             FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
-                                            0.0F),
+                                            0.0F, 1.0F),
                        1.0F, 0.0F, 1'024),
-                   0, false, 1.0F) {}
+                   0, false) {}
 
     [[nodiscard]] Root newRoot(Position position) {
         return m_search.newRoot(std::move(position), std::numeric_limits<std::uint32_t>::max());

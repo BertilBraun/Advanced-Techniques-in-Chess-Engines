@@ -29,12 +29,14 @@ void bind_search(py::module_ &module) {
         .def_readonly("kind", &FirstPlayUrgencyParameters::kind)
         .def_readonly("reduction", &FirstPlayUrgencyParameters::reduction);
     py::class_<TreeSearchParameters>(module, "TreeSearchParameters")
-        .def(py::init<float, FirstPlayUrgencyParameters, float>(), py::arg("exploration_constant"),
-             py::arg("first_play_urgency"), py::arg("forced_playout_coefficient"))
+        .def(py::init<float, FirstPlayUrgencyParameters, float, float>(),
+             py::arg("exploration_constant"), py::arg("first_play_urgency"),
+             py::arg("forced_playout_coefficient"), py::arg("value_discount_per_ply"))
         .def_readonly("exploration_constant", &TreeSearchParameters::exploration_constant)
         .def_readonly("first_play_urgency", &TreeSearchParameters::first_play_urgency)
         .def_readonly("forced_playout_coefficient",
-                      &TreeSearchParameters::forced_playout_coefficient);
+                      &TreeSearchParameters::forced_playout_coefficient)
+        .def_readonly("value_discount_per_ply", &TreeSearchParameters::value_discount_per_ply);
 
     py::class_<InferenceConfiguration>(module, "InferenceConfiguration")
         .def(py::init<int, std::string, InferenceDevice>(), py::arg("device_id"),
@@ -79,17 +81,16 @@ void bind_search(py::module_ &module) {
     module.attr("OutcomeProbabilities") = module.attr("WdlPrediction");
 
     py::class_<GameSearchVisit>(module, "GameSearchVisit")
-        .def(
-            py::init([](const int actionId, const std::uint32_t visitCount) {
-                if (actionId < 0) {
-                    throw py::value_error("Search visit action ID must be nonnegative");
-                }
-                if (visitCount == 0) {
-                    throw py::value_error("Search visit count must be positive");
-                }
-                return GameSearchVisit{.action_id = actionId, .visit_count = visitCount};
-            }),
-            py::arg("action_id"), py::arg("visit_count"))
+        .def(py::init([](const int actionId, const std::uint32_t visitCount) {
+                 if (actionId < 0) {
+                     throw py::value_error("Search visit action ID must be nonnegative");
+                 }
+                 if (visitCount == 0) {
+                     throw py::value_error("Search visit count must be positive");
+                 }
+                 return GameSearchVisit{.action_id = actionId, .visit_count = visitCount};
+             }),
+             py::arg("action_id"), py::arg("visit_count"))
         .def_readonly("action_id", &GameSearchVisit::action_id)
         .def_readonly("visit_count", &GameSearchVisit::visit_count)
         .def(py::self == py::self)

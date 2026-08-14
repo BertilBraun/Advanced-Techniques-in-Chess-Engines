@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from src.experiment.configuration import ExperimentConfiguration
+from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration
@@ -61,6 +62,11 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
     def target_layout(self) -> TrainingTargetLayout:
         raise NotImplementedError
 
+    @property
+    @abstractmethod
+    def value_discount_per_ply(self) -> FloatGenerationSchedule:
+        raise NotImplementedError
+
     @abstractmethod
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
         raise NotImplementedError
@@ -96,6 +102,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
                 exploration_constant=parameters.exploration_constant,
                 first_play_urgency=first_play_urgency,
                 forced_playout_coefficient=parameters.forced_playout_coefficient,
+                value_discount_per_ply=parameters.value_discount_per_ply,
             ),
             dirichlet_alpha=parameters.dirichlet_alpha,
             dirichlet_epsilon=parameters.dirichlet_epsilon,

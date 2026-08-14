@@ -14,8 +14,10 @@ TreeSearchParameters
 treeSearchParameters(const float explorationConstant,
                      const FirstPlayUrgencyParameters firstPlayUrgency =
                          FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
-                     const float forcedPlayoutCoefficient = 0.0F) {
-    return TreeSearchParameters(explorationConstant, firstPlayUrgency, forcedPlayoutCoefficient);
+                     const float forcedPlayoutCoefficient = 0.0F,
+                     const float valueDiscountPerPly = 1.0F) {
+    return TreeSearchParameters(explorationConstant, firstPlayUrgency, forcedPlayoutCoefficient,
+                                valueDiscountPerPly);
 }
 
 std::filesystem::path createTestModel(const std::string &name, const float win, const float draw,
@@ -94,6 +96,15 @@ int runBatchedSearchTests() {
             throw std::runtime_error("negative FPU reduction unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
+        for (const float invalidDiscount : {0.0F, 1.01F, std::numeric_limits<float>::infinity()}) {
+            try {
+                static_cast<void>(treeSearchParameters(
+                    1.5F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero), 0.0F,
+                    invalidDiscount));
+                throw std::runtime_error("invalid value discount unexpectedly validated");
+            } catch (const std::invalid_argument &) {
+            }
+        }
         try {
             static_cast<void>(FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero, 0.1F));
             throw std::runtime_error("zero FPU unexpectedly accepted a reduction");
@@ -139,9 +150,9 @@ int runBatchedSearchTests() {
         require(!results.results[0].search_visits.empty(), "full root did not expand legal moves");
         require(!results.results[1].search_visits.empty(), "fast root did not expand legal moves");
         for (const auto &result : results.results) {
-            require(std::ranges::all_of(result.search_visits, [](const GameSearchVisit &visit) {
-                        return visit.visit_count > 0;
-                    }),
+            require(std::ranges::all_of(
+                        result.search_visits,
+                        [](const GameSearchVisit &visit) { return visit.visit_count > 0; }),
                     "search result exposed zero-visit children");
             const auto highestVisit = std::ranges::max_element(
                 result.search_visits, {},
@@ -155,17 +166,17 @@ int runBatchedSearchTests() {
                 return ChessGame::Encoding::actionId(candidate.action, rootNode.position) ==
                        result.highest_visited_child_action_id;
             });
-            require(edge != rootNode.children.end(), "highest-visited child action is absent from the root");
+            require(edge != rootNode.children.end(),
+                    "highest-visited child action is absent from the root");
             require(std::abs(result.highest_visited_child_q +
-                             edge->value_sum / static_cast<float>(edge->visits)) < 1e-6F,
+                             result.root.tree().valueDiscountPerPly() * edge->value_sum /
+                                 static_cast<float>(edge->visits)) < 1e-6F,
                     "highest-visited child Q was not oriented to the root player");
         }
-        require(
-            results.results[0].search_visits == results.results[0].policy_target_visits,
-            "disabled full search changed the policy target");
-        require(
-            results.results[1].search_visits == results.results[1].policy_target_visits,
-            "disabled fast search changed the policy target");
+        require(results.results[0].search_visits == results.results[0].policy_target_visits,
+                "disabled full search changed the policy target");
+        require(results.results[1].search_visits == results.results[1].policy_target_visits,
+                "disabled fast search changed the policy target");
 
         const InferenceStatistics statistics = search.inferenceStatistics();
         require(statistics.evaluations == evaluationsBeforeSearch + 26,
@@ -239,6 +250,19 @@ int runBatchedSearchTests() {
             1, 16, 7, treeSearchParameters(1.25F), 0.3F, 0.25F);
         require(!search.updateSearchSchedule(sameCapacitySchedule),
                 "equal-capacity schedule incorrectly required root replacement");
+        const ChessSelfPlaySearchParameters discountedSchedule(
+            1, 16, 7,
+            treeSearchParameters(1.25F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
+                                 0.0F, 0.9985F),
+            0.3F, 0.25F);
+        require(search.updateSearchSchedule(discountedSchedule),
+                "value-discount change did not require root replacement");
+        try {
+            static_cast<void>(
+                search.search({ChessSelfPlaySearchRequest(results.results[0].root, true)}));
+            throw std::runtime_error("stale root unexpectedly accepted a new value discount");
+        } catch (const std::invalid_argument &) {
+        }
         const ChessSelfPlaySearchParameters largerSchedule(1, 24, 8, treeSearchParameters(1.25F),
                                                            0.3F, 0.25F);
         require(search.updateSearchSchedule(largerSchedule),

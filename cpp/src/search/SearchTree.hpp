@@ -31,11 +31,12 @@ public:
     using Edge = GameSearchEdge<Action>;
 
     GameSearchTree(Position rootPosition, const std::size_t initialCapacity,
-                   const std::size_t maximumCapacity = 0, const float turnDiscount = 1.0F)
+                   const std::size_t maximumCapacity = 0, const float valueDiscountPerPly = 1.0F)
         : m_arena(std::move(rootPosition), initialCapacity, maximumCapacity),
-          m_turnDiscount(turnDiscount) {
-        if (turnDiscount <= 0.0F || turnDiscount > 1.0F) {
-            throw std::invalid_argument("Game search turn discount must be in (0, 1]");
+          m_valueDiscountPerPly(valueDiscountPerPly) {
+        if (!std::isfinite(valueDiscountPerPly) || valueDiscountPerPly <= 0.0F ||
+            valueDiscountPerPly > 1.0F) {
+            throw std::invalid_argument("Game search value discount per ply must be in (0, 1]");
         }
     }
 
@@ -47,6 +48,7 @@ public:
     [[nodiscard]] std::size_t liveNodeCount() const noexcept { return m_arena.liveNodeCount(); }
     [[nodiscard]] std::size_t capacity() const noexcept { return m_arena.capacity(); }
     [[nodiscard]] std::size_t totalChildCount() const noexcept { return m_arena.totalChildCount(); }
+    [[nodiscard]] float valueDiscountPerPly() const noexcept { return m_valueDiscountPerPly; }
 
     [[nodiscard]] std::optional<std::size_t>
     selectAvailableLeaf(const TreeSearchParameters &parameters,
@@ -80,8 +82,9 @@ public:
             children.push_back({
                 .prior = edge.prior,
                 .visits = edge.visits,
-                .child_mean_value =
-                    edge.visits == 0 ? 0.0F : edge.value_sum / static_cast<float>(edge.visits),
+                .child_mean_value = edge.visits == 0 ? 0.0F
+                                                     : m_valueDiscountPerPly * edge.value_sum /
+                                                           static_cast<float>(edge.visits),
             });
         }
         return prunedRootPolicyVisits(children, rootNode.visits, explorationConstant,
@@ -116,7 +119,7 @@ public:
             Edge &incoming = parent.children.at(*selected.parent_edge_index);
             ++incoming.visits;
             incoming.value_sum += value;
-            value = -value * m_turnDiscount;
+            value = -value * m_valueDiscountPerPly;
             nodeIndex = *selected.parent_index;
         }
     }
@@ -201,7 +204,8 @@ public:
         m_arena.requireIdle();
         const std::uint32_t retainedRootVisits = static_cast<std::uint32_t>(
             static_cast<double>(root().visits) * static_cast<double>(retainedFraction));
-        search_tree_detail::retainSubtree(m_arena, rootIndex(), retainedRootVisits, m_turnDiscount);
+        search_tree_detail::retainSubtree(m_arena, rootIndex(), retainedRootVisits,
+                                          m_valueDiscountPerPly);
         const std::size_t liveNodeLimit = static_cast<std::size_t>(retainedRootVisits) + 1;
         m_arena.pruneToLiveNodeLimit(std::max<std::size_t>(1, liveNodeLimit));
     }
@@ -224,7 +228,7 @@ public:
 
 private:
     search_tree_detail::TreeArena<Game> m_arena;
-    float m_turnDiscount;
+    float m_valueDiscountPerPly;
 
     [[nodiscard]] std::optional<std::size_t>
     selectAvailableLeaf(const std::size_t nodeIndex, const TreeSearchParameters &parameters) {
@@ -263,10 +267,11 @@ private:
         return std::nullopt;
     }
 
-    [[nodiscard]] static float edgeValueForParent(const Node &parent, const Edge &edge,
-                                                  const TreeSearchParameters &parameters) {
+    [[nodiscard]] float edgeValueForParent(const Node &parent, const Edge &edge,
+                                           const TreeSearchParameters &parameters) const {
         if (edge.visits > 0) {
-            return -(edge.value_sum + edge.virtual_loss) / static_cast<float>(edge.visits);
+            return (-m_valueDiscountPerPly * edge.value_sum - edge.virtual_loss) /
+                   static_cast<float>(edge.visits);
         }
         const float parentMean =
             parent.visits == 0 ? 0.0F : parent.value_sum / static_cast<float>(parent.visits);
@@ -289,7 +294,7 @@ private:
                 static_cast<std::uint32_t>(static_cast<std::int64_t>(incoming.visits) + visitDelta);
             incoming.value_sum += value;
             incoming.virtual_loss += virtualLossDelta;
-            value = -value * m_turnDiscount;
+            value = -value * m_valueDiscountPerPly;
             nodeIndex = *selected.parent_index;
         }
     }
@@ -305,7 +310,7 @@ private:
             Edge &incoming = node(*selected.parent_index).children.at(*selected.parent_edge_index);
             incoming.value_sum += value;
             incoming.virtual_loss -= 1.0F;
-            value = -value * m_turnDiscount;
+            value = -value * m_valueDiscountPerPly;
             nodeIndex = *selected.parent_index;
         }
     }
@@ -317,9 +322,9 @@ public:
     using Tree = GameSearchTree<Game>;
 
     GameSearchRoot(Position position, const std::size_t initialCapacity,
-                   const std::size_t maximumCapacity = 0, const float turnDiscount = 1.0F)
+                   const std::size_t maximumCapacity = 0, const float valueDiscountPerPly = 1.0F)
         : m_tree(std::make_shared<Tree>(std::move(position), initialCapacity, maximumCapacity,
-                                        turnDiscount)) {}
+                                        valueDiscountPerPly)) {}
 
     [[nodiscard]] const Position &position() const { return m_tree->root().position; }
     [[nodiscard]] bool isTerminal() const { return Game::isTerminal(position()); }

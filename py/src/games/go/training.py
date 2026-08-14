@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from src.evaluation.configuration import EvaluationSearchConfiguration
+from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.contract import GoStateContract, NativeGoPosition
 from src.games.implementation import GameImplementation
@@ -45,13 +46,17 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
         return build_training_target_layout(
             self.network_dimensions.actions,
             self.configuration.go.objective.auxiliary_targets,
-            self.configuration.go.rules.maximum_moves,
         )
+
+    @property
+    def value_discount_per_ply(self) -> FloatGenerationSchedule:
+        return self.configuration.go.objective.value_discount_per_ply
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
         return self.self_play_configuration.resolve(
             model_generation,
             self.configuration.go.rules.maximum_moves,
+            self.value_discount_per_ply.value_at(model_generation),
         )
 
     def create_native_search(
