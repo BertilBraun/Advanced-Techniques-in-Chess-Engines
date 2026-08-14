@@ -345,7 +345,7 @@ def test_eight_gpu_chess_r4_configuration_resolves_checkpoint_continuation() -> 
     assert configuration.training.save_path.endswith('vast-chess-8gpu-1d-r4')
     assert configuration.training.trainer.learning_rate.value_at(150) == pytest.approx(0.004)
     assert configuration.training.trainer.learning_rate.value_at(300) == pytest.approx(0.003)
-    assert configuration.training.lifecycle.replay.capacity_at(150) == 2_500_000
+    assert configuration.training.lifecycle.replay.capacity_at(150) == 1_500_000
     assert configuration.training.lifecycle.replay.maximum_capacity == 2_500_000
     assert configuration.training.lifecycle.credit.replay_ratio == 10
     assert configuration.training.limits.minimum_free_disk_gib == pytest.approx(10.0)

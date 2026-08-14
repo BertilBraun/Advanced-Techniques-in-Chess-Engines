@@ -21,7 +21,7 @@ training:
         - {start_generation: 300, value: 0.003}
   lifecycle:
     replay:
-      capacity: {kind: constant, value: 2500000}
+      capacity: {kind: constant, value: 1500000}
       maximum_capacity: 2500000
     credit:
       replay_ratio: 10
