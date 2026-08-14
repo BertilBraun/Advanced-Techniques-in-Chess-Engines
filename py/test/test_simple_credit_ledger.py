@@ -94,6 +94,15 @@ def test_credit_ledger_without_optimizer_limit_never_completes(tmp_path: Path) -
     assert not ledger.training_complete
 
 
+def test_credit_ledger_initializes_progress_from_checkpoint_generation(tmp_path: Path) -> None:
+    ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 2))
+
+    assert ledger.model_generation == 2
+    assert ledger.progress.completed_optimizer_steps == 8
+    assert ledger.state.active_checkpoint.generation == 2
+    assert ledger.state.available_credits == 0
+
+
 def test_credit_ledger_adopts_one_complete_checkpoint_after_interrupted_commit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

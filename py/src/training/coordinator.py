@@ -6,6 +6,7 @@ import time
 import numpy as np
 
 from src.evaluation.manager import EvaluationManager
+from src.experiment.base_configuration import initial_generation
 from src.games.implementation import GameImplementation
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayManager
@@ -41,12 +42,15 @@ class Coordinator:
         training = game.training
         run_path = Path(training.save_path)
         self.run_limit_monitor = RunLimitMonitor(training.limits, run_path, run_started_at)
-        generation_zero = CheckpointReference.load(run_path, 0)
+        starting_checkpoint = CheckpointReference.load(
+            run_path,
+            initial_generation(self.configuration.run.resume),
+        )
         self.ledger = CreditLedger(
             run_path,
             training.lifecycle.credit,
             training.trainer.global_batch_size,
-            generation_zero,
+            starting_checkpoint,
         )
         resignation_configuration = game.resignation_configuration
         self.resignation_calibrator = (

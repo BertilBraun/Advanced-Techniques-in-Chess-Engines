@@ -46,8 +46,9 @@ class CreditLedger:
         if self.path.exists():
             self._state = CreditLedgerState.model_validate_json(self.path.read_text(encoding='utf-8'))
         else:
+            completed_optimizer_steps = starting_checkpoint.generation * self.parameters.optimizer_steps_per_quantum
             self._state = CreditLedgerState(
-                completed_optimizer_steps=0,
+                completed_optimizer_steps=completed_optimizer_steps,
                 earned_credits=Decimal(0),
                 consumed_credits=Decimal(0),
                 active_checkpoint=starting_checkpoint,

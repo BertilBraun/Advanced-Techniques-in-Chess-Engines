@@ -36,6 +36,7 @@ from src.util.frozen_model import JsonValue
 
 CHESS_EXPERIMENT_TEMPLATE_PATH = Path('configs/chess-experiment-template.yaml')
 CHESS_R3_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-1d-r3.yaml')
+CHESS_R4_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-1d-r4.yaml')
 
 
 def test_every_checked_in_experiment_uses_the_current_contract_and_dependency_lock() -> None:
@@ -326,6 +327,41 @@ def test_eight_gpu_chess_r3_configuration_is_fully_self_declared() -> None:
 
     assert experiment_configuration_source_paths(CHESS_R3_EXPERIMENT_PATH) == (CHESS_R3_EXPERIMENT_PATH.resolve(),)
     assert configuration.model_dump(exclude_unset=True) == configuration.model_dump()
+
+
+def test_eight_gpu_chess_r4_configuration_resolves_checkpoint_continuation() -> None:
+    configuration = load_chess_experiment_configuration(CHESS_R4_EXPERIMENT_PATH)
+
+    assert experiment_configuration_source_paths(CHESS_R4_EXPERIMENT_PATH) == (
+        CHESS_R3_EXPERIMENT_PATH.resolve(),
+        CHESS_R4_EXPERIMENT_PATH.resolve(),
+    )
+    assert configuration.run.run_name == 'vast-chess-8gpu-1d-r4'
+    assert configuration.run.stage.value == 'continuation'
+    assert configuration.run.resume.mode == 'checkpoint'
+    assert configuration.run.resume.generation == 150
+    assert configuration.training.save_path.endswith('vast-chess-8gpu-1d-r4')
+    assert configuration.training.trainer.learning_rate.value_at(150) == pytest.approx(0.004)
+    assert configuration.training.trainer.learning_rate.value_at(300) == pytest.approx(0.003)
+    assert configuration.training.lifecycle.replay.capacity_at(150) == 2_500_000
+    assert configuration.training.lifecycle.replay.maximum_capacity == 2_500_000
+    assert configuration.training.lifecycle.credit.replay_ratio == 10
+    self_play = configuration.chess.self_play
+    assert self_play.resignation.false_nonloss_rate_ceiling == pytest.approx(0.025)
+    assert self_play.start_position.minimum_remaining_plies == 25
+    assert tuple(self_play.search.full_searches.value_at(generation) for generation in (150, 180, 250)) == (
+        600,
+        700,
+        800,
+    )
+    assert self_play.search.fast_searches.value_at(150) == 150
+    assert self_play.full_search_probability.value_at(150) == pytest.approx(0.25)
+    assert self_play.greedy_after_ply.value_at(150) == 80
+    assert self_play.maximum_game_plies is not None
+    assert self_play.maximum_game_plies.value_at(150) == 200
+    assert self_play.force_fast_search_after_ply is not None
+    assert self_play.force_fast_search_after_ply.value_at(150) == 160
+    assert configuration.chess.objective.root_value_blend.value_at(150) == pytest.approx(0.10)
 
 
 def test_experiment_queue_validation_loads_multiple_experiments() -> None:

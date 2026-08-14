@@ -74,6 +74,22 @@ def load_inference_checkpoint_manifest(
     return manifest
 
 
+def load_checkpoint_manifest_path(path: Path, expected_generation: int) -> CheckpointManifest:
+    if not path.is_file():
+        raise ValueError(f'Checkpoint manifest does not exist: {path}')
+    manifest = CheckpointManifest.model_validate_json(path.read_text(encoding='utf-8'))
+    if manifest.generation != expected_generation:
+        raise ValueError(f'Checkpoint manifest generation {manifest.generation} does not match {expected_generation}.')
+    artifacts = (
+        (path.parent / manifest.model_path, manifest.model_sha256),
+        (path.parent / manifest.optimizer_path, manifest.optimizer_sha256),
+        (path.parent / manifest.inference_model_path, manifest.inference_model_sha256),
+    )
+    for artifact_path, expected_sha256 in artifacts:
+        _validate_checkpoint_artifact(artifact_path, expected_sha256)
+    return manifest
+
+
 class CheckpointReference(FrozenModel):
     generation: int
     manifest_path: Path

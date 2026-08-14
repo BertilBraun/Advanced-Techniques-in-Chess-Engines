@@ -15,6 +15,7 @@ import torch
 
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
 from src.experiment.base_configuration import (
+    CheckpointResumeConfiguration,
     RandomInitializationResumeConfiguration,
     WeightsOnlyResumeConfiguration,
 )
@@ -25,10 +26,12 @@ from src.games.composition import create_game_implementation
 from src.training.targets import auxiliary_head_output_size
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import model_save_path
 from src.training.checkpoint.persistence import (
     create_model,
     create_optimizer,
+    import_checkpoint,
     load_model,
     save_model_and_optimizer,
 )
@@ -43,7 +46,10 @@ class ExperimentRunManifest(FrozenModel):
     resolved_hardware: ResolvedHardware
     source_revision: str
     source_worktree_clean: bool
+    initial_generation: int = 0
     initial_model_sha256: str
+    initial_optimizer_sha256: str | None = None
+    initial_inference_model_sha256: str | None = None
     evaluation_dataset_sha256: str
     evaluation_dataset_manifest_sha256: str
     opening_suite_manifest_sha256: str
@@ -220,12 +226,25 @@ def _auxiliary_output_sizes(experiment: ExperimentConfiguration) -> tuple[int, .
     return tuple(auxiliary_head_output_size(head) for head in layout.auxiliary_heads)
 
 
-def _prepare_initial_checkpoint(experiment: ExperimentConfiguration, output_path: Path, manifest_path: Path) -> Path:
+def _prepare_initial_checkpoint(
+    experiment: ExperimentConfiguration,
+    output_path: Path,
+    manifest_path: Path,
+) -> CheckpointReference:
     training = experiment.training
     checkpoint_path = model_save_path(0, output_path)
     device = _training_device(experiment)
     auxiliary_output_sizes = _auxiliary_output_sizes(experiment)
     match experiment.run.resume:
+        case CheckpointResumeConfiguration(
+            checkpoint_manifest_path=checkpoint_manifest_path,
+            generation=generation,
+        ):
+            return import_checkpoint(
+                _resolve_source_path(checkpoint_manifest_path),
+                generation,
+                output_path,
+            )
         case WeightsOnlyResumeConfiguration(model_path=model_path):
             initial_model_path = _resolve_source_path(model_path)
             if not initial_model_path.is_file():
@@ -250,14 +269,14 @@ def _prepare_initial_checkpoint(experiment: ExperimentConfiguration, output_path
                     auxiliary_output_sizes,
                 )
                 save_model_and_optimizer(model, create_optimizer(model, training.trainer.optimizer), 0, output_path)
-    return checkpoint_path
+    return CheckpointReference.load(output_path, 0)
 
 
 def _run_manifest(
     experiment: ExperimentConfiguration,
     environment: _ValidatedRunEnvironment,
     artifacts: PreparedEvaluationArtifacts,
-    initial_checkpoint_path: Path,
+    initial_checkpoint: CheckpointReference,
 ) -> ExperimentRunManifest:
     return ExperimentRunManifest(
         experiment=experiment,
@@ -265,7 +284,10 @@ def _run_manifest(
         resolved_hardware=environment.hardware,
         source_revision=environment.source_revision,
         source_worktree_clean=True,
-        initial_model_sha256=_sha256(initial_checkpoint_path),
+        initial_generation=initial_checkpoint.generation,
+        initial_model_sha256=_sha256(initial_checkpoint.model_path),
+        initial_optimizer_sha256=_sha256(initial_checkpoint.optimizer_path),
+        initial_inference_model_sha256=initial_checkpoint.inference_model_sha256,
         evaluation_dataset_sha256=_sha256(artifacts.dataset_path),
         evaluation_dataset_manifest_sha256=_sha256(artifacts.dataset_manifest_path),
         opening_suite_manifest_sha256=_sha256(artifacts.opening_manifest_path),
@@ -303,8 +325,8 @@ def prepare_experiment_training_run(
     )
     output_path = Path(experiment.training.save_path)
     manifest_path = output_path / 'run_manifest.json'
-    initial_checkpoint_path = _prepare_initial_checkpoint(experiment, output_path, manifest_path)
+    initial_checkpoint = _prepare_initial_checkpoint(experiment, output_path, manifest_path)
     return _write_manifest(
         manifest_path,
-        _run_manifest(experiment, environment, evaluation_artifacts, initial_checkpoint_path),
+        _run_manifest(experiment, environment, evaluation_artifacts, initial_checkpoint),
     )

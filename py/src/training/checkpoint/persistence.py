@@ -1,11 +1,17 @@
 import hashlib
+import shutil
 import torch
 from os import PathLike
 from time import sleep
 from pathlib import Path
 
 from src.games.representation import NetworkDimensions
-from src.training.checkpoint.contracts import CheckpointManifest, load_checkpoint_manifest
+from src.training.checkpoint.contracts import (
+    CheckpointManifest,
+    CheckpointReference,
+    load_checkpoint_manifest,
+    load_checkpoint_manifest_path,
+)
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
 from src.training.configuration import OptimizerType
 from src.training.network import Network, NetworkParams
@@ -192,3 +198,59 @@ def save_model_and_optimizer(
     )
     manifest_path = checkpoint_manifest_path(generation, save_folder)
     write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')
+
+
+def import_checkpoint(
+    source_manifest_path: Path,
+    generation: int,
+    destination_folder: Path,
+) -> CheckpointReference:
+    source_manifest = load_checkpoint_manifest_path(source_manifest_path, generation)
+    destination_manifest_path = checkpoint_manifest_path(generation, destination_folder)
+    if destination_manifest_path.exists():
+        destination_reference = CheckpointReference.load(destination_folder, generation)
+        destination_manifest = load_checkpoint_manifest(generation, destination_folder)
+        source_hashes = (
+            source_manifest.model_sha256,
+            source_manifest.optimizer_sha256,
+            source_manifest.inference_model_sha256,
+        )
+        destination_hashes = (
+            destination_manifest.model_sha256,
+            destination_manifest.optimizer_sha256,
+            destination_manifest.inference_model_sha256,
+        )
+        if destination_hashes != source_hashes:
+            raise ValueError('Existing imported checkpoint does not match the configured source checkpoint.')
+        return destination_reference
+
+    destination_paths = (
+        model_save_path(generation, destination_folder),
+        optimizer_save_path(generation, destination_folder),
+        model_save_path(generation, destination_folder).with_suffix('.jit.pt'),
+    )
+    if any(path.exists() for path in destination_paths):
+        raise ValueError('Imported checkpoint artifacts exist without their checkpoint manifest.')
+
+    destination_folder.mkdir(parents=True, exist_ok=True)
+    source_paths = (
+        source_manifest_path.parent / source_manifest.model_path,
+        source_manifest_path.parent / source_manifest.optimizer_path,
+        source_manifest_path.parent / source_manifest.inference_model_path,
+    )
+    for source_path, destination_path in zip(source_paths, destination_paths, strict=True):
+        temporary_path = _temporary_path(destination_path)
+        shutil.copyfile(source_path, temporary_path)
+        temporary_path.replace(destination_path)
+
+    imported_manifest = CheckpointManifest(
+        generation=generation,
+        model_path=destination_paths[0].name,
+        model_sha256=source_manifest.model_sha256,
+        optimizer_path=destination_paths[1].name,
+        optimizer_sha256=source_manifest.optimizer_sha256,
+        inference_model_path=destination_paths[2].name,
+        inference_model_sha256=source_manifest.inference_model_sha256,
+    )
+    write_text_atomically(destination_manifest_path, imported_manifest.model_dump_json(indent=2) + '\n')
+    return CheckpointReference.load(destination_folder, generation)
