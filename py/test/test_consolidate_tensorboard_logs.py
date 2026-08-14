@@ -7,7 +7,11 @@ from tensorboard.plugins.custom_scalar import layout_pb2
 from tensorboard.summary.writer.event_file_writer import EventFileWriter
 from tensorboardX import SummaryWriter
 
-from tools.consolidate_tensorboard_logs import TensorboardLogConsolidator, consolidate_once
+from tools.consolidate_tensorboard_logs import (
+    TensorboardLogConsolidator,
+    TensorboardSourceSegment,
+    consolidate_once,
+)
 
 
 def write_scalar(log_directory: Path, tag: str, step: int, value: float, wall_time: float) -> None:
@@ -84,6 +88,35 @@ def test_consolidation_accepts_one_run_directory_as_source(tmp_path: Path) -> No
         assert scalar_values(run_directory, 'coordinator/evaluation/stockfish-level-0') == (expected_value,)
     assert manifest.selected_event_file_count == 4
     assert manifest.representative_self_play_processes[0].process_id == 100
+
+
+def test_consolidation_stitches_run_segments_at_wall_time_boundary(tmp_path: Path) -> None:
+    first_source = tmp_path / 'r3'
+    second_source = tmp_path / 'r4'
+    output_root = tmp_path / 'output'
+    write_scalar(first_source / 'coordinator', 'training/loss', 149, 1.5, wall_time=10.0)
+    write_scalar(first_source / 'coordinator', 'training/loss', 151, 9.0, wall_time=30.0)
+    write_scalar(second_source / 'coordinator', 'training/loss', 150, 1.4, wall_time=40.0)
+    write_scalar(second_source / 'coordinator', 'training/loss', 151, 1.3, wall_time=50.0)
+
+    manifest = consolidate_once(
+        None,
+        output_root,
+        single_run_source=True,
+        preserve_source_layout=True,
+        source_segments=(
+            TensorboardSourceSegment(first_source, maximum_wall_time=20.0),
+            TensorboardSourceSegment(second_source, minimum_wall_time=20.0),
+        ),
+    )
+
+    assert scalar_values(output_root / 'coordinator', 'training/loss') == pytest.approx((1.5, 1.4, 1.3))
+    assert tuple(segment.source_root for segment in manifest.source_segments) == (
+        str(first_source.resolve()),
+        str(second_source.resolve()),
+    )
+    assert manifest.source_segments[0].maximum_wall_time == 20.0
+    assert manifest.source_segments[1].minimum_wall_time == 20.0
 
 
 def test_evaluation_outcome_overlays_preserve_other_summaries_in_root_run(tmp_path: Path) -> None:

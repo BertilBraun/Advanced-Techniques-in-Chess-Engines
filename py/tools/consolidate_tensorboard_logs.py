@@ -61,6 +61,13 @@ class EventFileSelection:
 
 
 @dataclass(frozen=True)
+class TensorboardSourceSegment:
+    source_root: Path
+    minimum_wall_time: float | None = None
+    maximum_wall_time: float | None = None
+
+
+@dataclass(frozen=True)
 class TimeSeriesRoute:
     run_name: str
     tag: str
@@ -84,12 +91,20 @@ class TagSummary(BaseModel):
     maximum_step: int
 
 
+class SourceSegmentSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    source_root: str
+    minimum_wall_time: float | None
+    maximum_wall_time: float | None
+
+
 class ConsolidationManifest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    schema_version: int = 1
+    schema_version: int = 2
     generated_at_utc: datetime
-    source_root: str
+    source_segments: tuple[SourceSegmentSummary, ...]
     output_root: str
     source_event_file_count: int = Field(ge=0)
     selected_event_file_count: int = Field(ge=0)
@@ -105,6 +120,12 @@ class ConsolidationManifest(BaseModel):
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--source-root', type=Path)
+    parser.add_argument(
+        '--source-segment',
+        action='append',
+        nargs=3,
+        metavar=('SOURCE_ROOT', 'MINIMUM_WALL_TIME', 'MAXIMUM_WALL_TIME'),
+    )
     parser.add_argument('--output-root', required=True, type=Path)
     parser.add_argument('--watch-interval-seconds', type=float)
     parser.add_argument('--custom-layout-only', action='store_true')
@@ -115,17 +136,58 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _validate_paths(source_root: Path, output_root: Path) -> tuple[Path, Path]:
-    resolved_source_root = source_root.resolve()
+def _optional_wall_time(raw_value: str) -> float | None:
+    return None if raw_value == 'none' else float(raw_value)
+
+
+def _source_segments(arguments: argparse.Namespace) -> tuple[TensorboardSourceSegment, ...]:
+    if arguments.source_root is not None and arguments.source_segment is not None:
+        raise ValueError('--source-root and --source-segment are mutually exclusive.')
+    if arguments.source_segment is not None:
+        return tuple(
+            TensorboardSourceSegment(
+                source_root=Path(raw_source_root),
+                minimum_wall_time=_optional_wall_time(raw_minimum_wall_time),
+                maximum_wall_time=_optional_wall_time(raw_maximum_wall_time),
+            )
+            for raw_source_root, raw_minimum_wall_time, raw_maximum_wall_time in arguments.source_segment
+        )
+    if arguments.source_root is None:
+        raise ValueError('--source-root or --source-segment is required unless --custom-layout-only is selected.')
+    return (TensorboardSourceSegment(source_root=arguments.source_root),)
+
+
+def _validate_paths(
+    source_segments: tuple[TensorboardSourceSegment, ...],
+    output_root: Path,
+) -> tuple[tuple[TensorboardSourceSegment, ...], Path]:
+    if not source_segments:
+        raise ValueError('At least one TensorBoard source segment is required.')
     resolved_output_root = output_root.resolve()
-    if not resolved_source_root.is_dir():
-        raise ValueError(f'TensorBoard source root does not exist: {resolved_source_root}')
-    if resolved_output_root == resolved_source_root or resolved_source_root in resolved_output_root.parents:
-        raise ValueError('Output root must not be the source root or one of its descendants.')
+    resolved_source_segments: list[TensorboardSourceSegment] = []
+    for source_segment in source_segments:
+        resolved_source_root = source_segment.source_root.resolve()
+        if not resolved_source_root.is_dir():
+            raise ValueError(f'TensorBoard source root does not exist: {resolved_source_root}')
+        if resolved_output_root == resolved_source_root or resolved_source_root in resolved_output_root.parents:
+            raise ValueError('Output root must not be a source root or one of its descendants.')
+        if (
+            source_segment.minimum_wall_time is not None
+            and source_segment.maximum_wall_time is not None
+            and source_segment.minimum_wall_time > source_segment.maximum_wall_time
+        ):
+            raise ValueError('Source segment minimum wall time must not exceed its maximum wall time.')
+        resolved_source_segments.append(
+            TensorboardSourceSegment(
+                source_root=resolved_source_root,
+                minimum_wall_time=source_segment.minimum_wall_time,
+                maximum_wall_time=source_segment.maximum_wall_time,
+            )
+        )
     if resolved_output_root.exists() and any(resolved_output_root.iterdir()):
         raise ValueError(f'TensorBoard output root is not empty: {resolved_output_root}')
     resolved_output_root.mkdir(parents=True, exist_ok=True)
-    return resolved_source_root, resolved_output_root
+    return tuple(resolved_source_segments), resolved_output_root
 
 
 def _run_directories(source_root: Path, single_run_source: bool) -> tuple[Path, ...]:
@@ -390,14 +452,22 @@ def _summary_identity(
 class TensorboardLogConsolidator:
     def __init__(
         self,
-        source_root: Path,
+        source_root: Path | None,
         output_root: Path,
         time_series_view: bool = False,
         single_run_source: bool = False,
         evaluation_outcome_overlays: bool = False,
         preserve_source_layout: bool = False,
+        source_segments: tuple[TensorboardSourceSegment, ...] | None = None,
     ) -> None:
-        self.source_root, self.output_root = _validate_paths(source_root, output_root)
+        if source_root is not None and source_segments is not None:
+            raise ValueError('source_root and source_segments are mutually exclusive.')
+        requested_source_segments = source_segments
+        if requested_source_segments is None:
+            if source_root is None:
+                raise ValueError('A TensorBoard source root or source segments are required.')
+            requested_source_segments = (TensorboardSourceSegment(source_root=source_root),)
+        self.source_segments, self.output_root = _validate_paths(requested_source_segments, output_root)
         if time_series_view and evaluation_outcome_overlays:
             raise ValueError('Time-series view and evaluation outcome overlays are mutually exclusive.')
         if preserve_source_layout and not single_run_source:
@@ -427,16 +497,19 @@ class TensorboardLogConsolidator:
             writer.close()
 
     def scan(self) -> ConsolidationManifest:
-        selection = select_event_files(self.source_root, self.single_run_source)
-        for event_file in selection.event_files:
-            fingerprint = EventFileFingerprint(
-                size_bytes=event_file.stat().st_size,
-                modified_time_ns=event_file.stat().st_mtime_ns,
-            )
-            if self.event_file_fingerprints.get(event_file) == fingerprint:
-                continue
-            self._load_event_file(event_file)
-            self.event_file_fingerprints[event_file] = fingerprint
+        selections: list[EventFileSelection] = []
+        for source_segment in self.source_segments:
+            selection = select_event_files(source_segment.source_root, self.single_run_source)
+            selections.append(selection)
+            for event_file in selection.event_files:
+                fingerprint = EventFileFingerprint(
+                    size_bytes=event_file.stat().st_size,
+                    modified_time_ns=event_file.stat().st_mtime_ns,
+                )
+                if self.event_file_fingerprints.get(event_file) == fingerprint:
+                    continue
+                self._load_event_file(source_segment, event_file)
+                self.event_file_fingerprints[event_file] = fingerprint
         self._emit_changed_summaries()
         if self.writer is not None:
             scalar_tags = {identity.tag for identity in self.summary_states if identity.value_type == 'simple_value'}
@@ -446,28 +519,33 @@ class TensorboardLogConsolidator:
             self.writer.flush()
         for writer in self.time_series_writers.values():
             writer.flush()
-        manifest = self._manifest(selection)
+        manifest = self._manifest(tuple(selections))
         (self.output_root / 'consolidation-manifest.json').write_text(
             manifest.model_dump_json(indent=2),
             encoding='utf-8',
         )
         return manifest
 
-    def _load_event_file(self, event_file: Path) -> None:
+    def _load_event_file(self, source_segment: TensorboardSourceSegment, event_file: Path) -> None:
         loader = LegacyEventFileLoader(str(event_file))
         for event in loader.Load():
+            if source_segment.minimum_wall_time is not None and event.wall_time < source_segment.minimum_wall_time:
+                continue
+            if source_segment.maximum_wall_time is not None and event.wall_time > source_segment.maximum_wall_time:
+                continue
             if not event.HasField('summary'):
                 continue
             for original_value in event.summary.value:
-                category = _event_relative_parts(self.source_root, event_file, self.single_run_source)[1]
+                category = _event_relative_parts(source_segment.source_root, event_file, self.single_run_source)[1]
                 is_evaluation_summary = original_value.tag.startswith('evaluation/summaries/')
                 if _plugin_name(original_value) == 'text' and category != 'training_args' and not is_evaluation_summary:
                     self.excluded_text_summary_count += 1
                     continue
-                self._select_if_newer(event_file, event, original_value)
+                self._select_if_newer(source_segment.source_root, event_file, event, original_value)
 
     def _select_if_newer(
         self,
+        source_root: Path,
         event_file: Path,
         event: event_pb2.Event,
         original_value: summary_pb2.Summary.Value,
@@ -475,19 +553,19 @@ class TensorboardLogConsolidator:
         consolidated_value = summary_pb2.Summary.Value()
         consolidated_value.CopyFrom(original_value)
         consolidated_value.tag = canonical_tag(
-            self.source_root,
+            source_root,
             event_file,
             original_value.tag,
             self.single_run_source,
         )
         grouped_summary_tag = time_series_tag(
-            self.source_root,
+            source_root,
             event_file,
             original_value.tag,
             self.single_run_source,
         )
         source_route = source_layout_route(
-            self.source_root,
+            source_root,
             event_file,
             original_value.tag,
             self.single_run_source,
@@ -595,7 +673,7 @@ class TensorboardLogConsolidator:
             self.time_series_writers[route.run_name] = writer
         return writer, route.tag
 
-    def _manifest(self, selection: EventFileSelection) -> ConsolidationManifest:
+    def _manifest(self, selections: tuple[EventFileSelection, ...]) -> ConsolidationManifest:
         tag_identities: dict[tuple[str, str, str], list[SummaryIdentity]] = {}
         for identity in self.summary_states:
             key = (identity.tag, identity.plugin_name, identity.value_type)
@@ -613,15 +691,25 @@ class TensorboardLogConsolidator:
         )
         representatives = tuple(
             RepresentativeSelfPlayProcess(run_name=run_name, process_id=process_id)
+            for selection in selections
             for run_name, process_id in selection.representative_self_play_processes
         )
         return ConsolidationManifest(
             generated_at_utc=datetime.now(timezone.utc),
-            source_root=str(self.source_root),
+            source_segments=tuple(
+                SourceSegmentSummary(
+                    source_root=str(source_segment.source_root),
+                    minimum_wall_time=source_segment.minimum_wall_time,
+                    maximum_wall_time=source_segment.maximum_wall_time,
+                )
+                for source_segment in self.source_segments
+            ),
             output_root=str(self.output_root),
-            source_event_file_count=selection.source_event_file_count,
-            selected_event_file_count=len(selection.event_files),
-            skipped_self_play_event_file_count=selection.skipped_self_play_event_file_count,
+            source_event_file_count=sum(selection.source_event_file_count for selection in selections),
+            selected_event_file_count=sum(len(selection.event_files) for selection in selections),
+            skipped_self_play_event_file_count=sum(
+                selection.skipped_self_play_event_file_count for selection in selections
+            ),
             excluded_text_summary_count=self.excluded_text_summary_count,
             emitted_summary_count=self.emitted_summary_count,
             unique_summary_count=len(self.summary_states),
@@ -640,12 +728,13 @@ class StopSignal:
 
 
 def consolidate_once(
-    source_root: Path,
+    source_root: Path | None,
     output_root: Path,
     time_series_view: bool = False,
     single_run_source: bool = False,
     evaluation_outcome_overlays: bool = False,
     preserve_source_layout: bool = False,
+    source_segments: tuple[TensorboardSourceSegment, ...] | None = None,
 ) -> ConsolidationManifest:
     consolidator = TensorboardLogConsolidator(
         source_root,
@@ -654,6 +743,7 @@ def consolidate_once(
         single_run_source,
         evaluation_outcome_overlays,
         preserve_source_layout,
+        source_segments,
     )
     try:
         return consolidator.scan()
@@ -662,13 +752,14 @@ def consolidate_once(
 
 
 def watch(
-    source_root: Path,
+    source_root: Path | None,
     output_root: Path,
     interval_seconds: float,
     time_series_view: bool = False,
     single_run_source: bool = False,
     evaluation_outcome_overlays: bool = False,
     preserve_source_layout: bool = False,
+    source_segments: tuple[TensorboardSourceSegment, ...] | None = None,
 ) -> None:
     if interval_seconds <= 0:
         raise ValueError('Watch interval must be positive.')
@@ -682,6 +773,7 @@ def watch(
         single_run_source,
         evaluation_outcome_overlays,
         preserve_source_layout,
+        source_segments,
     )
     try:
         while not stop_signal.requested:
@@ -696,27 +788,28 @@ def main() -> None:
     if arguments.custom_layout_only:
         append_custom_scalar_layout(arguments.output_root)
         return
-    if arguments.source_root is None:
-        raise ValueError('--source-root is required unless --custom-layout-only is selected.')
+    source_segments = _source_segments(arguments)
     if arguments.watch_interval_seconds is None:
         manifest = consolidate_once(
-            arguments.source_root,
+            None,
             arguments.output_root,
             arguments.time_series_view,
             arguments.single_run_source,
             arguments.evaluation_outcome_overlays,
             arguments.preserve_source_layout,
+            source_segments,
         )
         print(manifest.model_dump_json(indent=2))
         return
     watch(
-        arguments.source_root,
+        None,
         arguments.output_root,
         arguments.watch_interval_seconds,
         arguments.time_series_view,
         arguments.single_run_source,
         arguments.evaluation_outcome_overlays,
         arguments.preserve_source_layout,
+        source_segments,
     )
 
 
