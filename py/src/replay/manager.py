@@ -10,13 +10,19 @@ from src.games.contracts import GameStateContract
 from src.replay.layout import ReplayLayout
 from src.replay.materialization import materialize_completed_game
 from src.replay.store import ReplayStore
-from src.self_play.completed_game import CompletedSelfPlayGame
+from src.self_play.completed_game import CompletedSelfPlayGame, TerminationReason
 from src.self_play.resignation import ResignationCalibrationBatch, ResignationCalibrator
 from src.replay.configuration import ReplayConfiguration
 from src.util.frozen_model import FrozenModel
 
 
 PositionT = TypeVar('PositionT')
+
+
+@dataclass(frozen=True)
+class IngestedCompletedGame:
+    length_plies: int
+    termination_reason: TerminationReason
 
 
 @dataclass(frozen=True)
@@ -29,6 +35,7 @@ class ReplayIngestion:
     retained_visit_mass: int
     discarded_visit_mass: int
     elapsed_seconds: float
+    completed_games: tuple[IngestedCompletedGame, ...]
 
     @property
     def samples_per_second(self) -> float:
@@ -122,6 +129,7 @@ class ReplayManager(Generic[PositionT]):
         policies_truncated = 0
         retained_visit_mass = 0
         discarded_visit_mass = 0
+        completed_games: list[IngestedCompletedGame] = []
         for path in self._available_games():
             game = CompletedSelfPlayGame.model_validate_json(path.read_text(encoding='utf-8'))
             if path.name != game.identity.file_name:
@@ -143,6 +151,12 @@ class ReplayManager(Generic[PositionT]):
             policies_truncated += materialized.policies_truncated
             retained_visit_mass += materialized.retained_visit_mass
             discarded_visit_mass += materialized.discarded_visit_mass
+            completed_games.append(
+                IngestedCompletedGame(
+                    length_plies=len(game.action_ids),
+                    termination_reason=game.termination_reason,
+                )
+            )
         self.store.flush()
         after = self.store.state
         return ReplayIngestion(
@@ -154,6 +168,7 @@ class ReplayManager(Generic[PositionT]):
             retained_visit_mass=retained_visit_mass,
             discarded_visit_mass=discarded_visit_mass,
             elapsed_seconds=time.perf_counter() - started_at,
+            completed_games=tuple(completed_games),
         )
 
     def description(self) -> ReplayDescription:

@@ -300,6 +300,11 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
     assert ingestion.live_samples == 4
     assert ingestion.evicted_samples == 2
     assert ingestion.samples_per_second > 0.0
+    assert tuple(game.length_plies for game in ingestion.completed_games) == (4, 4)
+    assert tuple(game.termination_reason for game in ingestion.completed_games) == (
+        TerminationReason.NATURAL,
+        TerminationReason.NATURAL,
+    )
     assert not tuple(inbox.glob('*.json'))
     description = manager.description()
     assert description.size == 4

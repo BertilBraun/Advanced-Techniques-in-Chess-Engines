@@ -1,15 +1,19 @@
 from decimal import Decimal
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from src.games.representation import PackedPlaneLayout
 from src.replay.layout import ReplayLayout
-from src.replay.manager import ReplayDescription
+from src.replay.manager import IngestedCompletedGame, ReplayDescription
+from src.self_play.completed_game import TerminationReason
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
+from src.training.coordinator import Coordinator
+import src.training.coordinator as coordinator_module
 from src.training.credit_ledger import CreditLedgerState
-from src.training.telemetry import training_lifecycle_telemetry
+from src.training.telemetry import completed_game_length_telemetry, training_lifecycle_telemetry
 from src.training.targets import TrainingTargetLayout
 
 
@@ -60,6 +64,66 @@ def test_training_lifecycle_telemetry_reports_credit_backlog_and_observed_ratio(
     assert telemetry.live_replay_rows == 100
     assert telemetry.logical_replay_capacity == 250
     assert telemetry.replay_fill_fraction == 0.4
+
+
+def test_completed_game_length_telemetry_reports_distribution_and_terminations() -> None:
+    games = (
+        IngestedCompletedGame(length_plies=10, termination_reason=TerminationReason.NATURAL),
+        IngestedCompletedGame(length_plies=20, termination_reason=TerminationReason.RESIGNATION),
+        IngestedCompletedGame(length_plies=30, termination_reason=TerminationReason.RESIGNATION),
+        IngestedCompletedGame(length_plies=40, termination_reason=TerminationReason.MAXIMUM_PLIES),
+    )
+
+    telemetry = completed_game_length_telemetry(games)
+
+    assert telemetry is not None
+    assert telemetry.lengths_plies == (10, 20, 30, 40)
+    assert telemetry.mean_plies == pytest.approx(25.0)
+    assert telemetry.median_plies == pytest.approx(25.0)
+    assert telemetry.p90_plies == pytest.approx(37.0)
+    assert telemetry.p99_plies == pytest.approx(39.7)
+    assert telemetry.maximum_plies == 40
+    by_reason = {entry.reason: entry for entry in telemetry.terminations}
+    assert by_reason[TerminationReason.NATURAL].completed_games == 1
+    assert by_reason[TerminationReason.NATURAL].mean_plies == pytest.approx(10.0)
+    assert by_reason[TerminationReason.RESIGNATION].fraction == pytest.approx(0.5)
+    assert by_reason[TerminationReason.RESIGNATION].mean_plies == pytest.approx(25.0)
+    assert by_reason[TerminationReason.ADJUDICATION].completed_games == 0
+    assert by_reason[TerminationReason.ADJUDICATION].mean_plies is None
+
+
+def test_completed_game_length_telemetry_omits_empty_windows() -> None:
+    assert completed_game_length_telemetry(()) is None
+
+
+def test_coordinator_logs_completed_game_length_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    coordinator = Coordinator.__new__(Coordinator)
+    coordinator._completed_games_since_last_quantum = [
+        IngestedCompletedGame(length_plies=20, termination_reason=TerminationReason.NATURAL),
+        IngestedCompletedGame(length_plies=40, termination_reason=TerminationReason.RESIGNATION),
+    ]
+    scalars: dict[str, tuple[float, int | None]] = {}
+    histograms: dict[str, tuple[np.ndarray, int | None]] = {}
+
+    def record_scalar(name: str, value: float, step: int | None = None) -> None:
+        scalars[name] = (value, step)
+
+    def record_histogram(name: str, values: np.ndarray, step: int | None = None) -> None:
+        histograms[name] = (values, step)
+
+    monkeypatch.setattr(coordinator_module, 'log_scalar', record_scalar)
+    monkeypatch.setattr(coordinator_module, 'log_histogram', record_histogram)
+
+    coordinator._record_completed_game_lengths(generation=7)
+
+    assert scalars['self_play/completed_games'] == (2, 7)
+    assert scalars['self_play/game_length_plies_mean'] == (30.0, 7)
+    assert scalars['self_play/game_length_plies_median'] == (30.0, 7)
+    assert scalars['self_play/termination/natural/fraction'] == (0.5, 7)
+    assert scalars['self_play/termination/resignation/game_length_plies_mean'] == (40.0, 7)
+    assert np.array_equal(histograms['self_play/game_length_plies'][0], np.asarray((20, 40), dtype=np.int32))
+    assert histograms['self_play/game_length_plies'][1] == 7
+    assert not coordinator._completed_games_since_last_quantum
 
 
 @pytest.mark.parametrize(

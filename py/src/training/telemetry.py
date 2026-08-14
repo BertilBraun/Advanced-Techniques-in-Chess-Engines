@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from decimal import Decimal
+from statistics import fmean, median
 
-from src.replay.manager import ReplayDescription
+from src.replay.manager import IngestedCompletedGame, ReplayDescription
+from src.self_play.completed_game import TerminationReason
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedgerState
 
@@ -18,6 +20,62 @@ class TrainingLifecycleTelemetry:
     live_replay_rows: int
     logical_replay_capacity: int
     replay_fill_fraction: float
+
+
+@dataclass(frozen=True)
+class TerminationGameLengthTelemetry:
+    reason: TerminationReason
+    completed_games: int
+    fraction: float
+    mean_plies: float | None
+
+
+@dataclass(frozen=True)
+class CompletedGameLengthTelemetry:
+    lengths_plies: tuple[int, ...]
+    mean_plies: float
+    median_plies: float
+    p90_plies: float
+    p99_plies: float
+    maximum_plies: int
+    terminations: tuple[TerminationGameLengthTelemetry, ...]
+
+
+def completed_game_length_telemetry(
+    games: tuple[IngestedCompletedGame, ...],
+) -> CompletedGameLengthTelemetry | None:
+    if not games:
+        return None
+    lengths = tuple(game.length_plies for game in games)
+    terminations: list[TerminationGameLengthTelemetry] = []
+    for reason in TerminationReason:
+        reason_lengths = tuple(game.length_plies for game in games if game.termination_reason is reason)
+        terminations.append(
+            TerminationGameLengthTelemetry(
+                reason=reason,
+                completed_games=len(reason_lengths),
+                fraction=len(reason_lengths) / len(games),
+                mean_plies=fmean(reason_lengths) if reason_lengths else None,
+            )
+        )
+    return CompletedGameLengthTelemetry(
+        lengths_plies=lengths,
+        mean_plies=fmean(lengths),
+        median_plies=median(lengths),
+        p90_plies=_percentile(lengths, 0.90),
+        p99_plies=_percentile(lengths, 0.99),
+        maximum_plies=max(lengths),
+        terminations=tuple(terminations),
+    )
+
+
+def _percentile(values: tuple[int, ...], quantile: float) -> float:
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * quantile
+    lower_index = int(position)
+    upper_index = min(lower_index + 1, len(ordered) - 1)
+    weight = position - lower_index
+    return ordered[lower_index] * (1.0 - weight) + ordered[upper_index] * weight
 
 
 def training_lifecycle_telemetry(

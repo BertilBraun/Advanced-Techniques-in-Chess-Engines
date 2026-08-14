@@ -9,7 +9,7 @@ from src.evaluation.manager import EvaluationManager
 from src.experiment.base_configuration import initial_generation
 from src.games.implementation import GameImplementation
 from src.replay.layout import ReplayLayout
-from src.replay.manager import ReplayManager
+from src.replay.manager import IngestedCompletedGame, ReplayManager
 from src.self_play.protocol import (
     RunningSelfPlayState,
     StatisticsLevel,
@@ -26,7 +26,7 @@ from src.training.distributions import (
     TrainingDistributionSnapshot,
 )
 from src.training.targets import AuxiliaryHeadLayout, NextPolicyHeadLayout, RemainingGameLengthHeadLayout
-from src.training.telemetry import training_lifecycle_telemetry
+from src.training.telemetry import completed_game_length_telemetry, training_lifecycle_telemetry
 from src.training.tensorboard import scheduled_settings_at
 from src.training.trainer import TrainerGroup, TrainingQuantumResult
 from src.training.run_limits import RunLimitMonitor
@@ -83,6 +83,7 @@ class Coordinator:
         self.final_stop_reason: str | None = None
         self._backpressure_pause_requested = False
         self._credit_wait_started_at = time.perf_counter()
+        self._completed_games_since_last_quantum: list[IngestedCompletedGame] = []
         self._record_scheduled_settings(self.ledger.model_generation)
 
     def run(self) -> None:
@@ -130,6 +131,7 @@ class Coordinator:
         generation = self.ledger.model_generation
         ingestion = self.replay_manager.ingest_available_games(generation)
         self.ledger.add_samples(ingestion.samples_added, generation)
+        self._completed_games_since_last_quantum.extend(ingestion.completed_games)
         if ingestion.games_ingested:
             self._record_resignation_diagnostics(generation)
 
@@ -261,6 +263,7 @@ class Coordinator:
         log_scalar('replay/live_rows', lifecycle.live_replay_rows, generation)
         log_scalar('replay/logical_capacity', lifecycle.logical_replay_capacity, generation)
         log_scalar('replay/fill_fraction', lifecycle.replay_fill_fraction, generation)
+        self._record_completed_game_lengths(generation)
         self._record_scheduled_settings(generation)
         log(
             f'Completed generation {generation}: loss={statistics.total_loss:.4f}, '
@@ -271,6 +274,26 @@ class Coordinator:
             f'observed-replay-ratio={lifecycle.observed_replay_ratio:.3f}, '
             f'replay={lifecycle.live_replay_rows}/{lifecycle.logical_replay_capacity}'
         )
+
+    def _record_completed_game_lengths(self, generation: int) -> None:
+        telemetry = completed_game_length_telemetry(tuple(self._completed_games_since_last_quantum))
+        if telemetry is None:
+            return
+        lengths = np.asarray(telemetry.lengths_plies, dtype=np.int32)
+        log_histogram('self_play/game_length_plies', lengths, generation)
+        log_scalar('self_play/completed_games', len(telemetry.lengths_plies), generation)
+        log_scalar('self_play/game_length_plies_mean', telemetry.mean_plies, generation)
+        log_scalar('self_play/game_length_plies_median', telemetry.median_plies, generation)
+        log_scalar('self_play/game_length_plies_p90', telemetry.p90_plies, generation)
+        log_scalar('self_play/game_length_plies_p99', telemetry.p99_plies, generation)
+        log_scalar('self_play/game_length_plies_maximum', telemetry.maximum_plies, generation)
+        for termination in telemetry.terminations:
+            prefix = f'self_play/termination/{termination.reason.value}'
+            log_scalar(f'{prefix}/completed_games', termination.completed_games, generation)
+            log_scalar(f'{prefix}/fraction', termination.fraction, generation)
+            if termination.mean_plies is not None:
+                log_scalar(f'{prefix}/game_length_plies_mean', termination.mean_plies, generation)
+        self._completed_games_since_last_quantum.clear()
 
     def _record_scheduled_settings(self, generation: int) -> None:
         for setting in scheduled_settings_at(self.configuration, generation):
