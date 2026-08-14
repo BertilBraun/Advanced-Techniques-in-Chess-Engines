@@ -5,7 +5,7 @@ run:
   tensorboard_run_directory: vast-chess-8gpu-1d-r4
   stage: continuation
   hardware:
-    minimum_disk_gib: 65
+    minimum_disk_gib: 10
   resume:
     mode: checkpoint
     checkpoint_manifest_path: /workspace/chess-restart-artifacts/vast-chess-8gpu-1d-r3-generation-150/checkpoint_150.json
@@ -25,6 +25,8 @@ training:
       maximum_capacity: 2500000
     credit:
       replay_ratio: 10
+  limits:
+    minimum_free_disk_gib: 10.0
 
 chess:
   self_play:
