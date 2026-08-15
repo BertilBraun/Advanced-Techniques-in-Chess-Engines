@@ -163,8 +163,11 @@ def _create_match_selectors(
     job: MatchEvaluationJob,
     game: GameImplementation[PositionT, NativeSearchT],
     device_type: Literal['cpu', 'cuda'],
+    candidate_selector: MatchActionSelector[PositionT] | None,
 ) -> _MatchSelectors[PositionT]:
     if isinstance(job.definition, PolicyRandomOpponentEvaluationDefinition):
+        if candidate_selector is not None:
+            raise ValueError('Policy-only evaluation does not accept a search selector override.')
         return _MatchSelectors(
             candidate=PolicyActionSelector(
                 game.state,
@@ -175,7 +178,9 @@ def _create_match_selectors(
             opponent=None,
         )
     search_configuration = _definition_search(job)
-    candidate = SearchActionSelector(game.create_evaluation_search(job.device_id, job.candidate, search_configuration))
+    candidate = candidate_selector or SearchActionSelector(
+        game.create_evaluation_search(job.device_id, job.candidate, search_configuration)
+    )
     opponent = (
         SearchActionSelector(
             game.create_evaluation_search(job.device_id, job.opponent.checkpoint, search_configuration)
@@ -324,9 +329,10 @@ def run_match(
     bootstrap_samples: int,
     external_engine: ExternalMatchEngine[PositionT] | None,
     device_type: Literal['cpu', 'cuda'],
+    candidate_selector: MatchActionSelector[PositionT] | None = None,
 ) -> MatchEvaluationResult:
     started_at = time.monotonic()
-    selectors = _create_match_selectors(job, game, device_type)
+    selectors = _create_match_selectors(job, game, device_type, candidate_selector)
     active = _build_matches(game.state, openings, job.definition.opening_pair_count, job.random_seed)
     completed: list[EvaluationGameResult] = []
     maximum_game_plies = _maximum_game_plies(job)

@@ -116,6 +116,11 @@ class FakeSearch:
         return FakeBatch(tuple(FakeResult((FakeVisit(0, 10), FakeVisit(1, 5))) for _ in requests))
 
 
+class OverrideSelector:
+    def choose_actions(self, positions: tuple[FakePosition, ...]) -> tuple[int, ...]:
+        return tuple(1 for _ in positions)
+
+
 class FakeGame:
     state = FakeState()
 
@@ -204,6 +209,72 @@ def test_shared_match_swaps_players_and_aggregates_pairs() -> None:
     assert result.aggregate.draws == 2
     assert result.aggregate.pair_count == 1
     assert result.aggregate.score == 0.5
+
+
+def test_shared_match_accepts_candidate_selector_override() -> None:
+    search = EvaluationSearchConfiguration(
+        searches_per_move=8,
+        parallel_searches=1,
+        exploration_constant=1.0,
+        inference=BatchedInferenceParams(
+            inference_workers=1,
+            inference_batch_size=8,
+            outstanding_batches_per_worker=1,
+        ),
+    )
+    definition = RandomOpponentEvaluationDefinition(
+        kind='random',
+        definition_id='random',
+        opening_pair_count=1,
+        search=search,
+        maximum_game_plies=6,
+    )
+    job = MatchEvaluationJob(
+        kind='match',
+        job_id='override-job',
+        definition=definition,
+        boundary_seconds=1200,
+        candidate=_checkpoint(),
+        opponent=RandomOpponent(kind='random'),
+        device_id=0,
+        deadline_seconds=3600,
+        random_seed=7,
+        result_path=Path('result.json'),
+    )
+    openings = OpeningSuiteManifest(
+        game='chess',
+        rules_digest='1' * 64,
+        representation_digest='2' * 64,
+        random_seed=0,
+        engine_identity='fake',
+        engine_artifact_sha256=('3' * 64,),
+        label_search_limit=10,
+        expanded_actions_per_position=2,
+        beam_width=2,
+        openings=(
+            OpeningLine(
+                opening_id='opening',
+                action_ids=(0, 0, 0, 0),
+                path_probability=0.5,
+                final_position_digest='0' * 64,
+                human_readable='opening',
+            ),
+        ),
+        builder_source_revision='revision',
+    )
+
+    result = run_match(
+        job,
+        FakeGame(),
+        openings,
+        100,
+        None,
+        'cpu',
+        candidate_selector=OverrideSelector(),
+    )
+
+    assert result.games[0].played_action_ids[0] == 1
+    assert result.games[1].played_action_ids[1] == 1
 
 
 def test_policy_random_match_uses_direct_greedy_policy(tmp_path: Path) -> None:

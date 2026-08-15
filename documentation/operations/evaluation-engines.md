@@ -43,6 +43,10 @@ engine configuration's fixed `match_nodes` budget. Both paths disable pondering,
 limits, and play the same paired opening suite. Keep the kinds separate rather than encoding unrestricted strength
 as a missing or sentinel skill level.
 
+For final-checkpoint calibration across several GPUs, use the standalone fixed-search or timed-search procedure in
+[Multi-GPU Stockfish gauntlet](stockfish-gauntlet.md). It reuses these match and engine contracts but remains outside
+the elapsed training-evaluation scheduler.
+
 ## Local WSL installation
 
 Use WSL 2 with an x86-64 Linux distribution. Install the small bootstrap prerequisites using the distribution's
