@@ -18,7 +18,7 @@ training:
       kind: staged
       stages:
         - {start_generation: 0, value: 0.004}
-        - {start_generation: 300, value: 0.003}
+        - {start_generation: 350, value: 0.003}
   lifecycle:
     replay:
       capacity: {kind: constant, value: 1500000}
@@ -48,4 +48,8 @@ chess:
     force_fast_search_after_ply: {kind: constant, value: 160}
   objective:
     root_value_blend: {kind: constant, value: 0.10}
-    value_discount_per_ply: {kind: constant, value: 0.9985}
+    value_discount_per_ply:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 0.9985}
+        - {start_generation: 300, value: 0.9980}

@@ -344,7 +344,8 @@ def test_eight_gpu_chess_r4_configuration_resolves_checkpoint_continuation() -> 
     assert configuration.run.resume.generation == 150
     assert configuration.training.save_path.endswith('vast-chess-8gpu-1d-r4')
     assert configuration.training.trainer.learning_rate.value_at(150) == pytest.approx(0.004)
-    assert configuration.training.trainer.learning_rate.value_at(300) == pytest.approx(0.003)
+    assert configuration.training.trainer.learning_rate.value_at(349) == pytest.approx(0.004)
+    assert configuration.training.trainer.learning_rate.value_at(350) == pytest.approx(0.003)
     assert configuration.training.lifecycle.replay.capacity_at(150) == 1_500_000
     assert configuration.training.lifecycle.replay.maximum_capacity == 2_500_000
     assert configuration.training.lifecycle.credit.replay_ratio == 10
@@ -365,9 +366,13 @@ def test_eight_gpu_chess_r4_configuration_resolves_checkpoint_continuation() -> 
     assert self_play.force_fast_search_after_ply is not None
     assert self_play.force_fast_search_after_ply.value_at(150) == 160
     assert configuration.chess.objective.root_value_blend.value_at(150) == pytest.approx(0.10)
-    assert configuration.chess.objective.value_discount_per_ply.value_at(150) == pytest.approx(0.9985)
+    assert configuration.chess.objective.value_discount_per_ply.value_at(299) == pytest.approx(0.9985)
+    assert configuration.chess.objective.value_discount_per_ply.value_at(300) == pytest.approx(0.9980)
     assert ChessImplementation(configuration).self_play_parameters_at(150).value_discount_per_ply == pytest.approx(
         0.9985
+    )
+    assert ChessImplementation(configuration).self_play_parameters_at(300).value_discount_per_ply == pytest.approx(
+        0.9980
     )
     remaining_length = configuration.chess.objective.auxiliary_targets[1]
     assert remaining_length.kind == 'remaining_game_length'
