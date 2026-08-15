@@ -6,11 +6,14 @@ from src.experiment.configuration import load_chess_experiment_configuration
 from tools.run_stockfish_gauntlet import (
     FixedModelSearchBudget,
     GauntletShardResult,
+    PrefixOpeningSelection,
+    SeededOpeningSelection,
     TimedModelSearchBudget,
     TimedMoveMeasurements,
     _combine_timed_measurements,
     _pair_shards,
     _search_configuration,
+    _select_opening_indices,
     _shift_game_indices,
     _stockfish_configuration,
 )
@@ -67,6 +70,20 @@ def test_pair_shards_are_balanced_and_contiguous() -> None:
         (6, 38, 6),
         (7, 44, 6),
     )
+
+
+def test_prefix_opening_selection_preserves_manifest_order() -> None:
+    assert _select_opening_indices(200, 10, PrefixOpeningSelection()) == tuple(range(10))
+
+
+def test_seeded_opening_selection_is_reproducible_and_spans_manifest() -> None:
+    selected = _select_opening_indices(200, 10, SeededOpeningSelection(random_seed=20260815))
+
+    assert selected == _select_opening_indices(200, 10, SeededOpeningSelection(random_seed=20260815))
+    assert len(selected) == len(set(selected)) == 10
+    assert min(selected) >= 0
+    assert max(selected) < 200
+    assert selected != tuple(range(10))
 
 
 def test_shift_game_indices_preserves_game_evidence() -> None:

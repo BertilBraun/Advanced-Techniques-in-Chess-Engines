@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 from multiprocessing import get_context
 from pathlib import Path
+import random
 import subprocess
 import time
 from typing import Annotated, Literal, TypeAlias
@@ -66,6 +67,21 @@ ModelSearchBudget: TypeAlias = Annotated[
 ]
 
 
+class PrefixOpeningSelection(FrozenModel):
+    kind: Literal['prefix'] = 'prefix'
+
+
+class SeededOpeningSelection(FrozenModel):
+    kind: Literal['seeded_sample'] = 'seeded_sample'
+    random_seed: int = Field(ge=0)
+
+
+OpeningSelection: TypeAlias = Annotated[
+    PrefixOpeningSelection | SeededOpeningSelection,
+    Field(discriminator='kind'),
+]
+
+
 class GpuProvenance(FrozenModel):
     device_id: int = Field(ge=0)
     uuid: str = Field(min_length=1)
@@ -105,7 +121,7 @@ class GauntletShardResult(FrozenModel):
 
 
 class StockfishGauntletResult(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     source_revision: str = Field(min_length=40, max_length=40)
     tool_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     started_at_utc: datetime
@@ -114,7 +130,11 @@ class StockfishGauntletResult(FrozenModel):
     evaluated_checkpoint: CheckpointReference
     opening_manifest_path: Path
     opening_manifest_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    opening_manifest_pair_count: int = Field(gt=0)
     opening_pair_count: int = Field(gt=0)
+    opening_selection: OpeningSelection
+    selected_opening_indices: tuple[int, ...] = Field(min_length=1)
+    match_random_seed: int = Field(ge=0)
     stockfish_executable_path: Path
     stockfish_executable_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     stockfish_identity: str = Field(min_length=1)
@@ -140,6 +160,8 @@ class Arguments:
     stockfish_executable: Path
     stockfish_nodes: int
     opening_pairs: int
+    opening_selection: PrefixOpeningSelection | SeededOpeningSelection
+    match_random_seed: int | None
     devices: tuple[int, ...]
     model_search_budget: FixedModelSearchBudget | TimedModelSearchBudget
     output_directory: Path
@@ -157,6 +179,8 @@ class _ShardRequest:
     opening_manifest: Path
     stockfish_executable: Path
     stockfish_nodes: int
+    opening_indices: tuple[int, ...]
+    match_random_seed: int
     model_search_budget: FixedModelSearchBudget | TimedModelSearchBudget
     output_path: Path
 
@@ -333,6 +357,21 @@ def _pair_shards(opening_pairs: int, devices: tuple[int, ...]) -> tuple[tuple[in
     return tuple(shards)
 
 
+def _select_opening_indices(
+    manifest_pair_count: int,
+    opening_pairs: int,
+    selection: PrefixOpeningSelection | SeededOpeningSelection,
+) -> tuple[int, ...]:
+    if opening_pairs > manifest_pair_count:
+        raise ValueError('Opening manifest does not contain the requested number of opening pairs.')
+    match selection:
+        case PrefixOpeningSelection():
+            return tuple(range(opening_pairs))
+        case SeededOpeningSelection(random_seed=random_seed):
+            generator = random.Random(random_seed)
+            return tuple(sorted(generator.sample(range(manifest_pair_count), opening_pairs)))
+
+
 def _shift_game_indices(game: EvaluationGameResult, first_pair_index: int) -> EvaluationGameResult:
     return game.model_copy(
         update={
@@ -376,7 +415,7 @@ def _run_shard(request: _ShardRequest) -> GauntletShardResult:
     if openings.game != 'chess':
         raise ValueError('Stockfish gauntlet requires chess openings.')
     selected_openings = openings.model_copy(
-        update={'openings': openings.openings[request.first_pair_index : request.first_pair_index + request.pair_count]}
+        update={'openings': tuple(openings.openings[index] for index in request.opening_indices)}
     )
     definition = StockfishFixedNodesEvaluationDefinition(
         kind='stockfish_fixed_nodes',
@@ -385,7 +424,6 @@ def _run_shard(request: _ShardRequest) -> GauntletShardResult:
         maximum_game_plies=300,
         search=_search_configuration(request.model_search_budget),
     )
-    random_seed = loaded.training.random_seed + request.stockfish_nodes
     job = MatchEvaluationJob(
         kind='match',
         job_id=f'stockfish-n{request.stockfish_nodes}-g{checkpoint.generation}-shard{request.shard_id}',
@@ -395,7 +433,7 @@ def _run_shard(request: _ShardRequest) -> GauntletShardResult:
         opponent=StockfishFixedNodesOpponent(kind='stockfish_fixed_nodes'),
         device_id=request.device_id,
         deadline_seconds=7 * 24 * 60 * 60,
-        random_seed=random_seed + request.first_pair_index,
+        random_seed=request.match_random_seed + request.first_pair_index,
         result_path=request.output_path,
     )
     game = ChessImplementation(loaded)
@@ -449,8 +487,18 @@ def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
         arguments.checkpoint_generation,
     )
     openings = OPENING_SUITE_MANIFEST_ADAPTER.validate_json(arguments.opening_manifest.read_text(encoding='utf-8'))
-    if openings.game != 'chess' or arguments.opening_pairs > len(openings.openings):
+    if openings.game != 'chess':
         raise ValueError('Opening manifest must contain the requested number of chess opening pairs.')
+    selected_opening_indices = _select_opening_indices(
+        len(openings.openings),
+        arguments.opening_pairs,
+        arguments.opening_selection,
+    )
+    match_random_seed = (
+        loaded.training.random_seed + arguments.stockfish_nodes
+        if arguments.match_random_seed is None
+        else arguments.match_random_seed
+    )
     gpus = _gpu_inventory(arguments.devices)
     idle_check_enforced = isinstance(arguments.model_search_budget, TimedModelSearchBudget)
     if idle_check_enforced:
@@ -474,6 +522,8 @@ def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
             opening_manifest=arguments.opening_manifest.resolve(),
             stockfish_executable=arguments.stockfish_executable.resolve(),
             stockfish_nodes=arguments.stockfish_nodes,
+            opening_indices=selected_opening_indices[first_pair_index : first_pair_index + pair_count],
+            match_random_seed=match_random_seed,
             model_search_budget=arguments.model_search_budget,
             output_path=shard_directory / f'shard-{shard_id:02d}.json',
         )
@@ -511,7 +561,11 @@ def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
         evaluated_checkpoint=checkpoint,
         opening_manifest_path=arguments.opening_manifest.resolve(),
         opening_manifest_sha256=_sha256(arguments.opening_manifest),
+        opening_manifest_pair_count=len(openings.openings),
         opening_pair_count=arguments.opening_pairs,
+        opening_selection=arguments.opening_selection,
+        selected_opening_indices=selected_opening_indices,
+        match_random_seed=match_random_seed,
         stockfish_executable_path=arguments.stockfish_executable.resolve(),
         stockfish_executable_sha256=_sha256(arguments.stockfish_executable),
         stockfish_identity=next(iter(identities)),
@@ -523,9 +577,7 @@ def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
         idle_device_check_enforced=idle_check_enforced,
         timed_move_measurements=_combine_timed_measurements(ordered_shards),
         games=games,
-        aggregate=aggregate_match(
-            games, loaded.training.random_seed + arguments.stockfish_nodes, loaded.evaluation.bootstrap_samples
-        ),
+        aggregate=aggregate_match(games, match_random_seed, loaded.evaluation.bootstrap_samples),
         shards=ordered_shards,
         duration_seconds=time.monotonic() - started_at,
     )
@@ -557,6 +609,16 @@ def _model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudge
     )
 
 
+def _opening_selection(namespace: argparse.Namespace) -> PrefixOpeningSelection | SeededOpeningSelection:
+    if namespace.opening_selection == 'prefix':
+        if namespace.opening_selection_seed is not None:
+            raise ValueError('--opening-selection-seed is only valid with seeded_sample selection.')
+        return PrefixOpeningSelection()
+    if namespace.opening_selection_seed is None:
+        raise ValueError('seeded_sample selection requires --opening-selection-seed.')
+    return SeededOpeningSelection(random_seed=namespace.opening_selection_seed)
+
+
 def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser(description='Run a paired multi-GPU model-versus-Stockfish gauntlet.')
     parser.add_argument('--experiment', required=True, type=Path)
@@ -565,7 +627,12 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--opening-manifest', required=True, type=Path)
     parser.add_argument('--stockfish-executable', required=True, type=Path)
     parser.add_argument('--stockfish-nodes', required=True, type=int)
-    parser.add_argument('--opening-pairs', default=50, type=int)
+    opening_scope = parser.add_mutually_exclusive_group()
+    opening_scope.add_argument('--opening-pairs', type=int)
+    opening_scope.add_argument('--all-opening-pairs', action='store_true')
+    parser.add_argument('--opening-selection', choices=('prefix', 'seeded_sample'), default='prefix')
+    parser.add_argument('--opening-selection-seed', type=int)
+    parser.add_argument('--match-random-seed', type=int)
     parser.add_argument('--devices', required=True, nargs='+', type=int)
     budget = parser.add_mutually_exclusive_group(required=True)
     budget.add_argument('--model-searches', type=int)
@@ -576,6 +643,13 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--outstanding-batches', type=int)
     parser.add_argument('--output-directory', required=True, type=Path)
     namespace = parser.parse_args()
+    if namespace.all_opening_pairs:
+        opening_manifest = OPENING_SUITE_MANIFEST_ADAPTER.validate_json(
+            namespace.opening_manifest.read_text(encoding='utf-8')
+        )
+        opening_pairs = len(opening_manifest.openings)
+    else:
+        opening_pairs = 50 if namespace.opening_pairs is None else namespace.opening_pairs
     arguments = Arguments(
         experiment=namespace.experiment,
         run_directory=namespace.run_directory,
@@ -583,7 +657,9 @@ def parse_arguments() -> Arguments:
         opening_manifest=namespace.opening_manifest,
         stockfish_executable=namespace.stockfish_executable,
         stockfish_nodes=namespace.stockfish_nodes,
-        opening_pairs=namespace.opening_pairs,
+        opening_pairs=opening_pairs,
+        opening_selection=_opening_selection(namespace),
+        match_random_seed=namespace.match_random_seed,
         devices=tuple(namespace.devices),
         model_search_budget=_model_search_budget(namespace),
         output_directory=namespace.output_directory,
@@ -599,8 +675,12 @@ def parse_arguments() -> Arguments:
     positive_values = (arguments.stockfish_nodes, arguments.opening_pairs)
     if any(value <= 0 for value in positive_values):
         raise ValueError('Stockfish nodes and opening pairs must be positive.')
-    if arguments.checkpoint_generation < 0 or any(device < 0 for device in arguments.devices):
-        raise ValueError('Checkpoint generation and device IDs must be nonnegative.')
+    if (
+        arguments.checkpoint_generation < 0
+        or any(device < 0 for device in arguments.devices)
+        or (arguments.match_random_seed is not None and arguments.match_random_seed < 0)
+    ):
+        raise ValueError('Checkpoint generation, match seed, and device IDs must be nonnegative.')
     if not arguments.devices or len(set(arguments.devices)) != len(arguments.devices):
         raise ValueError('Gauntlet devices must be nonempty and unique.')
     if arguments.output_directory.exists():

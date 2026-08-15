@@ -1,0 +1,4620 @@
+{
+  "schema_version": 1,
+  "source_url": "https://database.nikonoel.fr/lichess_elite_2025-11.zip",
+  "source_archive_sha256": "1ffa577aa0a1352fa04c9a890a6706049a3a79edc52810b136758d1e2a1a2eab",
+  "source_pgn_sha256": "6a6947c6b92c74f54a186fdc5f4e28354d92153ea24a45b54dee083fcc947594",
+  "source_games_read": 280246,
+  "eligible_source_games": 122357,
+  "minimum_player_rating": 2500,
+  "opening_plies": 8,
+  "maximum_absolute_centipawns": 50,
+  "maximum_openings_per_eco": 4,
+  "stockfish_identity": "Stockfish 18",
+  "stockfish_executable_sha256": "7a44d64fd877ee888a5160349827563444e1935ca6c1095d0f8e0859d57101c7",
+  "stockfish_nodes": 250000,
+  "stockfish_threads": 1,
+  "stockfish_hash_mib": 128,
+  "candidates_evaluated": 249,
+  "selected_openings": [
+    {
+      "opening_id": "elite-2025-11-001",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "d7d6",
+        "d2d4",
+        "c5d4",
+        "f3d4",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/3p1n2/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 6312,
+      "eco_code": "B90",
+      "opening_name": "Sicilian Defense: Najdorf Variation, English Attack",
+      "stockfish_centipawns_white": 38,
+      "stockfish_wdl_white": [
+        75,
+        921,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-002",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1b5",
+        "a7a6",
+        "b5a4",
+        "g8f6"
+      ],
+      "final_fen": "r1bqkb1r/1ppp1ppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 5",
+      "source_game_count": 2906,
+      "eco_code": "C77",
+      "opening_name": "Ruy Lopez: Morphy Defense, Anderssen Variation",
+      "stockfish_centipawns_white": 46,
+      "stockfish_wdl_white": [
+        110,
+        886,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-003",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1b5",
+        "g8f6",
+        "d2d3",
+        "f8c5"
+      ],
+      "final_fen": "r1bqk2r/pppp1ppp/2n2n2/1Bb1p3/4P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5",
+      "source_game_count": 2818,
+      "eco_code": "C65",
+      "opening_name": "Ruy Lopez: Berlin Defense",
+      "stockfish_centipawns_white": 15,
+      "stockfish_wdl_white": [
+        38,
+        950,
+        12
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-004",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "d7d5",
+        "b1c3",
+        "f8b4"
+      ],
+      "final_fen": "rnbqk2r/ppp2ppp/4pn2/3p4/1bPP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 2 5",
+      "source_game_count": 1635,
+      "eco_code": "D38",
+      "opening_name": "Queen's Gambit Declined: Ragozin Defense",
+      "stockfish_centipawns_white": 36,
+      "stockfish_wdl_white": [
+        79,
+        916,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-005",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "b1c3",
+        "g8f6",
+        "e4e5",
+        "f6d7"
+      ],
+      "final_fen": "rnbqkb1r/pppn1ppp/4p3/3pP3/3P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 1 5",
+      "source_game_count": 1377,
+      "eco_code": "C11",
+      "opening_name": "French Defense: Steinitz Variation, Boleslavsky Variation",
+      "stockfish_centipawns_white": 43,
+      "stockfish_wdl_white": [
+        101,
+        895,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-006",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "d7d5",
+        "b1c3",
+        "c7c6"
+      ],
+      "final_fen": "rnbqkb1r/pp3ppp/2p1pn2/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 1348,
+      "eco_code": "D43",
+      "opening_name": "Semi-Slav Defense",
+      "stockfish_centipawns_white": 36,
+      "stockfish_wdl_white": [
+        79,
+        916,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-007",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "g8f6",
+        "c4d5",
+        "e6d5"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/5n2/3p4/3P4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 1284,
+      "eco_code": "D35",
+      "opening_name": "Queen's Gambit Declined: Exchange Variation, Positional Variation",
+      "stockfish_centipawns_white": 31,
+      "stockfish_wdl_white": [
+        57,
+        938,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-008",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "b8c6",
+        "d2d4",
+        "c5d4",
+        "f3d4",
+        "g8f6"
+      ],
+      "final_fen": "r1bqkb1r/pp1ppppp/2n2n2/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 1170,
+      "eco_code": "B33",
+      "opening_name": "Sicilian Defense: Lasker-Pelikan Variation",
+      "stockfish_centipawns_white": 50,
+      "stockfish_wdl_white": [
+        114,
+        884,
+        2
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-009",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1c4",
+        "g8f6",
+        "d2d3",
+        "f8c5"
+      ],
+      "final_fen": "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5",
+      "source_game_count": 982,
+      "eco_code": "C54",
+      "opening_name": "Italian Game: Giuoco Pianissimo, Normal",
+      "stockfish_centipawns_white": 26,
+      "stockfish_wdl_white": [
+        55,
+        937,
+        8
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-010",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "e4e5",
+        "c7c5",
+        "c2c3",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkbnr/pp3ppp/2n1p3/2ppP3/3P4/2P5/PP3PPP/RNBQKBNR w KQkq - 1 5",
+      "source_game_count": 909,
+      "eco_code": "C02",
+      "opening_name": "French Defense: Advance Variation, Euwe Variation",
+      "stockfish_centipawns_white": 37,
+      "stockfish_wdl_white": [
+        82,
+        913,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-011",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "e7e6",
+        "d2d4",
+        "c5d4",
+        "f3d4",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkbnr/pp1p1ppp/2n1p3/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 822,
+      "eco_code": "B48",
+      "opening_name": "Sicilian Defense: Taimanov Variation, Bastrikov Variation, English Attack",
+      "stockfish_centipawns_white": 46,
+      "stockfish_wdl_white": [
+        101,
+        896,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-012",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "d7d5",
+        "b1c3",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 2 5",
+      "source_game_count": 821,
+      "eco_code": "D37",
+      "opening_name": "Queen's Gambit Declined: Three Knights Variation",
+      "stockfish_centipawns_white": 46,
+      "stockfish_wdl_white": [
+        112,
+        884,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-013",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "b1c3",
+        "d5e4",
+        "c3e4",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/2p2n2/8/3PN3/8/PPP2PPP/R1BQKBNR w KQkq - 1 5",
+      "source_game_count": 748,
+      "eco_code": "B15",
+      "opening_name": "Caro-Kann Defense: Tartakower Variation",
+      "stockfish_centipawns_white": 21,
+      "stockfish_wdl_white": [
+        38,
+        955,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-014",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8b4",
+        "e2e3",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/pppp1ppp/4pn2/8/1bPP4/2N1P3/PP3PPP/R1BQKBNR w KQ - 1 5",
+      "source_game_count": 702,
+      "eco_code": "E46",
+      "opening_name": "Nimzo-Indian Defense: Normal Variation",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        49,
+        942,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-015",
+      "moves_uci": [
+        "g1f3",
+        "g8f6",
+        "g2g3",
+        "g7g6",
+        "f1g2",
+        "f8g7",
+        "e1g1",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/8/8/5NP1/PPPPPPBP/RNBQ1RK1 w - - 4 5",
+      "source_game_count": 656,
+      "eco_code": "A05",
+      "opening_name": "King's Indian Attack: Symmetrical Defense",
+      "stockfish_centipawns_white": 27,
+      "stockfish_wdl_white": [
+        58,
+        935,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-016",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "e4e5",
+        "c8f5",
+        "g1f3",
+        "e7e6"
+      ],
+      "final_fen": "rn1qkbnr/pp3ppp/2p1p3/3pPb2/3P4/5N2/PPP2PPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 622,
+      "eco_code": "B12",
+      "opening_name": "Caro-Kann Defense: Advance Variation, Short Variation",
+      "stockfish_centipawns_white": 30,
+      "stockfish_wdl_white": [
+        65,
+        928,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-017",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1c4",
+        "f8c5",
+        "c2c3",
+        "g8f6"
+      ],
+      "final_fen": "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2P2N2/PP1P1PPP/RNBQK2R w KQkq - 1 5",
+      "source_game_count": 586,
+      "eco_code": "C54",
+      "opening_name": "Italian Game: Classical Variation, Giuoco Pianissimo",
+      "stockfish_centipawns_white": 32,
+      "stockfish_wdl_white": [
+        68,
+        926,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-018",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "g1f3",
+        "g8f6",
+        "c1f4",
+        "c7c5",
+        "e2e3",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkb1r/pp2pppp/2n2n2/2pp4/3P1B2/4PN2/PPP2PPP/RN1QKB1R w KQkq - 1 5",
+      "source_game_count": 569,
+      "eco_code": "D02",
+      "opening_name": "Queen's Pawn Game: London System",
+      "stockfish_centipawns_white": 11,
+      "stockfish_wdl_white": [
+        32,
+        954,
+        14
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-019",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "g8f6",
+        "g2g3",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p4/2PP4/5NP1/PP2PP1P/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 527,
+      "eco_code": "E05",
+      "opening_name": "Catalan Opening: Open Defense, Classical Line",
+      "stockfish_centipawns_white": 38,
+      "stockfish_wdl_white": [
+        84,
+        911,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-020",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "g7g6",
+        "b1c3",
+        "d7d5",
+        "g1f3",
+        "f8g7"
+      ],
+      "final_fen": "rnbqk2r/ppp1ppbp/5np1/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 2 5",
+      "source_game_count": 477,
+      "eco_code": "D91",
+      "opening_name": "Grünfeld Defense: Three Knights Variation, Petrosian System",
+      "stockfish_centipawns_white": 30,
+      "stockfish_wdl_white": [
+        63,
+        930,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-021",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "e4e5",
+        "c8f5",
+        "h2h4",
+        "h7h5"
+      ],
+      "final_fen": "rn1qkbnr/pp2ppp1/2p5/3pPb1p/3P3P/8/PPP2PP1/RNBQKBNR w KQkq - 0 5",
+      "source_game_count": 475,
+      "eco_code": "B12",
+      "opening_name": "Caro-Kann Defense: Advance Variation, Tal Variation",
+      "stockfish_centipawns_white": 38,
+      "stockfish_wdl_white": [
+        85,
+        910,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-022",
+      "moves_uci": [
+        "c2c4",
+        "e7e6",
+        "g2g3",
+        "d7d5",
+        "f1g2",
+        "g8f6",
+        "g1f3",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p4/2P5/5NP1/PP1PPPBP/RNBQK2R w KQkq - 4 5",
+      "source_game_count": 466,
+      "eco_code": "A14",
+      "opening_name": "English Opening: Agincourt Defense, Neo-Catalan Declined",
+      "stockfish_centipawns_white": 31,
+      "stockfish_wdl_white": [
+        65,
+        928,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-023",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "e4d5",
+        "c6d5",
+        "f1d3",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkbnr/pp2pppp/2n5/3p4/3P4/3B4/PPP2PPP/RNBQK1NR w KQkq - 2 5",
+      "source_game_count": 464,
+      "eco_code": "B13",
+      "opening_name": "Caro-Kann Defense: Exchange Variation",
+      "stockfish_centipawns_white": 21,
+      "stockfish_wdl_white": [
+        39,
+        954,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-024",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "d7d6",
+        "f1b5",
+        "c8d7",
+        "b5d7",
+        "d8d7"
+      ],
+      "final_fen": "rn2kbnr/pp1qpppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+      "source_game_count": 442,
+      "eco_code": "B52",
+      "opening_name": "Sicilian Defense: Moscow Variation, Main Line",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        30,
+        966,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-025",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "b8c6",
+        "d2d4",
+        "c5d4",
+        "f3d4",
+        "e7e5"
+      ],
+      "final_fen": "r1bqkbnr/pp1p1ppp/2n5/4p3/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 440,
+      "eco_code": "B32",
+      "opening_name": "Sicilian Defense: Kalashnikov Variation",
+      "stockfish_centipawns_white": 39,
+      "stockfish_wdl_white": [
+        77,
+        919,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-026",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "g7g6",
+        "b1c3",
+        "d7d5",
+        "c4d5",
+        "f6d5"
+      ],
+      "final_fen": "rnbqkb1r/ppp1pp1p/6p1/3n4/3P4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 436,
+      "eco_code": "D85",
+      "opening_name": "Grünfeld Defense: Exchange Variation",
+      "stockfish_centipawns_white": 33,
+      "stockfish_wdl_white": [
+        62,
+        934,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-027",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1c4",
+        "f8c5",
+        "e1g1",
+        "g8f6"
+      ],
+      "final_fen": "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQ1RK1 w kq - 6 5",
+      "source_game_count": 436,
+      "eco_code": "C50",
+      "opening_name": "Italian Game: Giuoco Piano",
+      "stockfish_centipawns_white": 31,
+      "stockfish_wdl_white": [
+        66,
+        928,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-028",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "b8c6",
+        "f1b5",
+        "g7g6",
+        "e1g1",
+        "f8g7"
+      ],
+      "final_fen": "r1bqk1nr/pp1pppbp/2n3p1/1Bp5/4P3/5N2/PPPP1PPP/RNBQ1RK1 w kq - 2 5",
+      "source_game_count": 421,
+      "eco_code": "B31",
+      "opening_name": "Sicilian Defense: Nyezhmetdinov-Rossolimo Attack, Fianchetto Variation",
+      "stockfish_centipawns_white": 42,
+      "stockfish_wdl_white": [
+        96,
+        900,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-029",
+      "moves_uci": [
+        "c2c4",
+        "e7e5",
+        "g2g3",
+        "g8f6",
+        "f1g2",
+        "c7c6",
+        "d2d4",
+        "e5e4"
+      ],
+      "final_fen": "rnbqkb1r/pp1p1ppp/2p2n2/8/2PPp3/6P1/PP2PPBP/RNBQK1NR w KQkq - 0 5",
+      "source_game_count": 414,
+      "eco_code": "A20",
+      "opening_name": "English Opening: King's English Variation",
+      "stockfish_centipawns_white": 17,
+      "stockfish_wdl_white": [
+        39,
+        950,
+        11
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-030",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "b7b6",
+        "g2g3",
+        "c8a6"
+      ],
+      "final_fen": "rn1qkb1r/p1pp1ppp/bp2pn2/8/2PP4/5NP1/PP2PP1P/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 378,
+      "eco_code": "E15",
+      "opening_name": "Queen's Indian Defense: Fianchetto Variation, Check Variation, Intermezzo Line",
+      "stockfish_centipawns_white": 41,
+      "stockfish_wdl_white": [
+        94,
+        902,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-031",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "b8c6",
+        "f1b5",
+        "e7e6",
+        "e1g1",
+        "g8e7"
+      ],
+      "final_fen": "r1bqkb1r/pp1pnppp/2n1p3/1Bp5/4P3/5N2/PPPP1PPP/RNBQ1RK1 w kq - 2 5",
+      "source_game_count": 368,
+      "eco_code": "B30",
+      "opening_name": "Sicilian Defense: Nyezhmetdinov-Rossolimo Attack",
+      "stockfish_centipawns_white": 30,
+      "stockfish_wdl_white": [
+        63,
+        930,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-032",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "d7d5",
+        "b1c3",
+        "c7c5"
+      ],
+      "final_fen": "rnbqkb1r/pp3ppp/4pn2/2pp4/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 364,
+      "eco_code": "D41",
+      "opening_name": "Queen's Gambit Declined: Semi-Tarrasch Defense",
+      "stockfish_centipawns_white": 24,
+      "stockfish_wdl_white": [
+        51,
+        940,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-033",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "g2g3",
+        "g8f6",
+        "f1g2",
+        "e7e6",
+        "e1g1",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p4/8/5NP1/PPPPPPBP/RNBQ1RK1 w kq - 2 5",
+      "source_game_count": 356,
+      "eco_code": "A05",
+      "opening_name": "King's Indian Attack",
+      "stockfish_centipawns_white": 39,
+      "stockfish_wdl_white": [
+        89,
+        906,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-034",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "g7g6",
+        "g2g3",
+        "f8g7",
+        "f1g2",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/8/3P4/5NP1/PPP1PPBP/RNBQK2R w KQ - 3 5",
+      "source_game_count": 353,
+      "eco_code": "A49",
+      "opening_name": "Indian Defense: Przepiorka Variation",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        49,
+        942,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-035",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "e4d5",
+        "c6d5",
+        "c2c4",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/5n2/3p4/2PP4/8/PP3PPP/RNBQKBNR w KQkq - 1 5",
+      "source_game_count": 348,
+      "eco_code": "B14",
+      "opening_name": "Caro-Kann Defense: Panov Attack, Modern Defense",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        43,
+        950,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-036",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "g1f3",
+        "d7d5",
+        "b1c3",
+        "d5e4",
+        "c3e4",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/2p2n2/8/4N3/5N2/PPPP1PPP/R1BQKB1R w KQkq - 1 5",
+      "source_game_count": 345,
+      "eco_code": "B10",
+      "opening_name": "Caro-Kann Defense: Two Knights Attack",
+      "stockfish_centipawns_white": 34,
+      "stockfish_wdl_white": [
+        63,
+        933,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-037",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "d2d4",
+        "e5d4",
+        "f3d4",
+        "g8f6"
+      ],
+      "final_fen": "r1bqkb1r/pppp1ppp/2n2n2/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 338,
+      "eco_code": "C45",
+      "opening_name": "Scotch Game: Schmidt Variation",
+      "stockfish_centipawns_white": 21,
+      "stockfish_wdl_white": [
+        38,
+        955,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-038",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "g1f3",
+        "g8f6",
+        "c1f4",
+        "e7e6",
+        "e2e3",
+        "f8d6"
+      ],
+      "final_fen": "rnbqk2r/ppp2ppp/3bpn2/3p4/3P1B2/4PN2/PPP2PPP/RN1QKB1R w KQkq - 1 5",
+      "source_game_count": 324,
+      "eco_code": "D02",
+      "opening_name": "Queen's Pawn Game: London System",
+      "stockfish_centipawns_white": 21,
+      "stockfish_wdl_white": [
+        47,
+        944,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-039",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "g7g6",
+        "g1f3",
+        "f8g7",
+        "g2g3",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/8/2PP4/5NP1/PP2PP1P/RNBQKB1R w KQ - 1 5",
+      "source_game_count": 314,
+      "eco_code": "E60",
+      "opening_name": "King's Indian Defense: Normal Variation, King's Knight Variation",
+      "stockfish_centipawns_white": 25,
+      "stockfish_wdl_white": [
+        52,
+        940,
+        8
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-040",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "b1c3",
+        "d5e4",
+        "c3e4",
+        "c8f5"
+      ],
+      "final_fen": "rn1qkbnr/pp2pppp/2p5/5b2/3PN3/8/PPP2PPP/R1BQKBNR w KQkq - 1 5",
+      "source_game_count": 311,
+      "eco_code": "B18",
+      "opening_name": "Caro-Kann Defense: Classical Variation",
+      "stockfish_centipawns_white": 35,
+      "stockfish_wdl_white": [
+        66,
+        930,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-041",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "d7d5",
+        "b1c3",
+        "b8d7"
+      ],
+      "final_fen": "r1bqkb1r/pppn1ppp/4pn2/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 2 5",
+      "source_game_count": 309,
+      "eco_code": "D37",
+      "opening_name": "Queen's Gambit Declined: Barmen Variation",
+      "stockfish_centipawns_white": 29,
+      "stockfish_wdl_white": [
+        62,
+        931,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-042",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "b7b6",
+        "g2g3",
+        "c8b7"
+      ],
+      "final_fen": "rn1qkb1r/pbpp1ppp/1p2pn2/8/2PP4/5NP1/PP2PP1P/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 299,
+      "eco_code": "E16",
+      "opening_name": "Queen's Indian Defense: Capablanca Variation",
+      "stockfish_centipawns_white": 42,
+      "stockfish_wdl_white": [
+        99,
+        897,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-043",
+      "moves_uci": [
+        "e2e4",
+        "d7d6",
+        "d2d4",
+        "g8f6",
+        "b1c3",
+        "e7e5",
+        "d4e5",
+        "d6e5"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/5n2/4p3/4P3/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 274,
+      "eco_code": "B00",
+      "opening_name": "Pirc Defense",
+      "stockfish_centipawns_white": 43,
+      "stockfish_wdl_white": [
+        88,
+        909,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-044",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1c4",
+        "g8f6",
+        "d2d3",
+        "f8e7"
+      ],
+      "final_fen": "r1bqk2r/ppppbppp/2n2n2/4p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5",
+      "source_game_count": 273,
+      "eco_code": "C55",
+      "opening_name": "Italian Game: Two Knights Defense, Modern Bishop's Opening",
+      "stockfish_centipawns_white": 34,
+      "stockfish_wdl_white": [
+        74,
+        920,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-045",
+      "moves_uci": [
+        "c2c4",
+        "c7c5",
+        "g2g3",
+        "b8c6",
+        "f1g2",
+        "g7g6",
+        "b1c3",
+        "f8g7"
+      ],
+      "final_fen": "r1bqk1nr/pp1pppbp/2n3p1/2p5/2P5/2N3P1/PP1PPPBP/R1BQK1NR w KQkq - 2 5",
+      "source_game_count": 265,
+      "eco_code": "A36",
+      "opening_name": "English Opening: Symmetrical Variation, Ultra-Symmetrical Variation",
+      "stockfish_centipawns_white": 25,
+      "stockfish_wdl_white": [
+        53,
+        939,
+        8
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-046",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "e7e6",
+        "c1f4",
+        "d7d5",
+        "e2e3",
+        "c7c5"
+      ],
+      "final_fen": "rnbqkb1r/pp3ppp/4pn2/2pp4/3P1B2/4PN2/PPP2PPP/RN1QKB1R w KQkq - 0 5",
+      "source_game_count": 264,
+      "eco_code": "D02",
+      "opening_name": "Queen's Pawn Game: London System",
+      "stockfish_centipawns_white": 17,
+      "stockfish_wdl_white": [
+        39,
+        950,
+        11
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-047",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "c7c6",
+        "g1f3",
+        "g8f6",
+        "e2e3",
+        "c8f5"
+      ],
+      "final_fen": "rn1qkb1r/pp2pppp/2p2n2/3p1b2/2PP4/4PN2/PP3PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 261,
+      "eco_code": "D12",
+      "opening_name": "Slav Defense: Quiet Variation, Schallopp Defense",
+      "stockfish_centipawns_white": 36,
+      "stockfish_wdl_white": [
+        78,
+        917,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-048",
+      "moves_uci": [
+        "g1f3",
+        "g8f6",
+        "c2c4",
+        "g7g6",
+        "g2g3",
+        "f8g7",
+        "f1g2",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/8/2P5/5NP1/PP1PPPBP/RNBQK2R w KQ - 3 5",
+      "source_game_count": 243,
+      "eco_code": "A15",
+      "opening_name": "English Opening: Anglo-Indian Defense, King's Indian Formation",
+      "stockfish_centipawns_white": 26,
+      "stockfish_wdl_white": [
+        56,
+        936,
+        8
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-049",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "c2c3",
+        "g8f6",
+        "e4e5",
+        "f6d5",
+        "g1f3",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkb1r/pp1ppppp/2n5/2pnP3/8/2P2N2/PP1P1PPP/RNBQKB1R w KQkq - 3 5",
+      "source_game_count": 241,
+      "eco_code": "B22",
+      "opening_name": "Sicilian Defense: Alapin Variation, Stoltz Attack",
+      "stockfish_centipawns_white": 17,
+      "stockfish_wdl_white": [
+        40,
+        949,
+        11
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-050",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1c4",
+        "g8f6",
+        "f3g5",
+        "d7d5"
+      ],
+      "final_fen": "r1bqkb1r/ppp2ppp/2n2n2/3pp1N1/2B1P3/8/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+      "source_game_count": 239,
+      "eco_code": "C58",
+      "opening_name": "Italian Game: Two Knights Defense, Polerio Defense, Bishop Check Line",
+      "stockfish_centipawns_white": 18,
+      "stockfish_wdl_white": [
+        41,
+        948,
+        11
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-051",
+      "moves_uci": [
+        "c2c4",
+        "g8f6",
+        "g2g3",
+        "g7g6",
+        "f1g2",
+        "f8g7",
+        "b1c3",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/8/2P5/2N3P1/PP1PPPBP/R1BQK1NR w KQ - 4 5",
+      "source_game_count": 233,
+      "eco_code": "A15",
+      "opening_name": "English Opening: Anglo-Indian Defense",
+      "stockfish_centipawns_white": 44,
+      "stockfish_wdl_white": [
+        105,
+        891,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-052",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "b1c3",
+        "b8c6",
+        "g2g3",
+        "g7g6",
+        "f1g2",
+        "f8g7"
+      ],
+      "final_fen": "r1bqk1nr/pp1pppbp/2n3p1/2p5/4P3/2N3P1/PPPP1PBP/R1BQK1NR w KQkq - 2 5",
+      "source_game_count": 224,
+      "eco_code": "B24",
+      "opening_name": "Sicilian Defense: Closed",
+      "stockfish_centipawns_white": -7,
+      "stockfish_wdl_white": [
+        16,
+        956,
+        28
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-053",
+      "moves_uci": [
+        "c2c4",
+        "e7e5",
+        "b1c3",
+        "g8f6",
+        "g1f3",
+        "b8c6",
+        "e2e4",
+        "f8b4"
+      ],
+      "final_fen": "r1bqk2r/pppp1ppp/2n2n2/4p3/1bP1P3/2N2N2/PP1P1PPP/R1BQKB1R w KQkq - 1 5",
+      "source_game_count": 223,
+      "eco_code": "A28",
+      "opening_name": "English Opening: Four Knights System, Nimzowitsch Variation",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        49,
+        942,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-054",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "c7c6",
+        "c4d5",
+        "c6d5",
+        "b1c3",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/5n2/3p4/3P4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 5",
+      "source_game_count": 213,
+      "eco_code": "D10",
+      "opening_name": "Slav Defense: Exchange Variation",
+      "stockfish_centipawns_white": 33,
+      "stockfish_wdl_white": [
+        62,
+        934,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-055",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "c4d5",
+        "e6d5"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/5n2/3p4/3P4/5N2/PP2PPPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 212,
+      "eco_code": "D02",
+      "opening_name": "Queen's Pawn Game: Symmetrical Variation",
+      "stockfish_centipawns_white": 12,
+      "stockfish_wdl_white": [
+        27,
+        962,
+        11
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-056",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1b5",
+        "a7a6",
+        "b5a4",
+        "d7d6"
+      ],
+      "final_fen": "r1bqkbnr/1pp2ppp/p1np4/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+      "source_game_count": 210,
+      "eco_code": "C72",
+      "opening_name": "Ruy Lopez: Morphy Defense, Modern Steinitz Defense",
+      "stockfish_centipawns_white": 50,
+      "stockfish_wdl_white": [
+        129,
+        868,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-057",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "b1d2",
+        "g8f6",
+        "e4e5",
+        "f6d7"
+      ],
+      "final_fen": "rnbqkb1r/pppn1ppp/4p3/3pP3/3P4/8/PPPN1PPP/R1BQKBNR w KQkq - 1 5",
+      "source_game_count": 209,
+      "eco_code": "C05",
+      "opening_name": "French Defense: Tarrasch Variation, Closed Variation",
+      "stockfish_centipawns_white": 47,
+      "stockfish_wdl_white": [
+        116,
+        880,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-058",
+      "moves_uci": [
+        "g1f3",
+        "g8f6",
+        "b2b3",
+        "g7g6",
+        "c1b2",
+        "f8g7",
+        "g2g3",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/8/8/1P3NP1/PBPPPP1P/RN1QKB1R w KQ - 1 5",
+      "source_game_count": 209,
+      "eco_code": "A05",
+      "opening_name": "Zukertort Opening: Nimzo-Larsen Variation",
+      "stockfish_centipawns_white": 24,
+      "stockfish_wdl_white": [
+        51,
+        940,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-059",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "e4d5",
+        "e6d5",
+        "g1f3",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/5n2/3p4/3P4/5N2/PPP2PPP/RNBQKB1R w KQkq - 2 5",
+      "source_game_count": 206,
+      "eco_code": "C01",
+      "opening_name": "French Defense: Exchange Variation",
+      "stockfish_centipawns_white": 28,
+      "stockfish_wdl_white": [
+        51,
+        943,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-060",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "c7c6",
+        "c4d5",
+        "c6d5"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/5n2/3p4/3P4/5N2/PP2PPPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 202,
+      "eco_code": "D13",
+      "opening_name": "Slav Defense: Exchange Variation",
+      "stockfish_centipawns_white": 31,
+      "stockfish_wdl_white": [
+        56,
+        939,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-061",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "g8f6",
+        "c1g5",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p2B1/2PP4/2N5/PP2PPPP/R2QKBNR w KQkq - 4 5",
+      "source_game_count": 195,
+      "eco_code": "D53",
+      "opening_name": "Queen's Gambit Declined",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        49,
+        942,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-062",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "d7d6",
+        "f1b5",
+        "c8d7",
+        "b5d7",
+        "b8d7"
+      ],
+      "final_fen": "r2qkbnr/pp1npppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+      "source_game_count": 195,
+      "eco_code": "B52",
+      "opening_name": "Sicilian Defense: Moscow Variation, Main Line",
+      "stockfish_centipawns_white": 29,
+      "stockfish_wdl_white": [
+        39,
+        958,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-063",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "c7c6",
+        "g1f3",
+        "g8f6",
+        "e2e3",
+        "e7e6"
+      ],
+      "final_fen": "rnbqkb1r/pp3ppp/2p1pn2/3p4/2PP4/4PN2/PP3PPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 191,
+      "eco_code": "D30",
+      "opening_name": "Semi-Slav Defense: Quiet Variation",
+      "stockfish_centipawns_white": 39,
+      "stockfish_wdl_white": [
+        89,
+        906,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-064",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "c7c6",
+        "g1f3",
+        "g8f6",
+        "b1c3",
+        "a7a6"
+      ],
+      "final_fen": "rnbqkb1r/1p2pppp/p1p2n2/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 190,
+      "eco_code": "D15",
+      "opening_name": "Slav Defense: Chebanenko Variation",
+      "stockfish_centipawns_white": 37,
+      "stockfish_wdl_white": [
+        82,
+        913,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-065",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "b1c3",
+        "g8f6",
+        "f1b5",
+        "c6d4"
+      ],
+      "final_fen": "r1bqkb1r/pppp1ppp/5n2/1B2p3/3nP3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 6 5",
+      "source_game_count": 190,
+      "eco_code": "C48",
+      "opening_name": "Four Knights Game: Spanish Variation, Rubinstein Variation",
+      "stockfish_centipawns_white": 11,
+      "stockfish_wdl_white": [
+        32,
+        954,
+        14
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-066",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "e7e6",
+        "c2c3",
+        "g8f6",
+        "e4e5",
+        "f6d5"
+      ],
+      "final_fen": "rnbqkb1r/pp1p1ppp/4p3/2pnP3/8/2P2N2/PP1P1PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 189,
+      "eco_code": "B40",
+      "opening_name": "Sicilian Defense: Delayed Alapin Variation, with e6",
+      "stockfish_centipawns_white": 35,
+      "stockfish_wdl_white": [
+        77,
+        917,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-067",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "d7d6",
+        "f1b5",
+        "b8d7",
+        "e1g1",
+        "a7a6"
+      ],
+      "final_fen": "r1bqkbnr/1p1npppp/p2p4/1Bp5/4P3/5N2/PPPP1PPP/RNBQ1RK1 w kq - 0 5",
+      "source_game_count": 188,
+      "eco_code": "B51",
+      "opening_name": "Sicilian Defense: Moscow Variation",
+      "stockfish_centipawns_white": 25,
+      "stockfish_wdl_white": [
+        53,
+        939,
+        8
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-068",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8b4",
+        "d1c2",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/pppp1ppp/4pn2/8/1bPP4/2N5/PPQ1PPPP/R1B1KBNR w KQ - 4 5",
+      "source_game_count": 185,
+      "eco_code": "E32",
+      "opening_name": "Nimzo-Indian Defense: Classical Variation",
+      "stockfish_centipawns_white": 27,
+      "stockfish_wdl_white": [
+        58,
+        935,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-069",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "b1d2",
+        "c7c5",
+        "e4d5",
+        "d8d5"
+      ],
+      "final_fen": "rnb1kbnr/pp3ppp/4p3/2pq4/3P4/8/PPPN1PPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 185,
+      "eco_code": "C07",
+      "opening_name": "French Defense: Tarrasch Variation, Chistyakov Defense",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        41,
+        952,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-070",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "g7g6",
+        "g2g3",
+        "f8g7",
+        "f1g2",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/8/2PP4/6P1/PP2PPBP/RNBQK1NR w KQ - 3 5",
+      "source_game_count": 183,
+      "eco_code": "E60",
+      "opening_name": "Indian Defense: King's Indian Variation, Fianchetto Variation",
+      "stockfish_centipawns_white": 47,
+      "stockfish_wdl_white": [
+        115,
+        881,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-071",
+      "moves_uci": [
+        "g1f3",
+        "c7c5",
+        "g2g3",
+        "b8c6",
+        "f1g2",
+        "g7g6",
+        "e1g1",
+        "f8g7"
+      ],
+      "final_fen": "r1bqk1nr/pp1pppbp/2n3p1/2p5/8/5NP1/PPPPPPBP/RNBQ1RK1 w kq - 2 5",
+      "source_game_count": 182,
+      "eco_code": "A04",
+      "opening_name": "Zukertort Opening: Sicilian Invitation",
+      "stockfish_centipawns_white": 14,
+      "stockfish_wdl_white": [
+        36,
+        952,
+        12
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-072",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "e4d5",
+        "c6d5",
+        "f1d3",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/5n2/3p4/3P4/3B4/PPP2PPP/RNBQK1NR w KQkq - 2 5",
+      "source_game_count": 175,
+      "eco_code": "B13",
+      "opening_name": "Caro-Kann Defense: Exchange Variation",
+      "stockfish_centipawns_white": 29,
+      "stockfish_wdl_white": [
+        53,
+        942,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-073",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "e4d5",
+        "e6d5",
+        "g1f3",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkbnr/ppp2ppp/2n5/3p4/3P4/5N2/PPP2PPP/RNBQKB1R w KQkq - 2 5",
+      "source_game_count": 171,
+      "eco_code": "C01",
+      "opening_name": "French Defense: Exchange Variation",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        42,
+        951,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-074",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "d7d5",
+        "b1c3",
+        "a7a6"
+      ],
+      "final_fen": "rnbqkb1r/1pp2ppp/p3pn2/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 167,
+      "eco_code": "D37",
+      "opening_name": "Queen's Gambit Declined: Three Knights Variation",
+      "stockfish_centipawns_white": 46,
+      "stockfish_wdl_white": [
+        111,
+        885,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-075",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1c4",
+        "g8f6",
+        "d2d3",
+        "h7h6"
+      ],
+      "final_fen": "r1bqkb1r/pppp1pp1/2n2n1p/4p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 0 5",
+      "source_game_count": 167,
+      "eco_code": "C55",
+      "opening_name": "Italian Game: Two Knights Defense, Modern Bishop's Opening",
+      "stockfish_centipawns_white": 39,
+      "stockfish_wdl_white": [
+        88,
+        907,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-076",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "c7c6",
+        "b1c3",
+        "g8f6",
+        "e2e3",
+        "e7e6"
+      ],
+      "final_fen": "rnbqkb1r/pp3ppp/2p1pn2/3p4/2PP4/2N1P3/PP3PPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 164,
+      "eco_code": "D45",
+      "opening_name": "Semi-Slav Defense: Chigorin Defense",
+      "stockfish_centipawns_white": 34,
+      "stockfish_wdl_white": [
+        73,
+        921,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-077",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "d7d6",
+        "d2d4",
+        "c5d4",
+        "d1d4",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkbnr/pp2pppp/2np4/8/3QP3/5N2/PPP2PPP/RNB1KB1R w KQkq - 1 5",
+      "source_game_count": 161,
+      "eco_code": "B53",
+      "opening_name": "Sicilian Defense: Chekhover Variation",
+      "stockfish_centipawns_white": 15,
+      "stockfish_wdl_white": [
+        31,
+        960,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-078",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g2g3",
+        "d7d5",
+        "f1g2",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p4/2PP4/6P1/PP2PPBP/RNBQK1NR w KQkq - 2 5",
+      "source_game_count": 159,
+      "eco_code": "E05",
+      "opening_name": "Catalan Opening: Open Defense, Classical Line",
+      "stockfish_centipawns_white": 39,
+      "stockfish_wdl_white": [
+        88,
+        907,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-079",
+      "moves_uci": [
+        "g1f3",
+        "g8f6",
+        "g2g3",
+        "d7d5",
+        "f1g2",
+        "c7c6",
+        "e1g1",
+        "c8g4"
+      ],
+      "final_fen": "rn1qkb1r/pp2pppp/2p2n2/3p4/6b1/5NP1/PPPPPPBP/RNBQ1RK1 w kq - 2 5",
+      "source_game_count": 157,
+      "eco_code": "A07",
+      "opening_name": "King's Indian Attack: Yugoslav Variation",
+      "stockfish_centipawns_white": 27,
+      "stockfish_wdl_white": [
+        57,
+        935,
+        8
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-080",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c1f4",
+        "d7d5",
+        "e2e3",
+        "c7c5",
+        "c2c3",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkb1r/pp2pppp/2n2n2/2pp4/3P1B2/2P1P3/PP3PPP/RN1QKBNR w KQkq - 1 5",
+      "source_game_count": 155,
+      "eco_code": "D00",
+      "opening_name": "Indian Defense",
+      "stockfish_centipawns_white": 8,
+      "stockfish_wdl_white": [
+        28,
+        956,
+        16
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-081",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "b7b6",
+        "a2a3",
+        "c8b7"
+      ],
+      "final_fen": "rn1qkb1r/pbpp1ppp/1p2pn2/8/2PP4/P4N2/1P2PPPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 154,
+      "eco_code": "E12",
+      "opening_name": "Queen's Indian Defense: Kasparov-Petrosian Variation, Main Line",
+      "stockfish_centipawns_white": 31,
+      "stockfish_wdl_white": [
+        66,
+        927,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-082",
+      "moves_uci": [
+        "g1f3",
+        "g8f6",
+        "g2g3",
+        "d7d5",
+        "f1g2",
+        "c7c6",
+        "e1g1",
+        "c8f5"
+      ],
+      "final_fen": "rn1qkb1r/pp2pppp/2p2n2/3p1b2/8/5NP1/PPPPPPBP/RNBQ1RK1 w kq - 2 5",
+      "source_game_count": 150,
+      "eco_code": "A05",
+      "opening_name": "King's Indian Attack",
+      "stockfish_centipawns_white": 42,
+      "stockfish_wdl_white": [
+        97,
+        899,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-083",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "c7c5",
+        "c4d5",
+        "e6d5"
+      ],
+      "final_fen": "rnbqkbnr/pp3ppp/8/2pp4/3P4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 144,
+      "eco_code": "D32",
+      "opening_name": "Tarrasch Defense: Two Knights Variation",
+      "stockfish_centipawns_white": 49,
+      "stockfish_wdl_white": [
+        113,
+        885,
+        2
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-084",
+      "moves_uci": [
+        "c2c4",
+        "e7e5",
+        "g2g3",
+        "g8f6",
+        "f1g2",
+        "d7d5",
+        "c4d5",
+        "f6d5"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/8/3np3/8/6P1/PP1PPPBP/RNBQK1NR w KQkq - 0 5",
+      "source_game_count": 142,
+      "eco_code": "A29",
+      "opening_name": "English Opening: King's English Variation, Four Knights Variation, Fianchetto Line",
+      "stockfish_centipawns_white": 30,
+      "stockfish_wdl_white": [
+        55,
+        940,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-085",
+      "moves_uci": [
+        "g1f3",
+        "d7d6",
+        "d2d4",
+        "g8f6",
+        "g2g3",
+        "g7g6",
+        "f1g2",
+        "f8g7"
+      ],
+      "final_fen": "rnbqk2r/ppp1ppbp/3p1np1/8/3P4/5NP1/PPP1PPBP/RNBQK2R w KQkq - 2 5",
+      "source_game_count": 142,
+      "eco_code": "A46",
+      "opening_name": "Indian Defense: Wade-Tartakower Defense",
+      "stockfish_centipawns_white": 42,
+      "stockfish_wdl_white": [
+        99,
+        897,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-086",
+      "moves_uci": [
+        "g1f3",
+        "c7c5",
+        "c2c4",
+        "b8c6",
+        "g2g3",
+        "g7g6",
+        "f1g2",
+        "f8g7"
+      ],
+      "final_fen": "r1bqk1nr/pp1pppbp/2n3p1/2p5/2P5/5NP1/PP1PPPBP/RNBQK2R w KQkq - 2 5",
+      "source_game_count": 141,
+      "eco_code": "A30",
+      "opening_name": "English Opening: Symmetrical Variation",
+      "stockfish_centipawns_white": 26,
+      "stockfish_wdl_white": [
+        55,
+        937,
+        8
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-087",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "g2g3",
+        "g7g6",
+        "f1g2",
+        "f8g7",
+        "d2d4",
+        "g8f6"
+      ],
+      "final_fen": "rnbqk2r/ppp1ppbp/5np1/3p4/3P4/5NP1/PPP1PPBP/RNBQK2R w KQkq - 1 5",
+      "source_game_count": 141,
+      "eco_code": "D78",
+      "opening_name": "Neo-Grünfeld Defense: Classical Variation, Original Defense",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        50,
+        941,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-088",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "g7g6",
+        "c1f4",
+        "f8g7",
+        "e2e3",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/8/3P1B2/4PN2/PPP2PPP/RN1QKB1R w KQ - 1 5",
+      "source_game_count": 140,
+      "eco_code": "A48",
+      "opening_name": "London System",
+      "stockfish_centipawns_white": 10,
+      "stockfish_wdl_white": [
+        30,
+        955,
+        15
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-089",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "e4d5",
+        "c6d5",
+        "g1f3",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkbnr/pp2pppp/2n5/3p4/3P4/5N2/PPP2PPP/RNBQKB1R w KQkq - 2 5",
+      "source_game_count": 140,
+      "eco_code": "B13",
+      "opening_name": "Caro-Kann Defense: Exchange Variation",
+      "stockfish_centipawns_white": 27,
+      "stockfish_wdl_white": [
+        50,
+        944,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-090",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "b1c3",
+        "b8c6",
+        "f2f4",
+        "g7g6",
+        "g1f3",
+        "f8g7"
+      ],
+      "final_fen": "r1bqk1nr/pp1pppbp/2n3p1/2p5/4PP2/2N2N2/PPPP2PP/R1BQKB1R w KQkq - 2 5",
+      "source_game_count": 136,
+      "eco_code": "B23",
+      "opening_name": "Sicilian Defense: Grand Prix Attack",
+      "stockfish_centipawns_white": -22,
+      "stockfish_wdl_white": [
+        9,
+        944,
+        47
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-091",
+      "moves_uci": [
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "d7d5",
+        "c4d5",
+        "e6d5",
+        "d2d4",
+        "c7c6"
+      ],
+      "final_fen": "rnbqkbnr/pp3ppp/2p5/3p4/3P4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 132,
+      "eco_code": "A13",
+      "opening_name": "English Opening: Agincourt Defense",
+      "stockfish_centipawns_white": 22,
+      "stockfish_wdl_white": [
+        41,
+        952,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-092",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c1f4",
+        "g7g6",
+        "b1c3",
+        "d7d5",
+        "e2e3",
+        "f8g7"
+      ],
+      "final_fen": "rnbqk2r/ppp1ppbp/5np1/3p4/3P1B2/2N1P3/PPP2PPP/R2QKBNR w KQkq - 1 5",
+      "source_game_count": 131,
+      "eco_code": "D01",
+      "opening_name": "Rapport-Jobava System",
+      "stockfish_centipawns_white": 5,
+      "stockfish_wdl_white": [
+        26,
+        957,
+        17
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-093",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "g7g6",
+        "d2d4",
+        "c5d4",
+        "d1d4",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/pp1ppp1p/5np1/8/3QP3/5N2/PPP2PPP/RNB1KB1R w KQkq - 1 5",
+      "source_game_count": 126,
+      "eco_code": "B27",
+      "opening_name": "Sicilian Defense: Hyperaccelerated Fianchetto",
+      "stockfish_centipawns_white": 46,
+      "stockfish_wdl_white": [
+        102,
+        895,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-094",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8b4",
+        "g1f3",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/pppp1ppp/4pn2/8/1bPP4/2N2N2/PP2PPPP/R1BQKB1R w KQ - 4 5",
+      "source_game_count": 125,
+      "eco_code": "E21",
+      "opening_name": "Nimzo-Indian Defense: Three Knights Variation",
+      "stockfish_centipawns_white": 22,
+      "stockfish_wdl_white": [
+        48,
+        943,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-095",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "e7e6",
+        "g2g3",
+        "d7d5",
+        "f1g2",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p4/3P4/5NP1/PPP1PPBP/RNBQK2R w KQkq - 2 5",
+      "source_game_count": 125,
+      "eco_code": "E05",
+      "opening_name": "Catalan Opening: Open Defense, Classical Line",
+      "stockfish_centipawns_white": 40,
+      "stockfish_wdl_white": [
+        91,
+        904,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-096",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1b5",
+        "a7a6",
+        "b5a4",
+        "f8e7"
+      ],
+      "final_fen": "r1bqk1nr/1pppbppp/p1n5/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 5",
+      "source_game_count": 125,
+      "eco_code": "C89",
+      "opening_name": "Ruy Lopez: Marshall Attack, Modern Variation",
+      "stockfish_centipawns_white": 45,
+      "stockfish_wdl_white": [
+        107,
+        889,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-097",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "e7e6",
+        "c1f4",
+        "b7b6",
+        "e2e3",
+        "c8b7"
+      ],
+      "final_fen": "rn1qkb1r/pbpp1ppp/1p2pn2/8/3P1B2/4PN2/PPP2PPP/RN1QKB1R w KQkq - 1 5",
+      "source_game_count": 124,
+      "eco_code": "A46",
+      "opening_name": "Indian Defense: London System",
+      "stockfish_centipawns_white": 28,
+      "stockfish_wdl_white": [
+        59,
+        934,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-098",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8b4",
+        "d1c2",
+        "d7d5"
+      ],
+      "final_fen": "rnbqk2r/ppp2ppp/4pn2/3p4/1bPP4/2N5/PPQ1PPPP/R1B1KBNR w KQkq - 0 5",
+      "source_game_count": 121,
+      "eco_code": "E35",
+      "opening_name": "Nimzo-Indian Defense: Classical Variation, Noa Variation",
+      "stockfish_centipawns_white": 20,
+      "stockfish_wdl_white": [
+        45,
+        945,
+        10
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-099",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "g7g6",
+        "g1f3",
+        "f8g7",
+        "g2g3",
+        "d7d6"
+      ],
+      "final_fen": "rnbqk2r/ppp1ppbp/3p1np1/8/2PP4/5NP1/PP2PP1P/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 121,
+      "eco_code": "E62",
+      "opening_name": "King's Indian Defense: Normal Variation, King's Knight Variation",
+      "stockfish_centipawns_white": 49,
+      "stockfish_wdl_white": [
+        123,
+        874,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-100",
+      "moves_uci": [
+        "c2c4",
+        "c7c5",
+        "g1f3",
+        "b8c6",
+        "d2d4",
+        "c5d4",
+        "f3d4",
+        "g8f6"
+      ],
+      "final_fen": "r1bqkb1r/pp1ppppp/2n2n2/8/2PN4/8/PP2PPPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 120,
+      "eco_code": "A33",
+      "opening_name": "English Opening: Symmetrical Variation, Anti-Benoni Variation, Spielmann Defense",
+      "stockfish_centipawns_white": 41,
+      "stockfish_wdl_white": [
+        84,
+        913,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-101",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "c7c6",
+        "g1f3",
+        "g8f6",
+        "e2e3",
+        "c8g4"
+      ],
+      "final_fen": "rn1qkb1r/pp2pppp/2p2n2/3p4/2PP2b1/4PN2/PP3PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 120,
+      "eco_code": "D11",
+      "opening_name": "Slav Defense: Quiet Variation, Pin Defense",
+      "stockfish_centipawns_white": 36,
+      "stockfish_wdl_white": [
+        79,
+        916,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-102",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8b4",
+        "g1f3",
+        "b7b6"
+      ],
+      "final_fen": "rnbqk2r/p1pp1ppp/1p2pn2/8/1bPP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 119,
+      "eco_code": "E21",
+      "opening_name": "Nimzo-Indian Defense: Three Knights Variation",
+      "stockfish_centipawns_white": 32,
+      "stockfish_wdl_white": [
+        68,
+        926,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-103",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "f8b4",
+        "c1d2",
+        "d8e7"
+      ],
+      "final_fen": "rnb1k2r/ppppqppp/4pn2/8/1bPP4/5N2/PP1BPPPP/RN1QKB1R w KQkq - 4 5",
+      "source_game_count": 118,
+      "eco_code": "E11",
+      "opening_name": "Bogo-Indian Defense: Nimzowitsch Variation",
+      "stockfish_centipawns_white": 48,
+      "stockfish_wdl_white": [
+        118,
+        879,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-104",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8b4",
+        "e2e3",
+        "b7b6"
+      ],
+      "final_fen": "rnbqk2r/p1pp1ppp/1p2pn2/8/1bPP4/2N1P3/PP3PPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 117,
+      "eco_code": "E44",
+      "opening_name": "Nimzo-Indian Defense: St. Petersburg Variation",
+      "stockfish_centipawns_white": 48,
+      "stockfish_wdl_white": [
+        119,
+        878,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-105",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8b4",
+        "f2f3",
+        "c7c5"
+      ],
+      "final_fen": "rnbqk2r/pp1p1ppp/4pn2/2p5/1bPP4/2N2P2/PP2P1PP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 117,
+      "eco_code": "E20",
+      "opening_name": "Nimzo-Indian Defense: Kmoch Variation",
+      "stockfish_centipawns_white": 20,
+      "stockfish_wdl_white": [
+        45,
+        945,
+        10
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-106",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "d7d6",
+        "d2d4",
+        "c5d4",
+        "d1d4",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/3p1n2/8/3QP3/5N2/PPP2PPP/RNB1KB1R w KQkq - 1 5",
+      "source_game_count": 116,
+      "eco_code": "B53",
+      "opening_name": "Sicilian Defense: Chekhover Variation",
+      "stockfish_centipawns_white": 21,
+      "stockfish_wdl_white": [
+        39,
+        954,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-107",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8b4",
+        "e2e3",
+        "c7c5"
+      ],
+      "final_fen": "rnbqk2r/pp1p1ppp/4pn2/2p5/1bPP4/2N1P3/PP3PPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 115,
+      "eco_code": "E42",
+      "opening_name": "Nimzo-Indian Defense: Rubinstein System, Rubinstein Variation",
+      "stockfish_centipawns_white": 35,
+      "stockfish_wdl_white": [
+        76,
+        918,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-108",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "c2c3",
+        "d7d5",
+        "e4d5",
+        "d8d5",
+        "d2d4",
+        "g8f6"
+      ],
+      "final_fen": "rnb1kb1r/pp2pppp/5n2/2pq4/3P4/2P5/PP3PPP/RNBQKBNR w KQkq - 1 5",
+      "source_game_count": 114,
+      "eco_code": "B22",
+      "opening_name": "Sicilian Defense: Delayed Alapin Variation",
+      "stockfish_centipawns_white": 34,
+      "stockfish_wdl_white": [
+        64,
+        932,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-109",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "d2d4",
+        "e5d4",
+        "f3d4",
+        "f8c5"
+      ],
+      "final_fen": "r1bqk1nr/pppp1ppp/2n5/2b5/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 114,
+      "eco_code": "C45",
+      "opening_name": "Scotch Game: Potter Variation",
+      "stockfish_centipawns_white": 39,
+      "stockfish_wdl_white": [
+        79,
+        918,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-110",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1b5",
+        "a7a6",
+        "b5a4",
+        "g8e7"
+      ],
+      "final_fen": "r1bqkb1r/1pppnppp/p1n5/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 5",
+      "source_game_count": 114,
+      "eco_code": "C70",
+      "opening_name": "Ruy Lopez: Morphy Defense, Cozio Defense",
+      "stockfish_centipawns_white": 49,
+      "stockfish_wdl_white": [
+        123,
+        874,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-111",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "a7a6",
+        "c4d5",
+        "e6d5"
+      ],
+      "final_fen": "rnbqkbnr/1pp2ppp/p7/3p4/3P4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 113,
+      "eco_code": "D31",
+      "opening_name": "Queen's Gambit Declined: Janowski Variation",
+      "stockfish_centipawns_white": 43,
+      "stockfish_wdl_white": [
+        88,
+        909,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-112",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "b1c3",
+        "d7d5",
+        "c1f4",
+        "a7a6",
+        "e2e3",
+        "e7e6"
+      ],
+      "final_fen": "rnbqkb1r/1pp2ppp/p3pn2/3p4/3P1B2/2N1P3/PPP2PPP/R2QKBNR w KQkq - 0 5",
+      "source_game_count": 112,
+      "eco_code": "D01",
+      "opening_name": "Rapport-Jobava System",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        50,
+        941,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-113",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "e4e5",
+        "c7c5",
+        "c2c3",
+        "d8b6"
+      ],
+      "final_fen": "rnb1kbnr/pp3ppp/1q2p3/2ppP3/3P4/2P5/PP3PPP/RNBQKBNR w KQkq - 1 5",
+      "source_game_count": 112,
+      "eco_code": "C02",
+      "opening_name": "French Defense: Advance Variation, Wade Variation",
+      "stockfish_centipawns_white": 32,
+      "stockfish_wdl_white": [
+        68,
+        926,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-114",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "b1c3",
+        "f8b4",
+        "e4d5",
+        "e6d5"
+      ],
+      "final_fen": "rnbqk1nr/ppp2ppp/8/3p4/1b1P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 109,
+      "eco_code": "C15",
+      "opening_name": "French Defense: Winawer Variation, Delayed Exchange Variation",
+      "stockfish_centipawns_white": 28,
+      "stockfish_wdl_white": [
+        51,
+        943,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-115",
+      "moves_uci": [
+        "c2c4",
+        "e7e6",
+        "g2g3",
+        "d7d5",
+        "f1g2",
+        "g8f6",
+        "g1f3",
+        "d5d4"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/4pn2/8/2Pp4/5NP1/PP1PPPBP/RNBQK2R w KQkq - 0 5",
+      "source_game_count": 108,
+      "eco_code": "A13",
+      "opening_name": "English Opening: Neo-Catalan",
+      "stockfish_centipawns_white": 29,
+      "stockfish_wdl_white": [
+        61,
+        932,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-116",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "b8c6",
+        "f1b5",
+        "e7e5",
+        "e1g1",
+        "f8d6"
+      ],
+      "final_fen": "r1bqk1nr/pp1p1ppp/2nb4/1Bp1p3/4P3/5N2/PPPP1PPP/RNBQ1RK1 w kq - 2 5",
+      "source_game_count": 108,
+      "eco_code": "B30",
+      "opening_name": "Sicilian Defense: Nyezhmetdinov-Rossolimo Attack",
+      "stockfish_centipawns_white": 49,
+      "stockfish_wdl_white": [
+        123,
+        874,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-117",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "c7c5",
+        "c4d5",
+        "e6d5"
+      ],
+      "final_fen": "rnbqkbnr/pp3ppp/8/2pp4/3P4/5N2/PP2PPPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 107,
+      "eco_code": "D30",
+      "opening_name": "Queen's Gambit Declined: Tarrasch Defense, Pseudo-Tarrasch",
+      "stockfish_centipawns_white": 46,
+      "stockfish_wdl_white": [
+        100,
+        897,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-118",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "d7d5",
+        "b1c3",
+        "h7h6"
+      ],
+      "final_fen": "rnbqkb1r/ppp2pp1/4pn1p/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 107,
+      "eco_code": "D37",
+      "opening_name": "Queen's Gambit Declined: Three Knights Variation",
+      "stockfish_centipawns_white": 44,
+      "stockfish_wdl_white": [
+        106,
+        890,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-119",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "e2e3",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p4/2P5/2N1PN2/PP1P1PPP/R1BQKB1R w KQkq - 2 5",
+      "source_game_count": 106,
+      "eco_code": "A13",
+      "opening_name": "English Opening: Agincourt Defense",
+      "stockfish_centipawns_white": 12,
+      "stockfish_wdl_white": [
+        33,
+        954,
+        13
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-120",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8b4",
+        "f2f3",
+        "d7d5"
+      ],
+      "final_fen": "rnbqk2r/ppp2ppp/4pn2/3p4/1bPP4/2N2P2/PP2P1PP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 104,
+      "eco_code": "E20",
+      "opening_name": "Nimzo-Indian Defense: Kmoch Variation",
+      "stockfish_centipawns_white": 10,
+      "stockfish_wdl_white": [
+        31,
+        954,
+        15
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-121",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "e4e5",
+        "c8f5",
+        "b1d2",
+        "e7e6"
+      ],
+      "final_fen": "rn1qkbnr/pp3ppp/2p1p3/3pPb2/3P4/8/PPPN1PPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 104,
+      "eco_code": "B12",
+      "opening_name": "Caro-Kann Defense: Advance Variation",
+      "stockfish_centipawns_white": 34,
+      "stockfish_wdl_white": [
+        73,
+        921,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-122",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "d2d4",
+        "c5d4",
+        "d1d4",
+        "b8c6",
+        "d4d3",
+        "g8f6"
+      ],
+      "final_fen": "r1bqkb1r/pp1ppppp/2n2n2/8/4P3/3Q4/PPP2PPP/RNB1KBNR w KQkq - 3 5",
+      "source_game_count": 103,
+      "eco_code": "B21",
+      "opening_name": "Sicilian Defense: Smith-Morra Gambit",
+      "stockfish_centipawns_white": 9,
+      "stockfish_wdl_white": [
+        24,
+        964,
+        12
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-123",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "b1c3",
+        "d5e4",
+        "c3e4",
+        "b8d7"
+      ],
+      "final_fen": "r1bqkbnr/pp1npppp/2p5/8/3PN3/8/PPP2PPP/R1BQKBNR w KQkq - 1 5",
+      "source_game_count": 103,
+      "eco_code": "B17",
+      "opening_name": "Caro-Kann Defense: Karpov Variation",
+      "stockfish_centipawns_white": 44,
+      "stockfish_wdl_white": [
+        92,
+        905,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-124",
+      "moves_uci": [
+        "g1f3",
+        "g8f6",
+        "c2c4",
+        "g7g6",
+        "b2b3",
+        "f8g7",
+        "c1b2",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/8/2P5/1P3N2/PB1PPPPP/RN1QKB1R w KQ - 3 5",
+      "source_game_count": 102,
+      "eco_code": "A15",
+      "opening_name": "English Opening: Anglo-Indian Defense, King's Indian Formation",
+      "stockfish_centipawns_white": 4,
+      "stockfish_wdl_white": [
+        25,
+        957,
+        18
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-125",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "b1c3",
+        "g8f6",
+        "f1b5",
+        "f8b4"
+      ],
+      "final_fen": "r1bqk2r/pppp1ppp/2n2n2/1B2p3/1b2P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 6 5",
+      "source_game_count": 101,
+      "eco_code": "C49",
+      "opening_name": "Four Knights Game: Spanish Variation, Double Spanish",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        50,
+        941,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-126",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "b1c3",
+        "g8f6",
+        "f1b5",
+        "f8d6"
+      ],
+      "final_fen": "r1bqk2r/pppp1ppp/2nb1n2/1B2p3/4P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 6 5",
+      "source_game_count": 101,
+      "eco_code": "C48",
+      "opening_name": "Four Knights Game: Spanish Variation",
+      "stockfish_centipawns_white": 18,
+      "stockfish_wdl_white": [
+        42,
+        947,
+        11
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-127",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "f8b4",
+        "b1d2",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/pppp1ppp/4pn2/8/1bPP4/5N2/PP1NPPPP/R1BQKB1R w KQ - 4 5",
+      "source_game_count": 100,
+      "eco_code": "E11",
+      "opening_name": "Bogo-Indian Defense: Grünfeld Variation",
+      "stockfish_centipawns_white": 42,
+      "stockfish_wdl_white": [
+        96,
+        900,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-128",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "b8c6",
+        "c2c3",
+        "d7d5",
+        "e4d5",
+        "d8d5"
+      ],
+      "final_fen": "r1b1kbnr/pp2pppp/2n5/2pq4/8/2P2N2/PP1P1PPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 99,
+      "eco_code": "B30",
+      "opening_name": "Sicilian Defense: Old Sicilian",
+      "stockfish_centipawns_white": 38,
+      "stockfish_wdl_white": [
+        74,
+        922,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-129",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "e7e6",
+        "c2c3",
+        "d7d5",
+        "e4d5",
+        "e6d5"
+      ],
+      "final_fen": "rnbqkbnr/pp3ppp/8/2pp4/8/2P2N2/PP1P1PPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 99,
+      "eco_code": "B40",
+      "opening_name": "Sicilian Defense: Delayed Alapin Variation, with e6",
+      "stockfish_centipawns_white": 37,
+      "stockfish_wdl_white": [
+        72,
+        924,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-130",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "e7e6",
+        "g2g3",
+        "b8c6",
+        "f1g2",
+        "g8f6"
+      ],
+      "final_fen": "r1bqkb1r/pp1p1ppp/2n1pn2/2p5/4P3/5NP1/PPPP1PBP/RNBQK2R w KQkq - 3 5",
+      "source_game_count": 99,
+      "eco_code": "B40",
+      "opening_name": "Sicilian Defense: French Variation",
+      "stockfish_centipawns_white": 18,
+      "stockfish_wdl_white": [
+        41,
+        948,
+        11
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-131",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "f1d3",
+        "d5e4",
+        "d3e4",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/4pn2/8/3PB3/8/PPP2PPP/RNBQK1NR w KQkq - 1 5",
+      "source_game_count": 99,
+      "eco_code": "C00",
+      "opening_name": "French Defense: Schlechter Variation",
+      "stockfish_centipawns_white": -20,
+      "stockfish_wdl_white": [
+        7,
+        955,
+        38
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-132",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "g2g3",
+        "c7c6",
+        "f1g2",
+        "c8g4",
+        "e1g1",
+        "b8d7"
+      ],
+      "final_fen": "r2qkbnr/pp1npppp/2p5/3p4/6b1/5NP1/PPPPPPBP/RNBQ1RK1 w kq - 4 5",
+      "source_game_count": 99,
+      "eco_code": "A07",
+      "opening_name": "King's Indian Attack",
+      "stockfish_centipawns_white": 18,
+      "stockfish_wdl_white": [
+        42,
+        947,
+        11
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-133",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "g7g6",
+        "c1f4",
+        "f8g7",
+        "e2e3",
+        "d7d6"
+      ],
+      "final_fen": "rnbqk2r/ppp1ppbp/3p1np1/8/3P1B2/4PN2/PPP2PPP/RN1QKB1R w KQkq - 0 5",
+      "source_game_count": 98,
+      "eco_code": "A48",
+      "opening_name": "London System",
+      "stockfish_centipawns_white": 9,
+      "stockfish_wdl_white": [
+        29,
+        956,
+        15
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-134",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "g7g6",
+        "d2d4",
+        "c5d4",
+        "f3d4",
+        "f8g7"
+      ],
+      "final_fen": "rnbqk1nr/pp1pppbp/6p1/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 98,
+      "eco_code": "B38",
+      "opening_name": "Sicilian Defense: Accelerated Dragon, Maróczy Bind",
+      "stockfish_centipawns_white": 20,
+      "stockfish_wdl_white": [
+        38,
+        955,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-135",
+      "moves_uci": [
+        "c2c4",
+        "c7c6",
+        "g1f3",
+        "d7d5",
+        "e2e3",
+        "g8f6",
+        "b1c3",
+        "a7a6"
+      ],
+      "final_fen": "rnbqkb1r/1p2pppp/p1p2n2/3p4/2P5/2N1PN2/PP1P1PPP/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 97,
+      "eco_code": "A11",
+      "opening_name": "English Opening: Caro-Kann Defensive System",
+      "stockfish_centipawns_white": 44,
+      "stockfish_wdl_white": [
+        106,
+        890,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-136",
+      "moves_uci": [
+        "c2c4",
+        "c7c6",
+        "g2g3",
+        "d7d5",
+        "f1g2",
+        "g8f6",
+        "g1f3",
+        "c8f5"
+      ],
+      "final_fen": "rn1qkb1r/pp2pppp/2p2n2/3p1b2/2P5/5NP1/PP1PPPBP/RNBQK2R w KQkq - 4 5",
+      "source_game_count": 97,
+      "eco_code": "A11",
+      "opening_name": "English Opening: Caro-Kann Defensive System",
+      "stockfish_centipawns_white": 35,
+      "stockfish_wdl_white": [
+        76,
+        918,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-137",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "c7c6",
+        "g1f3",
+        "g8f6",
+        "e2e3",
+        "a7a6"
+      ],
+      "final_fen": "rnbqkb1r/1p2pppp/p1p2n2/3p4/2PP4/4PN2/PP3PPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 97,
+      "eco_code": "D11",
+      "opening_name": "Slav Defense: Quiet Variation",
+      "stockfish_centipawns_white": 36,
+      "stockfish_wdl_white": [
+        78,
+        917,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-138",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "c7c6",
+        "c4d5",
+        "c6d5",
+        "c1f4",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkbnr/pp2pppp/2n5/3p4/3P1B2/8/PP2PPPP/RN1QKBNR w KQkq - 2 5",
+      "source_game_count": 96,
+      "eco_code": "D10",
+      "opening_name": "Slav Defense: Exchange Variation",
+      "stockfish_centipawns_white": 34,
+      "stockfish_wdl_white": [
+        64,
+        932,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-139",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "e4d5",
+        "e6d5",
+        "g1f3",
+        "f8d6"
+      ],
+      "final_fen": "rnbqk1nr/ppp2ppp/3b4/3p4/3P4/5N2/PPP2PPP/RNBQKB1R w KQkq - 2 5",
+      "source_game_count": 96,
+      "eco_code": "C01",
+      "opening_name": "French Defense: Exchange Variation",
+      "stockfish_centipawns_white": 28,
+      "stockfish_wdl_white": [
+        51,
+        944,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-140",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "d5c4",
+        "e2e3",
+        "g8f6",
+        "f1c4",
+        "e7e6"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/4pn2/8/2BP4/4P3/PP3PPP/RNBQK1NR w KQkq - 0 5",
+      "source_game_count": 94,
+      "eco_code": "D27",
+      "opening_name": "Queen's Gambit Accepted: Classical Defense, Main Line",
+      "stockfish_centipawns_white": 27,
+      "stockfish_wdl_white": [
+        50,
+        944,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-141",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "g7g6",
+        "c1g5",
+        "f8g7",
+        "b1d2",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/6B1/3P4/5N2/PPPNPPPP/R2QKB1R w KQ - 4 5",
+      "source_game_count": 94,
+      "eco_code": "A48",
+      "opening_name": "Torre Attack: Fianchetto Defense",
+      "stockfish_centipawns_white": 7,
+      "stockfish_wdl_white": [
+        27,
+        957,
+        16
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-142",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "c7c6",
+        "g1f3",
+        "g8f6",
+        "g2g3",
+        "c8f5"
+      ],
+      "final_fen": "rn1qkb1r/pp2pppp/2p2n2/3p1b2/2PP4/5NP1/PP2PP1P/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 93,
+      "eco_code": "D11",
+      "opening_name": "Slav Defense: Modern Line",
+      "stockfish_centipawns_white": 24,
+      "stockfish_wdl_white": [
+        51,
+        940,
+        9
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-143",
+      "moves_uci": [
+        "e2e4",
+        "d7d5",
+        "e4d5",
+        "d8d5",
+        "g1f3",
+        "c8g4",
+        "f1e2",
+        "b8c6"
+      ],
+      "final_fen": "r3kbnr/ppp1pppp/2n5/3q4/6b1/5N2/PPPPBPPP/RNBQK2R w KQkq - 4 5",
+      "source_game_count": 92,
+      "eco_code": "B01",
+      "opening_name": "Scandinavian Defense: Mieses-Kotroc Variation",
+      "stockfish_centipawns_white": 39,
+      "stockfish_wdl_white": [
+        76,
+        920,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-144",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "g2g3",
+        "g8f6",
+        "f1g2",
+        "c7c5",
+        "e1g1",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkb1r/pp2pppp/2n2n2/2pp4/8/5NP1/PPPPPPBP/RNBQ1RK1 w kq - 2 5",
+      "source_game_count": 92,
+      "eco_code": "A08",
+      "opening_name": "Zukertort Opening: Reversed Grünfeld",
+      "stockfish_centipawns_white": 42,
+      "stockfish_wdl_white": [
+        99,
+        897,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-145",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "g8f6",
+        "c4d5",
+        "f6d5"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/4p3/3n4/3P4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 91,
+      "eco_code": "D35",
+      "opening_name": "Queen's Gambit Declined: Exchange Variation",
+      "stockfish_centipawns_white": 32,
+      "stockfish_wdl_white": [
+        60,
+        935,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-146",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "b7b6",
+        "b1c3",
+        "c8b7"
+      ],
+      "final_fen": "rn1qkb1r/pbpp1ppp/1p2pn2/8/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 2 5",
+      "source_game_count": 91,
+      "eco_code": "E12",
+      "opening_name": "Queen's Indian Defense: Kasparov Variation",
+      "stockfish_centipawns_white": 25,
+      "stockfish_wdl_white": [
+        54,
+        938,
+        8
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-147",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "g7g6",
+        "c2c3",
+        "d7d5",
+        "e4d5",
+        "d8d5"
+      ],
+      "final_fen": "rnb1kbnr/pp2pp1p/6p1/2pq4/8/2P2N2/PP1P1PPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 91,
+      "eco_code": "B27",
+      "opening_name": "Sicilian Defense: Hyperaccelerated Dragon",
+      "stockfish_centipawns_white": 43,
+      "stockfish_wdl_white": [
+        91,
+        906,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-148",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "b1c3",
+        "g8f6",
+        "a2a3",
+        "d7d5"
+      ],
+      "final_fen": "r1bqkb1r/ppp2ppp/2n2n2/3pp3/4P3/P1N2N2/1PPP1PPP/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 91,
+      "eco_code": "C47",
+      "opening_name": "Four Knights Game: Gunsberg Variation",
+      "stockfish_centipawns_white": -6,
+      "stockfish_wdl_white": [
+        17,
+        956,
+        27
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-149",
+      "moves_uci": [
+        "c2c4",
+        "c7c6",
+        "g1f3",
+        "d7d5",
+        "e2e3",
+        "g8f6",
+        "b1c3",
+        "e7e6"
+      ],
+      "final_fen": "rnbqkb1r/pp3ppp/2p1pn2/3p4/2P5/2N1PN2/PP1P1PPP/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 87,
+      "eco_code": "A11",
+      "opening_name": "English Opening: Caro-Kann Defensive System",
+      "stockfish_centipawns_white": 33,
+      "stockfish_wdl_white": [
+        72,
+        922,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-150",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "g8f6",
+        "g2g3",
+        "c7c6"
+      ],
+      "final_fen": "rnbqkb1r/pp3ppp/2p1pn2/3p4/2PP4/5NP1/PP2PP1P/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 87,
+      "eco_code": "D30",
+      "opening_name": "Queen's Gambit Declined",
+      "stockfish_centipawns_white": 47,
+      "stockfish_wdl_white": [
+        117,
+        880,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-151",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "e7e6",
+        "g2g3",
+        "b7b6",
+        "f1g2",
+        "c8b7"
+      ],
+      "final_fen": "rn1qkb1r/pbpp1ppp/1p2pn2/8/3P4/5NP1/PPP1PPBP/RNBQK2R w KQkq - 2 5",
+      "source_game_count": 87,
+      "eco_code": "E17",
+      "opening_name": "Indian Defense: Knights Variation",
+      "stockfish_centipawns_white": 48,
+      "stockfish_wdl_white": [
+        121,
+        876,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-152",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1b5",
+        "a7a6",
+        "b5a4",
+        "b7b5"
+      ],
+      "final_fen": "r1bqkbnr/2pp1ppp/p1n5/1p2p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5",
+      "source_game_count": 87,
+      "eco_code": "C70",
+      "opening_name": "Ruy Lopez: Morphy Defense, Norwegian Variation",
+      "stockfish_centipawns_white": 40,
+      "stockfish_wdl_white": [
+        90,
+        905,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-153",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8e7",
+        "c4d5",
+        "e6d5"
+      ],
+      "final_fen": "rnbqk1nr/ppp1bppp/8/3p4/3P4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 86,
+      "eco_code": "D31",
+      "opening_name": "Queen's Gambit Declined: Charousek Variation",
+      "stockfish_centipawns_white": 36,
+      "stockfish_wdl_white": [
+        68,
+        928,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-154",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "d2d4",
+        "e5d4",
+        "d1d4",
+        "b8c6",
+        "d4e3",
+        "g8f6"
+      ],
+      "final_fen": "r1bqkb1r/pppp1ppp/2n2n2/8/4P3/4Q3/PPP2PPP/RNB1KBNR w KQkq - 3 5",
+      "source_game_count": 86,
+      "eco_code": "C22",
+      "opening_name": "Center Game: Berger Variation",
+      "stockfish_centipawns_white": -19,
+      "stockfish_wdl_white": [
+        8,
+        956,
+        36
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-155",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "f8b4",
+        "c1d2",
+        "a7a5"
+      ],
+      "final_fen": "rnbqk2r/1ppp1ppp/4pn2/p7/1bPP4/5N2/PP1BPPPP/RN1QKB1R w KQkq - 0 5",
+      "source_game_count": 85,
+      "eco_code": "E11",
+      "opening_name": "Bogo-Indian Defense: Wade-Smyslov Variation",
+      "stockfish_centipawns_white": 49,
+      "stockfish_wdl_white": [
+        122,
+        875,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-156",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "e7e6",
+        "g2g3",
+        "b7b5",
+        "f1g2",
+        "c8b7"
+      ],
+      "final_fen": "rn1qkb1r/pbpp1ppp/4pn2/1p6/3P4/5NP1/PPP1PPBP/RNBQK2R w KQkq - 2 5",
+      "source_game_count": 85,
+      "eco_code": "A46",
+      "opening_name": "Indian Defense: Knights Variation",
+      "stockfish_centipawns_white": 31,
+      "stockfish_wdl_white": [
+        65,
+        928,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-157",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "g2g3",
+        "g7g6",
+        "f1g2",
+        "f8g7",
+        "e1g1",
+        "e7e5"
+      ],
+      "final_fen": "rnbqk1nr/ppp2pbp/6p1/3pp3/8/5NP1/PPPPPPBP/RNBQ1RK1 w kq - 0 5",
+      "source_game_count": 84,
+      "eco_code": "A07",
+      "opening_name": "King's Indian Attack: Double Fianchetto",
+      "stockfish_centipawns_white": 6,
+      "stockfish_wdl_white": [
+        26,
+        957,
+        17
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-158",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g2g3",
+        "f8b4",
+        "c1d2",
+        "b4e7"
+      ],
+      "final_fen": "rnbqk2r/ppppbppp/4pn2/8/2PP4/6P1/PP1BPP1P/RN1QKBNR w KQkq - 3 5",
+      "source_game_count": 83,
+      "eco_code": "E11",
+      "opening_name": "Bogo-Indian Defense: Retreat Variation",
+      "stockfish_centipawns_white": 31,
+      "stockfish_wdl_white": [
+        66,
+        927,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-159",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "e7e6",
+        "c2c3",
+        "d7d5",
+        "e4d5",
+        "d8d5"
+      ],
+      "final_fen": "rnb1kbnr/pp3ppp/4p3/2pq4/8/2P2N2/PP1P1PPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 83,
+      "eco_code": "B22",
+      "opening_name": "Sicilian Defense: Delayed Alapin Variation",
+      "stockfish_centipawns_white": 31,
+      "stockfish_wdl_white": [
+        57,
+        938,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-160",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "c7c6",
+        "c4d5",
+        "c6d5",
+        "c1f4",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/5n2/3p4/3P1B2/8/PP2PPPP/RN1QKBNR w KQkq - 2 5",
+      "source_game_count": 82,
+      "eco_code": "D10",
+      "opening_name": "Slav Defense: Exchange Variation",
+      "stockfish_centipawns_white": 40,
+      "stockfish_wdl_white": [
+        80,
+        917,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-161",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "d7d5",
+        "e2e3",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p4/2PP4/4PN2/PP3PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 81,
+      "eco_code": "E10",
+      "opening_name": "Indian Defense: Anti-Nimzo-Indian",
+      "stockfish_centipawns_white": 10,
+      "stockfish_wdl_white": [
+        31,
+        955,
+        14
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-162",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "f8b4",
+        "d1c2",
+        "c7c5"
+      ],
+      "final_fen": "rnbqk2r/pp1p1ppp/4pn2/2p5/1bPP4/2N5/PPQ1PPPP/R1B1KBNR w KQkq - 0 5",
+      "source_game_count": 80,
+      "eco_code": "E38",
+      "opening_name": "Nimzo-Indian Defense: Classical Variation, Berlin Variation",
+      "stockfish_centipawns_white": 38,
+      "stockfish_wdl_white": [
+        86,
+        909,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-163",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "e4e5",
+        "c8f5",
+        "h2h4",
+        "h7h6"
+      ],
+      "final_fen": "rn1qkbnr/pp2ppp1/2p4p/3pPb2/3P3P/8/PPP2PP1/RNBQKBNR w KQkq - 0 5",
+      "source_game_count": 80,
+      "eco_code": "B12",
+      "opening_name": "Caro-Kann Defense: Advance Variation, Tal Variation",
+      "stockfish_centipawns_white": 50,
+      "stockfish_wdl_white": [
+        128,
+        869,
+        3
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-164",
+      "moves_uci": [
+        "g1f3",
+        "g8f6",
+        "d2d4",
+        "g7g6",
+        "c2c4",
+        "f8g7",
+        "e2e3",
+        "e8g8"
+      ],
+      "final_fen": "rnbq1rk1/ppppppbp/5np1/8/2PP4/4PN2/PP3PPP/RNBQKB1R w KQ - 1 5",
+      "source_game_count": 80,
+      "eco_code": "E60",
+      "opening_name": "King's Indian Defense: Normal Variation, King's Knight Variation",
+      "stockfish_centipawns_white": 21,
+      "stockfish_wdl_white": [
+        45,
+        945,
+        10
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-165",
+      "moves_uci": [
+        "b2b3",
+        "e7e5",
+        "c2c4",
+        "b8c6",
+        "c1b2",
+        "g8e7",
+        "g1f3",
+        "d7d5"
+      ],
+      "final_fen": "r1bqkb1r/ppp1nppp/2n5/3pp3/2P5/1P3N2/PB1PPPPP/RN1QKB1R w KQkq - 0 5",
+      "source_game_count": 79,
+      "eco_code": "A01",
+      "opening_name": "Nimzo-Larsen Attack: Modern Variation",
+      "stockfish_centipawns_white": -34,
+      "stockfish_wdl_white": [
+        6,
+        921,
+        73
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-166",
+      "moves_uci": [
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "d7d5",
+        "e2e3",
+        "g8f6",
+        "b2b3",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p4/2P5/1P2PN2/P2P1PPP/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 79,
+      "eco_code": "A13",
+      "opening_name": "English Opening: Agincourt Defense",
+      "stockfish_centipawns_white": 20,
+      "stockfish_wdl_white": [
+        45,
+        945,
+        10
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-167",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "c2c3",
+        "g8f6",
+        "e4e5",
+        "f6d5",
+        "g1f3",
+        "d7d6"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/3p4/2pnP3/8/2P2N2/PP1P1PPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 77,
+      "eco_code": "B22",
+      "opening_name": "Sicilian Defense: Alapin Variation",
+      "stockfish_centipawns_white": 19,
+      "stockfish_wdl_white": [
+        43,
+        947,
+        10
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-168",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1c4",
+        "f8c5",
+        "b1c3",
+        "g8f6"
+      ],
+      "final_fen": "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 6 5",
+      "source_game_count": 77,
+      "eco_code": "C50",
+      "opening_name": "Italian Game: Giuoco Pianissimo, Italian Four Knights Variation",
+      "stockfish_centipawns_white": 18,
+      "stockfish_wdl_white": [
+        41,
+        948,
+        11
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-169",
+      "moves_uci": [
+        "g1f3",
+        "g8f6",
+        "b2b3",
+        "d7d5",
+        "c1b2",
+        "c7c5",
+        "e2e3",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkb1r/pp2pppp/2n2n2/2pp4/8/1P2PN2/PBPP1PPP/RN1QKB1R w KQkq - 1 5",
+      "source_game_count": 77,
+      "eco_code": "A06",
+      "opening_name": "Nimzo-Larsen Attack: Classical Variation",
+      "stockfish_centipawns_white": 18,
+      "stockfish_wdl_white": [
+        42,
+        947,
+        11
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-170",
+      "moves_uci": [
+        "c2c4",
+        "e7e5",
+        "g2g3",
+        "g8f6",
+        "f1g2",
+        "c7c6",
+        "g1f3",
+        "e5e4"
+      ],
+      "final_fen": "rnbqkb1r/pp1p1ppp/2p2n2/8/2P1p3/5NP1/PP1PPPBP/RNBQK2R w KQkq - 0 5",
+      "source_game_count": 75,
+      "eco_code": "A20",
+      "opening_name": "English Opening: King's English Variation",
+      "stockfish_centipawns_white": 29,
+      "stockfish_wdl_white": [
+        62,
+        931,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-171",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "b1c3",
+        "d7d6",
+        "d2d4",
+        "c5d4",
+        "d1d4",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkbnr/pp2pppp/2np4/8/3QP3/2N5/PPP2PPP/R1B1KBNR w KQkq - 1 5",
+      "source_game_count": 75,
+      "eco_code": "B23",
+      "opening_name": "Sicilian Defense: Closed",
+      "stockfish_centipawns_white": 25,
+      "stockfish_wdl_white": [
+        46,
+        948,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-172",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "b1c3",
+        "d7d6",
+        "f2f4",
+        "g7g6",
+        "g1f3",
+        "f8g7"
+      ],
+      "final_fen": "rnbqk1nr/pp2ppbp/3p2p1/2p5/4PP2/2N2N2/PPPP2PP/R1BQKB1R w KQkq - 2 5",
+      "source_game_count": 75,
+      "eco_code": "B23",
+      "opening_name": "Sicilian Defense: Closed",
+      "stockfish_centipawns_white": 8,
+      "stockfish_wdl_white": [
+        29,
+        956,
+        15
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-173",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "d2d4",
+        "c5d4",
+        "d1d4",
+        "b8c6",
+        "d4d3",
+        "g7g6"
+      ],
+      "final_fen": "r1bqkbnr/pp1ppp1p/2n3p1/8/4P3/3Q4/PPP2PPP/RNB1KBNR w KQkq - 0 5",
+      "source_game_count": 75,
+      "eco_code": "B21",
+      "opening_name": "Sicilian Defense: Smith-Morra Gambit",
+      "stockfish_centipawns_white": 8,
+      "stockfish_wdl_white": [
+        24,
+        964,
+        12
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-174",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "b8c6",
+        "b1c3",
+        "e7e5",
+        "f1c4",
+        "f8e7"
+      ],
+      "final_fen": "r1bqk1nr/pp1pbppp/2n5/2p1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 2 5",
+      "source_game_count": 75,
+      "eco_code": "B30",
+      "opening_name": "Sicilian Defense: Closed, Anti-Sveshnikov Variation, with d6",
+      "stockfish_centipawns_white": 38,
+      "stockfish_wdl_white": [
+        84,
+        911,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-175",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "b8c6",
+        "f1b5",
+        "g8f6",
+        "d2d3",
+        "d7d6"
+      ],
+      "final_fen": "r1bqkb1r/ppp2ppp/2np1n2/1B2p3/4P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 0 5",
+      "source_game_count": 74,
+      "eco_code": "C65",
+      "opening_name": "Ruy Lopez: Berlin Defense",
+      "stockfish_centipawns_white": 26,
+      "stockfish_wdl_white": [
+        56,
+        936,
+        8
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-176",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "g1f3",
+        "g8f6",
+        "d2d4",
+        "f6e4",
+        "d4e5",
+        "d7d5"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/8/3pP3/4n3/5N2/PPP2PPP/RNBQKB1R w KQkq d6 0 5",
+      "source_game_count": 74,
+      "eco_code": "C43",
+      "opening_name": "Petrov's Defense: Modern Attack",
+      "stockfish_centipawns_white": 21,
+      "stockfish_wdl_white": [
+        39,
+        954,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-177",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "c2c4",
+        "d5d4",
+        "g2g3",
+        "b8c6",
+        "f1g2",
+        "e7e5"
+      ],
+      "final_fen": "r1bqkbnr/ppp2ppp/2n5/4p3/2Pp4/5NP1/PP1PPPBP/RNBQK2R w KQkq - 0 5",
+      "source_game_count": 74,
+      "eco_code": "A09",
+      "opening_name": "Réti Opening: Advance Variation",
+      "stockfish_centipawns_white": -29,
+      "stockfish_wdl_white": [
+        7,
+        932,
+        61
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-178",
+      "moves_uci": [
+        "b2b3",
+        "e7e5",
+        "c1b2",
+        "b8c6",
+        "e2e3",
+        "g8f6",
+        "f1b5",
+        "f8d6"
+      ],
+      "final_fen": "r1bqk2r/pppp1ppp/2nb1n2/1B2p3/8/1P2P3/PBPP1PPP/RN1QK1NR w KQkq - 3 5",
+      "source_game_count": 73,
+      "eco_code": "A01",
+      "opening_name": "Nimzo-Larsen Attack: Modern Variation",
+      "stockfish_centipawns_white": -17,
+      "stockfish_wdl_white": [
+        11,
+        949,
+        40
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-179",
+      "moves_uci": [
+        "c2c4",
+        "e7e5",
+        "b1c3",
+        "g8f6",
+        "g1f3",
+        "b8c6",
+        "g2g3",
+        "d7d5"
+      ],
+      "final_fen": "r1bqkb1r/ppp2ppp/2n2n2/3pp3/2P5/2N2NP1/PP1PPP1P/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 73,
+      "eco_code": "A29",
+      "opening_name": "English Opening: King's English Variation, Four Knights Variation, Fianchetto Line, with Nb6",
+      "stockfish_centipawns_white": 36,
+      "stockfish_wdl_white": [
+        79,
+        916,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-180",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "g7g6",
+        "c1g5",
+        "f8g7",
+        "b1d2",
+        "d7d5"
+      ],
+      "final_fen": "rnbqk2r/ppp1ppbp/5np1/3p2B1/3P4/5N2/PPPNPPPP/R2QKB1R w KQkq - 0 5",
+      "source_game_count": 73,
+      "eco_code": "A48",
+      "opening_name": "Queen's Pawn Game: Torre Attack, Grünfeld Variation, Main Line",
+      "stockfish_centipawns_white": 28,
+      "stockfish_wdl_white": [
+        59,
+        934,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-181",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "g1f3",
+        "d7d6",
+        "f1b5",
+        "b8d7",
+        "a2a4",
+        "g8f6"
+      ],
+      "final_fen": "r1bqkb1r/pp1npppp/3p1n2/1Bp5/P3P3/5N2/1PPP1PPP/RNBQK2R w KQkq - 1 5",
+      "source_game_count": 73,
+      "eco_code": "B51",
+      "opening_name": "Sicilian Defense: Moscow Variation",
+      "stockfish_centipawns_white": 11,
+      "stockfish_wdl_white": [
+        32,
+        954,
+        14
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-182",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "b1d2",
+        "c7c5",
+        "e4d5",
+        "e6d5"
+      ],
+      "final_fen": "rnbqkbnr/pp3ppp/8/2pp4/3P4/8/PPPN1PPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 73,
+      "eco_code": "C08",
+      "opening_name": "French Defense: Tarrasch Variation, Open System",
+      "stockfish_centipawns_white": 25,
+      "stockfish_wdl_white": [
+        46,
+        948,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-183",
+      "moves_uci": [
+        "g1f3",
+        "c7c5",
+        "c2c4",
+        "b8c6",
+        "b1c3",
+        "g7g6",
+        "g2g3",
+        "f8g7"
+      ],
+      "final_fen": "r1bqk1nr/pp1pppbp/2n3p1/2p5/2P5/2N2NP1/PP1PPP1P/R1BQKB1R w KQkq - 1 5",
+      "source_game_count": 73,
+      "eco_code": "A37",
+      "opening_name": "English Opening: Symmetrical Variation, Three Knights, Fianchetto Variation",
+      "stockfish_centipawns_white": 15,
+      "stockfish_wdl_white": [
+        37,
+        951,
+        12
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-184",
+      "moves_uci": [
+        "b2b3",
+        "e7e5",
+        "c1b2",
+        "b8c6",
+        "e2e3",
+        "d7d5",
+        "f1b5",
+        "g8e7"
+      ],
+      "final_fen": "r1bqkb1r/ppp1nppp/2n5/1B1pp3/8/1P2P3/PBPP1PPP/RN1QK1NR w KQkq - 2 5",
+      "source_game_count": 72,
+      "eco_code": "A01",
+      "opening_name": "Nimzo-Larsen Attack: Modern Variation",
+      "stockfish_centipawns_white": -15,
+      "stockfish_wdl_white": [
+        12,
+        951,
+        37
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-185",
+      "moves_uci": [
+        "d2d4",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "g1f3",
+        "g8f6",
+        "g2g3",
+        "f8d6"
+      ],
+      "final_fen": "rnbqk2r/ppp2ppp/3bpn2/3p4/2PP4/5NP1/PP2PP1P/RNBQKB1R w KQkq - 1 5",
+      "source_game_count": 72,
+      "eco_code": "D30",
+      "opening_name": "Queen's Gambit Declined",
+      "stockfish_centipawns_white": 46,
+      "stockfish_wdl_white": [
+        110,
+        886,
+        4
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-186",
+      "moves_uci": [
+        "e2e4",
+        "e7e5",
+        "b1c3",
+        "g8f6",
+        "f1c4",
+        "b8c6",
+        "d2d3",
+        "c6a5"
+      ],
+      "final_fen": "r1bqkb1r/pppp1ppp/5n2/n3p3/2B1P3/2NP4/PPP2PPP/R1BQK1NR w KQkq - 1 5",
+      "source_game_count": 72,
+      "eco_code": "C24",
+      "opening_name": "Bishop's Opening: Vienna Hybrid",
+      "stockfish_centipawns_white": 11,
+      "stockfish_wdl_white": [
+        32,
+        954,
+        14
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-187",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "c2c4",
+        "g7g6",
+        "f2f3",
+        "f8g7",
+        "e2e4",
+        "d7d6"
+      ],
+      "final_fen": "rnbqk2r/ppp1ppbp/3p1np1/8/2PPP3/5P2/PP4PP/RNBQKBNR w KQkq - 0 5",
+      "source_game_count": 71,
+      "eco_code": "E81",
+      "opening_name": "King's Indian Defense: Sämisch Variation, Sämisch Gambit",
+      "stockfish_centipawns_white": 25,
+      "stockfish_wdl_white": [
+        52,
+        940,
+        8
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-188",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "g1f3",
+        "e7e6",
+        "c1g5",
+        "d7d5",
+        "b1d2",
+        "f8e7"
+      ],
+      "final_fen": "rnbqk2r/ppp1bppp/4pn2/3p2B1/3P4/5N2/PPPNPPPP/R2QKB1R w KQkq - 2 5",
+      "source_game_count": 71,
+      "eco_code": "A46",
+      "opening_name": "Torre Attack: Classical Defense",
+      "stockfish_centipawns_white": 32,
+      "stockfish_wdl_white": [
+        68,
+        926,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-189",
+      "moves_uci": [
+        "e2e4",
+        "c7c5",
+        "b1c3",
+        "a7a6",
+        "g2g3",
+        "b7b5",
+        "f1g2",
+        "c8b7"
+      ],
+      "final_fen": "rn1qkbnr/1b1ppppp/p7/1pp5/4P3/2N3P1/PPPP1PBP/R1BQK1NR w KQkq - 2 5",
+      "source_game_count": 71,
+      "eco_code": "B23",
+      "opening_name": "Sicilian Defense: Closed",
+      "stockfish_centipawns_white": 38,
+      "stockfish_wdl_white": [
+        85,
+        910,
+        5
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-190",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d3",
+        "d7d5",
+        "b1d2",
+        "c7c5",
+        "g1f3",
+        "b8c6"
+      ],
+      "final_fen": "r1bqkbnr/pp3ppp/2n1p3/2pp4/4P3/3P1N2/PPPN1PPP/R1BQKB1R w KQkq - 2 5",
+      "source_game_count": 71,
+      "eco_code": "C00",
+      "opening_name": "French Defense: King's Indian Attack",
+      "stockfish_centipawns_white": -2,
+      "stockfish_wdl_white": [
+        20,
+        958,
+        22
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-191",
+      "moves_uci": [
+        "g1f3",
+        "g8f6",
+        "c2c4",
+        "e7e6",
+        "b1c3",
+        "d7d5",
+        "e2e3",
+        "c7c5"
+      ],
+      "final_fen": "rnbqkb1r/pp3ppp/4pn2/2pp4/2P5/2N1PN2/PP1P1PPP/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 71,
+      "eco_code": "A17",
+      "opening_name": "English Opening: Anglo-Indian Defense, King's Knight Variation",
+      "stockfish_centipawns_white": 13,
+      "stockfish_wdl_white": [
+        34,
+        953,
+        13
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-192",
+      "moves_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "e4d5",
+        "c6d5",
+        "g1f3",
+        "g8f6"
+      ],
+      "final_fen": "rnbqkb1r/pp2pppp/5n2/3p4/3P4/5N2/PPP2PPP/RNBQKB1R w KQkq - 2 5",
+      "source_game_count": 69,
+      "eco_code": "B13",
+      "opening_name": "Caro-Kann Defense: Exchange Variation",
+      "stockfish_centipawns_white": 23,
+      "stockfish_wdl_white": [
+        43,
+        950,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-193",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "g1f3",
+        "d7d5",
+        "b1c3",
+        "g8f6",
+        "e4e5",
+        "f6d7"
+      ],
+      "final_fen": "rnbqkb1r/pppn1ppp/4p3/3pP3/8/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 1 5",
+      "source_game_count": 69,
+      "eco_code": "C00",
+      "opening_name": "French Defense: Two Knights Variation",
+      "stockfish_centipawns_white": 20,
+      "stockfish_wdl_white": [
+        45,
+        945,
+        10
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-194",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "g2g3",
+        "b8c6",
+        "f1g2",
+        "e7e5",
+        "d2d3",
+        "g8f6"
+      ],
+      "final_fen": "r1bqkb1r/ppp2ppp/2n2n2/3pp3/8/3P1NP1/PPP1PPBP/RNBQK2R w KQkq - 1 5",
+      "source_game_count": 68,
+      "eco_code": "A00",
+      "opening_name": "Hungarian Opening",
+      "stockfish_centipawns_white": -13,
+      "stockfish_wdl_white": [
+        13,
+        953,
+        34
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-195",
+      "moves_uci": [
+        "c2c4",
+        "e7e5",
+        "g2g3",
+        "b8c6",
+        "f1g2",
+        "g7g6",
+        "b1c3",
+        "f8g7"
+      ],
+      "final_fen": "r1bqk1nr/pppp1pbp/2n3p1/4p3/2P5/2N3P1/PP1PPPBP/R1BQK1NR w KQkq - 2 5",
+      "source_game_count": 67,
+      "eco_code": "A25",
+      "opening_name": "English Opening: King's English Variation, Taimanov Variation",
+      "stockfish_centipawns_white": 29,
+      "stockfish_wdl_white": [
+        62,
+        931,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-196",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "e4e5",
+        "c7c5",
+        "c2c3",
+        "c8d7"
+      ],
+      "final_fen": "rn1qkbnr/pp1b1ppp/4p3/2ppP3/3P4/2P5/PP3PPP/RNBQKBNR w KQkq - 1 5",
+      "source_game_count": 67,
+      "eco_code": "C02",
+      "opening_name": "French Defense: Advance Variation, Euwe Variation",
+      "stockfish_centipawns_white": 31,
+      "stockfish_wdl_white": [
+        66,
+        927,
+        7
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-197",
+      "moves_uci": [
+        "g1f3",
+        "d7d5",
+        "c2c4",
+        "e7e6",
+        "d2d4",
+        "g8f6",
+        "e2e3",
+        "c7c5"
+      ],
+      "final_fen": "rnbqkb1r/pp3ppp/4pn2/2pp4/2PP4/4PN2/PP3PPP/RNBQKB1R w KQkq - 0 5",
+      "source_game_count": 67,
+      "eco_code": "E10",
+      "opening_name": "Indian Defense: Anti-Nimzo-Indian",
+      "stockfish_centipawns_white": 35,
+      "stockfish_wdl_white": [
+        76,
+        918,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-198",
+      "moves_uci": [
+        "g1f3",
+        "g8f6",
+        "c2c4",
+        "c7c5",
+        "b1c3",
+        "b8c6",
+        "g2g3",
+        "d7d5"
+      ],
+      "final_fen": "r1bqkb1r/pp2pppp/2n2n2/2pp4/2P5/2N2NP1/PP1PPP1P/R1BQKB1R w KQkq - 0 5",
+      "source_game_count": 67,
+      "eco_code": "A34",
+      "opening_name": "English Opening: Symmetrical Variation",
+      "stockfish_centipawns_white": 34,
+      "stockfish_wdl_white": [
+        73,
+        921,
+        6
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-199",
+      "moves_uci": [
+        "d2d4",
+        "g8f6",
+        "b1c3",
+        "d7d5",
+        "c1f4",
+        "e7e6",
+        "c3b5",
+        "b8a6"
+      ],
+      "final_fen": "r1bqkb1r/ppp2ppp/n3pn2/1N1p4/3P1B2/8/PPP1PPPP/R2QKBNR w KQkq - 2 5",
+      "source_game_count": 66,
+      "eco_code": "D01",
+      "opening_name": "Rapport-Jobava System",
+      "stockfish_centipawns_white": -5,
+      "stockfish_wdl_white": [
+        17,
+        957,
+        26
+      ]
+    },
+    {
+      "opening_id": "elite-2025-11-200",
+      "moves_uci": [
+        "e2e4",
+        "e7e6",
+        "d2d4",
+        "d7d5",
+        "b1c3",
+        "g8f6",
+        "e4d5",
+        "e6d5"
+      ],
+      "final_fen": "rnbqkb1r/ppp2ppp/5n2/3p4/3P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 5",
+      "source_game_count": 66,
+      "eco_code": "C01",
+      "opening_name": "French Defense: Classical Variation, Delayed Exchange Variation",
+      "stockfish_centipawns_white": 9,
+      "stockfish_wdl_white": [
+        25,
+        963,
+        12
+      ]
+    }
+  ]
+}
