@@ -367,12 +367,12 @@ def test_eight_gpu_chess_r4_configuration_resolves_checkpoint_continuation() -> 
     assert self_play.force_fast_search_after_ply.value_at(150) == 160
     assert configuration.chess.objective.root_value_blend.value_at(150) == pytest.approx(0.10)
     assert configuration.chess.objective.value_discount_per_ply.value_at(299) == pytest.approx(0.9985)
-    assert configuration.chess.objective.value_discount_per_ply.value_at(300) == pytest.approx(0.9980)
+    assert configuration.chess.objective.value_discount_per_ply.value_at(300) == pytest.approx(0.9960)
     assert ChessImplementation(configuration).self_play_parameters_at(150).value_discount_per_ply == pytest.approx(
         0.9985
     )
     assert ChessImplementation(configuration).self_play_parameters_at(300).value_discount_per_ply == pytest.approx(
-        0.9980
+        0.9960
     )
     remaining_length = configuration.chess.objective.auxiliary_targets[1]
     assert remaining_length.kind == 'remaining_game_length'

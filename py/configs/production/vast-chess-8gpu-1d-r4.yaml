@@ -52,4 +52,4 @@ chess:
       kind: staged
       stages:
         - {start_generation: 0, value: 0.9985}
-        - {start_generation: 300, value: 0.9980}
+        - {start_generation: 300, value: 0.9960}
