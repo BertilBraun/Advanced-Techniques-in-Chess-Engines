@@ -1,4 +1,4 @@
-# Generation 445 at 1,000 searches versus the Stockfish 13 fixed-node ladder
+# Generation 445 search scaling versus the Stockfish 13 fixed-node ladder
 
 ## Result
 
@@ -38,6 +38,31 @@ The 6,500-node rung was selected for the 100-game match because its 60% probe sc
 match's 66% score shows that the ten-game probe was directionally useful but too noisy to identify the exact crossing.
 The 6,500- and 11,000-node results jointly place the crossing near 2,400 on this calibration.
 
+## Direct 64-search comparison
+
+The 64-search ladder repeated the same generation, Stockfish rungs, five opening pairs, color swaps, and random
+seeds. Only the candidate search budget changed from 1,000 to 64.
+
+| Approximate calibrated Elo | Stockfish 13 nodes | Wins | Draws | Losses | Score | Paired 95% interval |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1,700 | 1,200 | 8 | 1 | 1 | 85% | 65%–100% |
+| 1,900 | 2,100 | 1 | 6 | 3 | 40% | 25%–60% |
+| 2,100 | 3,500 | 2 | 3 | 5 | 35% | 15%–60% |
+| 2,300 | 6,500 | 1 | 2 | 7 | 20% | 0%–50% |
+| 2,500 | 11,000 | 0 | 2 | 8 | 10% | 0%–20% |
+| 2,700 | 20,000 | 0 | 1 | 9 | 5% | 0%–15% |
+| 2,900 | 40,000 | 0 | 0 | 10 | 0% | 0%–0% |
+| 3,100 | 100,000 | 0 | 0 | 10 | 0% | 0%–0% |
+
+A one-parameter logistic fit to the eight rung scores gives approximately 1,972 calibrated Elo at 64 searches. The
+same fit to the matched 1,000-search probes gives approximately 2,471 Elo; the independent 100-game result gives
+approximately 2,415. The observed 64-to-1,000-search gain is therefore roughly **440 to 500 Elo** for generation
+445. This is a 15.625-fold budget increase, or 3.97 doublings, corresponding to an average of about 112 to 126 Elo
+per search doubling over the measured range.
+
+The fit is descriptive. It treats a draw as half a point and does not model the correlation from reusing five
+opening pairs at every rung. The paired intervals in the tables convey how noisy each ten-game probe remains.
+
 ## Reproducibility
 
 - Evaluation source revision: `ca942780260b6c0744a80aaa8c4333c52e7f9bf1`
@@ -50,14 +75,25 @@ The 6,500- and 11,000-node results jointly place the crossing near 2,400 on this
 - Final match seed: `20260819`
 - Candidate budget: 1,000 searches, one parallel search, one inference worker, batch size 64, one outstanding batch
 - Final wall time: 1,563.6 seconds on eight RTX 3060 GPUs while production training remained active
+- 64-search ladder result SHA-256 values, in ascending node order:
+  `1584c523d6bf66cd515280a9acafdeb8c315b1c1a51177e1041561d6d4f2f856`,
+  `372af64ad5210fe8ac1b6cc1a1dc4f00216564691bb26cd49cc641796c6e1481`,
+  `1f3f3779652722cf056d592ba72af91b30ad22e368128d29f8c15e908cec7f5a`,
+  `fa75a50f31eca9dd4ee8061bcfa0ed098c5816f02b33e04ca2ec8bddc1dba8a5`,
+  `437ff7f73b0e26006300896a204b4c32b33e62b89d19082025a58d4367686a5c`,
+  `3433dd6e85d7f34b23f58a6453860224aebf03d40e6ca9c0b6008ef79c544ae8`,
+  `4c14046fa2e8fdd7f543d16f2420ab4aea65663feb462a1abe976912dcd635dd`, and
+  `c4ba7cbdf90dfec965c10ae1d90c0a51c10fe6025025a5f3736b72d74bf56899`
 
 The complete result and all shard files were copied from the ephemeral compute node to
 `.codex-diagnostics/chess-evaluation-g445-s1000/` on the development host. Production training was not stopped and
-advanced from generation 446 to generation 455 during the evaluation.
+advanced from generation 446 to generation 455 during the 1,000-search evaluation. The 64-search ladder was copied
+to the same evidence directory after its completion.
 
 ## Interpretation limits
 
-The scheduled 64-search evaluation cannot by itself quantify the marginal Elo gained from 1,000 searches because it
-uses Stockfish 18, a different opening suite, and scheduled checkpoint timing. A clean search-scaling claim requires
-repeating this fixed Stockfish 13 rung with generation 445 at 64 searches. The present result nevertheless provides
-the requested directional strength estimate for the 1,000-search configuration.
+The direct ladders isolate search budget much better than the scheduled Stockfish 18 evaluation, but they still use
+only five opening pairs per rung. The measured 112-to-126-Elo gain per doubling should not be extrapolated unchanged:
+search returns normally diminish. Extending the lower end of this range through the 5.13 doublings from 1,000 to
+35,000 searches would add about 575 Elo, but this is an optimistic constant-slope extrapolation rather than a result.
+A timed, empty-GPU ladder is required to measure the actual deployment strength.
