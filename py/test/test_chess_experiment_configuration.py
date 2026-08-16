@@ -38,6 +38,7 @@ from src.util.frozen_model import JsonValue
 CHESS_EXPERIMENT_TEMPLATE_PATH = Path('configs/chess-experiment-template.yaml')
 CHESS_R3_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-1d-r3.yaml')
 CHESS_R4_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-1d-r4.yaml')
+CHESS_OPTIMAL_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
 
 
 def test_every_checked_in_experiment_uses_the_current_contract_and_dependency_lock() -> None:
@@ -377,6 +378,56 @@ def test_eight_gpu_chess_r4_configuration_resolves_checkpoint_continuation() -> 
     remaining_length = configuration.chess.objective.auxiliary_targets[1]
     assert remaining_length.kind == 'remaining_game_length'
     assert remaining_length.normalization_scale == pytest.approx(400.0)
+
+
+def test_eight_gpu_chess_optimal_configuration_resolves_distilled_curriculum() -> None:
+    configuration = load_chess_experiment_configuration(CHESS_OPTIMAL_EXPERIMENT_PATH)
+    training = configuration.training
+    self_play = configuration.chess.self_play
+    objective = configuration.chess.objective
+
+    assert experiment_configuration_source_paths(CHESS_OPTIMAL_EXPERIMENT_PATH) == (
+        CHESS_OPTIMAL_EXPERIMENT_PATH.resolve(),
+    )
+    assert configuration.run.stage.value == 'clean_retrain'
+    assert configuration.run.resume.mode == 'random_initialization'
+    assert training.limits.minimum_free_disk_gib == pytest.approx(10.0)
+    assert training.lifecycle.replay.maximum_capacity == 1_500_000
+    assert tuple(training.lifecycle.replay.capacity_at(generation) for generation in (0, 50, 100, 500)) == (
+        300_000,
+        900_000,
+        1_500_000,
+        1_500_000,
+    )
+    assert training.lifecycle.credit.replay_ratio == 8
+    assert tuple(
+        training.trainer.learning_rate.value_at(generation) for generation in (0, 100, 350, 550)
+    ) == pytest.approx((0.005, 0.004, 0.003, 0.002))
+    assert tuple(self_play.search.full_searches.value_at(generation) for generation in (0, 30, 90, 250, 550)) == (
+        200,
+        400,
+        600,
+        800,
+        1000,
+    )
+    assert tuple(self_play.search.fast_searches.value_at(generation) for generation in (0, 30, 90)) == (
+        50,
+        100,
+        150,
+    )
+    assert self_play.maximum_game_plies is not None
+    assert tuple(self_play.maximum_game_plies.value_at(generation) for generation in (0, 50, 100, 500)) == (
+        150,
+        180,
+        200,
+        200,
+    )
+    assert self_play.force_fast_search_after_ply is not None
+    assert self_play.force_fast_search_after_ply.value_at(100) == 160
+    assert self_play.resignation.false_nonloss_rate_ceiling == pytest.approx(0.025)
+    assert objective.root_value_blend.value_at(110) == pytest.approx(0.10)
+    assert objective.value_discount_per_ply.value_at(299) == pytest.approx(0.9985)
+    assert objective.value_discount_per_ply.value_at(300) == pytest.approx(0.996)
 
 
 def test_experiment_queue_validation_loads_multiple_experiments() -> None:
