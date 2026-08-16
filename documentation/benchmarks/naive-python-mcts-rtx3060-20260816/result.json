@@ -1,0 +1,80 @@
+{
+  "implementation": "naive-python-chess-puct",
+  "game_batch_size": 1,
+  "inference_batch_size": 1,
+  "parallel_searches": 1,
+  "exploration_constant": 1.0,
+  "root_initialization_inference_calls": 3,
+  "warmup_simulations": 32,
+  "warmup_inference_calls": 33,
+  "provenance": {
+    "command": [
+      "/tmp/benchmark_naive_python_mcts.py",
+      "--model",
+      "/workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-1d-r4/model_481.jit.pt",
+      "--output",
+      "/tmp/naive-python-mcts-generation481.json",
+      "--device",
+      "cuda:0",
+      "--simulations",
+      "1000",
+      "--repeats",
+      "3",
+      "--warmup-simulations",
+      "32",
+      "--source-revision",
+      "91924202b7074230b2046a068578a3a9f1ad7951"
+    ],
+    "created_unix_nanoseconds": 1786874026179952015,
+    "source_revision": "91924202b7074230b2046a068578a3a9f1ad7951",
+    "source_dirty": false,
+    "model_path": "/workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-1d-r4/model_481.jit.pt",
+    "model_sha256": "fc725986e2b6eed041f9f27ec3fa4fc8b30e9acd20fc20a586eee85487f64033",
+    "starting_fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "device": "cuda:0",
+    "cuda_visible_devices": "0",
+    "python_version": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+    "python_chess_version": "1.11.2",
+    "torch_version": "2.12.1+cu126",
+    "torch_cuda_version": "12.6",
+    "cudnn_version": 91002,
+    "platform": "Linux-6.8.0-111-generic-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "logical_cpu_count": 64
+  },
+  "runs": [
+    {
+      "repeat": 1,
+      "simulations": 1000,
+      "root_visits": 1000,
+      "inference_calls": 1000,
+      "inference_positions": 1000,
+      "elapsed_seconds": 12.389128134,
+      "simulations_per_second": 80.7159300625569,
+      "inference_calls_per_second": 80.7159300625569,
+      "selected_move_uci": "d2d4"
+    },
+    {
+      "repeat": 2,
+      "simulations": 1000,
+      "root_visits": 1000,
+      "inference_calls": 1000,
+      "inference_positions": 1000,
+      "elapsed_seconds": 12.370640337,
+      "simulations_per_second": 80.83655920454234,
+      "inference_calls_per_second": 80.83655920454234,
+      "selected_move_uci": "d2d4"
+    },
+    {
+      "repeat": 3,
+      "simulations": 1000,
+      "root_visits": 1000,
+      "inference_calls": 1000,
+      "inference_positions": 1000,
+      "elapsed_seconds": 12.079852896,
+      "simulations_per_second": 82.78246503573979,
+      "inference_calls_per_second": 82.78246503573979,
+      "selected_move_uci": "d2d4"
+    }
+  ]
+}
