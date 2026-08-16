@@ -194,7 +194,8 @@ chess:
     force_fast_search_after_ply:
       kind: staged
       stages:
-        - {start_generation: 0, value: 200}
+        - {start_generation: 0, value: 110}
+        - {start_generation: 50, value: 140}
         - {start_generation: 100, value: 160}
     starting_temperature: {kind: constant, value: 1.3}
     final_temperature: {kind: constant, value: 0.1}
@@ -204,11 +205,7 @@ chess:
     policy_loss_weight: {kind: constant, value: 1.0}
     value_loss_weight: {kind: constant, value: 1.0}
     root_value_blend: {kind: linear, start_generation: 50, end_generation: 110, start_value: 0.0, end_value: 0.10, rounding: none}
-    value_discount_per_ply:
-      kind: staged
-      stages:
-        - {start_generation: 0, value: 0.9985}
-        - {start_generation: 300, value: 0.9960}
+    value_discount_per_ply: {kind: constant, value: 0.996}
     auxiliary_targets:
       - {kind: next_policy, ply_offset: 1, loss_weight: {kind: constant, value: 0.1}}
       - {kind: remaining_game_length, loss_weight: {kind: constant, value: 0.1}, normalization_scale: 400.0}

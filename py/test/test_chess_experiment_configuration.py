@@ -423,11 +423,15 @@ def test_eight_gpu_chess_optimal_configuration_resolves_distilled_curriculum() -
         200,
     )
     assert self_play.force_fast_search_after_ply is not None
-    assert self_play.force_fast_search_after_ply.value_at(100) == 160
+    assert tuple(self_play.force_fast_search_after_ply.value_at(generation) for generation in (0, 50, 100)) == (
+        110,
+        140,
+        160,
+    )
     assert self_play.resignation.false_nonloss_rate_ceiling == pytest.approx(0.025)
     assert objective.root_value_blend.value_at(110) == pytest.approx(0.10)
-    assert objective.value_discount_per_ply.value_at(299) == pytest.approx(0.9985)
-    assert objective.value_discount_per_ply.value_at(300) == pytest.approx(0.996)
+    assert objective.value_discount_per_ply.value_at(0) == pytest.approx(0.996)
+    assert objective.value_discount_per_ply.value_at(1_000) == pytest.approx(0.996)
 
 
 def test_experiment_queue_validation_loads_multiple_experiments() -> None:
