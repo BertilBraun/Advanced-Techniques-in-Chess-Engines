@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -29,33 +30,39 @@ public:
 
     [[nodiscard]] Root newRoot(typename Game::State position,
                                const std::size_t maximumCapacity = 0) {
+        const std::scoped_lock lock(m_operationMutex);
         Root root(std::move(position), m_searchParameters.tree_capacity, maximumCapacity,
-                  m_valueDiscountPerPly);
+                  m_valueDiscountPerPly, m_searchParameters.tree_search.algorithm);
         m_trees.push_back(root.sharedTree());
         return root;
     }
 
     [[nodiscard]] GameSearchBatchResult
     searchDetailed(const std::vector<GameSearchRequest<Game>> &requests) {
+        const std::scoped_lock lock(m_operationMutex);
         return m_executor.searchDetailed(requests);
     }
 
     [[nodiscard]] std::vector<SearchInferenceResult<Game>>
     evaluate(const std::vector<typename Game::State> &positions) {
+        const std::scoped_lock lock(m_operationMutex);
         return m_executor.evaluate(positions);
     }
 
     [[nodiscard]] InferenceStatistics inferenceStatistics() const {
+        const std::scoped_lock lock(m_operationMutex);
         return m_executor.inferenceStatistics();
     }
 
     void updateSearchParameters(const BatchedSearchParameters parameters) {
+        const std::scoped_lock lock(m_operationMutex);
         m_searchParameters = parameters;
         m_valueDiscountPerPly = parameters.tree_search.value_discount_per_ply;
         m_executor.updateSearchParameters(parameters);
     }
 
     void refreshModel(const std::uint64_t modelGeneration, const std::string &modelPath) {
+        const std::scoped_lock lock(m_operationMutex);
         if (modelGeneration <= m_modelGeneration) {
             throw std::invalid_argument("Model generation must increase during refresh");
         }
@@ -66,7 +73,10 @@ public:
         }
     }
 
-    [[nodiscard]] std::uint64_t modelGeneration() const noexcept { return m_modelGeneration; }
+    [[nodiscard]] std::uint64_t modelGeneration() const {
+        const std::scoped_lock lock(m_operationMutex);
+        return m_modelGeneration;
+    }
 
 private:
     BatchedSearchExecutor<Game> m_executor;
@@ -75,6 +85,7 @@ private:
     std::vector<std::weak_ptr<Tree>> m_trees;
     bool m_resetTreesOnRefresh;
     float m_valueDiscountPerPly;
+    mutable std::mutex m_operationMutex;
 
     void resetActiveTrees() {
         for (const std::weak_ptr<Tree> &tree : m_trees) {

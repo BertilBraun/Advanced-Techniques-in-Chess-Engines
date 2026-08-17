@@ -40,12 +40,13 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def_property_readonly("is_terminal", &Root::isTerminal)
         .def_property_readonly("visits", &Root::visits)
         .def_property_readonly("live_nodes", &Root::liveNodeCount)
+        .def_property_readonly("graph_statistics", &Root::graphStatistics)
         .def("play", &Root::play, py::arg("action_id"))
         .def("reset", &Root::reset)
         .def(
             "discount",
             [](Root &selectedRoot, const float retainedFraction) {
-                selectedRoot.tree().discount(retainedFraction);
+                selectedRoot.discount(retainedFraction);
             },
             py::arg("retained_fraction"));
 
@@ -56,7 +57,8 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
     py::class_<Result>(module, names.result)
         .def_readonly("root_value", &Result::root_value)
         .def_readonly("highest_visited_child_action_id", &Result::highest_visited_child_action_id)
-        .def_readonly("highest_visited_child_visit_count", &Result::highest_visited_child_visit_count)
+        .def_readonly("highest_visited_child_visit_count",
+                      &Result::highest_visited_child_visit_count)
         .def_readonly("highest_visited_child_q", &Result::highest_visited_child_q)
         .def_readonly("search_visits", &Result::search_visits)
         .def_readonly("policy_target_visits", &Result::policy_target_visits)

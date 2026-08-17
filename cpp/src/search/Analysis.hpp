@@ -25,11 +25,13 @@ struct AnalysisParameters {
     std::uint32_t parallel_searches;
     float exploration_constant;
     BatchedInferenceParameters inference;
+    SearchAlgorithmParameters algorithm;
 
     AnalysisParameters(std::uint32_t parallelSearches, float explorationConstant,
-                       BatchedInferenceParameters inferenceParameters)
+                       BatchedInferenceParameters inferenceParameters,
+                       SearchAlgorithmParameters searchAlgorithm = MonteCarloTreeSearchParameters{})
         : parallel_searches(parallelSearches), exploration_constant(explorationConstant),
-          inference(std::move(inferenceParameters)) {
+          inference(std::move(inferenceParameters)), algorithm(std::move(searchAlgorithm)) {
         if (parallel_searches == 0 || !std::isfinite(exploration_constant) ||
             exploration_constant <= 0.0F) {
             throw std::invalid_argument("Analysis search parameters are invalid");
@@ -73,7 +75,7 @@ public:
                        parameters.parallel_searches,
                        TreeSearchParameters(parameters.exploration_constant,
                                             FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
-                                            0.0F, 1.0F),
+                                            0.0F, 1.0F, parameters.algorithm),
                        1.0F, 0.0F, 1'024),
                    0, false) {}
 

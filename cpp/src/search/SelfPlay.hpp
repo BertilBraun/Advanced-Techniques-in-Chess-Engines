@@ -99,13 +99,13 @@ public:
               engineParameters(m_searchParameters), initialModelGeneration, true)) {}
 
     [[nodiscard]] Root newRoot(Position position) const {
-        const std::shared_lock lock(m_operationMutex);
+        const std::unique_lock lock(m_operationMutex);
         return m_search->newRoot(std::move(position));
     }
 
     [[nodiscard]] Batch search(const std::vector<Request> &requests,
                                const bool collectStatistics = false) {
-        const std::shared_lock lock(m_operationMutex);
+        const std::unique_lock lock(m_operationMutex);
         if (requests.empty()) {
             return {
                 .results = {},
@@ -184,7 +184,7 @@ public:
     }
 
     [[nodiscard]] InferenceStatistics inferenceStatistics() const {
-        const std::shared_lock lock(m_operationMutex);
+        const std::unique_lock lock(m_operationMutex);
         return m_search->inferenceStatistics();
     }
 
@@ -200,15 +200,17 @@ public:
         const bool capacityChanged = updatedCapacity != m_arenaCapacity;
         const bool valueDiscountChanged = parameters.tree_search.value_discount_per_ply !=
                                           m_searchParameters.tree_search.value_discount_per_ply;
+        const bool algorithmChanged =
+            parameters.tree_search.algorithm != m_searchParameters.tree_search.algorithm;
         m_searchParameters = parameters;
         m_arenaCapacity = updatedCapacity;
         m_search->updateSearchParameters(engineParameters(m_searchParameters));
-        return capacityChanged || valueDiscountChanged;
+        return capacityChanged || valueDiscountChanged || algorithmChanged;
     }
 
     [[nodiscard]] std::vector<SearchInferenceResult<Game>>
     evaluate(const std::vector<Position> &positions) {
-        const std::shared_lock lock(m_operationMutex);
+        const std::unique_lock lock(m_operationMutex);
         return m_search->evaluate(positions);
     }
 

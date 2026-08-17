@@ -19,6 +19,7 @@
 #include <span>
 #include <stdexcept>
 #include <utility>
+#include <variant>
 #include <vector>
 
 // Runs the optimized multi-root MCTS loop, overlapping tree work with inference batches.
@@ -224,10 +225,30 @@ private:
     };
 
     struct PendingLeaf {
+        struct TreeSelection {
+            std::size_t node_index;
+        };
+        struct GraphSelection {
+            GameSearchPath path;
+        };
+
         std::size_t task_index;
-        std::size_t node_index;
+        std::variant<TreeSelection, GraphSelection> selection;
         bool counts_as_search;
         bool root_initialization;
+
+        [[nodiscard]] std::size_t nodeIndex() const {
+            return std::visit(
+                [](const auto &selected) -> std::size_t {
+                    using Selection = std::decay_t<decltype(selected)>;
+                    if constexpr (std::same_as<Selection, TreeSelection>) {
+                        return selected.node_index;
+                    } else {
+                        return selected.path.leaf_index;
+                    }
+                },
+                selection);
+        }
     };
 
     struct PendingBatch {
@@ -243,7 +264,7 @@ private:
         [[nodiscard]] std::size_t size() const noexcept { return m_leaves.size(); }
         [[nodiscard]] const Position &operator[](const std::size_t index) const {
             const PendingLeaf &leaf = m_leaves[index];
-            return m_tasks[leaf.task_index].root.tree().node(leaf.node_index).position;
+            return m_tasks[leaf.task_index].root.tree().node(leaf.nodeIndex()).position;
         }
 
     private:
@@ -266,6 +287,12 @@ private:
             m_searchParameters.tree_search.value_discount_per_ply) {
             throw std::invalid_argument(
                 "Root value discount does not match the active search parameters");
+        }
+        if (request.root.tree().graphSearch() !=
+            std::holds_alternative<MonteCarloGraphSearchParameters>(
+                m_searchParameters.tree_search.algorithm)) {
+            throw std::invalid_argument(
+                "Root search algorithm does not match the active search parameters");
         }
         RootTask task{
             .root = request.root,
@@ -364,6 +391,7 @@ private:
         bool countsAsSearch = true;
         bool rootInitialization = false;
         std::optional<std::size_t> leaf;
+        std::optional<GameSearchPath> graphPath;
         {
             ScopedNanosecondTimer selectionTimer(m_statistics.treeSelectionNanoseconds);
             if (!tree.root().expanded()) {
@@ -372,20 +400,39 @@ private:
                     return true;
                 }
                 leaf = tree.rootIndex();
+                if (tree.graphSearch()) {
+                    graphPath = GameSearchPath{.steps = {}, .leaf_index = *leaf};
+                }
                 rootInitialization = true;
                 countsAsSearch = task.count_root_initialization;
                 tree.node(*leaf).inference_pending = true;
             } else {
-                leaf = tree.selectAvailableLeaf(m_searchParameters.tree_search,
-                                                task.force_root_playouts);
-                if (!leaf.has_value()) {
-                    return false;
+                if (tree.graphSearch()) {
+                    std::optional<GraphSearchSelection> selected = tree.selectAvailableGraphLeaf(
+                        m_searchParameters.tree_search, task.force_root_playouts);
+                    if (!selected.has_value()) {
+                        return false;
+                    }
+                    if (selected->immediate_value.has_value()) {
+                        tree.backPropagateGraph(selected->path, *selected->immediate_value,
+                                                selected->update_leaf);
+                        return true;
+                    }
+                    graphPath = std::move(selected->path);
+                    leaf = graphPath->leaf_index;
+                    tree.reserveGraph(*graphPath);
+                } else {
+                    leaf = tree.selectAvailableLeaf(m_searchParameters.tree_search,
+                                                    task.force_root_playouts);
+                    if (!leaf.has_value()) {
+                        return false;
+                    }
+                    if (Game::isTerminal(tree.node(*leaf).position)) {
+                        tree.backPropagate(*leaf, Game::terminalValue(tree.node(*leaf).position));
+                        return true;
+                    }
+                    tree.reserve(*leaf);
                 }
-                if (Game::isTerminal(tree.node(*leaf).position)) {
-                    tree.backPropagate(*leaf, Game::terminalValue(tree.node(*leaf).position));
-                    return true;
-                }
-                tree.reserve(*leaf);
             }
         }
         constexpr std::size_t encodedSize = Game::Encoding::inferenceDimensions().encodedSize();
@@ -397,7 +444,14 @@ private:
         ++task.in_flight;
         leaves.push_back({
             .task_index = taskIndex,
-            .node_index = *leaf,
+            .selection =
+                graphPath.has_value()
+                    ? std::variant<typename PendingLeaf::TreeSelection,
+                                   typename PendingLeaf::GraphSelection>(
+                          typename PendingLeaf::GraphSelection{.path = std::move(*graphPath)})
+                    : std::variant<typename PendingLeaf::TreeSelection,
+                                   typename PendingLeaf::GraphSelection>(
+                          typename PendingLeaf::TreeSelection{.node_index = *leaf}),
             .counts_as_search = countsAsSearch,
             .root_initialization = rootInitialization,
         });
@@ -441,18 +495,30 @@ private:
                       const SearchInferenceResult<Game> &inference) {
         Tree &tree = task.root.tree();
         ScopedNanosecondTimer backupTimer(m_statistics.treeBackupNanoseconds);
-        tree.expand(pendingLeaf.node_index, inference);
+        tree.expand(pendingLeaf.nodeIndex(), inference);
         if (pendingLeaf.root_initialization) {
-            tree.node(pendingLeaf.node_index).inference_pending = false;
+            tree.node(pendingLeaf.nodeIndex()).inference_pending = false;
             if (pendingLeaf.counts_as_search) {
-                tree.backPropagate(pendingLeaf.node_index, inference.value());
+                if (tree.graphSearch()) {
+                    const auto &selected =
+                        std::get<typename PendingLeaf::GraphSelection>(pendingLeaf.selection);
+                    tree.backPropagateGraph(selected.path, inference.value(), true);
+                } else {
+                    tree.backPropagate(pendingLeaf.nodeIndex(), inference.value());
+                }
             }
             if (task.noise_pending) {
                 addNoise(task.root);
                 task.noise_pending = false;
             }
         } else if (pendingLeaf.counts_as_search) {
-            tree.completeReservation(pendingLeaf.node_index, inference.value());
+            if (tree.graphSearch()) {
+                const auto &selected =
+                    std::get<typename PendingLeaf::GraphSelection>(pendingLeaf.selection);
+                tree.completeGraphReservation(selected.path, inference.value());
+            } else {
+                tree.completeReservation(pendingLeaf.nodeIndex(), inference.value());
+            }
         }
         --task.in_flight;
     }
@@ -489,9 +555,15 @@ private:
             RootTask &task = tasks[pendingLeaf.task_index];
             try {
                 if (!pendingLeaf.root_initialization && pendingLeaf.counts_as_search) {
-                    task.root.tree().cancelReservation(pendingLeaf.node_index);
+                    if (task.root.tree().graphSearch()) {
+                        const auto &selected =
+                            std::get<typename PendingLeaf::GraphSelection>(pendingLeaf.selection);
+                        task.root.tree().cancelGraphReservation(selected.path);
+                    } else {
+                        task.root.tree().cancelReservation(pendingLeaf.nodeIndex());
+                    }
                 } else {
-                    task.root.tree().node(pendingLeaf.node_index).inference_pending = false;
+                    task.root.tree().node(pendingLeaf.nodeIndex()).inference_pending = false;
                 }
             } catch (...) {
             }

@@ -23,6 +23,7 @@ constexpr std::array testSuites = {
     NativeTestSuite{.name = "GoGame", .run = runGoGameTests},
     NativeTestSuite{.name = "InferencePipeline", .run = runInferencePipelineTests},
     NativeTestSuite{.name = "MovePolicyProcessing", .run = runMovePolicyProcessingTests},
+    NativeTestSuite{.name = "MonteCarloGraphSearch", .run = runMonteCarloGraphSearchTests},
     NativeTestSuite{.name = "PackedPlaneFixture", .run = runPackedPlaneFixtureTests},
 };
 } // namespace

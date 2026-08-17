@@ -216,6 +216,7 @@ if (BUILD_TESTING)
             test/TestChessGame.cpp
             test/TestGameHistory.cpp
             test/TestGameSearchTree.cpp
+            test/TestMonteCarloGraphSearch.cpp
             test/TestGoGame.cpp
             test/TestInferencePipeline.cpp
             test/TestMovePolicyProcessing.cpp

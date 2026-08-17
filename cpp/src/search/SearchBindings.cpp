@@ -28,15 +28,51 @@ void bind_search(py::module_ &module) {
         .def(py::init<FirstPlayUrgencyKind, float>(), py::arg("kind"), py::arg("reduction") = 0.0F)
         .def_readonly("kind", &FirstPlayUrgencyParameters::kind)
         .def_readonly("reduction", &FirstPlayUrgencyParameters::reduction);
+    py::class_<MonteCarloTreeSearchParameters>(module, "MonteCarloTreeSearchParameters")
+        .def(py::init<>());
+    py::class_<MonteCarloGraphSearchParameters>(module, "MonteCarloGraphSearchParameters")
+        .def(py::init<float, bool>(), py::arg("transposition_value_threshold") = 0.01F,
+             py::arg("transpositions_enabled") = true)
+        .def_readonly("transposition_value_threshold",
+                      &MonteCarloGraphSearchParameters::transposition_value_threshold)
+        .def_readonly("transpositions_enabled",
+                      &MonteCarloGraphSearchParameters::transpositions_enabled);
     py::class_<TreeSearchParameters>(module, "TreeSearchParameters")
-        .def(py::init<float, FirstPlayUrgencyParameters, float, float>(),
+        .def(py::init<float, FirstPlayUrgencyParameters, float, float, SearchAlgorithmParameters>(),
              py::arg("exploration_constant"), py::arg("first_play_urgency"),
-             py::arg("forced_playout_coefficient"), py::arg("value_discount_per_ply"))
+             py::arg("forced_playout_coefficient"), py::arg("value_discount_per_ply"),
+             py::arg("algorithm") = MonteCarloTreeSearchParameters{})
         .def_readonly("exploration_constant", &TreeSearchParameters::exploration_constant)
         .def_readonly("first_play_urgency", &TreeSearchParameters::first_play_urgency)
         .def_readonly("forced_playout_coefficient",
                       &TreeSearchParameters::forced_playout_coefficient)
-        .def_readonly("value_discount_per_ply", &TreeSearchParameters::value_discount_per_ply);
+        .def_readonly("value_discount_per_ply", &TreeSearchParameters::value_discount_per_ply)
+        .def_readonly("algorithm", &TreeSearchParameters::algorithm);
+
+    py::class_<GraphSearchStatistics>(module, "GraphSearchStatistics")
+        .def_readonly("transposition_table_probes",
+                      &GraphSearchStatistics::transposition_table_probes)
+        .def_readonly("transposition_table_hits", &GraphSearchStatistics::transposition_table_hits)
+        .def_readonly("transposition_links", &GraphSearchStatistics::transposition_links)
+        .def_readonly("unique_nodes_created", &GraphSearchStatistics::unique_nodes_created)
+        .def_readonly("edges_created", &GraphSearchStatistics::edges_created)
+        .def_readonly("evaluations_avoided", &GraphSearchStatistics::evaluations_avoided)
+        .def_readonly("transposition_corrections",
+                      &GraphSearchStatistics::transposition_corrections)
+        .def_readonly("correction_clips", &GraphSearchStatistics::correction_clips)
+        .def_readonly("continued_transpositions", &GraphSearchStatistics::continued_transpositions)
+        .def_readonly("cycle_cutoffs", &GraphSearchStatistics::cycle_cutoffs)
+        .def_readonly("nodes_retained", &GraphSearchStatistics::nodes_retained)
+        .def_readonly("nodes_reclaimed", &GraphSearchStatistics::nodes_reclaimed)
+        .def_readonly("edges_reclaimed", &GraphSearchStatistics::edges_reclaimed)
+        .def_readonly("nodes_pruned", &GraphSearchStatistics::nodes_pruned)
+        .def_readonly("hash_collision_checks", &GraphSearchStatistics::hash_collision_checks)
+        .def_readonly("peak_live_nodes", &GraphSearchStatistics::peak_live_nodes)
+        .def_readonly("peak_live_edges", &GraphSearchStatistics::peak_live_edges)
+        .def_readonly("identity_lookup_nanoseconds",
+                      &GraphSearchStatistics::identity_lookup_nanoseconds)
+        .def_readonly("reroot_nanoseconds", &GraphSearchStatistics::reroot_nanoseconds)
+        .def_readonly("pruning_nanoseconds", &GraphSearchStatistics::pruning_nanoseconds);
 
     py::class_<InferenceConfiguration>(module, "InferenceConfiguration")
         .def(py::init<int, std::string, InferenceDevice>(), py::arg("device_id"),
@@ -119,11 +155,14 @@ void bind_search(py::module_ &module) {
         .def_readonly("outstanding_batches_per_worker",
                       &BatchedInferenceParameters::outstanding_batches_per_worker);
     py::class_<AnalysisParameters>(module, "AnalysisParameters")
-        .def(py::init<std::uint32_t, float, BatchedInferenceParameters>(),
-             py::arg("parallel_searches"), py::arg("exploration_constant"), py::arg("inference"))
+        .def(
+            py::init<std::uint32_t, float, BatchedInferenceParameters, SearchAlgorithmParameters>(),
+            py::arg("parallel_searches"), py::arg("exploration_constant"), py::arg("inference"),
+            py::arg("algorithm") = MonteCarloTreeSearchParameters{})
         .def_readonly("parallel_searches", &AnalysisParameters::parallel_searches)
         .def_readonly("exploration_constant", &AnalysisParameters::exploration_constant)
-        .def_readonly("inference", &AnalysisParameters::inference);
+        .def_readonly("inference", &AnalysisParameters::inference)
+        .def_readonly("algorithm", &AnalysisParameters::algorithm);
     py::class_<SelfPlaySearchParameters>(module, "SelfPlaySearchParameters")
         .def(py::init<std::uint32_t, std::uint32_t, std::uint32_t, TreeSearchParameters, float,
                       float>(),

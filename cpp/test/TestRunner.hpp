@@ -10,4 +10,5 @@ int runGameSearchTreeTests();
 int runGoGameTests();
 int runInferencePipelineTests();
 int runMovePolicyProcessingTests();
+int runMonteCarloGraphSearchTests();
 int runPackedPlaneFixtureTests();
