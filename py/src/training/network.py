@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
 import torch
-from pydantic import Field, model_validator
+from pydantic import BeforeValidator, Field, JsonValue, model_validator
 
 from torch import nn, Tensor
 
@@ -79,16 +79,26 @@ class AttentionNetworkParams(NetworkHeadParams):
         return self
 
 
-SerializedNetworkConfiguration: TypeAlias = Annotated[
+NetworkConfigurationInput: TypeAlias = NetworkParams | AttentionNetworkParams | dict[str, JsonValue]
+
+
+def _normalize_network_discriminator(configuration: NetworkConfigurationInput) -> NetworkConfigurationInput:
+    match configuration:
+        case dict() if 'kind' not in configuration:
+            return {**configuration, 'kind': 'convolutional'}
+        case NetworkParams() | AttentionNetworkParams() | dict():
+            return configuration
+
+
+NetworkConfiguration: TypeAlias = Annotated[
     NetworkParams | AttentionNetworkParams,
     Field(discriminator='kind'),
+    BeforeValidator(_normalize_network_discriminator),
 ]
-
-NetworkConfiguration: TypeAlias = NetworkParams | AttentionNetworkParams
 
 
 class NetworkDefinition(FrozenModel):
-    architecture: SerializedNetworkConfiguration
+    architecture: NetworkConfiguration
     dimensions: NetworkDimensions
     auxiliary_output_sizes: tuple[int, ...]
 

@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 import torch
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from src.training.architecture_catalog import ArchitectureCatalogEntry, ParameterBand, load_architecture_catalog
-from src.training.network import AttentionNetworkParams, Network, NetworkDefinition
+from src.training.network import AttentionNetworkParams, Network, NetworkConfiguration, NetworkDefinition, NetworkParams
 
 
 CATALOG_PATH = Path('configs/architectures/chess-cnn-attention-v1.yaml')
@@ -67,6 +67,14 @@ def test_chess_architecture_configuration_round_trip(entry: ArchitectureCatalogE
     serialized = entry.definition.model_dump_json()
 
     assert NetworkDefinition.model_validate_json(serialized) == entry.definition
+
+
+def test_current_convolutional_configuration_gets_explicit_architecture_discriminator() -> None:
+    configuration = TypeAdapter(NetworkConfiguration).validate_python({'num_layers': 2, 'hidden_size': 32})
+
+    assert isinstance(configuration, NetworkParams)
+    assert configuration.kind == 'convolutional'
+    assert 'kind' in configuration.model_fields_set
 
 
 def test_attention_configuration_requires_even_head_partition() -> None:
