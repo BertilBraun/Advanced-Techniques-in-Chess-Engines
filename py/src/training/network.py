@@ -7,6 +7,7 @@ import torch
 from pydantic import BeforeValidator, Field, JsonValue, model_validator
 
 from torch import nn, Tensor
+from torch.nn import functional
 
 from src.games.representation import NetworkDimensions
 from src.training.batch import TrainingModelOutput
@@ -334,13 +335,13 @@ class AttentionEncoderBlock(nn.Module):
         dropout: float,
     ) -> None:
         super().__init__()
+        self.embedding_size = embedding_size
+        self.num_heads = num_heads
+        self.head_size = embedding_size // num_heads
+        self.attention_dropout_probability = dropout
         self.attention_normalization = nn.LayerNorm(embedding_size)
-        self.attention = nn.MultiheadAttention(
-            embedding_size,
-            num_heads,
-            dropout=dropout,
-            batch_first=True,
-        )
+        self.query_key_value_projection = nn.Linear(embedding_size, embedding_size * 3)
+        self.attention_output_projection = nn.Linear(embedding_size, embedding_size)
         self.attention_dropout = nn.Dropout(dropout)
         self.feedforward_normalization = nn.LayerNorm(embedding_size)
         self.feedforward = nn.Sequential(
@@ -353,7 +354,23 @@ class AttentionEncoderBlock(nn.Module):
 
     def forward(self, inputs: Tensor) -> Tensor:
         normalized = self.attention_normalization(inputs)
-        attended, _ = self.attention(normalized, normalized, normalized, need_weights=False)
+        batch_size, square_count, _ = normalized.shape
+        query_key_value = self.query_key_value_projection(normalized).reshape(
+            batch_size,
+            square_count,
+            3,
+            self.num_heads,
+            self.head_size,
+        )
+        query, key, value = query_key_value.permute(2, 0, 3, 1, 4).unbind(0)
+        attended = functional.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            dropout_p=self.attention_dropout_probability if self.training else 0.0,
+        )
+        attended = attended.transpose(1, 2).reshape(batch_size, square_count, self.embedding_size)
+        attended = self.attention_output_projection(attended)
         residual = inputs + self.attention_dropout(attended)
         feedforward = self.feedforward(self.feedforward_normalization(residual))
         return residual + self.feedforward_dropout(feedforward)
