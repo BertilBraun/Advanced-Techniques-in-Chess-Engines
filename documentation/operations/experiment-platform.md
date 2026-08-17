@@ -67,6 +67,22 @@ TensorRT KataGo builds are forbidden. Success requires `engines/INSTALLATION.txt
 report the CUDA backend, and both board-size smokes to pass. Exact assets and hashes remain in
 [Evaluation engines](evaluation-engines.md).
 
+The bootstrap also installs and smoke-probes the complete 3-5-piece Syzygy WDL set in
+`/workspace/syzygy/wdl345`. The installer downloads only the 145 `.rtbw` files, verifies each against the pinned
+Lichess SHA-512 manifest, and rejects DTZ or larger table sets. An existing directory is reused only after full
+checksum verification. Set `ENGINE_SYZYGY_WDL_DIRECTORY` to select another destination or
+`ENGINE_SYZYGY_WDL_BASE_URL` to use a mirror containing the same pinned files. A chess experiment enables
+maximum-ply probing explicitly with:
+
+```yaml
+chess:
+  self_play:
+    maximum_ply_syzygy_paths:
+      - /workspace/syzygy/wdl345
+```
+
+Provisioning the files does not expose them to search and does not enable the optional terminal oracle by itself.
+
 For later supervised commands, preserve the bootstrap runtime requirements: raise the soft open-file limit above
 the configured minimum, set `TRAINING_RUNTIME_IMAGE`, and include every locked-venv `site-packages/nvidia/*/lib`
 directory in `LD_LIBRARY_PATH`. Otherwise KataGo children can fail to load CUDA libraries even though bootstrap
