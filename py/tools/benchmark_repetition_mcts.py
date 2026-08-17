@@ -276,7 +276,12 @@ def run_search_steps(
 
         next_roots: list[ChessSearchRoot] = []
         for opening_index, result in enumerate(search_results.results):
+            graph_before_reroot = graph_metrics([result.root])
             root = choose_root(result.root, result.search_visits)
+            measured_graph = add_graph_metrics(
+                measured_graph,
+                subtract_graph_metrics(graph_metrics([root]), graph_before_reroot),
+            )
             if root.is_terminal:
                 terminal_roots += 1
                 root = search.new_root(openings[opening_index])

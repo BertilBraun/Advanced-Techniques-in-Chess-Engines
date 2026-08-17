@@ -114,26 +114,27 @@ std::size_t Board::searchStateHash() const noexcept {
             static_cast<std::size_t>(item) + 0x9e3779b97f4a7c15ULL + (value << 6U) + (value >> 2U);
     };
     combine(static_cast<std::uint64_t>(m_pos.rule50_count()));
-    for (auto entry = m_history; entry != nullptr; entry = entry->previous) {
-        combine(entry->key);
-    }
+    combine(m_history->context_hash);
     return value;
 }
 
 bool Board::hasSameSearchState(const Board &other) const {
-    if (m_pos.rule50_count() != other.m_pos.rule50_count()) {
+    if (m_pos.rule50_count() != other.m_pos.rule50_count() ||
+        repetitionIdentity() != other.repetitionIdentity() ||
+        m_history->retainedPreviousPositions != other.m_history->retainedPreviousPositions) {
         return false;
     }
-    auto left = m_history;
-    auto right = other.m_history;
-    while (left != nullptr && right != nullptr) {
-        if (left->identity != right->identity) {
-            return false;
-        }
-        left = left->previous;
-        right = right->previous;
+    return repetitionContext() == other.repetitionContext();
+}
+
+std::vector<Board::RepetitionIdentity> Board::repetitionContext() const {
+    std::vector<RepetitionIdentity> result;
+    result.reserve(static_cast<std::size_t>(m_history->retainedPreviousPositions) + 1);
+    for (auto entry = m_history; entry != nullptr; entry = entry->previous) {
+        result.push_back(entry->identity);
     }
-    return left == nullptr && right == nullptr;
+    std::ranges::sort(result);
+    return result;
 }
 
 Board::RepetitionIdentity Board::repetitionIdentity() const {

@@ -52,7 +52,16 @@ void testSearchStateIdentity() {
     require(knightOrderA.fen() == knightOrderB.fen(),
             "Commuting knight orders must reach the same current chess position");
     require(!ChessGame::statesEqual(knightOrderA, knightOrderB),
-            "Different reversible histories must not share graph identity");
+            "Different repetition contexts must not share graph identity");
+
+    const Board cycleOrderA = Board::replay(
+        initial.fen(), {"g1f3", "g8f6", "f3g1", "f6g8", "b1c3", "b8c6", "c3b1", "c6b8"});
+    const Board cycleOrderB = Board::replay(
+        initial.fen(), {"b1c3", "b8c6", "c3b1", "c6b8", "g1f3", "g8f6", "f3g1", "f6g8"});
+    require(ChessGame::statesEqual(cycleOrderA, cycleOrderB),
+            "Reordered histories with the same repetition counts must share graph identity");
+    require(ChessGame::stateHash(cycleOrderA) == ChessGame::stateHash(cycleOrderB),
+            "Equivalent repetition contexts must have equal graph hashes");
 
     const Board resetOrderA =
         Board::replay(initial.fen(), {"g1f3", "g8f6", "b1c3", "b8c6", "e2e4"});

@@ -99,6 +99,7 @@ public:
             return;
         }
         m_graphStatistics.edges_created += count;
+        m_liveEdgeCount += count;
         updateGraphPeaks();
     }
 
@@ -120,13 +121,14 @@ public:
 
     [[nodiscard]] GraphChildMaterialization
     materializeGraphChild(const std::size_t parentIndex, const std::size_t edgeIndex,
-                          const std::unordered_set<std::size_t> &trajectoryNodes) {
+                          const std::vector<std::size_t> &trajectoryNodes) {
         if (!graphSearch()) {
             throw std::logic_error("Graph materialization requires graph-search parameters");
         }
         Edge &edge = node(parentIndex).children.at(edgeIndex);
         if (edge.child_index.has_value()) {
-            const bool cycle = trajectoryNodes.contains(*edge.child_index);
+            const bool cycle =
+                std::ranges::find(trajectoryNodes, *edge.child_index) != trajectoryNodes.end();
             if (cycle) {
                 ++m_graphStatistics.cycle_cutoffs;
             }
@@ -141,15 +143,17 @@ public:
             ScopedNanosecondTimer lookupTimer(m_graphStatistics.identity_lookup_nanoseconds);
             ++m_graphStatistics.transposition_table_probes;
             const std::size_t hash = Game::stateHash(child);
-            const auto bucket = m_transpositionTable.find(hash);
-            if (bucket != m_transpositionTable.end()) {
-                for (const std::size_t candidateIndex : bucket->second) {
+            const auto [bucketBegin, bucketEnd] = m_transpositionTable.equal_range(hash);
+            if (bucketBegin != bucketEnd) {
+                for (auto candidate = bucketBegin; candidate != bucketEnd; ++candidate) {
+                    const std::size_t candidateIndex = candidate->second;
                     ++m_graphStatistics.hash_collision_checks;
                     if (!Game::statesEqual(child, node(candidateIndex).position)) {
                         continue;
                     }
                     ++m_graphStatistics.transposition_table_hits;
-                    if (trajectoryNodes.contains(candidateIndex)) {
+                    if (std::ranges::find(trajectoryNodes, candidateIndex) !=
+                        trajectoryNodes.end()) {
                         ++m_graphStatistics.cycle_cutoffs;
                         return {.node_index = candidateIndex, .transposition = true, .cycle = true};
                     }
@@ -168,7 +172,7 @@ public:
         childNode.incoming_edges = 1;
         edge.child_index = childIndex;
         if (parameters.transpositions_enabled) {
-            m_transpositionTable[Game::stateHash(child)].push_back(childIndex);
+            m_transpositionTable.emplace(Game::stateHash(child), childIndex);
         }
         ++m_graphStatistics.unique_nodes_created;
         updateGraphPeaks();
@@ -210,6 +214,7 @@ public:
             m_freeSlots.push_back(slot);
         }
         m_liveNodeCount = 0;
+        m_liveEdgeCount = 0;
         m_rootIndex = allocateNode(m_initialPosition, std::nullopt, std::nullopt);
         m_transpositionTable.clear();
         initializeGraphRoot();
@@ -320,8 +325,9 @@ private:
     std::size_t m_liveNodeCount = 0;
     std::size_t m_rootIndex;
     SearchAlgorithmParameters m_algorithm;
-    std::unordered_map<std::size_t, std::vector<std::size_t>> m_transpositionTable;
+    std::unordered_multimap<std::size_t, std::size_t> m_transpositionTable;
     GraphSearchStatistics m_graphStatistics;
+    std::size_t m_liveEdgeCount = 0;
 
     [[nodiscard]] std::size_t allocateNode(Position position,
                                            const std::optional<std::size_t> parentIndex,
@@ -354,7 +360,9 @@ private:
         if (index == m_rootIndex) {
             throw std::logic_error("Cannot release the active game-search root");
         }
-        static_cast<void>(node(index));
+        if (graphSearch()) {
+            m_liveEdgeCount -= node(index).children.size();
+        }
         m_nodes[index].reset();
         m_freeSlots.push_back(index);
         --m_liveNodeCount;
@@ -374,7 +382,7 @@ private:
         if (!graphSearch()) {
             return;
         }
-        m_transpositionTable[Game::stateHash(root().position)].push_back(m_rootIndex);
+        m_transpositionTable.emplace(Game::stateHash(root().position), m_rootIndex);
         ++m_graphStatistics.unique_nodes_created;
         updateGraphPeaks();
     }
@@ -383,18 +391,7 @@ private:
         m_graphStatistics.peak_live_nodes = std::max(m_graphStatistics.peak_live_nodes,
                                                      static_cast<std::uint64_t>(m_liveNodeCount));
         m_graphStatistics.peak_live_edges = std::max(m_graphStatistics.peak_live_edges,
-                                                     static_cast<std::uint64_t>(liveEdgeCount()));
-    }
-
-    [[nodiscard]] std::size_t liveEdgeCount() const noexcept {
-        std::size_t count = 0;
-        for (const std::optional<Node> &slot : m_nodes) {
-            if (!slot.has_value()) {
-                continue;
-            }
-            count += slot->children.size();
-        }
-        return count;
+                                                     static_cast<std::uint64_t>(m_liveEdgeCount));
     }
 
     void rerootGraphEdge(const std::size_t edgeIndex) {
@@ -403,7 +400,7 @@ private:
         if (edgeIndex >= root().children.size()) {
             throw std::out_of_range("Cannot reroot to a missing game-search edge");
         }
-        const std::unordered_set<std::size_t> rootPath = {m_rootIndex};
+        const std::vector<std::size_t> rootPath = {m_rootIndex};
         const GraphChildMaterialization retained =
             materializeGraphChild(m_rootIndex, edgeIndex, rootPath);
         if (retained.cycle) {
@@ -456,7 +453,7 @@ private:
                 continue;
             }
             if (parameters.transpositions_enabled) {
-                m_transpositionTable[Game::stateHash(node(index).position)].push_back(index);
+                m_transpositionTable.emplace(Game::stateHash(node(index).position), index);
             }
             for (const Edge &edge : node(index).children) {
                 if (edge.child_index.has_value()) {
@@ -473,34 +470,61 @@ private:
         }
         requireIdle();
         ScopedNanosecondTimer timer(m_graphStatistics.pruning_nanoseconds);
-        while (m_liveNodeCount > liveNodeLimit) {
-            std::optional<std::size_t> candidate;
-            for (const auto index : range(m_nodes.size())) {
-                if (index == m_rootIndex || !m_nodes[index].has_value() ||
-                    std::ranges::any_of(node(index).children, [](const Edge &edge) {
-                        return edge.child_index.has_value();
-                    })) {
+        using IncomingReference = std::pair<std::size_t, std::size_t>;
+        std::vector<std::vector<IncomingReference>> incomingReferences(m_nodes.size());
+        std::vector<std::size_t> materializedChildCounts(m_nodes.size(), 0);
+        for (const auto parentIndex : range(m_nodes.size())) {
+            if (!m_nodes[parentIndex].has_value()) {
+                continue;
+            }
+            const std::size_t edgeCount = node(parentIndex).children.size();
+            for (const auto edgeIndex : range(edgeCount)) {
+                const Edge &edge = node(parentIndex).children[edgeIndex];
+                if (!edge.child_index.has_value()) {
                     continue;
                 }
-                if (!candidate.has_value() || node(index).visits < node(*candidate).visits ||
-                    (node(index).visits == node(*candidate).visits && index < *candidate)) {
-                    candidate = index;
-                }
+                ++materializedChildCounts[parentIndex];
+                incomingReferences[*edge.child_index].emplace_back(parentIndex, edgeIndex);
             }
-            if (!candidate.has_value()) {
+        }
+
+        using PruneCandidate = std::pair<std::uint32_t, std::size_t>;
+        std::priority_queue<PruneCandidate, std::vector<PruneCandidate>,
+                            std::greater<PruneCandidate>>
+            candidates;
+        for (const auto index : range(m_nodes.size())) {
+            if (index != m_rootIndex && m_nodes[index].has_value() &&
+                materializedChildCounts[index] == 0) {
+                candidates.emplace(node(index).visits, index);
+            }
+        }
+
+        while (m_liveNodeCount > liveNodeLimit) {
+            if (candidates.empty()) {
                 throw std::logic_error("Game search graph has no prunable leaf");
             }
-            for (std::optional<Node> &slot : m_nodes) {
-                if (!slot.has_value()) {
+            const auto [visits, candidateIndex] = candidates.top();
+            static_cast<void>(visits);
+            candidates.pop();
+            if (!m_nodes[candidateIndex].has_value() ||
+                materializedChildCounts[candidateIndex] != 0) {
+                continue;
+            }
+            for (const auto [parentIndex, edgeIndex] : incomingReferences[candidateIndex]) {
+                if (!m_nodes[parentIndex].has_value()) {
                     continue;
                 }
-                for (Edge &edge : slot->children) {
-                    if (edge.child_index == candidate) {
-                        edge.child_index.reset();
-                    }
+                Edge &incomingEdge = node(parentIndex).children[edgeIndex];
+                if (incomingEdge.child_index != candidateIndex) {
+                    continue;
+                }
+                incomingEdge.child_index.reset();
+                --materializedChildCounts[parentIndex];
+                if (parentIndex != m_rootIndex && materializedChildCounts[parentIndex] == 0) {
+                    candidates.emplace(node(parentIndex).visits, parentIndex);
                 }
             }
-            releaseNode(*candidate);
+            releaseNode(candidateIndex);
             ++m_graphStatistics.nodes_pruned;
         }
         rebuildGraphMetadata();

@@ -3,6 +3,7 @@
 #include "position.h"
 
 #include <array>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -100,6 +101,7 @@ private:
         std::uint8_t en_passant_square;
 
         [[nodiscard]] bool operator==(const RepetitionIdentity &) const noexcept = default;
+        [[nodiscard]] auto operator<=>(const RepetitionIdentity &) const noexcept = default;
     };
 
     struct PositionHistory {
@@ -107,12 +109,15 @@ private:
                         std::shared_ptr<const PositionHistory> previousPosition)
             : key(positionKey), identity(std::move(positionIdentity)),
               previous(std::move(previousPosition)),
+              context_hash((previous == nullptr ? 0 : previous->context_hash) +
+                           positionKey * 0x9E3779B97F4A7C15ULL),
               retainedPreviousPositions(
                   previous == nullptr ? 0 : previous->retainedPreviousPositions + 1) {}
 
         const std::uint64_t key;
         const RepetitionIdentity identity;
         const std::shared_ptr<const PositionHistory> previous;
+        const std::uint64_t context_hash;
         const std::uint16_t retainedPreviousPositions;
     };
 
@@ -126,6 +131,7 @@ private:
     [[nodiscard]] bool drawByInsufficientMaterial() const;
     [[nodiscard]] std::uint8_t castlingRightsMask() const;
     [[nodiscard]] RepetitionIdentity repetitionIdentity() const;
+    [[nodiscard]] std::vector<RepetitionIdentity> repetitionContext() const;
     void validateHistory() const;
 };
 

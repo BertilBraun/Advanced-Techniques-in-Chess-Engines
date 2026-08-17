@@ -86,8 +86,10 @@ public:
         if (!graphSearch()) {
             throw std::logic_error("Graph selection requires a graph-search root");
         }
-        std::unordered_set<std::size_t> trajectoryNodes = {rootIndex()};
+        std::vector<std::size_t> trajectoryNodes = {rootIndex()};
+        trajectoryNodes.reserve(128);
         GameSearchPath path{.steps = {}, .leaf_index = rootIndex()};
+        path.steps.reserve(128);
         const std::size_t edgeCount = root().children.size();
         for (const auto edgeIndex : range(edgeCount)) {
             const Edge &edge = root().children[edgeIndex];
@@ -397,14 +399,14 @@ private:
 
     [[nodiscard]] std::optional<GraphSearchSelection>
     selectAvailableGraphLeaf(const std::size_t nodeIndex, const TreeSearchParameters &parameters,
-                             GameSearchPath path, std::unordered_set<std::size_t> trajectoryNodes) {
+                             GameSearchPath &path, std::vector<std::size_t> &trajectoryNodes) {
         if (!node(nodeIndex).expanded()) {
             if (node(nodeIndex).inference_pending) {
                 return std::nullopt;
             }
             path.leaf_index = nodeIndex;
             return GraphSearchSelection{
-                .path = std::move(path), .immediate_value = std::nullopt, .update_leaf = true};
+                .path = path, .immediate_value = std::nullopt, .update_leaf = true};
         }
         const std::size_t edgeCount = node(nodeIndex).children.size();
         std::vector<bool> attempted(edgeCount, false);
@@ -439,15 +441,15 @@ private:
 
     [[nodiscard]] std::optional<GraphSearchSelection>
     selectGraphEdge(const std::size_t nodeIndex, const std::size_t edgeIndex,
-                    const TreeSearchParameters &parameters, GameSearchPath path,
-                    std::unordered_set<std::size_t> trajectoryNodes) {
+                    const TreeSearchParameters &parameters, GameSearchPath &path,
+                    std::vector<std::size_t> &trajectoryNodes) {
         const search_tree_detail::GraphChildMaterialization materialized =
             m_arena.materializeGraphChild(nodeIndex, edgeIndex, trajectoryNodes);
         path.steps.push_back({.node_index = nodeIndex, .edge_index = edgeIndex});
         path.leaf_index = materialized.node_index;
         if (materialized.cycle) {
             return GraphSearchSelection{
-                .path = std::move(path),
+                .path = path,
                 .immediate_value = Game::cycleValue(node(materialized.node_index).position),
                 .update_leaf = false};
         }
@@ -464,20 +466,27 @@ private:
             if (std::abs(childMean - edgeMean) > graphParameters.transposition_value_threshold) {
                 ++m_arena.graphStatistics().evaluations_avoided;
                 ++m_arena.graphStatistics().transposition_corrections;
-                return GraphSearchSelection{.path = std::move(path),
+                return GraphSearchSelection{.path = path,
                                             .immediate_value = graphCorrection(edge, child),
                                             .update_leaf = false};
             }
             ++m_arena.graphStatistics().continued_transpositions;
         }
         if (Game::isTerminal(child.position)) {
-            return GraphSearchSelection{.path = std::move(path),
+            return GraphSearchSelection{.path = path,
                                         .immediate_value = Game::terminalValue(child.position),
                                         .update_leaf = true};
         }
-        trajectoryNodes.insert(materialized.node_index);
-        return selectAvailableGraphLeaf(materialized.node_index, parameters, std::move(path),
-                                        std::move(trajectoryNodes));
+        trajectoryNodes.push_back(materialized.node_index);
+        std::optional<GraphSearchSelection> selected =
+            selectAvailableGraphLeaf(materialized.node_index, parameters, path, trajectoryNodes);
+        if (selected.has_value()) {
+            return selected;
+        }
+        trajectoryNodes.pop_back();
+        path.steps.pop_back();
+        path.leaf_index = nodeIndex;
+        return std::nullopt;
     }
 
     [[nodiscard]] float edgeValueForParent(const Node &parent, const Edge &edge,

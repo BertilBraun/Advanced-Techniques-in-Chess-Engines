@@ -43,8 +43,9 @@ Generic graph search obtains both hashing and collision-checking equality from t
 chess fields or uses packed neural inputs as identities.
 
 Chess identity contains the current pieces, side to move, castling rights, en-passant state, exact halfmove clock,
-and the complete retained reversible repetition history. The fullmove display counter is excluded because it has no
-rule or network meaning. Go identity contains every retained black/white history board, player, ko point,
+and a canonical multiset of retained repetition positions. History order is excluded because future threefold
+semantics depend on occurrence counts rather than traversal order. The fullmove display counter is excluded because
+it has no rule or network meaning. Go identity contains every retained black/white history board, player, ko point,
 consecutive passes, move number, komi, and maximum-move rule.
 
 Czech et al. put a step counter in their transposition key to guarantee a DAG. This engine instead uses the complete
