@@ -634,6 +634,26 @@ def test_network_rejects_unknown_parameters() -> None:
         ChessExperimentConfiguration.model_validate(candidate)
 
 
+def test_chess_maximum_ply_syzygy_paths_are_optional_and_typed() -> None:
+    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
+    candidate['chess']['self_play']['maximum_ply_syzygy_paths'] = ['/tablebases/3-5', '/tablebases/6-7']
+
+    configuration = ChessExperimentConfiguration.model_validate(candidate)
+
+    assert configuration.chess.self_play.maximum_ply_syzygy_paths == (
+        '/tablebases/3-5',
+        '/tablebases/6-7',
+    )
+
+
+def test_chess_maximum_ply_syzygy_paths_reject_empty_entries() -> None:
+    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
+    candidate['chess']['self_play']['maximum_ply_syzygy_paths'] = ['']
+
+    with pytest.raises(ValidationError, match='nonempty directory path'):
+        ChessExperimentConfiguration.model_validate(candidate)
+
+
 def test_training_configuration_is_frozen() -> None:
     configuration = load_chess_experiment_configuration(CHESS_EXPERIMENT_TEMPLATE_PATH)
 

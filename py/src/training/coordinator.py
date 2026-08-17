@@ -72,6 +72,7 @@ class Coordinator:
             training.lifecycle.replay,
             self.ledger.model_generation,
             game.value_discount_per_ply,
+            game.terminal_oracle,
             self.resignation_calibrator,
         )
         self.trainer_group = TrainerGroup(self.configuration, game, self.ledger.state.active_checkpoint)
@@ -113,6 +114,7 @@ class Coordinator:
             self.self_play_group.close()
             self.trainer_group.close()
             self.replay_manager.close()
+            self.game.close()
             self.ledger.save()
 
     def _start_self_play(self) -> None:

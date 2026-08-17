@@ -6,7 +6,7 @@ import time
 from typing import Generic, TypeVar
 
 from src.experiment.generation_schedule import FloatGenerationSchedule
-from src.games.contracts import GameStateContract
+from src.games.contracts import GameStateContract, TerminalOracle
 from src.replay.layout import ReplayLayout
 from src.replay.materialization import materialize_completed_game
 from src.replay.store import ReplayStore
@@ -60,6 +60,7 @@ class ReplayManager(Generic[PositionT]):
         configuration: ReplayConfiguration,
         value_discount_per_ply: FloatGenerationSchedule,
         resignation_calibrator: ResignationCalibrator | None,
+        terminal_oracle: TerminalOracle[PositionT] | None,
     ) -> None:
         if store.layout.packed_planes != state.packed_plane_layout:
             raise ValueError('Replay layout does not match the game packed-plane representation.')
@@ -75,6 +76,7 @@ class ReplayManager(Generic[PositionT]):
         self.configuration = configuration
         self.value_discount_per_ply = value_discount_per_ply
         self.resignation_calibrator = resignation_calibrator
+        self.terminal_oracle = terminal_oracle
 
     @classmethod
     def open(
@@ -85,6 +87,7 @@ class ReplayManager(Generic[PositionT]):
         configuration: ReplayConfiguration,
         model_generation: int,
         value_discount_per_ply: FloatGenerationSchedule,
+        terminal_oracle: TerminalOracle[PositionT] | None,
         resignation_calibrator: ResignationCalibrator | None = None,
     ) -> ReplayManager[PositionT]:
         replay_path = run_path / 'replay.bin'
@@ -104,6 +107,7 @@ class ReplayManager(Generic[PositionT]):
             configuration,
             value_discount_per_ply,
             resignation_calibrator,
+            terminal_oracle,
         )
 
     @property
@@ -137,6 +141,7 @@ class ReplayManager(Generic[PositionT]):
             materialized = materialize_completed_game(
                 game,
                 self.state,
+                self.terminal_oracle,
                 self.store.layout.targets,
                 self.store.layout.maximum_policy_entries,
                 self.value_discount_per_ply,

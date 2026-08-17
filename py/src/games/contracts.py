@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 
 PositionT = TypeVar('PositionT')
+TerminalOraclePositionT = TypeVar('TerminalOraclePositionT', contravariant=True)
 
 
 class Player(IntEnum):
@@ -46,6 +47,15 @@ class WdlTarget(FrozenModel):
             draw=remainder / 3.0,
             loss=max(-value, 0.0) + remainder / 3.0,
         )
+
+
+class TerminalOracle(ABC, Generic[TerminalOraclePositionT]):
+    @abstractmethod
+    def probe_wdl(self, position: TerminalOraclePositionT) -> WdlTarget | None:
+        raise NotImplementedError
+
+    def close(self) -> None:
+        pass
 
 
 class GameStateContract(ABC, Generic[PositionT]):

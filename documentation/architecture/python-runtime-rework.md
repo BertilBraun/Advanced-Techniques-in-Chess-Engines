@@ -1646,7 +1646,8 @@ The ordinary turn algorithm is fully specified:
 10. repeated-move penalties and other chess-only sampling modifications are not part of the base algorithm;
 11. the selected action advances the retained root through `root.play(action_id)`;
 12. a natural terminal position uses `state.terminal_wdl()`; a configured maximum-ply ending uses
-    `state.adjudicated_wdl()` and records that termination reason;
+    the optional game terminal oracle once at the cap, falls back to `state.adjudicated_wdl()` when the oracle is
+    absent or does not cover the position, and records that termination reason;
 13. a nonterminal search result without a positive visit is an invariant failure, not a silently discarded game;
 14. loading a new generation keeps action and observation history but resets every retained tree before play resumes.
 
@@ -1782,6 +1783,16 @@ separate chess and Go batch builders.
 The shared trainer owns the optimizer hot loop, transfer overlap, gradient handling, DDP reductions, and common
 statistics. The game-owned `ResolvedTrainingObjective` owns only model-output interpretation and loss construction
 for one resolved generation.
+
+The terminal oracle is a typed game-agnostic `position -> WdlTarget | None` boundary owned by the concrete game
+composition. Chess may configure a Syzygy WDL implementation; Go currently supplies no oracle. The shared worker
+calls it only after the move that reaches `maximum_game_plies`, never during ordinary search, and the replay manager
+uses the same boundary only to validate the completed result while reconstructing that capped trajectory. An oracle
+result changes only the final WDL value target. It does not add visits, policy targets, search priors, move choices,
+or pre-cap tablebase probes. Chess collapses Syzygy's cursed wins and blessed losses to draws, preserving the
+fifty-move-rule interpretation when converting five-state tablebase WDL to the network's three-state target. At the
+Python/C++ boundary, the chess adapter reads the native `ChessPosition.fen` property already exposed by the binding;
+search requests, retained roots, visits, and native move selection remain unchanged.
 
 ### Network and inference outputs
 

@@ -93,12 +93,31 @@ This improves value labels for already excessive games without suppressing ordin
 before the cap. The generic platform should own only an optional terminal-oracle contract; chess owns the Syzygy
 implementation.
 
-Retain 200 plies as the default candidate. Current games are about 100 plies on average and P90 is about 174, while
-raising the cap beyond 200 correlated with a pronounced training deterioration. Before fixing the next-run value,
-compare historical counterfactual coverage at 180, 200, 220, and 300 plies and review the maximum-game treatment in
-AlphaZero-style literature. Do not choose 150 without evidence because it would truncate a nontrivial part of the
-ordinary distribution. The purpose of this analysis is to distinguish 200 from a nearby value such as 220, not to
-reopen very long games.
+Retain **200 plies** as the recommendation. Current games are about 100 plies on average and P90 is about 174, while
+raising the cap beyond 200 correlated with a pronounced training deterioration. The existing evidence distinguishes
+the candidates as follows:
+
+| Cap | Existing-evidence assessment |
+| ---: | --- |
+| 180 | Only six plies beyond the observed P90, so it would truncate a material part of the ordinary long tail. |
+| 200 | Twenty-six plies beyond P90, preserves the established late-game tail, and avoids the previously harmful longer-cap regime. |
+| 220 | Adds ten percent more capped-game search than 200 without current coverage or strength evidence that those plies improve labels. |
+| 300 | Re-enters the long-game regime associated with deterioration and spends 100 extra plies before applying the same safety adjudication. |
+
+The external references are deliberately treated as design context rather than transferable numeric tuning. AlphaZero
+used a remote 512-step draw cutoff, scored Go at its separate 722-step cutoff, and used no endgame tablebases
+([supplementary methods](https://arxiv.org/pdf/1712.01815)). Current Lc0 self-play has a 450-ply safety cutoff and
+can expose Syzygy to its search
+([official source](https://github.com/LeelaChessZero/lc0/blob/master/src/selfplay/game.cc)); that always-available
+search behavior is explicitly not adopted here. KataGo plays games to completion, reduces visits after sustained
+low win rate, stochastically downweights those late samples, and uses Go-specific mechanisms to finish games sooner
+([paper, Appendix D](https://arxiv.org/abs/1902.10565)). Together these sources support having a safety mechanism and
+preserving natural endgame experience, but none justifies increasing this project's empirically problematic cap.
+
+Before authorizing a run, still compute exact historical counterfactual coverage at 180, 200, 220, and 300 from the
+preserved corpus. That audit may reject 200 if it reveals unexpected label coverage, but absent such contrary evidence
+200 is the coherent choice. Do not choose 150 without evidence because it would truncate a nontrivial part of the
+ordinary distribution.
 
 ## 5. Architecture and throughput experiments
 

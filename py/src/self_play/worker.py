@@ -283,7 +283,13 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if natural_wdl is not None:
             return self._complete(active_game, natural_wdl, TerminationReason.NATURAL)
         if parameters.maximum_game_plies is not None and len(active_game.action_ids) >= parameters.maximum_game_plies:
-            final_wdl = self.game.state.adjudicated_wdl(active_game.root.position, TerminationReason.MAXIMUM_PLIES)
+            oracle = self.game.terminal_oracle
+            final_wdl = None if oracle is None else oracle.probe_wdl(active_game.root.position)
+            if final_wdl is None:
+                final_wdl = self.game.state.adjudicated_wdl(
+                    active_game.root.position,
+                    TerminationReason.MAXIMUM_PLIES,
+                )
             return self._complete(active_game, final_wdl, TerminationReason.MAXIMUM_PLIES)
         return None
 
@@ -355,6 +361,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if self.restart_archive is not None:
             self.restart_archive.close()
             self.restart_archive = None
+        self.game.close()
 
     def _prepare_restart_archive(self, parameters: ResolvedSelfPlayParameters) -> None:
         match parameters.start_position:

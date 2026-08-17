@@ -5,7 +5,7 @@ from math import isclose
 from typing import TypeVar
 
 from src.experiment.generation_schedule import FloatGenerationSchedule
-from src.games.contracts import GameStateContract, WdlTarget
+from src.games.contracts import GameStateContract, TerminalOracle, WdlTarget
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
@@ -54,6 +54,7 @@ def retain_policy(observation: SearchObservation, maximum_entries: int) -> Polic
 def materialize_completed_game(
     game: CompletedSelfPlayGame,
     state: GameStateContract[PositionT],
+    terminal_oracle: TerminalOracle[PositionT] | None,
     targets: TrainingTargetLayout,
     maximum_policy_entries: int,
     value_discount_per_ply: FloatGenerationSchedule,
@@ -65,7 +66,7 @@ def materialize_completed_game(
 
     positions = _reconstruct_trajectory(game, state)
     observations = {observation.ply: observation for observation in game.observations}
-    _validate_result(game, state, positions[-1])
+    _validate_result(game, state, terminal_oracle, positions[-1])
 
     samples: list[ReplaySample] = []
     policies_truncated = 0
@@ -163,6 +164,7 @@ def _reconstruct_trajectory(
 def _validate_result(
     game: CompletedSelfPlayGame,
     state: GameStateContract[PositionT],
+    terminal_oracle: TerminalOracle[PositionT] | None,
     final_position: PositionT,
 ) -> None:
     match game.termination_reason:
@@ -170,7 +172,11 @@ def _validate_result(
             expected = state.natural_terminal_wdl(final_position)
             if expected is None:
                 raise ValueError('Naturally terminated game does not end in a terminal position.')
-        case TerminationReason.MAXIMUM_PLIES | TerminationReason.ADJUDICATION:
+        case TerminationReason.MAXIMUM_PLIES:
+            expected = None if terminal_oracle is None else terminal_oracle.probe_wdl(final_position)
+            if expected is None:
+                expected = state.adjudicated_wdl(final_position, game.termination_reason)
+        case TerminationReason.ADJUDICATION:
             expected = state.adjudicated_wdl(final_position, game.termination_reason)
         case TerminationReason.RESIGNATION:
             if state.natural_terminal_wdl(final_position) is not None:

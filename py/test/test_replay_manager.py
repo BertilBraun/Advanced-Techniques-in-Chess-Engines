@@ -6,7 +6,7 @@ import pytest
 from AlphaZeroCpp import GameSearchVisit
 
 from src.experiment.generation_schedule import ConstantSchedule
-from src.games.contracts import GameStateContract, Player, WdlTarget
+from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
@@ -157,6 +157,7 @@ def test_shared_materialization_reconstructs_perspective_and_trajectory_targets(
     materialized = materialize_completed_game(
         _completed_game(),
         LINEAR_STATE_CONTRACT,
+        None,
         _target_layout(),
         1,
         UNDISCOUNTED_VALUES,
@@ -205,6 +206,7 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
     materialized = materialize_completed_game(
         game,
         LINEAR_STATE_CONTRACT,
+        None,
         targets,
         maximum_policy_entries=3,
         value_discount_per_ply=UNDISCOUNTED_VALUES,
@@ -229,6 +231,7 @@ def test_remaining_game_length_uses_exact_completed_trajectory_boundary() -> Non
     materialized = materialize_completed_game(
         _completed_game(),
         LINEAR_STATE_CONTRACT,
+        None,
         targets,
         3,
         UNDISCOUNTED_VALUES,
@@ -246,6 +249,7 @@ def test_materialization_uniformly_blurs_wdl_by_actual_remaining_game_plies() ->
     materialized = materialize_completed_game(
         _completed_game(),
         LINEAR_STATE_CONTRACT,
+        None,
         _target_layout(),
         3,
         ConstantSchedule[float](value=0.5),
@@ -258,6 +262,36 @@ def test_materialization_uniformly_blurs_wdl_by_actual_remaining_game_plies() ->
         draw=1.0 / 6.0,
         loss=1.0 / 6.0,
     )
+
+
+class WinningTerminalOracle(TerminalOracle[LinearPosition]):
+    def probe_wdl(self, position: LinearPosition) -> WdlTarget | None:
+        assert len(position.action_ids) == 3
+        return WdlTarget(win=1.0, draw=0.0, loss=0.0)
+
+
+def test_materialization_revalidates_maximum_ply_result_with_terminal_oracle() -> None:
+    natural_game = _completed_game()
+    game = CompletedSelfPlayGame.model_validate(
+        {
+            **natural_game.model_dump(),
+            'action_ids': natural_game.action_ids[:3],
+            'observations': natural_game.observations[:3],
+            'final_wdl': WdlTarget(win=1.0, draw=0.0, loss=0.0),
+            'termination_reason': TerminationReason.MAXIMUM_PLIES,
+        }
+    )
+
+    materialized = materialize_completed_game(
+        game,
+        LINEAR_STATE_CONTRACT,
+        WinningTerminalOracle(),
+        _target_layout(),
+        3,
+        UNDISCOUNTED_VALUES,
+    )
+
+    assert materialized.samples[-1].wdl_target == WdlTarget(win=1.0, draw=0.0, loss=0.0)
 
 
 def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> None:
@@ -291,6 +325,7 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
         configuration,
         model_generation=2,
         value_discount_per_ply=UNDISCOUNTED_VALUES,
+        terminal_oracle=None,
     )
 
     ingestion = manager.ingest_available_games(2)
@@ -317,6 +352,7 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
         configuration,
         model_generation=2,
         value_discount_per_ply=UNDISCOUNTED_VALUES,
+        terminal_oracle=None,
     )
     assert reopened.live_samples == 4
     reopened.close()
@@ -344,6 +380,7 @@ def test_replay_manager_keeps_malformed_game_for_inspection(tmp_path: Path) -> N
         configuration,
         model_generation=0,
         value_discount_per_ply=UNDISCOUNTED_VALUES,
+        terminal_oracle=None,
     )
 
     with pytest.raises(ValueError):
@@ -396,6 +433,7 @@ def test_replay_ingestion_updates_central_resignation_state(tmp_path: Path) -> N
         replay_configuration,
         model_generation=2,
         value_discount_per_ply=UNDISCOUNTED_VALUES,
+        terminal_oracle=None,
         resignation_calibrator=calibrator,
     )
 

@@ -9,7 +9,7 @@ import pytest
 from AlphaZeroCpp import GameSearchVisit
 
 from src.games.implementation import GameImplementation
-from src.games.contracts import WdlTarget
+from src.games.contracts import TerminalOracle, WdlTarget
 from src.self_play.parameters import (
     RandomOpeningStartParameters,
     ResolvedSelfPlayParameters,
@@ -160,12 +160,16 @@ class FakeGame:
         restart_parameters: RestartStateStartParameters | None = None,
         force_fast_search_after_ply: int | None = None,
         resignation_configuration: CalibratedResignationConfiguration | None = None,
+        maximum_game_plies: int | None = None,
+        terminal_oracle: TerminalOracle[FakePosition] | None = None,
     ) -> None:
         self.search = FakeSearch()
         self.maximum_random_opening_plies = maximum_random_opening_plies
         self.restart_parameters = restart_parameters
         self.force_fast_search_after_ply = force_fast_search_after_ply
         self.resignation_configuration = resignation_configuration
+        self.maximum_game_plies = maximum_game_plies
+        self.terminal_oracle = terminal_oracle
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
         start_position = self.restart_parameters
@@ -188,11 +192,15 @@ class FakeGame:
             starting_temperature=1.0,
             final_temperature=1.0,
             greedy_after_ply=1,
-            maximum_game_plies=None,
+            maximum_game_plies=self.maximum_game_plies,
             primary_sample_weight=1.0,
             value_discount_per_ply=1.0,
             force_fast_search_after_ply=self.force_fast_search_after_ply,
         )
+
+    def close(self) -> None:
+        if self.terminal_oracle is not None:
+            self.terminal_oracle.close()
 
     def create_native_search(
         self,
@@ -205,6 +213,16 @@ class FakeGame:
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> ResolvedSelfPlayParameters:
         return parameters
+
+
+class RecordingTerminalOracle(TerminalOracle[FakePosition]):
+    def __init__(self, result: WdlTarget | None) -> None:
+        self.result = result
+        self.probed_positions: list[FakePosition] = []
+
+    def probe_wdl(self, position: FakePosition) -> WdlTarget | None:
+        self.probed_positions.append(position)
+        return self.result
 
 
 def checkpoint(path: Path, generation: int) -> CheckpointReference:
@@ -263,6 +281,48 @@ def test_worker_owns_shared_search_move_selection_and_generation_transition(tmp_
     assert game.search.generations == [1]
     assert statistics.model_generation == 1
     assert statistics.completed_searches == 9
+
+
+def test_terminal_oracle_is_probed_only_at_maximum_ply(tmp_path: Path) -> None:
+    oracle_result = WdlTarget(win=1.0, draw=0.0, loss=0.0)
+    oracle = RecordingTerminalOracle(oracle_result)
+    game = FakeGame(maximum_game_plies=2, terminal_oracle=oracle)
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path,
+    )
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    worker.run_batch()
+    assert oracle.probed_positions == []
+    worker.run_batch()
+
+    completed = CompletedSelfPlayGame.model_validate_json(next(tmp_path.glob('*.json')).read_text(encoding='utf-8'))
+    assert oracle.probed_positions == [FakePosition(2)]
+    assert completed.final_wdl == oracle_result
+    assert completed.termination_reason is TerminationReason.MAXIMUM_PLIES
+
+
+def test_uncovered_maximum_ply_position_uses_game_adjudication(tmp_path: Path) -> None:
+    oracle = RecordingTerminalOracle(None)
+    game = FakeGame(maximum_game_plies=1, terminal_oracle=oracle)
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path,
+    )
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    worker.run_batch()
+
+    completed = CompletedSelfPlayGame.model_validate_json(next(tmp_path.glob('*.json')).read_text(encoding='utf-8'))
+    assert oracle.probed_positions == [FakePosition(1)]
+    assert completed.final_wdl == WdlTarget(win=0.0, draw=1.0, loss=0.0)
 
 
 def test_worker_replaces_roots_when_search_arena_capacity_changes(tmp_path: Path) -> None:
