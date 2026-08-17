@@ -42,6 +42,6 @@ training:
           num_value_channels: 1
           value_fc_size: 32
     promotion:
-      decay: 0.99
+      decay: 0.8
       warmup_quanta: 10
       maximum_relative_loss: 1.01

@@ -26,8 +26,8 @@ run:
 training:
   save_path: py/training_data/production/vast-chess-8gpu-optimal
   network:
-    num_layers: 12
-    hidden_size: 112
+    num_layers: 6
+    hidden_size: 64
     residual_context:
       kind: global_pooling
       placement: every_second_block
@@ -93,6 +93,45 @@ training:
     minimum_free_disk_gib: 10.0
     resource_telemetry_interval_seconds: 5.0
   random_seed: 20260811
+  progressive_model_sizing:
+    models:
+      - model_id: chess-6x64
+        training_start_days: 0.0
+        network:
+          num_layers: 6
+          hidden_size: 64
+          residual_context:
+            kind: global_pooling
+            placement: every_second_block
+          num_policy_channels: 4
+          num_value_channels: 2
+          value_fc_size: 48
+      - model_id: chess-9x88
+        training_start_days: 0.75
+        network:
+          num_layers: 9
+          hidden_size: 88
+          residual_context:
+            kind: global_pooling
+            placement: every_second_block
+          num_policy_channels: 4
+          num_value_channels: 2
+          value_fc_size: 48
+      - model_id: chess-12x112
+        training_start_days: 1.5
+        network:
+          num_layers: 12
+          hidden_size: 112
+          residual_context:
+            kind: global_pooling
+            placement: every_second_block
+          num_policy_channels: 4
+          num_value_channels: 2
+          value_fc_size: 48
+    promotion:
+      decay: 0.8
+      warmup_quanta: 10
+      maximum_relative_loss: 1.01
 evaluation:
   cadence_seconds: 1200
   job_timeout_seconds: 1800

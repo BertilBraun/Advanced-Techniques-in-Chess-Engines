@@ -281,3 +281,4 @@ def test_checked_in_progressive_configuration_defines_all_three_models() -> None
         'medium',
         'large',
     )
+    assert training.progressive_model_sizing.promotion.decay == pytest.approx(0.8)

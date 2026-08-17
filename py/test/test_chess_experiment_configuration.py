@@ -400,6 +400,22 @@ def test_eight_gpu_chess_optimal_configuration_resolves_distilled_curriculum() -
         1_500_000,
     )
     assert training.lifecycle.credit.replay_ratio == 8
+    progressive = training.progressive_model_sizing
+    assert progressive is not None
+    assert tuple(model.model_id for model in progressive.models) == (
+        'chess-6x64',
+        'chess-9x88',
+        'chess-12x112',
+    )
+    assert tuple(model.training_start_days for model in progressive.models) == pytest.approx((0.0, 0.75, 1.5))
+    assert tuple((model.network.num_layers, model.network.hidden_size) for model in progressive.models) == (
+        (6, 64),
+        (9, 88),
+        (12, 112),
+    )
+    assert progressive.promotion.decay == pytest.approx(0.8)
+    assert progressive.promotion.warmup_quanta == 10
+    assert progressive.promotion.maximum_relative_loss == pytest.approx(1.01)
     assert tuple(
         training.trainer.learning_rate.value_at(generation) for generation in (0, 100, 350, 550)
     ) == pytest.approx((0.005, 0.004, 0.003, 0.002))

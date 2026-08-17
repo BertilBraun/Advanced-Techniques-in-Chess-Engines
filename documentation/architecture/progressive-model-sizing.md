@@ -45,7 +45,7 @@ the progressive state from naming different architectures.
 
 The promotion configuration explicitly owns:
 
-- EMA decay `d`, constrained to `0 < d < 1`;
+- EMA decay `d`, constrained to `0 < d < 1` and normally configured as `0.8`;
 - a positive number of paired warmup quanta;
 - the maximum candidate-to-active relative loss, normally `1.01`.
 
