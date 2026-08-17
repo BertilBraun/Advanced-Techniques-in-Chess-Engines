@@ -4,11 +4,16 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 
-from src.self_play.configuration import BatchedInferenceParams
+from src.self_play.configuration import (
+    BatchedInferenceParams,
+    MonteCarloTreeSearchConfiguration,
+    SearchAlgorithmConfiguration,
+)
 from src.util.frozen_model import FrozenModel
 
 
 class EvaluationSearchConfiguration(FrozenModel):
+    algorithm: SearchAlgorithmConfiguration = MonteCarloTreeSearchConfiguration()
     searches_per_move: int = Field(gt=0)
     parallel_searches: int = Field(gt=0)
     exploration_constant: float = Field(gt=0.0)

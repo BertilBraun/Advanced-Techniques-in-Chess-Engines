@@ -19,11 +19,16 @@ from src.experiment.configuration import (
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.training import ChessImplementation
 from src.games.go.configuration import GoExperimentConfiguration
-from src.self_play.configuration import EnabledForcedPlayoutConfiguration
+from src.self_play.configuration import (
+    EnabledForcedPlayoutConfiguration,
+    MonteCarloGraphSearchConfiguration,
+    MonteCarloTreeSearchConfiguration,
+)
 from src.self_play.parameters import (
     FirstPlayUrgencyParameters,
     ParentValueFirstPlayUrgencyParameters,
     ReducedParentValueFirstPlayUrgencyParameters,
+    MonteCarloGraphSearchAlgorithmParameters,
     ZeroFirstPlayUrgencyParameters,
 )
 from src.training.network import (
@@ -127,6 +132,26 @@ def test_forced_playout_screen_resolves_canonical_coefficient() -> None:
 def test_enabled_forced_playout_coefficient_must_be_positive_and_finite(coefficient: float) -> None:
     with pytest.raises(ValidationError):
         EnabledForcedPlayoutConfiguration.model_validate({'kind': 'enabled', 'coefficient': coefficient})
+
+
+def test_tree_search_remains_the_default_control() -> None:
+    configuration = load_chess_experiment_configuration(CHESS_EXPERIMENT_TEMPLATE_PATH)
+
+    assert configuration.chess.self_play.search.algorithm == MonteCarloTreeSearchConfiguration()
+
+
+def test_graph_search_resolves_separately_from_tree_search() -> None:
+    configuration = MonteCarloGraphSearchConfiguration.model_validate(
+        {'kind': 'graph', 'transposition_value_threshold': 0.02}
+    )
+
+    assert configuration.resolve() == MonteCarloGraphSearchAlgorithmParameters(transposition_value_threshold=0.02)
+
+
+@pytest.mark.parametrize('threshold', (-0.01, float('inf'), float('nan')))
+def test_graph_search_threshold_must_be_finite_and_nonnegative(threshold: float) -> None:
+    with pytest.raises(ValidationError):
+        MonteCarloGraphSearchConfiguration.model_validate({'kind': 'graph', 'transposition_value_threshold': threshold})
 
 
 def test_game_experiments_extend_the_shared_run_and_training_configuration() -> None:

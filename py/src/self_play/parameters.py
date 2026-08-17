@@ -71,6 +71,26 @@ FirstPlayUrgencyParameters: TypeAlias = (
 
 
 @dataclass(frozen=True)
+class MonteCarloTreeSearchAlgorithmParameters:
+    kind: Literal['tree'] = 'tree'
+
+
+@dataclass(frozen=True)
+class MonteCarloGraphSearchAlgorithmParameters:
+    transposition_value_threshold: float = 0.01
+    kind: Literal['graph'] = 'graph'
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.transposition_value_threshold) or self.transposition_value_threshold < 0.0:
+            raise ValueError('Graph transposition value threshold must be finite and nonnegative.')
+
+
+SearchAlgorithmParameters: TypeAlias = (
+    MonteCarloTreeSearchAlgorithmParameters | MonteCarloGraphSearchAlgorithmParameters
+)
+
+
+@dataclass(frozen=True)
 class ResolvedSelfPlayParameters:
     start_position: StartPositionParameters
     full_search_probability: float
@@ -80,6 +100,7 @@ class ResolvedSelfPlayParameters:
     forced_playout_coefficient: float
     exploration_constant: float
     first_play_urgency: FirstPlayUrgencyParameters
+    search_algorithm: SearchAlgorithmParameters
     dirichlet_alpha: float
     dirichlet_epsilon: float
     retained_root_visit_fraction: float

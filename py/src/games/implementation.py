@@ -10,6 +10,8 @@ from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration
 from src.self_play.parameters import (
     ParentValueFirstPlayUrgencyParameters,
+    MonteCarloGraphSearchAlgorithmParameters,
+    MonteCarloTreeSearchAlgorithmParameters,
     ReducedParentValueFirstPlayUrgencyParameters,
     ResolvedSelfPlayParameters,
     ZeroFirstPlayUrgencyParameters,
@@ -79,6 +81,8 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
         from AlphaZeroCpp import (
             FirstPlayUrgencyKind,
             FirstPlayUrgencyParameters,
+            MonteCarloGraphSearchParameters,
+            MonteCarloTreeSearchParameters,
             SelfPlaySearchParameters,
             TreeSearchParameters,
         )
@@ -94,6 +98,12 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
                     reduction,
                 )
 
+        match parameters.search_algorithm:
+            case MonteCarloTreeSearchAlgorithmParameters():
+                search_algorithm = MonteCarloTreeSearchParameters()
+            case MonteCarloGraphSearchAlgorithmParameters(transposition_value_threshold=transposition_value_threshold):
+                search_algorithm = MonteCarloGraphSearchParameters(transposition_value_threshold)
+
         return SelfPlaySearchParameters(
             parallel_searches=parameters.parallel_searches,
             full_searches=parameters.full_searches,
@@ -103,6 +113,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
                 first_play_urgency=first_play_urgency,
                 forced_playout_coefficient=parameters.forced_playout_coefficient,
                 value_discount_per_ply=parameters.value_discount_per_ply,
+                algorithm=search_algorithm,
             ),
             dirichlet_alpha=parameters.dirichlet_alpha,
             dirichlet_epsilon=parameters.dirichlet_epsilon,

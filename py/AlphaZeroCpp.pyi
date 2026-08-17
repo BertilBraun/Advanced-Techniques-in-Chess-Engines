@@ -49,6 +49,9 @@ __all__ = [
     'InferenceDevice',
     'InferenceConfiguration',
     'InferenceStatistics',
+    'GraphSearchStatistics',
+    'MonteCarloGraphSearchParameters',
+    'MonteCarloTreeSearchParameters',
     'TreeSearchParameters',
     'WdlPrediction',
     'encode_board_packed_bytes',
@@ -126,6 +129,42 @@ class FirstPlayUrgencyParameters:
     kind: FirstPlayUrgencyKind
     reduction: float
 
+class MonteCarloTreeSearchParameters:
+    def __init__(self) -> None: ...
+
+class MonteCarloGraphSearchParameters:
+    def __init__(
+        self,
+        transposition_value_threshold: float = 0.01,
+        transpositions_enabled: bool = True,
+    ) -> None: ...
+    transposition_value_threshold: float
+    transpositions_enabled: bool
+
+SearchAlgorithmParameters = MonteCarloTreeSearchParameters | MonteCarloGraphSearchParameters
+
+class GraphSearchStatistics:
+    transposition_table_probes: int
+    transposition_table_hits: int
+    transposition_links: int
+    unique_nodes_created: int
+    edges_created: int
+    evaluations_avoided: int
+    transposition_corrections: int
+    correction_clips: int
+    continued_transpositions: int
+    cycle_cutoffs: int
+    nodes_retained: int
+    nodes_reclaimed: int
+    edges_reclaimed: int
+    nodes_pruned: int
+    hash_collision_checks: int
+    peak_live_nodes: int
+    peak_live_edges: int
+    identity_lookup_nanoseconds: int
+    reroot_nanoseconds: int
+    pruning_nanoseconds: int
+
 class TreeSearchParameters:
     def __init__(
         self,
@@ -133,11 +172,13 @@ class TreeSearchParameters:
         first_play_urgency: FirstPlayUrgencyParameters,
         forced_playout_coefficient: float,
         value_discount_per_ply: float,
+        algorithm: SearchAlgorithmParameters = ...,
     ) -> None: ...
     exploration_constant: float
     first_play_urgency: FirstPlayUrgencyParameters
     forced_playout_coefficient: float
     value_discount_per_ply: float
+    algorithm: SearchAlgorithmParameters
 
 class BatchedInferenceParameters:
     def __init__(
@@ -156,10 +197,12 @@ class AnalysisParameters:
         parallel_searches: int,
         exploration_constant: float,
         inference: BatchedInferenceParameters,
+        algorithm: SearchAlgorithmParameters = ...,
     ) -> None: ...
     parallel_searches: int
     exploration_constant: float
     inference: BatchedInferenceParameters
+    algorithm: SearchAlgorithmParameters
 
 class ActionAnalysisCandidate:
     @property
@@ -263,6 +306,8 @@ class GoPosition9:
 
 class GoSearchRoot7:
     @property
+    def graph_statistics(self) -> GraphSearchStatistics: ...
+    @property
     def position(self) -> GoPosition7: ...
     @property
     def is_terminal(self) -> bool: ...
@@ -275,6 +320,8 @@ class GoSearchRoot7:
     def play(self, action_id: int) -> None: ...
 
 class GoSearchRoot9:
+    @property
+    def graph_statistics(self) -> GraphSearchStatistics: ...
     @property
     def position(self) -> GoPosition9: ...
     @property
@@ -565,6 +612,8 @@ class ChessSearchRoot:
         """
     def play(self, action_id: int) -> None: ...
     def reset(self) -> None: ...
+    @property
+    def graph_statistics(self) -> GraphSearchStatistics: ...
     @property
     def arena_capacity(self) -> int: ...
     @property

@@ -12,6 +12,8 @@ from src.experiment.generation_schedule import (
 )
 from src.self_play.parameters import (
     ParentValueFirstPlayUrgencyParameters,
+    MonteCarloGraphSearchAlgorithmParameters,
+    MonteCarloTreeSearchAlgorithmParameters,
     RandomOpeningStartParameters,
     ReducedParentValueFirstPlayUrgencyParameters,
     ResolvedSelfPlayParameters,
@@ -86,7 +88,37 @@ FirstPlayUrgencyConfiguration: TypeAlias = Annotated[
 ]
 
 
+class MonteCarloTreeSearchConfiguration(FrozenModel):
+    kind: Literal['tree'] = 'tree'
+
+    def resolve(self) -> MonteCarloTreeSearchAlgorithmParameters:
+        return MonteCarloTreeSearchAlgorithmParameters()
+
+
+class MonteCarloGraphSearchConfiguration(FrozenModel):
+    kind: Literal['graph'] = 'graph'
+    transposition_value_threshold: float = Field(default=0.01, ge=0.0)
+
+    @model_validator(mode='after')
+    def validate_threshold(self) -> MonteCarloGraphSearchConfiguration:
+        if not isfinite(self.transposition_value_threshold):
+            raise ValueError('Graph transposition value threshold must be finite.')
+        return self
+
+    def resolve(self) -> MonteCarloGraphSearchAlgorithmParameters:
+        return MonteCarloGraphSearchAlgorithmParameters(
+            transposition_value_threshold=self.transposition_value_threshold,
+        )
+
+
+SearchAlgorithmConfiguration: TypeAlias = Annotated[
+    MonteCarloTreeSearchConfiguration | MonteCarloGraphSearchConfiguration,
+    Field(discriminator='kind'),
+]
+
+
 class SelfPlaySearchParams(FrozenModel):
+    algorithm: SearchAlgorithmConfiguration = MonteCarloTreeSearchConfiguration()
     full_searches: IntegerGenerationSchedule
     fast_searches: IntegerGenerationSchedule
     parallel_searches: int = Field(gt=0)
@@ -220,6 +252,7 @@ class SelfPlayConfiguration(FrozenModel):
             forced_playout_coefficient=search.forced_playouts.resolved_coefficient(),
             exploration_constant=search.exploration_constant.value_at(model_generation),
             first_play_urgency=search.first_play_urgency.resolve(model_generation),
+            search_algorithm=search.algorithm.resolve(),
             dirichlet_alpha=search.dirichlet_alpha.value_at(model_generation),
             dirichlet_epsilon=search.dirichlet_epsilon.value_at(model_generation),
             retained_root_visit_fraction=self.retained_root_visit_fraction.value_at(model_generation),

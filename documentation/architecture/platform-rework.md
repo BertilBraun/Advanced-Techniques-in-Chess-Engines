@@ -128,6 +128,10 @@ The shared Python self-play worker, evaluation match runner, and interactive
 chess engine consume the same native search implementation through their
 coarse typed bindings.
 
+Monte-Carlo tree search remains the default/control algorithm. The separately configurable full shared-statistics
+graph path, its semantic state-identity contract, and its prepared benchmark matrix are specified in
+[Monte-Carlo graph search](monte-carlo-graph-search.md).
+
 ### Game specialization
 
 Chess and Go are concrete first-class implementations. Shared orchestration,

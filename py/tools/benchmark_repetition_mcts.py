@@ -10,6 +10,7 @@ import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Literal
 
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
@@ -19,6 +20,8 @@ from AlphaZeroCpp import (
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
     InferenceConfiguration,
+    MonteCarloGraphSearchParameters,
+    MonteCarloTreeSearchParameters,
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )
@@ -59,6 +62,29 @@ class BenchmarkResult:
     inference_model_positions: int
     inference_average_batch_size: float
     inference_batch_size_distribution: tuple[BatchSizeCount, ...]
+    graph: GraphSearchMetrics
+
+
+@dataclass(frozen=True)
+class GraphSearchMetrics:
+    transposition_table_probes: int = 0
+    transposition_table_hits: int = 0
+    transposition_links: int = 0
+    unique_nodes_created: int = 0
+    edges_created: int = 0
+    evaluations_avoided: int = 0
+    transposition_corrections: int = 0
+    correction_clips: int = 0
+    continued_transpositions: int = 0
+    cycle_cutoffs: int = 0
+    nodes_retained: int = 0
+    nodes_reclaimed: int = 0
+    edges_reclaimed: int = 0
+    nodes_pruned: int = 0
+    hash_collision_checks: int = 0
+    identity_lookup_nanoseconds: int = 0
+    reroot_nanoseconds: int = 0
+    pruning_nanoseconds: int = 0
 
 
 @dataclass(frozen=True)
@@ -75,6 +101,8 @@ class Arguments:
     gpu_sampling_interval_seconds: float
     ready_file: Path | None
     start_barrier: Path | None
+    algorithm: Literal['tree', 'graph']
+    transposition_value_threshold: float
 
 
 @dataclass(frozen=True)
@@ -82,6 +110,83 @@ class SearchStepsResult:
     roots: list[ChessSearchRoot]
     terminal_roots: int
     searches_completed: int
+    graph: GraphSearchMetrics
+
+
+def graph_metrics(roots: list[ChessSearchRoot]) -> GraphSearchMetrics:
+    result = GraphSearchMetrics()
+    for root in roots:
+        statistics = root.graph_statistics
+        result = add_graph_metrics(
+            result,
+            GraphSearchMetrics(
+                transposition_table_probes=statistics.transposition_table_probes,
+                transposition_table_hits=statistics.transposition_table_hits,
+                transposition_links=statistics.transposition_links,
+                unique_nodes_created=statistics.unique_nodes_created,
+                edges_created=statistics.edges_created,
+                evaluations_avoided=statistics.evaluations_avoided,
+                transposition_corrections=statistics.transposition_corrections,
+                correction_clips=statistics.correction_clips,
+                continued_transpositions=statistics.continued_transpositions,
+                cycle_cutoffs=statistics.cycle_cutoffs,
+                nodes_retained=statistics.nodes_retained,
+                nodes_reclaimed=statistics.nodes_reclaimed,
+                edges_reclaimed=statistics.edges_reclaimed,
+                nodes_pruned=statistics.nodes_pruned,
+                hash_collision_checks=statistics.hash_collision_checks,
+                identity_lookup_nanoseconds=statistics.identity_lookup_nanoseconds,
+                reroot_nanoseconds=statistics.reroot_nanoseconds,
+                pruning_nanoseconds=statistics.pruning_nanoseconds,
+            ),
+        )
+    return result
+
+
+def subtract_graph_metrics(after: GraphSearchMetrics, before: GraphSearchMetrics) -> GraphSearchMetrics:
+    return GraphSearchMetrics(
+        transposition_table_probes=after.transposition_table_probes - before.transposition_table_probes,
+        transposition_table_hits=after.transposition_table_hits - before.transposition_table_hits,
+        transposition_links=after.transposition_links - before.transposition_links,
+        unique_nodes_created=after.unique_nodes_created - before.unique_nodes_created,
+        edges_created=after.edges_created - before.edges_created,
+        evaluations_avoided=after.evaluations_avoided - before.evaluations_avoided,
+        transposition_corrections=after.transposition_corrections - before.transposition_corrections,
+        correction_clips=after.correction_clips - before.correction_clips,
+        continued_transpositions=after.continued_transpositions - before.continued_transpositions,
+        cycle_cutoffs=after.cycle_cutoffs - before.cycle_cutoffs,
+        nodes_retained=after.nodes_retained - before.nodes_retained,
+        nodes_reclaimed=after.nodes_reclaimed - before.nodes_reclaimed,
+        edges_reclaimed=after.edges_reclaimed - before.edges_reclaimed,
+        nodes_pruned=after.nodes_pruned - before.nodes_pruned,
+        hash_collision_checks=after.hash_collision_checks - before.hash_collision_checks,
+        identity_lookup_nanoseconds=after.identity_lookup_nanoseconds - before.identity_lookup_nanoseconds,
+        reroot_nanoseconds=after.reroot_nanoseconds - before.reroot_nanoseconds,
+        pruning_nanoseconds=after.pruning_nanoseconds - before.pruning_nanoseconds,
+    )
+
+
+def add_graph_metrics(left: GraphSearchMetrics, right: GraphSearchMetrics) -> GraphSearchMetrics:
+    return GraphSearchMetrics(
+        transposition_table_probes=left.transposition_table_probes + right.transposition_table_probes,
+        transposition_table_hits=left.transposition_table_hits + right.transposition_table_hits,
+        transposition_links=left.transposition_links + right.transposition_links,
+        unique_nodes_created=left.unique_nodes_created + right.unique_nodes_created,
+        edges_created=left.edges_created + right.edges_created,
+        evaluations_avoided=left.evaluations_avoided + right.evaluations_avoided,
+        transposition_corrections=left.transposition_corrections + right.transposition_corrections,
+        correction_clips=left.correction_clips + right.correction_clips,
+        continued_transpositions=left.continued_transpositions + right.continued_transpositions,
+        cycle_cutoffs=left.cycle_cutoffs + right.cycle_cutoffs,
+        nodes_retained=left.nodes_retained + right.nodes_retained,
+        nodes_reclaimed=left.nodes_reclaimed + right.nodes_reclaimed,
+        edges_reclaimed=left.edges_reclaimed + right.edges_reclaimed,
+        nodes_pruned=left.nodes_pruned + right.nodes_pruned,
+        hash_collision_checks=left.hash_collision_checks + right.hash_collision_checks,
+        identity_lookup_nanoseconds=left.identity_lookup_nanoseconds + right.identity_lookup_nanoseconds,
+        reroot_nanoseconds=left.reroot_nanoseconds + right.reroot_nanoseconds,
+        pruning_nanoseconds=left.pruning_nanoseconds + right.pruning_nanoseconds,
+    )
 
 
 def load_openings(path: Path, number_of_games: int) -> tuple[str, ...]:
@@ -150,9 +255,15 @@ def run_search_steps(
 ) -> SearchStepsResult:
     terminal_roots = 0
     searches_completed = 0
+    measured_graph = GraphSearchMetrics()
     for _ in range(steps):
         visits_before = sum(root.visits for root in roots)
+        graph_before = graph_metrics(roots)
         search_results = search.search([ChessSelfPlaySearchRequest(root, False) for root in roots])
+        measured_graph = add_graph_metrics(
+            measured_graph,
+            subtract_graph_metrics(graph_metrics(roots), graph_before),
+        )
         searches_completed += sum(result.root.visits for result in search_results.results) - visits_before
 
         next_roots: list[ChessSearchRoot] = []
@@ -167,6 +278,7 @@ def run_search_steps(
         roots=roots,
         terminal_roots=terminal_roots,
         searches_completed=searches_completed,
+        graph=measured_graph,
     )
 
 
@@ -178,6 +290,11 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
     if args.gpu_sampling_interval_seconds < 0:
         raise ValueError('GPU sampling interval cannot be negative.')
 
+    search_algorithm = (
+        MonteCarloTreeSearchParameters()
+        if args.algorithm == 'tree'
+        else MonteCarloGraphSearchParameters(args.transposition_value_threshold)
+    )
     search = ChessSelfPlaySearch(
         InferenceConfiguration(args.device, str(args.model)),
         SelfPlaySearchParameters(
@@ -186,6 +303,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             args.searches,
             TreeSearchParameters(
                 1.0,
+                search_algorithm,
                 FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO),
                 0.0,
                 1.0,
@@ -269,6 +387,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             measurement_model_positions / measurement_model_calls if measurement_model_calls else 0.0
         ),
         inference_batch_size_distribution=batch_size_distribution,
+        graph=measurement_result.graph,
     )
 
 
@@ -286,6 +405,8 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--gpu-sampling-interval-seconds', type=float, default=1.0)
     parser.add_argument('--ready-file', type=Path)
     parser.add_argument('--start-barrier', type=Path)
+    parser.add_argument('--algorithm', choices=('tree', 'graph'), default='tree')
+    parser.add_argument('--transposition-value-threshold', type=float, default=0.01)
     namespace = parser.parse_args()
     return Arguments(
         model=namespace.model,
@@ -300,6 +421,8 @@ def parse_arguments() -> Arguments:
         gpu_sampling_interval_seconds=namespace.gpu_sampling_interval_seconds,
         ready_file=namespace.ready_file,
         start_barrier=namespace.start_barrier,
+        algorithm=namespace.algorithm,
+        transposition_value_threshold=namespace.transposition_value_threshold,
     )
 
 

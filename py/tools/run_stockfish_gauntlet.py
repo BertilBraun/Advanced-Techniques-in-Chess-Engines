@@ -37,7 +37,12 @@ from src.games.chess.interactive.configuration import InferenceTarget, Interacti
 from src.games.chess.interactive.engine import InteractiveEngine
 from src.games.chess.stockfish import StockfishClient, StockfishFixedNodesMatchEngine
 from src.games.chess.training import ChessImplementation
-from src.self_play.configuration import BatchedInferenceParams
+from src.self_play.configuration import (
+    BatchedInferenceParams,
+    MonteCarloGraphSearchConfiguration,
+    MonteCarloTreeSearchConfiguration,
+    SearchAlgorithmConfiguration,
+)
 from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -50,6 +55,7 @@ class FixedModelSearchBudget(FrozenModel):
     inference_workers: int = Field(gt=0)
     inference_batch_size: int = Field(gt=0)
     outstanding_batches_per_worker: int = Field(gt=0, le=2)
+    algorithm: SearchAlgorithmConfiguration = MonteCarloTreeSearchConfiguration()
 
 
 class TimedModelSearchBudget(FrozenModel):
@@ -59,6 +65,7 @@ class TimedModelSearchBudget(FrozenModel):
     inference_workers: int = Field(gt=0)
     inference_batch_size: int = Field(gt=0)
     outstanding_batches_per_worker: int = Field(gt=0, le=2)
+    algorithm: SearchAlgorithmConfiguration = MonteCarloTreeSearchConfiguration()
 
 
 ModelSearchBudget: TypeAlias = Annotated[
@@ -203,6 +210,7 @@ class _TimedSearchActionSelector(MatchActionSelector[ChessPosition]):
                 outstanding_batches_per_worker=budget.outstanding_batches_per_worker,
                 maximum_batch_size=budget.inference_batch_size,
                 inference_target=InferenceTarget.CUDA,
+                search_algorithm=budget.algorithm.resolve(),
             )
         )
         self._searches: list[int] = []
@@ -313,6 +321,7 @@ def _search_configuration(
         budget.searches_per_move if isinstance(budget, FixedModelSearchBudget) else budget.parallel_searches + 1
     )
     return EvaluationSearchConfiguration(
+        algorithm=budget.algorithm,
         searches_per_move=searches_per_move,
         parallel_searches=budget.parallel_searches,
         exploration_constant=1.0,
@@ -586,6 +595,13 @@ def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
 
 
 def _model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudget | TimedModelSearchBudget:
+    algorithm: SearchAlgorithmConfiguration
+    if namespace.algorithm == 'tree':
+        algorithm = MonteCarloTreeSearchConfiguration()
+    else:
+        algorithm = MonteCarloGraphSearchConfiguration(
+            transposition_value_threshold=namespace.transposition_value_threshold
+        )
     if namespace.model_searches is not None:
         parallel_searches = 1 if namespace.parallel_searches is None else namespace.parallel_searches
         inference_workers = 1 if namespace.inference_workers is None else namespace.inference_workers
@@ -596,6 +612,7 @@ def _model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudge
             inference_workers=inference_workers,
             inference_batch_size=namespace.inference_batch_size,
             outstanding_batches_per_worker=outstanding_batches,
+            algorithm=algorithm,
         )
     parallel_searches = 64 if namespace.parallel_searches is None else namespace.parallel_searches
     inference_workers = 2 if namespace.inference_workers is None else namespace.inference_workers
@@ -606,6 +623,7 @@ def _model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudge
         inference_workers=inference_workers,
         inference_batch_size=namespace.inference_batch_size,
         outstanding_batches_per_worker=outstanding_batches,
+        algorithm=algorithm,
     )
 
 
@@ -641,6 +659,8 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--inference-workers', type=int)
     parser.add_argument('--inference-batch-size', default=64, type=int)
     parser.add_argument('--outstanding-batches', type=int)
+    parser.add_argument('--algorithm', choices=('tree', 'graph'), default='tree')
+    parser.add_argument('--transposition-value-threshold', type=float, default=0.01)
     parser.add_argument('--output-directory', required=True, type=Path)
     namespace = parser.parse_args()
     if namespace.all_opening_pairs:

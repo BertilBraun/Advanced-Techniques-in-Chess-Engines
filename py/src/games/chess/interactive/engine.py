@@ -11,6 +11,8 @@ from AlphaZeroCpp import (
     ChessAnalysisSession as BoundChessAnalysisSession,
     InferenceDevice,
     InferenceConfiguration,
+    MonteCarloGraphSearchParameters,
+    MonteCarloTreeSearchParameters,
 )
 from src.games.chess.interactive.analysis import (
     AnalysisRequest,
@@ -22,6 +24,10 @@ from src.games.chess.interactive.analysis import (
     TimedMctsAnalysis,
 )
 from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+from src.self_play.parameters import (
+    MonteCarloGraphSearchAlgorithmParameters,
+    MonteCarloTreeSearchAlgorithmParameters,
+)
 
 
 @dataclass(frozen=True)
@@ -52,6 +58,11 @@ class InteractiveEngine:
             model_path=configuration.model_path,
             device=target_mapping[configuration.inference_target],
         )
+        match configuration.search_algorithm:
+            case MonteCarloTreeSearchAlgorithmParameters():
+                search_algorithm = MonteCarloTreeSearchParameters()
+            case MonteCarloGraphSearchAlgorithmParameters(transposition_value_threshold=transposition_value_threshold):
+                search_algorithm = MonteCarloGraphSearchParameters(transposition_value_threshold)
         self._bound_analysis = BoundChessAnalysis(
             runtime_parameters,
             AnalysisParameters(
@@ -62,6 +73,7 @@ class InteractiveEngine:
                     batch_size=batch_size,
                     outstanding_batches_per_worker=configuration.outstanding_batches_per_worker,
                 ),
+                algorithm=search_algorithm,
             ),
         )
 

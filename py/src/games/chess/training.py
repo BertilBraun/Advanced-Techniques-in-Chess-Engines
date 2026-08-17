@@ -97,6 +97,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             forced_playout_coefficient=0.0,
             exploration_constant=configuration.exploration_constant,
             first_play_urgency=ZeroFirstPlayUrgencyParameters(),
+            search_algorithm=configuration.algorithm.resolve(),
             dirichlet_alpha=1.0,
             dirichlet_epsilon=0.0,
         )

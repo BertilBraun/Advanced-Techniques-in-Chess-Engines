@@ -15,6 +15,7 @@ from src.self_play.parameters import (
     ResolvedSelfPlayParameters,
     RestartStateStartParameters,
     ZeroFirstPlayUrgencyParameters,
+    MonteCarloTreeSearchAlgorithmParameters,
 )
 from src.self_play.completed_game import CompletedSelfPlayGame, GameIdentity, SearchObservation
 from src.self_play.completed_game import TerminationReason
@@ -182,6 +183,7 @@ class FakeGame:
             forced_playout_coefficient=0.0,
             exploration_constant=1.0,
             first_play_urgency=ZeroFirstPlayUrgencyParameters(),
+            search_algorithm=MonteCarloTreeSearchAlgorithmParameters(),
             dirichlet_alpha=0.3,
             dirichlet_epsilon=0.25,
             retained_root_visit_fraction=0.5,

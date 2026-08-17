@@ -3,6 +3,7 @@ from pathlib import Path
 from src.evaluation.configuration import StockfishEngineConfiguration
 from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult, EvaluationTerminationReason
 from src.experiment.configuration import load_chess_experiment_configuration
+from src.self_play.configuration import MonteCarloGraphSearchConfiguration
 from tools.run_stockfish_gauntlet import (
     FixedModelSearchBudget,
     GauntletShardResult,
@@ -55,6 +56,20 @@ def test_timed_budget_builds_only_internal_validation_search() -> None:
 
     assert search.searches_per_move == 65
     assert search.parallel_searches == 64
+
+
+def test_graph_strength_budget_preserves_the_algorithm_discriminator() -> None:
+    algorithm = MonteCarloGraphSearchConfiguration(transposition_value_threshold=0.02)
+    budget = FixedModelSearchBudget(
+        searches_per_move=400,
+        parallel_searches=4,
+        inference_workers=1,
+        inference_batch_size=64,
+        outstanding_batches_per_worker=1,
+        algorithm=algorithm,
+    )
+
+    assert _search_configuration(budget).algorithm == algorithm
 
 
 def test_pair_shards_are_balanced_and_contiguous() -> None:
