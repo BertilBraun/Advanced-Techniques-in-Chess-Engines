@@ -14,11 +14,13 @@ from typing import Literal
 
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
+    ChessPosition,
     ChessSearchRoot,
     ChessSelfPlaySearch,
     ChessSelfPlaySearchRequest,
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
+    GameSearchVisit,
     InferenceConfiguration,
     MonteCarloGraphSearchParameters,
     MonteCarloTreeSearchParameters,
@@ -46,6 +48,7 @@ class BenchmarkResult:
     games: int
     warmup_steps: int
     measurement_steps: int
+    minimum_measurement_seconds: float
     target_searches_per_ply: int
     elapsed_seconds: float
     completed_game_plies: int
@@ -95,6 +98,7 @@ class Arguments:
     games: int
     warmup_steps: int
     steps: int
+    minimum_measurement_seconds: float
     searches: int
     parallel_searches: int
     maximum_batch_size: int
@@ -110,6 +114,7 @@ class SearchStepsResult:
     roots: list[ChessSearchRoot]
     terminal_roots: int
     searches_completed: int
+    completed_steps: int
     graph: GraphSearchMetrics
 
 
@@ -189,9 +194,9 @@ def add_graph_metrics(left: GraphSearchMetrics, right: GraphSearchMetrics) -> Gr
     )
 
 
-def load_openings(path: Path, number_of_games: int) -> tuple[str, ...]:
+def load_openings(path: Path, number_of_games: int) -> tuple[ChessPosition, ...]:
     openings = tuple(
-        line.split('\t', maxsplit=1)[1]
+        ChessPosition(line.rsplit('\t', maxsplit=1)[1])
         for line in path.read_text(encoding='utf-8').splitlines()
         if line and not line.startswith('#')
     )
@@ -229,10 +234,10 @@ def sample_gpu_until_stopped(
         samples.append(query_gpu(device_id))
 
 
-def choose_root(result_root: ChessSearchRoot, visits: list[tuple[int, int]]) -> ChessSearchRoot:
+def choose_root(result_root: ChessSearchRoot, visits: list[GameSearchVisit]) -> ChessSearchRoot:
     if not visits:
         raise ValueError('MCTS returned no visits for a nonterminal root.')
-    child_index = max(range(len(visits)), key=lambda index: visits[index][1])
+    child_index = max(range(len(visits)), key=lambda index: visits[index].visit_count)
     return result_root.make_new_root(child_index)
 
 
@@ -250,13 +255,16 @@ def wait_for_synchronized_start(args: Arguments) -> None:
 def run_search_steps(
     search: ChessSelfPlaySearch,
     roots: list[ChessSearchRoot],
-    openings: tuple[str, ...],
+    openings: tuple[ChessPosition, ...],
     steps: int,
+    minimum_elapsed_seconds: float = 0.0,
 ) -> SearchStepsResult:
     terminal_roots = 0
     searches_completed = 0
+    completed_steps = 0
     measured_graph = GraphSearchMetrics()
-    for _ in range(steps):
+    start_time = time.perf_counter()
+    while completed_steps < steps or time.perf_counter() - start_time < minimum_elapsed_seconds:
         visits_before = sum(root.visits for root in roots)
         graph_before = graph_metrics(roots)
         search_results = search.search([ChessSelfPlaySearchRequest(root, False) for root in roots])
@@ -274,10 +282,12 @@ def run_search_steps(
                 root = search.new_root(openings[opening_index])
             next_roots.append(root)
         roots = next_roots
+        completed_steps += 1
     return SearchStepsResult(
         roots=roots,
         terminal_roots=terminal_roots,
         searches_completed=searches_completed,
+        completed_steps=completed_steps,
         graph=measured_graph,
     )
 
@@ -287,6 +297,8 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         raise ValueError('games, steps, and searches must be positive.')
     if args.warmup_steps < 0:
         raise ValueError('warmup steps cannot be negative.')
+    if args.minimum_measurement_seconds < 0:
+        raise ValueError('minimum measurement seconds cannot be negative.')
     if args.gpu_sampling_interval_seconds < 0:
         raise ValueError('GPU sampling interval cannot be negative.')
 
@@ -303,10 +315,10 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             args.searches,
             TreeSearchParameters(
                 1.0,
-                search_algorithm,
                 FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO),
                 0.0,
                 1.0,
+                search_algorithm,
             ),
             0.3,
             0.0,
@@ -338,7 +350,13 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
 
     process_time_start = time.process_time()
     wall_time_start = time.perf_counter()
-    measurement_result = run_search_steps(search, roots, openings, args.steps)
+    measurement_result = run_search_steps(
+        search,
+        roots,
+        openings,
+        args.steps,
+        args.minimum_measurement_seconds,
+    )
     elapsed_seconds = time.perf_counter() - wall_time_start
     process_seconds = time.process_time() - process_time_start
     stop_event.set()
@@ -359,14 +377,15 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         for batch_size, calls in enumerate(inference_statistics.modelBatchSizeHistogram)
         if calls > warmup_inference_statistics.modelBatchSizeHistogram[batch_size]
     )
-    completed_game_plies = args.games * args.steps
+    completed_game_plies = args.games * measurement_result.completed_steps
     peak_rss_mib = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
     return BenchmarkResult(
         process_id=os.getpid(),
         device_id=args.device,
         games=args.games,
         warmup_steps=args.warmup_steps,
-        measurement_steps=args.steps,
+        measurement_steps=measurement_result.completed_steps,
+        minimum_measurement_seconds=args.minimum_measurement_seconds,
         target_searches_per_ply=args.searches,
         elapsed_seconds=elapsed_seconds,
         completed_game_plies=completed_game_plies,
@@ -399,6 +418,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--games', type=int, default=16)
     parser.add_argument('--warmup-steps', type=int, default=2)
     parser.add_argument('--steps', type=int, default=10)
+    parser.add_argument('--minimum-measurement-seconds', type=float, default=0.0)
     parser.add_argument('--searches', type=int, default=600)
     parser.add_argument('--parallel-searches', type=int, default=4)
     parser.add_argument('--maximum-batch-size', type=int, default=256)
@@ -415,6 +435,7 @@ def parse_arguments() -> Arguments:
         games=namespace.games,
         warmup_steps=namespace.warmup_steps,
         steps=namespace.steps,
+        minimum_measurement_seconds=namespace.minimum_measurement_seconds,
         searches=namespace.searches,
         parallel_searches=namespace.parallel_searches,
         maximum_batch_size=namespace.maximum_batch_size,

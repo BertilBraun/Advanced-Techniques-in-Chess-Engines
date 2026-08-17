@@ -106,6 +106,7 @@ python py/tools/benchmark_repetition_mcts.py \
   --algorithm graph \
   --transposition-value-threshold 0.01 \
   --searches 100 \
+  --minimum-measurement-seconds 120 \
   --games 16 \
   --parallel-searches 4 \
   --maximum-batch-size 256
