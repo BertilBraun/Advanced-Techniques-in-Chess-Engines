@@ -37,6 +37,16 @@ struct ChessGame {
         }
         return *winner == state.currentPlayer() ? 1.0F : -1.0F;
     }
+
+    [[nodiscard]] static float cycleValue(const State &) noexcept { return 0.0F; }
+
+    [[nodiscard]] static std::size_t stateHash(const State &state) noexcept {
+        return state.searchStateHash();
+    }
+
+    [[nodiscard]] static bool statesEqual(const State &left, const State &right) {
+        return left.hasSameSearchState(right);
+    }
 };
 
 static_assert(SearchGame<ChessGame>);

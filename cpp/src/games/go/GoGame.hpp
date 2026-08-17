@@ -30,6 +30,13 @@ template <std::size_t BoardSize, std::size_t HistoryLength = 8> struct GoGame {
         }
         return *result.winner == state.player() ? 1.0F : -1.0F;
     }
+    [[nodiscard]] static float cycleValue(const State &) noexcept { return 0.0F; }
+    [[nodiscard]] static std::size_t stateHash(const State &state) noexcept {
+        return static_cast<std::size_t>(state.hash());
+    }
+    [[nodiscard]] static bool statesEqual(const State &left, const State &right) noexcept {
+        return left == right;
+    }
 };
 
 using Go7Game = GoGame<7, 8>;

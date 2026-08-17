@@ -1,13 +1,14 @@
 #include "games/chess/implementation/ChessBoard.hpp"
 #include "util/py.hpp"
 
-#include "games/chess/implementation/ChessAction.hpp"
 #include "bitboard.h"
+#include "games/chess/implementation/ChessAction.hpp"
 #include "movegen.h"
 
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <functional>
 #include <ranges>
 
 using namespace Stockfish;
@@ -29,6 +30,7 @@ static constexpr int MAX_MATERIAL_VALUE = PIECE_VALUE[PAWN] * 8 + PIECE_VALUE[KN
                                           PIECE_VALUE[QUEEN] * 1;
 static constexpr Bitboard DARK_SQUARES = 0xAA55AA55AA55AA55ULL;
 static constexpr int BOARD_LENGTH = 8;
+static_assert(PIECE_NB <= 16, "Packed repetition identity requires four-bit pieces");
 static constexpr std::array PIECE_TYPES = {PieceType::PAWN, PieceType::KNIGHT, PieceType::BISHOP,
                                            PieceType::ROOK, PieceType::QUEEN,  PieceType::KING};
 
@@ -75,8 +77,8 @@ void Board::makeMove(Move m) {
         m_history->retainedPreviousPositions >= MAX_REVERSIBLE_HISTORY_PLIES;
     std::shared_ptr<const PositionHistory> previous =
         resetsRepetitionHistory || historyIsAtCapacity ? nullptr : m_history;
-    m_history =
-        std::make_shared<const PositionHistory>(m_pos.repetition_key(), std::move(previous));
+    m_history = std::make_shared<const PositionHistory>(m_pos.repetition_key(),
+                                                        repetitionIdentity(), std::move(previous));
     m_validMoves.reset();
     validateHistory();
 }
@@ -85,7 +87,8 @@ void Board::setFen(const std::string &fen) {
     Position position;
     position.set(fen, false);
     m_pos = std::move(position);
-    m_history = std::make_shared<const PositionHistory>(m_pos.repetition_key(), nullptr);
+    m_history = std::make_shared<const PositionHistory>(m_pos.repetition_key(),
+                                                        repetitionIdentity(), nullptr);
     m_validMoves.reset();
     validateHistory();
 }
@@ -104,6 +107,51 @@ int Board::repetitionCount() const {
     return occurrences;
 }
 
+std::size_t Board::searchStateHash() const noexcept {
+    std::size_t value = static_cast<std::size_t>(m_pos.repetition_key());
+    const auto combine = [&value](const std::uint64_t item) {
+        value ^=
+            static_cast<std::size_t>(item) + 0x9e3779b97f4a7c15ULL + (value << 6U) + (value >> 2U);
+    };
+    combine(static_cast<std::uint64_t>(m_pos.rule50_count()));
+    for (auto entry = m_history; entry != nullptr; entry = entry->previous) {
+        combine(entry->key);
+    }
+    return value;
+}
+
+bool Board::hasSameSearchState(const Board &other) const {
+    if (m_pos.rule50_count() != other.m_pos.rule50_count()) {
+        return false;
+    }
+    auto left = m_history;
+    auto right = other.m_history;
+    while (left != nullptr && right != nullptr) {
+        if (left->identity != right->identity) {
+            return false;
+        }
+        left = left->previous;
+        right = right->previous;
+    }
+    return left == nullptr && right == nullptr;
+}
+
+Board::RepetitionIdentity Board::repetitionIdentity() const {
+    std::array<std::uint64_t, 4> packedPieces{};
+    for (const int squareIndex : range(64)) {
+        const std::uint64_t piece =
+            static_cast<std::uint64_t>(m_pos.piece_on(static_cast<Square>(squareIndex)));
+        packedPieces[static_cast<std::size_t>(squareIndex) / 16] |=
+            piece << ((static_cast<std::size_t>(squareIndex) % 16) * 4);
+    }
+    return {
+        .packed_pieces = packedPieces,
+        .side_to_move = static_cast<std::uint8_t>(m_pos.side_to_move()),
+        .castling_rights = castlingRightsMask(),
+        .en_passant_square = static_cast<std::uint8_t>(m_pos.ep_square()),
+    };
+}
+
 std::uint8_t Board::castlingRightsMask() const {
     return static_cast<std::uint8_t>(
         static_cast<std::uint8_t>(m_pos.can_castle(CastlingRights::WHITE_OO)) |
@@ -116,6 +164,8 @@ void Board::validateHistory() const {
     assert(m_history != nullptr && "Board history must be initialized");
     assert(m_history->key == m_pos.repetition_key() &&
            "Board history head must describe the current position");
+    assert(m_history->identity == repetitionIdentity() &&
+           "Board history head must retain exact repetition semantics");
     assert(m_history->retainedPreviousPositions <= MAX_REVERSIBLE_HISTORY_PLIES &&
            "Board history exceeded its bounded reversible window");
     assert((m_history->previous == nullptr) == (m_history->retainedPreviousPositions == 0) &&

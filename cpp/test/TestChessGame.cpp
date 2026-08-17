@@ -10,6 +10,44 @@ void require(const bool condition, const std::string &message) {
         throw std::runtime_error(message);
     }
 }
+
+void testSearchStateIdentity() {
+    const Board initial;
+    const Board sameInitial;
+    require(ChessGame::statesEqual(initial, sameInitial),
+            "Equal chess rule states must share graph identity");
+    require(ChessGame::stateHash(initial) == ChessGame::stateHash(sameInitial),
+            "Equal chess rule states must have equal graph hashes");
+    const Board differentFullmove(
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 99");
+    require(ChessGame::statesEqual(initial, differentFullmove),
+            "Non-semantic chess fullmove display state must not split graph identity");
+
+    const Board otherSide("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
+    require(!ChessGame::statesEqual(initial, otherSide),
+            "Chess graph identity must include the side to move");
+
+    const Board castling("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+    const Board noCastling("r3k2r/8/8/8/8/8/8/R3K2R w - - 0 1");
+    require(!ChessGame::statesEqual(castling, noCastling),
+            "Chess graph identity must include castling rights");
+
+    const Board enPassant("8/8/8/3pP3/8/8/4K2k/8 w - d6 0 1");
+    const Board noEnPassant("8/8/8/3pP3/8/8/4K2k/8 w - - 0 1");
+    require(!ChessGame::statesEqual(enPassant, noEnPassant),
+            "Chess graph identity must include en-passant state");
+
+    const Board halfmoveZero("8/8/8/8/8/8/4K2k/8 w - - 0 1");
+    const Board halfmoveNinetyNine("8/8/8/8/8/8/4K2k/8 w - - 99 1");
+    require(!ChessGame::statesEqual(halfmoveZero, halfmoveNinetyNine),
+            "Chess graph identity must include the fifty-move clock");
+
+    const Board repeated = Board::replay(initial.fen(), {"g1f3", "g8f6", "f3g1", "f6g8"});
+    const Board historyBlind(repeated.fen());
+    require(repeated.fen() == historyBlind.fen(), "Chess history fixture must share its FEN");
+    require(!ChessGame::statesEqual(repeated, historyBlind),
+            "Chess graph identity must include repetition-relevant history");
+}
 } // namespace
 
 int runChessGameTests() {
@@ -17,6 +55,7 @@ int runChessGameTests() {
     Stockfish::Position::init();
 
     const Board initial;
+    testSearchStateIdentity();
     require(!ChessGame::isTerminal(initial), "Initial chess position must not be terminal");
     require(static_cast<int>(ChessGame::legalActions(initial).size()) == 20,
             "Initial chess position must expose 20 legal actions");
@@ -57,8 +96,7 @@ int runChessGameTests() {
             "The fifty-move boundary must be a draw");
 
     const Board insufficientMaterial("8/8/8/8/8/8/6k1/K7 w - - 0 1");
-    require(ChessGame::isTerminal(insufficientMaterial),
-            "Insufficient material must be terminal");
+    require(ChessGame::isTerminal(insufficientMaterial), "Insufficient material must be terminal");
     require(ChessGame::terminalValue(insufficientMaterial) == 0.0F,
             "Insufficient material must be a draw");
 

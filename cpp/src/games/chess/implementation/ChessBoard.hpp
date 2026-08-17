@@ -2,6 +2,8 @@
 
 #include "position.h"
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <memory>
@@ -69,6 +71,12 @@ public:
     /// Returns the number of earlier occurrences of the current position.
     [[nodiscard]] int repetitionCount() const;
 
+    /// Hashes every rule field that can affect future play, including reversible history.
+    [[nodiscard]] std::size_t searchStateHash() const noexcept;
+
+    /// Compares the complete rule state used by graph-search transposition detection.
+    [[nodiscard]] bool hasSameSearchState(const Board &other) const;
+
     /**
      * Produces an ASCII representation of the board similar to the Python version:
      *   '  a b c d e f g h'
@@ -85,14 +93,25 @@ public:
     [[nodiscard]] std::string repr() const;
 
 private:
+    struct RepetitionIdentity {
+        std::array<std::uint64_t, 4> packed_pieces;
+        std::uint8_t side_to_move;
+        std::uint8_t castling_rights;
+        std::uint8_t en_passant_square;
+
+        [[nodiscard]] bool operator==(const RepetitionIdentity &) const noexcept = default;
+    };
+
     struct PositionHistory {
-        PositionHistory(const std::uint64_t positionKey,
+        PositionHistory(const std::uint64_t positionKey, RepetitionIdentity positionIdentity,
                         std::shared_ptr<const PositionHistory> previousPosition)
-            : key(positionKey), previous(std::move(previousPosition)),
+            : key(positionKey), identity(std::move(positionIdentity)),
+              previous(std::move(previousPosition)),
               retainedPreviousPositions(
                   previous == nullptr ? 0 : previous->retainedPreviousPositions + 1) {}
 
         const std::uint64_t key;
+        const RepetitionIdentity identity;
         const std::shared_ptr<const PositionHistory> previous;
         const std::uint16_t retainedPreviousPositions;
     };
@@ -106,6 +125,7 @@ private:
 
     [[nodiscard]] bool drawByInsufficientMaterial() const;
     [[nodiscard]] std::uint8_t castlingRightsMask() const;
+    [[nodiscard]] RepetitionIdentity repetitionIdentity() const;
     void validateHistory() const;
 };
 

@@ -3,6 +3,7 @@
 #include "search/InferenceDimensions.hpp"
 
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -15,6 +16,9 @@ concept GameRules =
         { Game::legalActions(state) } -> std::same_as<std::vector<typename Game::Action>>;
         { Game::isTerminal(state) } -> std::same_as<bool>;
         { Game::terminalValue(state) } -> std::same_as<float>;
+        { Game::cycleValue(state) } -> std::same_as<float>;
+        { Game::stateHash(state) } -> std::same_as<std::size_t>;
+        { Game::statesEqual(state, state) } -> std::same_as<bool>;
     };
 
 template <typename Game>

@@ -109,6 +109,19 @@ void test_history_encoding_and_hash() {
     require(white_played.hash() == white_played.hash() &&
                 white_played.hash() != black_played.hash(),
             "Go hashes must be stable and state-sensitive");
+    require(Go7Game::statesEqual(white_played, white_played) &&
+                !Go7Game::statesEqual(white_played, black_played),
+            "Go graph identity must use the complete position");
+    require(Go7Game::stateHash(white_played) == static_cast<std::size_t>(white_played.hash()),
+            "Go game contract must expose the canonical position hash");
+    auto history_distinct = white_played.history();
+    history_distinct.back().black.set(2);
+    const auto same_current_board = Go7Game::State::restore(
+        history_distinct, white_played.player(), white_played.ko_point(),
+        white_played.consecutive_passes(), white_played.move_number(), white_played.rules());
+    require(same_current_board.board() == white_played.board() &&
+                !Go7Game::statesEqual(same_current_board, white_played),
+            "Go graph identity must distinguish equal boards with different retained history");
 
     const auto encoded = encode_go_position(white_played);
     require(encoded.binary_planes[0].test(0), "Current-player black stone plane is incorrect");
