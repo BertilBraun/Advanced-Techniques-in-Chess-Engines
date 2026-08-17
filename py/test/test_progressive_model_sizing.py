@@ -4,12 +4,14 @@ import hashlib
 from pathlib import Path
 
 import pytest
+import yaml
 
 from src.games.representation import PackedPlaneLayout
 from src.replay.layout import ReplayLayout
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.contracts import CheckpointManifest
 from src.training.checkpoint.persistence import publish_checkpoint
+from src.training.configuration import TrainingArgs
 from src.training.network import DisabledResidualContext, NetworkParams
 from src.training.progressive import (
     CompletedCandidateTraining,
@@ -253,3 +255,29 @@ def test_candidate_retention_keeps_only_exact_restart_state(tmp_path: Path) -> N
     assert not obsolete.model_path.exists()
     assert not obsolete.optimizer_path.exists()
     assert not obsolete.inference_model_path.exists()
+
+
+def test_checked_in_progressive_configuration_defines_all_three_models() -> None:
+    python_root = Path(__file__).parents[1]
+    base_payload = yaml.safe_load(
+        (python_root / 'configs' / 'baselines' / 'vast-go-9x9-2gpu-4h.yaml').read_text(encoding='utf-8')
+    )
+    progressive_payload = yaml.safe_load(
+        (python_root / 'configs' / 'research' / 'go-9x9-progressive-model-sizing.yaml').read_text(encoding='utf-8')
+    )
+    base_training = base_payload['training']
+    progressive_training = progressive_payload['training']
+    merged_training = {
+        **base_training,
+        **progressive_training,
+        'limits': {**base_training['limits'], **progressive_training['limits']},
+    }
+
+    training = TrainingArgs.model_validate(merged_training)
+
+    assert training.progressive_model_sizing is not None
+    assert tuple(model.model_id for model in training.progressive_model_sizing.models) == (
+        'small',
+        'medium',
+        'large',
+    )

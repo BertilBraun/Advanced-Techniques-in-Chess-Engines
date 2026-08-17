@@ -267,6 +267,10 @@ Static values that affect artifact or process compatibility cannot be scheduled.
 
 ## Coordinator ownership
 
+Architecture-agnostic progressive sizing is specified separately in
+[Progressive model sizing](progressive-model-sizing.md). It composes the same replay, DDP, checkpoint, objective,
+self-play, and evaluation boundaries; its private candidate checkpoints are never published directly.
+
 The coordinator owns:
 
 - the public run loop;

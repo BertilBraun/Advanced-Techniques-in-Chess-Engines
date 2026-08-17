@@ -66,6 +66,15 @@ Inheritance may be chained, but cycles are rejected. The fully resolved configur
 canonical chess/Go Pydantic union. Approval records, resolved run JSON, and queue fingerprints use that effective
 configuration, so changing a base invalidates approvals and queue summaries for every dependent experiment.
 
+### Progressive model sizing
+
+An experiment may add `training.progressive_model_sizing` with exactly three complete network definitions, strictly
+increasing elapsed active-run starts, and typed paired-loss EMA promotion settings. The day-zero definition must
+equal `training.network`. See
+[`configs/research/go-9x9-progressive-model-sizing.yaml`](configs/research/go-9x9-progressive-model-sizing.yaml) for
+the complete schema and [Progressive model sizing](../documentation/architecture/progressive-model-sizing.md) for
+training, promotion, restart, retention, and publication semantics.
+
 ## Experiment queue
 
 The queue is a resource wrapper above `train.py`; it does not add a training mode. Its command prefix owns all
