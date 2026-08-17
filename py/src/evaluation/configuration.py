@@ -8,12 +8,16 @@ from src.self_play.configuration import (
     BatchedInferenceParams,
     MonteCarloTreeSearchConfiguration,
     SearchAlgorithmConfiguration,
+    omit_default_tree_search_algorithm,
 )
 from src.util.frozen_model import FrozenModel
 
 
 class EvaluationSearchConfiguration(FrozenModel):
-    algorithm: SearchAlgorithmConfiguration = MonteCarloTreeSearchConfiguration()
+    algorithm: SearchAlgorithmConfiguration = Field(
+        default_factory=MonteCarloTreeSearchConfiguration,
+        exclude_if=omit_default_tree_search_algorithm,
+    )
     searches_per_move: int = Field(gt=0)
     parallel_searches: int = Field(gt=0)
     exploration_constant: float = Field(gt=0.0)

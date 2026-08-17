@@ -117,8 +117,15 @@ SearchAlgorithmConfiguration: TypeAlias = Annotated[
 ]
 
 
+def omit_default_tree_search_algorithm(algorithm: SearchAlgorithmConfiguration) -> bool:
+    return algorithm.kind == 'tree'
+
+
 class SelfPlaySearchParams(FrozenModel):
-    algorithm: SearchAlgorithmConfiguration = MonteCarloTreeSearchConfiguration()
+    algorithm: SearchAlgorithmConfiguration = Field(
+        default_factory=MonteCarloTreeSearchConfiguration,
+        exclude_if=omit_default_tree_search_algorithm,
+    )
     full_searches: IntegerGenerationSchedule
     fast_searches: IntegerGenerationSchedule
     parallel_searches: int = Field(gt=0)
