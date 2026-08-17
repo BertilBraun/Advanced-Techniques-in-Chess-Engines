@@ -1,0 +1,14 @@
+2026-08-17T22:31:37+00:00
+SOURCE_REVISION=0bbc8cf7
+c95a67f478c0dc69ac0c5e12661d98c2ae524932c499e070f6321cfe5824c864  /workspace/chess-restart-artifacts/vast-chess-8gpu-1d-r4-four-day-freeze-20260817/run-state/model_624.jit.pt
+0, NVIDIA GeForce RTX 3060, 0 %, 1 MiB, 12288 MiB
+1, NVIDIA GeForce RTX 3060, 0 %, 1 MiB, 12288 MiB
+2, NVIDIA GeForce RTX 3060, 0 %, 1 MiB, 12288 MiB
+3, NVIDIA GeForce RTX 3060, 0 %, 1 MiB, 12288 MiB
+4, NVIDIA GeForce RTX 3060, 0 %, 1 MiB, 12288 MiB
+5, NVIDIA GeForce RTX 3060, 0 %, 1 MiB, 12288 MiB
+6, NVIDIA GeForce RTX 3060, 0 %, 1 MiB, 12288 MiB
+7, NVIDIA GeForce RTX 3060, 0 %, 1 MiB, 12288 MiB
+  12409  612266 bash -c while true; do date -u +%H:%M:%S; stat -c %y /workspace/alphazero-engine/py/training_data/screening/go7-overnight/00-baseline/evaluations/manager-state.json; wc -c /workspace/alphazero-engine/py/training_data/screening/go7-overnight/00-baseline/evaluations/reference-checkpoints.json; sleep 30; done
+  13212  612115 bash -c while true; do date -u +%H:%M:%S; wc -c /workspace/alphazero-engine/py/training_data/screening/go7-overnight/00-baseline/evaluations/reference-checkpoints.json; find /workspace/alphazero-engine/py/training_data/screening/go7-overnight/00-baseline/evaluations -type f | wc -l; sleep 30; done
+  14303  611904 bash -c while true; do date -u +%H:%M:%S; wc -c /workspace/alphazero-engine/py/training_data/screening/go7-overnight/00-baseline/evaluations/reference-checkpoints.json; find /workspace/alphazero-engine/py/training_data/screening/go7-overnight/00-baseline/evaluations -type f | wc -l; sleep 30; done
