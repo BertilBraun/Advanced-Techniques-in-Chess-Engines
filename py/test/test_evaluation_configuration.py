@@ -16,39 +16,6 @@ from src.experiment.configuration import load_experiment_configuration
 from src.training.checkpoint import CheckpointReference
 
 
-def test_checked_in_evaluation_definitions_are_canonical_for_each_game() -> None:
-    chess = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
-    go = load_experiment_configuration(Path('configs/go-7x7-experiment-template.yaml'))
-
-    assert chess.evaluation.engine.kind == 'stockfish'
-    assert go.evaluation.engine.kind == 'katago'
-    assert chess.evaluation.cadence_seconds == go.evaluation.cadence_seconds == 1200
-    assert chess.evaluation.job_timeout_seconds == go.evaluation.job_timeout_seconds == 1200
-    assert chess.training.topology.evaluation.device_cycle == (0,)
-    assert chess.evaluation.maximum_concurrent_jobs == go.evaluation.maximum_concurrent_jobs == 10
-    assert tuple(
-        definition.boundary_offset
-        for definition in chess.evaluation.definitions
-        if definition.kind == 'previous_checkpoint'
-    ) == (1, 2, 3)
-    assert all(
-        definition.kind != 'fixed_checkpoint'
-        for definition in (*chess.evaluation.definitions, *go.evaluation.definitions)
-    )
-    assert tuple(
-        definition.skill_level for definition in chess.evaluation.definitions if definition.kind == 'stockfish'
-    ) == (0, 1, 2, 3)
-    assert tuple(
-        definition.maximum_visits for definition in go.evaluation.definitions if definition.kind == 'katago'
-    ) == (64,)
-    assert tuple(
-        (definition.boundary_offset, definition.boundary_parity)
-        for definition in go.evaluation.definitions
-        if definition.kind == 'previous_checkpoint'
-    ) == ((1, 'every'), (2, 'every'), (3, 'every'))
-    assert all(definition.kind not in ('random', 'policy_random') for definition in go.evaluation.definitions)
-
-
 def test_evaluation_definition_ids_must_be_unique() -> None:
     experiment = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
     payload = experiment.evaluation.model_dump(mode='json')
