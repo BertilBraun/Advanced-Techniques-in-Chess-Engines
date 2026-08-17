@@ -9,4 +9,4 @@ go:
     auxiliary_targets:
       - kind: remaining_game_length
         normalization_scale: 196
-        loss_weight: {kind: constant, value: 0.15}
+        loss_weight: 0.15

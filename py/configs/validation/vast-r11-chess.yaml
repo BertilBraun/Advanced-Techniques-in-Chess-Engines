@@ -16,9 +16,9 @@ run:
     minimum_disk_gib: 20
   environment:
     runtime_image: vastai/pytorch:cuda-13.0.3-auto
-    python_version: "3.12"
-    torch_version: "2.12.1+cu126"
-    cuda_version: "12.6"
+    python_version: '3.12'
+    torch_version: 2.12.1+cu126
+    cuda_version: '12.6'
     dependency_lock_path: py/requirements-training.lock
     dependency_lock_sha256: f027ad99a12742660107a2857b18cbc6b821a95971c2ecf2c4ad814c38116171
     minimum_open_file_soft_limit: 32768
@@ -27,7 +27,9 @@ training:
   network:
     num_layers: 2
     hidden_size: 32
-    residual_context: {kind: squeeze_excitation, placement: every_second_block}
+    residual_context:
+      kind: squeeze_excitation
+      placement: every_second_block
     num_policy_channels: 2
     num_value_channels: 1
     value_fc_size: 16
@@ -37,35 +39,27 @@ training:
     optimizer: adamw
     precision: float32
     compilation: disabled
-    learning_rate:
-      kind: constant
-      value: 0.001
+    learning_rate: 0.001
     max_grad_norm: 0.5
-    duplicate_multiplicity_weight_cap:
+    duplicate_multiplicity_weight_cap: null
   topology:
     trainer:
       device_type: cuda
       process_group_backend: nccl
       rank_zero_device_id: 0
-      ddp_device_ids:
-        - 0
+      ddp_device_ids: [0]
       cpu_threads: 4
       interop_threads: 1
     self_play:
-      device_ids:
-        - 0
+      device_ids: [0]
       parallel_games_per_process: 4
       tensorboard_processes: 1
-      node_ids_to_pause_during_training:
-        - 0
+      node_ids_to_pause_during_training: [0]
     evaluation:
-      device_cycle:
-        - 0
+      device_cycle: [0]
   lifecycle:
     replay:
-      capacity:
-        kind: constant
-        value: 128
+      capacity: 128
       maximum_capacity: 128
       maximum_policy_entries: 16
     credit:
@@ -79,7 +73,7 @@ training:
       milestone_interval: 1
   limits:
     hourly_price: 0.303
-    maximum_cost: 0.10
+    maximum_cost: 0.1
     maximum_wall_time_seconds: 300
     maximum_open_file_count: 16384
     maximum_host_ram_percent: 90.0
@@ -93,11 +87,18 @@ evaluation:
   bootstrap_samples: 100
   dataset:
     path: py/reference/vast-r11-chess-evaluation-v1.bin
-    source: {kind: engine_self_play, random_seed: 1111, move_sampling_temperature: 1.0}
+    source:
+      kind: engine_self_play
+      random_seed: 1111
+      move_sampling_temperature: 1.0
   openings:
     path: py/reference/vast-r11-chess-openings-v1.json
     opening_count: 1
-    source: {kind: engine_beam, random_seed: 1111, expanded_actions_per_position: 3, beam_width: 81}
+    source:
+      kind: engine_beam
+      random_seed: 1111
+      expanded_actions_per_position: 3
+      beam_width: 81
   engine:
     kind: stockfish
     executable_path: engines/stockfish
@@ -136,24 +137,15 @@ evaluation:
       search: *evaluation_search
 chess:
   self_play:
-    resignation: {kind: disabled}
+    resignation:
+      kind: disabled
     search:
-      full_searches:
-        kind: constant
-        value: 8
-      fast_searches:
-        kind: constant
-        value: 2
+      full_searches: 8
+      fast_searches: 2
       parallel_searches: 1
-      dirichlet_epsilon:
-        kind: constant
-        value: 0.25
-      dirichlet_alpha:
-        kind: constant
-        value: 0.3
-      exploration_constant:
-        kind: constant
-        value: 1.5
+      dirichlet_epsilon: 0.25
+      dirichlet_alpha: 0.3
+      exploration_constant: 1.5
       first_play_urgency:
         kind: zero
       forced_playouts:
@@ -164,42 +156,18 @@ chess:
       outstanding_batches_per_worker: 1
     start_position:
       kind: random_opening
-      maximum_plies:
-        kind: constant
-        value: 0
-    full_search_probability:
-      kind: constant
-      value: 1.0
-    retained_root_visit_fraction:
-      kind: constant
-      value: 0.0
-    greedy_after_ply:
-      kind: constant
-      value: 8
-    maximum_game_plies:
-      kind: constant
-      value: 16
-    starting_temperature:
-      kind: constant
-      value: 1.0
-    final_temperature:
-      kind: constant
-      value: 0.1
-    primary_sample_weight:
-      kind: constant
-      value: 1.0
+      maximum_plies: 0
+    full_search_probability: 1.0
+    retained_root_visit_fraction: 0.0
+    greedy_after_ply: 8
+    maximum_game_plies: 16
+    starting_temperature: 1.0
+    final_temperature: 0.1
+    primary_sample_weight: 1.0
     detailed_statistics_workers: 1
   objective:
-    policy_loss_weight:
-      kind: constant
-      value: 1.0
-    value_loss_weight:
-      kind: constant
-      value: 0.5
-    root_value_blend:
-      kind: constant
-      value: 0.0
-    value_discount_per_ply:
-      kind: constant
-      value: 1.0
+    policy_loss_weight: 1.0
+    value_loss_weight: 0.5
+    root_value_blend: 0.0
+    value_discount_per_ply: 1.0
     auxiliary_targets: []

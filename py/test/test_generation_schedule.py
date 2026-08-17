@@ -22,6 +22,36 @@ def test_constant_schedule_returns_typed_value() -> None:
     assert isinstance(floating.value_at(100), float)
 
 
+def test_numeric_schedule_values_wrap_and_serialize_as_constants() -> None:
+    integer_adapter = TypeAdapter(IntegerGenerationSchedule)
+    float_adapter = TypeAdapter(FloatGenerationSchedule)
+
+    integer = integer_adapter.validate_python(7)
+    floating = float_adapter.validate_python(0.25)
+
+    assert integer == ConstantSchedule[int](value=7)
+    assert floating == ConstantSchedule[float](value=0.25)
+    assert integer_adapter.dump_python(integer, mode='json') == 7
+    assert float_adapter.dump_python(floating, mode='json') == pytest.approx(0.25)
+    assert integer_adapter.validate_json(integer_adapter.dump_json(integer)) == integer
+    assert float_adapter.validate_json(float_adapter.dump_json(floating)) == floating
+
+
+@pytest.mark.parametrize(
+    ('adapter', 'payload'),
+    (
+        (TypeAdapter(IntegerGenerationSchedule), {'kind': 'constant', 'value': 7}),
+        (TypeAdapter(FloatGenerationSchedule), {'kind': 'constant', 'value': 0.25}),
+    ),
+)
+def test_explicit_constant_schedule_mapping_is_rejected(
+    adapter: TypeAdapter[IntegerGenerationSchedule] | TypeAdapter[FloatGenerationSchedule],
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError, match='numeric value'):
+        adapter.validate_python(payload)
+
+
 def test_staged_schedule_selects_boundaries() -> None:
     schedule = StagedSchedule[int](
         stages=(

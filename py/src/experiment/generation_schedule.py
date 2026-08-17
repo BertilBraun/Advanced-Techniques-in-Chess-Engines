@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from enum import Enum
 from typing import Annotated, Generic, Literal, TypeAlias, TypeVar
 
-from pydantic import Field, model_validator
+from pydantic import BeforeValidator, Field, model_serializer, model_validator
 
-from src.util.frozen_model import FrozenModel
+from src.util.frozen_model import FrozenModel, JsonValue
 
 
 ScheduleValueT = TypeVar('ScheduleValueT')
@@ -24,6 +25,10 @@ class ConstantSchedule(FrozenModel, Generic[ScheduleValueT]):
 
     def value_at(self, model_generation: int) -> ScheduleValueT:
         _validate_generation(model_generation)
+        return self.value
+
+    @model_serializer
+    def serialize_constant(self) -> ScheduleValueT:
         return self.value
 
 
@@ -100,13 +105,41 @@ class LinearSchedule(FrozenModel, Generic[NumericScheduleValueT]):
                 return math.ceil(interpolated)
 
 
+FloatScheduleModel: TypeAlias = ConstantSchedule[float] | StagedSchedule[float] | LinearSchedule[float]
+IntegerScheduleModel: TypeAlias = ConstantSchedule[int] | StagedSchedule[int] | LinearSchedule[int]
+
+
+def _wrap_float_constant(value: JsonValue | FloatScheduleModel) -> JsonValue | FloatScheduleModel:
+    match value:
+        case bool():
+            return value
+        case int() | float():
+            return ConstantSchedule[float](value=value)
+        case Mapping() if value.get('kind') == 'constant':
+            raise ValueError('Write a constant float schedule as its numeric value.')
+        case _:
+            return value
+
+
+def _wrap_integer_constant(value: JsonValue | IntegerScheduleModel) -> JsonValue | IntegerScheduleModel:
+    match value:
+        case bool():
+            return value
+        case int():
+            return ConstantSchedule[int](value=value)
+        case Mapping() if value.get('kind') == 'constant':
+            raise ValueError('Write a constant integer schedule as its numeric value.')
+        case _:
+            return value
+
+
 FloatGenerationSchedule: TypeAlias = Annotated[
-    ConstantSchedule[float] | StagedSchedule[float] | LinearSchedule[float],
-    Field(discriminator='kind'),
+    Annotated[FloatScheduleModel, Field(discriminator='kind')],
+    BeforeValidator(_wrap_float_constant),
 ]
 IntegerGenerationSchedule: TypeAlias = Annotated[
-    ConstantSchedule[int] | StagedSchedule[int] | LinearSchedule[int],
-    Field(discriminator='kind'),
+    Annotated[IntegerScheduleModel, Field(discriminator='kind')],
+    BeforeValidator(_wrap_integer_constant),
 ]
 
 

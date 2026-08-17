@@ -5,4 +5,10 @@ run:
 training:
   save_path: py/training_data/screening/go7-overnight/01-learning-rate-decay
   trainer:
-    learning_rate: {kind: linear, start_generation: 0, end_generation: 120, start_value: 0.005, end_value: 0.001, rounding: none}
+    learning_rate:
+      kind: linear
+      start_generation: 0
+      end_generation: 120
+      start_value: 0.005
+      end_value: 0.001
+      rounding: none

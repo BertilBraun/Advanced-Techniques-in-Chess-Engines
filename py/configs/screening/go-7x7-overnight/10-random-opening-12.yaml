@@ -7,4 +7,4 @@ training:
 go:
   self_play:
     start_position:
-      maximum_plies: {kind: constant, value: 12}
+      maximum_plies: 12

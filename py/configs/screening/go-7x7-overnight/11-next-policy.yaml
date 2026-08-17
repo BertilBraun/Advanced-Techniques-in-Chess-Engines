@@ -6,4 +6,7 @@ training:
   save_path: py/training_data/screening/go7-overnight/11-next-policy
 go:
   objective:
-    auxiliary_targets: [{kind: next_policy, ply_offset: 1, loss_weight: {kind: constant, value: 0.15}}]
+    auxiliary_targets:
+      - kind: next_policy
+        ply_offset: 1
+        loss_weight: 0.15

@@ -1,5 +1,4 @@
 extends: vast-chess-8gpu-1d-r3.yaml
-
 run:
   run_name: vast-chess-8gpu-1d-r4
   tensorboard_run_directory: vast-chess-8gpu-1d-r4-late-quality
@@ -10,7 +9,6 @@ run:
     mode: checkpoint
     checkpoint_manifest_path: /workspace/chess-restart-artifacts/vast-chess-8gpu-1d-r3-generation-150/checkpoint_150.json
     generation: 150
-
 training:
   save_path: py/training_data/production/vast-chess-8gpu-1d-r4
   trainer:
@@ -22,13 +20,12 @@ training:
         - {start_generation: 550, value: 0.002}
   lifecycle:
     replay:
-      capacity: {kind: constant, value: 1500000}
+      capacity: 1500000
       maximum_capacity: 2500000
     credit:
       replay_ratio: 8
   limits:
     minimum_free_disk_gib: 10.0
-
 chess:
   self_play:
     resignation:
@@ -41,17 +38,17 @@ chess:
           - {start_generation: 180, value: 700}
           - {start_generation: 250, value: 800}
           - {start_generation: 550, value: 1000}
-      fast_searches: {kind: constant, value: 150}
+      fast_searches: 150
     start_position:
       minimum_remaining_plies: 25
-    full_search_probability: {kind: constant, value: 0.25}
-    greedy_after_ply: {kind: constant, value: 80}
-    maximum_game_plies: {kind: constant, value: 200}
-    force_fast_search_after_ply: {kind: constant, value: 160}
+    full_search_probability: 0.25
+    greedy_after_ply: 80
+    maximum_game_plies: 200
+    force_fast_search_after_ply: 160
   objective:
-    root_value_blend: {kind: constant, value: 0.10}
+    root_value_blend: 0.1
     value_discount_per_ply:
       kind: staged
       stages:
         - {start_generation: 0, value: 0.9985}
-        - {start_generation: 300, value: 0.9960}
+        - {start_generation: 300, value: 0.996}

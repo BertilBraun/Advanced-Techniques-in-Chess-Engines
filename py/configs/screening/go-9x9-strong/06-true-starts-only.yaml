@@ -6,4 +6,6 @@ training:
   save_path: py/training_data/screening/go9-strong/06-true-starts-only
 go:
   self_play:
-    start_position: {kind: random_opening, maximum_plies: {kind: constant, value: 0}}
+    start_position:
+      kind: random_opening
+      maximum_plies: 0

@@ -5,4 +5,6 @@ run:
 training:
   save_path: py/training_data/screening/go9-model-size/03-global-pooling-8x96
   network:
-    residual_context: {kind: global_pooling, placement: every_second_block}
+    residual_context:
+      kind: global_pooling
+      placement: every_second_block

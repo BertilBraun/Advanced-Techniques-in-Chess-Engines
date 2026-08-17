@@ -7,4 +7,5 @@ training:
 go:
   self_play:
     search:
-      first_play_urgency: {kind: zero}
+      first_play_urgency:
+        kind: zero

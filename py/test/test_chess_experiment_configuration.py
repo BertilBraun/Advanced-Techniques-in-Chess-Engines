@@ -463,7 +463,7 @@ def test_go_experiments_resolve_deterministically(path: Path, board_size: int, a
         ({'kind': 'zero'}, ZeroFirstPlayUrgencyParameters()),
         ({'kind': 'parent_value'}, ParentValueFirstPlayUrgencyParameters()),
         (
-            {'kind': 'reduced_parent_value', 'reduction': {'kind': 'constant', 'value': 0.2}},
+            {'kind': 'reduced_parent_value', 'reduction': 0.2},
             ReducedParentValueFirstPlayUrgencyParameters(reduction=0.2),
         ),
     ),
@@ -500,17 +500,17 @@ def test_queue_validation_supports_both_games() -> None:
         (('go', 'rules', 'maximum_moves'), 10, 'twice the board point count'),
         (
             ('go', 'objective', 'root_value_blend'),
-            {'kind': 'constant', 'value': 1.5},
+            1.5,
             'must remain in',
         ),
         (
             ('go', 'objective', 'value_discount_per_ply'),
-            {'kind': 'constant', 'value': 0.0},
+            0.0,
             'must remain in',
         ),
         (
             ('go', 'self_play', 'search', 'first_play_urgency'),
-            {'kind': 'reduced_parent_value', 'reduction': {'kind': 'constant', 'value': -0.1}},
+            {'kind': 'reduced_parent_value', 'reduction': -0.1},
             'Reduced-parent FPU reduction must remain finite and positive',
         ),
         (('go', 'self_play', 'maximum_game_plies'), 200, 'Extra inputs are not permitted'),
@@ -576,7 +576,7 @@ def test_experiment_configuration_hash_includes_resolved_base_content(tmp_path: 
     override_path = tmp_path / 'override.yaml'
     override_path.write_text('extends: base.yaml\n', encoding='utf-8')
     original = experiment_configuration_sha256(load_experiment_configuration(override_path))
-    base_path.write_text(source.replace('value: 0.002', 'value: 0.004', 1), encoding='utf-8')
+    base_path.write_text(source.replace('learning_rate: 0.002', 'learning_rate: 0.004', 1), encoding='utf-8')
 
     changed = experiment_configuration_sha256(load_experiment_configuration(override_path))
 

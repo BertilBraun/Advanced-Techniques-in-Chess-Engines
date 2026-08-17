@@ -5,4 +5,4 @@ run:
 training:
   save_path: py/training_data/screening/go7-overnight/02-learning-rate-constant-004
   trainer:
-    learning_rate: {kind: constant, value: 0.004}
+    learning_rate: 0.004

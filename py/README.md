@@ -48,8 +48,19 @@ run:
 training:
   save_path: py/training_data/screening/go7-learning-rate-decay
   trainer:
-    learning_rate: {kind: linear, start_generation: 0, end_generation: 50, start_value: 0.005, end_value: 0.001, rounding: none}
+    learning_rate:
+      kind: linear
+      start_generation: 0
+      end_generation: 50
+      start_value: 0.005
+      end_value: 0.001
+      rounding: none
 ```
+
+Generation-scheduled numeric fields accept a number for a constant schedule or an explicit `staged` or `linear`
+mapping. Constant mappings are intentionally rejected; write `learning_rate: 0.007`, for example. Checked-in YAML
+uses block-style mappings and nonnumeric lists, while compact flow style is reserved for numeric lists and individual
+entries in a staged schedule.
 
 Inheritance may be chained, but cycles are rejected. The fully resolved configuration is validated through the
 canonical chess/Go Pydantic union. Approval records, resolved run JSON, and queue fingerprints use that effective

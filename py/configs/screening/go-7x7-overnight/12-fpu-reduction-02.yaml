@@ -9,4 +9,4 @@ go:
     search:
       first_play_urgency:
         kind: reduced_parent_value
-        reduction: {kind: constant, value: 0.2}
+        reduction: 0.2

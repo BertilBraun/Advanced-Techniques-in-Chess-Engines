@@ -6,4 +6,4 @@ training:
   save_path: py/training_data/screening/go9-strong/05-no-root-value-blend
 go:
   objective:
-    root_value_blend: {kind: constant, value: 0.0}
+    root_value_blend: 0.0

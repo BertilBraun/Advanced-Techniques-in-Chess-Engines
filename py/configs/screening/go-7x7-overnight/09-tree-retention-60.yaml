@@ -6,4 +6,4 @@ training:
   save_path: py/training_data/screening/go7-overnight/09-tree-retention-60
 go:
   self_play:
-    retained_root_visit_fraction: {kind: constant, value: 0.6}
+    retained_root_visit_fraction: 0.6

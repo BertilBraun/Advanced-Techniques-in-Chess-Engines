@@ -39,7 +39,7 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
         update={
             'global_batch_size': 1,
             'local_batch_size': 1,
-            'learning_rate': {'kind': 'constant', 'value': 0.001},
+            'learning_rate': 0.001,
         }
     )
     trainer_topology = configuration.training.topology.trainer.validated_copy(
@@ -63,7 +63,7 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
     )
     replay = configuration.training.lifecycle.replay.validated_copy(
         update={
-            'capacity': {'kind': 'constant', 'value': 128},
+            'capacity': 128,
             'maximum_capacity': 128,
             'maximum_policy_entries': min(8, configuration.network_dimensions.actions),
         }
@@ -92,12 +92,12 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
     )
     common_self_play = {
         'search': {
-            'full_searches': {'kind': 'constant', 'value': 2},
-            'fast_searches': {'kind': 'constant', 'value': 1},
+            'full_searches': 2,
+            'fast_searches': 1,
             'parallel_searches': 1,
-            'dirichlet_epsilon': {'kind': 'constant', 'value': 0.0},
-            'dirichlet_alpha': {'kind': 'constant', 'value': 0.3},
-            'exploration_constant': {'kind': 'constant', 'value': 1.0},
+            'dirichlet_epsilon': 0.0,
+            'dirichlet_alpha': 0.3,
+            'exploration_constant': 1.0,
             'first_play_urgency': {'kind': 'zero'},
             'forced_playouts': {'kind': 'disabled'},
         },
@@ -106,13 +106,13 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
             'inference_batch_size': 1,
             'outstanding_batches_per_worker': 1,
         },
-        'start_position': {'kind': 'random_opening', 'maximum_plies': {'kind': 'constant', 'value': 0}},
-        'full_search_probability': {'kind': 'constant', 'value': 1.0},
-        'retained_root_visit_fraction': {'kind': 'constant', 'value': 0.0},
-        'greedy_after_ply': {'kind': 'constant', 'value': 1},
-        'starting_temperature': {'kind': 'constant', 'value': 1.0},
-        'final_temperature': {'kind': 'constant', 'value': 1.0},
-        'primary_sample_weight': {'kind': 'constant', 'value': 1.0},
+        'start_position': {'kind': 'random_opening', 'maximum_plies': 0},
+        'full_search_probability': 1.0,
+        'retained_root_visit_fraction': 0.0,
+        'greedy_after_ply': 1,
+        'starting_temperature': 1.0,
+        'final_temperature': 1.0,
+        'primary_sample_weight': 1.0,
         'detailed_statistics_workers': 1,
     }
     match configuration:
@@ -121,7 +121,7 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
                 update={
                     'self_play': {
                         **common_self_play,
-                        'maximum_game_plies': {'kind': 'constant', 'value': 1},
+                        'maximum_game_plies': 1,
                     }
                 }
             )

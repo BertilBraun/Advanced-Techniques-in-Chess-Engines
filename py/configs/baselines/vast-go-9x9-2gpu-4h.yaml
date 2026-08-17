@@ -4,7 +4,8 @@ run:
   tensorboard_run_directory: vast-go-9x9-2gpu-4h-baseline
   stage: clean_retrain
   requires_explicit_approval: true
-  resume: {mode: random_initialization}
+  resume:
+    mode: random_initialization
   hardware:
     provider_name: vast.ai
     offer_id: instance-47400225-machine-112617-host-115630
@@ -15,33 +16,80 @@ run:
     minimum_disk_gib: 25
   environment:
     runtime_image: vastai/pytorch:cuda-13.0.3-auto
-    python_version: "3.12"
-    torch_version: "2.12.1+cu126"
-    cuda_version: "12.6"
+    python_version: '3.12'
+    torch_version: 2.12.1+cu126
+    cuda_version: '12.6'
     dependency_lock_path: py/requirements-training.lock
     dependency_lock_sha256: f027ad99a12742660107a2857b18cbc6b821a95971c2ecf2c4ad814c38116171
     minimum_open_file_soft_limit: 32768
 training:
   save_path: py/training_data/baselines/vast-go-9x9-2gpu-4h
-  network: {num_layers: 8, hidden_size: 96, residual_context: {kind: global_pooling, placement: every_second_block}, num_policy_channels: 2, num_value_channels: 1, value_fc_size: 32}
+  network:
+    num_layers: 8
+    hidden_size: 96
+    residual_context:
+      kind: global_pooling
+      placement: every_second_block
+    num_policy_channels: 2
+    num_value_channels: 1
+    value_fc_size: 32
   trainer:
     global_batch_size: 1024
     local_batch_size: 512
     optimizer: adamw
     precision: float32
     compilation: disabled
-    learning_rate: {kind: linear, start_generation: 0, end_generation: 150, start_value: 0.01, end_value: 0.001, rounding: none}
+    learning_rate:
+      kind: linear
+      start_generation: 0
+      end_generation: 150
+      start_value: 0.01
+      end_value: 0.001
+      rounding: none
     max_grad_norm: 1.0
-    duplicate_multiplicity_weight_cap:
+    duplicate_multiplicity_weight_cap: null
   topology:
-    trainer: {device_type: cuda, process_group_backend: nccl, rank_zero_device_id: 0, ddp_device_ids: [0, 1], cpu_threads: 8, interop_threads: 1}
-    self_play: {device_ids: [0, 0, 0, 0, 1, 1, 1, 1], parallel_games_per_process: 1024, tensorboard_processes: 1, node_ids_to_pause_during_training: [1, 2, 3, 5, 6, 7]}
-    evaluation: {device_cycle: [0, 1]}
+    trainer:
+      device_type: cuda
+      process_group_backend: nccl
+      rank_zero_device_id: 0
+      ddp_device_ids: [0, 1]
+      cpu_threads: 8
+      interop_threads: 1
+    self_play:
+      device_ids: [0, 0, 0, 0, 1, 1, 1, 1]
+      parallel_games_per_process: 1024
+      tensorboard_processes: 1
+      node_ids_to_pause_during_training: [1, 2, 3, 5, 6, 7]
+    evaluation:
+      device_cycle: [0, 1]
   lifecycle:
-    replay: {capacity: {kind: linear, start_generation: 0, end_generation: 15, start_value: 100000, end_value: 500000, rounding: nearest}, maximum_capacity: 500000, maximum_policy_entries: 82}
-    credit: {replay_ratio: 4, optimizer_steps_per_quantum: 200, maximum_optimizer_steps: 1000000, retained_checkpoint_interval_generations: 1, self_play_backpressure_quanta: 5}
-    inference_retention: {recent_checkpoint_count: 11, milestone_interval: 10}
-  limits: {hourly_price: 0.11522222222222215, maximum_wall_time_seconds: 14700, maximum_open_file_count: 32768, maximum_host_ram_percent: 95.0, minimum_free_disk_gib: 10.0, resource_telemetry_interval_seconds: 5.0}
+    replay:
+      capacity:
+        kind: linear
+        start_generation: 0
+        end_generation: 15
+        start_value: 100000
+        end_value: 500000
+        rounding: nearest
+      maximum_capacity: 500000
+      maximum_policy_entries: 82
+    credit:
+      replay_ratio: 4
+      optimizer_steps_per_quantum: 200
+      maximum_optimizer_steps: 1000000
+      retained_checkpoint_interval_generations: 1
+      self_play_backpressure_quanta: 5
+    inference_retention:
+      recent_checkpoint_count: 11
+      milestone_interval: 10
+  limits:
+    hourly_price: 0.11522222222222216
+    maximum_wall_time_seconds: 14700
+    maximum_open_file_count: 32768
+    maximum_host_ram_percent: 95.0
+    minimum_free_disk_gib: 10.0
+    resource_telemetry_interval_seconds: 5.0
   random_seed: 1209
 evaluation:
   cadence_seconds: 1200
@@ -79,9 +127,15 @@ evaluation:
         maximum_win_probability_uncertainty: 0.15
         maximum_score_uncertainty: 1.5
         minimum_visits: 10000
-  engine: {kind: katago, executable_path: engines/katago, model_path: engines/katago.bin.gz, analysis_configuration_path: engines/katago-analysis.cfg, label_max_visits: 256}
+  engine:
+    kind: katago
+    executable_path: engines/katago
+    model_path: engines/katago.bin.gz
+    analysis_configuration_path: engines/katago-analysis.cfg
+    label_max_visits: 256
   definitions:
-    - {kind: fixed_dataset, definition_id: fixed-dataset}
+    - kind: fixed_dataset
+      definition_id: fixed-dataset
     - kind: previous_checkpoint
       definition_id: previous-20m
       boundary_offset: 1
@@ -91,30 +145,112 @@ evaluation:
         searches_per_move: 64
         parallel_searches: 1
         exploration_constant: 1.0
-        inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 1}
-    - {kind: previous_checkpoint, definition_id: previous-40m, boundary_offset: 2, opening_pair_count: 100, maximum_game_plies: 324, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-60m, boundary_offset: 3, opening_pair_count: 100, maximum_game_plies: 324, search: *evaluation_search}
-    - {kind: reference_checkpoint, definition_id: same-time-baseline, manifest_path: py/training_data/screening/go9-strong/00-baseline/evaluations/reference-checkpoints.json, opening_pair_count: 100, maximum_game_plies: 324, search: *evaluation_search}
-    - {kind: katago, definition_id: katago-64, maximum_visits: 64, opening_pair_count: 50, maximum_game_plies: 324, search: *evaluation_search}
+        inference:
+          inference_workers: 1
+          inference_batch_size: 64
+          outstanding_batches_per_worker: 1
+    - kind: previous_checkpoint
+      definition_id: previous-40m
+      boundary_offset: 2
+      opening_pair_count: 100
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: previous_checkpoint
+      definition_id: previous-60m
+      boundary_offset: 3
+      opening_pair_count: 100
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: reference_checkpoint
+      definition_id: same-time-baseline
+      manifest_path: py/training_data/screening/go9-strong/00-baseline/evaluations/reference-checkpoints.json
+      opening_pair_count: 100
+      maximum_game_plies: 324
+      search: *evaluation_search
+    - kind: katago
+      definition_id: katago-64
+      maximum_visits: 64
+      opening_pair_count: 50
+      maximum_game_plies: 324
+      search: *evaluation_search
 go:
   self_play:
-    search: {full_searches: {kind: linear, start_generation: 0, end_generation: 50, start_value: 64, end_value: 256, rounding: nearest}, fast_searches: {kind: linear, start_generation: 0, end_generation: 50, start_value: 16, end_value: 64, rounding: nearest}, parallel_searches: 1, dirichlet_epsilon: {kind: constant, value: 0.25}, dirichlet_alpha: {kind: constant, value: 0.3}, exploration_constant: {kind: constant, value: 1.5}, first_play_urgency: {kind: reduced_parent_value, reduction: {kind: constant, value: 0.2}}, forced_playouts: {kind: enabled, coefficient: 2.0}}
-    inference: {inference_workers: 1, inference_batch_size: 128, outstanding_batches_per_worker: 2}
-    start_position: {kind: restart_state, true_start_probability: 0.5, candidate_visit_mass: 0.85, minimum_candidates: 2, maximum_candidates: 3, maximum_absolute_root_value: 0.3, minimum_remaining_plies: 15, maximum_archive_positions: 50000, maximum_age_generations: 20}
-    full_search_probability: {kind: linear, start_generation: 0, end_generation: 25, start_value: 1.0, end_value: 0.25, rounding: none}
-    retained_root_visit_fraction: {kind: constant, value: 0.6}
-    greedy_after_ply: {kind: constant, value: 60}
-    starting_temperature: {kind: constant, value: 1.0}
-    final_temperature: {kind: constant, value: 0.1}
-    primary_sample_weight: {kind: constant, value: 1.0}
+    search:
+      full_searches:
+        kind: linear
+        start_generation: 0
+        end_generation: 50
+        start_value: 64
+        end_value: 256
+        rounding: nearest
+      fast_searches:
+        kind: linear
+        start_generation: 0
+        end_generation: 50
+        start_value: 16
+        end_value: 64
+        rounding: nearest
+      parallel_searches: 1
+      dirichlet_epsilon: 0.25
+      dirichlet_alpha: 0.3
+      exploration_constant: 1.5
+      first_play_urgency:
+        kind: reduced_parent_value
+        reduction: 0.2
+      forced_playouts:
+        kind: enabled
+        coefficient: 2.0
+    inference:
+      inference_workers: 1
+      inference_batch_size: 128
+      outstanding_batches_per_worker: 2
+    start_position:
+      kind: restart_state
+      true_start_probability: 0.5
+      candidate_visit_mass: 0.85
+      minimum_candidates: 2
+      maximum_candidates: 3
+      maximum_absolute_root_value: 0.3
+      minimum_remaining_plies: 15
+      maximum_archive_positions: 50000
+      maximum_age_generations: 20
+    full_search_probability:
+      kind: linear
+      start_generation: 0
+      end_generation: 25
+      start_value: 1.0
+      end_value: 0.25
+      rounding: none
+    retained_root_visit_fraction: 0.6
+    greedy_after_ply: 60
+    starting_temperature: 1.0
+    final_temperature: 0.1
+    primary_sample_weight: 1.0
     detailed_statistics_workers: 1
-  rules: {komi_half_points: 14, maximum_moves: 324}
-  representation: {board_size: 9, history_length: 8, binary_channel_count: 16, scalar_channel_count: 1, canonical_player_perspective: true}
+  rules:
+    komi_half_points: 14
+    maximum_moves: 324
+  representation:
+    board_size: 9
+    history_length: 8
+    binary_channel_count: 16
+    scalar_channel_count: 1
+    canonical_player_perspective: true
   objective:
-    policy_loss_weight: {kind: constant, value: 1.0}
-    value_loss_weight: {kind: constant, value: 1.0}
-    root_value_blend: {kind: linear, start_generation: 30, end_generation: 75, start_value: 0.0, end_value: 0.15, rounding: none}
-    value_discount_per_ply: {kind: constant, value: 1.0}
+    policy_loss_weight: 1.0
+    value_loss_weight: 1.0
+    root_value_blend:
+      kind: linear
+      start_generation: 30
+      end_generation: 75
+      start_value: 0.0
+      end_value: 0.15
+      rounding: none
+    value_discount_per_ply: 1.0
     auxiliary_targets:
-      - {kind: next_policy, ply_offset: 1, loss_weight: {kind: constant, value: 0.1}}
-      - {kind: remaining_game_length, loss_weight: {kind: constant, value: 0.1}, normalization_scale: 324}
+      - kind: next_policy
+        ply_offset: 1
+        loss_weight: 0.1
+      - kind: remaining_game_length
+        loss_weight: 0.1
+        normalization_scale: 324

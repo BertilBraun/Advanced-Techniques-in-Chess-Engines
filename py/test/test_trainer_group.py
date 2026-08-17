@@ -31,7 +31,7 @@ def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
         update={
             'global_batch_size': 2,
             'local_batch_size': 2,
-            'learning_rate': {'kind': 'constant', 'value': 0.001},
+            'learning_rate': 0.001,
         }
     )
     network = configuration.training.network.validated_copy(
@@ -64,7 +64,7 @@ def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
     )
     replay = configuration.training.lifecycle.replay.validated_copy(
         update={
-            'capacity': {'kind': 'constant', 'value': 2},
+            'capacity': 2,
             'maximum_capacity': 2,
             'maximum_policy_entries': 2,
         }

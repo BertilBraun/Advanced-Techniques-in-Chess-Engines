@@ -7,4 +7,6 @@ training:
 go:
   self_play:
     search:
-      forced_playouts: {kind: enabled, coefficient: 2.0}
+      forced_playouts:
+        kind: enabled
+        coefficient: 2.0

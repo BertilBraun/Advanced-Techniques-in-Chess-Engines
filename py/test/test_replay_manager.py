@@ -275,7 +275,7 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
     )
     publish_completed_self_play_game(inbox, second_game)
     configuration = ReplayConfiguration(
-        capacity={'kind': 'constant', 'value': 4},
+        capacity=4,
         maximum_capacity=6,
         maximum_policy_entries=1,
     )
@@ -328,7 +328,7 @@ def test_replay_manager_keeps_malformed_game_for_inspection(tmp_path: Path) -> N
     malformed = inbox / 'malformed.json'
     malformed.write_text('{}', encoding='utf-8')
     configuration = ReplayConfiguration(
-        capacity={'kind': 'constant', 'value': 4},
+        capacity=4,
         maximum_capacity=4,
         maximum_policy_entries=1,
     )
@@ -366,7 +366,7 @@ def test_replay_ingestion_updates_central_resignation_state(tmp_path: Path) -> N
     inbox = tmp_path / 'completed-games' / 'inbox'
     publish_completed_self_play_game(inbox, game)
     replay_configuration = ReplayConfiguration(
-        capacity={'kind': 'constant', 'value': 4},
+        capacity=4,
         maximum_capacity=4,
         maximum_policy_entries=1,
     )

@@ -14,7 +14,7 @@ training:
       parallel_games_per_process: 8
   lifecycle:
     replay:
-      capacity: {kind: constant, value: 2048}
+      capacity: 2048
       maximum_capacity: 2048
     credit:
       replay_ratio: 1
@@ -29,7 +29,8 @@ evaluation:
   job_timeout_seconds: 120
   maximum_concurrent_jobs: 3
   definitions:
-    - {kind: fixed_dataset, definition_id: fixed-dataset}
+    - kind: fixed_dataset
+      definition_id: fixed-dataset
     - kind: previous_checkpoint
       definition_id: previous-60s
       boundary_offset: 1
@@ -43,13 +44,18 @@ evaluation:
           inference_workers: 1
           inference_batch_size: 8
           outstanding_batches_per_worker: 1
-    - {kind: katago, definition_id: katago-smoke, maximum_visits: 2, opening_pair_count: 1, maximum_game_plies: 32, search: *smoke_search}
+    - kind: katago
+      definition_id: katago-smoke
+      maximum_visits: 2
+      opening_pair_count: 1
+      maximum_game_plies: 32
+      search: *smoke_search
 go:
   self_play:
     search:
-      full_searches: {kind: constant, value: 2}
-      fast_searches: {kind: constant, value: 1}
+      full_searches: 2
+      fast_searches: 1
     inference:
       inference_batch_size: 8
-    greedy_after_ply: {kind: constant, value: 4}
+    greedy_after_ply: 4
     detailed_statistics_workers: 1

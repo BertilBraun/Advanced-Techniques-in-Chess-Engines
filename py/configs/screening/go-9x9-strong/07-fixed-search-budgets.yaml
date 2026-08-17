@@ -7,5 +7,5 @@ training:
 go:
   self_play:
     search:
-      full_searches: {kind: constant, value: 256}
-      fast_searches: {kind: constant, value: 64}
+      full_searches: 256
+      fast_searches: 64

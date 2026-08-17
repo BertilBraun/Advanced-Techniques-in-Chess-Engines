@@ -174,12 +174,12 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
                 {
                     'kind': 'next_policy',
                     'ply_offset': 1,
-                    'loss_weight': {'kind': 'constant', 'value': 0.25},
+                    'loss_weight': 0.25,
                 },
                 {
                     'kind': 'next_policy',
                     'ply_offset': 3,
-                    'loss_weight': {'kind': 'constant', 'value': 0.1},
+                    'loss_weight': 0.1,
                 },
             ]
         }
@@ -214,7 +214,7 @@ def test_remaining_game_length_layout_is_a_scalar_target() -> None:
                 {
                     'kind': 'remaining_game_length',
                     'normalization_scale': 256,
-                    'loss_weight': {'kind': 'constant', 'value': 0.15},
+                    'loss_weight': 0.15,
                 }
             ]
         }

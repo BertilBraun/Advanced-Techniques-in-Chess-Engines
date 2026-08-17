@@ -3,7 +3,8 @@ run:
   run_name: vast-chess-8gpu-1d
   tensorboard_run_directory: vast-chess-8gpu-1d
   stage: clean_retrain
-  resume: {mode: random_initialization}
+  resume:
+    mode: random_initialization
   hardware:
     provider_name: vast.ai
     offer_id: instance-47400225-machine-112617-host-115630
@@ -14,9 +15,9 @@ run:
     minimum_disk_gib: 75
   environment:
     runtime_image: vastai/pytorch:cuda-13.0.3-auto
-    python_version: "3.12"
-    torch_version: "2.12.1+cu126"
-    cuda_version: "12.6"
+    python_version: '3.12'
+    torch_version: 2.12.1+cu126
+    cuda_version: '12.6'
     dependency_lock_path: py/requirements-training.lock
     dependency_lock_sha256: f027ad99a12742660107a2857b18cbc6b821a95971c2ecf2c4ad814c38116171
     minimum_open_file_soft_limit: 65536
@@ -25,7 +26,9 @@ training:
   network:
     num_layers: 12
     hidden_size: 112
-    residual_context: {kind: global_pooling, placement: every_second_block}
+    residual_context:
+      kind: global_pooling
+      placement: every_second_block
     num_policy_channels: 4
     num_value_channels: 2
     value_fc_size: 48
@@ -35,9 +38,15 @@ training:
     optimizer: adamw
     precision: float32
     compilation: disabled
-    learning_rate: {kind: linear, start_generation: 0, end_generation: 150, start_value: 0.01, end_value: 0.002, rounding: none}
+    learning_rate:
+      kind: linear
+      start_generation: 0
+      end_generation: 150
+      start_value: 0.01
+      end_value: 0.002
+      rounding: none
     max_grad_norm: 1.0
-    duplicate_multiplicity_weight_cap:
+    duplicate_multiplicity_weight_cap: null
   topology:
     trainer:
       device_type: cuda
@@ -51,10 +60,17 @@ training:
       parallel_games_per_process: 1024
       tensorboard_processes: 1
       node_ids_to_pause_during_training: [1, 2, 4, 5, 7, 8, 10, 11]
-    evaluation: {device_cycle: [4, 5, 6, 7]}
+    evaluation:
+      device_cycle: [4, 5, 6, 7]
   lifecycle:
     replay:
-      capacity: {kind: linear, start_generation: 0, end_generation: 100, start_value: 200000, end_value: 2500000, rounding: nearest}
+      capacity:
+        kind: linear
+        start_generation: 0
+        end_generation: 100
+        start_value: 200000
+        end_value: 2500000
+        rounding: nearest
       maximum_capacity: 2500000
       maximum_policy_entries: 60
     credit:
@@ -63,7 +79,9 @@ training:
       maximum_optimizer_steps: 1000000000
       retained_checkpoint_interval_generations: 3
       self_play_backpressure_quanta: 5
-    inference_retention: {recent_checkpoint_count: 11, milestone_interval: 10}
+    inference_retention:
+      recent_checkpoint_count: 11
+      milestone_interval: 10
   limits:
     hourly_price: 0.4608888888888886
     maximum_cost: 12.0
@@ -81,7 +99,10 @@ evaluation:
   maximum_concurrent_jobs: 10
   dataset:
     path: /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v1.bin
-    source: {kind: engine_self_play, random_seed: 20260811, move_sampling_temperature: 1.0}
+    source:
+      kind: engine_self_play
+      random_seed: 20260811
+      move_sampling_temperature: 1.0
   openings:
     path: /workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-openings-v1.json
     opening_count: 50
@@ -99,7 +120,8 @@ evaluation:
     multi_pv: 8
     policy_softmax_temperature: 0.15
   definitions:
-    - {kind: fixed_dataset, definition_id: fixed-dataset}
+    - kind: fixed_dataset
+      definition_id: fixed-dataset
     - kind: previous_checkpoint
       definition_id: previous-20m
       boundary_offset: 1
@@ -109,15 +131,57 @@ evaluation:
         searches_per_move: 64
         parallel_searches: 1
         exploration_constant: 1.0
-        inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 1}
-    - {kind: previous_checkpoint, definition_id: previous-40m, boundary_offset: 2, opening_pair_count: 50, maximum_game_plies: 300, search: *evaluation_search}
-    - {kind: previous_checkpoint, definition_id: previous-60m, boundary_offset: 3, opening_pair_count: 50, maximum_game_plies: 300, search: *evaluation_search}
-    - {kind: stockfish, definition_id: stockfish-level-0, skill_level: 0, opening_pair_count: 50, maximum_game_plies: 300, search: *evaluation_search}
-    - {kind: stockfish, definition_id: stockfish-level-1, skill_level: 1, opening_pair_count: 50, maximum_game_plies: 300, search: *evaluation_search}
-    - {kind: stockfish, definition_id: stockfish-level-2, skill_level: 2, opening_pair_count: 50, maximum_game_plies: 300, search: *evaluation_search}
-    - {kind: stockfish, definition_id: stockfish-level-3, skill_level: 3, opening_pair_count: 50, maximum_game_plies: 300, search: *evaluation_search}
-    - {kind: stockfish, definition_id: stockfish-level-4, skill_level: 4, opening_pair_count: 50, maximum_game_plies: 300, search: *evaluation_search}
-    - {kind: stockfish_fixed_nodes, definition_id: stockfish-fixed-nodes-1000, opening_pair_count: 50, maximum_game_plies: 300, search: *evaluation_search}
+        inference:
+          inference_workers: 1
+          inference_batch_size: 64
+          outstanding_batches_per_worker: 1
+    - kind: previous_checkpoint
+      definition_id: previous-40m
+      boundary_offset: 2
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: previous_checkpoint
+      definition_id: previous-60m
+      boundary_offset: 3
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish
+      definition_id: stockfish-level-0
+      skill_level: 0
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish
+      definition_id: stockfish-level-1
+      skill_level: 1
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish
+      definition_id: stockfish-level-2
+      skill_level: 2
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish
+      definition_id: stockfish-level-3
+      skill_level: 3
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish
+      definition_id: stockfish-level-4
+      skill_level: 4
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-1000
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
 chess:
   self_play:
     search:
@@ -140,12 +204,19 @@ chess:
           - {start_generation: 20, value: 125}
           - {start_generation: 35, value: 150}
       parallel_searches: 1
-      dirichlet_epsilon: {kind: constant, value: 0.25}
-      dirichlet_alpha: {kind: constant, value: 0.3}
-      exploration_constant: {kind: constant, value: 1.5}
-      first_play_urgency: {kind: reduced_parent_value, reduction: {kind: constant, value: 0.2}}
-      forced_playouts: {kind: enabled, coefficient: 1.5}
-    inference: {inference_workers: 2, inference_batch_size: 64, outstanding_batches_per_worker: 2}
+      dirichlet_epsilon: 0.25
+      dirichlet_alpha: 0.3
+      exploration_constant: 1.5
+      first_play_urgency:
+        kind: reduced_parent_value
+        reduction: 0.2
+      forced_playouts:
+        kind: enabled
+        coefficient: 1.5
+    inference:
+      inference_workers: 2
+      inference_batch_size: 64
+      outstanding_batches_per_worker: 2
     start_position:
       kind: restart_state
       true_start_probability: 0.5
@@ -156,19 +227,41 @@ chess:
       minimum_remaining_plies: 15
       maximum_archive_positions: 50000
       maximum_age_generations: 20
-    full_search_probability: {kind: linear, start_generation: 0, end_generation: 25, start_value: 1.0, end_value: 0.25, rounding: none}
-    retained_root_visit_fraction: {kind: constant, value: 0.6}
-    greedy_after_ply: {kind: constant, value: 200}
-    maximum_game_plies: {kind: linear, start_generation: 0, end_generation: 50, start_value: 200, end_value: 600, rounding: nearest}
-    force_fast_search_after_ply: {kind: constant, value: 250}
-    starting_temperature: {kind: constant, value: 1.3}
-    final_temperature: {kind: constant, value: 0.1}
-    primary_sample_weight: {kind: constant, value: 1.0}
+    full_search_probability:
+      kind: linear
+      start_generation: 0
+      end_generation: 25
+      start_value: 1.0
+      end_value: 0.25
+      rounding: none
+    retained_root_visit_fraction: 0.6
+    greedy_after_ply: 200
+    maximum_game_plies:
+      kind: linear
+      start_generation: 0
+      end_generation: 50
+      start_value: 200
+      end_value: 600
+      rounding: nearest
+    force_fast_search_after_ply: 250
+    starting_temperature: 1.3
+    final_temperature: 0.1
+    primary_sample_weight: 1.0
   objective:
-    policy_loss_weight: {kind: constant, value: 1.0}
-    value_loss_weight: {kind: constant, value: 1.0}
-    root_value_blend: {kind: linear, start_generation: 20, end_generation: 40, start_value: 0.0, end_value: 0.15, rounding: none}
-    value_discount_per_ply: {kind: constant, value: 1.0}
+    policy_loss_weight: 1.0
+    value_loss_weight: 1.0
+    root_value_blend:
+      kind: linear
+      start_generation: 20
+      end_generation: 40
+      start_value: 0.0
+      end_value: 0.15
+      rounding: none
+    value_discount_per_ply: 1.0
     auxiliary_targets:
-      - {kind: next_policy, ply_offset: 1, loss_weight: {kind: constant, value: 0.1}}
-      - {kind: remaining_game_length, loss_weight: {kind: constant, value: 0.1}, normalization_scale: 600}
+      - kind: next_policy
+        ply_offset: 1
+        loss_weight: 0.1
+      - kind: remaining_game_length
+        loss_weight: 0.1
+        normalization_scale: 600

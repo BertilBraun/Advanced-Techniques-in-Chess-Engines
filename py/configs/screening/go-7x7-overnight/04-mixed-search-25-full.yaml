@@ -6,4 +6,4 @@ training:
   save_path: py/training_data/screening/go7-overnight/04-mixed-search-25-full
 go:
   self_play:
-    full_search_probability: {kind: constant, value: 0.25}
+    full_search_probability: 0.25
