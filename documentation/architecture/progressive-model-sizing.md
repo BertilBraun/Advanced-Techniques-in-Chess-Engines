@@ -52,6 +52,11 @@ The promotion configuration explicitly owns:
 Elapsed eligibility uses the evaluation manager's persisted active-run clock. It therefore resumes from accumulated
 elapsed time after a stopped experiment and does not count preparation or stopped time.
 
+The optimal chess production configuration uses `6x64`, `12x120`, and `18x160` residual stages. Their published
+policy/value networks contain 927,735, 3,476,491, and 8,407,551 parameters respectively. Training-only auxiliary
+heads increase the in-memory training models to 1,411,680, 3,960,884, and 8,892,264 parameters; published size
+targets deliberately exclude those trimmed heads.
+
 ## Quantum and replay semantics
 
 At a training boundary the coordinator pauses every self-play worker. It freezes a typed replay-batch identity with

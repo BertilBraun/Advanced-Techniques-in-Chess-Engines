@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 
 import pytest
+import torch
 import yaml
 from pydantic import ValidationError
 
@@ -28,6 +29,7 @@ from src.self_play.parameters import (
 )
 from src.training.network import (
     GlobalPoolingResidualContext,
+    Network,
     ResidualContextPlacement,
     SqueezeExcitationResidualContext,
 )
@@ -404,15 +406,23 @@ def test_eight_gpu_chess_optimal_configuration_resolves_distilled_curriculum() -
     assert progressive is not None
     assert tuple(model.model_id for model in progressive.models) == (
         'chess-6x64',
-        'chess-9x88',
-        'chess-12x112',
+        'chess-12x120',
+        'chess-18x160',
     )
     assert tuple(model.training_start_days for model in progressive.models) == pytest.approx((0.0, 0.75, 1.5))
     assert tuple((model.network.num_layers, model.network.hidden_size) for model in progressive.models) == (
         (6, 64),
-        (9, 88),
-        (12, 112),
+        (12, 120),
+        (18, 160),
     )
+    network_dimensions = ChessImplementation(configuration).network_dimensions
+    assert tuple(
+        sum(
+            parameter.numel()
+            for parameter in Network(model.network, torch.device('cpu'), network_dimensions).parameters()
+        )
+        for model in progressive.models
+    ) == (927_735, 3_476_491, 8_407_551)
     assert progressive.promotion.decay == pytest.approx(0.8)
     assert progressive.promotion.warmup_quanta == 10
     assert progressive.promotion.maximum_relative_loss == pytest.approx(1.01)

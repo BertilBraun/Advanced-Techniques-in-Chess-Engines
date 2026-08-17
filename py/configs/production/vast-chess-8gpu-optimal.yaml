@@ -106,22 +106,22 @@ training:
           num_policy_channels: 4
           num_value_channels: 2
           value_fc_size: 48
-      - model_id: chess-9x88
+      - model_id: chess-12x120
         training_start_days: 0.75
         network:
-          num_layers: 9
-          hidden_size: 88
+          num_layers: 12
+          hidden_size: 120
           residual_context:
             kind: global_pooling
             placement: every_second_block
           num_policy_channels: 4
           num_value_channels: 2
           value_fc_size: 48
-      - model_id: chess-12x112
+      - model_id: chess-18x160
         training_start_days: 1.5
         network:
-          num_layers: 12
-          hidden_size: 112
+          num_layers: 18
+          hidden_size: 160
           residual_context:
             kind: global_pooling
             placement: every_second_block
