@@ -17,6 +17,7 @@ from src.replay.store import ReplayStore
 from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
+from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.configuration import TrainingCompilation, TrainingPrecision
 from src.training.network import Network
@@ -130,14 +131,28 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
         layout=layout,
     )
     store.close()
-    trainer_group = TrainerGroup(configuration, game, starting_checkpoint)
+    trainer_group = TrainerGroup(
+        configuration,
+        game,
+        TrainerStartup(
+            network=configuration.training.network,
+            save_path=tmp_path,
+            starting_generation=starting_checkpoint.generation,
+        ),
+    )
 
     result = trainer_group.train_quantum(
-        description,
-        TrainingProgress(
-            completed_optimizer_steps=0,
-            optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
-        ),
+        TrainerQuantum(
+            replay=description,
+            model_progress=TrainingProgress(
+                completed_optimizer_steps=0,
+                optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
+            ),
+            replay_source_progress=TrainingProgress(
+                completed_optimizer_steps=0,
+                optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
+            ),
+        )
     )
     trainer_group.close()
 

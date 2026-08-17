@@ -116,6 +116,16 @@ Private retention keeps the exact latest checkpoint for every candidate and any 
 quantum; older private model, optimizer, inference, and manifest files are removed. Ordinary published checkpoint
 retention remains unchanged.
 
+The coordinator delegates the complete quantum to a `TrainingSession`. Fixed training and progressive training are
+separate implementations with typed result variants; the coordinator only pauses the workers selected by the
+session, commits one publication, hands the result to `TrainingReporter`, and resumes self-play.
+`ProgressiveTrainingSession` owns
+candidate ordering, private checkpoint import, shared-replay training, promotion, publication, and recovery.
+
+Evaluation startup is explicit. On restart, persisted evaluation jobs remain dormant until any pending progressive
+quantum has completed and its active checkpoint has been published. This prevents resumed evaluation from
+competing with catch-up training.
+
 ## Telemetry
 
 Each model writes separate TensorBoard series below `progressive_models/<model-id>/`, including policy, WDL, total

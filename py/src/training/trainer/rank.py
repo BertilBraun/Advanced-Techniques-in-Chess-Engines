@@ -24,13 +24,13 @@ from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import auxiliary_head_output_size
 from src.training.distributions import TrainingDistributionSnapshot, capture_training_distributions
 from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
-from src.training.network import NetworkParams
 from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
     StopTrainerCommand,
     TrainerCommand,
     TrainerStopped,
+    TrainerStartup,
     TrainQuantumCommand,
 )
 
@@ -51,7 +51,7 @@ class _RankRuntime:
     distributed_model: DistributedDataParallel
     optimizer: torch.optim.Optimizer
     device: torch.device
-    save_path: str
+    save_path: Path
 
 
 @dataclass(frozen=True)
@@ -83,9 +83,7 @@ def _initialize_rank(
     world_size: int,
     rendezvous_port: int,
     configuration: ExperimentConfiguration,
-    network: NetworkParams,
-    save_path: str,
-    starting_generation: int,
+    startup: TrainerStartup,
 ) -> _RankRuntime:
     game = create_game_implementation(configuration)
     topology = configuration.training.topology.trainer
@@ -102,12 +100,12 @@ def _initialize_rank(
         world_size=world_size,
     )
     auxiliary_sizes = tuple(auxiliary_head_output_size(head) for head in game.target_layout.auxiliary_heads)
-    initial_checkpoint_exists = checkpoint_manifest_path(starting_generation, save_path).exists()
+    initial_checkpoint_exists = checkpoint_manifest_path(startup.starting_generation, startup.save_path).exists()
     model, optimizer = load_model_and_optimizer(
-        starting_generation,
-        network,
+        startup.starting_generation,
+        startup.network,
         device,
-        save_path,
+        startup.save_path,
         configuration.training.trainer.optimizer,
         game.network_dimensions,
         auxiliary_sizes,
@@ -120,9 +118,9 @@ def _initialize_rank(
     )
     if not initial_checkpoint_exists:
         if rank == 0:
-            save_model_and_optimizer(model, optimizer, starting_generation, save_path)
+            save_model_and_optimizer(model, optimizer, startup.starting_generation, startup.save_path)
         distributed.barrier()
-    return _RankRuntime(game, model, distributed_model, optimizer, device, save_path)
+    return _RankRuntime(game, model, distributed_model, optimizer, device, startup.save_path)
 
 
 def _create_distributed_model(
@@ -177,9 +175,7 @@ def trainer_rank_main(
     world_size: int,
     rendezvous_port: int,
     configuration_json: str,
-    network: NetworkParams,
-    save_path: str,
-    starting_generation: int,
+    startup: TrainerStartup,
 ) -> None:
     try:
         configuration = load_experiment_configuration_json(configuration_json)
@@ -188,9 +184,7 @@ def trainer_rank_main(
             world_size,
             rendezvous_port,
             configuration,
-            network,
-            save_path,
-            starting_generation,
+            startup,
         )
         _run_rank_commands(connection, rank, world_size, configuration, runtime)
     except BaseException:
@@ -275,13 +269,13 @@ def _save_rank_checkpoint(
     model: Network,
     optimizer: torch.optim.Optimizer,
     command: TrainQuantumCommand,
-    save_path: str,
+    save_path: Path,
 ) -> CheckpointReference | None:
     if rank != 0:
         return None
     generation = command.target_progress.model_generation
     save_model_and_optimizer(model, optimizer, generation, save_path)
-    return CheckpointReference.load(Path(save_path), generation)
+    return CheckpointReference.load(save_path, generation)
 
 
 def train_rank_quantum(
@@ -293,7 +287,7 @@ def train_rank_quantum(
     ddp: DistributedDataParallel,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
-    save_path: str,
+    save_path: Path,
     command: TrainQuantumCommand,
 ) -> RankTrainingResult:
     started_at = time.perf_counter()

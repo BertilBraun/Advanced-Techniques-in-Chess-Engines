@@ -10,9 +10,9 @@ from src.replay.manager import IngestedCompletedGame, ReplayDescription
 from src.self_play.completed_game import TerminationReason
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
-from src.training.coordinator import Coordinator
-import src.training.coordinator as coordinator_module
 from src.training.credit_ledger import CreditLedgerState
+from src.training.reporting import TrainingReporter
+import src.training.reporting as reporting_module
 from src.training.telemetry import completed_game_length_telemetry, training_lifecycle_telemetry
 from src.training.targets import TrainingTargetLayout
 
@@ -96,12 +96,11 @@ def test_completed_game_length_telemetry_omits_empty_windows() -> None:
     assert completed_game_length_telemetry(()) is None
 
 
-def test_coordinator_logs_completed_game_length_window(monkeypatch: pytest.MonkeyPatch) -> None:
-    coordinator = Coordinator.__new__(Coordinator)
-    coordinator._completed_games_since_last_quantum = [
+def test_training_reporter_logs_completed_game_length_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    completed_games = (
         IngestedCompletedGame(length_plies=20, termination_reason=TerminationReason.NATURAL),
         IngestedCompletedGame(length_plies=40, termination_reason=TerminationReason.RESIGNATION),
-    ]
+    )
     scalars: dict[str, tuple[float, int | None]] = {}
     histograms: dict[str, tuple[np.ndarray, int | None]] = {}
 
@@ -111,10 +110,10 @@ def test_coordinator_logs_completed_game_length_window(monkeypatch: pytest.Monke
     def record_histogram(name: str, values: np.ndarray, step: int | None = None) -> None:
         histograms[name] = (values, step)
 
-    monkeypatch.setattr(coordinator_module, 'log_scalar', record_scalar)
-    monkeypatch.setattr(coordinator_module, 'log_histogram', record_histogram)
+    monkeypatch.setattr(reporting_module, 'log_scalar', record_scalar)
+    monkeypatch.setattr(reporting_module, 'log_histogram', record_histogram)
 
-    coordinator._record_completed_game_lengths(generation=7)
+    TrainingReporter._record_completed_game_lengths(completed_games, generation=7)
 
     assert scalars['self_play/completed_games'] == (2, 7)
     assert scalars['self_play/game_length_plies_mean'] == (30.0, 7)
@@ -123,7 +122,6 @@ def test_coordinator_logs_completed_game_length_window(monkeypatch: pytest.Monke
     assert scalars['self_play/termination/resignation/game_length_plies_mean'] == (40.0, 7)
     assert np.array_equal(histograms['self_play/game_length_plies'][0], np.asarray((20, 40), dtype=np.int32))
     assert histograms['self_play/game_length_plies'][1] == 7
-    assert not coordinator._completed_games_since_last_quantum
 
 
 @pytest.mark.parametrize(
