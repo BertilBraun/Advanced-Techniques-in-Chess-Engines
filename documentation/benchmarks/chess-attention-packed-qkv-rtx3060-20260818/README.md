@@ -1,5 +1,10 @@
 # Packed-QKV attention optimization on RTX 3060
 
+> **Inference correction:** the batch-64 inference figures below were measured with FP32 model parameters and
+> inputs even though CUDA production inference converts both to BF16. They are retained as historical artifacts but
+> must not be used to estimate self-play throughput. The corrected BF16 investigation is recorded in
+> [`../chess-attention-sdpa-backends-rtx3060-20260818/README.md`](../chess-attention-sdpa-backends-rtx3060-20260818/README.md).
+
 ## Question
 
 The first contended comparison found the 4M attention model trained 29% slower than its parameter-matched CNN
@@ -42,10 +47,9 @@ It does not reduce peak training memory, and it does not improve the short batch
 remaining training gap is consistent with flash-attention backward, LayerNorm, feed-forward, residual, and optimizer
 kernel fragmentation rather than an attention fallback or incorrect tensor shape.
 
-The optimization is worth retaining as the cleaner attention primitive, but it does not make the attention candidate
-an efficiency-equivalent replacement for the CNN on RTX 3060. A playing-strength or sample-efficiency gain would need
-to justify approximately 14% lower training throughput, 28% lower batch-64 inference throughput, and 2.43x peak
-allocated training memory at this 4M scale.
+The optimization is worth retaining as the cleaner attention primitive. It leaves a 14% training-throughput deficit
+at this scale. The inference and self-play conclusion originally drawn from this table is invalid because of the FP32
+benchmark mismatch described above.
 
 ## Artifact hashes
 

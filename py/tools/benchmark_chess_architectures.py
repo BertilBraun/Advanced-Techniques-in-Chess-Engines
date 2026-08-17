@@ -262,25 +262,18 @@ def _inference_measurements(
     device: torch.device,
     world_size: int,
 ) -> tuple[InferenceMeasurement, ...]:
-    network.eval()
+    inference_network = _prepare_inference_network(network)
     measurements: list[InferenceMeasurement] = []
-    dimensions = network.dimensions
     with torch.inference_mode():
         for batch_size in plan.inference.batch_sizes:
-            states = torch.zeros(
-                batch_size,
-                dimensions.channels,
-                dimensions.rows,
-                dimensions.columns,
-                device=device,
-            )
+            states = _create_inference_states(network, batch_size, device)
             for _ in range(plan.inference.warmup_batches):
-                network(states)
+                inference_network(states)
             torch.cuda.synchronize(device)
             torch.cuda.reset_peak_memory_stats(device)
             started = time.perf_counter()
             for _ in range(plan.inference.measured_batches):
-                network(states)
+                inference_network(states)
             torch.cuda.synchronize(device)
             elapsed = time.perf_counter() - started
             mean_seconds = elapsed / plan.inference.measured_batches
@@ -306,6 +299,28 @@ def _inference_measurements(
                 )
             )
     return tuple(measurements)
+
+
+def _prepare_inference_network(network: Network) -> torch.jit.ScriptModule:
+    network.auxiliaryHeads = nn.ModuleList()
+    network.auxiliary_output_sizes = ()
+    network.eval()
+    network.fuse_model()
+    inference_network = torch.jit.script(network)
+    inference_network.to(dtype=torch.bfloat16)
+    return inference_network
+
+
+def _create_inference_states(network: Network, batch_size: int, device: torch.device) -> Tensor:
+    dimensions = network.dimensions
+    return torch.zeros(
+        batch_size,
+        dimensions.channels,
+        dimensions.rows,
+        dimensions.columns,
+        device=device,
+        dtype=torch.bfloat16,
+    )
 
 
 def _run_benchmark(arguments: argparse.Namespace, plan: ArchitectureBenchmarkPlan) -> None:

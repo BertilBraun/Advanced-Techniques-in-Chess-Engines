@@ -3,9 +3,12 @@ from pathlib import Path
 
 import pytest
 import numpy as np
+import torch
 
 from src.training.architecture_benchmark import load_architecture_benchmark_plan
-from tools.benchmark_chess_architectures import _run_benchmark
+from src.training.architecture_catalog import load_architecture_catalog
+from src.training.network import Network
+from tools.benchmark_chess_architectures import _create_inference_states, _prepare_inference_network, _run_benchmark
 from tools.create_synthetic_architecture_replay import ReplayGenerationArguments, create_synthetic_architecture_replay
 
 
@@ -46,6 +49,24 @@ def test_chess_architecture_benchmark_refuses_gpu_work_without_acknowledgement()
 
     with pytest.raises(ValueError, match='acknowledge-gpu-load'):
         _run_benchmark(arguments, plan)
+
+
+def test_inference_measurement_uses_bfloat16_model_and_inputs() -> None:
+    plan = load_architecture_benchmark_plan(Path('configs/benchmarks/chess-architecture-uncontended-15s.yaml'))
+    catalog = load_architecture_catalog(plan.catalog_path)
+    definition = catalog.models[0].definition
+    network = Network(
+        definition.architecture,
+        torch.device('cpu'),
+        definition.dimensions,
+        definition.auxiliary_output_sizes,
+    )
+    inference_network = _prepare_inference_network(network)
+    states = _create_inference_states(network, batch_size=64, device=torch.device('cpu'))
+
+    assert states.dtype is torch.bfloat16
+    assert states.shape == (64, 29, 8, 8)
+    assert {parameter.dtype for parameter in inference_network.parameters()} == {torch.bfloat16}
 
 
 def test_synthetic_architecture_replay_is_deterministic(tmp_path: Path) -> None:
