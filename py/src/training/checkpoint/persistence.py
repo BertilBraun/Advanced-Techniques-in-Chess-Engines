@@ -14,7 +14,7 @@ from src.training.checkpoint.contracts import (
 )
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
 from src.training.configuration import OptimizerType
-from src.training.network import Network, NetworkParams
+from src.training.network import Network, NetworkConfiguration, NetworkDefinition
 from src.util.atomic_file import write_text_atomically
 from src.util.log import LogLevel, log
 
@@ -32,7 +32,7 @@ def _temporary_path(path: Path) -> Path:
 
 
 def create_model(
-    args: NetworkParams,
+    args: NetworkConfiguration,
     device: torch.device,
     dimensions: NetworkDimensions,
     auxiliary_output_sizes: tuple[int, ...] = (),
@@ -51,7 +51,7 @@ def create_optimizer(model: Network, type: OptimizerType) -> torch.optim.Optimiz
 
 def load_model(
     path: str | PathLike[str],
-    args: NetworkParams,
+    args: NetworkConfiguration,
     device: torch.device,
     dimensions: NetworkDimensions,
     auxiliary_output_sizes: tuple[int, ...] = (),
@@ -127,7 +127,7 @@ def load_optimizer(
 
 def load_model_and_optimizer(
     generation: int,
-    args: NetworkParams,
+    args: NetworkConfiguration,
     device: torch.device,
     save_folder: str | PathLike[str],
     type: OptimizerType,
@@ -144,6 +144,13 @@ def load_model_and_optimizer(
         raise ValueError(f'Checkpoint generation cannot be negative: {generation}')
 
     manifest = load_checkpoint_manifest(generation, save_folder)
+    expected_network = NetworkDefinition(
+        architecture=args,
+        dimensions=dimensions,
+        auxiliary_output_sizes=auxiliary_output_sizes,
+    )
+    if manifest.network != expected_network:
+        raise ValueError('Checkpoint network definition does not match the configured architecture.')
     model = load_model(
         Path(save_folder) / manifest.model_path,
         args,
@@ -181,7 +188,11 @@ def save_model_and_optimizer(
     fused_model.eval()
     fused_model.fuse_model()
 
-    torch.jit.script(fused_model).save(str(temporary_jit_path))
+    torch.jit.save(
+        torch.jit.script(fused_model),
+        str(temporary_jit_path),
+        _extra_files={'network.json': fused_model.checkpoint_definition().model_dump_json()},
+    )
 
     temporary_model_path.replace(raw_model_path)
     temporary_optimizer_path.replace(raw_optimizer_path)
@@ -189,6 +200,7 @@ def save_model_and_optimizer(
 
     manifest = CheckpointManifest(
         generation=generation,
+        network=model.checkpoint_definition(),
         model_path=raw_model_path.name,
         model_sha256=_sha256(raw_model_path),
         optimizer_path=raw_optimizer_path.name,
@@ -245,6 +257,7 @@ def import_checkpoint(
 
     imported_manifest = CheckpointManifest(
         generation=generation,
+        network=source_manifest.network,
         model_path=destination_paths[0].name,
         model_sha256=source_manifest.model_sha256,
         optimizer_path=destination_paths[1].name,

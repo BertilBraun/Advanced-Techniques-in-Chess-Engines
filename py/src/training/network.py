@@ -44,13 +44,17 @@ ResidualContextConfiguration: TypeAlias = Annotated[
 ]
 
 
-class NetworkParams(FrozenModel):
-    num_layers: int = Field(gt=0)
-    hidden_size: int = Field(gt=0)
-    residual_context: ResidualContextConfiguration = DisabledResidualContext()
+class NetworkHeadParams(FrozenModel):
     num_policy_channels: int = Field(default=4, gt=0)
     num_value_channels: int = Field(default=2, gt=0)
     value_fc_size: int = Field(default=48, gt=0)
+
+
+class NetworkParams(NetworkHeadParams):
+    kind: Literal['convolutional'] = 'convolutional'
+    num_layers: int = Field(gt=0)
+    hidden_size: int = Field(gt=0)
+    residual_context: ResidualContextConfiguration = DisabledResidualContext()
 
     @model_validator(mode='after')
     def validate_global_pooling_width(self) -> NetworkParams:
@@ -60,20 +64,41 @@ class NetworkParams(FrozenModel):
         return self
 
 
+class AttentionNetworkParams(NetworkHeadParams):
+    kind: Literal['attention'] = 'attention'
+    num_layers: int = Field(gt=0)
+    embedding_size: int = Field(gt=0)
+    num_heads: int = Field(gt=0)
+    feedforward_size: int = Field(gt=0)
+    dropout: float = Field(default=0.0, ge=0.0, lt=1.0)
+
+    @model_validator(mode='after')
+    def validate_attention_dimensions(self) -> AttentionNetworkParams:
+        if self.embedding_size % self.num_heads:
+            raise ValueError('Attention embedding size must be divisible by the number of heads.')
+        return self
+
+
+SerializedNetworkConfiguration: TypeAlias = Annotated[
+    NetworkParams | AttentionNetworkParams,
+    Field(discriminator='kind'),
+]
+
+NetworkConfiguration: TypeAlias = NetworkParams | AttentionNetworkParams
+
+
+class NetworkDefinition(FrozenModel):
+    architecture: SerializedNetworkConfiguration
+    dimensions: NetworkDimensions
+    auxiliary_output_sizes: tuple[int, ...]
+
+
 class Network(nn.Module):
-    """
-    The neural network model for the AlphaZero bot.
-
-    The architecture is based on the AlphaZero paper, but with less layers.
-
-    We use a residual neural network with NUM_RES_BLOCKS residual blocks.
-    The input to the network is a ENCODING_CHANNELSxrow_countxcolumn_count tensor representing the board state.
-    The output of the network is a policy over all possible moves and a value for the current board state.
-    """
+    """AlphaZero training model with a configured convolutional or attention backbone."""
 
     def __init__(
         self,
-        args: NetworkParams,
+        args: NetworkConfiguration,
         device: torch.device,
         dimensions: NetworkDimensions,
         auxiliary_output_sizes: tuple[int, ...] = (),
@@ -90,21 +115,44 @@ class Network(nn.Module):
         column_count = dimensions.columns
         action_size = dimensions.actions
 
-        self.startBlock = nn.Sequential(
-            nn.Conv2d(encoding_channels, args.hidden_size, kernel_size=3, padding='same', bias=False),
-            nn.BatchNorm2d(args.hidden_size),
-            nn.ReLU(inplace=True),
-        )
-
-        self.backBone = nn.ModuleList(
-            [
-                _build_residual_block(args.hidden_size, args.residual_context, block_index)
-                for block_index in range(args.num_layers)
-            ]
-        )
+        match args:
+            case NetworkParams():
+                hidden_size = args.hidden_size
+                self.startBlock = nn.Sequential(
+                    nn.Conv2d(encoding_channels, hidden_size, kernel_size=3, padding='same', bias=False),
+                    nn.BatchNorm2d(hidden_size),
+                    nn.ReLU(inplace=True),
+                )
+                self.backBone = nn.ModuleList(
+                    [
+                        _build_residual_block(hidden_size, args.residual_context, block_index)
+                        for block_index in range(args.num_layers)
+                    ]
+                )
+                self.finishBlock = nn.Identity()
+            case AttentionNetworkParams():
+                hidden_size = args.embedding_size
+                self.startBlock = AttentionInput(
+                    encoding_channels,
+                    row_count,
+                    column_count,
+                    hidden_size,
+                )
+                self.backBone = nn.ModuleList(
+                    [
+                        AttentionEncoderBlock(
+                            hidden_size,
+                            args.num_heads,
+                            args.feedforward_size,
+                            args.dropout,
+                        )
+                        for _ in range(args.num_layers)
+                    ]
+                )
+                self.finishBlock = AttentionOutput(row_count, column_count)
 
         self.policyHead = nn.Sequential(
-            nn.Conv2d(args.hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
+            nn.Conv2d(hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
             nn.BatchNorm2d(args.num_policy_channels),
             nn.ReLU(inplace=True),
             nn.Flatten(),
@@ -112,7 +160,7 @@ class Network(nn.Module):
         )
 
         self.valueHead = nn.Sequential(
-            nn.Conv2d(args.hidden_size, args.num_value_channels, kernel_size=1, bias=False),
+            nn.Conv2d(hidden_size, args.num_value_channels, kernel_size=1, bias=False),
             nn.BatchNorm2d(args.num_value_channels),
             nn.ReLU(inplace=True),
             nn.Flatten(),
@@ -123,7 +171,7 @@ class Network(nn.Module):
         self.auxiliaryHeads = nn.ModuleList(
             (
                 nn.Sequential(
-                    nn.Conv2d(args.hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
+                    nn.Conv2d(hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
                     nn.BatchNorm2d(args.num_policy_channels),
                     nn.ReLU(inplace=True),
                     nn.Flatten(),
@@ -143,6 +191,14 @@ class Network(nn.Module):
 
         self.to(device=self.device, dtype=torch.float32)
 
+    @torch.jit.unused
+    def checkpoint_definition(self) -> NetworkDefinition:
+        return NetworkDefinition(
+            architecture=self.network_args,
+            dimensions=self.dimensions,
+            auxiliary_output_sizes=self.auxiliary_output_sizes,
+        )
+
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         x = self._features(x)
         policy_logits = self.policyHead(x)
@@ -156,7 +212,7 @@ class Network(nn.Module):
         x = self.startBlock(x)
         for block in self.backBone:
             x = block(x)
-        return x
+        return self.finishBlock(x)
 
     def logit_forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         x = self._features(x)
@@ -173,7 +229,7 @@ class Network(nn.Module):
             auxiliary_logits=tuple(head(features) for head in self.auxiliaryHeads),
         )
 
-    def fuse_model(self):
+    def fuse_model(self) -> None:
         for m in self.modules():
             if (
                 type(m) is nn.Sequential
@@ -184,11 +240,11 @@ class Network(nn.Module):
                 modules_to_fuse = [str(i) for i in range(min(3, len(m)))]  # Conv2d, BatchNorm2d, ReLU
                 torch.ao.quantization.fuse_modules(m, modules_to_fuse, inplace=True)
 
-    def disable_auto_grad(self):
+    def disable_auto_grad(self) -> None:
         for p in self.parameters():
             p.requires_grad = False
 
-    def print_params(self):
+    def print_params(self) -> None:
         for name, param in self.named_parameters():
             log(name, list(param.shape))
         sum_of_params = sum(p.numel() for p in self.parameters())
@@ -229,6 +285,79 @@ class ResBlock(nn.Module):
         x = x + residual
         x = self.relu2(x)
         return x
+
+
+class AttentionInput(nn.Module):
+    def __init__(
+        self,
+        input_channels: int,
+        rows: int,
+        columns: int,
+        embedding_size: int,
+    ) -> None:
+        super().__init__()
+        self.rows = rows
+        self.columns = columns
+        self.projection = nn.Linear(input_channels, embedding_size)
+        self.row_embeddings = nn.Parameter(torch.empty(rows, embedding_size))
+        self.column_embeddings = nn.Parameter(torch.empty(columns, embedding_size))
+        self.normalization = nn.LayerNorm(embedding_size)
+        nn.init.normal_(self.row_embeddings, mean=0.0, std=embedding_size**-0.5)
+        nn.init.normal_(self.column_embeddings, mean=0.0, std=embedding_size**-0.5)
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        batch_size = inputs.shape[0]
+        tokens = inputs.permute(0, 2, 3, 1).reshape(batch_size, self.rows * self.columns, -1)
+        positions = (self.row_embeddings[:, None, :] + self.column_embeddings[None, :, :]).reshape(
+            self.rows * self.columns,
+            -1,
+        )
+        return self.normalization(self.projection(tokens) + positions[None, :, :])
+
+
+class AttentionEncoderBlock(nn.Module):
+    def __init__(
+        self,
+        embedding_size: int,
+        num_heads: int,
+        feedforward_size: int,
+        dropout: float,
+    ) -> None:
+        super().__init__()
+        self.attention_normalization = nn.LayerNorm(embedding_size)
+        self.attention = nn.MultiheadAttention(
+            embedding_size,
+            num_heads,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.attention_dropout = nn.Dropout(dropout)
+        self.feedforward_normalization = nn.LayerNorm(embedding_size)
+        self.feedforward = nn.Sequential(
+            nn.Linear(embedding_size, feedforward_size),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(feedforward_size, embedding_size),
+        )
+        self.feedforward_dropout = nn.Dropout(dropout)
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        normalized = self.attention_normalization(inputs)
+        attended, _ = self.attention(normalized, normalized, normalized, need_weights=False)
+        residual = inputs + self.attention_dropout(attended)
+        feedforward = self.feedforward(self.feedforward_normalization(residual))
+        return residual + self.feedforward_dropout(feedforward)
+
+
+class AttentionOutput(nn.Module):
+    def __init__(self, rows: int, columns: int) -> None:
+        super().__init__()
+        self.rows = rows
+        self.columns = columns
+
+    def forward(self, tokens: Tensor) -> Tensor:
+        batch_size = tokens.shape[0]
+        return tokens.reshape(batch_size, self.rows, self.columns, -1).permute(0, 3, 1, 2).contiguous()
 
 
 class GlobalPoolingBias(nn.Module):

@@ -6,8 +6,17 @@ from pathlib import Path
 import pytest
 
 from src.experiment.configuration import load_chess_experiment_configuration
+from src.games.representation import NetworkDimensions
 from src.training.checkpoint import CheckpointManifest, CheckpointReference
 from src.training.checkpoint.retention import CheckpointRetention
+from src.training.network import NetworkDefinition, NetworkParams
+
+
+NETWORK_DEFINITION = NetworkDefinition(
+    architecture=NetworkParams(num_layers=1, hidden_size=8),
+    dimensions=NetworkDimensions(channels=3, rows=3, columns=3, actions=10),
+    auxiliary_output_sizes=(),
+)
 
 
 def _sha256(path: Path) -> str:
@@ -23,6 +32,7 @@ def _write_checkpoint(run_path: Path, generation: int) -> None:
     inference_path.write_bytes(f'inference-{generation}'.encode())
     manifest = CheckpointManifest(
         generation=generation,
+        network=NETWORK_DEFINITION,
         model_path=model_path.name,
         model_sha256=_sha256(model_path),
         optimizer_path=optimizer_path.name,

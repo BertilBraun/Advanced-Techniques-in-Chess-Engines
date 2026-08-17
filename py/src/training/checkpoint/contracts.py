@@ -5,11 +5,13 @@ from os import PathLike
 from pathlib import Path
 
 from src.training.checkpoint.paths import checkpoint_manifest_path
+from src.training.network import NetworkDefinition
 from src.util.frozen_model import FrozenModel
 
 
 class CheckpointManifest(FrozenModel):
     generation: int
+    network: NetworkDefinition
     model_path: str
     model_sha256: str
     optimizer_path: str

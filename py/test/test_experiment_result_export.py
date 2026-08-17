@@ -13,6 +13,7 @@ from src.experiment.configuration import experiment_configuration_sha256, load_e
 from src.experiment.progress_telemetry import RunOutcome, RunOutcomeStatus
 from src.experiment.run import ExperimentRunManifest
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
+from src.games.representation import NetworkDimensions
 from src.experiment_queue.configuration import (
     QueueConfiguration,
     QueuedExperiment,
@@ -31,6 +32,14 @@ from src.experiment_queue.state import (
 )
 from src.experiment_queue.validation import queue_configuration_fingerprint
 from src.training.checkpoint import CheckpointManifest, CheckpointReference
+from src.training.network import NetworkDefinition, NetworkParams
+
+
+NETWORK_DEFINITION = NetworkDefinition(
+    architecture=NetworkParams(num_layers=1, hidden_size=8),
+    dimensions=NetworkDimensions(channels=3, rows=3, columns=3, actions=10),
+    auxiliary_output_sizes=(),
+)
 
 
 def _sha256(path: Path) -> str:
@@ -47,6 +56,7 @@ def _write_checkpoint(run_path: Path, generation: int, include_optimizer: bool =
     inference_path.write_bytes(f'inference-{generation}'.encode())
     manifest = CheckpointManifest(
         generation=generation,
+        network=NETWORK_DEFINITION,
         model_path=model_path.name,
         model_sha256=_sha256(model_path),
         optimizer_path=optimizer_path.name,

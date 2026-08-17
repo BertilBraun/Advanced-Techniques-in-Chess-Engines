@@ -3,10 +3,19 @@ from pathlib import Path
 
 import pytest
 
+from src.games.representation import NetworkDimensions
 from src.training.checkpoint import CheckpointManifest
 from src.training.checkpoint.contracts import load_checkpoint_manifest
 from src.training.checkpoint.paths import inference_model_path
 from src.training.checkpoint.persistence import import_checkpoint
+from src.training.network import NetworkDefinition, NetworkParams
+
+
+NETWORK_DEFINITION = NetworkDefinition(
+    architecture=NetworkParams(num_layers=1, hidden_size=8),
+    dimensions=NetworkDimensions(channels=3, rows=3, columns=3, actions=10),
+    auxiliary_output_sizes=(),
+)
 
 
 def sha256(path: Path) -> str:
@@ -23,6 +32,7 @@ def write_checkpoint_fixture(root: Path, content_prefix: bytes = b'') -> None:
 
     manifest = CheckpointManifest(
         generation=2,
+        network=NETWORK_DEFINITION,
         model_path=model_path.name,
         model_sha256=sha256(model_path),
         optimizer_path=optimizer_path.name,

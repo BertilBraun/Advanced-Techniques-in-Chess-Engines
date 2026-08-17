@@ -13,7 +13,7 @@ from src.experiment.generation_schedule import (
 from src.replay.configuration import ReplayConfiguration
 from src.self_play.configuration import SelfPlayConfiguration
 from src.training.run_limits import RuntimeLimits
-from src.training.network import NetworkParams
+from src.training.network import NetworkConfiguration
 from src.training.targets import AuxiliaryTargetConfiguration
 from src.util.frozen_model import FrozenModel
 
@@ -158,7 +158,7 @@ class TrainingLifecycleParams(FrozenModel):
 
 class TrainingArgs(FrozenModel):
     save_path: str
-    network: NetworkParams
+    network: NetworkConfiguration
     trainer: TrainingParams
     topology: TopologyParams
     lifecycle: TrainingLifecycleParams
