@@ -14,7 +14,7 @@ from src.replay.configuration import ReplayConfiguration
 from src.self_play.configuration import SelfPlayConfiguration
 from src.training.run_limits import RuntimeLimits
 from src.training.network import NetworkParams
-from src.training.progressive import ProgressiveModelSizingConfiguration
+from src.training.progressive import SECONDS_PER_DAY, ProgressiveModelSizingConfiguration
 from src.training.targets import AuxiliaryTargetConfiguration
 from src.util.frozen_model import FrozenModel
 
@@ -192,6 +192,11 @@ class TrainingArgs(FrozenModel):
             initial_network = self.progressive_model_sizing.models[0].network
             if initial_network != self.network:
                 raise ValueError('The day-zero progressive model must match the published training network.')
+            maximum_wall_time = self.limits.maximum_wall_time_seconds
+            final_model = self.progressive_model_sizing.models[-1]
+            final_start_seconds = float(final_model.training_start_days) * SECONDS_PER_DAY
+            if maximum_wall_time is not None and maximum_wall_time <= final_start_seconds:
+                raise ValueError('Maximum wall time must reach the final progressive model training start.')
         return self
 
     def validate_game(self, action_size: int, self_play: SelfPlayConfiguration) -> None:

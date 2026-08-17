@@ -20,6 +20,7 @@ class TrainQuantumCommand(FrozenModel):
     source_progress: TrainingProgress
     target_progress: TrainingProgress
     parameters: ResolvedTrainingParameters
+    replay_source_optimizer_steps: int
 
 
 class StopTrainerCommand(FrozenModel):

@@ -1,5 +1,6 @@
-from decimal import Decimal
 from dataclasses import dataclass
+from decimal import Decimal
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,8 @@ import pytest
 from src.games.representation import PackedPlaneLayout
 from src.replay.layout import ReplayLayout
 from src.training.checkpoint import CheckpointReference
+from src.training.checkpoint.contracts import CheckpointManifest
+from src.training.checkpoint.persistence import publish_checkpoint
 from src.training.network import DisabledResidualContext, NetworkParams
 from src.training.progressive import (
     CompletedCandidateTraining,
@@ -14,7 +17,9 @@ from src.training.progressive import (
     ProgressiveModelSizingConfiguration,
     ProgressiveTrainingStateStore,
     TotalLossEmaPromotionConfiguration,
+    retain_progressive_candidate_checkpoints,
 )
+from src.util.atomic_file import write_text_atomically
 from src.training.targets import TrainingTargetLayout
 
 
@@ -120,6 +125,7 @@ def test_progressive_models_require_zero_then_strictly_increasing_starts(
 def test_pending_quantum_persists_replay_identity_and_candidate_completion(tmp_path: Path) -> None:
     state_path = tmp_path / 'progressive-training.json'
     store = ProgressiveTrainingStateStore(state_path, _configuration())
+    store.initialize_candidate('small', 40, _checkpoint(tmp_path, 'small', 10))
     pending = store.begin_quantum(64_800.0, _replay(tmp_path), 40, 4)
 
     assert pending.required_model_ids == ('small', 'medium')
@@ -187,3 +193,63 @@ def test_later_candidate_is_not_skipped_after_first_promotion(tmp_path: Path) ->
     pending = store.begin_quantum(129_600.0, replay, 4, 4)
 
     assert pending.required_model_ids == ('medium', 'large')
+
+
+def test_publication_relabels_private_candidate_generation_atomically(tmp_path: Path) -> None:
+    private_path = tmp_path / 'models' / 'medium'
+    private_path.mkdir(parents=True)
+    source = _checkpoint(tmp_path, 'medium', 2)
+    for path, payload in (
+        (source.model_path, b'model'),
+        (source.optimizer_path, b'optimizer'),
+        (source.inference_model_path, b'inference'),
+    ):
+        path.write_bytes(payload)
+    manifest = CheckpointManifest(
+        generation=2,
+        model_path=source.model_path.name,
+        model_sha256=hashlib.sha256(b'model').hexdigest(),
+        optimizer_path=source.optimizer_path.name,
+        optimizer_sha256=hashlib.sha256(b'optimizer').hexdigest(),
+        inference_model_path=source.inference_model_path.name,
+        inference_model_sha256=hashlib.sha256(b'inference').hexdigest(),
+    )
+    write_text_atomically(source.manifest_path, manifest.model_dump_json(indent=2) + '\n')
+
+    published = publish_checkpoint(source, generation=7, destination_folder=tmp_path)
+
+    assert published.generation == 7
+    assert published.model_path.read_bytes() == b'model'
+    assert publish_checkpoint(source, generation=7, destination_folder=tmp_path) == published
+
+
+def test_candidate_retention_keeps_only_exact_restart_state(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration())
+    retained = _checkpoint(tmp_path, 'small', 2)
+    obsolete = _checkpoint(tmp_path, 'small', 1)
+    for checkpoint in (retained, obsolete):
+        checkpoint.manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        for path in (
+            checkpoint.manifest_path,
+            checkpoint.model_path,
+            checkpoint.optimizer_path,
+            checkpoint.inference_model_path,
+        ):
+            path.write_bytes(b'x')
+    store.initialize_candidate('small', 8, retained)
+
+    retain_progressive_candidate_checkpoints(tmp_path, store.state)
+
+    assert all(
+        path.exists()
+        for path in (
+            retained.manifest_path,
+            retained.model_path,
+            retained.optimizer_path,
+            retained.inference_model_path,
+        )
+    )
+    assert not obsolete.manifest_path.exists()
+    assert not obsolete.model_path.exists()
+    assert not obsolete.optimizer_path.exists()
+    assert not obsolete.inference_model_path.exists()

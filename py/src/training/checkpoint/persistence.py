@@ -254,3 +254,49 @@ def import_checkpoint(
     )
     write_text_atomically(destination_manifest_path, imported_manifest.model_dump_json(indent=2) + '\n')
     return CheckpointReference.load(destination_folder, generation)
+
+
+def publish_checkpoint(
+    source: CheckpointReference,
+    generation: int,
+    destination_folder: Path,
+) -> CheckpointReference:
+    destination_manifest_path = checkpoint_manifest_path(generation, destination_folder)
+    source_manifest = load_checkpoint_manifest_path(source.manifest_path, source.generation)
+    if destination_manifest_path.exists():
+        destination = CheckpointReference.load(destination_folder, generation)
+        destination_manifest = load_checkpoint_manifest(generation, destination_folder)
+        if (
+            destination_manifest.model_sha256,
+            destination_manifest.optimizer_sha256,
+            destination_manifest.inference_model_sha256,
+        ) != (
+            source_manifest.model_sha256,
+            source_manifest.optimizer_sha256,
+            source_manifest.inference_model_sha256,
+        ):
+            raise ValueError('Existing published checkpoint does not match the progressive model checkpoint.')
+        return destination
+
+    destination_paths = (
+        model_save_path(generation, destination_folder),
+        optimizer_save_path(generation, destination_folder),
+        model_save_path(generation, destination_folder).with_suffix('.jit.pt'),
+    )
+    source_paths = (source.model_path, source.optimizer_path, source.inference_model_path)
+    for source_path, destination_path in zip(source_paths, destination_paths, strict=True):
+        temporary_path = _temporary_path(destination_path)
+        shutil.copyfile(source_path, temporary_path)
+        temporary_path.replace(destination_path)
+
+    manifest = CheckpointManifest(
+        generation=generation,
+        model_path=destination_paths[0].name,
+        model_sha256=source_manifest.model_sha256,
+        optimizer_path=destination_paths[1].name,
+        optimizer_sha256=source_manifest.optimizer_sha256,
+        inference_model_path=destination_paths[2].name,
+        inference_model_sha256=source_manifest.inference_model_sha256,
+    )
+    write_text_atomically(destination_manifest_path, manifest.model_dump_json(indent=2) + '\n')
+    return CheckpointReference.load(destination_folder, generation)

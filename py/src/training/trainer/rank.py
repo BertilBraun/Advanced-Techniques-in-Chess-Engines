@@ -18,11 +18,13 @@ from src.replay.batch_loader import MappedReplayBatchLoader
 from src.training.batch import TrainingModelOutput
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.persistence import load_model_and_optimizer, save_model_and_optimizer
+from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.network import Network
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import auxiliary_head_output_size
 from src.training.distributions import TrainingDistributionSnapshot, capture_training_distributions
 from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
+from src.training.network import NetworkParams
 from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
@@ -49,6 +51,7 @@ class _RankRuntime:
     distributed_model: DistributedDataParallel
     optimizer: torch.optim.Optimizer
     device: torch.device
+    save_path: str
 
 
 @dataclass(frozen=True)
@@ -80,7 +83,9 @@ def _initialize_rank(
     world_size: int,
     rendezvous_port: int,
     configuration: ExperimentConfiguration,
-    starting_checkpoint: CheckpointReference,
+    network: NetworkParams,
+    save_path: str,
+    starting_generation: int,
 ) -> _RankRuntime:
     game = create_game_implementation(configuration)
     topology = configuration.training.topology.trainer
@@ -97,11 +102,12 @@ def _initialize_rank(
         world_size=world_size,
     )
     auxiliary_sizes = tuple(auxiliary_head_output_size(head) for head in game.target_layout.auxiliary_heads)
+    initial_checkpoint_exists = checkpoint_manifest_path(starting_generation, save_path).exists()
     model, optimizer = load_model_and_optimizer(
-        starting_checkpoint.generation,
-        configuration.training.network,
+        starting_generation,
+        network,
         device,
-        configuration.training.save_path,
+        save_path,
         configuration.training.trainer.optimizer,
         game.network_dimensions,
         auxiliary_sizes,
@@ -112,7 +118,11 @@ def _initialize_rank(
         configuration.training.trainer.compilation,
         device_id,
     )
-    return _RankRuntime(game, model, distributed_model, optimizer, device)
+    if not initial_checkpoint_exists:
+        if rank == 0:
+            save_model_and_optimizer(model, optimizer, starting_generation, save_path)
+        distributed.barrier()
+    return _RankRuntime(game, model, distributed_model, optimizer, device, save_path)
 
 
 def _create_distributed_model(
@@ -155,6 +165,7 @@ def _run_rank_commands(
                         runtime.distributed_model,
                         runtime.optimizer,
                         runtime.device,
+                        runtime.save_path,
                         command,
                     )
                 )
@@ -166,11 +177,21 @@ def trainer_rank_main(
     world_size: int,
     rendezvous_port: int,
     configuration_json: str,
-    starting_checkpoint: CheckpointReference,
+    network: NetworkParams,
+    save_path: str,
+    starting_generation: int,
 ) -> None:
     try:
         configuration = load_experiment_configuration_json(configuration_json)
-        runtime = _initialize_rank(rank, world_size, rendezvous_port, configuration, starting_checkpoint)
+        runtime = _initialize_rank(
+            rank,
+            world_size,
+            rendezvous_port,
+            configuration,
+            network,
+            save_path,
+            starting_generation,
+        )
         _run_rank_commands(connection, rank, world_size, configuration, runtime)
     except BaseException:
         try:
@@ -272,6 +293,7 @@ def train_rank_quantum(
     ddp: DistributedDataParallel,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
+    save_path: str,
     command: TrainQuantumCommand,
 ) -> RankTrainingResult:
     started_at = time.perf_counter()
@@ -284,7 +306,7 @@ def train_rank_quantum(
     loader = MappedReplayBatchLoader(
         replay=command.replay,
         state=game.state,
-        source_optimizer_step=command.source_progress.completed_optimizer_steps,
+        source_optimizer_step=command.replay_source_optimizer_steps,
         optimizer_steps=optimizer_steps,
         global_batch_size=configuration.training.trainer.global_batch_size,
         world_size=world_size,
@@ -305,7 +327,7 @@ def train_rank_quantum(
         precision=configuration.training.trainer.precision,
     )
     totals = _resolve_loss_totals(training_result.totals)
-    checkpoint = _save_rank_checkpoint(rank, model, optimizer, command, configuration.training.save_path)
+    checkpoint = _save_rank_checkpoint(rank, model, optimizer, command, save_path)
     distributed.barrier()
     divisor = float(optimizer_steps)
     return RankTrainingResult(

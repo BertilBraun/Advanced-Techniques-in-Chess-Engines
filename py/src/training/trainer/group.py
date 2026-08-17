@@ -10,6 +10,7 @@ from src.games.implementation import GameImplementation
 from src.replay.manager import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
+from src.training.network import NetworkParams
 from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
@@ -29,11 +30,15 @@ class TrainerGroup:
         self,
         configuration: ExperimentConfiguration,
         game: GameImplementation,
-        starting_checkpoint: CheckpointReference,
+        starting_checkpoint: CheckpointReference | None,
+        network: NetworkParams | None = None,
+        save_path: str | None = None,
     ) -> None:
         self.configuration = configuration
         self.game = game
-        self.starting_checkpoint = starting_checkpoint
+        self.network = network or configuration.training.network
+        self.save_path = save_path or configuration.training.save_path
+        self.starting_generation = 0 if starting_checkpoint is None else starting_checkpoint.generation
         topology = configuration.training.topology.trainer
         self.world_size = len(topology.ddp_device_ids)
         self._closed = False
@@ -51,7 +56,9 @@ class TrainerGroup:
                     self.world_size,
                     rendezvous_port,
                     configuration.model_dump_json(),
-                    starting_checkpoint,
+                    self.network,
+                    self.save_path,
+                    self.starting_generation,
                 ),
                 name=f'trainer-rank-{rank}',
             )
@@ -64,18 +71,29 @@ class TrainerGroup:
         self,
         replay: ReplayDescription,
         progress: TrainingProgress,
+        replay_source_optimizer_steps: int | None = None,
     ) -> TrainingQuantumResult:
         self._ensure_open()
         source_generation = progress.model_generation
         target_progress = progress.next_generation
+        replay_source_steps = (
+            progress.completed_optimizer_steps
+            if replay_source_optimizer_steps is None
+            else replay_source_optimizer_steps
+        )
+        optimizer_steps_per_quantum = self.configuration.training.lifecycle.credit.optimizer_steps_per_quantum
+        if replay_source_steps % optimizer_steps_per_quantum:
+            raise ValueError('Replay source optimizer steps must align with complete training quanta.')
+        comparable_generation = replay_source_steps // optimizer_steps_per_quantum
         command = TrainQuantumCommand(
             replay=replay,
             source_progress=progress,
             target_progress=target_progress,
             parameters=ResolvedTrainingParameters(
                 learning_rate=self.configuration.training.trainer.learning_rate.value_at(source_generation),
-                objective=self.game.training_objective_at(source_generation),
+                objective=self.game.training_objective_at(comparable_generation),
             ),
+            replay_source_optimizer_steps=replay_source_steps,
         )
         for connection in self._connections:
             connection.send(command)
