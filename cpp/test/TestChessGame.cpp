@@ -18,8 +18,7 @@ void testSearchStateIdentity() {
             "Equal chess rule states must share graph identity");
     require(ChessGame::stateHash(initial) == ChessGame::stateHash(sameInitial),
             "Equal chess rule states must have equal graph hashes");
-    const Board differentFullmove(
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 99");
+    const Board differentFullmove("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 99");
     require(ChessGame::statesEqual(initial, differentFullmove),
             "Non-semantic chess fullmove display state must not split graph identity");
 
@@ -47,6 +46,22 @@ void testSearchStateIdentity() {
     require(repeated.fen() == historyBlind.fen(), "Chess history fixture must share its FEN");
     require(!ChessGame::statesEqual(repeated, historyBlind),
             "Chess graph identity must include repetition-relevant history");
+
+    const Board knightOrderA = Board::replay(initial.fen(), {"g1f3", "g8f6", "b1c3", "b8c6"});
+    const Board knightOrderB = Board::replay(initial.fen(), {"b1c3", "b8c6", "g1f3", "g8f6"});
+    require(knightOrderA.fen() == knightOrderB.fen(),
+            "Commuting knight orders must reach the same current chess position");
+    require(!ChessGame::statesEqual(knightOrderA, knightOrderB),
+            "Different reversible histories must not share graph identity");
+
+    const Board resetOrderA =
+        Board::replay(initial.fen(), {"g1f3", "g8f6", "b1c3", "b8c6", "e2e4"});
+    const Board resetOrderB =
+        Board::replay(initial.fen(), {"b1c3", "b8c6", "g1f3", "g8f6", "e2e4"});
+    require(ChessGame::statesEqual(resetOrderA, resetOrderB),
+            "The same irreversible move must merge histories after their rule-state reset");
+    require(ChessGame::stateHash(resetOrderA) == ChessGame::stateHash(resetOrderB),
+            "Equal post-reset chess states must have equal graph hashes");
 }
 } // namespace
 
