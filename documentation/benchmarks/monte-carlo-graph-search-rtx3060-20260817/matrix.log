@@ -1,0 +1,111 @@
+START 01 budget=100 algorithm=tree 2026-08-17T21:15:03Z
+chess-day4-confirmatory-200-parallel-fixed   RUNNING   pid 3075981, uptime 1:48:12
+0, 88 %, 665 MiB
+1, 93 %, 665 MiB
+2, 91 %, 665 MiB
+3, 93 %, 665 MiB
+4, 93 %, 665 MiB
+5, 91 %, 665 MiB
+6, 93 %, 665 MiB
+7, 93 %, 665 MiB
+DONE 01 budget=100 algorithm=tree 2026-08-17T21:17:10Z
+START 02 budget=100 algorithm=graph 2026-08-17T21:17:10Z
+chess-day4-confirmatory-200-parallel-fixed   RUNNING   pid 3075981, uptime 1:50:18
+0, 97 %, 853 MiB
+1, 94 %, 853 MiB
+2, 98 %, 853 MiB
+3, 96 %, 853 MiB
+4, 98 %, 853 MiB
+5, 97 %, 853 MiB
+6, 98 %, 853 MiB
+7, 96 %, 853 MiB
+DONE 02 budget=100 algorithm=graph 2026-08-17T21:19:16Z
+START 03 budget=400 algorithm=graph 2026-08-17T21:19:16Z
+chess-day4-confirmatory-200-parallel-fixed   RUNNING   pid 3075981, uptime 1:52:24
+0, 59 %, 265 MiB
+1, 41 %, 265 MiB
+2, 43 %, 265 MiB
+3, 39 %, 265 MiB
+4, 41 %, 265 MiB
+5, 41 %, 265 MiB
+6, 38 %, 265 MiB
+7, 41 %, 265 MiB
+DONE 03 budget=400 algorithm=graph 2026-08-17T21:21:26Z
+START 04 budget=400 algorithm=tree 2026-08-17T21:21:26Z
+chess-day4-confirmatory-200-parallel-fixed   RUNNING   pid 3075981, uptime 1:54:34
+0, 98 %, 1343 MiB
+1, 98 %, 1343 MiB
+2, 98 %, 1343 MiB
+3, 99 %, 1343 MiB
+4, 99 %, 1343 MiB
+5, 98 %, 1343 MiB
+6, 98 %, 1343 MiB
+7, 91 %, 1343 MiB
+DONE 04 budget=400 algorithm=tree 2026-08-17T21:23:35Z
+START 05 budget=1000 algorithm=tree 2026-08-17T21:23:35Z
+chess-day4-confirmatory-200-parallel-fixed   RUNNING   pid 3075981, uptime 1:56:43
+0, 100 %, 1249 MiB
+1, 98 %, 1249 MiB
+2, 98 %, 1249 MiB
+3, 98 %, 1249 MiB
+4, 98 %, 1249 MiB
+5, 100 %, 1249 MiB
+6, 99 %, 1249 MiB
+7, 99 %, 1249 MiB
+DONE 05 budget=1000 algorithm=tree 2026-08-17T21:25:52Z
+START 06 budget=1000 algorithm=graph 2026-08-17T21:25:52Z
+chess-day4-confirmatory-200-parallel-fixed   RUNNING   pid 3075981, uptime 1:59:01
+0, 99 %, 2069 MiB
+1, 99 %, 2069 MiB
+2, 98 %, 2069 MiB
+3, 100 %, 2069 MiB
+4, 100 %, 2069 MiB
+5, 99 %, 2069 MiB
+6, 98 %, 2069 MiB
+7, 98 %, 2069 MiB
+DONE 06 budget=1000 algorithm=graph 2026-08-17T21:28:13Z
+START 07 budget=3200 algorithm=graph 2026-08-17T21:28:13Z
+chess-day4-confirmatory-200-parallel-fixed   RUNNING   pid 3075981, uptime 2:01:22
+0, 55 %, 265 MiB
+1, 42 %, 265 MiB
+2, 26 %, 265 MiB
+3, 43 %, 265 MiB
+4, 35 %, 265 MiB
+5, 39 %, 265 MiB
+6, 34 %, 265 MiB
+7, 38 %, 265 MiB
+DONE 07 budget=3200 algorithm=graph 2026-08-17T21:31:24Z
+START 08 budget=3200 algorithm=tree 2026-08-17T21:31:24Z
+chess-day4-confirmatory-200-parallel-fixed   RUNNING   pid 3075981, uptime 2:04:32
+0, 99 %, 2069 MiB
+1, 98 %, 2069 MiB
+2, 94 %, 2069 MiB
+3, 98 %, 2069 MiB
+4, 97 %, 2069 MiB
+5, 100 %, 2069 MiB
+6, 98 %, 2069 MiB
+7, 99 %, 2069 MiB
+DONE 08 budget=3200 algorithm=tree 2026-08-17T21:34:06Z
+START 09 budget=10000 algorithm=tree 2026-08-17T21:34:06Z
+chess-day4-confirmatory-200-parallel-fixed   RUNNING   pid 3075981, uptime 2:07:14
+0, 96 %, 988 MiB
+1, 90 %, 988 MiB
+2, 96 %, 988 MiB
+3, 65 %, 988 MiB
+4, 93 %, 988 MiB
+5, 92 %, 988 MiB
+6, 95 %, 988 MiB
+7, 97 %, 988 MiB
+DONE 09 budget=10000 algorithm=tree 2026-08-17T21:37:36Z
+START 10 budget=10000 algorithm=graph 2026-08-17T21:37:36Z
+chess-day4-confirmatory-200-parallel-fixed   EXITED    Aug 17 09:34 PM
+START 10 budget=10000 algorithm=graph 2026-08-17T21:38:27Z evaluation_regime=exited
+chess-day4-confirmatory-200-parallel-fixed   EXITED    Aug 17 09:34 PM
+0, 0 %, 1 MiB
+1, 0 %, 1 MiB
+2, 0 %, 1 MiB
+3, 0 %, 1 MiB
+4, 0 %, 1 MiB
+5, 0 %, 1 MiB
+6, 0 %, 1 MiB
+7, 0 %, 1 MiB
