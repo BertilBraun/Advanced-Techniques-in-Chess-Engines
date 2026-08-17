@@ -58,7 +58,7 @@ length (1).
 The 1M band is dominated by the two 1,880-action policy heads. That limits how closely either backbone can approach
 one million parameters without changing the fixed experimental head contract.
 
-## Benchmark protocol awaiting authorization
+## Benchmark protocol and first contended comparison
 
 The frozen plan is `py/configs/benchmarks/chess-architecture-v1.yaml`; the gated runner is
 `py/tools/benchmark_chess_architectures.py`. `describe` is read-only. `run` refuses to start without
@@ -88,4 +88,10 @@ torchrun --standalone --nproc_per_node=8 -m tools.benchmark_chess_architectures 
   --acknowledge-gpu-load
 ```
 
-No command above has been run as part of this implementation.
+The explicitly authorized first comparison used a separate 120-second contention plan while the confirmatory chess
+evaluation shared all eight GPUs. All six primary runs completed without controlling that evaluation. Results and raw
+JSON artifacts are recorded in
+`documentation/benchmarks/chess-architecture-contended-rtx3060-20260817/README.md`. The CNN controls delivered
+15-29% more training samples per second and used 1.9-2.4x less peak allocated training memory than the attention
+models at the matched parameter bands. These throughput results do not compare playing strength; frozen-replay
+equal-sample and equal-wall-time training-quality experiments remain separate work.

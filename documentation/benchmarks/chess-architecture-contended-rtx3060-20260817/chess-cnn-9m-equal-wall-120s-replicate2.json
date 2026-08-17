@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "model_id": "chess-cnn-9m",
+  "parameter_count": 9490464,
+  "world_size": 8,
+  "plan": {
+    "schema_version": 1,
+    "catalog_path": "/workspace/chess-architecture-validation-e35a9a0b/source/py/configs/architectures/chess-cnn-attention-v1.yaml",
+    "topology": {
+      "trainer_device_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "global_training_batch_size": 2048,
+      "local_training_batch_size": 256,
+      "self_play_processes_per_device": 2,
+      "inference_workers_per_process": 2,
+      "outstanding_batches_per_worker": 2,
+      "production_inference_batch_size": 64
+    },
+    "training": {
+      "warmup_optimizer_steps": 10,
+      "equal_sample_optimizer_steps": 128,
+      "equal_wall_time_seconds": 120.0,
+      "precision": "bfloat16"
+    },
+    "inference": {
+      "batch_sizes": [
+        1,
+        8,
+        32,
+        64,
+        128,
+        256
+      ],
+      "warmup_batches": 20,
+      "measured_batches": 100
+    }
+  },
+  "frozen_replay_sha256": "6ff14bf9f605132c788e325351ea423f9315d96881c0bab8551af4aeb3f897f2",
+  "torch_version": "2.12.1+cu126",
+  "cuda_version": "12.6",
+  "device_name": "NVIDIA GeForce RTX 3060",
+  "training": {
+    "protocol": "equal_wall_time",
+    "optimizer_steps": 1002,
+    "global_samples": 2052096,
+    "elapsed_seconds": 120.05461412097793,
+    "samples_per_second": 17093.020664179734,
+    "maximum_rank_peak_allocated_bytes": 693334016,
+    "maximum_rank_peak_reserved_bytes": 765460480
+  },
+  "inference": [
+    {
+      "batch_size": 1,
+      "mean_seconds": 0.005210336060263217,
+      "minimum_rank_positions_per_second": 191.92619985235305,
+      "aggregate_positions_per_second": 1535.4095988188244,
+      "maximum_rank_peak_allocated_bytes": 97737216,
+      "maximum_rank_peak_reserved_bytes": 159383552
+    },
+    {
+      "batch_size": 8,
+      "mean_seconds": 0.004933655550703406,
+      "minimum_rank_positions_per_second": 1621.5157134063436,
+      "aggregate_positions_per_second": 12972.125707250749,
+      "maximum_rank_peak_allocated_bytes": 60838912,
+      "maximum_rank_peak_reserved_bytes": 159383552
+    },
+    {
+      "batch_size": 32,
+      "mean_seconds": 0.006918682510731741,
+      "minimum_rank_positions_per_second": 4625.158034114732,
+      "aggregate_positions_per_second": 37001.264272917855,
+      "maximum_rank_peak_allocated_bytes": 67470848,
+      "maximum_rank_peak_reserved_bytes": 159383552
+    },
+    {
+      "batch_size": 64,
+      "mean_seconds": 0.012789908510167152,
+      "minimum_rank_positions_per_second": 5003.945098522333,
+      "aggregate_positions_per_second": 40031.560788178664,
+      "maximum_rank_peak_allocated_bytes": 75753984,
+      "maximum_rank_peak_reserved_bytes": 159383552
+    },
+    {
+      "batch_size": 128,
+      "mean_seconds": 0.024502207059413195,
+      "minimum_rank_positions_per_second": 5224.01919507187,
+      "aggregate_positions_per_second": 41792.15356057496,
+      "maximum_rank_peak_allocated_bytes": 92311040,
+      "maximum_rank_peak_reserved_bytes": 161480704
+    },
+    {
+      "batch_size": 256,
+      "mean_seconds": 0.051890023989835755,
+      "minimum_rank_positions_per_second": 4933.510920136507,
+      "aggregate_positions_per_second": 39468.08736109205,
+      "maximum_rank_peak_allocated_bytes": 116647424,
+      "maximum_rank_peak_reserved_bytes": 161480704
+    }
+  ]
+}
