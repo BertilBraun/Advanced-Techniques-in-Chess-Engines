@@ -95,3 +95,10 @@ JSON artifacts are recorded in
 15-29% more training samples per second and used 1.9-2.4x less peak allocated training memory than the attention
 models at the matched parameter bands. These throughput results do not compare playing strength; frozen-replay
 equal-sample and equal-wall-time training-quality experiments remain separate work.
+
+Profiling the 4M attention model identified avoidable batch-first/sequence-first materialization inside generic
+`nn.MultiheadAttention`. Revision `c470fb8b` replaces it with a packed-QKV projection and direct scaled dot-product
+attention. The short uncontended comparison in
+`documentation/benchmarks/chess-attention-packed-qkv-rtx3060-20260818/README.md` found 14.6% higher attention
+training throughput, reducing its deficit to the CNN from 24.8% to 13.9%. Memory and batch-64 inference did not
+improve, so the RTX 3060 efficiency tradeoff remains material.

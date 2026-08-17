@@ -32,6 +32,14 @@ def test_contended_benchmark_plan_uses_two_minute_measurement() -> None:
     assert plan.training.equal_wall_time_seconds == 120.0
 
 
+def test_uncontended_smoke_plan_is_short_and_uses_production_inference_batch() -> None:
+    plan = load_architecture_benchmark_plan(Path('configs/benchmarks/chess-architecture-uncontended-15s.yaml'))
+
+    assert plan.topology.global_training_batch_size == 2048
+    assert plan.training.equal_wall_time_seconds == 15.0
+    assert plan.inference.batch_sizes == (64,)
+
+
 def test_chess_architecture_benchmark_refuses_gpu_work_without_acknowledgement() -> None:
     plan = load_architecture_benchmark_plan(Path('configs/benchmarks/chess-architecture-v1.yaml'))
     arguments = Namespace(acknowledge_gpu_load=False)

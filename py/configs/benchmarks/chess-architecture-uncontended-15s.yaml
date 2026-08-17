@@ -1,0 +1,19 @@
+schema_version: 1
+catalog_path: ../architectures/chess-cnn-attention-v1.yaml
+topology:
+  trainer_device_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+  global_training_batch_size: 2048
+  local_training_batch_size: 256
+  self_play_processes_per_device: 2
+  inference_workers_per_process: 2
+  outstanding_batches_per_worker: 2
+  production_inference_batch_size: 64
+training:
+  warmup_optimizer_steps: 10
+  equal_sample_optimizer_steps: 128
+  equal_wall_time_seconds: 15.0
+  precision: bfloat16
+inference:
+  batch_sizes: [64]
+  warmup_batches: 20
+  measured_batches: 100
