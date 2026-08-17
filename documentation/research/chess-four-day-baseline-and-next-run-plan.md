@@ -1,0 +1,266 @@
+# Chess four-day baseline and next-run plan
+
+## Status and constraint
+
+This document records the agreed research plan. It does not authorize a run, implementation, evaluation, or change
+to the active training process. The current run is the four-day baseline. There is budget for at most one further
+four-day experimental run, so every proposed change must first pass a cheaper audit, benchmark, or evaluation.
+
+Checkpoint averaging and model gating are out of scope. The next run will publish each completed model directly,
+as the current run does.
+
+## 1. Freeze the four-day baseline
+
+Stop cleanly after the first completed generation at or beyond four days and preserve the following locally:
+
+- native and inference model checkpoints;
+- optimizer, scheduler, generation, and random-state checkpoint;
+- resignation calibration state;
+- effective configuration and source revision;
+- TensorBoard events and the composed R3-to-R4 timeline;
+- run logs, evaluation results, and exact totals for optimizer steps, generated games, admitted positions, wall time,
+  and GPU-hours;
+- hashes and a small machine-readable artifact manifest.
+
+The full replay payload is not part of the required local archive. Before discarding it, measure its physical size.
+Preserve the replay metadata, logical contents summary, age and generation distributions, and a representative
+sample. Retain the full replay only if its measured size is acceptable or if an exact continuation branch is later
+required. The model, optimizer, configuration, and run evidence are sufficient for the frozen paper result; the full
+replay is necessary only to reproduce the exact next optimizer batches or continue with the same data state.
+
+## 2. Establish playing strength
+
+Evaluate the frozen model at these candidate modes:
+
+- policy only;
+- 64 searches per move;
+- 1,000 searches per move;
+- 10,000 searches per move;
+- 50 milliseconds per move;
+- 1 second per move;
+- 5 seconds per move.
+
+Use the existing calibrated Stockfish fixed-node ladder. For each candidate mode, first run a small exploratory sweep
+over the ladder. Select the rung closest to a 50% candidate score, then run 400 games against that rung using paired
+openings and reversed colors. Report WDL, score, paired confidence interval, descriptive Elo difference, and the
+approximate calibrated Elo. The calibration uncertainty and dependence on hardware, openings, and time control must
+remain explicit.
+
+The final-model evaluation must not reuse the generation-445 result as its strength estimate, although that result
+can serve as a historical comparison. Timed modes must run on an otherwise idle GPU allocation and record actual
+latency, inference batch behavior, and achieved simulations per move.
+
+Persist completed games and per-move telemetry from all ladder and confirmatory matches. At minimum, record the ply,
+position identity, network WDL, root WDL/Q, root visits, post-pruning visit distribution, policy entropy, chosen move,
+halfmove clock, repetition count, material, and terminal reason.
+
+## 3. Explain long games from the evaluation corpus
+
+Use the evaluation games across all search and time budgets to determine whether extra plies are removable shuffling
+or necessary play. Report game-length mean, median, P90, P95, and maximum, split by candidate mode, outcome, terminal
+reason, and opponent rung.
+
+Classify long tails using reproducible signals:
+
+- repeated full game states;
+- reversible non-pawn and non-capture sequences;
+- plies since the last irreversible move;
+- material and pawn-structure changes;
+- root-value and chosen-move-value changes during apparently idle sequences;
+- conversion from strongly winning positions;
+- eventual resignation, rule terminal, ply cap, tablebase result, or material adjudication.
+
+Estimate how many plies can be removed by deleting exact cycles and how many low-progress plies remain without an
+exact repetition. Do not introduce a shorter-game objective unless the analysis demonstrates a meaningful population
+of removable play.
+
+The current forced-fast tail already excludes approximately the final 40 plies of a capped 200-ply game from policy
+training. Measure the actual training-position distribution by ply and phase before further downsampling endgames.
+If late positions are overrepresented or strongly correlated, prefer stratified per-game or per-phase sampling over
+blanket removal.
+
+## 4. Late-cap tablebase adjudication
+
+The candidate next-run behavior is deliberately narrow:
+
+1. Play normally before the configured maximum game ply.
+2. At the maximum only, probe the optional game-specific terminal oracle.
+3. If the chess position is covered by Syzygy, assign its exact WDL as the game result.
+4. Otherwise use the configured material fallback.
+5. Do not derive a policy target from the tablebase and do not use it to guide ordinary pre-cap search.
+
+This improves value labels for already excessive games without suppressing ordinary seven-piece endgame experience
+before the cap. The generic platform should own only an optional terminal-oracle contract; chess owns the Syzygy
+implementation.
+
+Retain 200 plies as the default candidate. Current games are about 100 plies on average and P90 is about 174, while
+raising the cap beyond 200 correlated with a pronounced training deterioration. Before fixing the next-run value,
+compare historical counterfactual coverage at 180, 200, 220, and 300 plies and review the maximum-game treatment in
+AlphaZero-style literature. Do not choose 150 without evidence because it would truncate a nontrivial part of the
+ordinary distribution. The purpose of this analysis is to distinguish 200 from a nearby value such as 220, not to
+reopen very long games.
+
+## 5. Architecture and throughput experiments
+
+Benchmark both convolutional and attention-based families at three approximate capacities:
+
+- 1 million parameters;
+- 3.5 to 4 million parameters, matching the current network;
+- 8 to 10 million parameters.
+
+For every architecture, measure on the eight RTX 3060 node:
+
+- training positions per second at global batch size 2,048;
+- standalone inference throughput over relevant batch sizes;
+- end-to-end self-play simulations per second with the production topology;
+- GPU memory, host overhead, and compilation behavior;
+- fixed-replay policy, WDL, and auxiliary validation quality after equal optimizer samples and equal wall time.
+
+Lower attention throughput is acceptable if it yields enough additional learning per sample or per wall-clock hour.
+The decision metric is expected final strength within a four-day wall-clock budget, not raw throughput alone.
+
+The architecture pilot may train candidates on a frozen dataset, but it must not become multiple self-play training
+runs. Use the frozen-data results, published chess evidence, and throughput measurements to select one architecture
+family for the single experimental run.
+
+## 6. Progressive model sizing
+
+The tentative four-day schedule is:
+
+| Wall time | Approximate capacity |
+| --- | ---: |
+| 0 to 12 hours | 1 million parameters |
+| 12 to 48 hours | 3.5 to 4 million parameters |
+| 48 to 96 hours | 8 to 10 million parameters |
+
+The transition method is an open experiment, not an assumed weight morphism. KataGo trained the next larger network
+concurrently on the same replay data and switched only when its average loss caught up to the smaller model. Its main
+run switched from 6x96 to 10x128, 15x192, and 20x256 networks at approximately 0.75, 1.75, and 7.5 days. It did not
+simply widen the active checkpoint in place.
+
+Concurrent catch-up training consumes hardware that this project may need for self-play. Compare these transition
+options cheaply:
+
+- concurrent larger-model training on the same replay, following KataGo;
+- sequential initialization from the smaller model where the architecture permits exact identity-preserving depth
+  growth;
+- fresh larger-model initialization trained on accumulated replay with a short warmup.
+
+For any transition, require the larger model to catch up on fixed replay loss and a small match before it replaces the
+self-play model. This is a transition criterion, not permanent generation-by-generation gating. Keep one architecture
+family throughout a run; do not transition from a CNN body to a transformer body mid-run unless a separate experiment
+demonstrates a reliable transfer method.
+
+Reference: [Accelerating Self-Play Learning in Go](https://arxiv.org/abs/1902.10565).
+
+## 7. Existing and candidate auxiliary targets
+
+Remaining game length and opponent next-policy prediction are already implemented and configured. They are training
+heads only: the current inference export strips auxiliary heads, so search cannot consume remaining-length predictions
+without extending the inference contract and native search parameters.
+
+The next targets worth investigating are:
+
+- short-horizon values, predicting outcomes or searched values at several future horizons;
+- search-improvement uncertainty, predicting whether additional simulations will materially change the root target;
+- plies until irreversible progress, only if the long-game analysis shows reversible shuffling that total remaining
+  length does not distinguish.
+
+Short-horizon values are the leading candidate because they may provide denser value supervision and features for
+adaptive search. A 3,200-search teacher target for every training position is too expensive. Search-improvement
+uncertainty must therefore use sparse audit positions, naturally available full searches, or a cheaper online signal.
+
+Plies-until-progress is only a predictor. It cannot discourage shuffling unless search consumes it through a bounded
+utility term or it supports another stopping/control decision. Do not add it merely because the label is easy to
+compute.
+
+## 8. Moves-left search use
+
+The current policy target is the root visit distribution. A remaining-length prediction changes the learned policy at
+the current position only if it affects PUCT visits; using it solely to choose the final move changes later trajectories
+but not the current visit target.
+
+There is no budget for multiple multi-day moves-left runs. Use the trained baseline head for a cheap screening test
+after exposing it through inference:
+
+- baseline search with no length term;
+- final-root selection with a bounded length preference;
+- PUCT exploitation with a bounded, decisive-value-gated length preference.
+
+Run evaluation matches and measure Elo, decisive-game length, repetitions, and conversion failures. This screening
+can reject obviously harmful formulations but cannot prove the self-play learning benefit. If the mechanism is chosen
+for the one experimental run, its actual contribution must be reported as part of that run and interpreted without a
+full multi-day ablation.
+
+## 9. Adaptive search budget
+
+The initial design is an online progressive search, not a fixed-position learned classifier:
+
+1. Run 400 simulations.
+2. Stop if the post-pruning root visits have a dominant, stable move and no competitive second move.
+3. Otherwise continue to 800 and then 1,200 or 1,600 simulations while checking root-policy and root-value stability.
+4. Permit 3,200 simulations only for positions that remain unresolved and also carry a strong difficulty signal.
+
+Candidate signals include top-one visit share, top-one versus top-two margin, visit-distribution change between
+checkpoints, Q convergence, policy entropy, network-versus-search disagreement, and short-horizon-value disagreement.
+No single threshold such as 70% visits is sufficient across all positions. Dirichlet noise and forced playouts distort
+raw visits, so stopping and stability decisions should use the pruned decision distribution where applicable.
+
+Calibrate the rule on positions drawn from early, middle, and late checkpoints rather than only the final policy. Run
+each audit position to the maximum budget and ask at which earlier checkpoint its selected move, visit target, and root
+value had effectively stabilized. The audit set validates an online rule; it is not assumed to be a stationary training
+distribution.
+
+The experiment must report:
+
+- mean and distribution of simulations per full-search position;
+- agreement with the maximum-budget selected move;
+- visit-policy divergence and root-value error;
+- total self-play throughput;
+- strength at equal average search compute.
+
+Reference: [Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search](https://arxiv.org/abs/2012.07910).
+
+## 10. Transposition audit and graph-search decision
+
+Instrument search without merging nodes first. Hash every expanded full game state and measure exact duplicates at
+100, 400, 1,000, 3,200, 10,000, 30,000, and 100,000 simulations. Report duplicate rate, potential repeated inference,
+depth, source paths, state-history constraints, and hashing overhead.
+
+The preferred eventual optimization is full Monte-Carlo graph search rather than reviving a generic evaluation cache.
+The audit still measures repeated neural evaluations because it provides an upper bound on avoidable inference. A flat
+node arena may simplify identity and storage, but it does not remove the hard parts: multiple-parent statistics,
+virtual loss, backup semantics, root retention, cycle prevention, repetition history, castling and en-passant rights,
+and the halfmove clock.
+
+Use the measurements to decide separately for self-play and evaluation. Low reuse at 100 to 1,000 simulations should
+leave self-play unchanged. Material reuse at 10,000 to 100,000 simulations can justify evaluation-only graph search.
+No implementation is authorized merely from theoretical reuse.
+
+Reference: [Monte-Carlo Graph Search for AlphaZero](https://arxiv.org/abs/2012.11045).
+
+## 11. Explicit exclusions
+
+- No checkpoint averaging.
+- No model gating.
+- No second baseline repetition.
+- No multiple multi-day auxiliary-target ablations.
+- No always-on tablebase use before the late game cap.
+- No transposition implementation before measuring reuse.
+- No assumption that transformer throughput will match CNN throughput.
+
+## 12. Authorization gate for the experimental run
+
+Before proposing the final experimental configuration, complete and review:
+
+1. the frozen baseline archive and final Elo/search ladder;
+2. long-game and shuffling analysis from the evaluation corpus;
+3. the late-cap and tablebase cutoff decision;
+4. CNN-versus-attention throughput and frozen-data learning benchmarks;
+5. a reliable progressive-size transition test;
+6. the adaptive-search audit;
+7. the transposition reuse audit;
+8. the cheap moves-left screening, if inference support is implemented.
+
+Select one coherent package for the single four-day experimental run. Any mechanism that has not passed its cheap
+screen remains out of that run.
