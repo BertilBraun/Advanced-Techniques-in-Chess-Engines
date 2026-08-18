@@ -369,7 +369,8 @@ def test_remaining_game_length_uses_masked_smooth_l1_loss() -> None:
     assert loss.total.item() == pytest.approx(0.15 * 0.125)
 
 
-def test_next_policy_auxiliary_still_uses_masked_cross_entropy() -> None:
+@pytest.mark.parametrize('prediction_dtype', (torch.float32, torch.bfloat16))
+def test_next_policy_auxiliary_still_uses_masked_cross_entropy(prediction_dtype: torch.dtype) -> None:
     objective = ResolvedTrainingObjective(
         policy_loss_weight=0.0,
         value_loss_weight=0.0,
@@ -392,9 +393,13 @@ def test_next_policy_auxiliary_still_uses_masked_cross_entropy() -> None:
     output = TrainingModelOutput(
         policy_logits=torch.zeros((2, 2)),
         wdl_logits=torch.zeros((2, 3)),
-        auxiliary_logits=(torch.tensor(((2.0, 0.0), (100.0, -100.0))),),
+        auxiliary_logits=(torch.tensor(((2.0, 0.0), (100.0, -100.0)), dtype=prediction_dtype),),
     )
 
     loss = objective.calculate_loss(output, batch)
 
-    assert loss.auxiliary[0].item() == pytest.approx(torch.log1p(torch.exp(torch.tensor(-2.0))).item())
+    assert loss.auxiliary[0].dtype is prediction_dtype
+    assert loss.auxiliary[0].item() == pytest.approx(
+        torch.log1p(torch.exp(torch.tensor(-2.0))).item(),
+        rel=0.02,
+    )

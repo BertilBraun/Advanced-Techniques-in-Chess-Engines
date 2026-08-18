@@ -9,11 +9,11 @@ run:
     mode: random_initialization
   hardware:
     provider_name: vast.ai
-    offer_id: instance-47400225-machine-112617-host-115630
-    gpu_model: NVIDIA GeForce RTX 3060
+    offer_id: instance-48042270-machine-79780-host-399360
+    gpu_model: NVIDIA GeForce RTX 3090
     gpu_count: 8
-    logical_cpu_count: 64
-    minimum_ram_gib: 180
+    logical_cpu_count: 80
+    minimum_ram_gib: 200
     minimum_disk_gib: 10
   environment:
     runtime_image: vastai/pytorch:cuda-13.0.3-auto
@@ -78,7 +78,7 @@ training:
       recent_checkpoint_count: 22
       milestone_interval: 20
   limits:
-    hourly_price: 0.46
+    hourly_price: 1.1244444
     maximum_cost: null
     maximum_wall_time_seconds: null
     maximum_open_file_count: 49152
@@ -316,14 +316,8 @@ chess:
   objective:
     policy_loss_weight: 1.0
     value_loss_weight: 1.0
-    root_value_blend:
-      kind: linear
-      start_generation: 50
-      end_generation: 110
-      start_value: 0.0
-      end_value: 0.1
-      rounding: none
-    value_discount_per_ply: 0.996
+    root_value_blend: 0.0
+    value_discount_per_ply: 1.0
     auxiliary_targets:
       - kind: next_policy
         ply_offset: 1

@@ -141,7 +141,7 @@ class ResolvedTrainingObjective(FrozenModel):
                     mask_policy_logits(prediction[eligible_rows], legal_action_ids[eligible_rows]),
                     target[eligible_rows],
                     reduction='none',
-                )
+                ).to(dtype=rows.dtype)
             case ResolvedRemainingGameLengthLoss():
                 rows = functional.smooth_l1_loss(prediction, target, reduction='none').squeeze(1)
         eligible_weights = eligibility.to(dtype=rows.dtype) * sample_weights

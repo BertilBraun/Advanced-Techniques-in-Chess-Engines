@@ -1,0 +1,95 @@
+extends: ../production/vast-chess-8gpu-optimal.yaml
+run:
+  run_name: vast-chess-8gpu-3090-pilot
+  tensorboard_run_directory: vast-chess-8gpu-3090-pilot
+  stage: systems_pilot
+training:
+  save_path: /workspace/pilots/vast-chess-8gpu-3090
+  lifecycle:
+    replay:
+      capacity: 4096
+      maximum_capacity: 4096
+      maximum_policy_entries: 60
+    credit:
+      replay_ratio: 4
+      optimizer_steps_per_quantum: 1
+      maximum_optimizer_steps: null
+      retained_checkpoint_interval_generations: 1
+      self_play_backpressure_quanta: 5
+    inference_retention:
+      recent_checkpoint_count: 8
+      milestone_interval: 1
+  limits:
+    hourly_price: 1.1244444
+    maximum_cost: null
+    maximum_wall_time_seconds: null
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 10.0
+    resource_telemetry_interval_seconds: 1.0
+  progressive_model_sizing:
+    models:
+      - model_id: chess-attention-500k-pilot
+        training_start_days: 0.0
+        network:
+          kind: attention
+          num_layers: 6
+          embedding_size: 96
+          num_heads: 3
+          feedforward_size: 192
+          dropout: 0.0
+          policy_head: {kind: chess_76_plane_direct_v2}
+          num_value_channels: 2
+          value_fc_size: 48
+    promotion:
+      decay: 0.8
+      warmup_quanta: 10
+      maximum_relative_loss: 1.01
+evaluation:
+  cadence_seconds: 20
+  job_timeout_seconds: 120
+  shutdown_grace_seconds: 10
+  bootstrap_samples: 64
+  maximum_concurrent_jobs: 4
+  definitions:
+    - kind: fixed_dataset
+      definition_id: fixed-dataset
+    - kind: previous_checkpoint
+      definition_id: previous-boundary
+      boundary_offset: 1
+      opening_pair_count: 1
+      maximum_game_plies: 40
+      search: &pilot_evaluation_search
+        searches_per_move: 8
+        parallel_searches: 1
+        exploration_constant: 1.0
+        inference:
+          inference_workers: 1
+          inference_batch_size: 8
+          outstanding_batches_per_worker: 1
+          sdpa_backend: memory_efficient
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-pilot
+      opening_pair_count: 1
+      maximum_game_plies: 40
+      search: *pilot_evaluation_search
+chess:
+  self_play:
+    search:
+      full_searches: 8
+      fast_searches: 2
+    start_position:
+      kind: restart_state
+      true_start_probability: 0.5
+      candidate_visit_mass: 0.85
+      minimum_candidates: 2
+      maximum_candidates: 3
+      maximum_absolute_root_value: 0.8
+      minimum_remaining_plies: 5
+      maximum_archive_positions: 1000
+      maximum_age_generations: 8
+    full_search_probability: 0.5
+    greedy_after_ply: 30
+    maximum_game_plies: 60
+    force_fast_search_after_ply: 40
+    detailed_statistics_workers: 1
