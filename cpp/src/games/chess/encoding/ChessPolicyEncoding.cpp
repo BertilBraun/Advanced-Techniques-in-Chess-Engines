@@ -7,6 +7,7 @@
 #include <cmath>
 #include <optional>
 #include <ranges>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -133,9 +134,13 @@ int ChessEncoding::actionId(const ChessAction action, const Board &state) {
 }
 
 ChessAction ChessEncoding::decodeAction(const int actionId, const Board &state) {
-    assert(0 <= actionId && actionId < action_count);
+    if (actionId < 0 || actionId >= action_count) {
+        throw std::invalid_argument("Chess action ID is outside the action space");
+    }
     const std::optional<PolicyMove> decoded = decodeCanonicalActionId(actionId);
-    assert(decoded.has_value());
+    if (!decoded.has_value()) {
+        throw std::invalid_argument("Chess action ID encodes an off-board move");
+    }
     Stockfish::Square fromSquare = decoded->from;
     Stockfish::Square toSquare = decoded->to;
     if (state.currentPlayer() == -1) {
@@ -151,7 +156,9 @@ ChessAction ChessEncoding::decodeAction(const int actionId, const Board &state) 
                 : decoded->promotion == Stockfish::PieceType::NO_PIECE_TYPE;
         return correctSquares && correctPromotion;
     });
-    assert(legal != legalMoves.end());
+    if (legal == legalMoves.end()) {
+        throw std::invalid_argument("Chess action ID is illegal in this position");
+    }
     return ChessAction(*legal);
 }
 
