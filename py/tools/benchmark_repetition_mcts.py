@@ -13,6 +13,7 @@ from pathlib import Path
 
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
+    ChessPosition,
     ChessSearchRoot,
     ChessSelfPlaySearch,
     ChessSelfPlaySearchRequest,
@@ -96,7 +97,7 @@ class SearchStepsResult:
 
 def load_openings(path: Path, number_of_games: int) -> tuple[str, ...]:
     openings = tuple(
-        line.split('\t', maxsplit=1)[1]
+        line.rsplit('\t', maxsplit=1)[1]
         for line in path.read_text(encoding='utf-8').splitlines()
         if line and not line.startswith('#')
     )
@@ -173,7 +174,7 @@ def run_search_steps(
             root = choose_root(result.root, result.search_visits)
             if root.is_terminal:
                 terminal_roots += 1
-                root = search.new_root(openings[opening_index])
+                root = search.new_root(ChessPosition(openings[opening_index]))
             next_roots.append(root)
         roots = next_roots
         steps_completed += 1
@@ -213,7 +214,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         BatchedInferenceParameters(1, args.maximum_batch_size, 1),
     )
     openings = load_openings(args.openings, args.games)
-    roots = [search.new_root(fen) for fen in openings]
+    roots = [search.new_root(ChessPosition(fen)) for fen in openings]
     warmup_result = run_search_steps(search, roots, openings, args.warmup_steps)
     roots = warmup_result.roots
     warmup_inference_statistics = search.inference_statistics()
