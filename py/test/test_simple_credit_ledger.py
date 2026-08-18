@@ -2,12 +2,11 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedger
-from src.training.trainer import TrainingQuantumResult, TrainingStatistics
 from src.training.distributions import PolicyTrainingDistribution, TrainingDistributionSnapshot
+from src.training.trainer import TrainingQuantumResult, TrainingStatistics
 
 
 def _empty_distributions() -> TrainingDistributionSnapshot:
@@ -92,6 +91,23 @@ def test_credit_ledger_without_optimizer_limit_never_completes(tmp_path: Path) -
     ledger = CreditLedger(tmp_path, parameters, global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
 
     assert not ledger.training_complete
+
+
+def test_credit_ledger_reports_samples_needed_for_next_quantum(tmp_path: Path) -> None:
+    ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
+
+    assert ledger.samples_needed_for_quantum(live_samples=0) == 16
+    ledger.add_samples(5, model_generation=0)
+    assert ledger.samples_needed_for_quantum(live_samples=5) == 11
+    ledger.add_samples(11, model_generation=0)
+    assert ledger.samples_needed_for_quantum(live_samples=16) == 0
+
+
+def test_credit_ledger_rejects_negative_live_sample_count(tmp_path: Path) -> None:
+    ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
+
+    with pytest.raises(ValueError, match='Live replay sample count'):
+        ledger.samples_needed_for_quantum(live_samples=-1)
 
 
 def test_credit_ledger_initializes_progress_from_checkpoint_generation(tmp_path: Path) -> None:

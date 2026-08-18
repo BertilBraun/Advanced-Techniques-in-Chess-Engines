@@ -105,15 +105,35 @@ class ReplayManager(Generic[PositionT]):
     def live_samples(self) -> int:
         return self.store.state.size
 
-    def ingest_available_games(self, model_generation: int) -> ReplayIngestion:
+    @property
+    def available_game_count(self) -> int:
+        return len(self._available_games())
+
+    def ingest_available_games(
+        self,
+        model_generation: int,
+        maximum_samples: int | None = None,
+        maximum_elapsed_seconds: float | None = None,
+    ) -> ReplayIngestion:
+        if maximum_samples is not None and maximum_samples <= 0:
+            raise ValueError('Maximum ingestion samples must be positive.')
+        if maximum_elapsed_seconds is not None and maximum_elapsed_seconds <= 0.0:
+            raise ValueError('Maximum ingestion elapsed seconds must be positive.')
         if self.resignation_calibrator is None:
-            return self._ingest_available_games(model_generation, None)
+            return self._ingest_available_games(model_generation, maximum_samples, maximum_elapsed_seconds, None)
         with self.resignation_calibrator.calibration_batch() as calibration_batch:
-            return self._ingest_available_games(model_generation, calibration_batch)
+            return self._ingest_available_games(
+                model_generation,
+                maximum_samples,
+                maximum_elapsed_seconds,
+                calibration_batch,
+            )
 
     def _ingest_available_games(
         self,
         model_generation: int,
+        maximum_samples: int | None,
+        maximum_elapsed_seconds: float | None,
         calibration_batch: ResignationCalibrationBatch | None,
     ) -> ReplayIngestion:
         started_at = time.perf_counter()
@@ -154,6 +174,10 @@ class ReplayManager(Generic[PositionT]):
                     observations=game.observations,
                 )
             )
+            if maximum_samples is not None and samples_added >= maximum_samples:
+                break
+            if maximum_elapsed_seconds is not None and time.perf_counter() - started_at >= maximum_elapsed_seconds:
+                break
         self.store.flush()
         after = self.store.state
         return ReplayIngestion(

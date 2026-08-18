@@ -527,6 +527,45 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
     reopened.close()
 
 
+def test_replay_manager_stops_after_reaching_sample_limit(tmp_path: Path) -> None:
+    game = _completed_game()
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    publish_completed_self_play_game(inbox, game)
+    second_game = game.validated_copy(
+        update={
+            'identity': {
+                'worker_id': 3,
+                'process_instance_id': '38c8809f-a49d-4d98-8da5-034614893665',
+                'game_number': 8,
+            }
+        }
+    )
+    publish_completed_self_play_game(inbox, second_game)
+    configuration = ReplayConfiguration(capacity=6, maximum_capacity=6, maximum_policy_entries=1)
+    layout = ReplayLayout(
+        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
+        targets=_target_layout(),
+        maximum_policy_entries=1,
+        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
+    )
+    manager = ReplayManager.open(
+        tmp_path,
+        LINEAR_STATE_CONTRACT,
+        layout,
+        configuration,
+        model_generation=2,
+        value_discount_per_ply=UNDISCOUNTED_VALUES,
+        terminal_oracle=None,
+    )
+
+    ingestion = manager.ingest_available_games(2, maximum_samples=1)
+
+    assert ingestion.games_ingested == 1
+    assert ingestion.samples_added == 3
+    assert len(tuple(inbox.glob('*.json'))) == 1
+    manager.close()
+
+
 def test_replay_manager_keeps_malformed_game_for_inspection(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
     inbox.mkdir(parents=True)

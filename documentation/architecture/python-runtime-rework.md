@@ -1937,7 +1937,7 @@ The phase ends with current runtime behavior intact but configuration, progress,
 - add run-fixed auxiliary training heads and discriminated target definitions, beginning with `next_policy`;
 - export a separate trimmed policy-and-WDL inference model and preserve the existing two-output C++ model contract;
 - move replay ingestion into `ReplayManager` in the coordinator process;
-- make each call drain the full inbox;
+- bound each ingestion call by the samples needed to fund the next quantum so training and stop checks are not delayed by an inbox backlog;
 - apply capacity schedules inside ingestion;
 - simplify the ledger to atomic progress, credit, and checkpoint state;
 - remove trainer-rank replay ownership;

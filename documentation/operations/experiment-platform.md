@@ -36,8 +36,8 @@ groups, and publishes only the active stage after the complete quantum. Candidat
 private restart state and are not production inference artifacts.
 
 Run preparation verifies a clean exact source revision, approval, hardware/runtime contract, output paths, and
-immutable evaluation inputs. The coordinator starts self-play, ingests completed games into replay, grants trainer
-credits at the configured replay ratio, publishes inference checkpoints after DDP quanta, schedules evaluation,
+immutable evaluation inputs. The coordinator starts self-play, ingests completed games into replay only until the
+next training quantum is funded, grants trainer credits at the configured replay ratio, publishes inference checkpoints after DDP quanta, schedules evaluation,
 and records a durable outcome on clean shutdown. Six of eight self-play workers pause during each training quantum
 in the current two-GPU baseline.
 

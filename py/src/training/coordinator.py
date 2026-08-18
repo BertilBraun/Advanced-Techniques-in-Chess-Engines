@@ -22,6 +22,9 @@ from src.training.self_play_group import SelfPlayGroup
 from src.training.session import TrainingSessionQuantum, create_training_session
 from src.util.log import log
 
+INGESTION_SLICE_SECONDS = 10.0
+INGESTION_PAUSE_BACKLOG_GAMES = 100
+
 
 class Coordinator:
     def __init__(self, game: GameImplementation, run_started_at: float) -> None:
@@ -85,6 +88,7 @@ class Coordinator:
         self.latest_completed_model_version = self.ledger.model_generation
         self.final_stop_reason: str | None = None
         self._backpressure_pause_requested = False
+        self._ingestion_pause_requested = False
         self._credit_wait_started_at = time.perf_counter()
         self._completed_games_since_last_quantum: list[IngestedCompletedGame] = []
         self.reporter.record_initial_settings(self.ledger.model_generation)
@@ -111,8 +115,11 @@ class Coordinator:
                     self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
                     continue
                 self._apply_self_play_backpressure()
-                self._ingest_available_games()
+                self._ingest_toward_next_quantum()
                 self._apply_self_play_backpressure()
+                self.final_stop_reason = self.run_limit_monitor.stop_reason()
+                if self.final_stop_reason is not None:
+                    break
                 if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
                     self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
                     time.sleep(0.1)
@@ -139,9 +146,22 @@ class Coordinator:
             raise RuntimeError('Self-play workers did not enter the running state.')
         self._credit_wait_started_at = time.perf_counter()
 
-    def _ingest_available_games(self) -> None:
+    def _ingest_toward_next_quantum(self) -> None:
         generation = self.ledger.model_generation
-        ingestion = self.replay_manager.ingest_available_games(generation)
+        maximum_samples = self.ledger.samples_needed_for_quantum(self.replay_manager.live_samples)
+        if maximum_samples == 0:
+            return
+        if (
+            not self._ingestion_pause_requested
+            and self.replay_manager.available_game_count >= INGESTION_PAUSE_BACKLOG_GAMES
+        ):
+            self.self_play_group.request_pause(self._topology_pause_worker_ids())
+            self._ingestion_pause_requested = True
+        ingestion = self.replay_manager.ingest_available_games(
+            generation,
+            maximum_samples,
+            maximum_elapsed_seconds=INGESTION_SLICE_SECONDS,
+        )
         self.ledger.add_samples(ingestion.samples_added, generation)
         self._completed_games_since_last_quantum.extend(ingestion.completed_games)
         if ingestion.games_ingested:
@@ -150,6 +170,12 @@ class Coordinator:
                 f'{ingestion.elapsed_seconds:.1f}s ({ingestion.samples_per_second:.0f} samples/s).'
             )
             self._record_resignation_diagnostics(generation)
+        if (
+            self._ingestion_pause_requested
+            and self.replay_manager.available_game_count == 0
+            and not self.ledger.can_train_quantum(self.replay_manager.live_samples)
+        ):
+            self._resume_ingestion_paused_workers()
 
     def _train_quantum(self, self_play_started: bool) -> None:
         credit_wait_seconds = time.perf_counter() - self._credit_wait_started_at
@@ -187,6 +213,7 @@ class Coordinator:
         checkpoint_activation_seconds = time.perf_counter() - checkpoint_activation_started_at
         if self_play_started:
             self._backpressure_pause_requested = False
+            self._ingestion_pause_requested = False
             self._apply_self_play_backpressure()
         if self.resignation_calibrator is not None:
             self._record_resignation_diagnostics(self.ledger.model_generation)
@@ -212,9 +239,24 @@ class Coordinator:
             return tuple(range(self.self_play_group.worker_count))
         if self._backpressure_pause_requested:
             return ()
+        if self._ingestion_pause_requested:
+            return ()
         if self._self_play_backpressure_required():
             return tuple(range(self.self_play_group.worker_count))
+        return self._topology_pause_worker_ids()
+
+    def _topology_pause_worker_ids(self) -> tuple[int, ...]:
         return self.configuration.training.topology.self_play.node_ids_to_pause_during_training
+
+    def _resume_ingestion_paused_workers(self) -> None:
+        state = RunningSelfPlayState(
+            checkpoint=self.ledger.state.active_checkpoint,
+            resignation_policy=self._resignation_policy(),
+        )
+        applied = self.self_play_group.apply_to_workers(self._topology_pause_worker_ids(), state)
+        if any(response.kind != 'running' for response in applied):
+            raise RuntimeError('Self-play workers did not resume after replay ingestion.')
+        self._ingestion_pause_requested = False
 
     def _apply_self_play_backpressure(self) -> None:
         if not self._self_play_backpressure_required() or self._backpressure_pause_requested:

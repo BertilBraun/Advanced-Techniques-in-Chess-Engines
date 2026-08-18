@@ -130,7 +130,8 @@ The coordinator delegates the complete quantum to a `TrainingSession`. Fixed tra
 separate implementations with typed result variants; the coordinator pauses the workers selected by the experiment
 topology, commits one publication, transitions self-play immediately, and then hands the already-collected outcome
 to `TrainingReporter`. Replay ingestion is not part of quantum finalization. When existing credits already fund the
-next quantum, the coordinator starts it without first draining the inbox.
+next quantum, the coordinator starts it without first draining the inbox. Otherwise ingestion stops as soon as it
+has added enough samples to fund that quantum, leaving later games for the next coordinator iteration.
 `ProgressiveTrainingSession` owns
 candidate ordering, private checkpoint import, shared-replay training, promotion, publication, and recovery.
 

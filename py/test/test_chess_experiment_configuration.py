@@ -133,6 +133,7 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     assert configuration.training.limits.hourly_price == pytest.approx(1.1244444)
     assert configuration.training.limits.maximum_cost is None
     assert configuration.training.limits.maximum_wall_time_seconds is None
+    assert configuration.training.lifecycle.credit.self_play_backpressure_quanta == 2
     assert configuration.training.limits.manual_stop_file == Path(
         '/workspace/run-control/stop/vast-chess-8gpu-optimal.stop'
     )

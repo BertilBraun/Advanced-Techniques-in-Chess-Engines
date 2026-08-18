@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, model_validator
-
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
 from src.training.progress import TrainingProgress
@@ -91,6 +90,15 @@ class CreditLedger:
             and live_samples >= self.global_batch_size
             and self._state.available_credits >= Decimal(required)
         )
+
+    def samples_needed_for_quantum(self, live_samples: int) -> int:
+        if live_samples < 0:
+            raise ValueError('Live replay sample count cannot be negative.')
+        required_credits = Decimal(self.parameters.presentation_credits_per_quantum(self.global_batch_size))
+        missing_credits = max(Decimal(0), required_credits - self._state.available_credits)
+        credit_samples = int((missing_credits / self.parameters.replay_ratio).to_integral_value(rounding=ROUND_CEILING))
+        replay_samples = max(0, self.global_batch_size - live_samples)
+        return max(credit_samples, replay_samples)
 
     def add_samples(self, sample_count: int, model_generation: int) -> None:
         if sample_count < 0:
