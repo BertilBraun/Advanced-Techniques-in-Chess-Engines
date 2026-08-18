@@ -14,6 +14,7 @@ from AlphaZeroCpp import (
     ChessSelfPlaySearchRequest,
     InferenceConfiguration,
     SearchCheckpoint,
+    SearchCheckpointDetail,
 )
 from pydantic import Field
 from src.experiment.configuration import load_chess_experiment_configuration
@@ -54,7 +55,18 @@ class SearchSnapshot(FrozenModel):
 
 class PositionAudit(FrozenModel):
     fen: str = Field(min_length=1)
+    final_policy_correction: float = Field(ge=0.0, le=1.0)
+    final_value_correction: float = Field(ge=0.0, le=1.0)
+    final_search_correction_target: float = Field(ge=0.0, le=1.0)
     snapshots: tuple[SearchSnapshot, ...] = Field(min_length=1)
+
+
+class CorrectionCalibrationBucket(FrozenModel):
+    stop_visits: int = Field(gt=0)
+    positions: int = Field(gt=0)
+    mean_target: float = Field(ge=0.0, le=1.0)
+    mean_prediction: float = Field(ge=0.0, le=1.0)
+    mean_absolute_error: float = Field(ge=0.0, le=1.0)
 
 
 class CandidateMetrics(FrozenModel):
@@ -65,6 +77,12 @@ class CandidateMetrics(FrozenModel):
     selected_move_agreement: float = Field(ge=0.0, le=1.0)
     mean_policy_total_variation: float = Field(ge=0.0, le=1.0)
     mean_root_value_error: float = Field(ge=0.0, le=2.0)
+    mean_final_policy_correction: float = Field(ge=0.0, le=1.0)
+    mean_final_value_correction: float = Field(ge=0.0, le=1.0)
+    mean_final_search_correction_target: float = Field(ge=0.0, le=1.0)
+    unstable_at_gate_positions: int = Field(ge=0)
+    unstable_at_gate_recall: float | None = Field(default=None, ge=0.0, le=1.0)
+    correction_calibration_by_stop_visits: tuple[CorrectionCalibrationBucket, ...]
 
 
 class StopReasonCount(FrozenModel):
@@ -80,7 +98,7 @@ class LiveCanaryMetrics(FrozenModel):
 
 
 class CalibrationReport(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     source_revision: str = Field(min_length=40, max_length=40)
     model: str = Field(min_length=1)
     generation: int = Field(ge=0)
@@ -152,7 +170,7 @@ def _snapshot(checkpoint: SearchCheckpoint, predicted_search_correction: float) 
     leader = max(policy_visits, key=lambda visit: (visit.visit_count, -visit.action_id))
     return SearchSnapshot(
         visits=checkpoint.visits,
-        selected_action_id=checkpoint.leader_action_id,
+        selected_action_id=checkpoint.most_visited_action_id,
         policy_leader_action_id=leader.action_id,
         root_value=checkpoint.root_value,
         predicted_search_correction=predicted_search_correction,
@@ -195,13 +213,18 @@ def collect_audits(arguments: Arguments) -> tuple[tuple[PositionAudit, ...], flo
     )
     roots = [search.new_root(ChessPosition(fen)) for fen in openings]
     started = time.perf_counter()
-    batch = search.search([ChessSelfPlaySearchRequest(root, True) for root in roots])
+    batch = search.search(
+        [ChessSelfPlaySearchRequest(root, True, SearchCheckpointDetail.POLICIES) for root in roots]
+    )
     elapsed = time.perf_counter() - started
     statistics = search.inference_statistics()
     game.close()
     audits = tuple(
         PositionAudit(
             fen=fen,
+            final_policy_correction=result.policy_correction,
+            final_value_correction=result.value_correction,
+            final_search_correction_target=result.search_correction_target,
             snapshots=tuple(
                 _snapshot(checkpoint, result.predicted_search_correction) for checkpoint in result.checkpoints
             ),
@@ -303,6 +326,8 @@ def candidate_metrics(
 ) -> CandidateMetrics:
     selected = tuple(_selected_snapshot(audit, adaptive, maximum_visits, threshold) for audit in audits)
     references = tuple(audit.snapshots[-1] for audit in audits)
+    unstable = tuple(_unstable_at_gate(audit, adaptive, maximum_visits) for audit in audits)
+    unstable_count = sum(unstable)
     return CandidateMetrics(
         maximum_visits=maximum_visits,
         minimum_search_correction=threshold,
@@ -323,7 +348,62 @@ def candidate_metrics(
             for snapshot, reference in zip(selected, references, strict=True)
         )
         / len(selected),
+        mean_final_policy_correction=sum(audit.final_policy_correction for audit in audits) / len(audits),
+        mean_final_value_correction=sum(audit.final_value_correction for audit in audits) / len(audits),
+        mean_final_search_correction_target=(
+            sum(audit.final_search_correction_target for audit in audits) / len(audits)
+        ),
+        unstable_at_gate_positions=unstable_count,
+        unstable_at_gate_recall=(
+            sum(
+                is_unstable and snapshot.predicted_search_correction >= threshold
+                for is_unstable, snapshot in zip(unstable, selected, strict=True)
+            )
+            / unstable_count
+            if unstable_count
+            else None
+        ),
+        correction_calibration_by_stop_visits=_correction_calibration_buckets(audits, selected),
     )
+
+
+def _unstable_at_gate(
+    audit: PositionAudit,
+    adaptive: AdaptiveFullSearchBudget,
+    maximum_visits: int,
+) -> bool:
+    gate_visit = adaptive.minimum_visits + (maximum_visits - adaptive.minimum_visits) // 2
+    gate = next(snapshot for snapshot in audit.snapshots if snapshot.visits >= gate_visit)
+    reference = audit.snapshots[-1]
+    return (
+        gate.selected_action_id != reference.selected_action_id
+        or _policy_total_variation(gate, reference) > 0.1
+        or abs(gate.root_value - reference.root_value) > adaptive.root_value_tolerance
+    )
+
+
+def _correction_calibration_buckets(
+    audits: tuple[PositionAudit, ...],
+    selected: tuple[SearchSnapshot, ...],
+) -> tuple[CorrectionCalibrationBucket, ...]:
+    buckets: list[CorrectionCalibrationBucket] = []
+    for stop_visits in sorted({snapshot.visits for snapshot in selected}):
+        indices = tuple(index for index, snapshot in enumerate(selected) if snapshot.visits == stop_visits)
+        targets = tuple(audits[index].final_search_correction_target for index in indices)
+        predictions = tuple(selected[index].predicted_search_correction for index in indices)
+        buckets.append(
+            CorrectionCalibrationBucket(
+                stop_visits=stop_visits,
+                positions=len(indices),
+                mean_target=sum(targets) / len(targets),
+                mean_prediction=sum(predictions) / len(predictions),
+                mean_absolute_error=(
+                    sum(abs(target - prediction) for target, prediction in zip(targets, predictions, strict=True))
+                    / len(targets)
+                ),
+            )
+        )
+    return tuple(buckets)
 
 
 def main() -> None:

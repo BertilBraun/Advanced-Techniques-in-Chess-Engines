@@ -112,9 +112,13 @@ void bind_search(py::module_ &module) {
         .value("DETERMINISTIC", SearchStopReason::Deterministic)
         .value("LEARNED_GATE", SearchStopReason::LearnedGate)
         .value("MAXIMUM", SearchStopReason::Maximum);
+    py::enum_<SearchCheckpointDetail>(module, "SearchCheckpointDetail")
+        .value("SCALARS", SearchCheckpointDetail::Scalars)
+        .value("POLICIES", SearchCheckpointDetail::Policies);
     py::class_<SearchCheckpoint>(module, "SearchCheckpoint")
         .def_readonly("visits", &SearchCheckpoint::visits)
         .def_readonly("leader_action_id", &SearchCheckpoint::leader_action_id)
+        .def_readonly("most_visited_action_id", &SearchCheckpoint::most_visited_action_id)
         .def_readonly("policy_target_visits", &SearchCheckpoint::policy_target_visits)
         .def_readonly("top_visit_share", &SearchCheckpoint::top_visit_share)
         .def_readonly("top_two_margin", &SearchCheckpoint::top_two_margin)
@@ -160,6 +164,7 @@ void bind_search(py::module_ &module) {
         .def_readonly("starting_visits", &GameSearchResult::starting_visits)
         .def_readonly("final_visits", &GameSearchResult::final_visits)
         .def_readonly("stop_reason", &GameSearchResult::stop_reason)
+        .def_readonly("learned_gate_evaluated", &GameSearchResult::learned_gate_evaluated)
         .def_readonly("checkpoints", &GameSearchResult::checkpoints);
     py::class_<BatchedSearchParameters>(module, "BatchedSearchParameters")
         .def(py::init<std::uint32_t, TreeSearchParameters, float, float, std::size_t>(),

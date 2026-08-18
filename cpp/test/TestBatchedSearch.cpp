@@ -344,12 +344,20 @@ int runBatchedSearchTests() {
         ChessSelfPlaySearch deterministicSearch(runtimeParameters, deterministicParameters,
                                                 inferenceParameters);
         const ChessSelfPlaySearchBatch deterministicResults = deterministicSearch.search(
-            {ChessSelfPlaySearchRequest(deterministicSearch.newRoot(Board{}), true)});
+            {ChessSelfPlaySearchRequest(deterministicSearch.newRoot(Board{}), true,
+                                        SearchCheckpointDetail::Policies)});
         require(deterministicResults.results[0].stop_reason == SearchStopReason::Deterministic &&
                     deterministicResults.results[0].final_visits == 4,
                 "deterministic adaptive search did not stop at its first eligible checkpoint");
         require(!deterministicResults.results[0].checkpoints[0].policy_target_visits.empty(),
                 "adaptive checkpoint omitted its policy snapshot");
+        require(deterministicResults.results[0].checkpoints.back().most_visited_action_id ==
+                    deterministicResults.results[0].highest_visited_child_action_id,
+                "adaptive checkpoint omitted the raw selected move");
+        require(deterministicResults.results[0].search_correction_target ==
+                    std::max(deterministicResults.results[0].policy_correction,
+                             deterministicResults.results[0].value_correction),
+                "search-correction label did not use the larger final correction");
 
         const AdaptiveSearchLimit learnedLimit(
             4, 12, 2, 2, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 8,
@@ -361,8 +369,11 @@ int runBatchedSearchTests() {
         const ChessSelfPlaySearchBatch learnedResults = learnedSearch.search(
             {ChessSelfPlaySearchRequest(learnedSearch.newRoot(Board{}), true)});
         require(learnedResults.results[0].stop_reason == SearchStopReason::LearnedGate &&
-                    learnedResults.results[0].final_visits == 8,
+                    learnedResults.results[0].final_visits == 8 &&
+                    learnedResults.results[0].learned_gate_evaluated,
                 "learned adaptive gate did not stop at its midpoint");
+        require(learnedResults.results[0].checkpoints[0].policy_target_visits.empty(),
+                "ordinary self-play retained detailed checkpoint policies");
 
         ChessSelfPlaySearch terminalSearch(runtimeParameters, stagedParameters,
                                            inferenceParameters);

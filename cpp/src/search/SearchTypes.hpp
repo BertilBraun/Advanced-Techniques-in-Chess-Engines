@@ -24,10 +24,12 @@ struct GameSearchVisit {
 };
 
 enum class SearchStopReason { FixedLimit, Deterministic, LearnedGate, Maximum };
+enum class SearchCheckpointDetail { Scalars, Policies };
 
 struct SearchCheckpoint {
     std::uint32_t visits;
     int leader_action_id;
+    int most_visited_action_id;
     std::vector<GameSearchVisit> policy_target_visits;
     float top_visit_share;
     float top_two_margin;
@@ -145,6 +147,7 @@ struct GameSearchResult {
     std::uint32_t starting_visits;
     std::uint32_t final_visits;
     SearchStopReason stop_reason;
+    bool learned_gate_evaluated;
     std::vector<SearchCheckpoint> checkpoints;
 };
 
@@ -178,6 +181,7 @@ template <SearchGame Game> struct GameSearchRequest {
     bool add_root_noise;
     bool force_root_playouts = false;
     bool count_root_initialization = false;
+    SearchCheckpointDetail checkpoint_detail = SearchCheckpointDetail::Scalars;
     SearchAdmission admission = SearchAdmission::Immediate;
 };
 

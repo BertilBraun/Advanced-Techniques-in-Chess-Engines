@@ -27,6 +27,7 @@ __all__ = [
     'FixedSearchLimit',
     'DisabledSearchCorrectionGate',
     'SearchCheckpoint',
+    'SearchCheckpointDetail',
     'SearchCorrectionGate',
     'SearchStopReason',
     'GameAnalysisResult',
@@ -95,12 +96,19 @@ class SearchStopReason:
 class SearchCheckpoint:
     visits: int
     leader_action_id: int
+    most_visited_action_id: int
     policy_target_visits: list[GameSearchVisit]
     top_visit_share: float
     top_two_margin: float
     root_value: float
     root_value_delta: float
     leader_stable: bool
+
+class SearchCheckpointDetail:
+    SCALARS: SearchCheckpointDetail
+    POLICIES: SearchCheckpointDetail
+    @property
+    def name(self) -> str: ...
 
 class FixedSearchLimit:
     visits: int
@@ -161,6 +169,8 @@ class GameSearchResult:
     def final_visits(self) -> int: ...
     @property
     def stop_reason(self) -> SearchStopReason: ...
+    @property
+    def learned_gate_evaluated(self) -> bool: ...
     @property
     def checkpoints(self) -> list[SearchCheckpoint]: ...
 
@@ -362,9 +372,15 @@ class GoSearchRoot9:
     def play(self, action_id: int) -> None: ...
 
 class GoSelfPlaySearchRequest7:
-    def __init__(self, root: GoSearchRoot7, full_search: bool) -> None: ...
+    def __init__(
+        self,
+        root: GoSearchRoot7,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> None: ...
     root: GoSearchRoot7
     full_search: bool
+    checkpoint_detail: SearchCheckpointDetail
 
 class GoSelfPlaySearchResult7:
     root_value: float
@@ -381,6 +397,7 @@ class GoSelfPlaySearchResult7:
     starting_visits: int
     final_visits: int
     stop_reason: SearchStopReason
+    learned_gate_evaluated: bool
     checkpoints: list[SearchCheckpoint]
     root: GoSearchRoot7
 
@@ -400,7 +417,12 @@ class GoSelfPlaySearch7:
     @staticmethod
     def inference_dimensions() -> InferenceDimensions: ...
     def new_root(self, position: GoPosition7) -> GoSearchRoot7: ...
-    def request(self, root: GoSearchRoot7, full_search: bool) -> GoSelfPlaySearchRequest7: ...
+    def request(
+        self,
+        root: GoSearchRoot7,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> GoSelfPlaySearchRequest7: ...
     def search(
         self, requests: list[GoSelfPlaySearchRequest7], collect_statistics: bool = False
     ) -> GoSelfPlaySearchBatch7: ...
@@ -409,9 +431,15 @@ class GoSelfPlaySearch7:
     def model_generation(self) -> int: ...
 
 class GoSelfPlaySearchRequest9:
-    def __init__(self, root: GoSearchRoot9, full_search: bool) -> None: ...
+    def __init__(
+        self,
+        root: GoSearchRoot9,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> None: ...
     root: GoSearchRoot9
     full_search: bool
+    checkpoint_detail: SearchCheckpointDetail
 
 class GoSelfPlaySearchResult9:
     root_value: float
@@ -428,6 +456,7 @@ class GoSelfPlaySearchResult9:
     starting_visits: int
     final_visits: int
     stop_reason: SearchStopReason
+    learned_gate_evaluated: bool
     checkpoints: list[SearchCheckpoint]
     root: GoSearchRoot9
 
@@ -447,7 +476,12 @@ class GoSelfPlaySearch9:
     @staticmethod
     def inference_dimensions() -> InferenceDimensions: ...
     def new_root(self, position: GoPosition9) -> GoSearchRoot9: ...
-    def request(self, root: GoSearchRoot9, full_search: bool) -> GoSelfPlaySearchRequest9: ...
+    def request(
+        self,
+        root: GoSearchRoot9,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> GoSelfPlaySearchRequest9: ...
     def search(
         self, requests: list[GoSelfPlaySearchRequest9], collect_statistics: bool = False
     ) -> GoSelfPlaySearchBatch9: ...
@@ -595,7 +629,12 @@ class ChessSelfPlaySearch:
     def model_version(self) -> int: ...
     @property
     def model_generation(self) -> int: ...
-    def request(self, root: ChessSearchRoot, full_search: bool) -> ChessSelfPlaySearchRequest: ...
+    def request(
+        self,
+        root: ChessSearchRoot,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> ChessSelfPlaySearchRequest: ...
     def inference_statistics(self) -> InferenceStatistics: ...
     def refresh_model(self, model_version: int, model_path: str) -> None: ...
     def update_search_schedule(self, search_parameters: SelfPlaySearchParameters) -> bool: ...
@@ -622,11 +661,18 @@ class ChessSelfPlaySearch:
     ) -> ChessSearchRoot: ...
 
 class ChessSelfPlaySearchRequest:
-    def __init__(self, root: ChessSearchRoot, full_search: bool) -> None: ...
+    def __init__(
+        self,
+        root: ChessSearchRoot,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> None: ...
     @property
     def root(self) -> ChessSearchRoot: ...
     @property
     def full_search(self) -> bool: ...
+    @property
+    def checkpoint_detail(self) -> SearchCheckpointDetail: ...
 
 class ChessSearchChild:
     @property
@@ -734,6 +780,8 @@ class ChessSelfPlaySearchResult:
     def final_visits(self) -> int: ...
     @property
     def stop_reason(self) -> SearchStopReason: ...
+    @property
+    def learned_gate_evaluated(self) -> bool: ...
     @property
     def checkpoints(self) -> list[SearchCheckpoint]: ...
 

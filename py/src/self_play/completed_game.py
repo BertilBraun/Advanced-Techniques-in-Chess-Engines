@@ -74,6 +74,7 @@ class SearchStopReason(str, Enum):
 class SearchCheckpointObservation(FrozenModel):
     visits: int = Field(gt=0)
     leader_action_id: int = Field(ge=0)
+    most_visited_action_id: int = Field(ge=0)
     top_visit_share: float = Field(ge=0.0, le=1.0)
     top_two_margin: float = Field(ge=0.0, le=1.0)
     root_value: float = Field(ge=-1.0, le=1.0)
@@ -103,6 +104,7 @@ class SearchObservation(FrozenModel):
     starting_visits: int = Field(ge=0)
     final_visits: int = Field(gt=0)
     stop_reason: SearchStopReason
+    learned_gate_evaluated: bool
     checkpoints: tuple[SearchCheckpointObservation, ...] = ()
 
     def model_post_init(self, __context: object, /) -> None:
@@ -125,7 +127,7 @@ class SearchObservation(FrozenModel):
 
 
 class CompletedSelfPlayGame(FrozenModel):
-    schema_version: Literal[4] = 4
+    schema_version: Literal[5] = 5
     identity: GameIdentity
     created_at_seconds: float = Field(ge=0.0)
     generation_seconds: float = Field(ge=0.0)

@@ -103,6 +103,7 @@ public:
                 .starting_visits = task.starting_visits,
                 .final_visits = root.visits(),
                 .stop_reason = task.stop_reason,
+                .learned_gate_evaluated = task.learned_gate_checked,
                 .checkpoints = task.checkpoints,
             };
             result.search_visits.reserve(node.children.size());
@@ -257,6 +258,7 @@ private:
         bool stopped;
         bool learned_gate_checked;
         SearchStopReason stop_reason;
+        SearchCheckpointDetail checkpoint_detail;
         std::vector<SearchCheckpoint> checkpoints;
     };
 
@@ -322,6 +324,7 @@ private:
             .stop_reason = std::holds_alternative<FixedSearchLimit>(request.limit)
                                ? SearchStopReason::FixedLimit
                                : SearchStopReason::Maximum,
+            .checkpoint_detail = request.checkpoint_detail,
             .checkpoints = {},
         };
         task.root.tree().prepareForSearch(task.maximum_visits,
@@ -376,16 +379,30 @@ private:
         bool stable = task.checkpoints.size() >= historyCount;
         const int leaderAction =
             Game::Encoding::actionId(rootNode.children[leader].action, rootNode.position);
+        int mostVisitedAction = -1;
+        std::uint32_t mostVisits = 0;
         std::vector<GameSearchVisit> checkpointVisits;
-        checkpointVisits.reserve(policyVisits.size());
+        if (task.checkpoint_detail == SearchCheckpointDetail::Policies) {
+            checkpointVisits.reserve(policyVisits.size());
+        }
         for (const auto index : range(policyVisits.size())) {
-            if (policyVisits[index] > 0) {
+            const auto &edge = rootNode.children[index];
+            const int actionId = Game::Encoding::actionId(edge.action, rootNode.position);
+            if (mostVisitedAction < 0 || edge.visits > mostVisits ||
+                (edge.visits == mostVisits && actionId < mostVisitedAction)) {
+                mostVisitedAction = actionId;
+                mostVisits = edge.visits;
+            }
+            if (task.checkpoint_detail == SearchCheckpointDetail::Policies &&
+                policyVisits[index] > 0) {
                 checkpointVisits.push_back({
-                    .action_id = Game::Encoding::actionId(
-                        rootNode.children[index].action, rootNode.position),
+                    .action_id = actionId,
                     .visit_count = policyVisits[index],
                 });
             }
+        }
+        if (mostVisitedAction < 0) {
+            throw std::logic_error("Adaptive search checkpoint has no visited child");
         }
         if (stable) {
             for (const SearchCheckpoint &previous :
@@ -399,6 +416,7 @@ private:
         return {
             .visits = task.root.visits(),
             .leader_action_id = leaderAction,
+            .most_visited_action_id = mostVisitedAction,
             .policy_target_visits = std::move(checkpointVisits),
             .top_visit_share = topShare,
             .top_two_margin = topShare - secondShare,

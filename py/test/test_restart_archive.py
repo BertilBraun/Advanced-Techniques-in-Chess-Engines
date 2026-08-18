@@ -77,6 +77,7 @@ def completed_game(
                 starting_visits=0,
                 final_visits=256,
                 stop_reason=SearchStopReason.FIXED_LIMIT,
+                learned_gate_evaluated=False,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=1.0, loss=0.0),

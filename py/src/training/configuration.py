@@ -202,7 +202,12 @@ class TrainingArgs(FrozenModel):
                 raise ValueError('Maximum wall time must reach the final progressive model training start.')
         return self
 
-    def validate_game(self, action_size: int, self_play: SelfPlayConfiguration) -> None:
+    def validate_game(
+        self,
+        action_size: int,
+        self_play: SelfPlayConfiguration,
+        auxiliary_targets: tuple[AuxiliaryTargetConfiguration, ...],
+    ) -> None:
         if action_size > 65_536:
             raise ValueError('Game action IDs must fit uint16 replay storage.')
         if self.lifecycle.replay.maximum_policy_entries > action_size:
@@ -211,8 +216,15 @@ class TrainingArgs(FrozenModel):
         match search.full_search_budget:
             case FixedFullSearchBudgetConfiguration(visits=visits):
                 full_search_budgets = defined_schedule_values(visits)
+                learned_gate_can_enable = False
             case AdaptiveFullSearchBudgetConfiguration(maximum_visits=maximum_visits):
                 full_search_budgets = defined_schedule_values(maximum_visits)
+                learned_gate_can_enable = any(
+                    value > search.full_search_budget.minimum_visits for value in full_search_budgets
+                )
+        search_correction_targets = sum(target.kind == 'search_correction' for target in auxiliary_targets)
+        if learned_gate_can_enable and search_correction_targets != 1:
+            raise ValueError('An enabled adaptive learned gate requires exactly one search-correction target.')
         search_budgets = (
             *full_search_budgets,
             *defined_schedule_values(search.fast_searches),

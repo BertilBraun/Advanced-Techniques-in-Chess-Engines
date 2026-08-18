@@ -85,6 +85,9 @@ class NativeSearchResult(Protocol[NativeRootT]):
     def stop_reason(self) -> SearchStopReason: ...
 
     @property
+    def learned_gate_evaluated(self) -> bool: ...
+
+    @property
     def checkpoints(self) -> list[SearchCheckpoint]: ...
 
     @property

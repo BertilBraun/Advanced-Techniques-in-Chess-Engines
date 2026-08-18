@@ -76,6 +76,7 @@ def completed_continuation(
                 starting_visits=0,
                 final_visits=20,
                 stop_reason=SearchStopReason.FIXED_LIMIT,
+                learned_gate_evaluated=False,
             ),
         ),
         final_wdl=final_wdl,

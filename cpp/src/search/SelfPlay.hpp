@@ -61,6 +61,7 @@ struct SelfPlaySearchStatistics {
 template <SearchGame Game> struct SelfPlaySearchRequest {
     GameSearchRoot<Game> root;
     bool full_search;
+    SearchCheckpointDetail checkpoint_detail = SearchCheckpointDetail::Scalars;
 };
 
 template <SearchGame Game> struct SelfPlaySearchResult {
@@ -78,6 +79,7 @@ template <SearchGame Game> struct SelfPlaySearchResult {
     std::uint32_t starting_visits;
     std::uint32_t final_visits;
     SearchStopReason stop_reason;
+    bool learned_gate_evaluated;
     std::vector<SearchCheckpoint> checkpoints;
     GameSearchRoot<Game> root;
 };
@@ -158,6 +160,7 @@ public:
                 .force_root_playouts =
                     request.full_search &&
                     m_searchParameters.tree_search.forced_playout_coefficient > 0.0F,
+                .checkpoint_detail = request.checkpoint_detail,
                 .admission = admission,
             });
         }
@@ -183,6 +186,7 @@ public:
                 .starting_visits = searched.results[index].starting_visits,
                 .final_visits = searched.results[index].final_visits,
                 .stop_reason = searched.results[index].stop_reason,
+                .learned_gate_evaluated = searched.results[index].learned_gate_evaluated,
                 .checkpoints = std::move(searched.results[index].checkpoints),
                 .root = requests[index].root,
             });

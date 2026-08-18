@@ -11,7 +11,9 @@ from src.replay.configuration import ReplayConfiguration
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
+    EligibleScalarAuxiliaryTarget,
     IneligibleNextPolicyTarget,
+    IneligibleScalarAuxiliaryTarget,
     ReplaySample,
 )
 from src.replay.layout import ReplayLayout
@@ -26,7 +28,14 @@ from src.self_play.completed_game import (
     publish_completed_self_play_game,
 )
 from src.self_play.resignation import CalibratedResignationConfiguration, ResignationCalibrator
-from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
+from src.training.targets import (
+    FutureSearchValueHeadLayout,
+    IrreversibleProgressHeadLayout,
+    NextPolicyHeadLayout,
+    RemainingGameLengthHeadLayout,
+    SearchCorrectionHeadLayout,
+    TrainingTargetLayout,
+)
 
 
 @dataclass(frozen=True)
@@ -138,6 +147,7 @@ def _completed_game() -> CompletedSelfPlayGame:
                 starting_visits=0,
                 final_visits=13,
                 stop_reason=SearchStopReason.FIXED_LIMIT,
+                learned_gate_evaluated=False,
             )
         )
     return CompletedSelfPlayGame(
@@ -216,6 +226,7 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
                 starting_visits=0,
                 final_visits=8,
                 stop_reason=SearchStopReason.FIXED_LIMIT,
+                learned_gate_evaluated=False,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=0.0, loss=1.0),
@@ -263,6 +274,113 @@ def test_remaining_game_length_uses_exact_completed_trajectory_boundary() -> Non
         for target in sample.auxiliary_targets
         if isinstance(target, EligibleRemainingGameLengthTarget)
     ) == pytest.approx((1.0, 0.5, 0.25))
+
+
+def test_four_ply_future_value_uses_terminal_fallback_with_current_perspective() -> None:
+    targets = TrainingTargetLayout(
+        action_size=3,
+        wdl_size=3,
+        auxiliary_heads=(FutureSearchValueHeadLayout(kind='future_search_value', ply_offset=4, smooth_l1_beta=0.1),),
+    )
+
+    game = _completed_game().model_copy(
+        update={
+            'observations': tuple(
+                observation.model_copy(update={'full_search': True}) for observation in _completed_game().observations
+            )
+        }
+    )
+    materialized = materialize_completed_game(
+        game,
+        LINEAR_STATE_CONTRACT,
+        None,
+        targets,
+        3,
+        UNDISCOUNTED_VALUES,
+    )
+
+    values = tuple(sample.auxiliary_targets[0] for sample in materialized.samples)
+    assert values == (
+        EligibleScalarAuxiliaryTarget(kind='future_search_value', value=-1.0),
+        EligibleScalarAuxiliaryTarget(kind='future_search_value', value=1.0),
+        EligibleScalarAuxiliaryTarget(kind='future_search_value', value=-1.0),
+        EligibleScalarAuxiliaryTarget(kind='future_search_value', value=1.0),
+    )
+
+
+def test_irreversible_progress_records_event_distance_and_terminal_censoring() -> None:
+    targets = TrainingTargetLayout(
+        action_size=3,
+        wdl_size=3,
+        auxiliary_heads=(IrreversibleProgressHeadLayout(kind='irreversible_progress', horizon_plies=3),),
+    )
+    materialized = materialize_completed_game(
+        _completed_game(),
+        LINEAR_STATE_CONTRACT,
+        None,
+        targets,
+        3,
+        UNDISCOUNTED_VALUES,
+    )
+    event_targets = tuple(sample.auxiliary_targets[0] for sample in materialized.samples)
+    assert event_targets[1:] == (
+        EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=2 / 3),
+        EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=1 / 3),
+    )
+
+    game = _completed_game().model_copy(
+        update={
+            'action_ids': (0, 1, 0, 0),
+            'observations': (
+                *_completed_game().observations[:-1],
+                _completed_game().observations[-1].model_copy(
+                    update={
+                        'selected_action_id': 0,
+                        'highest_visited_child_action_id': 0,
+                    }
+                ),
+            ),
+        }
+    )
+    censored = materialize_completed_game(
+        game,
+        LINEAR_STATE_CONTRACT,
+        None,
+        targets,
+        3,
+        UNDISCOUNTED_VALUES,
+    )
+    assert isinstance(censored.samples[1].auxiliary_targets[0], IneligibleScalarAuxiliaryTarget)
+
+
+def test_search_correction_materializes_final_larger_correction() -> None:
+    targets = TrainingTargetLayout(
+        action_size=3,
+        wdl_size=3,
+        auxiliary_heads=(SearchCorrectionHeadLayout(kind='search_correction'),),
+    )
+    observation = _completed_game().observations[0].model_copy(
+        update={
+            'policy_correction': 0.1,
+            'value_correction': 0.3,
+            'search_correction_target': 0.3,
+        }
+    )
+    game = _completed_game().model_copy(update={'observations': (observation, *_completed_game().observations[1:])})
+
+    materialized = materialize_completed_game(
+        game,
+        LINEAR_STATE_CONTRACT,
+        None,
+        targets,
+        3,
+        UNDISCOUNTED_VALUES,
+    )
+
+    assert materialized.samples[0].auxiliary_targets[0] == EligibleScalarAuxiliaryTarget(
+        kind='search_correction',
+        value=0.3,
+    )
 
 
 def test_materialization_uniformly_blurs_wdl_by_actual_remaining_game_plies() -> None:

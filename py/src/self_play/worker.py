@@ -273,10 +273,12 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             starting_visits=result.starting_visits,
             final_visits=result.final_visits,
             stop_reason=SearchStopReason(result.stop_reason.name.lower()),
+            learned_gate_evaluated=result.learned_gate_evaluated,
             checkpoints=tuple(
                 SearchCheckpointObservation(
                     visits=checkpoint.visits,
                     leader_action_id=checkpoint.leader_action_id,
+                    most_visited_action_id=checkpoint.most_visited_action_id,
                     top_visit_share=checkpoint.top_visit_share,
                     top_two_margin=checkpoint.top_two_margin,
                     root_value=checkpoint.root_value,

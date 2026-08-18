@@ -3,11 +3,17 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from AlphaZeroCpp import GameSearchVisit
 import src.training.reporting as reporting_module
 from src.games.representation import PackedPlaneLayout
 from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame, ReplayDescription
-from src.self_play.completed_game import TerminationReason
+from src.self_play.completed_game import (
+    SearchCheckpointObservation,
+    SearchObservation,
+    SearchStopReason,
+    TerminationReason,
+)
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedgerState
@@ -104,6 +110,71 @@ def test_adaptive_search_telemetry_omits_windows_without_full_searches() -> None
     games = (IngestedCompletedGame(length_plies=10, termination_reason=TerminationReason.NATURAL),)
 
     assert adaptive_search_telemetry(games) is None
+
+
+def test_adaptive_search_telemetry_reports_scalar_checkpoints_and_gate_outcome() -> None:
+    checkpoints = (
+        SearchCheckpointObservation(
+            visits=400,
+            leader_action_id=1,
+            most_visited_action_id=2,
+            top_visit_share=0.4,
+            top_two_margin=0.1,
+            root_value=0.2,
+            root_value_delta=2.0,
+            leader_stable=False,
+        ),
+        SearchCheckpointObservation(
+            visits=500,
+            leader_action_id=2,
+            most_visited_action_id=2,
+            top_visit_share=0.5,
+            top_two_margin=0.2,
+            root_value=0.22,
+            root_value_delta=0.02,
+            leader_stable=False,
+        ),
+    )
+    observation = SearchObservation(
+        ply=0,
+        model_generation=50,
+        policy_target_visits=(GameSearchVisit(action_id=2, visit_count=500),),
+        root_value=0.22,
+        highest_visited_child_action_id=2,
+        highest_visited_child_visit_count=500,
+        highest_visited_child_q=0.2,
+        selected_action_id=2,
+        full_search=True,
+        sample_weight=1.0,
+        search_budget=800,
+        network_root_value=0.1,
+        policy_correction=0.3,
+        value_correction=0.06,
+        search_correction_target=0.3,
+        predicted_search_correction=0.7,
+        starting_visits=0,
+        final_visits=800,
+        stop_reason=SearchStopReason.MAXIMUM,
+        learned_gate_evaluated=True,
+        checkpoints=checkpoints,
+    )
+    games = (
+        IngestedCompletedGame(
+            length_plies=1,
+            termination_reason=TerminationReason.NATURAL,
+            observations=(observation,),
+        ),
+    )
+
+    telemetry = adaptive_search_telemetry(games)
+
+    assert telemetry is not None
+    assert telemetry.checkpoint_visits == (400, 500)
+    assert telemetry.checkpoint_top_visit_shares == (0.4, 0.5)
+    assert telemetry.leader_changes == 1
+    assert telemetry.learned_gate_evaluations == 1
+    assert telemetry.learned_gate_denials == 0
+    assert telemetry.learned_gate_unlocks == 1
 
 
 def test_training_reporter_logs_completed_game_length_window(monkeypatch: pytest.MonkeyPatch) -> None:

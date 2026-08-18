@@ -194,7 +194,7 @@ def _future_search_value_target(
             else -1.0
         )
         return EligibleScalarAuxiliaryTarget(kind='future_search_value', value=sign * future.root_value)
-    if future_ply < len(positions):
+    if future_ply < len(game.action_ids):
         return IneligibleScalarAuxiliaryTarget(kind='future_search_value')
     final_player = state.current_player(positions[-1])
     current_player = state.current_player(positions[observation.ply])

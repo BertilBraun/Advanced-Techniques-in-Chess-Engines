@@ -244,6 +244,30 @@ class TrainingReporter:
             generation,
             log_mean=True,
         )
+        if telemetry.checkpoint_visits:
+            _log_values('adaptive_search/checkpoint_visits', telemetry.checkpoint_visits, generation, log_mean=True)
+            _log_values(
+                'adaptive_search/checkpoint_top_visit_share',
+                telemetry.checkpoint_top_visit_shares,
+                generation,
+                log_mean=True,
+            )
+            _log_values(
+                'adaptive_search/checkpoint_top_two_margin',
+                telemetry.checkpoint_top_two_margins,
+                generation,
+                log_mean=True,
+            )
+            _log_values(
+                'adaptive_search/checkpoint_root_value_delta',
+                telemetry.checkpoint_root_value_deltas,
+                generation,
+                log_mean=True,
+            )
+        log_scalar('adaptive_search/leader_changes', telemetry.leader_changes, generation)
+        log_scalar('adaptive_search/learned_gate/evaluations', telemetry.learned_gate_evaluations, generation)
+        log_scalar('adaptive_search/learned_gate/denials', telemetry.learned_gate_denials, generation)
+        log_scalar('adaptive_search/learned_gate/unlocks', telemetry.learned_gate_unlocks, generation)
         for reason, count in telemetry.stop_reasons:
             log_scalar(f'adaptive_search/stop_reason/{reason.value}', count, generation)
 

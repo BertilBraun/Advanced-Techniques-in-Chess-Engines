@@ -50,9 +50,12 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
             py::arg("retained_fraction"));
 
     py::class_<Request>(module, names.request)
-        .def(py::init<Root, bool>(), py::arg("root"), py::arg("full_search"))
+        .def(py::init<Root, bool, SearchCheckpointDetail>(), py::arg("root"),
+             py::arg("full_search"),
+             py::arg("checkpoint_detail") = SearchCheckpointDetail::Scalars)
         .def_readonly("root", &Request::root)
-        .def_readonly("full_search", &Request::full_search);
+        .def_readonly("full_search", &Request::full_search)
+        .def_readonly("checkpoint_detail", &Request::checkpoint_detail);
     py::class_<Result>(module, names.result)
         .def_readonly("root_value", &Result::root_value)
         .def_readonly("highest_visited_child_action_id", &Result::highest_visited_child_action_id)
@@ -68,6 +71,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def_readonly("starting_visits", &Result::starting_visits)
         .def_readonly("final_visits", &Result::final_visits)
         .def_readonly("stop_reason", &Result::stop_reason)
+        .def_readonly("learned_gate_evaluated", &Result::learned_gate_evaluated)
         .def_readonly("checkpoints", &Result::checkpoints)
         .def_readonly("root", &Result::root);
     py::class_<Batch>(module, names.batch)
@@ -90,10 +94,12 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
             py::arg("position"))
         .def(
             "request",
-            [](const Search &, Root selectedRoot, const bool fullSearch) {
-                return Request(std::move(selectedRoot), fullSearch);
+            [](const Search &, Root selectedRoot, const bool fullSearch,
+               const SearchCheckpointDetail checkpointDetail) {
+                return Request(std::move(selectedRoot), fullSearch, checkpointDetail);
             },
-            py::arg("root"), py::arg("full_search"))
+            py::arg("root"), py::arg("full_search"),
+            py::arg("checkpoint_detail") = SearchCheckpointDetail::Scalars)
         .def("search", &Search::search, py::arg("requests"), py::arg("collect_statistics") = false,
              py::call_guard<py::gil_scoped_release>())
         .def("refresh_model", &Search::refreshModel, py::arg("model_generation"),

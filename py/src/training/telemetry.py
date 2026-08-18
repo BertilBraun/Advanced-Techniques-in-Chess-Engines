@@ -49,6 +49,14 @@ class AdaptiveSearchTelemetry:
     search_correction_predictions: tuple[float, ...]
     policy_corrections: tuple[float, ...]
     value_corrections: tuple[float, ...]
+    checkpoint_visits: tuple[int, ...]
+    checkpoint_top_visit_shares: tuple[float, ...]
+    checkpoint_top_two_margins: tuple[float, ...]
+    checkpoint_root_value_deltas: tuple[float, ...]
+    leader_changes: int
+    learned_gate_evaluations: int
+    learned_gate_denials: int
+    learned_gate_unlocks: int
     stop_reasons: tuple[tuple[SearchStopReason, int], ...]
 
 
@@ -58,6 +66,9 @@ def adaptive_search_telemetry(
     observations = tuple(observation for game in games for observation in game.observations if observation.full_search)
     if not observations:
         return None
+    checkpoints = tuple(checkpoint for observation in observations for checkpoint in observation.checkpoints)
+    learned_gate_evaluations = sum(observation.learned_gate_evaluated for observation in observations)
+    learned_gate_denials = sum(observation.stop_reason is SearchStopReason.LEARNED_GATE for observation in observations)
     return AdaptiveSearchTelemetry(
         final_visits=tuple(observation.final_visits for observation in observations),
         new_simulations=tuple(_new_simulations(observation) for observation in observations),
@@ -65,11 +76,24 @@ def adaptive_search_telemetry(
         search_correction_predictions=tuple(observation.predicted_search_correction for observation in observations),
         policy_corrections=tuple(observation.policy_correction for observation in observations),
         value_corrections=tuple(observation.value_correction for observation in observations),
+        checkpoint_visits=tuple(checkpoint.visits for checkpoint in checkpoints),
+        checkpoint_top_visit_shares=tuple(checkpoint.top_visit_share for checkpoint in checkpoints),
+        checkpoint_top_two_margins=tuple(checkpoint.top_two_margin for checkpoint in checkpoints),
+        checkpoint_root_value_deltas=tuple(checkpoint.root_value_delta for checkpoint in checkpoints),
+        leader_changes=sum(_leader_changes(observation) for observation in observations),
+        learned_gate_evaluations=learned_gate_evaluations,
+        learned_gate_denials=learned_gate_denials,
+        learned_gate_unlocks=learned_gate_evaluations - learned_gate_denials,
         stop_reasons=tuple(
             (reason, sum(observation.stop_reason is reason for observation in observations))
             for reason in SearchStopReason
         ),
     )
+
+
+def _leader_changes(observation: SearchObservation) -> int:
+    leaders = tuple(checkpoint.leader_action_id for checkpoint in observation.checkpoints)
+    return sum(left != right for left, right in zip(leaders, leaders[1:]))
 
 
 def _new_simulations(observation: SearchObservation) -> int:

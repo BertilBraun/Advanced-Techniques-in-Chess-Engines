@@ -83,6 +83,23 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     assert configuration.training.network == progressive_model_sizing.models[0].network
 
 
+@pytest.mark.parametrize('search_correction_count', (0, 2))
+def test_adaptive_learned_gate_requires_exactly_one_search_correction_target(
+    search_correction_count: int,
+) -> None:
+    candidate = yaml.safe_load(OPTIMAL_CHESS_EXPERIMENT_PATH.read_text(encoding='utf-8'))
+    targets = candidate['chess']['objective']['auxiliary_targets']
+    without_search_correction = tuple(target for target in targets if target['kind'] != 'search_correction')
+    search_correction = next(target for target in targets if target['kind'] == 'search_correction')
+    candidate['chess']['objective']['auxiliary_targets'] = [
+        *without_search_correction,
+        *[search_correction] * search_correction_count,
+    ]
+
+    with pytest.raises(ValidationError, match='requires exactly one search-correction'):
+        ChessExperimentConfiguration.model_validate(candidate)
+
+
 @pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))
 def test_enabled_forced_playout_coefficient_must_be_positive_and_finite(coefficient: float) -> None:
     with pytest.raises(ValidationError):
