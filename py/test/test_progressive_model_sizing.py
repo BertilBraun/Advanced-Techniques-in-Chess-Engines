@@ -1,15 +1,17 @@
-from dataclasses import dataclass
 from decimal import Decimal
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
 
 from src.games.representation import NetworkDimensions, PackedPlaneLayout
 from src.replay.layout import ReplayLayout
+from src.replay.description import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.contracts import CheckpointManifest
 from src.training.checkpoint.persistence import publish_checkpoint
+from src.training.configuration import TrainingArgs
 from src.training.network import (
     AttentionNetworkParams,
     GoPointPassPolicyHeadConfiguration,
@@ -71,18 +73,8 @@ def test_progressive_model_definition_accepts_attention_architecture() -> None:
     assert isinstance(definition.network, AttentionNetworkParams)
 
 
-@dataclass(frozen=True)
-class ReplaySnapshot:
-    path: Path
-    head: int
-    size: int
-    logical_capacity: int
-    maximum_capacity: int
-    layout: ReplayLayout
-
-
-def _replay(tmp_path: Path, head: int = 3) -> ReplaySnapshot:
-    return ReplaySnapshot(
+def _replay(tmp_path: Path, head: int = 3) -> ReplayDescription:
+    return ReplayDescription(
         path=tmp_path / 'replay.bin',
         head=head,
         size=32,
@@ -125,6 +117,39 @@ def test_elapsed_run_time_controls_candidate_eligibility(
     assert _configuration().eligible_model_ids(elapsed_seconds) == expected
 
 
+@pytest.mark.parametrize('model_count', (1, 2, 4))
+def test_model_schedule_accepts_any_nonempty_model_tuple(model_count: int) -> None:
+    models = tuple(
+        ProgressiveModelDefinition(
+            model_id=f'model-{index}',
+            training_start_days=Decimal(index),
+            network=_network(8 + index),
+        )
+        for index in range(model_count)
+    )
+
+    configuration = ProgressiveModelSizingConfiguration(
+        models=models,
+        promotion=TotalLossEmaPromotionConfiguration(decay=0.9, warmup_quanta=2),
+    )
+
+    assert configuration.models == models
+    assert configuration.is_progressive is (model_count > 1)
+
+
+def test_model_schedule_rejects_an_empty_model_tuple() -> None:
+    with pytest.raises(ValueError):
+        ProgressiveModelSizingConfiguration(
+            models=(),
+            promotion=TotalLossEmaPromotionConfiguration(decay=0.9, warmup_quanta=2),
+        )
+
+
+def test_training_configuration_has_one_network_owner() -> None:
+    assert 'network' not in TrainingArgs.model_fields
+    assert TrainingArgs.model_fields['progressive_model_sizing'].is_required()
+
+
 @pytest.mark.parametrize(
     'starts',
     (
@@ -152,6 +177,10 @@ def test_pending_quantum_persists_replay_identity_and_candidate_completion(tmp_p
     pending = store.begin_quantum(64_800.0, _replay(tmp_path), 40, 4)
 
     assert pending.required_model_ids == ('small', 'medium')
+    assert pending.replay_batch.replay == _replay(tmp_path)
+    assert pending.replay_batch.source_optimizer_steps == 40
+    persisted_replay_batch = json.loads(state_path.read_text(encoding='utf-8'))['pending_quantum']['replay_batch']
+    assert set(persisted_replay_batch) == {'replay', 'source_optimizer_steps'}
     store.record_candidate(
         CompletedCandidateTraining(
             model_id='small',

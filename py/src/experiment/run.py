@@ -231,6 +231,7 @@ def _prepare_initial_checkpoint(
     manifest_path: Path,
 ) -> CheckpointReference:
     training = experiment.training
+    initial_network = training.initial_model.network
     checkpoint_path = model_save_path(0, output_path)
     device = _training_device(experiment)
     auxiliary_heads = _auxiliary_heads(experiment)
@@ -251,7 +252,7 @@ def _prepare_initial_checkpoint(
             if not checkpoint_path.exists():
                 model = load_model(
                     initial_model_path,
-                    training.network,
+                    initial_network,
                     device,
                     experiment.network_dimensions,
                     auxiliary_heads,
@@ -262,7 +263,7 @@ def _prepare_initial_checkpoint(
                 raise ValueError(f'Random checkpoint exists without a run manifest: {checkpoint_path}')
             if not checkpoint_path.exists():
                 model = create_model(
-                    training.network,
+                    initial_network,
                     device,
                     experiment.network_dimensions,
                     auxiliary_heads,

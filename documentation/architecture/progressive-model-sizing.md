@@ -2,11 +2,11 @@
 
 ## Purpose and scope
 
-Progressive sizing is an optional training policy above the shared chess/Go model, replay, objective, DDP, and
-checkpoint contracts. It is independent of the concrete network architecture: each of exactly three configured
-stages supplies a complete `NetworkParams` value, and the runtime does not infer width, depth, or a relationship
-between architectures. The first model starts at elapsed run day `0.0`; later models have strictly increasing
-elapsed active-run starts, such as `0.75` and `1.5` days.
+Model sizing is a training policy above the shared chess/Go model, replay, objective, DDP, and checkpoint contracts.
+It is independent of the concrete network architecture: a required non-empty tuple supplies complete model
+definitions, and the runtime does not infer width, depth, or a relationship between architectures. One definition
+is ordinary fixed-model training. Multiple definitions enable progressive training. The first model starts at
+elapsed run day `0.0`; later models have strictly increasing elapsed active-run starts, such as `0.75` and `1.5` days.
 
 This policy does not add a transformer path, model-shape adapter, weight transfer, match gate, or checkpoint
 averaging. Every later model starts from its own random initialization. All models use the run-fixed input,
@@ -38,10 +38,10 @@ boundary that fits this platform's blocking DDP quantum.
 
 ## Configuration and eligibility
 
-`training.progressive_model_sizing` owns three ordered `ProgressiveModelDefinition` values. Each owns a stable model
-ID, an elapsed active-run start in days, and a complete network definition. The first definition must exactly equal
-`training.network`, which remains the day-zero published model. This prevents the published initial checkpoint and
-the progressive state from naming different architectures.
+`training.progressive_model_sizing` owns a non-empty ordered tuple of `ProgressiveModelDefinition` values. Each owns
+a stable model ID, an elapsed active-run start in days, and a complete network definition. This tuple is the only
+network-configuration owner: its first definition is the day-zero published model, so there is no duplicate
+`training.network` field to keep synchronized.
 
 The promotion configuration explicitly owns:
 
@@ -60,11 +60,11 @@ the learned output heads remain a small fraction of every stage.
 
 ## Quantum and replay semantics
 
-At a training boundary the coordinator pauses every self-play worker. It freezes a typed replay-batch identity with
-the replay path, FIFO head and size, capacities, layout digest, and global source optimizer step. The active model
-and every eligible larger model, in configured order, receive that same replay description and source optimizer
-step. The existing deterministic rank sampler consequently chooses the same rows in the same optimizer-step order
-for every model. Models may have different execution times but cannot observe different batches.
+At a progressive training boundary the coordinator pauses every self-play worker. It freezes a typed replay-batch
+identity containing the canonical `ReplayDescription` and global source optimizer step. The active model and every
+eligible larger model, in configured order, receive those same values. The existing deterministic rank sampler
+consequently chooses the same rows in the same optimizer-step order for every model. Models may have different
+execution times but cannot observe different batches.
 
 After a promotion, superseded smaller models stop training. The new active model and its immediate or later eligible
 successors continue. A later stage that becomes eligible after many quanta starts from scratch at model-local

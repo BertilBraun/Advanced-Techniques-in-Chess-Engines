@@ -28,7 +28,7 @@ pytestmark = [
 
 def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguration:
     configuration = load_experiment_configuration(path)
-    network = configuration.training.network.validated_copy(
+    network = configuration.training.initial_model.network.validated_copy(
         update={
             'num_layers': 1,
             'hidden_size': 8,
@@ -150,7 +150,7 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
     game = create_game_implementation(configuration)
     device = torch.device('cpu')
     model = create_model(
-        configuration.training.network,
+        configuration.training.initial_model.network,
         device,
         game.network_dimensions,
         tuple(head.action_size for head in game.target_layout.auxiliary_heads),
@@ -211,7 +211,7 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
         configuration,
         game,
         TrainerStartup(
-            network=configuration.training.network,
+            network=configuration.training.initial_model.network,
             save_path=Path(configuration.training.save_path),
             starting_generation=checkpoint.generation,
         ),

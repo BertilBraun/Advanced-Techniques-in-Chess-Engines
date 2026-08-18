@@ -7,13 +7,13 @@ from typing import Generic, TypeVar
 
 from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract, TerminalOracle
+from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.materialization import materialize_completed_game
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import CompletedSelfPlayGame, TerminationReason
 from src.self_play.resignation import ResignationCalibrationBatch, ResignationCalibrator
 from src.replay.configuration import ReplayConfiguration
-from src.util.frozen_model import FrozenModel
 
 
 PositionT = TypeVar('PositionT')
@@ -40,15 +40,6 @@ class ReplayIngestion:
     @property
     def samples_per_second(self) -> float:
         return self.samples_added / self.elapsed_seconds if self.elapsed_seconds > 0.0 else 0.0
-
-
-class ReplayDescription(FrozenModel):
-    path: Path
-    head: int
-    size: int
-    logical_capacity: int
-    maximum_capacity: int
-    layout: ReplayLayout
 
 
 class ReplayManager(Generic[PositionT]):

@@ -3,7 +3,8 @@ from __future__ import annotations
 import numpy as np
 
 from src.experiment.configuration import ExperimentConfiguration
-from src.replay.manager import IngestedCompletedGame, ReplayDescription
+from src.replay.description import ReplayDescription
+from src.replay.manager import IngestedCompletedGame
 from src.self_play.resignation import ResignationDiagnostics
 from src.training.credit_ledger import CreditLedgerState
 from src.training.distributions import (

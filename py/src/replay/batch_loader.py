@@ -14,7 +14,7 @@ import torch
 from src.games.contracts import GameStateContract
 from src.games.representation import decode_packed_planes
 from src.replay.contracts import EligibleNextPolicyTarget, EligibleRemainingGameLengthTarget
-from src.replay.manager import ReplayDescription
+from src.replay.description import ReplayDescription
 from src.replay.store import ReplayStore
 from AlphaZeroCpp import GameSearchVisit
 from src.training.batch import TrainingBatch

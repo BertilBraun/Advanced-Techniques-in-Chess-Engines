@@ -28,8 +28,9 @@ replay-ratio-8, and constant-LR-0.007 runs complete the authored twelve-run camp
 
 ## Training and evaluation lifecycle
 
-The optional progressive-sizing policy is documented in
-[Progressive model sizing](../architecture/progressive-model-sizing.md). Its coordinator pauses all self-play,
+The model schedule is documented in [Progressive model sizing](../architecture/progressive-model-sizing.md). Every
+experiment declares a non-empty tuple of complete model definitions; one definition uses ordinary fixed-model
+training, while multiple definitions enable progressive sizing. The progressive coordinator pauses all self-play,
 trains every eligible model sequentially on one replay-batch identity, and publishes only the active stage after the
 complete quantum. Candidate checkpoints under `models/` are private restart state and are not production inference
 artifacts.

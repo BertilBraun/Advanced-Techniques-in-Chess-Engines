@@ -6,7 +6,8 @@ import pytest
 
 from src.games.representation import PackedPlaneLayout
 from src.replay.layout import ReplayLayout
-from src.replay.manager import IngestedCompletedGame, ReplayDescription
+from src.replay.description import ReplayDescription
+from src.replay.manager import IngestedCompletedGame
 from src.self_play.completed_game import TerminationReason
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams

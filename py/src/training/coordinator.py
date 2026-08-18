@@ -41,7 +41,7 @@ class Coordinator:
             training.lifecycle.credit,
             training.trainer.global_batch_size,
             starting_checkpoint,
-            adopt_completed_quantum=training.progressive_model_sizing is None,
+            adopt_completed_quantum=not training.progressive_model_sizing.is_progressive,
         )
         self.training_session = create_training_session(
             self.configuration,
