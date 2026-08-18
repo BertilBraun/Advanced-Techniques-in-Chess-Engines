@@ -1,0 +1,376 @@
+{
+  "schema_version": 1,
+  "source_revision": {
+    "commit": "5095255a8e9211e1a6ed4b041911406fe050fa56",
+    "dirty": false
+  },
+  "configuration_path": "/workspace/codex-direct-policy-validation-d1fb7283/py/configs/production/vast-chess-8gpu-optimal.yaml",
+  "configuration_sha256": "1339dfe4dbaf1e539f6cbc57e9d90a930dbfaf1eb2531c1fdb9e8e29d454ca4a",
+  "policy_semantics": "chess_76_plane_direct_v2_logits",
+  "hardware": {
+    "gpu_id": 0,
+    "device_name": "NVIDIA GeForce RTX 4070 SUPER",
+    "compute_capability": [
+      8,
+      9
+    ],
+    "torch_version": "2.12.1+cu126",
+    "cuda_version": "12.6"
+  },
+  "attention_backend": "memory_efficient",
+  "batch_sizes": [
+    1,
+    16,
+    64,
+    256
+  ],
+  "execution_modes": [
+    "eager",
+    "compiled"
+  ],
+  "warmup_iterations": 10,
+  "target_duration_seconds": 5.0,
+  "models": [
+    {
+      "model_id": "chess-attention-500k",
+      "training_start_days": 0.0,
+      "network": {
+        "policy_head": {
+          "kind": "chess_76_plane_direct_v2"
+        },
+        "num_value_channels": 2,
+        "value_fc_size": 48,
+        "kind": "attention",
+        "num_layers": 6,
+        "embedding_size": 96,
+        "num_heads": 3,
+        "feedforward_size": 192,
+        "dropout": 0.0
+      },
+      "parameters": {
+        "backbone": 453312,
+        "primary_policy_head": 7372,
+        "value_head": 6535,
+        "auxiliary_heads": 7535,
+        "inference_total": 467219,
+        "training_total": 474754
+      }
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "training_start_days": 0.75,
+      "network": {
+        "policy_head": {
+          "kind": "chess_76_plane_direct_v2"
+        },
+        "num_value_channels": 2,
+        "value_fc_size": 48,
+        "kind": "attention",
+        "num_layers": 10,
+        "embedding_size": 160,
+        "num_heads": 5,
+        "feedforward_size": 320,
+        "dropout": 0.0
+      },
+      "parameters": {
+        "backbone": 2073280,
+        "primary_policy_head": 12236,
+        "value_head": 6663,
+        "auxiliary_heads": 12463,
+        "inference_total": 2092179,
+        "training_total": 2104642
+      }
+    },
+    {
+      "model_id": "chess-attention-5m",
+      "training_start_days": 2.0,
+      "network": {
+        "policy_head": {
+          "kind": "chess_76_plane_direct_v2"
+        },
+        "num_value_channels": 2,
+        "value_fc_size": 48,
+        "kind": "attention",
+        "num_layers": 16,
+        "embedding_size": 192,
+        "num_heads": 6,
+        "feedforward_size": 384,
+        "dropout": 0.0
+      },
+      "parameters": {
+        "backbone": 4761600,
+        "primary_policy_head": 14668,
+        "value_head": 6727,
+        "auxiliary_heads": 14927,
+        "inference_total": 4782995,
+        "training_total": 4797922
+      }
+    }
+  ],
+  "measurements": [
+    {
+      "model_id": "chess-attention-500k",
+      "execution_mode": "eager",
+      "batch_size": 1,
+      "measured_iterations": 2643,
+      "elapsed_seconds": 4.971348496968858,
+      "mean_batch_seconds": 0.0018809491097120158,
+      "positions_per_second": 531.6464942281749,
+      "peak_allocated_bytes": 9624064,
+      "peak_reserved_bytes": 23068672
+    },
+    {
+      "model_id": "chess-attention-500k",
+      "execution_mode": "eager",
+      "batch_size": 16,
+      "measured_iterations": 2628,
+      "elapsed_seconds": 4.999632657971233,
+      "mean_batch_seconds": 0.001902447738954046,
+      "positions_per_second": 8410.217885300071,
+      "peak_allocated_bytes": 11891200,
+      "peak_reserved_bytes": 25165824
+    },
+    {
+      "model_id": "chess-attention-500k",
+      "execution_mode": "eager",
+      "batch_size": 64,
+      "measured_iterations": 2615,
+      "elapsed_seconds": 5.002441858989187,
+      "mean_batch_seconds": 0.0019129796783897463,
+      "positions_per_second": 33455.66119859261,
+      "peak_allocated_bytes": 19147264,
+      "peak_reserved_bytes": 29360128
+    },
+    {
+      "model_id": "chess-attention-500k",
+      "execution_mode": "eager",
+      "batch_size": 256,
+      "measured_iterations": 2624,
+      "elapsed_seconds": 4.999280451040249,
+      "mean_batch_seconds": 0.0019052135865244852,
+      "positions_per_second": 134368.13689062465,
+      "peak_allocated_bytes": 48171520,
+      "peak_reserved_bytes": 71303168
+    },
+    {
+      "model_id": "chess-attention-500k",
+      "execution_mode": "compiled",
+      "batch_size": 1,
+      "measured_iterations": 3470,
+      "elapsed_seconds": 4.990944256016519,
+      "mean_batch_seconds": 0.0014383124657108123,
+      "positions_per_second": 695.259217895884,
+      "peak_allocated_bytes": 9615872,
+      "peak_reserved_bytes": 121634816
+    },
+    {
+      "model_id": "chess-attention-500k",
+      "execution_mode": "compiled",
+      "batch_size": 16,
+      "measured_iterations": 3267,
+      "elapsed_seconds": 4.895759969949722,
+      "mean_batch_seconds": 0.0014985491184419106,
+      "positions_per_second": 10676.994035828275,
+      "peak_allocated_bytes": 11104768,
+      "peak_reserved_bytes": 121634816
+    },
+    {
+      "model_id": "chess-attention-500k",
+      "execution_mode": "compiled",
+      "batch_size": 64,
+      "measured_iterations": 3324,
+      "elapsed_seconds": 4.996912889997475,
+      "mean_batch_seconds": 0.0015032830595660272,
+      "positions_per_second": 42573.485806775294,
+      "peak_allocated_bytes": 16001536,
+      "peak_reserved_bytes": 121634816
+    },
+    {
+      "model_id": "chess-attention-500k",
+      "execution_mode": "compiled",
+      "batch_size": 256,
+      "measured_iterations": 3351,
+      "elapsed_seconds": 5.000981323013548,
+      "mean_batch_seconds": 0.0014923847576883162,
+      "positions_per_second": 171537.5332541861,
+      "peak_allocated_bytes": 35588608,
+      "peak_reserved_bytes": 121634816
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "execution_mode": "eager",
+      "batch_size": 1,
+      "measured_iterations": 1697,
+      "elapsed_seconds": 5.15571949200239,
+      "mean_batch_seconds": 0.003038137591044426,
+      "positions_per_second": 329.1490164723673,
+      "peak_allocated_bytes": 12973568,
+      "peak_reserved_bytes": 31457280
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "execution_mode": "eager",
+      "batch_size": 16,
+      "measured_iterations": 1605,
+      "elapsed_seconds": 4.942553658038378,
+      "mean_batch_seconds": 0.003079472684136061,
+      "positions_per_second": 5195.69473125194,
+      "peak_allocated_bytes": 16715264,
+      "peak_reserved_bytes": 31457280
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "execution_mode": "eager",
+      "batch_size": 64,
+      "measured_iterations": 1742,
+      "elapsed_seconds": 5.239700204983819,
+      "mean_batch_seconds": 0.0030078646412077035,
+      "positions_per_second": 21277.553226033146,
+      "peak_allocated_bytes": 29345280,
+      "peak_reserved_bytes": 52428800
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "execution_mode": "eager",
+      "batch_size": 256,
+      "measured_iterations": 1396,
+      "elapsed_seconds": 4.68383704702137,
+      "mean_batch_seconds": 0.0033551841311041334,
+      "positions_per_second": 76299.83631204013,
+      "peak_allocated_bytes": 76588544,
+      "peak_reserved_bytes": 83886080
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "execution_mode": "compiled",
+      "batch_size": 1,
+      "measured_iterations": 2220,
+      "elapsed_seconds": 4.908909310004674,
+      "mean_batch_seconds": 0.002211220409912015,
+      "positions_per_second": 452.2389516293358,
+      "peak_allocated_bytes": 12953088,
+      "peak_reserved_bytes": 134217728
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "execution_mode": "compiled",
+      "batch_size": 16,
+      "measured_iterations": 2213,
+      "elapsed_seconds": 4.9327708490309305,
+      "mean_batch_seconds": 0.0022289972205291144,
+      "positions_per_second": 7178.115725151938,
+      "peak_allocated_bytes": 15404544,
+      "peak_reserved_bytes": 134217728
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "execution_mode": "compiled",
+      "batch_size": 64,
+      "measured_iterations": 2257,
+      "elapsed_seconds": 5.141736023011617,
+      "mean_batch_seconds": 0.0022781284993405484,
+      "positions_per_second": 28093.235310706194,
+      "peak_allocated_bytes": 23447040,
+      "peak_reserved_bytes": 134217728
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "execution_mode": "compiled",
+      "batch_size": 256,
+      "measured_iterations": 1893,
+      "elapsed_seconds": 4.650117563956883,
+      "mean_batch_seconds": 0.0024564804880913274,
+      "positions_per_second": 104214.13939213117,
+      "peak_allocated_bytes": 55617024,
+      "peak_reserved_bytes": 134217728
+    },
+    {
+      "model_id": "chess-attention-5m",
+      "execution_mode": "eager",
+      "batch_size": 1,
+      "measured_iterations": 1115,
+      "elapsed_seconds": 5.091353413998149,
+      "mean_batch_seconds": 0.0045662362457382505,
+      "positions_per_second": 218.99874342535776,
+      "peak_allocated_bytes": 18409984,
+      "peak_reserved_bytes": 41943040
+    },
+    {
+      "model_id": "chess-attention-5m",
+      "execution_mode": "eager",
+      "batch_size": 16,
+      "measured_iterations": 1119,
+      "elapsed_seconds": 4.9586304249824025,
+      "mean_batch_seconds": 0.00443130511615943,
+      "positions_per_second": 3610.6744132002013,
+      "peak_allocated_bytes": 22888960,
+      "peak_reserved_bytes": 41943040
+    },
+    {
+      "model_id": "chess-attention-5m",
+      "execution_mode": "eager",
+      "batch_size": 64,
+      "measured_iterations": 1135,
+      "elapsed_seconds": 5.267660746991169,
+      "mean_batch_seconds": 0.004641110790300589,
+      "positions_per_second": 13789.80224599528,
+      "peak_allocated_bytes": 37222912,
+      "peak_reserved_bytes": 62914560
+    },
+    {
+      "model_id": "chess-attention-5m",
+      "execution_mode": "eager",
+      "batch_size": 256,
+      "measured_iterations": 759,
+      "elapsed_seconds": 4.756599487969652,
+      "mean_batch_seconds": 0.006266929496666208,
+      "positions_per_second": 40849.350568916285,
+      "peak_allocated_bytes": 94558720,
+      "peak_reserved_bytes": 127926272
+    },
+    {
+      "model_id": "chess-attention-5m",
+      "execution_mode": "compiled",
+      "batch_size": 1,
+      "measured_iterations": 1500,
+      "elapsed_seconds": 5.003509380039759,
+      "mean_batch_seconds": 0.003335672920026506,
+      "positions_per_second": 299.7895848829368,
+      "peak_allocated_bytes": 18311680,
+      "peak_reserved_bytes": 178257920
+    },
+    {
+      "model_id": "chess-attention-5m",
+      "execution_mode": "compiled",
+      "batch_size": 16,
+      "measured_iterations": 1469,
+      "elapsed_seconds": 4.935802448017057,
+      "mean_batch_seconds": 0.0033599744370436057,
+      "positions_per_second": 4761.940990860089,
+      "peak_allocated_bytes": 21316096,
+      "peak_reserved_bytes": 178257920
+    },
+    {
+      "model_id": "chess-attention-5m",
+      "execution_mode": "compiled",
+      "batch_size": 64,
+      "measured_iterations": 1483,
+      "elapsed_seconds": 5.170732873957604,
+      "mean_batch_seconds": 0.003486670852297778,
+      "positions_per_second": 18355.618500043638,
+      "peak_allocated_bytes": 30931456,
+      "peak_reserved_bytes": 178257920
+    },
+    {
+      "model_id": "chess-attention-5m",
+      "execution_mode": "compiled",
+      "batch_size": 256,
+      "measured_iterations": 1032,
+      "elapsed_seconds": 4.841123314050492,
+      "mean_batch_seconds": 0.004691010963227221,
+      "positions_per_second": 54572.45826257516,
+      "peak_allocated_bytes": 69392896,
+      "peak_reserved_bytes": 178257920
+    }
+  ]
+}
