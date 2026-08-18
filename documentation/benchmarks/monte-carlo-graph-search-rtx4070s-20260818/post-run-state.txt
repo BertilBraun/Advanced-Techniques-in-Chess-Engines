@@ -1,0 +1,33 @@
+2026-08-18T09:44:45+00:00
+SOURCE_REVISION
+2949744f7d5f2b22e313fd6673fa22fd83ed3763
+MODEL_SHA256
+52d735c1e4f6d4c1a651e40240c5453afef8c46b4979fe495c98e53c00a13554  /workspace/codex-mcgs-bench-2949744f/benchmark-results-4070s-20260818/current-r3-seed-20260818.jit.pt
+NVIDIA_SMI
+Tue Aug 18 09:44:45 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070 ...    On  |   00000000:02:00.0 Off |                  N/A |
+| 38%   50C    P2            105W /  220W |    1569MiB /  12282MiB |     35%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 4070 ...    On  |   00000000:C4:00.0 Off |                  N/A |
+| 43%   39C    P8              8W /  220W |       1MiB /  12282MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A           13233      C   ...hazero-engine-venv/bin/python       1560MiB |
++-----------------------------------------------------------------------------------------+
+RELEVANT_PROCESSES
+  13164      28 /workspace/alphazero-engine-venv/bin/python /workspace/alphazero-engine-venv/bin/torchrun --standalone --nproc-per-node=1 tools/benchmark_chess_architectures.py --plan configs/benchmarks/chess-architecture-single-gpu-batch256-15s.yaml run chess-attention-4m --protocol equal_wall_time --frozen-replay /workspace/chess-architecture-benchmark-data/chess-synthetic-replay-seed-20260817.npz --output /workspace/chess-architecture-training-results/chess-attention-4m-b256-compiled-memory-efficient.json --acknowledge-gpu-load --training-sdpa-backend memory_efficient --compile-training
+  13233      26 /workspace/alphazero-engine-venv/bin/python -u tools/benchmark_chess_architectures.py --plan configs/benchmarks/chess-architecture-single-gpu-batch256-15s.yaml run chess-attention-4m --protocol equal_wall_time --frozen-replay /workspace/chess-architecture-benchmark-data/chess-synthetic-replay-seed-20260817.npz --output /workspace/chess-architecture-training-results/chess-attention-4m-b256-compiled-memory-efficient.json --acknowledge-gpu-load --training-sdpa-backend memory_efficient --compile-training

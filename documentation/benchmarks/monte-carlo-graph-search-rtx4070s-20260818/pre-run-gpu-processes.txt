@@ -1,0 +1,1 @@
+GPU-1ef45c53-e153-5c7d-cb9b-79a8eb6d9a9c, 7492, /workspace/alphazero-engine/cpp/build/InferenceBenchmark, 508 MiB

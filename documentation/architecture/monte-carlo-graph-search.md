@@ -37,6 +37,15 @@ Before clipping, adding this one sample makes the incoming edge mean exactly equ
 sample is clipped to the game value range `[-1, 1]`, and both residual signs are compared by absolute magnitude.
 Deterministic native tests cover the unclipped equality and clipped monotonic behavior.
 
+`transposition_value_threshold` controls when that correction replaces further descent. It is not a state-identity
+or hash tolerance: the child must already be an equality-verified transposition. Once both the shared child and the
+new incoming edge have completed visits, the engine compares their child-perspective means. A difference greater
+than the threshold stops that simulation at the shared node and backs up the correction without neural inference;
+a difference at or below the threshold continues selection through the shared subtree. On the `[-1, 1]` value
+scale, the default `0.01` is one percentage point. Zero corrects every non-identical estimate, while a larger value
+continues through more transpositions. Canonical topology and shared node statistics exist independently of this
+choice.
+
 ## State identity and cycles
 
 Generic graph search obtains both hashing and collision-checking equality from the game contract. It never inspects
