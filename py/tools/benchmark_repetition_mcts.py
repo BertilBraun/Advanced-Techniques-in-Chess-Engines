@@ -135,10 +135,11 @@ def sample_gpu_until_stopped(
         samples.append(query_gpu(device_id))
 
 
-def choose_root(result_root: ChessSearchRoot, visits: list[tuple[int, int]]) -> ChessSearchRoot:
-    if not visits:
+def choose_root(result_root: ChessSearchRoot) -> ChessSearchRoot:
+    children = result_root.children
+    if not children:
         raise ValueError('MCTS returned no visits for a nonterminal root.')
-    child_index = max(range(len(visits)), key=lambda index: visits[index][1])
+    child_index = max(range(len(children)), key=lambda index: children[index].visits)
     return result_root.make_new_root(child_index)
 
 
@@ -171,7 +172,7 @@ def run_search_steps(
 
         next_roots: list[ChessSearchRoot] = []
         for opening_index, result in enumerate(search_results.results):
-            root = choose_root(result.root, result.search_visits)
+            root = choose_root(result.root)
             if root.is_terminal:
                 terminal_roots += 1
                 root = search.new_root(ChessPosition(openings[opening_index]))
