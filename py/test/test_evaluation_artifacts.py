@@ -342,20 +342,22 @@ class TerminalGuardEngine(FakeEngine):
 
 
 class FixedPolicyModel(torch.nn.Module):
-    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         policy = torch.log(torch.tensor((0.4, 0.3, 0.2, 0.1), device=inputs.device)).expand(inputs.shape[0], 4)
         value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
-        return policy, value
+        correction = torch.zeros((inputs.shape[0], 1), device=inputs.device)
+        return policy, value, correction
 
 
 class FixedPolicyWithIllegalLogitModel(torch.nn.Module):
-    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         policy = torch.tensor(
             (log(0.4), log(0.3), log(0.2), log(0.1), 100.0),
             device=inputs.device,
         ).expand(inputs.shape[0], 5)
         value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
-        return policy, value
+        correction = torch.zeros((inputs.shape[0], 1), device=inputs.device)
+        return policy, value, correction
 
 
 def _build_fake_evaluation_dataset(

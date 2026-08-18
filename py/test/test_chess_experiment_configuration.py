@@ -66,7 +66,7 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
         2_500_000,
     )
     assert configuration.training.lifecycle.credit.replay_ratio == 10
-    assert configuration.chess.self_play.search.parallel_searches == 2
+    assert configuration.chess.self_play.search.parallel_searches == 4
     assert configuration.chess.self_play.inference.sdpa_backend is SdpaBackend.MEMORY_EFFICIENT
     assert configuration.training.trainer.precision is TrainingPrecision.BFLOAT16
     assert configuration.training.trainer.compilation is TrainingCompilation.DEFAULT

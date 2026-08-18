@@ -27,7 +27,7 @@ from src.training.network import (
     NetworkParams,
     ResidualContextPlacement,
 )
-from src.training.targets import build_training_target_layout
+from src.training.targets import SearchCorrectionHeadLayout, build_training_target_layout
 from src.util.frozen_model import FrozenModel
 
 
@@ -198,8 +198,9 @@ def parameter_counts(network: Network) -> ParameterCounts:
     primary_policy_head = module_parameter_count(network.policyHead)
     value_head = module_parameter_count(network.valueHead)
     auxiliary_heads = module_parameter_count(network.auxiliaryHeads)
-    inference_total = backbone + primary_policy_head + value_head
-    training_total = inference_total + auxiliary_heads
+    primary_total = backbone + primary_policy_head + value_head
+    inference_total = primary_total + _search_correction_parameter_count(network)
+    training_total = primary_total + auxiliary_heads
     assert training_total == module_parameter_count(network)
     return ParameterCounts(
         backbone=backbone,
@@ -209,6 +210,14 @@ def parameter_counts(network: Network) -> ParameterCounts:
         inference_total=inference_total,
         training_total=training_total,
     )
+
+
+def _search_correction_parameter_count(network: Network) -> int:
+    for head, module in zip(network.auxiliary_heads, network.auxiliaryHeads, strict=True):
+        match head:
+            case SearchCorrectionHeadLayout():
+                return module_parameter_count(module)
+    return 0
 
 
 def _source_revision() -> SourceRevision:
