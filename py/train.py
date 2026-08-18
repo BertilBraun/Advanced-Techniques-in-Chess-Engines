@@ -2,7 +2,6 @@ import argparse
 import os
 import random
 from pathlib import Path
-from time import monotonic
 
 os.environ['OMP_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for OpenMP
 os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
@@ -33,29 +32,27 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    from src.experiment.configuration import (
-        load_experiment_configuration,
-        write_resolved_experiment,
-    )
+    from src.experiment.training_startup import prepare_training_startup
     from src.util.log import log
     from src.util.profiler import start_gpu_usage_logger
     from src.training.coordinator import Coordinator
     from src.util.tensorboard import (
         TensorboardWriter,
-        configure_tensorboard_run_directory,
-        get_run_id,
         log_text,
     )
-    from src.experiment.run import prepare_experiment_training_run
     from src.experiment.resource_telemetry import start_resource_telemetry
     from src.experiment.progress_telemetry import (
         RunOutcomeStatus,
         write_run_outcome,
     )
 
-    experiment = load_experiment_configuration(command_line_arguments.run_config.resolve())
+    startup = prepare_training_startup(
+        command_line_arguments.run_config,
+        command_line_arguments.expected_source_revision,
+        command_line_arguments.approval_file,
+    )
+    experiment = startup.experiment
     training = experiment.training
-    configure_tensorboard_run_directory(experiment.run.tensorboard_run_directory)
 
     random.seed(training.random_seed)
     np.random.seed(training.random_seed)
@@ -67,16 +64,11 @@ if __name__ == '__main__':
     log('Training args:')
     log(training, use_pprint=True)
 
-    run_id = get_run_id()
+    run_id = startup.run_id
     log(f'Run ID: {run_id}')
 
-    run_started_at = monotonic()
-    manifest = prepare_experiment_training_run(
-        experiment,
-        command_line_arguments.expected_source_revision,
-        command_line_arguments.approval_file,
-    )
-    write_resolved_experiment(Path(training.save_path) / 'resolved-experiment.json', experiment)
+    run_started_at = startup.started_at
+    manifest = startup.manifest
     log('Resolved run manifest:')
     log(manifest.model_dump(), use_pprint=True)
 
