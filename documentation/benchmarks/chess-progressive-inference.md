@@ -30,7 +30,7 @@ The retained configuration's exact parameter counts are pinned by the harness te
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `chess-attention-500k` | 474,754 | 467,219 | 453,312 | 7,372 | 6,535 | 7,535 |
 | `chess-attention-2m` | 2,104,642 | 2,092,179 | 2,073,280 | 12,236 | 6,663 | 12,463 |
-| `chess-attention-5m` | 4,797,922 | 4,782,995 | 4,761,600 | 14,668 | 6,727 | 14,927 |
+| `chess-attention-4m5` | 4,500,898 | 4,485,971 | 4,464,576 | 14,668 | 6,727 | 14,927 |
 
 The inference model excludes the next-policy and remaining-game-length auxiliary heads. The primary Chess policy
 head is a single 76-plane projection and emits 4,864 raw logits.

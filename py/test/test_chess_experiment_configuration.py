@@ -77,11 +77,11 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
         0.75,
         2.0,
     )
-    expected_model_ids = ('chess-attention-500k', 'chess-attention-2m', 'chess-attention-5m')
+    expected_model_ids = ('chess-attention-500k', 'chess-attention-2m', 'chess-attention-4m5')
     assert tuple(model.model_id for model in progressive_model_sizing.models) == expected_model_ids
     assert tuple(
         (model.network.num_layers, model.network.embedding_size) for model in progressive_model_sizing.models
-    ) == ((6, 96), (10, 160), (16, 192))
+    ) == ((6, 96), (10, 160), (15, 192))
     assert configuration.training.network == progressive_model_sizing.models[0].network
 
 

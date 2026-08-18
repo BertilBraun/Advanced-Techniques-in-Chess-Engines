@@ -52,10 +52,10 @@ The promotion configuration explicitly owns:
 Elapsed eligibility uses the evaluation manager's persisted active-run clock. It therefore resumes from accumulated
 elapsed time after a stopped experiment and does not count preparation or stopped time.
 
-The clean chess configuration uses attention stages `6x96`, `10x160`, and `16x192`, with feed-forward widths twice
-the embedding width. Their published policy/value networks contain 467,219, 2,092,179, and 4,782,995 parameters.
+The clean chess configuration uses attention stages `6x96`, `10x160`, and `15x192`, with feed-forward widths twice
+the embedding width. Their published policy/value networks contain 467,219, 2,092,179, and 4,485,971 parameters.
 Training-only next-policy and remaining-length heads increase the exact training totals to 474,754, 2,104,642, and
-4,797,922 parameters. The corresponding shared backbones contain 453,312, 2,073,280, and 4,761,600 parameters, so
+4,500,898 parameters. The corresponding shared backbones contain 453,312, 2,073,280, and 4,464,576 parameters, so
 the learned output heads remain a small fraction of every stage.
 
 ## Quantum and replay semantics

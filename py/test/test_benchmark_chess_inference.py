@@ -68,7 +68,7 @@ def test_production_progressive_model_parameter_counts_are_derived_directly() ->
     expected_counts = (
         (474_754, 467_219, 453_312, 7_372, 6_535, 7_535),
         (2_104_642, 2_092_179, 2_073_280, 12_236, 6_663, 12_463),
-        (4_797_922, 4_782_995, 4_761_600, 14_668, 6_727, 14_927),
+        (4_500_898, 4_485_971, 4_464_576, 14_668, 6_727, 14_927),
     )
 
     for model, expected in zip(progressive.models, expected_counts, strict=True):
