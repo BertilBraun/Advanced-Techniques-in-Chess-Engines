@@ -114,9 +114,11 @@ The learned search-correction prediction is evaluated once per full search, at t
 The prediction is constant for that root, so repeatedly applying the same learned threshold after the gate would add
 no information. Only the deterministic evidence changes after the tail is unlocked.
 
-The initial configuration exposes one `minimum_search_correction_to_unlock_tail` value. Its production value must be
-calibrated after implementation from measured target, prediction, and search-stability distributions; it is not fixed
-by this plan.
+The initial `minimum_search_correction_to_unlock_tail` is `0.40`. This is a provisional semantics- and risk-based
+default, not a value calibrated from the random-model mechanics audit. A predicted correction of 0.40 is already
+material on the target's `[0, 1]` scale, while a head still centered near sigmoid 0.50 will tend to fail safely toward
+more search. Recalibrate it from trained-head target, prediction, and search-stability distributions before the run if
+a representative checkpoint becomes available, and otherwise monitor it closely during the run.
 
 ## 4. Search-correction target
 
@@ -354,8 +356,8 @@ be reported by the canary, but a separate two-versus-four selection experiment i
   retain selected-move, policy, and root-value acceptance gates.
 - **Learned feedback loop:** the label comes from the final search produced by the adaptive policy, so report targets
   by final-visit bucket and retain deterministic evidence as an independent stop condition.
-- **Uncalibrated early head:** keep the gate disabled through generation 49 and calibrate the unlock threshold before
-  the production run.
+- **Uncalibrated early head:** keep the gate disabled through generation 49, use the conservative provisional 0.40
+  threshold, and recalibrate from a trained head as soon as representative evidence exists.
 - **Difficulty predicts budget rather than correction:** inspect conditional calibration at the same final-visit
   counts and the separate policy/value correction components.
 - **Retained-root accounting errors:** preserve the current total-visit invariant and report starting, final, and new

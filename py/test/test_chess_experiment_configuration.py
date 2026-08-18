@@ -16,7 +16,11 @@ from src.experiment.configuration import (
 )
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.go.configuration import GoExperimentConfiguration
-from src.self_play.configuration import EnabledForcedPlayoutConfiguration, SdpaBackend
+from src.self_play.configuration import (
+    AdaptiveFullSearchBudgetConfiguration,
+    EnabledForcedPlayoutConfiguration,
+    SdpaBackend,
+)
 from src.self_play.parameters import (
     FirstPlayUrgencyParameters,
     ParentValueFirstPlayUrgencyParameters,
@@ -65,6 +69,9 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     )
     assert configuration.training.lifecycle.credit.replay_ratio == 10
     assert configuration.chess.self_play.search.parallel_searches == 4
+    full_search_budget = configuration.chess.self_play.search.full_search_budget
+    assert isinstance(full_search_budget, AdaptiveFullSearchBudgetConfiguration)
+    assert full_search_budget.minimum_search_correction_to_unlock_tail == 0.4
     assert configuration.chess.self_play.inference.sdpa_backend is SdpaBackend.MEMORY_EFFICIENT
     assert configuration.training.trainer.precision is TrainingPrecision.BFLOAT16
     assert configuration.training.trainer.compilation is TrainingCompilation.DEFAULT

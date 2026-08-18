@@ -3,8 +3,9 @@
 This is implementation evidence for the adaptive-search design, not threshold calibration for the second four-day
 run. The continuous-root audit and the native adaptive canary were regenerated at revision
 `a3d73359a0c68f14ceae6f147e32b6d7cb9bd06e` with a seed-zero, randomly initialized copy of the first production model
-stage. A representative trained model with the three-output search-correction ABI was not available on the node, so
-the configured `0.50` learned-gate threshold remains provisional.
+stage. A representative trained model with the three-output search-correction ABI was not available on the node. The
+production default is therefore a provisional `0.40`, selected from the target semantics and the asymmetric risk of
+premature stopping rather than from this random-model audit.
 
 ## Environment
 
@@ -67,5 +68,5 @@ two-output ABI. None contains the learned search-correction output required for 
   stub name and an older completed-game positional-only hook retain their pre-existing warnings.
 
 Production threshold calibration still requires this same audit on sampled positions from a representative trained
-checkpoint. At minimum, compare thresholds around 0.50 using move agreement, policy total variation, root-value
+checkpoint. At minimum, compare thresholds around 0.40 using move agreement, policy total variation, root-value
 error, mean visits, maximum-cap frequency, and a small equal-average-compute paired match before approving the run.

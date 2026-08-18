@@ -278,7 +278,7 @@ chess:
         final_top_two_margin: 0.15
         threshold_relaxation_visits: 1200
         learned_gate_start_generation: 50
-        minimum_search_correction_to_unlock_tail: 0.50
+        minimum_search_correction_to_unlock_tail: 0.40
       fast_searches:
         kind: staged
         stages:

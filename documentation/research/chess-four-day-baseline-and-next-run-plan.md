@@ -266,6 +266,13 @@ checkpoints, Q convergence, policy entropy, network-versus-search disagreement, 
 No single threshold such as 70% visits is sufficient across all positions. Dirichlet noise and forced playouts distort
 raw visits, so stopping and stability decisions should use the pruned decision distribution where applicable.
 
+The implemented learned signal predicts the larger of policy correction and value correction. Policy correction is
+the total-variation distance between the clean pre-noise network prior and the final post-pruning searched policy;
+value correction is half the absolute difference between final root Q and the network WDL scalar. Use `0.40` as the
+provisional minimum prediction for unlocking the tail. This is a semantics- and risk-based default: a predicted 0.40
+already represents a material correction, while allowing a weak head centered near sigmoid 0.50 to fail safely toward
+more search. It is not calibrated by the random-model mechanics audit and must be revisited with a trained head.
+
 Calibrate the rule on positions drawn from early, middle, and late checkpoints rather than only the final policy. Run
 each audit position to the maximum budget and ask at which earlier checkpoint its selected move, visit target, and root
 value had effectively stabilized. The audit set validates an online rule; it is not assumed to be a stationary training
