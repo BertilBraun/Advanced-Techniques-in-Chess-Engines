@@ -35,11 +35,11 @@ feed-forward sequences. Parameter count is not a latency-equivalent measure when
 ## Conclusion
 
 Nothing in the direct policy implementation or CNN path shows a throughput regression. The bad comparison mixed
-the wrong runtime with a model that was 3.2 times deeper. The production configuration should retain TorchScript
-inference and use memory-efficient SDPA only if the native export path can enforce the same backend; otherwise
-automatic dispatch is already close. The large progressive stage should be redesigned closer to six or seven
-attention blocks. A roughly 3.2-3.8M, 6x256 or 7x256 backbone is expected to preserve approximately 50-60k or
-43-50k batch-64 throughput respectively, and needs a direct measurement before selection.
+the wrong runtime with a model that was 3.2 times deeper. The production configuration retains TorchScript inference
+and selects memory-efficient SDPA. After this control, the final architecture decision deliberately retained greater
+depth for learning capacity: the selected 15x192 final stage measures 26.1k positions/s at batch 64. That final decision
+and its exact three-stage measurements are recorded in
+[the final progressive benchmark](../chess-direct-policy-final-progressive-rtx4070s-20260818/README.md).
 
 Artifact SHA-256 values:
 

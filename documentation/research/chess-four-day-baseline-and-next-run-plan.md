@@ -137,56 +137,51 @@ preserved corpus. That audit may reject 200 if it reveals unexpected label cover
 200 is the coherent choice. Do not choose 150 without evidence because it would truncate a nontrivial part of the
 ordinary distribution.
 
-## 5. Architecture and throughput experiments
+## 5. Architecture and throughput decision
 
-Benchmark both convolutional and attention-based families at three approximate capacities:
+The previous Chess network had 3,578,232 trainable parameters: 2,603,720 in the shared backbone and 974,512 in the
+output heads. Its two dense policy heads alone contained 967,232 parameters. The next run deliberately makes a clean
+break from that representation: Chess now emits direct 76-plane policy logits, normalizes only over legal moves, and
+has no dense-policy compatibility or checkpoint migration path.
 
-- 1 million parameters;
-- 3.5 to 4 million parameters, matching the current network;
-- 8 to 10 million parameters.
+Controlled RTX 4070 SUPER measurements found no direct-policy throughput regression. A direct-policy 5x256 attention
+control reached 61.0k positions/s with automatic dispatch and 63.5k with memory-efficient SDPA at batch 64, compared
+with approximately 59.8k positions/s for the historical dense-policy control. The direct-policy CNN control was also
+effectively unchanged at 36.2k positions/s versus approximately 35.9k historically. The lower throughput of the largest progressive
+model is explained by its 15 sequential attention blocks, not by the policy rework. The complete controlled comparison
+is recorded in [the kernel-control benchmark](../benchmarks/chess-direct-policy-kernel-controls-rtx4070s-20260818/README.md).
 
-For every architecture, measure on the eight RTX 3060 node:
+The selected production-equivalent progressive models measured as follows at batch 64, BF16, fused TorchScript, and
+memory-efficient SDPA:
 
-- training positions per second at global batch size 2,048;
-- standalone inference throughput over relevant batch sizes;
-- end-to-end self-play simulations per second with the production topology;
-- GPU memory, host overhead, and compilation behavior;
-- fixed-replay policy, WDL, and auxiliary validation quality after equal optimizer samples and equal wall time.
+| Stage | Backbone | Training parameters | Inference parameters | Positions/s |
+| --- | ---: | ---: | ---: | ---: |
+| `chess-attention-500k` | 6x96, 3 heads, FFN 192 | 474,754 | 467,219 | 53,746.6 |
+| `chess-attention-2m` | 10x160, 5 heads, FFN 320 | 2,104,642 | 2,092,179 | 36,706.3 |
+| `chess-attention-4m5` | 15x192, 6 heads, FFN 384 | 4,500,898 | 4,485,971 | 26,126.9 |
 
-Lower attention throughput is acceptable if it yields enough additional learning per sample or per wall-clock hour.
-The decision metric is expected final strength within a four-day wall-clock budget, not raw throughput alone.
-
-The architecture pilot may train candidates on a frozen dataset, but it must not become multiple self-play training
-runs. Use the frozen-data results, published chess evidence, and throughput measurements to select one architecture
-family for the single experimental run.
+The exact final run and environment are recorded in
+[the final progressive benchmark](../benchmarks/chess-direct-policy-final-progressive-rtx4070s-20260818/README.md).
 
 ## 6. Progressive model sizing
 
-The tentative four-day schedule is:
+The production configuration uses exactly three independently trained stages:
 
-| Wall time | Approximate capacity |
-| --- | ---: |
-| 0 to 12 hours | 1 million parameters |
-| 12 to 48 hours | 3.5 to 4 million parameters |
-| 48 to 96 hours | 8 to 10 million parameters |
+| Start time | Model |
+| --- | --- |
+| 0 days | `chess-attention-500k` (6x96) |
+| 0.75 days | `chess-attention-2m` (10x160) |
+| 2.0 days | `chess-attention-4m5` (15x192) |
 
-The transition method is an open experiment, not an assumed weight morphism. KataGo trained the next larger network
-concurrently on the same replay data and switched only when its average loss caught up to the smaller model. Its main
-run switched from 6x96 to 10x128, 15x192, and 20x256 networks at approximately 0.75, 1.75, and 7.5 days. It did not
-simply widen the active checkpoint in place.
+Each candidate starts from random initialization and trains from the shared replay stream; weights are not transferred
+between model sizes. The next eligible candidate is promoted only after its loss EMA beats the active model by the
+configured threshold for the required consecutive training quanta. Only the active checkpoint is published to
+self-play. This preserves the early update rate of the small network, moves to a model near the useful capacity of the
+last run without spending parameters on dense heads, and reserves the deeper 4.5M model for the latter half of the run.
 
-Concurrent catch-up training consumes hardware that this project may need for self-play. Compare these transition
-options cheaply:
-
-- concurrent larger-model training on the same replay, following KataGo;
-- sequential initialization from the smaller model where the architecture permits exact identity-preserving depth
-  growth;
-- fresh larger-model initialization trained on accumulated replay with a short warmup.
-
-For any transition, require the larger model to catch up on fixed replay loss and a small match before it replaces the
-self-play model. This is a transition criterion, not permanent generation-by-generation gating. Keep one architecture
-family throughout a run; do not transition from a CNN body to a transformer body mid-run unless a separate experiment
-demonstrates a reliable transfer method.
+The configured promotion rule uses loss EMA decay 0.8, ten warmup quanta, and a maximum candidate-to-active relative
+loss of 1.01. Evaluation matches remain independent strength evidence rather than blocking the automated promotion.
+All three stages use the same attention architecture family.
 
 Reference: [Accelerating Self-Play Learning in Go](https://arxiv.org/abs/1902.10565).
 
