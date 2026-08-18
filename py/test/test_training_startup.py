@@ -2,8 +2,7 @@ from pathlib import Path
 from typing import NoReturn
 
 import pytest
-
-import src.experiment.training_startup as training_startup
+from src.experiment import training_startup
 from src.experiment.configuration import ExperimentConfiguration
 from src.experiment.run_contract import load_approval_record
 
