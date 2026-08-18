@@ -4,9 +4,7 @@ from dataclasses import dataclass
 from typing import Annotated, Literal, TypeAlias
 
 import torch
-import torch.nn.functional as functional
 from pydantic import Field
-
 from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.targets import (
     AuxiliaryTargetConfiguration,
@@ -18,6 +16,7 @@ from src.training.targets import (
     SearchCorrectionTargetConfiguration,
 )
 from src.util.frozen_model import FrozenModel
+from torch.nn import functional
 
 
 def _scalar_to_wdl(scores: torch.Tensor) -> torch.Tensor:

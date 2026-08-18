@@ -8,7 +8,6 @@ from uuid import UUID
 
 from AlphaZeroCpp import GameSearchVisit
 from pydantic import BeforeValidator, ConfigDict, Field, PlainSerializer
-
 from src.games.contracts import WdlTarget
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -106,7 +105,7 @@ class SearchObservation(FrozenModel):
     stop_reason: SearchStopReason
     checkpoints: tuple[SearchCheckpointObservation, ...] = ()
 
-    def model_post_init(self, __context: object) -> None:
+    def model_post_init(self, __context: object, /) -> None:
         if not isfinite(self.root_value) or not -1.0 <= self.root_value <= 1.0:
             raise ValueError('Search root value must be finite and lie in [-1, 1].')
         if not isfinite(self.highest_visited_child_q) or not -1.0 <= self.highest_visited_child_q <= 1.0:

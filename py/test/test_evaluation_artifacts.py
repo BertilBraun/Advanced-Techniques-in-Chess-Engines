@@ -1,24 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
+import random
+from dataclasses import dataclass
 from math import log
 from pathlib import Path
-import random
 
 import numpy as np
 import pytest
-import torch
-
 import src.evaluation.dataset as dataset_module
 import src.evaluation.katago_book as katago_book_module
-from src.evaluation.dataset import (
-    build_evaluation_dataset,
-    build_katago_book_evaluation_dataset,
-    dataset_manifest_path,
-    load_evaluation_dataset,
-)
-from src.evaluation.openings import build_katago_book_opening_suite, build_opening_suite
+import torch
 from src.evaluation.configuration import (
     EngineBeamOpeningSource,
     EngineSelfPlayDatasetSource,
@@ -36,7 +28,13 @@ from src.evaluation.contracts import (
     KataGoBookOpeningSuiteManifest,
     OpeningSuiteManifest,
 )
-from src.evaluation.dataset import evaluate_fixed_dataset
+from src.evaluation.dataset import (
+    build_evaluation_dataset,
+    build_katago_book_evaluation_dataset,
+    dataset_manifest_path,
+    evaluate_fixed_dataset,
+    load_evaluation_dataset,
+)
 from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
 from src.evaluation.katago_book import (
     KataGoBookExport,
@@ -48,6 +46,7 @@ from src.evaluation.katago_book import (
     select_katago_book_positions,
     write_katago_book_export,
 )
+from src.evaluation.openings import build_katago_book_opening_suite, build_opening_suite
 from src.experiment.configuration import load_experiment_configuration
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions

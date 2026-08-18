@@ -2,9 +2,15 @@ from pathlib import Path
 
 import pytest
 import torch
-
-from src.games.representation import NetworkDimensions
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.games.representation import NetworkDimensions
+from src.training.checkpoint.contracts import load_checkpoint_manifest
+from src.training.checkpoint.persistence import (
+    create_optimizer,
+    load_model,
+    load_model_and_optimizer,
+    save_model_and_optimizer,
+)
 from src.training.network import (
     AttentionNetworkParams,
     Chess76PlaneDirectPolicyHeadConfiguration,
@@ -17,13 +23,6 @@ from src.training.network import (
     ResidualContextPlacement,
 )
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
-from src.training.checkpoint.persistence import (
-    create_optimizer,
-    load_model,
-    load_model_and_optimizer,
-    save_model_and_optimizer,
-)
-from src.training.checkpoint.contracts import load_checkpoint_manifest
 
 
 @pytest.mark.parametrize(
@@ -91,9 +90,7 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     )
     loaded_model.eval()
     loaded_output = loaded_model.training_output(torch.zeros((2, 3, 3, 3)))
-    inference_policy, inference_wdl, inference_search_correction = inference_model(
-        torch.zeros((2, 3, 3, 3))
-    )
+    inference_policy, inference_wdl, inference_search_correction = inference_model(torch.zeros((2, 3, 3, 3)))
     training_policy_logits, training_wdl_logits = loaded_model.logit_forward(torch.zeros((2, 3, 3, 3)))
 
     assert any(name.startswith('auxiliaryHeads.') for name in training_state)

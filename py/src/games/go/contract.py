@@ -7,9 +7,16 @@ from typing import Protocol
 import numpy as np
 import numpy.typing as npt
 from AlphaZeroCpp import GameSearchVisit
-
-from src.games.representation import NetworkDimensions
 from src.games.contracts import GameStateContract, Player, WdlTarget
+from src.games.representation import (
+    NetworkDimensions,
+    PackedPlaneLayout,
+    PackedPlanePayload,
+    RepresentationDimensions,
+    decode_packed_planes,
+    decode_packed_planes_into,
+    encode_packed_planes,
+)
 from src.replay.contracts import (
     EligibleLegalMovesTarget,
     EligibleNextPolicyTarget,
@@ -19,14 +26,6 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.self_play.completed_game import TerminationReason
-from src.games.representation import (
-    PackedPlaneLayout,
-    PackedPlanePayload,
-    RepresentationDimensions,
-    decode_packed_planes,
-    decode_packed_planes_into,
-    encode_packed_planes,
-)
 
 
 class NativeEnumValue(Protocol):

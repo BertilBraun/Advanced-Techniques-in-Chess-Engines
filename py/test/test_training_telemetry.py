@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
+import src.training.reporting as reporting_module
 from src.games.representation import PackedPlaneLayout
 from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame, ReplayDescription
@@ -12,13 +12,12 @@ from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedgerState
 from src.training.reporting import TrainingReporter
-import src.training.reporting as reporting_module
+from src.training.targets import TrainingTargetLayout
 from src.training.telemetry import (
     adaptive_search_telemetry,
     completed_game_length_telemetry,
     training_lifecycle_telemetry,
 )
-from src.training.targets import TrainingTargetLayout
 
 
 def test_training_lifecycle_telemetry_reports_credit_backlog_and_observed_ratio() -> None:

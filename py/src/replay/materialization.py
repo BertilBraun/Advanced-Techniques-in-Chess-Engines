@@ -28,7 +28,6 @@ from src.training.targets import (
     TrainingTargetLayout,
 )
 
-
 PositionT = TypeVar('PositionT')
 
 

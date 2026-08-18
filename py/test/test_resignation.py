@@ -1,12 +1,12 @@
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
+import src.self_play.resignation as resignation_module
 from AlphaZeroCpp import GameSearchVisit
 from pydantic import ValidationError
-
 from src.games.contracts import WdlTarget
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
@@ -20,10 +20,9 @@ from src.self_play.resignation import (
     ResignationCalibrator,
     one_sided_binomial_upper_bound,
 )
-import src.self_play.resignation as resignation_module
 
 
-def configuration(**updates: float | int) -> CalibratedResignationConfiguration:
+def configuration(**updates: float) -> CalibratedResignationConfiguration:
     values: dict[str, float | int | str] = {
         'kind': 'calibrated',
         'first_production_generation': 50,

@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
-
 from src.experiment.generation_schedule import FloatGenerationSchedule, defined_schedule_values
 from src.util.frozen_model import FrozenModel
 

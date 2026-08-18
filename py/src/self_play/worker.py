@@ -1,13 +1,12 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
-import time
 from typing import TYPE_CHECKING, Generic
 from uuid import uuid4
 
 import numpy as np
-
 from src.games.contracts import WdlTarget
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
@@ -18,23 +17,21 @@ from src.self_play.completed_game import (
     TerminationReason,
     publish_completed_self_play_game,
 )
+from src.self_play.native_search import NativeRequestT, NativeResultT, NativeRootT, NativeSearchT, PositionT
 from src.self_play.parameters import (
     RandomOpeningStartParameters,
     ResolvedSelfPlayParameters,
     RestartStateStartParameters,
 )
-from src.self_play.native_search import NativeRequestT, NativeResultT, NativeRootT, NativeSearchT, PositionT
-from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.self_play.resignation import (
     CalibratedResignationConfiguration,
     PublishedResignationPolicy,
 )
+from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.util.tensorboard import log_scalar
-
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import GameSearchVisit, InferenceStatistics
-
     from src.games.implementation import GameImplementation
     from src.training.checkpoint import CheckpointReference
 

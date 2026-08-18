@@ -1,10 +1,10 @@
 import hashlib
 import shutil
-import torch
 from os import PathLike
-from time import sleep
 from pathlib import Path
+from time import sleep
 
+import torch
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint.contracts import (
     CheckpointManifest,

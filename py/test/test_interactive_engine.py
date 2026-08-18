@@ -12,7 +12,7 @@ from torch import Tensor, nn
 
 pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import AnalysisParameters, BatchedInferenceParameters
-
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.interactive.analysis import (
     AnalysisResult,
     CountedMctsAnalysis,
@@ -21,7 +21,6 @@ from src.games.chess.interactive.analysis import (
 )
 from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
 from src.games.chess.interactive.engine import InteractiveEngine
-from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.uci.engine import UciConfiguration, UciEngine, UciGame
 from src.games.chess.uci.server import UciServer
 

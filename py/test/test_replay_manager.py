@@ -4,10 +4,10 @@ from uuid import UUID
 
 import pytest
 from AlphaZeroCpp import GameSearchVisit
-
 from src.experiment.generation_schedule import ConstantSchedule
 from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
+from src.replay.configuration import ReplayConfiguration
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
@@ -25,7 +25,6 @@ from src.self_play.completed_game import (
     TerminationReason,
     publish_completed_self_play_game,
 )
-from src.replay.configuration import ReplayConfiguration
 from src.self_play.resignation import CalibratedResignationConfiguration, ResignationCalibrator
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 

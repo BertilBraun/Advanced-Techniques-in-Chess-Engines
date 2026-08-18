@@ -3,12 +3,11 @@ from __future__ import annotations
 from typing import Annotated, Literal, TypeAlias
 
 import torch
-import torch.nn.functional as functional
 from pydantic import Field
-
 from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.objective import ResolvedTrainingObjective, blended_wdl_targets, mask_policy_logits
 from src.util.frozen_model import FrozenModel
+from torch.nn import functional
 
 
 class PolicyTrainingDistribution(FrozenModel):

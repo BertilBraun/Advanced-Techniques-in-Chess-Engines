@@ -4,7 +4,6 @@ from typing import Protocol
 
 import numpy as np
 from AlphaZeroCpp import GameSearchVisit
-
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import (
     NetworkDimensions,

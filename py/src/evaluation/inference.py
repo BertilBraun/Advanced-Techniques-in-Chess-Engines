@@ -5,10 +5,8 @@ from typing import Generic, Literal, TypeVar
 
 import numpy as np
 import torch
-
 from src.games.contracts import GameStateContract
 from src.games.representation import PackedPlanePayload, decode_packed_planes_into
-
 
 PositionT = TypeVar('PositionT')
 

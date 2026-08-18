@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Literal, TypeAlias
 
 from AlphaZeroCpp import GameSearchVisit
-
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlanePayload
 

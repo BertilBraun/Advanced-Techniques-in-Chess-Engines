@@ -5,7 +5,6 @@ from enum import Enum
 from typing import Literal
 
 from pydantic import Field, model_validator
-
 from src.experiment.generation_schedule import (
     FloatGenerationSchedule,
     defined_schedule_values,
@@ -16,9 +15,9 @@ from src.self_play.configuration import (
     FixedFullSearchBudgetConfiguration,
     SelfPlayConfiguration,
 )
-from src.training.run_limits import RuntimeLimits
 from src.training.network import NetworkConfiguration
 from src.training.progressive import SECONDS_PER_DAY, ProgressiveModelSizingConfiguration
+from src.training.run_limits import RuntimeLimits
 from src.training.targets import AuxiliaryTargetConfiguration
 from src.util.frozen_model import FrozenModel
 

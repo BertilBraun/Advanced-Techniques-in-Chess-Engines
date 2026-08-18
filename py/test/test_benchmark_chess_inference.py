@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import Network
@@ -16,7 +15,6 @@ from tools.benchmark_chess_inference import (
     parse_execution_modes,
     parse_positive_integer_list,
 )
-
 
 CONFIGURATION_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
 

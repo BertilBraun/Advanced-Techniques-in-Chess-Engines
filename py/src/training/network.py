@@ -6,10 +6,6 @@ from typing import Annotated, Literal, TypeAlias
 
 import torch
 from pydantic import BeforeValidator, Field, JsonValue, model_validator
-
-from torch import nn, Tensor
-from torch.nn import functional
-
 from src.games.representation import NetworkDimensions
 from src.training.batch import TrainingModelOutput
 from src.training.targets import (
@@ -23,6 +19,8 @@ from src.training.targets import (
 )
 from src.util.frozen_model import FrozenModel
 from src.util.log import log
+from torch import Tensor, nn
+from torch.nn import functional
 
 
 class ResidualContextPlacement(str, Enum):

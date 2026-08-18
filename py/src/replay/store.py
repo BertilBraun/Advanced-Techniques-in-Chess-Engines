@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import mmap
+from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
 import numpy as np
 import numpy.typing as npt
-
+from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import WdlTarget
 from src.replay.contracts import (
     EligibleLegalMovesTarget,
@@ -21,7 +21,6 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.replay.layout import ReplayLayout
-from AlphaZeroCpp import GameSearchVisit
 from src.training.targets import (
     FutureSearchValueHeadLayout,
     IrreversibleProgressHeadLayout,
@@ -30,7 +29,6 @@ from src.training.targets import (
     RemainingGameLengthHeadLayout,
     SearchCorrectionHeadLayout,
 )
-
 
 _REPLAY_MAGIC = b'AZRPLY01'
 _REPLAY_SCHEMA_VERSION = 3

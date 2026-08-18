@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 import yaml
 from pydantic import ValidationError
-
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.experiment.configuration import (
     experiment_configuration_sha256,
@@ -25,9 +24,8 @@ from src.self_play.parameters import (
     ZeroFirstPlayUrgencyParameters,
 )
 from src.training.configuration import TrainingCompilation, TrainingPrecision
-from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
 from src.util.frozen_model import JsonValue
-
+from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
 
 CHESS_EXPERIMENT_TEMPLATE_PATH = Path('test/configs/chess-experiment.yaml')
 OPTIMAL_CHESS_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')

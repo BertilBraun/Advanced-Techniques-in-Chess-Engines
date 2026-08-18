@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Generator, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Generic, TypeVar
-import time
 
 import numpy as np
 import numpy.typing as npt
 import torch
-
+from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import GameStateContract
 from src.games.representation import decode_packed_planes
 from src.replay.contracts import (
@@ -21,10 +21,8 @@ from src.replay.contracts import (
 )
 from src.replay.manager import ReplayDescription
 from src.replay.store import ReplayStore
-from AlphaZeroCpp import GameSearchVisit
 from src.training.batch import TrainingBatch
 from src.training.targets import auxiliary_head_output_size
-
 
 PositionT = TypeVar('PositionT')
 

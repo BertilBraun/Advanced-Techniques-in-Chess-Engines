@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
-
 from src.evaluation.configuration import (
     EvaluationSearchConfiguration,
     PolicyRandomOpponentEvaluationDefinition,
@@ -22,8 +21,8 @@ from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.contracts import ReplaySample
 from src.self_play.completed_game import TerminationReason
-from src.training.checkpoint import CheckpointReference
 from src.self_play.configuration import BatchedInferenceParams
+from src.training.checkpoint import CheckpointReference
 
 
 @dataclass(frozen=True)

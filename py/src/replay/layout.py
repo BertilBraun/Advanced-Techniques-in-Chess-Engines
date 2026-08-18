@@ -5,7 +5,6 @@ import json
 
 import numpy as np
 from pydantic import Field, model_validator
-
 from src.games.representation import PackedPlaneLayout
 from src.training.targets import (
     AuxiliaryHeadLayout,

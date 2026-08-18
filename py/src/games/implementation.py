@@ -20,14 +20,12 @@ from src.training.configuration import TrainingArgs
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import TrainingTargetLayout
 
-
 if TYPE_CHECKING:
     from AlphaZeroCpp import SelfPlaySearchParameters
-
-    from src.self_play.native_search import NativeSelfPlaySearch
     from src.evaluation.configuration import EvaluationSearchConfiguration
-    from src.training.checkpoint import CheckpointReference
+    from src.self_play.native_search import NativeSelfPlaySearch
     from src.self_play.resignation import CalibratedResignationConfiguration
+    from src.training.checkpoint import CheckpointReference
 
 
 PositionT = TypeVar('PositionT')

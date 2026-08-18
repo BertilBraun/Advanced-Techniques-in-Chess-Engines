@@ -18,8 +18,8 @@ from AlphaZeroCpp import (
     ChessSelfPlaySearchRequest,
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
-    InferenceConfiguration,
     FixedSearchLimit,
+    InferenceConfiguration,
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )

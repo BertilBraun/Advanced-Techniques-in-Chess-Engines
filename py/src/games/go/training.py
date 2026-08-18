@@ -1,21 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import replace
+
 from src.evaluation.configuration import EvaluationSearchConfiguration
 from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.contract import GoStateContract, NativeGoPosition
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
+from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
+from src.self_play.native_configuration import native_sdpa_backend
+from src.self_play.native_search import NativeSelfPlaySearch
 from src.self_play.parameters import (
     FixedFullSearchBudget,
     ResolvedSelfPlayParameters,
     ZeroFirstPlayUrgencyParameters,
 )
-from src.self_play.native_search import NativeSelfPlaySearch
-from src.self_play.native_configuration import native_sdpa_backend
 from src.training.checkpoint import CheckpointReference
-from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 

@@ -11,7 +11,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import torch
-
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
     ChessSearchRoot,
@@ -19,12 +18,11 @@ from AlphaZeroCpp import (
     ChessSelfPlaySearchRequest,
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
-    InferenceConfiguration,
     FixedSearchLimit,
+    InferenceConfiguration,
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )
-
 
 INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 BYTES_PER_MIB = 2**20

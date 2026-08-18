@@ -5,12 +5,11 @@ import pytest
 import torch
 from AlphaZeroCpp import GameSearchVisit
 from pydantic import ValidationError
-
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.training import ChessImplementation
-from src.games.go.contract import GoStateContract
 from src.games.contracts import Player, WdlTarget
+from src.games.go.contract import GoStateContract
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
@@ -26,13 +25,13 @@ from src.self_play.completed_game import (
     TerminationReason,
     publish_completed_self_play_game,
 )
+from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.objective import (
     ResolvedNextPolicyLoss,
     ResolvedRemainingGameLengthLoss,
     ResolvedTrainingObjective,
 )
 from src.training.targets import RemainingGameLengthHeadLayout, build_training_target_layout
-from src.training.batch import TrainingBatch, TrainingModelOutput
 
 
 def test_wdl_target_validates_and_reverses_perspective() -> None:

@@ -12,14 +12,13 @@ from AlphaZeroCpp import (
     ChessSelfPlaySearchRequest,
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
-    InferenceConfiguration,
     FixedSearchLimit,
+    InferenceConfiguration,
     SelfPlaySearchParameters,
     TreeSearchParameters,
     new_root,
     new_root_with_history,
 )
-
 
 KNIGHT_CYCLE = (
     'g1f3',

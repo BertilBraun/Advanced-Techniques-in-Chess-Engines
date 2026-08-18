@@ -1,15 +1,22 @@
-from dataclasses import dataclass
 import hashlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 from uuid import UUID
 
 import numpy as np
 import pytest
-from AlphaZeroCpp import GameSearchVisit, SearchCheckpoint, SearchStopReason as NativeSearchStopReason
-
-from src.games.implementation import GameImplementation
+from AlphaZeroCpp import GameSearchVisit, SearchCheckpoint
+from AlphaZeroCpp import SearchStopReason as NativeSearchStopReason
 from src.games.contracts import TerminalOracle, WdlTarget
+from src.games.implementation import GameImplementation
+from src.self_play.completed_game import (
+    CompletedSelfPlayGame,
+    GameIdentity,
+    SearchObservation,
+    SearchStopReason,
+    TerminationReason,
+)
 from src.self_play.parameters import (
     FixedFullSearchBudget,
     RandomOpeningStartParameters,
@@ -17,13 +24,11 @@ from src.self_play.parameters import (
     RestartStateStartParameters,
     ZeroFirstPlayUrgencyParameters,
 )
-from src.self_play.completed_game import CompletedSelfPlayGame, GameIdentity, SearchObservation, SearchStopReason
-from src.self_play.completed_game import TerminationReason
-from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.self_play.resignation import (
     CalibratedResignationConfiguration,
     PublishedResignationPolicy,
 )
+from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 

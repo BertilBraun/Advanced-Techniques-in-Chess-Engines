@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import math
+import subprocess
+import time
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from enum import Enum
-import hashlib
-import math
 from pathlib import Path
-import subprocess
-import time
 from typing import Literal
 
 import torch
 from pydantic import Field
-from torch import Tensor, nn
-from torch.nn.attention import SDPBackend, sdpa_kernel
-
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import (
@@ -29,7 +26,8 @@ from src.training.network import (
 )
 from src.training.targets import SearchCorrectionHeadLayout, build_training_target_layout
 from src.util.frozen_model import FrozenModel
-
+from torch import Tensor, nn
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 DEFAULT_CONFIGURATION_PATH = Path(__file__).resolve().parents[1] / 'configs/production/vast-chess-8gpu-optimal.yaml'
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]

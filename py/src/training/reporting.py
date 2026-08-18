@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from src.experiment.configuration import ExperimentConfiguration
 from src.replay.manager import IngestedCompletedGame, ReplayDescription
 from src.self_play.resignation import ResignationDiagnostics
