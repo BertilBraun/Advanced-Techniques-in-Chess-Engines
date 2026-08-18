@@ -4,7 +4,6 @@ from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
 import torch
-from AlphaZeroCpp import chess_policy_mapping
 from pydantic import BeforeValidator, Field, JsonValue, model_validator
 
 from torch import nn, Tensor
@@ -47,18 +46,16 @@ ResidualContextConfiguration: TypeAlias = Annotated[
 ]
 
 
-class DensePolicyHeadConfiguration(FrozenModel):
-    kind: Literal['dense'] = 'dense'
-    channels: int = Field(gt=0)
+class Chess76PlaneDirectPolicyHeadConfiguration(FrozenModel):
+    kind: Literal['chess_76_plane_direct_v2'] = 'chess_76_plane_direct_v2'
 
 
-class Chess76PlanePolicyHeadConfiguration(FrozenModel):
-    kind: Literal['chess_76_plane_v1'] = 'chess_76_plane_v1'
-    hidden_channels: int = Field(default=32, gt=0)
+class GoPointPassPolicyHeadConfiguration(FrozenModel):
+    kind: Literal['go_point_pass_v1'] = 'go_point_pass_v1'
 
 
 PolicyHeadConfiguration: TypeAlias = Annotated[
-    DensePolicyHeadConfiguration | Chess76PlanePolicyHeadConfiguration,
+    Chess76PlaneDirectPolicyHeadConfiguration | GoPointPassPolicyHeadConfiguration,
     Field(discriminator='kind'),
 ]
 
@@ -232,9 +229,8 @@ class Network(nn.Module):
         policy_logits = self.policyHead(x)
         value_logits = self.valueHead(x)
 
-        policy = torch.softmax(policy_logits, dim=1)
         value = torch.softmax(value_logits, dim=1)
-        return policy, value
+        return policy_logits, value
 
     def _features(self, x: Tensor) -> Tensor:
         x = self.startBlock(x)
@@ -283,33 +279,17 @@ class Network(nn.Module):
         )
 
 
-class Chess76PlanePolicyHead(nn.Module):
-    def __init__(self, input_channels: int, hidden_channels: int, square_count: int, action_size: int) -> None:
+class GoPointPassPolicyHead(nn.Module):
+    def __init__(self, input_channels: int) -> None:
         super().__init__()
-        mapping = chess_policy_mapping()
-        action_plane_indices = torch.tensor(mapping.action_plane_indices, dtype=torch.long)
-        if action_plane_indices.shape != (action_size,):
-            raise ValueError('Chess spatial policy mapping does not match the configured action space.')
-        if torch.unique(action_plane_indices).numel() != action_size:
-            raise ValueError('Chess spatial policy mapping must be one-to-one.')
-        maximum_plane_index = mapping.plane_count * square_count
-        if (
-            mapping.plane_count <= 0
-            or torch.any(action_plane_indices < 0)
-            or torch.any(action_plane_indices >= maximum_plane_index)
-        ):
-            raise ValueError('Chess spatial policy mapping contains an out-of-bounds plane index.')
-        self.projection = nn.Sequential(
-            nn.Conv2d(input_channels, hidden_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(hidden_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(hidden_channels, mapping.plane_count, kernel_size=1, bias=True),
-        )
-        self.register_buffer('action_plane_indices', action_plane_indices, persistent=False)
+        self.point_projection = nn.Conv2d(input_channels, 1, kernel_size=1, bias=True)
+        self.pass_projection = nn.Linear(input_channels, 1)
 
     def forward(self, features: Tensor) -> Tensor:
-        plane_logits = self.projection(features).flatten(start_dim=1)
-        return torch.index_select(plane_logits, 1, self.action_plane_indices)
+        point_logits = self.point_projection(features).flatten(start_dim=1)
+        pooled_features = torch.mean(features, dim=(2, 3))
+        pass_logit = self.pass_projection(pooled_features)
+        return torch.cat((point_logits, pass_logit), dim=1)
 
 
 def _build_policy_head(
@@ -320,23 +300,17 @@ def _build_policy_head(
     configuration: PolicyHeadConfiguration,
 ) -> nn.Module:
     match configuration:
-        case DensePolicyHeadConfiguration(channels=channels):
+        case Chess76PlaneDirectPolicyHeadConfiguration():
+            if row_count != 8 or column_count != 8 or action_size != 76 * 64:
+                raise ValueError('Chess direct policy heads require an 8x8 board and 4,864 actions.')
             return nn.Sequential(
-                nn.Conv2d(input_channels, channels, kernel_size=1, bias=False),
-                nn.BatchNorm2d(channels),
-                nn.ReLU(inplace=True),
+                nn.Conv2d(input_channels, 76, kernel_size=1, bias=True),
                 nn.Flatten(),
-                nn.Linear(channels * row_count * column_count, action_size),
             )
-        case Chess76PlanePolicyHeadConfiguration(hidden_channels=hidden_channels):
-            if row_count != 8 or column_count != 8:
-                raise ValueError('Chess spatial policy heads require an 8x8 board.')
-            return Chess76PlanePolicyHead(
-                input_channels,
-                hidden_channels,
-                row_count * column_count,
-                action_size,
-            )
+        case GoPointPassPolicyHeadConfiguration():
+            if action_size != row_count * column_count + 1:
+                raise ValueError('Go point-pass policy heads require one action per point plus pass.')
+            return GoPointPassPolicyHead(input_channels)
 
 
 def _build_auxiliary_head(
