@@ -1,6 +1,7 @@
 **/**.so
 **/**.bin
-!reference/go-7x7-baseline-v1.bin
+!reference/go-7x7-baseline-direct-policy-v3.bin
+!reference/go-9x9-book-evaluation-direct-policy-v2.bin
 
 **/log_**.txt
 **/**.dot
