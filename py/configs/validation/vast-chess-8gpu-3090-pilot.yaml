@@ -23,6 +23,7 @@ training:
     hourly_price: 1.1244444
     maximum_cost: null
     maximum_wall_time_seconds: null
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-3090-pilot.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
     minimum_free_disk_gib: 10.0

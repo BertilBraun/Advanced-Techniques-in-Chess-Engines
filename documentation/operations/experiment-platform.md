@@ -200,6 +200,12 @@ supervisorctl status experiment-queue
   --summary /workspace/run-control/r15c/go9-screening-summary.json
 ```
 
+For an unbounded direct run, configure `training.limits.manual_stop_file` outside the repository. Request a
+checkpoint-safe stop by atomically creating that file. The coordinator detects it between training quanta, closes
+self-play and evaluation workers, persists the credit ledger, and records a `stopped` run outcome. Remove a stale
+stop file before starting or resuming the run. Do not use terminal `Ctrl+C` as the normal stop mechanism because it
+signals the entire foreground process group.
+
 Update only pending work by atomically replacing the live queue file. Stop with
 `supervisorctl stop experiment-queue` only when active runs should also terminate: queue shutdown sends termination
 to every active child. Restarting against a summary that still says `running` marks those entries failed rather

@@ -133,6 +133,10 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     assert configuration.run.hardware.gpu_model == 'NVIDIA GeForce RTX 3090'
     assert configuration.training.limits.hourly_price == pytest.approx(1.1244444)
     assert configuration.training.limits.maximum_cost is None
+    assert configuration.training.limits.maximum_wall_time_seconds is None
+    assert configuration.training.limits.manual_stop_file == Path(
+        '/workspace/run-control/stop/vast-chess-8gpu-optimal.stop'
+    )
     assert configuration.chess.objective.root_value_blend.value_at(0) == 0.0
     assert configuration.chess.objective.value_discount_per_ply.value_at(0) == 1.0
     progressive_model_sizing = configuration.training.progressive_model_sizing

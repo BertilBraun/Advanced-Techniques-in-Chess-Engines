@@ -18,8 +18,8 @@ class DiskUsage:
     free: int
 
 
-def limits(**updates: float | int | None) -> RuntimeLimits:
-    values: dict[str, float | int | None] = {
+def limits(**updates: float | int | Path | None) -> RuntimeLimits:
+    values: dict[str, float | int | Path | None] = {
         'hourly_price': 2.0,
         'maximum_cost': 10.0,
         'maximum_wall_time_seconds': 100.0,
@@ -64,6 +64,14 @@ def test_run_limit_monitor_allows_unbounded_time_and_cost(
     monitor = RunLimitMonitor(configured_limits, tmp_path, 0.0, psutil.Process())
 
     assert monitor.stop_reason() is None
+
+
+def test_run_limit_monitor_honors_manual_stop_file(tmp_path: Path) -> None:
+    stop_file = tmp_path / 'stop-requested'
+    stop_file.touch()
+    monitor = RunLimitMonitor(limits(manual_stop_file=stop_file), tmp_path, 0.0, psutil.Process())
+
+    assert monitor.stop_reason() == 'manual stop requested'
 
 
 def test_run_limit_monitor_enforces_host_resources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
