@@ -269,6 +269,8 @@ def _deterministic_stop(
     if index < history_count:
         return False
     current = snapshots[index]
+    if current.visits < adaptive.minimum_visits:
+        return False
     leaders = {snapshot.policy_leader_action_id for snapshot in snapshots[index - history_count : index + 1]}
     if len(leaders) != 1 or abs(current.root_value - snapshots[index - 1].root_value) > adaptive.root_value_tolerance:
         return False

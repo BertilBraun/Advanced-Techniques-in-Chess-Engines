@@ -288,6 +288,31 @@ int runBatchedSearchTests() {
                     forcedResults.results[1].policy_target_visits,
                 "fast search applied forced playouts or pruning");
 
+        const GameSearchResult &correctionResult = forcedResults.results[0];
+        const Board initialBoard{};
+        const std::vector<ChessAction> legalActions = ChessGame::legalActions(initialBoard);
+        const float cleanPrior = 1.0F / static_cast<float>(legalActions.size());
+        const float policyVisitTotal =
+            static_cast<float>(totalVisits(correctionResult.policy_target_visits));
+        float expectedPolicyCorrection = 0.0F;
+        for (const ChessAction action : legalActions) {
+            const int actionId = ChessEncoding::actionId(action, initialBoard);
+            const auto searched = std::ranges::find_if(
+                correctionResult.policy_target_visits,
+                [actionId](const GameSearchVisit visit) { return visit.action_id == actionId; });
+            const float searchedProbability =
+                searched == correctionResult.policy_target_visits.end()
+                    ? 0.0F
+                    : static_cast<float>(searched->visit_count) / policyVisitTotal;
+            expectedPolicyCorrection += 0.5F * std::abs(cleanPrior - searchedProbability);
+        }
+        const float expectedValueCorrection =
+            0.5F * std::abs(correctionResult.root_value - correctionResult.network_root_value);
+        require(std::abs(correctionResult.policy_correction - expectedPolicyCorrection) < 0.00001F,
+                "policy correction did not use the clean pre-noise legal prior");
+        require(std::abs(correctionResult.value_correction - expectedValueCorrection) < 0.00001F,
+                "value correction did not use root Q and the network WDL scalar");
+
         require(initialFastSearchAdmissionCount(8, 2, 4, 1, 4) == 2,
                 "4:1 mixed admission selected the wrong initial fast count");
         require(initialFastSearchAdmissionCount(5, 2, 4, 1, 4) == 2,

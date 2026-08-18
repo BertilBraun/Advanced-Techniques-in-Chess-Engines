@@ -101,6 +101,38 @@ def test_candidate_metrics_reports_unstable_gate_recall() -> None:
     assert metrics.unstable_at_gate_recall == 1.0
 
 
+def test_candidate_metrics_never_stops_before_minimum_visits() -> None:
+    audit = PositionAudit(
+        fen='8/8/8/8/8/8/4K3/6k1 w - - 0 1',
+        final_policy_correction=0.1,
+        final_value_correction=0.1,
+        final_search_correction_target=0.1,
+        snapshots=tuple(
+            _snapshot(visits, correction=0.0, first_probability=0.9)
+            for visits in (100, 200, 300, 400, 500, 800, 3200)
+        ),
+    )
+    adaptive = AdaptiveFullSearchBudget(
+        kind='adaptive',
+        minimum_visits=400,
+        maximum_visits=800,
+        observation_interval=100,
+        leader_stability_window=200,
+        root_value_tolerance=0.04,
+        initial_top_visit_share=0.8,
+        final_top_visit_share=0.7,
+        initial_top_two_margin=0.3,
+        final_top_two_margin=0.2,
+        threshold_relaxation_visits=1200,
+        minimum_search_correction_to_unlock_tail=0.5,
+    )
+
+    metrics = candidate_metrics((audit,), adaptive, maximum_visits=800, threshold=0.5)
+
+    assert metrics.mean_visits == 400
+    assert {bucket.stop_visits for bucket in metrics.correction_calibration_by_stop_visits} == {400}
+
+
 def test_adaptive_budget_rejects_nonpositive_relaxation_window() -> None:
     with pytest.raises(ValueError, match='observation cadence'):
         AdaptiveFullSearchBudget(
