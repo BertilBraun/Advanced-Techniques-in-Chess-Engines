@@ -85,7 +85,9 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     assert full_search_budget.resolve(49).minimum_search_correction_to_unlock_tail is None
     assert full_search_budget.resolve(50).minimum_search_correction_to_unlock_tail == 0.4
     full_search_probability = configuration.chess.self_play.full_search_probability
-    assert tuple(full_search_probability.value_at(generation) for generation in (0, 29, 30, 49, 50, 69, 70, 249, 250)) == (
+    assert tuple(
+        full_search_probability.value_at(generation) for generation in (0, 29, 30, 49, 50, 69, 70, 249, 250)
+    ) == (
         1.0,
         1.0,
         0.5,
