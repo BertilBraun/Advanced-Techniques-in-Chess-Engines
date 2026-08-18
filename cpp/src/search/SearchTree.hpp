@@ -475,6 +475,13 @@ private:
             statistics.maximum_shared_visit_advantage =
                 std::max(statistics.maximum_shared_visit_advantage, advantage);
         }
+        if (materialized.transposition && completedChildVisits > 0 && completedEdgeVisits == 0 &&
+            !Game::isTerminal(child.position)) {
+            ++m_arena.graphStatistics().evaluations_avoided;
+            return GraphSearchSelection{.path = path,
+                                        .immediate_value = graphCorrection(edge, child),
+                                        .update_leaf = false};
+        }
         if (materialized.transposition && completedChildVisits > 0 && completedEdgeVisits > 0) {
             const float childMean = child.value_sum / static_cast<float>(completedChildVisits);
             const float edgeMean = edge.value_sum / static_cast<float>(completedEdgeVisits);

@@ -241,6 +241,45 @@ void testUnfoldedTreeCountsSharedDescendants() {
             "Unfolded tree did not duplicate the shared node and its descendant");
 }
 
+void testFirstTranspositionReusesSharedEvaluation() {
+    FixtureTree tree = makeGraph(FixtureKind::DeepDiamond);
+    expand(tree, tree.rootIndex());
+
+    preferRootEdge(tree, 0);
+    GraphSearchSelection firstParent = selectGraph(tree);
+    expand(tree, firstParent.path.leaf_index);
+    tree.backPropagateGraph(firstParent.path, 0.0F, true);
+    GraphSearchSelection shared = selectGraph(tree);
+    expand(tree, shared.path.leaf_index);
+    tree.backPropagateGraph(shared.path, 0.4F, true);
+
+    preferRootEdge(tree, 1);
+    GraphSearchSelection secondParent = selectGraph(tree);
+    expand(tree, secondParent.path.leaf_index);
+    tree.backPropagateGraph(secondParent.path, 0.0F, true);
+    const GraphSearchStatistics statisticsBefore = tree.graphStatistics();
+    const GraphSearchSelection reused = selectGraph(tree);
+
+    require(reused.immediate_value.has_value() && !reused.update_leaf,
+            "First transposition link did not reuse the shared node evaluation");
+    requireNear(*reused.immediate_value, 0.4F,
+                "First transposition link backed up the wrong shared value");
+    require(tree.graphStatistics().evaluations_avoided ==
+                statisticsBefore.evaluations_avoided + 1,
+            "First transposition evaluation reuse was not instrumented");
+
+    tree.backPropagateGraph(reused.path, *reused.immediate_value, reused.update_leaf);
+    const GameSearchPathStep &incomingStep = reused.path.steps.back();
+    const auto &incoming =
+        tree.node(incomingStep.node_index).children.at(incomingStep.edge_index);
+    require(incoming.visits == 1,
+            "First transposition reuse did not visit the new incoming edge exactly once");
+    requireNear(incoming.value_sum, 0.4F,
+                "First transposition reuse did not initialize the incoming edge from the node");
+    require(tree.node(shared.path.leaf_index).visits == 1,
+            "First transposition reuse incorrectly revisited the shared node");
+}
+
 void testHistoryDistinctStatesDoNotMerge() {
     FixtureTree tree = makeGraph(FixtureKind::TerminalDiamond);
     expand(tree, tree.rootIndex());
@@ -368,6 +407,7 @@ int runMonteCarloGraphSearchTests() {
     try {
         testSharedNodesAndCorrection();
         testUnfoldedTreeCountsSharedDescendants();
+        testFirstTranspositionReusesSharedEvaluation();
         testHistoryDistinctStatesDoNotMerge();
         testCycleCutoff();
         testParallelReservationCoalescesLeaf();
