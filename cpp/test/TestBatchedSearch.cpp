@@ -33,7 +33,8 @@ std::filesystem::path createTestModel(const std::string &name, const float win, 
             policies = torch.zeros((batch_size, 4864), device=boards.device)
             outcome = torch.cat((self.outcome_parameter, self.outcome_buffer))
             outcomes = outcome.unsqueeze(0).repeat((batch_size, 1))
-            return policies, outcomes
+            search_correction = torch.full((batch_size, 1), 0.5, device=boards.device)
+            return policies, outcomes, search_correction
     )JIT");
     const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path path =
@@ -124,7 +125,7 @@ int runBatchedSearchTests() {
         } catch (const std::invalid_argument &) {
         }
         const InferenceConfiguration runtimeParameters(0, modelPath.string(), InferenceDevice::Cpu);
-        const ChessSelfPlaySearchParameters searchParameters(1, 16, 8, treeSearchParameters(1.5F),
+        const ChessSelfPlaySearchParameters searchParameters(1, FixedSearchLimit(16), 8, treeSearchParameters(1.5F),
                                                              0.3F, 0.25F);
         const BatchedInferenceParameters inferenceParameters(2, 4, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
@@ -247,11 +248,11 @@ int runBatchedSearchTests() {
         require(search.modelGeneration() == 28, "repeated refresh lost model generation");
 
         const ChessSelfPlaySearchParameters sameCapacitySchedule(
-            1, 16, 7, treeSearchParameters(1.25F), 0.3F, 0.25F);
+            1, FixedSearchLimit(16), 7, treeSearchParameters(1.25F), 0.3F, 0.25F);
         require(!search.updateSearchSchedule(sameCapacitySchedule),
                 "equal-capacity schedule incorrectly required root replacement");
         const ChessSelfPlaySearchParameters discountedSchedule(
-            1, 16, 7,
+            1, FixedSearchLimit(16), 7,
             treeSearchParameters(1.25F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
                                  0.0F, 0.9985F),
             0.3F, 0.25F);
@@ -263,13 +264,13 @@ int runBatchedSearchTests() {
             throw std::runtime_error("stale root unexpectedly accepted a new value discount");
         } catch (const std::invalid_argument &) {
         }
-        const ChessSelfPlaySearchParameters largerSchedule(1, 24, 8, treeSearchParameters(1.25F),
+        const ChessSelfPlaySearchParameters largerSchedule(1, FixedSearchLimit(24), 8, treeSearchParameters(1.25F),
                                                            0.3F, 0.25F);
         require(search.updateSearchSchedule(largerSchedule),
                 "larger schedule did not report an arena-capacity change");
 
         const ChessSelfPlaySearchParameters forcedSchedule(
-            1, 64, 16,
+            1, FixedSearchLimit(64), 16,
             treeSearchParameters(
                 1.5F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::ReducedParentValue, 0.2F),
                 2.0F),
@@ -302,7 +303,7 @@ int runBatchedSearchTests() {
         require(initialFastSearchAdmissionCount(384, 256, 600, 150, 256) == 96,
                 "capacity-fill admission incorrectly displaced ratio-based work");
 
-        const ChessSelfPlaySearchParameters stagedParameters(1, 4, 1, treeSearchParameters(1.5F),
+        const ChessSelfPlaySearchParameters stagedParameters(1, FixedSearchLimit(4), 1, treeSearchParameters(1.5F),
                                                              0.3F, 0.25F);
         ChessSelfPlaySearch stagedSearch(runtimeParameters, stagedParameters, inferenceParameters);
         const std::vector<bool> mixedKinds = {false, true, false, false, true, false, false};
@@ -327,13 +328,39 @@ int runBatchedSearchTests() {
         require(allFastResults.simulations_completed == 5,
                 "all-fast search completed the wrong simulation count");
 
-        const ChessSelfPlaySearchParameters equalParameters(1, 4, 4, treeSearchParameters(1.5F),
+        const ChessSelfPlaySearchParameters equalParameters(1, FixedSearchLimit(4), 4, treeSearchParameters(1.5F),
                                                             0.3F, 0.25F);
         ChessSelfPlaySearch equalSearch(runtimeParameters, equalParameters, inferenceParameters);
         const ChessSelfPlaySearchBatch equalResults =
             searchRequests(equalSearch, {false, true, false, true});
         require(equalResults.simulations_completed == 16,
                 "equal-budget search completed the wrong simulation count");
+
+        const AdaptiveSearchLimit deterministicLimit(
+            4, 12, 2, 2, 1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 8,
+            DisabledSearchCorrectionGate{});
+        const ChessSelfPlaySearchParameters deterministicParameters(
+            1, deterministicLimit, 1, treeSearchParameters(1.5F), 0.3F, 0.25F);
+        ChessSelfPlaySearch deterministicSearch(runtimeParameters, deterministicParameters,
+                                                inferenceParameters);
+        const ChessSelfPlaySearchBatch deterministicResults = deterministicSearch.search(
+            {ChessSelfPlaySearchRequest(deterministicSearch.newRoot(Board{}), true)});
+        require(deterministicResults.results[0].stop_reason == SearchStopReason::Deterministic &&
+                    deterministicResults.results[0].final_visits == 4,
+                "deterministic adaptive search did not stop at its first eligible checkpoint");
+
+        const AdaptiveSearchLimit learnedLimit(
+            4, 12, 2, 2, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 8,
+            SearchCorrectionGate(8, 0.6F));
+        const ChessSelfPlaySearchParameters learnedParameters(
+            1, learnedLimit, 1, treeSearchParameters(1.5F), 0.3F, 0.25F);
+        ChessSelfPlaySearch learnedSearch(runtimeParameters, learnedParameters,
+                                         inferenceParameters);
+        const ChessSelfPlaySearchBatch learnedResults = learnedSearch.search(
+            {ChessSelfPlaySearchRequest(learnedSearch.newRoot(Board{}), true)});
+        require(learnedResults.results[0].stop_reason == SearchStopReason::LearnedGate &&
+                    learnedResults.results[0].final_visits == 8,
+                "learned adaptive gate did not stop at its midpoint");
 
         ChessSelfPlaySearch terminalSearch(runtimeParameters, stagedParameters,
                                            inferenceParameters);

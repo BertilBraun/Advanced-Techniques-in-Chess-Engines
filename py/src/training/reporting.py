@@ -7,9 +7,11 @@ from src.replay.manager import IngestedCompletedGame, ReplayDescription
 from src.self_play.resignation import ResignationDiagnostics
 from src.training.credit_ledger import CreditLedgerState
 from src.training.distributions import (
+    LegalMovesTrainingDistribution,
     NextPolicyTrainingDistribution,
     PolicyTrainingDistribution,
     RemainingGameLengthTrainingDistribution,
+    ScalarAuxiliaryTrainingDistribution,
     TrainingDistributionSnapshot,
 )
 from src.training.session import (
@@ -19,7 +21,15 @@ from src.training.session import (
     TrainingPublication,
     TrainingSessionResult,
 )
-from src.training.targets import AuxiliaryHeadLayout, NextPolicyHeadLayout, RemainingGameLengthHeadLayout
+from src.training.targets import (
+    AuxiliaryHeadLayout,
+    FutureSearchValueHeadLayout,
+    IrreversibleProgressHeadLayout,
+    LegalMovesHeadLayout,
+    NextPolicyHeadLayout,
+    RemainingGameLengthHeadLayout,
+    SearchCorrectionHeadLayout,
+)
 from src.training.telemetry import completed_game_length_telemetry, training_lifecycle_telemetry
 from src.training.tensorboard import scheduled_settings_at
 from src.training.trainer import TrainingStatistics
@@ -237,6 +247,20 @@ def _record_training_distributions(
                 _log_values(f'{prefix}/target', target, generation, log_mean=True)
                 _log_values(f'{prefix}/prediction', prediction, generation, log_mean=True)
                 _log_values(f'{prefix}/absolute_error', absolute_error, generation, log_mean=True)
+            case ScalarAuxiliaryTrainingDistribution(
+                target=target,
+                prediction=prediction,
+                absolute_error=absolute_error,
+            ):
+                _log_values(f'{prefix}/target', target, generation, log_mean=True)
+                _log_values(f'{prefix}/prediction', prediction, generation, log_mean=True)
+                _log_values(f'{prefix}/absolute_error', absolute_error, generation, log_mean=True)
+            case LegalMovesTrainingDistribution(
+                legal_probability=legal_probability,
+                illegal_probability=illegal_probability,
+            ):
+                _log_values(f'{prefix}/legal_probability', legal_probability, generation, log_mean=True)
+                _log_values(f'{prefix}/illegal_probability', illegal_probability, generation, log_mean=True)
 
 
 def _record_policy_distribution(prefix: str, policy: PolicyTrainingDistribution, generation: int) -> None:
@@ -263,3 +287,11 @@ def _auxiliary_name(index: int, head: AuxiliaryHeadLayout) -> str:
             return f'{index}-next-policy-ply-{ply_offset}'
         case RemainingGameLengthHeadLayout():
             return f'{index}-remaining-game-length'
+        case FutureSearchValueHeadLayout(ply_offset=ply_offset):
+            return f'{index}-future-search-value-ply-{ply_offset}'
+        case IrreversibleProgressHeadLayout(horizon_plies=horizon_plies):
+            return f'{index}-irreversible-progress-{horizon_plies}'
+        case LegalMovesHeadLayout():
+            return f'{index}-legal-moves'
+        case SearchCorrectionHeadLayout():
+            return f'{index}-search-correction'

@@ -230,7 +230,7 @@ private:
             const std::uint32_t chunk = std::min(remaining, m_parameters.parallel_searches);
             const GameSearchBatchResult batch = m_search.searchDetailed({GameSearchRequest<Game>{
                 .root = root,
-                .visit_limit = root.visits() + chunk,
+                .limit = FixedSearchLimit(root.visits() + chunk),
                 .add_root_noise = false,
                 .count_root_initialization = true,
             }});

@@ -94,7 +94,7 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
     )
     common_self_play = {
         'search': {
-            'full_searches': 2,
+            'full_search_budget': {'kind': 'fixed', 'visits': 2},
             'fast_searches': 1,
             'parallel_searches': 1,
             'dirichlet_epsilon': 0.0,

@@ -95,6 +95,15 @@ class GameStateContract(ABC, Generic[PositionT]):
         raise NotImplementedError
 
     @abstractmethod
+    def is_irreversible_transition(
+        self,
+        position: PositionT,
+        action_id: int,
+        child: PositionT,
+    ) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
     def current_player(self, position: PositionT) -> Player:
         raise NotImplementedError
 

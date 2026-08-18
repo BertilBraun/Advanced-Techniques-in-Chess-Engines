@@ -470,7 +470,7 @@ def evaluate_fixed_dataset(
                 state,
                 tuple(state.packed_plane_layout.value(bytes(row['packed_state'])) for row in batch),
             )
-            policy_logits, _ = model(torch.from_numpy(decoded).to(device))
+            policy_logits, _, _ = model(torch.from_numpy(decoded).to(device))
             policy_logits = policy_logits.float().cpu()
             for row_index, row in enumerate(batch):
                 count = int(row['policy_count'])

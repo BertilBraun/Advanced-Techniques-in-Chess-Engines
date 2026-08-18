@@ -12,6 +12,7 @@ from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
+    SearchStopReason,
     TerminationReason,
 )
 from src.self_play.resignation import (
@@ -68,6 +69,14 @@ def completed_continuation(
                 full_search=True,
                 sample_weight=1.0,
                 search_budget=20,
+                network_root_value=root_value,
+                policy_correction=0.0,
+                value_correction=0.0,
+                search_correction_target=0.0,
+                predicted_search_correction=0.0,
+                starting_visits=0,
+                final_visits=20,
+                stop_reason=SearchStopReason.FIXED_LIMIT,
             ),
         ),
         final_wdl=final_wdl,

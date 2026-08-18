@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
@@ -11,7 +12,15 @@ from torch.nn import functional
 
 from src.games.representation import NetworkDimensions
 from src.training.batch import TrainingModelOutput
-from src.training.targets import AuxiliaryHeadLayout, NextPolicyHeadLayout, RemainingGameLengthHeadLayout
+from src.training.targets import (
+    AuxiliaryHeadLayout,
+    FutureSearchValueHeadLayout,
+    IrreversibleProgressHeadLayout,
+    LegalMovesHeadLayout,
+    NextPolicyHeadLayout,
+    RemainingGameLengthHeadLayout,
+    SearchCorrectionHeadLayout,
+)
 from src.util.frozen_model import FrozenModel
 from src.util.log import log
 
@@ -279,6 +288,66 @@ class Network(nn.Module):
         )
 
 
+class ZeroSearchCorrectionHead(nn.Module):
+    def forward(self, features: Tensor) -> Tensor:
+        return torch.zeros((features.shape[0], 1), dtype=features.dtype, device=features.device)
+
+
+class InferenceNetwork(nn.Module):
+    def __init__(self, training_model: Network) -> None:
+        super().__init__()
+        self.startBlock = copy.deepcopy(training_model.startBlock)
+        self.backBone = copy.deepcopy(training_model.backBone)
+        self.finishBlock = copy.deepcopy(training_model.finishBlock)
+        self.policyHead = copy.deepcopy(training_model.policyHead)
+        self.valueHead = copy.deepcopy(training_model.valueHead)
+        self.searchCorrectionHead = copy.deepcopy(_search_correction_head(training_model))
+        self.network_definition = NetworkDefinition(
+            architecture=training_model.network_args,
+            dimensions=training_model.dimensions,
+            auxiliary_heads=tuple(
+                head for head in training_model.auxiliary_heads if head.kind == 'search_correction'
+            ),
+        )
+
+    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        features = self.startBlock(inputs)
+        for block in self.backBone:
+            features = block(features)
+        features = self.finishBlock(features)
+        return (
+            self.policyHead(features),
+            torch.softmax(self.valueHead(features), dim=1),
+            torch.sigmoid(self.searchCorrectionHead(features)),
+        )
+
+    @torch.jit.unused
+    def checkpoint_definition(self) -> NetworkDefinition:
+        return self.network_definition
+
+    def fuse_model(self) -> None:
+        for module in self.modules():
+            if (
+                type(module) is nn.Sequential
+                and len(module) >= 2
+                and isinstance(module[0], nn.Conv2d)
+                and isinstance(module[1], nn.BatchNorm2d)
+            ):
+                torch.ao.quantization.fuse_modules(
+                    module,
+                    [str(index) for index in range(min(3, len(module)))],
+                    inplace=True,
+                )
+
+
+def _search_correction_head(training_model: Network) -> nn.Module:
+    for index, head in enumerate(training_model.auxiliary_heads):
+        match head:
+            case SearchCorrectionHeadLayout():
+                return training_model.auxiliaryHeads[index]
+    return ZeroSearchCorrectionHead()
+
+
 class GoPointPassPolicyHead(nn.Module):
     def __init__(self, input_channels: int) -> None:
         super().__init__()
@@ -340,6 +409,37 @@ def _build_auxiliary_head(
                 nn.Flatten(),
                 nn.Linear(row_count * column_count, output_size),
             )
+        case FutureSearchValueHeadLayout(output_size=output_size):
+            return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
+        case IrreversibleProgressHeadLayout(output_size=output_size):
+            return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
+        case LegalMovesHeadLayout(action_size=legal_action_size):
+            if legal_action_size != action_size:
+                raise ValueError('Legal-moves action space must match the primary policy action space.')
+            return _build_policy_head(
+                input_channels,
+                row_count,
+                column_count,
+                action_size,
+                policy_configuration,
+            )
+        case SearchCorrectionHeadLayout(output_size=output_size):
+            return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
+
+
+def _build_scalar_auxiliary_head(
+    input_channels: int,
+    row_count: int,
+    column_count: int,
+    output_size: int,
+) -> nn.Module:
+    return nn.Sequential(
+        nn.Conv2d(input_channels, 1, kernel_size=1, bias=False),
+        nn.BatchNorm2d(1),
+        nn.ReLU(inplace=True),
+        nn.Flatten(),
+        nn.Linear(row_count * column_count, output_size),
+    )
 
 
 class ResBlock(nn.Module):

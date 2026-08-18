@@ -12,6 +12,8 @@ from src.experiment.generation_schedule import (
     defined_schedule_values,
 )
 from src.self_play.parameters import (
+    AdaptiveFullSearchBudget,
+    FixedFullSearchBudget,
     ParentValueFirstPlayUrgencyParameters,
     RandomOpeningStartParameters,
     ReducedParentValueFirstPlayUrgencyParameters,
@@ -95,8 +97,72 @@ FirstPlayUrgencyConfiguration: TypeAlias = Annotated[
 ]
 
 
+class FixedFullSearchBudgetConfiguration(FrozenModel):
+    kind: Literal['fixed'] = 'fixed'
+    visits: IntegerGenerationSchedule
+
+    def resolve(self, model_generation: int) -> FixedFullSearchBudget:
+        return FixedFullSearchBudget(kind=self.kind, visits=self.visits.value_at(model_generation))
+
+
+class AdaptiveFullSearchBudgetConfiguration(FrozenModel):
+    kind: Literal['adaptive'] = 'adaptive'
+    minimum_visits: int = Field(gt=0)
+    maximum_visits: IntegerGenerationSchedule
+    observation_interval: int = Field(gt=0)
+    leader_stability_window: int = Field(gt=0)
+    root_value_tolerance: float = Field(ge=0.0, le=1.0)
+    initial_top_visit_share: float = Field(ge=0.0, le=1.0)
+    final_top_visit_share: float = Field(ge=0.0, le=1.0)
+    initial_top_two_margin: float = Field(ge=0.0, le=1.0)
+    final_top_two_margin: float = Field(ge=0.0, le=1.0)
+    threshold_relaxation_visits: int = Field(gt=0)
+    learned_gate_start_generation: int = Field(ge=0)
+    minimum_search_correction_to_unlock_tail: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode='after')
+    def validate_search_range(self) -> AdaptiveFullSearchBudgetConfiguration:
+        if any(value < self.minimum_visits for value in defined_schedule_values(self.maximum_visits)):
+            raise ValueError('Adaptive maximum visits must remain at least the minimum.')
+        if self.leader_stability_window < self.observation_interval:
+            raise ValueError('Leader-stability window must cover at least one observation interval.')
+        if self.leader_stability_window % self.observation_interval:
+            raise ValueError('Leader-stability window must divide into complete observation intervals.')
+        if self.final_top_visit_share > self.initial_top_visit_share:
+            raise ValueError('Final top-visit threshold cannot exceed its initial threshold.')
+        if self.final_top_two_margin > self.initial_top_two_margin:
+            raise ValueError('Final top-two margin cannot exceed its initial threshold.')
+        return self
+
+    def resolve(self, model_generation: int) -> AdaptiveFullSearchBudget:
+        maximum_visits = self.maximum_visits.value_at(model_generation)
+        gate_enabled = model_generation >= self.learned_gate_start_generation and maximum_visits > self.minimum_visits
+        return AdaptiveFullSearchBudget(
+            kind=self.kind,
+            minimum_visits=self.minimum_visits,
+            maximum_visits=maximum_visits,
+            observation_interval=self.observation_interval,
+            leader_stability_window=self.leader_stability_window,
+            root_value_tolerance=self.root_value_tolerance,
+            initial_top_visit_share=self.initial_top_visit_share,
+            final_top_visit_share=self.final_top_visit_share,
+            initial_top_two_margin=self.initial_top_two_margin,
+            final_top_two_margin=self.final_top_two_margin,
+            threshold_relaxation_visits=self.threshold_relaxation_visits,
+            minimum_search_correction_to_unlock_tail=(
+                self.minimum_search_correction_to_unlock_tail if gate_enabled else None
+            ),
+        )
+
+
+FullSearchBudgetConfiguration: TypeAlias = Annotated[
+    FixedFullSearchBudgetConfiguration | AdaptiveFullSearchBudgetConfiguration,
+    Field(discriminator='kind'),
+]
+
+
 class SelfPlaySearchParams(FrozenModel):
-    full_searches: IntegerGenerationSchedule
+    full_search_budget: FullSearchBudgetConfiguration
     fast_searches: IntegerGenerationSchedule
     parallel_searches: int = Field(gt=0)
     dirichlet_epsilon: FloatGenerationSchedule
@@ -107,7 +173,12 @@ class SelfPlaySearchParams(FrozenModel):
 
     @model_validator(mode='after')
     def validate_scheduled_values(self) -> SelfPlaySearchParams:
-        if any(value <= self.parallel_searches for value in defined_schedule_values(self.full_searches)):
+        match self.full_search_budget:
+            case FixedFullSearchBudgetConfiguration(visits=visits):
+                maximum_visits = defined_schedule_values(visits)
+            case AdaptiveFullSearchBudgetConfiguration(maximum_visits=maximum_visits_schedule):
+                maximum_visits = defined_schedule_values(maximum_visits_schedule)
+        if any(value <= self.parallel_searches for value in maximum_visits):
             raise ValueError('Every full-search budget must exceed the parallel-search count.')
         if any(value <= 0 for value in defined_schedule_values(self.fast_searches)):
             raise ValueError('Every fast-search budget must be positive.')
@@ -237,7 +308,7 @@ class SelfPlayConfiguration(FrozenModel):
             start_position=self.start_position.resolve(model_generation),
             full_search_probability=self.full_search_probability.value_at(model_generation),
             parallel_searches=search.parallel_searches,
-            full_searches=search.full_searches.value_at(model_generation),
+            full_search_budget=search.full_search_budget.resolve(model_generation),
             fast_searches=search.fast_searches.value_at(model_generation),
             forced_playout_coefficient=search.forced_playouts.resolved_coefficient(),
             exploration_constant=search.exploration_constant.value_at(model_generation),

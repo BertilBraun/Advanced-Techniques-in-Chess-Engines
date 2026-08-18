@@ -135,7 +135,9 @@ evaluation:
 go:
   self_play:
     search:
-      full_searches: 8
+      full_search_budget:
+        kind: fixed
+        visits: 8
       fast_searches: 2
       parallel_searches: 1
       dirichlet_epsilon: 0.25

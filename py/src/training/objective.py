@@ -10,8 +10,12 @@ from pydantic import Field
 from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.targets import (
     AuxiliaryTargetConfiguration,
+    FutureSearchValueTargetConfiguration,
+    IrreversibleProgressTargetConfiguration,
+    LegalMovesTargetConfiguration,
     NextPolicyTargetConfiguration,
     RemainingGameLengthTargetConfiguration,
+    SearchCorrectionTargetConfiguration,
 )
 from src.util.frozen_model import FrozenModel
 
@@ -64,8 +68,34 @@ class ResolvedRemainingGameLengthLoss(FrozenModel):
     weight: float = Field(ge=0.0)
 
 
+class ResolvedFutureSearchValueLoss(FrozenModel):
+    kind: Literal['future_search_value'] = 'future_search_value'
+    weight: float = Field(ge=0.0)
+    smooth_l1_beta: float = Field(gt=0.0)
+
+
+class ResolvedIrreversibleProgressLoss(FrozenModel):
+    kind: Literal['irreversible_progress'] = 'irreversible_progress'
+    weight: float = Field(ge=0.0)
+
+
+class ResolvedLegalMovesLoss(FrozenModel):
+    kind: Literal['legal_moves'] = 'legal_moves'
+    weight: float = Field(ge=0.0)
+
+
+class ResolvedSearchCorrectionLoss(FrozenModel):
+    kind: Literal['search_correction'] = 'search_correction'
+    weight: float = Field(ge=0.0)
+
+
 ResolvedAuxiliaryLoss: TypeAlias = Annotated[
-    ResolvedNextPolicyLoss | ResolvedRemainingGameLengthLoss,
+    ResolvedNextPolicyLoss
+    | ResolvedRemainingGameLengthLoss
+    | ResolvedFutureSearchValueLoss
+    | ResolvedIrreversibleProgressLoss
+    | ResolvedLegalMovesLoss
+    | ResolvedSearchCorrectionLoss,
     Field(discriminator='kind'),
 ]
 
@@ -81,6 +111,22 @@ def resolve_auxiliary_losses(
                 losses.append(ResolvedNextPolicyLoss(weight=loss_weight.value_at(model_generation)))
             case RemainingGameLengthTargetConfiguration(loss_weight=loss_weight):
                 losses.append(ResolvedRemainingGameLengthLoss(weight=loss_weight.value_at(model_generation)))
+            case FutureSearchValueTargetConfiguration(
+                loss_weight=loss_weight,
+                smooth_l1_beta=smooth_l1_beta,
+            ):
+                losses.append(
+                    ResolvedFutureSearchValueLoss(
+                        weight=loss_weight.value_at(model_generation),
+                        smooth_l1_beta=smooth_l1_beta,
+                    )
+                )
+            case IrreversibleProgressTargetConfiguration(loss_weight=loss_weight):
+                losses.append(ResolvedIrreversibleProgressLoss(weight=loss_weight.value_at(model_generation)))
+            case LegalMovesTargetConfiguration(loss_weight=loss_weight):
+                losses.append(ResolvedLegalMovesLoss(weight=loss_weight.value_at(model_generation)))
+            case SearchCorrectionTargetConfiguration(loss_weight=loss_weight):
+                losses.append(ResolvedSearchCorrectionLoss(weight=loss_weight.value_at(model_generation)))
     return tuple(losses)
 
 
@@ -144,6 +190,31 @@ class ResolvedTrainingObjective(FrozenModel):
                 )
             case ResolvedRemainingGameLengthLoss():
                 rows = functional.smooth_l1_loss(prediction, target, reduction='none').squeeze(1)
+            case ResolvedFutureSearchValueLoss(smooth_l1_beta=beta):
+                rows = functional.smooth_l1_loss(prediction, target, reduction='none', beta=beta).squeeze(1)
+            case ResolvedIrreversibleProgressLoss():
+                rows = functional.smooth_l1_loss(
+                    torch.sigmoid(prediction),
+                    target,
+                    reduction='none',
+                ).squeeze(1)
+            case ResolvedSearchCorrectionLoss():
+                rows = functional.smooth_l1_loss(
+                    torch.sigmoid(prediction),
+                    target,
+                    reduction='none',
+                ).squeeze(1)
+            case ResolvedLegalMovesLoss():
+                element_loss = functional.binary_cross_entropy_with_logits(
+                    prediction,
+                    target,
+                    reduction='none',
+                )
+                legal = target > 0.5
+                illegal = ~legal
+                positive = (element_loss * legal).sum(dim=1) / legal.sum(dim=1).clamp_min(1)
+                negative = (element_loss * illegal).sum(dim=1) / illegal.sum(dim=1).clamp_min(1)
+                rows = 0.5 * (positive + negative)
         eligible_weights = eligibility.to(dtype=rows.dtype) * sample_weights
         denominator = eligible_weights.sum().clamp_min(1.0)
         return (rows * eligible_weights).sum() / denominator

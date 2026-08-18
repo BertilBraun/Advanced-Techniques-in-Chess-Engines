@@ -21,6 +21,7 @@ from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
+    SearchStopReason,
     TerminationReason,
     publish_completed_self_play_game,
 )
@@ -68,6 +69,12 @@ class LinearStateContract(GameStateContract[LinearPosition]):
         if action_id not in self.legal_action_ids(position):
             raise ValueError('Action is not legal in the linear test game.')
         return LinearPosition(position.action_ids + (action_id,))
+
+    def is_irreversible_transition(
+        self, position: LinearPosition, action_id: int, child: LinearPosition
+    ) -> bool:
+        del position, child
+        return action_id == 2
 
     def current_player(self, position: LinearPosition) -> Player:
         return Player.FIRST if len(position.action_ids) % 2 == 0 else Player.SECOND
@@ -126,6 +133,14 @@ def _completed_game() -> CompletedSelfPlayGame:
                 full_search=ply != 1,
                 sample_weight=1.0,
                 search_budget=13,
+                network_root_value=0.1,
+                policy_correction=0.2,
+                value_correction=0.075,
+                search_correction_target=0.2,
+                predicted_search_correction=0.15,
+                starting_visits=0,
+                final_visits=13,
+                stop_reason=SearchStopReason.FIXED_LIMIT,
             )
         )
     return CompletedSelfPlayGame(
@@ -196,6 +211,14 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
                 full_search=True,
                 sample_weight=1.0,
                 search_budget=8,
+                network_root_value=0.0,
+                policy_correction=0.0,
+                value_correction=0.0,
+                search_correction_target=0.0,
+                predicted_search_correction=0.0,
+                starting_visits=0,
+                final_visits=8,
+                stop_reason=SearchStopReason.FIXED_LIMIT,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=0.0, loss=1.0),

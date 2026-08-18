@@ -98,6 +98,7 @@ public:
         }
         selected.children.reserve(inferenceResult.actions.size());
         selected.network_outcome = inferenceResult.outcome;
+        selected.search_correction = inferenceResult.search_correction;
         for (const auto &[action, prior] : inferenceResult.actions) {
             selected.children.push_back({
                 .action = action,

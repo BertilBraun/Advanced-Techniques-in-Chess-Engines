@@ -26,6 +26,7 @@
 struct InferenceOutput {
     torch::Tensor policies;
     torch::Tensor outcomes;
+    torch::Tensor search_corrections;
 };
 
 class InferenceCompletion {
@@ -53,6 +54,7 @@ private:
 template <SearchGame Game>
 [[nodiscard]] SearchInferenceResult<Game>
 processInferencePosition(const float *policy, const float *outcome,
+                         const float searchCorrection,
                          const typename Game::State &position);
 
 using PreparedInferenceModel = std::unique_ptr<torch::jit::script::Module>;
@@ -123,11 +125,12 @@ public:
             results.reserve(positions.size());
             const float *policies = output.policies.data_ptr<float>();
             const float *outcomes = output.outcomes.data_ptr<float>();
+            const float *searchCorrections = output.search_corrections.data_ptr<float>();
             const InferenceDimensions dimensions = Game::Encoding::inferenceDimensions();
             for (const auto row : range(positions.size())) {
                 results.push_back(processInferencePosition<Game>(
                     policies + row * dimensions.actions, outcomes + row * dimensions.outcomes,
-                    positions[row]));
+                    searchCorrections[row], positions[row]));
             }
             release(slotIndex);
             return results;
@@ -191,6 +194,7 @@ private:
 template <SearchGame Game>
 [[nodiscard]] SearchInferenceResult<Game>
 processInferencePosition(const float *policy, const float *outcome,
+                         const float searchCorrection,
                          const typename Game::State &position) {
     const float win = outcome[static_cast<std::size_t>(WdlIndex::Win)];
     const float draw = outcome[static_cast<std::size_t>(WdlIndex::Draw)];
@@ -198,6 +202,9 @@ processInferencePosition(const float *policy, const float *outcome,
     if (!std::isfinite(win) || !std::isfinite(draw) || !std::isfinite(loss) || win < 0.0F ||
         draw < 0.0F || loss < 0.0F || std::abs(win + draw + loss - 1.0F) > 1e-2F) {
         throw std::runtime_error("Inference model WDL output must be three probabilities");
+    }
+    if (!std::isfinite(searchCorrection) || searchCorrection < 0.0F || searchCorrection > 1.0F) {
+        throw std::runtime_error("Inference model search correction must lie in [0, 1]");
     }
 
     const std::vector<typename Game::Action> legalActions = Game::legalActions(position);
@@ -237,5 +244,6 @@ processInferencePosition(const float *policy, const float *outcome,
     return {
         .actions = std::move(actions),
         .outcome = {.win = win, .draw = draw, .loss = loss},
+        .search_correction = searchCorrection,
     };
 }

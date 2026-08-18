@@ -176,13 +176,15 @@ evaluation:
 go:
   self_play:
     search:
-      full_searches:
-        kind: linear
-        start_generation: 0
-        end_generation: 50
-        start_value: 64
-        end_value: 256
-        rounding: nearest
+      full_search_budget:
+        kind: fixed
+        visits:
+          kind: linear
+          start_generation: 0
+          end_generation: 50
+          start_value: 64
+          end_value: 256
+          rounding: nearest
       fast_searches:
         kind: linear
         start_generation: 0

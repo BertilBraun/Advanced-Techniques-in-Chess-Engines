@@ -19,6 +19,7 @@ from AlphaZeroCpp import (
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
     InferenceConfiguration,
+    FixedSearchLimit,
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )
@@ -182,7 +183,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         InferenceConfiguration(args.device, str(args.model)),
         SelfPlaySearchParameters(
             args.parallel_searches,
-            args.searches,
+            FixedSearchLimit(args.searches),
             args.searches,
             TreeSearchParameters(
                 1.0,

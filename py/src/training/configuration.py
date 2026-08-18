@@ -11,7 +11,11 @@ from src.experiment.generation_schedule import (
     defined_schedule_values,
 )
 from src.replay.configuration import ReplayConfiguration
-from src.self_play.configuration import SelfPlayConfiguration
+from src.self_play.configuration import (
+    AdaptiveFullSearchBudgetConfiguration,
+    FixedFullSearchBudgetConfiguration,
+    SelfPlayConfiguration,
+)
 from src.training.run_limits import RuntimeLimits
 from src.training.network import NetworkConfiguration
 from src.training.progressive import SECONDS_PER_DAY, ProgressiveModelSizingConfiguration
@@ -205,8 +209,13 @@ class TrainingArgs(FrozenModel):
         if self.lifecycle.replay.maximum_policy_entries > action_size:
             raise ValueError('Maximum retained policy entries cannot exceed the game action count.')
         search = self_play.search
+        match search.full_search_budget:
+            case FixedFullSearchBudgetConfiguration(visits=visits):
+                full_search_budgets = defined_schedule_values(visits)
+            case AdaptiveFullSearchBudgetConfiguration(maximum_visits=maximum_visits):
+                full_search_budgets = defined_schedule_values(maximum_visits)
         search_budgets = (
-            *defined_schedule_values(search.full_searches),
+            *full_search_budgets,
             *defined_schedule_values(search.fast_searches),
         )
         if any(search_budget > 65_535 for search_budget in search_budgets):

@@ -20,6 +20,7 @@ from AlphaZeroCpp import (
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
     InferenceConfiguration,
+    FixedSearchLimit,
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )
@@ -215,7 +216,7 @@ def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
     )
     search_parameters = SelfPlaySearchParameters(
         parallel_searches=arguments.parallel_searches,
-        full_searches=arguments.searches,
+        full_search_budget=FixedSearchLimit(arguments.searches),
         fast_searches=arguments.searches,
         tree_search=TreeSearchParameters(
             exploration_constant=2.0,

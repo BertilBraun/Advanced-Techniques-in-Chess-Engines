@@ -22,6 +22,7 @@ from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
+    SearchStopReason,
     TerminationReason,
     publish_completed_self_play_game,
 )
@@ -124,6 +125,14 @@ def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> 
         full_search=True,
         sample_weight=1.0,
         search_budget=16,
+        network_root_value=0.1,
+        policy_correction=0.2,
+        value_correction=0.075,
+        search_correction_target=0.2,
+        predicted_search_correction=0.15,
+        starting_visits=0,
+        final_visits=16,
+        stop_reason=SearchStopReason.FIXED_LIMIT,
     )
     game = CompletedSelfPlayGame(
         identity=GameIdentity(

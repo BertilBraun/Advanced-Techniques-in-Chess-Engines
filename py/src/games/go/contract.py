@@ -11,8 +11,10 @@ from AlphaZeroCpp import GameSearchVisit
 from src.games.representation import NetworkDimensions
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.replay.contracts import (
+    EligibleLegalMovesTarget,
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
+    EligibleScalarAuxiliaryTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -147,6 +149,15 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
     def child_position(self, position: NativeGoPosition, action_id: int) -> NativeGoPosition:
         return position.child(action_id)
 
+    def is_irreversible_transition(
+        self,
+        position: NativeGoPosition,
+        action_id: int,
+        child: NativeGoPosition,
+    ) -> bool:
+        del position, child
+        return action_id != self.pass_action
+
     def current_player(self, position: NativeGoPosition) -> Player:
         return Player.FIRST if position.player.name == 'BLACK' else Player.SECOND
 
@@ -235,7 +246,11 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
             match target:
                 case EligibleNextPolicyTarget(policy=policy):
                     transformed_auxiliary.append(EligibleNextPolicyTarget(policy=transform_policy(policy)))
-                case EligibleRemainingGameLengthTarget():
+                case (
+                    EligibleRemainingGameLengthTarget()
+                    | EligibleScalarAuxiliaryTarget()
+                    | EligibleLegalMovesTarget()
+                ):
                     transformed_auxiliary.append(target)
                 case _:
                     transformed_auxiliary.append(target)

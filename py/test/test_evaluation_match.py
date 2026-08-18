@@ -53,6 +53,12 @@ class FakeState(GameStateContract[FakePosition]):
     def child_position(self, position: FakePosition, action_id: int) -> FakePosition:
         return FakePosition((*position.actions, action_id))
 
+    def is_irreversible_transition(
+        self, position: FakePosition, action_id: int, child: FakePosition
+    ) -> bool:
+        del position, action_id, child
+        return False
+
     def current_player(self, position: FakePosition) -> Player:
         return Player.FIRST if len(position.actions) % 2 == 0 else Player.SECOND
 

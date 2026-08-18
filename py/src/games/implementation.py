@@ -9,6 +9,8 @@ from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration
 from src.self_play.parameters import (
+    AdaptiveFullSearchBudget,
+    FixedFullSearchBudget,
     ParentValueFirstPlayUrgencyParameters,
     ReducedParentValueFirstPlayUrgencyParameters,
     ResolvedSelfPlayParameters,
@@ -84,8 +86,12 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:
         from AlphaZeroCpp import (
+            AdaptiveSearchLimit,
+            DisabledSearchCorrectionGate,
             FirstPlayUrgencyKind,
             FirstPlayUrgencyParameters,
+            FixedSearchLimit,
+            SearchCorrectionGate,
             SelfPlaySearchParameters,
             TreeSearchParameters,
         )
@@ -101,9 +107,38 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
                     reduction,
                 )
 
+        match parameters.full_search_budget:
+            case FixedFullSearchBudget(visits=visits):
+                full_search_budget = FixedSearchLimit(visits)
+            case AdaptiveFullSearchBudget() as adaptive:
+                gate_visit = adaptive.minimum_visits + (
+                    adaptive.maximum_visits - adaptive.minimum_visits
+                ) // 2
+                gate = (
+                    DisabledSearchCorrectionGate()
+                    if adaptive.minimum_search_correction_to_unlock_tail is None
+                    else SearchCorrectionGate(
+                        gate_visit,
+                        adaptive.minimum_search_correction_to_unlock_tail,
+                    )
+                )
+                full_search_budget = AdaptiveSearchLimit(
+                    minimum_visits=adaptive.minimum_visits,
+                    maximum_visits=adaptive.maximum_visits,
+                    observation_interval=adaptive.observation_interval,
+                    leader_stability_window=adaptive.leader_stability_window,
+                    root_value_tolerance=adaptive.root_value_tolerance,
+                    initial_top_visit_share=adaptive.initial_top_visit_share,
+                    final_top_visit_share=adaptive.final_top_visit_share,
+                    initial_top_two_margin=adaptive.initial_top_two_margin,
+                    final_top_two_margin=adaptive.final_top_two_margin,
+                    threshold_relaxation_visits=adaptive.threshold_relaxation_visits,
+                    search_correction_gate=gate,
+                )
+
         return SelfPlaySearchParameters(
             parallel_searches=parameters.parallel_searches,
-            full_searches=parameters.full_searches,
+            full_search_budget=full_search_budget,
             fast_searches=parameters.fast_searches,
             tree_search=TreeSearchParameters(
                 exploration_constant=parameters.exploration_constant,

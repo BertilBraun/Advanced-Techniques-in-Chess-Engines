@@ -13,6 +13,7 @@ from AlphaZeroCpp import (
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
     InferenceConfiguration,
+    FixedSearchLimit,
     SelfPlaySearchParameters,
     TreeSearchParameters,
     new_root,
@@ -73,7 +74,7 @@ def main() -> None:
         InferenceConfiguration(args.device, str(args.model)),
         SelfPlaySearchParameters(
             1,
-            8,
+            FixedSearchLimit(8),
             8,
             TreeSearchParameters(
                 1.0,
