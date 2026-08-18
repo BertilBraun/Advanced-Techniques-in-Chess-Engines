@@ -108,8 +108,7 @@ def test_candidate_metrics_never_stops_before_minimum_visits() -> None:
         final_value_correction=0.1,
         final_search_correction_target=0.1,
         snapshots=tuple(
-            _snapshot(visits, correction=0.0, first_probability=0.9)
-            for visits in (100, 200, 300, 400, 500, 800, 3200)
+            _snapshot(visits, correction=0.0, first_probability=0.9) for visits in (100, 200, 300, 400, 500, 800, 3200)
         ),
     )
     adaptive = AdaptiveFullSearchBudget(
