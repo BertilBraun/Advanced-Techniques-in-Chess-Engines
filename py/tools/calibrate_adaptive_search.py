@@ -193,7 +193,7 @@ def collect_audits(arguments: Arguments) -> tuple[tuple[PositionAudit, ...], flo
     openings = _load_openings(arguments.openings, arguments.positions)
     search = ChessSelfPlaySearch(
         InferenceConfiguration(arguments.device, str(arguments.model)),
-        _fixed_parameters(game, arguments.generation, budgets[0]),
+        _fixed_parameters(game, arguments.generation, arguments.reference_visits),
         BatchedInferenceParameters(1, arguments.batch_size, 1),
     )
     roots = [search.new_root(ChessPosition(fen)) for fen in openings]
