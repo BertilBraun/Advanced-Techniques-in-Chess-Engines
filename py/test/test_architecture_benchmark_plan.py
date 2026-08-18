@@ -47,6 +47,16 @@ def test_uncontended_smoke_plan_is_short_and_uses_production_inference_batch() -
     assert plan.inference.batch_sizes == (64,)
 
 
+def test_single_gpu_benchmark_plan_preserves_global_training_and_inference_batches() -> None:
+    plan = load_architecture_benchmark_plan(Path('configs/benchmarks/chess-architecture-single-gpu-15s.yaml'))
+
+    assert plan.topology.trainer_device_ids == (0,)
+    assert plan.topology.global_training_batch_size == 2048
+    assert plan.topology.local_training_batch_size == 2048
+    assert plan.topology.production_inference_batch_size == 64
+    assert plan.training.equal_wall_time_seconds == 15.0
+
+
 def test_chess_architecture_benchmark_refuses_gpu_work_without_acknowledgement() -> None:
     plan = load_architecture_benchmark_plan(Path('configs/benchmarks/chess-architecture-v1.yaml'))
     arguments = Namespace(acknowledge_gpu_load=False)
