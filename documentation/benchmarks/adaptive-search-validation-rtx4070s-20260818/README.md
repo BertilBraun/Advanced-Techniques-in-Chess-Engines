@@ -2,7 +2,7 @@
 
 This is implementation evidence for the adaptive-search design, not threshold calibration for the second four-day
 run. The continuous-root audit and the native adaptive canary were regenerated at revision
-`4b06f848b1a61e7949611bf56ddc1628a008b0a4` with a seed-zero, randomly initialized copy of the first production model
+`a3d73359a0c68f14ceae6f147e32b6d7cb9bd06e` with a seed-zero, randomly initialized copy of the first production model
 stage. A representative trained model with the three-output search-correction ABI was not available on the node, so
 the configured `0.50` learned-gate threshold remains provisional.
 
@@ -22,8 +22,8 @@ requests explicitly enabled detailed policy snapshots; ordinary self-play keeps 
 tool then replayed every configured maximum and correction threshold offline and ran a fresh native generation-450
 adaptive search canary.
 
-The 51,200-reference-visit audit completed in 3.902 seconds at 13,123 simulations per second with an average inference
-batch of 63.94. The native adaptive canary averaged 687.50 visits, 11,041 simulations per second, and a 36.60-position
+The 51,200-reference-visit audit completed in 3.772 seconds at 13,573 simulations per second with an average inference
+batch of 63.94. The native adaptive canary averaged 718.75 visits, 9,441 simulations per second, and a 27.03-position
 inference batch; all 16 positions stopped through the deterministic rule. These numbers demonstrate continuous-root
 checkpoint collection, offline rule replay, tail termination, and useful batching. They do not measure playing
 strength or justify any production threshold because the network was random.
@@ -31,8 +31,10 @@ strength or justify any production threshold because the network was random.
 Schema version 2 compares the raw most-visited action used for move selection, while retaining the post-pruning policy
 leader for stopping metrics. It also records the final policy correction, value correction, combined search-correction
 target, prediction error by stopping-visit bucket, and unstable-position recall after the learned gate. For example,
-the 1,000-visit/0.50 candidate used 618.75 mean visits and had 62.5% raw move agreement with the 3,200-visit reference;
+the 1,000-visit/0.50 candidate used 606.25 mean visits and had 56.25% raw move agreement with the 3,200-visit reference;
 its constant random-model prediction is mechanics evidence only, not a threshold recommendation.
+Offline replay now enforces the same 400-visit minimum as native search. The minimum stopping bucket across every
+candidate in this report is 400 visits; no candidate stopped below the production minimum.
 
 The complete per-position snapshots and candidate metrics are in
 [`random-generation450-16.json`](random-generation450-16.json).
@@ -58,6 +60,9 @@ two-output ABI. None contains the learned search-correction output required for 
   from base revision `30c4fbf8`; the failures are unrelated to this feature.
 - The Release native suite passed five consecutive runs. The naive Python MCTS benchmark completed an eight-simulation
   GPU smoke through the three-output inference ABI.
+- A focused native test independently reconstructs policy correction from the clean pre-noise legal prior and the
+  post-pruning searched policy under enabled Dirichlet noise, and reconstructs value correction from root Q and the
+  network WDL scalar. A focused offline test proves pre-minimum checkpoints cannot stop candidate replay.
 - `ruff format` was unchanged. `ruff check --fix` left no warnings introduced by this branch; the checked canonical
   stub name and an older completed-game positional-only hook retain their pre-existing warnings.
 
