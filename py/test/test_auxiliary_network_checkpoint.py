@@ -7,7 +7,7 @@ from src.games.representation import NetworkDimensions
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import (
     AttentionNetworkParams,
-    ChessSpatialPolicyHeadConfiguration,
+    Chess76PlanePolicyHeadConfiguration,
     DensePolicyHeadConfiguration,
     DisabledResidualContext,
     GlobalPoolingResidualContext,
@@ -121,7 +121,7 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
         num_layers=1,
         hidden_size=16,
         residual_context=DisabledResidualContext(),
-        policy_head=ChessSpatialPolicyHeadConfiguration(hidden_channels=32),
+        policy_head=Chess76PlanePolicyHeadConfiguration(hidden_channels=32),
         num_value_channels=2,
         value_fc_size=8,
     )
@@ -150,8 +150,14 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
 
     assert expected_training_output.policy_logits.shape == (2, 1880)
     assert tuple(output.shape for output in expected_training_output.auxiliary_logits) == ((2, 1880), (2, 1))
-    assert 'policyHead.action_plane_indices' in loaded.state_dict()
-    assert 'auxiliaryHeads.0.action_plane_indices' in loaded.state_dict()
+    assert 'policyHead.action_plane_indices' not in loaded.state_dict()
+    assert 'auxiliaryHeads.0.action_plane_indices' not in loaded.state_dict()
+    assert torch.equal(model.policyHead.action_plane_indices, loaded.policyHead.action_plane_indices)
+    assert torch.equal(
+        model.auxiliaryHeads[0].action_plane_indices,
+        loaded.auxiliaryHeads[0].action_plane_indices,
+    )
+    assert any(name == 'policyHead.action_plane_indices' for name, _ in inference_model.named_buffers())
     assert all(not name.startswith('auxiliaryHeads.') for name, _ in inference_model.named_buffers())
     torch.testing.assert_close(loaded_training_output.policy_logits, expected_training_output.policy_logits)
     torch.testing.assert_close(loaded_training_output.auxiliary_logits[0], expected_training_output.auxiliary_logits[0])

@@ -7,8 +7,8 @@ from torch import Tensor, nn
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import (
     DensePolicyHeadConfiguration,
-    ChessSpatialPolicyHead,
-    ChessSpatialPolicyHeadConfiguration,
+    Chess76PlanePolicyHead,
+    Chess76PlanePolicyHeadConfiguration,
     DisabledResidualContext,
     GlobalPoolingBias,
     GlobalPoolingResBlock,
@@ -161,7 +161,7 @@ def test_global_pooling_requires_distinct_global_and_local_channels() -> None:
         )
 
 
-def test_chess_spatial_policy_heads_preserve_action_outputs_and_backpropagate() -> None:
+def test_chess_76_plane_policy_heads_preserve_action_outputs_and_backpropagate() -> None:
     auxiliary_heads = (
         NextPolicyHeadLayout(kind='next_policy', action_size=1880, ply_offset=1),
         RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
@@ -171,7 +171,7 @@ def test_chess_spatial_policy_heads_preserve_action_outputs_and_backpropagate() 
             num_layers=1,
             hidden_size=16,
             residual_context=DisabledResidualContext(),
-            policy_head=ChessSpatialPolicyHeadConfiguration(hidden_channels=32),
+            policy_head=Chess76PlanePolicyHeadConfiguration(hidden_channels=32),
         ),
         torch.device('cpu'),
         CHESS_NETWORK_DIMENSIONS,
@@ -184,7 +184,7 @@ def test_chess_spatial_policy_heads_preserve_action_outputs_and_backpropagate() 
 
     assert output.policy_logits.shape == (2, 1880)
     assert tuple(logits.shape for logits in output.auxiliary_logits) == ((2, 1880), (2, 1))
-    assert isinstance(network.policyHead, ChessSpatialPolicyHead)
+    assert isinstance(network.policyHead, Chess76PlanePolicyHead)
     assert torch.unique(network.policyHead.action_plane_indices).numel() == 1880
     learned_head_parameters = sum(
         parameter.numel()

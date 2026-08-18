@@ -52,13 +52,13 @@ class DensePolicyHeadConfiguration(FrozenModel):
     channels: int = Field(gt=0)
 
 
-class ChessSpatialPolicyHeadConfiguration(FrozenModel):
-    kind: Literal['chess_spatial'] = 'chess_spatial'
+class Chess76PlanePolicyHeadConfiguration(FrozenModel):
+    kind: Literal['chess_76_plane_v1'] = 'chess_76_plane_v1'
     hidden_channels: int = Field(default=32, gt=0)
 
 
 PolicyHeadConfiguration: TypeAlias = Annotated[
-    DensePolicyHeadConfiguration | ChessSpatialPolicyHeadConfiguration,
+    DensePolicyHeadConfiguration | Chess76PlanePolicyHeadConfiguration,
     Field(discriminator='kind'),
 ]
 
@@ -283,7 +283,7 @@ class Network(nn.Module):
         )
 
 
-class ChessSpatialPolicyHead(nn.Module):
+class Chess76PlanePolicyHead(nn.Module):
     def __init__(self, input_channels: int, hidden_channels: int, square_count: int, action_size: int) -> None:
         super().__init__()
         mapping = chess_policy_mapping()
@@ -305,7 +305,7 @@ class ChessSpatialPolicyHead(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(hidden_channels, mapping.plane_count, kernel_size=1, bias=True),
         )
-        self.register_buffer('action_plane_indices', action_plane_indices, persistent=True)
+        self.register_buffer('action_plane_indices', action_plane_indices, persistent=False)
 
     def forward(self, features: Tensor) -> Tensor:
         plane_logits = self.projection(features).flatten(start_dim=1)
@@ -328,10 +328,10 @@ def _build_policy_head(
                 nn.Flatten(),
                 nn.Linear(channels * row_count * column_count, action_size),
             )
-        case ChessSpatialPolicyHeadConfiguration(hidden_channels=hidden_channels):
+        case Chess76PlanePolicyHeadConfiguration(hidden_channels=hidden_channels):
             if row_count != 8 or column_count != 8:
                 raise ValueError('Chess spatial policy heads require an 8x8 board.')
-            return ChessSpatialPolicyHead(
+            return Chess76PlanePolicyHead(
                 input_channels,
                 hidden_channels,
                 row_count * column_count,

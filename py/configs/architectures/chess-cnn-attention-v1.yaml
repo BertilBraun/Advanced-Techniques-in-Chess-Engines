@@ -11,7 +11,7 @@ models:
         residual_context:
           kind: global_pooling
           placement: every_second_block
-        policy_head: {kind: chess_spatial, hidden_channels: 32}
+        policy_head: {kind: chess_76_plane_v1, hidden_channels: 32}
         num_value_channels: 2
         value_fc_size: 48
       dimensions: &chess_dimensions
@@ -35,7 +35,7 @@ models:
         num_heads: 4
         feedforward_size: 256
         dropout: 0.0
-        policy_head: {kind: chess_spatial, hidden_channels: 32}
+        policy_head: {kind: chess_76_plane_v1, hidden_channels: 32}
         num_value_channels: 2
         value_fc_size: 48
       dimensions: *chess_dimensions
@@ -52,7 +52,7 @@ models:
         residual_context:
           kind: global_pooling
           placement: every_second_block
-        policy_head: {kind: chess_spatial, hidden_channels: 32}
+        policy_head: {kind: chess_76_plane_v1, hidden_channels: 32}
         num_value_channels: 2
         value_fc_size: 48
       dimensions: *chess_dimensions
@@ -69,7 +69,7 @@ models:
         num_heads: 6
         feedforward_size: 384
         dropout: 0.0
-        policy_head: {kind: chess_spatial, hidden_channels: 32}
+        policy_head: {kind: chess_76_plane_v1, hidden_channels: 32}
         num_value_channels: 2
         value_fc_size: 48
       dimensions: *chess_dimensions
@@ -86,7 +86,7 @@ models:
         residual_context:
           kind: global_pooling
           placement: every_second_block
-        policy_head: {kind: chess_spatial, hidden_channels: 32}
+        policy_head: {kind: chess_76_plane_v1, hidden_channels: 32}
         num_value_channels: 2
         value_fc_size: 48
       dimensions: *chess_dimensions
@@ -103,7 +103,7 @@ models:
         num_heads: 8
         feedforward_size: 512
         dropout: 0.0
-        policy_head: {kind: chess_spatial, hidden_channels: 32}
+        policy_head: {kind: chess_76_plane_v1, hidden_channels: 32}
         num_value_channels: 2
         value_fc_size: 48
       dimensions: *chess_dimensions

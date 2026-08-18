@@ -42,6 +42,8 @@ primary and next-policy heads use `backbone -> 32-channel 1x1 projection -> norm
 1x1 projection -> fixed gather`. Replay action IDs, sparse targets, losses, JIT `(policy, WDL)` inference output,
 and native search integration therefore remain unchanged. Impossible spatial slots never enter the canonical
 softmax. Legal-action masking remains search-owned; legal-move prediction is deliberately outside this rework.
+The architecture manifest identifies these exact semantics with the versioned `chess_76_plane_v1` policy-head
+variant. Native gather indices are reconstructed when loading raw weights rather than accepted from a checkpoint.
 
 ## Frozen model catalog
 
