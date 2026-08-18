@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import Field, model_validator
-
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration
@@ -64,7 +63,11 @@ class GoExperimentConfiguration(BaseExperimentConfiguration):
 
     @model_validator(mode='after')
     def validate_experiment(self) -> GoExperimentConfiguration:
-        self.training.validate_game(self.network_dimensions.actions, self.go.self_play)
+        self.training.validate_game(
+            self.network_dimensions.actions,
+            self.go.self_play,
+            self.go.objective.auxiliary_targets,
+        )
         if self.evaluation.engine.kind != 'katago':
             raise ValueError('Go evaluation requires the KataGo engine configuration.')
         return self

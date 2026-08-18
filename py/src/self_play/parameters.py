@@ -71,11 +71,65 @@ FirstPlayUrgencyParameters: TypeAlias = (
 
 
 @dataclass(frozen=True)
+class FixedFullSearchBudget:
+    kind: Literal['fixed']
+    visits: int
+
+    def __post_init__(self) -> None:
+        if self.visits <= 0:
+            raise ValueError('Fixed full-search visits must be positive.')
+
+
+@dataclass(frozen=True)
+class AdaptiveFullSearchBudget:
+    kind: Literal['adaptive']
+    minimum_visits: int
+    maximum_visits: int
+    observation_interval: int
+    leader_stability_window: int
+    root_value_tolerance: float
+    initial_top_visit_share: float
+    final_top_visit_share: float
+    initial_top_two_margin: float
+    final_top_two_margin: float
+    threshold_relaxation_visits: int
+    minimum_search_correction_to_unlock_tail: float | None
+
+    def __post_init__(self) -> None:
+        if self.minimum_visits <= 0 or self.maximum_visits < self.minimum_visits:
+            raise ValueError('Adaptive full-search visit bounds are invalid.')
+        if (
+            self.observation_interval <= 0
+            or self.leader_stability_window < self.observation_interval
+            or self.threshold_relaxation_visits <= 0
+        ):
+            raise ValueError('Adaptive observation cadence is invalid.')
+        if self.leader_stability_window % self.observation_interval:
+            raise ValueError('Adaptive leader window must divide into observation intervals.')
+        thresholds = (
+            self.root_value_tolerance,
+            self.initial_top_visit_share,
+            self.final_top_visit_share,
+            self.initial_top_two_margin,
+            self.final_top_two_margin,
+        )
+        if any(not isfinite(value) or not 0.0 <= value <= 1.0 for value in thresholds):
+            raise ValueError('Adaptive search thresholds must be finite probabilities.')
+        if self.minimum_search_correction_to_unlock_tail is not None and not (
+            0.0 <= self.minimum_search_correction_to_unlock_tail <= 1.0
+        ):
+            raise ValueError('Search-correction threshold must lie in [0, 1].')
+
+
+FullSearchBudget: TypeAlias = FixedFullSearchBudget | AdaptiveFullSearchBudget
+
+
+@dataclass(frozen=True)
 class ResolvedSelfPlayParameters:
     start_position: StartPositionParameters
     full_search_probability: float
     parallel_searches: int
-    full_searches: int
+    full_search_budget: FullSearchBudget
     fast_searches: int
     forced_playout_coefficient: float
     exploration_constant: float
@@ -96,7 +150,7 @@ class ResolvedSelfPlayParameters:
             raise ValueError('Full-search probability must lie in (0, 1].')
         if self.parallel_searches <= 0:
             raise ValueError('Parallel searches must be positive.')
-        if self.full_searches <= self.parallel_searches:
+        if self.maximum_full_searches <= self.parallel_searches:
             raise ValueError('Full-search budget must exceed parallel searches.')
         if self.fast_searches <= 0:
             raise ValueError('Fast-search budget must be positive.')
@@ -126,3 +180,11 @@ class ResolvedSelfPlayParameters:
             raise ValueError('Primary sample weight must be positive.')
         if not isfinite(self.value_discount_per_ply) or not 0.0 < self.value_discount_per_ply <= 1.0:
             raise ValueError('Value discount per ply must be finite and lie in (0, 1].')
+
+    @property
+    def maximum_full_searches(self) -> int:
+        match self.full_search_budget:
+            case FixedFullSearchBudget(visits=visits):
+                return visits
+            case AdaptiveFullSearchBudget(maximum_visits=maximum_visits):
+                return maximum_visits

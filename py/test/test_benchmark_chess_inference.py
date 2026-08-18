@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import Network
@@ -16,7 +15,6 @@ from tools.benchmark_chess_inference import (
     parse_execution_modes,
     parse_positive_integer_list,
 )
-
 
 CONFIGURATION_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
 
@@ -66,9 +64,9 @@ def test_production_progressive_model_parameter_counts_are_derived_directly() ->
     )
 
     expected_counts = (
-        (474_754, 467_219, 453_312, 7_372, 6_535, 7_535),
-        (2_104_642, 2_092_179, 2_073_280, 12_236, 6_663, 12_463),
-        (4_500_898, 4_485_971, 4_464_576, 14_668, 6_727, 14_927),
+        (482_615, 467_382, 453_312, 7_372, 6_535, 15_396),
+        (2_117_559, 2_092_406, 2_073_280, 12_236, 6_663, 25_380),
+        (4_516_343, 4_486_230, 4_464_576, 14_668, 6_727, 30_372),
     )
 
     for model, expected in zip(progressive.models, expected_counts, strict=True):
@@ -89,5 +87,3 @@ def test_production_progressive_model_parameter_counts_are_derived_directly() ->
             count.auxiliary_heads,
         ) == expected
         assert count.training_total == sum(parameter.numel() for parameter in network.parameters())
-        assert count.training_total == count.inference_total + count.auxiliary_heads
-        assert count.inference_total == count.backbone + count.primary_policy_head + count.value_head

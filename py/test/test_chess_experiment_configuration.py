@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 import yaml
 from pydantic import ValidationError
-
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.experiment.configuration import (
     experiment_configuration_sha256,
@@ -17,7 +16,11 @@ from src.experiment.configuration import (
 )
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.go.configuration import GoExperimentConfiguration
-from src.self_play.configuration import EnabledForcedPlayoutConfiguration, SdpaBackend
+from src.self_play.configuration import (
+    AdaptiveFullSearchBudgetConfiguration,
+    EnabledForcedPlayoutConfiguration,
+    SdpaBackend,
+)
 from src.self_play.parameters import (
     FirstPlayUrgencyParameters,
     ParentValueFirstPlayUrgencyParameters,
@@ -25,9 +28,13 @@ from src.self_play.parameters import (
     ZeroFirstPlayUrgencyParameters,
 )
 from src.training.configuration import TrainingCompilation, TrainingPrecision
-from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
+from src.training.targets import (
+    FutureSearchValueTargetConfiguration,
+    IrreversibleProgressTargetConfiguration,
+    RemainingGameLengthTargetConfiguration,
+)
 from src.util.frozen_model import JsonValue
-
+from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
 
 CHESS_EXPERIMENT_TEMPLATE_PATH = Path('test/configs/chess-experiment.yaml')
 OPTIMAL_CHESS_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
@@ -66,7 +73,57 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
         2_500_000,
     )
     assert configuration.training.lifecycle.credit.replay_ratio == 10
-    assert configuration.chess.self_play.search.parallel_searches == 2
+    assert configuration.chess.self_play.search.parallel_searches == 4
+    full_search_budget = configuration.chess.self_play.search.full_search_budget
+    assert isinstance(full_search_budget, AdaptiveFullSearchBudgetConfiguration)
+    assert full_search_budget.minimum_visits == 400
+    assert full_search_budget.minimum_search_correction_to_unlock_tail == 0.4
+    assert tuple(
+        full_search_budget.maximum_visits.value_at(generation)
+        for generation in (0, 29, 30, 49, 50, 69, 70, 149, 150, 249, 250, 349, 350, 449, 450)
+    ) == (400, 400, 500, 500, 800, 800, 1000, 1000, 1200, 1200, 1600, 1600, 2400, 2400, 3200)
+    assert full_search_budget.resolve(49).minimum_search_correction_to_unlock_tail is None
+    assert full_search_budget.resolve(50).minimum_search_correction_to_unlock_tail == 0.4
+    full_search_probability = configuration.chess.self_play.full_search_probability
+    assert tuple(full_search_probability.value_at(generation) for generation in (0, 29, 30, 49, 50, 69, 70, 249, 250)) == (
+        1.0,
+        1.0,
+        0.5,
+        0.5,
+        0.35,
+        0.35,
+        0.25,
+        0.25,
+        0.2,
+    )
+    assert configuration.chess.self_play.maximum_ply_syzygy_paths == ('/workspace/syzygy/wdl345',)
+    assert configuration.training.limits.maximum_wall_time_seconds == 345600
+    auxiliary_targets = configuration.chess.objective.auxiliary_targets
+    assert tuple(target.kind for target in auxiliary_targets) == (
+        'next_policy',
+        'remaining_game_length',
+        'future_search_value',
+        'irreversible_progress',
+        'legal_moves',
+        'search_correction',
+    )
+    assert tuple(target.loss_weight.value_at(0) for target in auxiliary_targets) == (
+        0.1,
+        0.05,
+        0.05,
+        0.025,
+        0.025,
+        0.1,
+    )
+    remaining_game_length = auxiliary_targets[1]
+    future_search_value = auxiliary_targets[2]
+    irreversible_progress = auxiliary_targets[3]
+    assert isinstance(remaining_game_length, RemainingGameLengthTargetConfiguration)
+    assert remaining_game_length.normalization_scale == 200.0
+    assert isinstance(future_search_value, FutureSearchValueTargetConfiguration)
+    assert future_search_value.ply_offset == 4
+    assert isinstance(irreversible_progress, IrreversibleProgressTargetConfiguration)
+    assert irreversible_progress.horizon_plies == 16
     assert configuration.chess.self_play.inference.sdpa_backend is SdpaBackend.MEMORY_EFFICIENT
     assert configuration.training.trainer.precision is TrainingPrecision.BFLOAT16
     assert configuration.training.trainer.compilation is TrainingCompilation.DEFAULT
@@ -89,6 +146,23 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
         (model.network.num_layers, model.network.embedding_size) for model in progressive_model_sizing.models
     ) == ((6, 96), (10, 160), (15, 192))
     assert configuration.training.initial_model == progressive_model_sizing.models[0]
+
+
+@pytest.mark.parametrize('search_correction_count', (0, 2))
+def test_adaptive_learned_gate_requires_exactly_one_search_correction_target(
+    search_correction_count: int,
+) -> None:
+    candidate = yaml.safe_load(OPTIMAL_CHESS_EXPERIMENT_PATH.read_text(encoding='utf-8'))
+    targets = candidate['chess']['objective']['auxiliary_targets']
+    without_search_correction = tuple(target for target in targets if target['kind'] != 'search_correction')
+    search_correction = next(target for target in targets if target['kind'] == 'search_correction')
+    candidate['chess']['objective']['auxiliary_targets'] = [
+        *without_search_correction,
+        *[search_correction] * search_correction_count,
+    ]
+
+    with pytest.raises(ValidationError, match='requires exactly one search-correction'):
+        ChessExperimentConfiguration.model_validate(candidate)
 
 
 @pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))

@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
-
 from src.evaluation.configuration import (
     EvaluationSearchConfiguration,
     PolicyRandomOpponentEvaluationDefinition,
@@ -22,8 +21,8 @@ from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.contracts import ReplaySample
 from src.self_play.completed_game import TerminationReason
-from src.training.checkpoint import CheckpointReference
 from src.self_play.configuration import BatchedInferenceParams
+from src.training.checkpoint import CheckpointReference
 
 
 @dataclass(frozen=True)
@@ -52,6 +51,10 @@ class FakeState(GameStateContract[FakePosition]):
 
     def child_position(self, position: FakePosition, action_id: int) -> FakePosition:
         return FakePosition((*position.actions, action_id))
+
+    def is_irreversible_transition(self, position: FakePosition, action_id: int, child: FakePosition) -> bool:
+        del position, action_id, child
+        return False
 
     def current_player(self, position: FakePosition) -> Player:
         return Player.FIRST if len(position.actions) % 2 == 0 else Player.SECOND
@@ -134,10 +137,11 @@ class FakeGame:
 
 
 class FixedPolicyModel(torch.nn.Module):
-    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         policy = torch.tensor((0.1, 0.9), device=inputs.device).expand(inputs.shape[0], 2)
         value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
-        return policy, value
+        correction = torch.zeros((inputs.shape[0], 1), device=inputs.device)
+        return policy, value, correction
 
 
 def _checkpoint() -> CheckpointReference:

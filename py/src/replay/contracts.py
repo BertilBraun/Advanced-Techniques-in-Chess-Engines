@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Literal, TypeAlias
 
 from AlphaZeroCpp import GameSearchVisit
-
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlanePayload
 
@@ -58,11 +57,33 @@ class IneligibleRemainingGameLengthTarget:
     eligible: Literal[False] = False
 
 
+@dataclass(frozen=True)
+class EligibleScalarAuxiliaryTarget:
+    kind: Literal['future_search_value', 'irreversible_progress', 'search_correction']
+    value: float
+    eligible: Literal[True] = True
+
+
+@dataclass(frozen=True)
+class IneligibleScalarAuxiliaryTarget:
+    kind: Literal['future_search_value', 'irreversible_progress']
+    eligible: Literal[False] = False
+
+
+@dataclass(frozen=True)
+class EligibleLegalMovesTarget:
+    kind: Literal['legal_moves'] = 'legal_moves'
+    eligible: Literal[True] = True
+
+
 AuxiliaryReplayTarget: TypeAlias = (
     EligibleNextPolicyTarget
     | IneligibleNextPolicyTarget
     | EligibleRemainingGameLengthTarget
     | IneligibleRemainingGameLengthTarget
+    | EligibleScalarAuxiliaryTarget
+    | IneligibleScalarAuxiliaryTarget
+    | EligibleLegalMovesTarget
 )
 
 

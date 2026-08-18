@@ -1,10 +1,10 @@
 import hashlib
 import shutil
-import torch
 from os import PathLike
-from time import sleep
 from pathlib import Path
+from time import sleep
 
+import torch
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint.contracts import (
     CheckpointManifest,
@@ -14,7 +14,7 @@ from src.training.checkpoint.contracts import (
 )
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
 from src.training.configuration import OptimizerType
-from src.training.network import Network, NetworkConfiguration, NetworkDefinition
+from src.training.network import InferenceNetwork, Network, NetworkConfiguration, NetworkDefinition
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.log import LogLevel, log
@@ -181,11 +181,7 @@ def save_model_and_optimizer(
     torch.save(model.state_dict(), temporary_model_path)
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
 
-    # Create a copy of the model, then set that to eval mode, fuse it, and save it as a JIT script
-    fused_model = Network(model.network_args, model.device, model.dimensions, model.auxiliary_heads)
-    fused_model.load_state_dict(model.state_dict())
-    fused_model.auxiliaryHeads = torch.nn.ModuleList()
-    fused_model.auxiliary_heads = ()
+    fused_model = InferenceNetwork(model)
     fused_model.eval()
     fused_model.fuse_model()
 

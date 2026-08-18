@@ -1,29 +1,37 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import mmap
+from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
 import numpy as np
 import numpy.typing as npt
-
+from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import WdlTarget
 from src.replay.contracts import (
+    EligibleLegalMovesTarget,
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
+    EligibleScalarAuxiliaryTarget,
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
+    IneligibleScalarAuxiliaryTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
 from src.replay.layout import ReplayLayout
-from AlphaZeroCpp import GameSearchVisit
-from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
-
+from src.training.targets import (
+    FutureSearchValueHeadLayout,
+    IrreversibleProgressHeadLayout,
+    LegalMovesHeadLayout,
+    NextPolicyHeadLayout,
+    RemainingGameLengthHeadLayout,
+    SearchCorrectionHeadLayout,
+)
 
 _REPLAY_MAGIC = b'AZRPLY01'
-_REPLAY_SCHEMA_VERSION = 2
+_REPLAY_SCHEMA_VERSION = 3
 _HEADER_DTYPE = np.dtype(
     [
         ('magic', 'S8'),
@@ -253,6 +261,21 @@ class ReplayStore:
                     row[f'auxiliary_{index}_eligible'] = 1
                 case RemainingGameLengthHeadLayout(), IneligibleRemainingGameLengthTarget():
                     row[f'auxiliary_{index}_eligible'] = 0
+                case (
+                    (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
+                    EligibleScalarAuxiliaryTarget(value=value),
+                ):
+                    row[f'auxiliary_{index}_value'] = value
+                    row[f'auxiliary_{index}_eligible'] = 1
+                case (
+                    (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
+                    IneligibleScalarAuxiliaryTarget(),
+                ):
+                    row[f'auxiliary_{index}_eligible'] = 0
+                case SearchCorrectionHeadLayout(), EligibleScalarAuxiliaryTarget(value=value):
+                    row[f'auxiliary_{index}_value'] = value
+                case LegalMovesHeadLayout(), EligibleLegalMovesTarget():
+                    pass
                 case _:
                     raise ValueError('Replay auxiliary target does not match its fixed layout.')
         row['sample_weight'] = sample.sample_weight
@@ -294,6 +317,25 @@ class ReplayStore:
                         )
                     else:
                         auxiliary_targets.append(IneligibleRemainingGameLengthTarget())
+                case FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout():
+                    if int(row[f'auxiliary_{index}_eligible']):
+                        auxiliary_targets.append(
+                            EligibleScalarAuxiliaryTarget(
+                                kind=head.kind,
+                                value=float(row[f'auxiliary_{index}_value']),
+                            )
+                        )
+                    else:
+                        auxiliary_targets.append(IneligibleScalarAuxiliaryTarget(kind=head.kind))
+                case SearchCorrectionHeadLayout():
+                    auxiliary_targets.append(
+                        EligibleScalarAuxiliaryTarget(
+                            kind='search_correction',
+                            value=float(row[f'auxiliary_{index}_value']),
+                        )
+                    )
+                case LegalMovesHeadLayout():
+                    auxiliary_targets.append(EligibleLegalMovesTarget())
         wdl = row['wdl_target']
         return ReplaySample(
             encoded_state=self.layout.packed_planes.value(bytes(row['encoded_state'])),

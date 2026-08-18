@@ -1,28 +1,34 @@
-from dataclasses import dataclass
 import hashlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 from uuid import UUID
 
 import numpy as np
 import pytest
-from AlphaZeroCpp import GameSearchVisit
-
-from src.games.implementation import GameImplementation
+from AlphaZeroCpp import GameSearchVisit, SearchCheckpoint
+from AlphaZeroCpp import SearchStopReason as NativeSearchStopReason
 from src.games.contracts import TerminalOracle, WdlTarget
+from src.games.implementation import GameImplementation
+from src.self_play.completed_game import (
+    CompletedSelfPlayGame,
+    GameIdentity,
+    SearchObservation,
+    SearchStopReason,
+    TerminationReason,
+)
 from src.self_play.parameters import (
+    FixedFullSearchBudget,
     RandomOpeningStartParameters,
     ResolvedSelfPlayParameters,
     RestartStateStartParameters,
     ZeroFirstPlayUrgencyParameters,
 )
-from src.self_play.completed_game import CompletedSelfPlayGame, GameIdentity, SearchObservation
-from src.self_play.completed_game import TerminationReason
-from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.self_play.resignation import (
     CalibratedResignationConfiguration,
     PublishedResignationPolicy,
 )
+from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 
@@ -63,6 +69,16 @@ class FakeResult:
     highest_visited_child_q: float
     search_visits: list[GameSearchVisit]
     policy_target_visits: list[GameSearchVisit]
+    network_root_value: float
+    policy_correction: float
+    value_correction: float
+    search_correction_target: float
+    predicted_search_correction: float
+    starting_visits: int
+    final_visits: int
+    stop_reason: NativeSearchStopReason
+    learned_gate_evaluated: bool
+    checkpoints: list[SearchCheckpoint]
     root: FakeRoot
 
 
@@ -105,6 +121,16 @@ class FakeSearch:
                     self.highest_visited_child_q,
                     self.search_visits,
                     self.policy_target_visits,
+                    self.root_value,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0,
+                    3,
+                    NativeSearchStopReason.FIXED_LIMIT,
+                    False,
+                    [],
                     request.root,
                 )
                 for request in requests
@@ -181,7 +207,7 @@ class FakeGame:
             start_position=start_position,
             full_search_probability=1.0,
             parallel_searches=1,
-            full_searches=3,
+            full_search_budget=FixedFullSearchBudget(kind='fixed', visits=3),
             fast_searches=1,
             forced_playout_coefficient=0.0,
             exploration_constant=1.0,
@@ -508,6 +534,15 @@ def restart_source_game() -> CompletedSelfPlayGame:
                 full_search=True,
                 sample_weight=1.0,
                 search_budget=256,
+                network_root_value=0.0,
+                policy_correction=0.0,
+                value_correction=0.0,
+                search_correction_target=0.0,
+                predicted_search_correction=0.0,
+                starting_visits=0,
+                final_visits=256,
+                stop_reason=SearchStopReason.FIXED_LIMIT,
+                learned_gate_evaluated=False,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=1.0, loss=0.0),

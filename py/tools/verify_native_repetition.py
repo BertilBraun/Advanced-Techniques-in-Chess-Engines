@@ -12,13 +12,13 @@ from AlphaZeroCpp import (
     ChessSelfPlaySearchRequest,
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
+    FixedSearchLimit,
     InferenceConfiguration,
     SelfPlaySearchParameters,
     TreeSearchParameters,
     new_root,
     new_root_with_history,
 )
-
 
 KNIGHT_CYCLE = (
     'g1f3',
@@ -73,7 +73,7 @@ def main() -> None:
         InferenceConfiguration(args.device, str(args.model)),
         SelfPlaySearchParameters(
             1,
-            8,
+            FixedSearchLimit(8),
             8,
             TreeSearchParameters(
                 1.0,

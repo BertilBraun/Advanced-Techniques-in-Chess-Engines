@@ -5,9 +5,17 @@ import json
 
 import numpy as np
 from pydantic import Field, model_validator
-
 from src.games.representation import PackedPlaneLayout
-from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
+from src.training.targets import (
+    AuxiliaryHeadLayout,
+    FutureSearchValueHeadLayout,
+    IrreversibleProgressHeadLayout,
+    LegalMovesHeadLayout,
+    NextPolicyHeadLayout,
+    RemainingGameLengthHeadLayout,
+    SearchCorrectionHeadLayout,
+    TrainingTargetLayout,
+)
 from src.util.frozen_model import FrozenModel
 
 ReplayDtypeField = tuple[str, str] | tuple[str, str, tuple[int, ...]]
@@ -61,6 +69,17 @@ class ReplayLayout(FrozenModel):
                             (f'auxiliary_{index}_eligible', 'u1'),
                         )
                     )
+                case FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout():
+                    fields.extend(
+                        (
+                            (f'auxiliary_{index}_value', '<f4'),
+                            (f'auxiliary_{index}_eligible', 'u1'),
+                        )
+                    )
+                case SearchCorrectionHeadLayout():
+                    fields.append((f'auxiliary_{index}_value', '<f4'))
+                case LegalMovesHeadLayout():
+                    pass
         fields.extend(
             (
                 ('sample_weight', '<f4'),
@@ -95,9 +114,17 @@ class ReplayLayout(FrozenModel):
         return hashlib.sha256(encoded).hexdigest()
 
 
-def _head_digest_fields(head: NextPolicyHeadLayout | RemainingGameLengthHeadLayout) -> dict[str, int | float | str]:
+def _head_digest_fields(head: AuxiliaryHeadLayout) -> dict[str, int | float | str]:
     match head:
         case NextPolicyHeadLayout(action_size=action_size, ply_offset=ply_offset):
             return {'kind': head.kind, 'action_size': action_size, 'ply_offset': ply_offset}
         case RemainingGameLengthHeadLayout(normalization_scale=normalization_scale):
             return {'kind': head.kind, 'output_size': 1, 'normalization_scale': normalization_scale}
+        case FutureSearchValueHeadLayout(ply_offset=ply_offset, smooth_l1_beta=beta):
+            return {'kind': head.kind, 'output_size': 1, 'ply_offset': ply_offset, 'smooth_l1_beta': beta}
+        case IrreversibleProgressHeadLayout(horizon_plies=horizon_plies):
+            return {'kind': head.kind, 'output_size': 1, 'horizon_plies': horizon_plies}
+        case LegalMovesHeadLayout(action_size=action_size):
+            return {'kind': head.kind, 'action_size': action_size}
+        case SearchCorrectionHeadLayout():
+            return {'kind': head.kind, 'output_size': 1}

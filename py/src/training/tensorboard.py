@@ -6,12 +6,21 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.configuration import (
+    AdaptiveFullSearchBudgetConfiguration,
+    FixedFullSearchBudgetConfiguration,
     RandomOpeningStartConfiguration,
     ReducedParentValueFirstPlayUrgencyConfiguration,
     SelfPlayConfiguration,
 )
 from src.training.configuration import TrainingObjectiveConfiguration
-from src.training.targets import NextPolicyTargetConfiguration, RemainingGameLengthTargetConfiguration
+from src.training.targets import (
+    FutureSearchValueTargetConfiguration,
+    IrreversibleProgressTargetConfiguration,
+    LegalMovesTargetConfiguration,
+    NextPolicyTargetConfiguration,
+    RemainingGameLengthTargetConfiguration,
+    SearchCorrectionTargetConfiguration,
+)
 
 
 @dataclass(frozen=True)
@@ -56,8 +65,13 @@ def _self_play_settings_at(
     model_generation: int,
 ) -> tuple[ScheduledSetting, ...]:
     search = configuration.search
+    match search.full_search_budget:
+        case FixedFullSearchBudgetConfiguration(visits=visits):
+            full_searches = visits.value_at(model_generation)
+        case AdaptiveFullSearchBudgetConfiguration(maximum_visits=maximum_visits):
+            full_searches = maximum_visits.value_at(model_generation)
     settings = [
-        ScheduledSetting('settings/self_play/full_searches', search.full_searches.value_at(model_generation)),
+        ScheduledSetting('settings/self_play/full_searches', full_searches),
         ScheduledSetting('settings/self_play/fast_searches', search.fast_searches.value_at(model_generation)),
         ScheduledSetting('settings/self_play/dirichlet_epsilon', search.dirichlet_epsilon.value_at(model_generation)),
         ScheduledSetting('settings/self_play/dirichlet_alpha', search.dirichlet_alpha.value_at(model_generation)),
@@ -140,6 +154,14 @@ def _objective_settings_at(
                 name = f'{index}-next-policy-ply-{ply_offset}'
             case RemainingGameLengthTargetConfiguration(loss_weight=loss_weight):
                 name = f'{index}-remaining-game-length'
+            case FutureSearchValueTargetConfiguration(ply_offset=ply_offset, loss_weight=loss_weight):
+                name = f'{index}-future-search-value-ply-{ply_offset}'
+            case IrreversibleProgressTargetConfiguration(horizon_plies=horizon_plies, loss_weight=loss_weight):
+                name = f'{index}-irreversible-progress-{horizon_plies}'
+            case LegalMovesTargetConfiguration(loss_weight=loss_weight):
+                name = f'{index}-legal-moves'
+            case SearchCorrectionTargetConfiguration(loss_weight=loss_weight):
+                name = f'{index}-search-correction'
         settings.append(
             ScheduledSetting(
                 f'settings/training/auxiliary/{name}/loss_weight',

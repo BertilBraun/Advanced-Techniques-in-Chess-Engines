@@ -53,7 +53,9 @@ evaluation:
 go:
   self_play:
     search:
-      full_searches: 2
+      full_search_budget:
+        kind: fixed
+        visits: 2
       fast_searches: 1
     inference:
       inference_batch_size: 8

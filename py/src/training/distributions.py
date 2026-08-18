@@ -3,12 +3,11 @@ from __future__ import annotations
 from typing import Annotated, Literal, TypeAlias
 
 import torch
-import torch.nn.functional as functional
 from pydantic import Field
-
 from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.objective import ResolvedTrainingObjective, blended_wdl_targets, mask_policy_logits
 from src.util.frozen_model import FrozenModel
+from torch.nn import functional
 
 
 class PolicyTrainingDistribution(FrozenModel):
@@ -32,8 +31,24 @@ class RemainingGameLengthTrainingDistribution(FrozenModel):
     absolute_error: tuple[float, ...]
 
 
+class ScalarAuxiliaryTrainingDistribution(FrozenModel):
+    kind: Literal['future_search_value', 'irreversible_progress', 'search_correction']
+    target: tuple[float, ...]
+    prediction: tuple[float, ...]
+    absolute_error: tuple[float, ...]
+
+
+class LegalMovesTrainingDistribution(FrozenModel):
+    kind: Literal['legal_moves'] = 'legal_moves'
+    legal_probability: tuple[float, ...]
+    illegal_probability: tuple[float, ...]
+
+
 AuxiliaryTrainingDistribution: TypeAlias = Annotated[
-    NextPolicyTrainingDistribution | RemainingGameLengthTrainingDistribution,
+    NextPolicyTrainingDistribution
+    | RemainingGameLengthTrainingDistribution
+    | ScalarAuxiliaryTrainingDistribution
+    | LegalMovesTrainingDistribution,
     Field(discriminator='kind'),
 ]
 
@@ -109,7 +124,14 @@ def _auxiliary_distribution(
     target: torch.Tensor,
     legal_action_ids: torch.Tensor,
     eligibility: torch.Tensor,
-    kind: Literal['next_policy', 'remaining_game_length'],
+    kind: Literal[
+        'next_policy',
+        'remaining_game_length',
+        'future_search_value',
+        'irreversible_progress',
+        'legal_moves',
+        'search_correction',
+    ],
 ) -> AuxiliaryTrainingDistribution:
     eligible = eligibility.to(dtype=torch.bool)
     match kind:
@@ -124,6 +146,25 @@ def _auxiliary_distribution(
                 target=_floats(eligible_targets),
                 prediction=_floats(eligible_predictions),
                 absolute_error=_floats(torch.abs(eligible_predictions - eligible_targets)),
+            )
+        case 'future_search_value' | 'irreversible_progress' | 'search_correction':
+            eligible_predictions = prediction[eligible].squeeze(1)
+            if kind in {'irreversible_progress', 'search_correction'}:
+                eligible_predictions = torch.sigmoid(eligible_predictions)
+            eligible_targets = target[eligible].squeeze(1)
+            return ScalarAuxiliaryTrainingDistribution(
+                kind=kind,
+                target=_floats(eligible_targets),
+                prediction=_floats(eligible_predictions),
+                absolute_error=_floats(torch.abs(eligible_predictions - eligible_targets)),
+            )
+        case 'legal_moves':
+            probabilities = torch.sigmoid(prediction[eligible])
+            legal = target[eligible] > 0.5
+            illegal = ~legal
+            return LegalMovesTrainingDistribution(
+                legal_probability=_floats((probabilities * legal).sum(dim=1) / legal.sum(dim=1).clamp_min(1)),
+                illegal_probability=_floats((probabilities * illegal).sum(dim=1) / illegal.sum(dim=1).clamp_min(1)),
             )
 
 

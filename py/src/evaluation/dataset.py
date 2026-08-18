@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import json
-from pathlib import Path
 import random
 import time
+from dataclasses import dataclass
+from pathlib import Path
 from typing import TypeVar
 
 import numpy as np
 import numpy.typing as npt
 import torch
-
 from src.evaluation.configuration import EngineSelfPlayDatasetSource, EvaluationDatasetConfiguration
 from src.evaluation.contracts import (
-    AnyEvaluationDatasetManifest,
     EVALUATION_DATASET_MANIFEST_ADAPTER,
+    AnyEvaluationDatasetManifest,
     EvaluationDatasetManifest,
     EvaluationSourceGame,
     FixedDatasetEvaluationJob,
@@ -39,7 +38,6 @@ from src.evaluation.katago_book import (
 )
 from src.games.contracts import GameStateContract
 from src.util.atomic_file import write_text_atomically
-
 
 PositionT = TypeVar('PositionT')
 RETAINED_PLY_INTERVAL = 3
@@ -470,7 +468,7 @@ def evaluate_fixed_dataset(
                 state,
                 tuple(state.packed_plane_layout.value(bytes(row['packed_state'])) for row in batch),
             )
-            policy_logits, _ = model(torch.from_numpy(decoded).to(device))
+            policy_logits, _, _ = model(torch.from_numpy(decoded).to(device))
             policy_logits = policy_logits.float().cpu()
             for row_index, row in enumerate(batch):
                 count = int(row['policy_count'])

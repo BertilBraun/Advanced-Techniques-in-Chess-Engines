@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import model_validator
-
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.experiment.generation_schedule import IntegerGenerationSchedule
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
@@ -43,7 +42,11 @@ class ChessExperimentConfiguration(BaseExperimentConfiguration):
 
     @model_validator(mode='after')
     def validate_experiment(self) -> ChessExperimentConfiguration:
-        self.training.validate_game(self.network_dimensions.actions, self.chess.self_play)
+        self.training.validate_game(
+            self.network_dimensions.actions,
+            self.chess.self_play,
+            self.chess.objective.auxiliary_targets,
+        )
         if self.evaluation.engine.kind != 'stockfish':
             raise ValueError('Chess evaluation requires the Stockfish engine configuration.')
         return self

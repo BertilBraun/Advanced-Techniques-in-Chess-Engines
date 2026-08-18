@@ -1,16 +1,16 @@
-from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 from uuid import UUID
 
 import pytest
 from AlphaZeroCpp import GameSearchVisit
-
 from src.games.contracts import WdlTarget
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
+    SearchStopReason,
     TerminationReason,
 )
 from src.self_play.parameters import RestartStateStartParameters
@@ -69,6 +69,15 @@ def completed_game(
                 full_search=full_search,
                 sample_weight=1.0,
                 search_budget=256,
+                network_root_value=root_value,
+                policy_correction=0.0,
+                value_correction=0.0,
+                search_correction_target=0.0,
+                predicted_search_correction=0.0,
+                starting_visits=0,
+                final_visits=256,
+                stop_reason=SearchStopReason.FIXED_LIMIT,
+                learned_gate_evaluated=False,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=1.0, loss=0.0),

@@ -5,10 +5,8 @@ from typing import Generic, Literal, TypeVar
 
 import numpy as np
 import torch
-
 from src.games.contracts import GameStateContract
 from src.games.representation import PackedPlanePayload, decode_packed_planes_into
-
 
 PositionT = TypeVar('PositionT')
 
@@ -61,7 +59,7 @@ class PolicyActionSelector(Generic[PositionT]):
             return ()
         decoded = decode_network_inputs(self.state, positions)
         with torch.inference_mode():
-            policy_logits, _ = self.model(torch.from_numpy(decoded).to(self.device))
+            policy_logits, _, _ = self.model(torch.from_numpy(decoded).to(self.device))
         policy_logits = policy_logits.float().cpu()
         return tuple(
             max(

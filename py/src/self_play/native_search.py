@@ -3,7 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import GameSearchVisit, InferenceStatistics, SelfPlaySearchParameters
+    from AlphaZeroCpp import (
+        GameSearchVisit,
+        InferenceStatistics,
+        SearchCheckpoint,
+        SearchStopReason,
+        SelfPlaySearchParameters,
+    )
 
 
 PositionT = TypeVar('PositionT')
@@ -53,6 +59,36 @@ class NativeSearchResult(Protocol[NativeRootT]):
 
     @property
     def policy_target_visits(self) -> list[GameSearchVisit]: ...
+
+    @property
+    def network_root_value(self) -> float: ...
+
+    @property
+    def policy_correction(self) -> float: ...
+
+    @property
+    def value_correction(self) -> float: ...
+
+    @property
+    def search_correction_target(self) -> float: ...
+
+    @property
+    def predicted_search_correction(self) -> float: ...
+
+    @property
+    def starting_visits(self) -> int: ...
+
+    @property
+    def final_visits(self) -> int: ...
+
+    @property
+    def stop_reason(self) -> SearchStopReason: ...
+
+    @property
+    def learned_gate_evaluated(self) -> bool: ...
+
+    @property
+    def checkpoints(self) -> list[SearchCheckpoint]: ...
 
     @property
     def root(self) -> NativeRootT: ...

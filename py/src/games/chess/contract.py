@@ -4,7 +4,6 @@ from typing import Protocol
 
 import numpy as np
 from AlphaZeroCpp import GameSearchVisit
-
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import (
     NetworkDimensions,
@@ -15,8 +14,10 @@ from src.games.representation import (
     encode_packed_planes,
 )
 from src.replay.contracts import (
+    EligibleLegalMovesTarget,
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
+    EligibleScalarAuxiliaryTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -89,6 +90,18 @@ class ChessStateContract(GameStateContract[ChessPosition]):
 
     def child_position(self, position: ChessPosition, action_id: int) -> ChessPosition:
         return position.child(action_id)
+
+    def is_irreversible_transition(
+        self,
+        position: ChessPosition,
+        action_id: int,
+        child: ChessPosition,
+    ) -> bool:
+        move = position.action_uci(action_id)
+        piece = _piece_at(position.fen, move[:2])
+        capture = _piece_at(position.fen, move[2:4]) is not None
+        castling_changed = position.fen.split()[2] != child.fen.split()[2]
+        return piece is not None and (piece.lower() == 'p' or capture or castling_changed)
 
     def current_player(self, position: ChessPosition) -> Player:
         return Player(position.current_player)
@@ -163,7 +176,7 @@ class ChessStateContract(GameStateContract[ChessPosition]):
             match target:
                 case EligibleNextPolicyTarget(policy=policy):
                     transformed_auxiliary.append(EligibleNextPolicyTarget(policy=transform_policy(policy)))
-                case EligibleRemainingGameLengthTarget():
+                case EligibleRemainingGameLengthTarget() | EligibleScalarAuxiliaryTarget() | EligibleLegalMovesTarget():
                     transformed_auxiliary.append(target)
                 case _:
                     transformed_auxiliary.append(target)
@@ -186,3 +199,17 @@ CHESS_NETWORK_DIMENSIONS = NetworkDimensions(
     columns=CHESS_STATE_CONTRACT.representation.columns,
     actions=CHESS_STATE_CONTRACT.action_size,
 )
+
+
+def _piece_at(fen: str, square: str) -> str | None:
+    file_index = ord(square[0]) - ord('a')
+    rank_index = 8 - int(square[1])
+    file_cursor = 0
+    for token in fen.split()[0].split('/')[rank_index]:
+        if token.isdigit():
+            file_cursor += int(token)
+            continue
+        if file_cursor == file_index:
+            return token
+        file_cursor += 1
+    return None

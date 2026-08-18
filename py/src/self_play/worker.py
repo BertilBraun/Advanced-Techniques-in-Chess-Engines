@@ -1,38 +1,37 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
-import time
 from typing import TYPE_CHECKING, Generic
 from uuid import uuid4
 
 import numpy as np
-
 from src.games.contracts import WdlTarget
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
+    SearchCheckpointObservation,
     SearchObservation,
+    SearchStopReason,
     TerminationReason,
     publish_completed_self_play_game,
 )
+from src.self_play.native_search import NativeRequestT, NativeResultT, NativeRootT, NativeSearchT, PositionT
 from src.self_play.parameters import (
     RandomOpeningStartParameters,
     ResolvedSelfPlayParameters,
     RestartStateStartParameters,
 )
-from src.self_play.native_search import NativeRequestT, NativeResultT, NativeRootT, NativeSearchT, PositionT
-from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.self_play.resignation import (
     CalibratedResignationConfiguration,
     PublishedResignationPolicy,
 )
+from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.util.tensorboard import log_scalar
-
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import GameSearchVisit, InferenceStatistics
-
     from src.games.implementation import GameImplementation
     from src.training.checkpoint import CheckpointReference
 
@@ -265,7 +264,29 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             selected_action_id=None if resignation_triggered else selected_action_id,
             full_search=request.full_search,
             sample_weight=parameters.primary_sample_weight,
-            search_budget=parameters.full_searches if request.full_search else parameters.fast_searches,
+            search_budget=parameters.maximum_full_searches if request.full_search else parameters.fast_searches,
+            network_root_value=result.network_root_value,
+            policy_correction=result.policy_correction,
+            value_correction=result.value_correction,
+            search_correction_target=result.search_correction_target,
+            predicted_search_correction=result.predicted_search_correction,
+            starting_visits=result.starting_visits,
+            final_visits=result.final_visits,
+            stop_reason=SearchStopReason(result.stop_reason.name.lower()),
+            learned_gate_evaluated=result.learned_gate_evaluated,
+            checkpoints=tuple(
+                SearchCheckpointObservation(
+                    visits=checkpoint.visits,
+                    leader_action_id=checkpoint.leader_action_id,
+                    most_visited_action_id=checkpoint.most_visited_action_id,
+                    top_visit_share=checkpoint.top_visit_share,
+                    top_two_margin=checkpoint.top_two_margin,
+                    root_value=checkpoint.root_value,
+                    root_value_delta=checkpoint.root_value_delta,
+                    leader_stable=checkpoint.leader_stable,
+                )
+                for checkpoint in result.checkpoints
+            ),
         )
         active_game.observations.append(observation)
         if resignation_triggered:

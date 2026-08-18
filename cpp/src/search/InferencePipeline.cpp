@@ -71,16 +71,21 @@ prepareInferenceModelUpdate(const torch::jit::script::Module &model, const std::
         throw std::invalid_argument("Updated inference model must return a tuple");
     }
     const auto outputTuple = output.toTuple();
-    if (outputTuple->elements().size() != 2 || !outputTuple->elements()[0].isTensor() ||
-        !outputTuple->elements()[1].isTensor()) {
-        throw std::invalid_argument("Updated inference model must return policy and WDL tensors");
+    if (outputTuple->elements().size() != 3 || !outputTuple->elements()[0].isTensor() ||
+        !outputTuple->elements()[1].isTensor() || !outputTuple->elements()[2].isTensor()) {
+        throw std::invalid_argument(
+            "Updated inference model must return policy, WDL, and search-correction tensors");
     }
     const torch::Tensor policy = outputTuple->elements()[0].toTensor();
     const torch::Tensor outcome = outputTuple->elements()[1].toTensor();
+    const torch::Tensor searchCorrection = outputTuple->elements()[2].toTensor();
     if (policy.dim() != 2 || policy.size(0) != 1 || policy.size(1) != actionCount ||
         outcome.dim() != 2 || outcome.size(0) != 1 || outcome.size(1) != outcomeCount ||
         !torch::isfinite(policy).all().item<bool>() ||
         !torch::isfinite(outcome).all().item<bool>() || (outcome < 0).any().item<bool>() ||
+        searchCorrection.dim() != 2 || searchCorrection.size(0) != 1 ||
+        searchCorrection.size(1) != 1 || !torch::isfinite(searchCorrection).all().item<bool>() ||
+        (searchCorrection < 0).any().item<bool>() || (searchCorrection > 1).any().item<bool>() ||
         std::abs(outcome.sum().item<float>() - 1.0F) > 1e-2F) {
         throw std::invalid_argument("Updated inference model returned invalid output");
     }
@@ -218,6 +223,7 @@ InferenceOutput InferenceRunner::createOutputBuffer() const {
                                  options),
         .outcomes = torch::empty(
             {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.outcomes)}, options),
+        .search_corrections = torch::empty({tensorSize(m_maximumBatchSize), 1}, options),
     };
 }
 
@@ -239,7 +245,12 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards,
         output.policies.size(1) != tensorSize(m_dimensions.actions) ||
         output.outcomes.device().is_cuda() || output.outcomes.scalar_type() != torch::kFloat32 ||
         output.outcomes.dim() != 2 || output.outcomes.size(0) < static_cast<int64_t>(batchSize) ||
-        output.outcomes.size(1) != tensorSize(m_dimensions.outcomes)) {
+        output.outcomes.size(1) != tensorSize(m_dimensions.outcomes) ||
+        output.search_corrections.device().is_cuda() ||
+        output.search_corrections.scalar_type() != torch::kFloat32 ||
+        output.search_corrections.dim() != 2 ||
+        output.search_corrections.size(0) < static_cast<int64_t>(batchSize) ||
+        output.search_corrections.size(1) != 1) {
         throw std::invalid_argument("Inference output buffers have invalid shapes or types");
     }
 
@@ -258,13 +269,17 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards,
         m_modelInputs[0] = deviceInput;
         const torch::jit::IValue modelOutput = m_model->forward(m_modelInputs);
         const auto outputTuple = modelOutput.toTuple();
-        if (outputTuple->elements().size() != 2) {
-            throw std::runtime_error("Inference model must return policy and WDL tensors");
+        if (outputTuple->elements().size() != 3) {
+            throw std::runtime_error(
+                "Inference model must return policy, WDL, and search-correction tensors");
         }
         const torch::Tensor policies = outputTuple->elements()[0].toTensor();
         const torch::Tensor outcomes = outputTuple->elements()[1].toTensor();
+        const torch::Tensor searchCorrections = outputTuple->elements()[2].toTensor();
         output.policies.narrow(0, 0, static_cast<int64_t>(batchSize)).copy_(policies, usesCuda());
         output.outcomes.narrow(0, 0, static_cast<int64_t>(batchSize)).copy_(outcomes, usesCuda());
+        output.search_corrections.narrow(0, 0, static_cast<int64_t>(batchSize))
+            .copy_(searchCorrections, usesCuda());
         completion.record();
     } catch (...) {
         completion.finishFailedSubmission();
@@ -408,6 +423,8 @@ InferenceOutput InferencePipeline::waitCompletedOutput(const size_t slotIndex) {
     return {
         .policies = slot.output.policies.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
         .outcomes = slot.output.outcomes.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
+        .search_corrections =
+            slot.output.search_corrections.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
     };
 }
 

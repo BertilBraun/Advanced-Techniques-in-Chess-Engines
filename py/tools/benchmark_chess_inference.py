@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import math
+import subprocess
+import time
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from enum import Enum
-import hashlib
-import math
 from pathlib import Path
-import subprocess
-import time
 from typing import Literal
 
 import torch
 from pydantic import Field
-from torch import Tensor, nn
-from torch.nn.attention import SDPBackend, sdpa_kernel
-
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import (
@@ -27,9 +24,10 @@ from src.training.network import (
     NetworkParams,
     ResidualContextPlacement,
 )
-from src.training.targets import build_training_target_layout
+from src.training.targets import SearchCorrectionHeadLayout, build_training_target_layout
 from src.util.frozen_model import FrozenModel
-
+from torch import Tensor, nn
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 DEFAULT_CONFIGURATION_PATH = Path(__file__).resolve().parents[1] / 'configs/production/vast-chess-8gpu-optimal.yaml'
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -198,8 +196,9 @@ def parameter_counts(network: Network) -> ParameterCounts:
     primary_policy_head = module_parameter_count(network.policyHead)
     value_head = module_parameter_count(network.valueHead)
     auxiliary_heads = module_parameter_count(network.auxiliaryHeads)
-    inference_total = backbone + primary_policy_head + value_head
-    training_total = inference_total + auxiliary_heads
+    primary_total = backbone + primary_policy_head + value_head
+    inference_total = primary_total + _search_correction_parameter_count(network)
+    training_total = primary_total + auxiliary_heads
     assert training_total == module_parameter_count(network)
     return ParameterCounts(
         backbone=backbone,
@@ -209,6 +208,14 @@ def parameter_counts(network: Network) -> ParameterCounts:
         inference_total=inference_total,
         training_total=training_total,
     )
+
+
+def _search_correction_parameter_count(network: Network) -> int:
+    for head, module in zip(network.auxiliary_heads, network.auxiliaryHeads, strict=True):
+        match head:
+            case SearchCorrectionHeadLayout():
+                return module_parameter_count(module)
+    return 0
 
 
 def _source_revision() -> SourceRevision:

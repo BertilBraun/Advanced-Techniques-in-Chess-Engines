@@ -45,7 +45,7 @@ TreeSearchParameters zeroTreeSearch(const float explorationConstant,
 void expandRoot(GoTree &tree, const std::size_t edgeCount) {
     const std::vector<Go7Game::Action> legalActions = Go7Game::legalActions(tree.root().position);
     require(legalActions.size() >= edgeCount, "Go fixture does not have enough root actions");
-    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}};
+    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, 0.5F};
     for (const auto index : range(edgeCount)) {
         inference.actions.emplace_back(legalActions[index], 1.0F / static_cast<float>(edgeCount));
     }
@@ -185,7 +185,7 @@ void testRecursiveDiscount() {
     const std::size_t childIndex = materializeRootEdge(tree, 0);
     const std::vector<Go7Game::Action> legalActions =
         Go7Game::legalActions(tree.node(childIndex).position);
-    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}};
+    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, 0.5F};
     inference.actions.emplace_back(legalActions[0], 0.5F);
     inference.actions.emplace_back(legalActions[1], 0.5F);
     tree.expand(childIndex, inference);
@@ -285,7 +285,7 @@ void testFreshRootNoiseUsesRawPriors() {
 template <SearchGame Game> void exercise_tree(typename Game::State position) {
     GameSearchTree<Game> tree(std::move(position), 1, 16);
     const auto legalActions = Game::legalActions(tree.root().position);
-    SearchInferenceResult<Game> inference{{}, {0.5F, 0.0F, 0.5F}};
+    SearchInferenceResult<Game> inference{{}, {0.5F, 0.0F, 0.5F}, 0.5F};
     inference.actions.reserve(legalActions.size());
     for (const typename Game::Action action : legalActions) {
         inference.actions.emplace_back(action, 1.0F / static_cast<float>(legalActions.size()));
@@ -315,7 +315,7 @@ std::size_t selectedRootEdgeAfterOneVisit(const float rootValue,
     GameSearchTree<Go7Game> tree(
         GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}), 1, 64);
     const auto legalActions = Go7Game::legalActions(tree.root().position);
-    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}};
+    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, 0.5F};
     for (const GoAction action : legalActions) {
         inference.actions.emplace_back(action, 1.0F / static_cast<float>(legalActions.size()));
     }

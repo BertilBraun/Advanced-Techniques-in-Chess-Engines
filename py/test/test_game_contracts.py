@@ -5,15 +5,16 @@ import pytest
 import torch
 from AlphaZeroCpp import GameSearchVisit
 from pydantic import ValidationError
-
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.training import ChessImplementation
-from src.games.go.contract import GoStateContract
 from src.games.contracts import Player, WdlTarget
+from src.games.go.contract import GoStateContract
 from src.replay.contracts import (
+    EligibleLegalMovesTarget,
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
+    EligibleScalarAuxiliaryTarget,
     IneligibleNextPolicyTarget,
     ReplaySample,
     SparsePolicyTarget,
@@ -22,16 +23,18 @@ from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
     SearchObservation,
+    SearchStopReason,
     TerminationReason,
     publish_completed_self_play_game,
 )
+from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.objective import (
+    ResolvedLegalMovesLoss,
     ResolvedNextPolicyLoss,
     ResolvedRemainingGameLengthLoss,
     ResolvedTrainingObjective,
 )
 from src.training.targets import RemainingGameLengthHeadLayout, build_training_target_layout
-from src.training.batch import TrainingBatch, TrainingModelOutput
 
 
 def test_wdl_target_validates_and_reverses_perspective() -> None:
@@ -124,6 +127,15 @@ def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> 
         full_search=True,
         sample_weight=1.0,
         search_budget=16,
+        network_root_value=0.1,
+        policy_correction=0.2,
+        value_correction=0.075,
+        search_correction_target=0.2,
+        predicted_search_correction=0.15,
+        starting_visits=0,
+        final_visits=16,
+        stop_reason=SearchStopReason.FIXED_LIMIT,
+        learned_gate_evaluated=False,
     )
     game = CompletedSelfPlayGame(
         identity=GameIdentity(
@@ -259,6 +271,10 @@ def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_togeth
             EligibleNextPolicyTarget(policy=policy),
             IneligibleNextPolicyTarget(),
             EligibleRemainingGameLengthTarget(normalized_length=0.5),
+            EligibleScalarAuxiliaryTarget(kind='future_search_value', value=-0.25),
+            EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=0.5),
+            EligibleLegalMovesTarget(),
+            EligibleScalarAuxiliaryTarget(kind='search_correction', value=0.2),
         ),
         sample_weight=1.0,
         source_model_generation=0,
@@ -274,6 +290,7 @@ def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_togeth
     assert auxiliary.policy.visits[0].action_id == transformed_action
     assert transformed.auxiliary_targets[1] == IneligibleNextPolicyTarget()
     assert transformed.auxiliary_targets[2] == EligibleRemainingGameLengthTarget(normalized_length=0.5)
+    assert transformed.auxiliary_targets[3:] == sample.auxiliary_targets[3:]
     assert transformed.encoded_state == CHESS_STATE_CONTRACT.transform_encoded_state(sample.encoded_state, 1)
 
 
@@ -402,3 +419,38 @@ def test_next_policy_auxiliary_still_uses_masked_cross_entropy(prediction_dtype:
         torch.log1p(torch.exp(torch.tensor(-2.0))).item(),
         rel=0.02,
     )
+
+
+def test_legal_move_loss_balances_legal_and_illegal_classes_per_position() -> None:
+    objective = ResolvedTrainingObjective(
+        policy_loss_weight=0.0,
+        value_loss_weight=0.0,
+        root_value_blend=0.0,
+        auxiliary_losses=(ResolvedLegalMovesLoss(weight=1.0),),
+    )
+    target = torch.tensor(((1.0, 0.0, 0.0, 0.0),))
+    prediction = torch.tensor(((0.0, 0.0, 2.0, -2.0),))
+    batch = TrainingBatch(
+        states=torch.zeros((1, 1)),
+        policy_targets=torch.tensor(((1.0, 0.0),)),
+        policy_legal_action_ids=torch.tensor(((0, 1),)),
+        wdl_targets=torch.tensor(((0.0, 1.0, 0.0),)),
+        root_values=torch.zeros(1),
+        auxiliary_targets=(target,),
+        auxiliary_legal_action_ids=(torch.empty((1, 0), dtype=torch.int64),),
+        auxiliary_eligibility=(torch.tensor((True,)),),
+        sample_weights=torch.ones(1),
+        source_model_generations=torch.zeros(1, dtype=torch.int64),
+        source_created_at_seconds=torch.zeros(1, dtype=torch.float64),
+    )
+    output = TrainingModelOutput(
+        policy_logits=torch.zeros((1, 2)),
+        wdl_logits=torch.zeros((1, 3)),
+        auxiliary_logits=(prediction,),
+    )
+    element_loss = torch.nn.functional.binary_cross_entropy_with_logits(prediction, target, reduction='none')
+    expected = 0.5 * (element_loss[0, :1].mean() + element_loss[0, 1:].mean())
+
+    loss = objective.calculate_loss(output, batch)
+
+    assert loss.auxiliary[0].item() == pytest.approx(expected.item())

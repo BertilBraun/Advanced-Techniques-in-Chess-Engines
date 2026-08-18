@@ -6,6 +6,7 @@ __all__ = [
     'AnalysisMode',
     'AnalysisParameters',
     'AnalysisResult',
+    'AdaptiveSearchLimit',
     'ActionAnalysisCandidate',
     'BatchedInferenceParameters',
     'BatchedSearchParameters',
@@ -23,6 +24,12 @@ __all__ = [
     'SelfPlaySearchStatistics',
     'GameSearchResult',
     'GameSearchVisit',
+    'FixedSearchLimit',
+    'DisabledSearchCorrectionGate',
+    'SearchCheckpoint',
+    'SearchCheckpointDetail',
+    'SearchCorrectionGate',
+    'SearchStopReason',
     'GameAnalysisResult',
     'FirstPlayUrgencyKind',
     'FirstPlayUrgencyParameters',
@@ -78,6 +85,61 @@ class GameSearchVisit:
     def __eq__(self, other: object) -> bool: ...
     def __repr__(self) -> str: ...
 
+class SearchStopReason:
+    FIXED_LIMIT: SearchStopReason
+    DETERMINISTIC: SearchStopReason
+    LEARNED_GATE: SearchStopReason
+    MAXIMUM: SearchStopReason
+    @property
+    def name(self) -> str: ...
+
+class SearchCheckpoint:
+    visits: int
+    leader_action_id: int
+    most_visited_action_id: int
+    policy_target_visits: list[GameSearchVisit]
+    top_visit_share: float
+    top_two_margin: float
+    root_value: float
+    root_value_delta: float
+    leader_stable: bool
+
+class SearchCheckpointDetail:
+    SCALARS: SearchCheckpointDetail
+    POLICIES: SearchCheckpointDetail
+    @property
+    def name(self) -> str: ...
+
+class FixedSearchLimit:
+    visits: int
+    def __init__(self, visits: int) -> None: ...
+
+class DisabledSearchCorrectionGate:
+    def __init__(self) -> None: ...
+
+class SearchCorrectionGate:
+    visit: int
+    minimum_prediction: float
+    def __init__(self, visit: int, minimum_prediction: float) -> None: ...
+
+class AdaptiveSearchLimit:
+    minimum_visits: int
+    maximum_visits: int
+    def __init__(
+        self,
+        minimum_visits: int,
+        maximum_visits: int,
+        observation_interval: int,
+        leader_stability_window: int,
+        root_value_tolerance: float,
+        initial_top_visit_share: float,
+        final_top_visit_share: float,
+        initial_top_two_margin: float,
+        final_top_two_margin: float,
+        threshold_relaxation_visits: int,
+        search_correction_gate: DisabledSearchCorrectionGate | SearchCorrectionGate,
+    ) -> None: ...
+
 class GameSearchResult:
     @property
     def root_value(self) -> float: ...
@@ -91,6 +153,26 @@ class GameSearchResult:
     def search_visits(self) -> list[GameSearchVisit]: ...
     @property
     def policy_target_visits(self) -> list[GameSearchVisit]: ...
+    @property
+    def network_root_value(self) -> float: ...
+    @property
+    def policy_correction(self) -> float: ...
+    @property
+    def value_correction(self) -> float: ...
+    @property
+    def search_correction_target(self) -> float: ...
+    @property
+    def predicted_search_correction(self) -> float: ...
+    @property
+    def starting_visits(self) -> int: ...
+    @property
+    def final_visits(self) -> int: ...
+    @property
+    def stop_reason(self) -> SearchStopReason: ...
+    @property
+    def learned_gate_evaluated(self) -> bool: ...
+    @property
+    def checkpoints(self) -> list[SearchCheckpoint]: ...
 
 class ChessPosition:
     def __init__(self, fen: str = ...) -> None: ...
@@ -290,9 +372,15 @@ class GoSearchRoot9:
     def play(self, action_id: int) -> None: ...
 
 class GoSelfPlaySearchRequest7:
-    def __init__(self, root: GoSearchRoot7, full_search: bool) -> None: ...
+    def __init__(
+        self,
+        root: GoSearchRoot7,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> None: ...
     root: GoSearchRoot7
     full_search: bool
+    checkpoint_detail: SearchCheckpointDetail
 
 class GoSelfPlaySearchResult7:
     root_value: float
@@ -301,6 +389,16 @@ class GoSelfPlaySearchResult7:
     highest_visited_child_q: float
     search_visits: list[GameSearchVisit]
     policy_target_visits: list[GameSearchVisit]
+    network_root_value: float
+    policy_correction: float
+    value_correction: float
+    search_correction_target: float
+    predicted_search_correction: float
+    starting_visits: int
+    final_visits: int
+    stop_reason: SearchStopReason
+    learned_gate_evaluated: bool
+    checkpoints: list[SearchCheckpoint]
     root: GoSearchRoot7
 
 class GoSelfPlaySearchBatch7:
@@ -319,7 +417,12 @@ class GoSelfPlaySearch7:
     @staticmethod
     def inference_dimensions() -> InferenceDimensions: ...
     def new_root(self, position: GoPosition7) -> GoSearchRoot7: ...
-    def request(self, root: GoSearchRoot7, full_search: bool) -> GoSelfPlaySearchRequest7: ...
+    def request(
+        self,
+        root: GoSearchRoot7,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> GoSelfPlaySearchRequest7: ...
     def search(
         self, requests: list[GoSelfPlaySearchRequest7], collect_statistics: bool = False
     ) -> GoSelfPlaySearchBatch7: ...
@@ -328,9 +431,15 @@ class GoSelfPlaySearch7:
     def model_generation(self) -> int: ...
 
 class GoSelfPlaySearchRequest9:
-    def __init__(self, root: GoSearchRoot9, full_search: bool) -> None: ...
+    def __init__(
+        self,
+        root: GoSearchRoot9,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> None: ...
     root: GoSearchRoot9
     full_search: bool
+    checkpoint_detail: SearchCheckpointDetail
 
 class GoSelfPlaySearchResult9:
     root_value: float
@@ -339,6 +448,16 @@ class GoSelfPlaySearchResult9:
     highest_visited_child_q: float
     search_visits: list[GameSearchVisit]
     policy_target_visits: list[GameSearchVisit]
+    network_root_value: float
+    policy_correction: float
+    value_correction: float
+    search_correction_target: float
+    predicted_search_correction: float
+    starting_visits: int
+    final_visits: int
+    stop_reason: SearchStopReason
+    learned_gate_evaluated: bool
+    checkpoints: list[SearchCheckpoint]
     root: GoSearchRoot9
 
 class GoSelfPlaySearchBatch9:
@@ -357,7 +476,12 @@ class GoSelfPlaySearch9:
     @staticmethod
     def inference_dimensions() -> InferenceDimensions: ...
     def new_root(self, position: GoPosition9) -> GoSearchRoot9: ...
-    def request(self, root: GoSearchRoot9, full_search: bool) -> GoSelfPlaySearchRequest9: ...
+    def request(
+        self,
+        root: GoSearchRoot9,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> GoSelfPlaySearchRequest9: ...
     def search(
         self, requests: list[GoSelfPlaySearchRequest9], collect_statistics: bool = False
     ) -> GoSelfPlaySearchBatch9: ...
@@ -505,7 +629,12 @@ class ChessSelfPlaySearch:
     def model_version(self) -> int: ...
     @property
     def model_generation(self) -> int: ...
-    def request(self, root: ChessSearchRoot, full_search: bool) -> ChessSelfPlaySearchRequest: ...
+    def request(
+        self,
+        root: ChessSearchRoot,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> ChessSelfPlaySearchRequest: ...
     def inference_statistics(self) -> InferenceStatistics: ...
     def refresh_model(self, model_version: int, model_path: str) -> None: ...
     def update_search_schedule(self, search_parameters: SelfPlaySearchParameters) -> bool: ...
@@ -532,11 +661,18 @@ class ChessSelfPlaySearch:
     ) -> ChessSearchRoot: ...
 
 class ChessSelfPlaySearchRequest:
-    def __init__(self, root: ChessSearchRoot, full_search: bool) -> None: ...
+    def __init__(
+        self,
+        root: ChessSearchRoot,
+        full_search: bool,
+        checkpoint_detail: SearchCheckpointDetail = SearchCheckpointDetail.SCALARS,
+    ) -> None: ...
     @property
     def root(self) -> ChessSearchRoot: ...
     @property
     def full_search(self) -> bool: ...
+    @property
+    def checkpoint_detail(self) -> SearchCheckpointDetail: ...
 
 class ChessSearchChild:
     @property
@@ -601,12 +737,12 @@ class SelfPlaySearchParameters:
     dirichlet_alpha: float
     dirichlet_epsilon: float
     fast_searches: int
-    full_searches: int
+    full_search_budget: FixedSearchLimit | AdaptiveSearchLimit
     parallel_searches: int
     def __init__(
         self,
         parallel_searches: int,
-        full_searches: int,
+        full_search_budget: FixedSearchLimit | AdaptiveSearchLimit,
         fast_searches: int,
         tree_search: TreeSearchParameters,
         dirichlet_alpha: float,
@@ -628,6 +764,26 @@ class ChessSelfPlaySearchResult:
     def search_visits(self) -> list[GameSearchVisit]: ...
     @property
     def policy_target_visits(self) -> list[GameSearchVisit]: ...
+    @property
+    def network_root_value(self) -> float: ...
+    @property
+    def policy_correction(self) -> float: ...
+    @property
+    def value_correction(self) -> float: ...
+    @property
+    def search_correction_target(self) -> float: ...
+    @property
+    def predicted_search_correction(self) -> float: ...
+    @property
+    def starting_visits(self) -> int: ...
+    @property
+    def final_visits(self) -> int: ...
+    @property
+    def stop_reason(self) -> SearchStopReason: ...
+    @property
+    def learned_gate_evaluated(self) -> bool: ...
+    @property
+    def checkpoints(self) -> list[SearchCheckpoint]: ...
 
 class ChessSelfPlaySearchBatch:
     @property

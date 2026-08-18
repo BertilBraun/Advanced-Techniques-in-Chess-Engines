@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
-
 from src.experiment.generation_schedule import FloatGenerationSchedule, defined_schedule_values
 from src.util.frozen_model import FrozenModel
 
@@ -33,8 +32,60 @@ class RemainingGameLengthTargetConfiguration(FrozenModel):
         return self
 
 
+class FutureSearchValueTargetConfiguration(FrozenModel):
+    kind: Literal['future_search_value'] = 'future_search_value'
+    ply_offset: int = Field(gt=0)
+    smooth_l1_beta: float = Field(default=0.1, gt=0.0)
+    loss_weight: FloatGenerationSchedule
+
+    @model_validator(mode='after')
+    def validate_loss_weight(self) -> FutureSearchValueTargetConfiguration:
+        if any(value < 0.0 for value in defined_schedule_values(self.loss_weight)):
+            raise ValueError('Auxiliary loss weight must remain nonnegative.')
+        return self
+
+
+class IrreversibleProgressTargetConfiguration(FrozenModel):
+    kind: Literal['irreversible_progress'] = 'irreversible_progress'
+    horizon_plies: int = Field(gt=0)
+    loss_weight: FloatGenerationSchedule
+
+    @model_validator(mode='after')
+    def validate_loss_weight(self) -> IrreversibleProgressTargetConfiguration:
+        if any(value < 0.0 for value in defined_schedule_values(self.loss_weight)):
+            raise ValueError('Auxiliary loss weight must remain nonnegative.')
+        return self
+
+
+class LegalMovesTargetConfiguration(FrozenModel):
+    kind: Literal['legal_moves'] = 'legal_moves'
+    loss_weight: FloatGenerationSchedule
+
+    @model_validator(mode='after')
+    def validate_loss_weight(self) -> LegalMovesTargetConfiguration:
+        if any(value < 0.0 for value in defined_schedule_values(self.loss_weight)):
+            raise ValueError('Auxiliary loss weight must remain nonnegative.')
+        return self
+
+
+class SearchCorrectionTargetConfiguration(FrozenModel):
+    kind: Literal['search_correction'] = 'search_correction'
+    loss_weight: FloatGenerationSchedule
+
+    @model_validator(mode='after')
+    def validate_loss_weight(self) -> SearchCorrectionTargetConfiguration:
+        if any(value < 0.0 for value in defined_schedule_values(self.loss_weight)):
+            raise ValueError('Auxiliary loss weight must remain nonnegative.')
+        return self
+
+
 AuxiliaryTargetConfiguration: TypeAlias = Annotated[
-    NextPolicyTargetConfiguration | RemainingGameLengthTargetConfiguration,
+    NextPolicyTargetConfiguration
+    | RemainingGameLengthTargetConfiguration
+    | FutureSearchValueTargetConfiguration
+    | IrreversibleProgressTargetConfiguration
+    | LegalMovesTargetConfiguration
+    | SearchCorrectionTargetConfiguration,
     Field(discriminator='kind'),
 ]
 
@@ -61,7 +112,53 @@ class RemainingGameLengthHeadLayout:
             raise ValueError('Remaining-game-length normalization scale must be positive.')
 
 
-AuxiliaryHeadLayout: TypeAlias = NextPolicyHeadLayout | RemainingGameLengthHeadLayout
+@dataclass(frozen=True)
+class FutureSearchValueHeadLayout:
+    kind: Literal['future_search_value']
+    ply_offset: int
+    smooth_l1_beta: float
+    output_size: Literal[1] = 1
+
+    def __post_init__(self) -> None:
+        if self.ply_offset <= 0 or self.smooth_l1_beta <= 0.0:
+            raise ValueError('Future-search-value offset and beta must be positive.')
+
+
+@dataclass(frozen=True)
+class IrreversibleProgressHeadLayout:
+    kind: Literal['irreversible_progress']
+    horizon_plies: int
+    output_size: Literal[1] = 1
+
+    def __post_init__(self) -> None:
+        if self.horizon_plies <= 0:
+            raise ValueError('Irreversible-progress horizon must be positive.')
+
+
+@dataclass(frozen=True)
+class LegalMovesHeadLayout:
+    kind: Literal['legal_moves']
+    action_size: int
+
+    def __post_init__(self) -> None:
+        if self.action_size <= 0:
+            raise ValueError('Legal-moves action size must be positive.')
+
+
+@dataclass(frozen=True)
+class SearchCorrectionHeadLayout:
+    kind: Literal['search_correction']
+    output_size: Literal[1] = 1
+
+
+AuxiliaryHeadLayout: TypeAlias = (
+    NextPolicyHeadLayout
+    | RemainingGameLengthHeadLayout
+    | FutureSearchValueHeadLayout
+    | IrreversibleProgressHeadLayout
+    | LegalMovesHeadLayout
+    | SearchCorrectionHeadLayout
+)
 
 
 def auxiliary_head_output_size(head: AuxiliaryHeadLayout) -> int:
@@ -69,6 +166,14 @@ def auxiliary_head_output_size(head: AuxiliaryHeadLayout) -> int:
         case NextPolicyHeadLayout(action_size=action_size):
             return action_size
         case RemainingGameLengthHeadLayout(output_size=output_size):
+            return output_size
+        case FutureSearchValueHeadLayout(output_size=output_size):
+            return output_size
+        case IrreversibleProgressHeadLayout(output_size=output_size):
+            return output_size
+        case LegalMovesHeadLayout(action_size=action_size):
+            return action_size
+        case SearchCorrectionHeadLayout(output_size=output_size):
             return output_size
 
 
@@ -99,4 +204,26 @@ def build_training_target_layout(
                         normalization_scale=normalization_scale,
                     )
                 )
+            case FutureSearchValueTargetConfiguration(
+                ply_offset=ply_offset,
+                smooth_l1_beta=smooth_l1_beta,
+            ):
+                heads.append(
+                    FutureSearchValueHeadLayout(
+                        kind='future_search_value',
+                        ply_offset=ply_offset,
+                        smooth_l1_beta=smooth_l1_beta,
+                    )
+                )
+            case IrreversibleProgressTargetConfiguration(horizon_plies=horizon_plies):
+                heads.append(
+                    IrreversibleProgressHeadLayout(
+                        kind='irreversible_progress',
+                        horizon_plies=horizon_plies,
+                    )
+                )
+            case LegalMovesTargetConfiguration():
+                heads.append(LegalMovesHeadLayout(kind='legal_moves', action_size=action_size))
+            case SearchCorrectionTargetConfiguration():
+                heads.append(SearchCorrectionHeadLayout(kind='search_correction'))
     return TrainingTargetLayout(action_size=action_size, wdl_size=3, auxiliary_heads=tuple(heads))

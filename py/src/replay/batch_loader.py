@@ -1,25 +1,28 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Generator, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Generic, TypeVar
-import time
 
 import numpy as np
 import numpy.typing as npt
 import torch
-
+from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import GameStateContract
 from src.games.representation import decode_packed_planes
-from src.replay.contracts import EligibleNextPolicyTarget, EligibleRemainingGameLengthTarget
+from src.replay.contracts import (
+    EligibleLegalMovesTarget,
+    EligibleNextPolicyTarget,
+    EligibleRemainingGameLengthTarget,
+    EligibleScalarAuxiliaryTarget,
+)
 from src.replay.description import ReplayDescription
 from src.replay.store import ReplayStore
-from AlphaZeroCpp import GameSearchVisit
 from src.training.batch import TrainingBatch
 from src.training.targets import auxiliary_head_output_size
-
 
 PositionT = TypeVar('PositionT')
 
@@ -255,6 +258,14 @@ def build_training_batch(
                     auxiliary_eligibility[target_index][row] = True
                 case EligibleRemainingGameLengthTarget(normalized_length=normalized_length):
                     auxiliary_targets[target_index][row, 0] = normalized_length
+                    auxiliary_eligibility[target_index][row] = True
+                case EligibleScalarAuxiliaryTarget(value=value):
+                    auxiliary_targets[target_index][row, 0] = value
+                    auxiliary_eligibility[target_index][row] = True
+                case EligibleLegalMovesTarget():
+                    legal_actions = sample.policy.legal_action_ids
+                    auxiliary_targets[target_index][row, legal_actions] = 1.0
+                    auxiliary_legal_action_ids[target_index][row, : len(legal_actions)] = legal_actions
                     auxiliary_eligibility[target_index][row] = True
     return TrainingBatch(
         states=torch.from_numpy(states),

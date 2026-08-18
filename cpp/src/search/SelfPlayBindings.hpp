@@ -50,9 +50,13 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
             py::arg("retained_fraction"));
 
     py::class_<Request>(module, names.request)
-        .def(py::init<Root, bool>(), py::arg("root"), py::arg("full_search"))
+        .def(py::init<Root, bool, SearchCheckpointDetail>(), py::arg("root"),
+             py::arg("full_search"),
+             py::arg_v("checkpoint_detail", SearchCheckpointDetail::Scalars,
+                       "SearchCheckpointDetail.SCALARS"))
         .def_readonly("root", &Request::root)
-        .def_readonly("full_search", &Request::full_search);
+        .def_readonly("full_search", &Request::full_search)
+        .def_readonly("checkpoint_detail", &Request::checkpoint_detail);
     py::class_<Result>(module, names.result)
         .def_readonly("root_value", &Result::root_value)
         .def_readonly("highest_visited_child_action_id", &Result::highest_visited_child_action_id)
@@ -60,6 +64,16 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def_readonly("highest_visited_child_q", &Result::highest_visited_child_q)
         .def_readonly("search_visits", &Result::search_visits)
         .def_readonly("policy_target_visits", &Result::policy_target_visits)
+        .def_readonly("network_root_value", &Result::network_root_value)
+        .def_readonly("policy_correction", &Result::policy_correction)
+        .def_readonly("value_correction", &Result::value_correction)
+        .def_readonly("search_correction_target", &Result::search_correction_target)
+        .def_readonly("predicted_search_correction", &Result::predicted_search_correction)
+        .def_readonly("starting_visits", &Result::starting_visits)
+        .def_readonly("final_visits", &Result::final_visits)
+        .def_readonly("stop_reason", &Result::stop_reason)
+        .def_readonly("learned_gate_evaluated", &Result::learned_gate_evaluated)
+        .def_readonly("checkpoints", &Result::checkpoints)
         .def_readonly("root", &Result::root);
     py::class_<Batch>(module, names.batch)
         .def_readonly("results", &Batch::results)
@@ -81,10 +95,13 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
             py::arg("position"))
         .def(
             "request",
-            [](const Search &, Root selectedRoot, const bool fullSearch) {
-                return Request(std::move(selectedRoot), fullSearch);
+            [](const Search &, Root selectedRoot, const bool fullSearch,
+               const SearchCheckpointDetail checkpointDetail) {
+                return Request(std::move(selectedRoot), fullSearch, checkpointDetail);
             },
-            py::arg("root"), py::arg("full_search"))
+            py::arg("root"), py::arg("full_search"),
+            py::arg_v("checkpoint_detail", SearchCheckpointDetail::Scalars,
+                      "SearchCheckpointDetail.SCALARS"))
         .def("search", &Search::search, py::arg("requests"), py::arg("collect_statistics") = false,
              py::call_guard<py::gil_scoped_release>())
         .def("refresh_model", &Search::refreshModel, py::arg("model_generation"),

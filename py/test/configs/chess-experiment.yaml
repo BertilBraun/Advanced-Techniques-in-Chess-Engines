@@ -182,13 +182,15 @@ chess:
     resignation:
       kind: disabled
     search:
-      full_searches:
-        kind: linear
-        start_generation: 0
-        end_generation: 20
-        start_value: 300
-        end_value: 600
-        rounding: nearest
+      full_search_budget:
+        kind: fixed
+        visits:
+          kind: linear
+          start_generation: 0
+          end_generation: 20
+          start_value: 300
+          end_value: 600
+          rounding: nearest
       fast_searches:
         kind: linear
         start_generation: 0

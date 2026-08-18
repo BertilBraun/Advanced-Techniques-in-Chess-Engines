@@ -3,22 +3,25 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
 from src.evaluation.configuration import EvaluationSearchConfiguration
 from src.experiment.generation_schedule import FloatGenerationSchedule
+from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.chess.syzygy import SyzygyTerminalOracle
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
-from src.self_play.parameters import ResolvedSelfPlayParameters, ZeroFirstPlayUrgencyParameters
-from src.self_play.native_search import NativeSelfPlaySearch
+from src.self_play.configuration import BatchedInferenceParams
 from src.self_play.native_configuration import native_sdpa_backend
+from src.self_play.native_search import NativeSelfPlaySearch
+from src.self_play.parameters import (
+    FixedFullSearchBudget,
+    ResolvedSelfPlayParameters,
+    ZeroFirstPlayUrgencyParameters,
+)
+from src.self_play.resignation import CalibratedResignationConfiguration
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
-from src.self_play.configuration import BatchedInferenceParams
-from src.self_play.resignation import CalibratedResignationConfiguration
-
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import ChessSelfPlaySearch
@@ -109,7 +112,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         parameters = replace(
             self.self_play_parameters_at(checkpoint.generation),
             parallel_searches=configuration.parallel_searches,
-            full_searches=configuration.searches_per_move,
+            full_search_budget=FixedFullSearchBudget(kind='fixed', visits=configuration.searches_per_move),
             fast_searches=configuration.searches_per_move,
             forced_playout_coefficient=0.0,
             exploration_constant=configuration.exploration_constant,

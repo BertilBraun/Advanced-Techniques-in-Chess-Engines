@@ -13,7 +13,8 @@ std::filesystem::path createTestModel() {
             wins = torch.clamp(boards[:, 0, 0, 0].float(), 0.0, 1.0)
             draws = torch.zeros_like(wins)
             outcomes = torch.stack((wins, draws, 1.0 - wins), 1)
-            return policies, outcomes
+            search_correction = torch.full((batch_size, 1), 0.5, device=boards.device)
+            return policies, outcomes, search_correction
     )JIT");
     const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path path =

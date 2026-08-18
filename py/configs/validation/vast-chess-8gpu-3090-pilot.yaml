@@ -76,7 +76,9 @@ evaluation:
 chess:
   self_play:
     search:
-      full_searches: 8
+      full_search_budget:
+        kind: fixed
+        visits: 8
       fast_searches: 2
     start_position:
       kind: restart_state

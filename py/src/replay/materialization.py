@@ -7,16 +7,26 @@ from typing import TypeVar
 from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract, TerminalOracle, WdlTarget
 from src.replay.contracts import (
+    EligibleLegalMovesTarget,
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
+    EligibleScalarAuxiliaryTarget,
     IneligibleNextPolicyTarget,
+    IneligibleScalarAuxiliaryTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
 from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, TerminationReason
 from src.self_play.policy import ordered_search_visits
-from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
-
+from src.training.targets import (
+    FutureSearchValueHeadLayout,
+    IrreversibleProgressHeadLayout,
+    LegalMovesHeadLayout,
+    NextPolicyHeadLayout,
+    RemainingGameLengthHeadLayout,
+    SearchCorrectionHeadLayout,
+    TrainingTargetLayout,
+)
 
 PositionT = TypeVar('PositionT')
 
@@ -111,6 +121,36 @@ def materialize_completed_game(
                     auxiliary_targets.append(
                         EligibleRemainingGameLengthTarget(normalized_length=remaining_plies / normalization_scale)
                     )
+                case FutureSearchValueHeadLayout(ply_offset=ply_offset):
+                    auxiliary_targets.append(
+                        _future_search_value_target(
+                            game,
+                            observation,
+                            observations,
+                            positions,
+                            state,
+                            ply_offset,
+                        )
+                    )
+                case IrreversibleProgressHeadLayout(horizon_plies=horizon_plies):
+                    auxiliary_targets.append(
+                        _irreversible_progress_target(
+                            game,
+                            observation,
+                            positions,
+                            state,
+                            horizon_plies,
+                        )
+                    )
+                case LegalMovesHeadLayout():
+                    auxiliary_targets.append(EligibleLegalMovesTarget())
+                case SearchCorrectionHeadLayout():
+                    auxiliary_targets.append(
+                        EligibleScalarAuxiliaryTarget(
+                            kind='search_correction',
+                            value=observation.search_correction_target,
+                        )
+                    )
 
         position = positions[observation.ply]
         position_wdl = game.final_wdl if state.current_player(position) == final_player else game.final_wdl.reversed()
@@ -135,6 +175,58 @@ def materialize_completed_game(
         retained_visit_mass=retained_visit_mass,
         discarded_visit_mass=discarded_visit_mass,
     )
+
+
+def _future_search_value_target(
+    game: CompletedSelfPlayGame,
+    observation: SearchObservation,
+    observations: dict[int, SearchObservation],
+    positions: tuple[PositionT, ...],
+    state: GameStateContract[PositionT],
+    ply_offset: int,
+) -> EligibleScalarAuxiliaryTarget | IneligibleScalarAuxiliaryTarget:
+    future_ply = observation.ply + ply_offset
+    future = observations.get(future_ply)
+    if future is not None:
+        sign = (
+            1.0
+            if state.current_player(positions[observation.ply]) == state.current_player(positions[future_ply])
+            else -1.0
+        )
+        return EligibleScalarAuxiliaryTarget(kind='future_search_value', value=sign * future.root_value)
+    if future_ply < len(game.action_ids):
+        return IneligibleScalarAuxiliaryTarget(kind='future_search_value')
+    final_player = state.current_player(positions[-1])
+    current_player = state.current_player(positions[observation.ply])
+    final_wdl = game.final_wdl if current_player == final_player else game.final_wdl.reversed()
+    return EligibleScalarAuxiliaryTarget(
+        kind='future_search_value',
+        value=final_wdl.win - final_wdl.loss,
+    )
+
+
+def _irreversible_progress_target(
+    game: CompletedSelfPlayGame,
+    observation: SearchObservation,
+    positions: tuple[PositionT, ...],
+    state: GameStateContract[PositionT],
+    horizon_plies: int,
+) -> EligibleScalarAuxiliaryTarget | IneligibleScalarAuxiliaryTarget:
+    available = min(horizon_plies, len(game.action_ids) - observation.ply)
+    for offset in range(1, available + 1):
+        action_ply = observation.ply + offset - 1
+        if state.is_irreversible_transition(
+            positions[action_ply],
+            game.action_ids[action_ply],
+            positions[action_ply + 1],
+        ):
+            return EligibleScalarAuxiliaryTarget(
+                kind='irreversible_progress',
+                value=offset / horizon_plies,
+            )
+    if available < horizon_plies:
+        return IneligibleScalarAuxiliaryTarget(kind='irreversible_progress')
+    return EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=1.0)
 
 
 def _uniformly_blurred_wdl(target: WdlTarget, retained_weight: float) -> WdlTarget:

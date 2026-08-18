@@ -21,25 +21,26 @@
 
 struct SelfPlaySearchParameters {
     std::uint32_t parallel_searches;
-    std::uint32_t full_searches;
+    SearchLimit full_search_budget;
     std::uint32_t fast_searches;
     TreeSearchParameters tree_search;
     float dirichlet_alpha;
     float dirichlet_epsilon;
 
-    SelfPlaySearchParameters(std::uint32_t parallelSearches, std::uint32_t fullSearches,
+    SelfPlaySearchParameters(std::uint32_t parallelSearches, SearchLimit fullSearchBudget,
                              std::uint32_t fastSearches, TreeSearchParameters treeSearch,
                              float dirichletAlpha, float dirichletEpsilon)
-        : parallel_searches(parallelSearches), full_searches(fullSearches),
+        : parallel_searches(parallelSearches), full_search_budget(std::move(fullSearchBudget)),
           fast_searches(fastSearches), tree_search(treeSearch), dirichlet_alpha(dirichletAlpha),
           dirichlet_epsilon(dirichletEpsilon) {
-        if (parallel_searches == 0 || full_searches == 0 || fast_searches == 0) {
+        if (parallel_searches == 0 || fast_searches == 0) {
             throw std::invalid_argument("Self-play search counts must be positive");
         }
     }
 
     [[nodiscard]] std::uint32_t arenaCapacity() const {
-        const std::uint64_t maximumSearches = std::max(full_searches, fast_searches);
+        const std::uint64_t maximumSearches =
+            std::max(maximumVisits(full_search_budget), fast_searches);
         const std::uint64_t capacity = maximumSearches + parallel_searches + 1U;
         if (capacity > std::numeric_limits<std::uint32_t>::max()) {
             throw std::overflow_error("Search parameters exceed the node index capacity");
@@ -60,6 +61,7 @@ struct SelfPlaySearchStatistics {
 template <SearchGame Game> struct SelfPlaySearchRequest {
     GameSearchRoot<Game> root;
     bool full_search;
+    SearchCheckpointDetail checkpoint_detail = SearchCheckpointDetail::Scalars;
 };
 
 template <SearchGame Game> struct SelfPlaySearchResult {
@@ -69,6 +71,16 @@ template <SearchGame Game> struct SelfPlaySearchResult {
     float highest_visited_child_q;
     std::vector<GameSearchVisit> search_visits;
     std::vector<GameSearchVisit> policy_target_visits;
+    float network_root_value;
+    float policy_correction;
+    float value_correction;
+    float search_correction_target;
+    float predicted_search_correction;
+    std::uint32_t starting_visits;
+    std::uint32_t final_visits;
+    SearchStopReason stop_reason;
+    bool learned_gate_evaluated;
+    std::vector<SearchCheckpoint> checkpoints;
     GameSearchRoot<Game> root;
 };
 
@@ -121,7 +133,8 @@ public:
                                               m_inferenceParameters.batch_size *
                                               m_inferenceParameters.outstanding_batches_per_worker;
         const std::size_t initiallyAdmittedFastSearches = initialFastSearchAdmissionCount(
-            fastSearchCount, fullSearchCount, m_searchParameters.full_searches,
+            fastSearchCount, fullSearchCount,
+            maximumVisits(m_searchParameters.full_search_budget),
             m_searchParameters.fast_searches, inferenceCapacity);
         std::size_t admittedFastSearches = 0;
         std::vector<GameSearchRequest<Game>> engineRequests;
@@ -140,12 +153,14 @@ public:
             }
             engineRequests.push_back({
                 .root = request.root,
-                .visit_limit = request.full_search ? m_searchParameters.full_searches
-                                                   : m_searchParameters.fast_searches,
+                .limit = request.full_search
+                             ? m_searchParameters.full_search_budget
+                             : SearchLimit{FixedSearchLimit(m_searchParameters.fast_searches)},
                 .add_root_noise = request.full_search,
                 .force_root_playouts =
                     request.full_search &&
                     m_searchParameters.tree_search.forced_playout_coefficient > 0.0F,
+                .checkpoint_detail = request.checkpoint_detail,
                 .admission = admission,
             });
         }
@@ -162,6 +177,17 @@ public:
                 .highest_visited_child_q = searched.results[index].highest_visited_child_q,
                 .search_visits = std::move(searched.results[index].search_visits),
                 .policy_target_visits = std::move(searched.results[index].policy_target_visits),
+                .network_root_value = searched.results[index].network_root_value,
+                .policy_correction = searched.results[index].policy_correction,
+                .value_correction = searched.results[index].value_correction,
+                .search_correction_target = searched.results[index].search_correction_target,
+                .predicted_search_correction =
+                    searched.results[index].predicted_search_correction,
+                .starting_visits = searched.results[index].starting_visits,
+                .final_visits = searched.results[index].final_visits,
+                .stop_reason = searched.results[index].stop_reason,
+                .learned_gate_evaluated = searched.results[index].learned_gate_evaluated,
+                .checkpoints = std::move(searched.results[index].checkpoints),
                 .root = requests[index].root,
             });
         }
