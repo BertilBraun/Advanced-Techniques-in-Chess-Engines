@@ -1,5 +1,9 @@
 # Direct-policy progressive Chess inference on RTX 4070 SUPER
 
+> This eager/compiled diagnostic is not the production self-play comparison. Production exports fused TorchScript
+> and uses automatic SDPA dispatch. The corrected controls are recorded in
+> `../chess-direct-policy-kernel-controls-rtx4070s-20260818/README.md`.
+
 This run measures the three clean-run attention stages at exact source revision
 `5095255a8e9211e1a6ed4b041911406fe050fa56`. The checkout was clean. GPU 0 was an idle NVIDIA GeForce RTX 4070
 SUPER under PyTorch 2.12.1+cu126 and CUDA 12.6. Each point used ten warmups and a calibrated five-second BF16
