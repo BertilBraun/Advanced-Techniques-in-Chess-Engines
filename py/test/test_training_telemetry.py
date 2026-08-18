@@ -13,7 +13,11 @@ from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedgerState
 from src.training.reporting import TrainingReporter
 import src.training.reporting as reporting_module
-from src.training.telemetry import completed_game_length_telemetry, training_lifecycle_telemetry
+from src.training.telemetry import (
+    adaptive_search_telemetry,
+    completed_game_length_telemetry,
+    training_lifecycle_telemetry,
+)
 from src.training.targets import TrainingTargetLayout
 
 
@@ -95,6 +99,12 @@ def test_completed_game_length_telemetry_reports_distribution_and_terminations()
 
 def test_completed_game_length_telemetry_omits_empty_windows() -> None:
     assert completed_game_length_telemetry(()) is None
+
+
+def test_adaptive_search_telemetry_omits_windows_without_full_searches() -> None:
+    games = (IngestedCompletedGame(length_plies=10, termination_reason=TerminationReason.NATURAL),)
+
+    assert adaptive_search_telemetry(games) is None
 
 
 def test_training_reporter_logs_completed_game_length_window(monkeypatch: pytest.MonkeyPatch) -> None:

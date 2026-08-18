@@ -3,7 +3,7 @@ from decimal import Decimal
 from statistics import fmean, median
 
 from src.replay.manager import IngestedCompletedGame, ReplayDescription
-from src.self_play.completed_game import TerminationReason
+from src.self_play.completed_game import SearchObservation, SearchStopReason, TerminationReason
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedgerState
 
@@ -39,6 +39,48 @@ class CompletedGameLengthTelemetry:
     p99_plies: float
     maximum_plies: int
     terminations: tuple[TerminationGameLengthTelemetry, ...]
+
+
+@dataclass(frozen=True)
+class AdaptiveSearchTelemetry:
+    final_visits: tuple[int, ...]
+    new_simulations: tuple[int, ...]
+    search_correction_targets: tuple[float, ...]
+    search_correction_predictions: tuple[float, ...]
+    policy_corrections: tuple[float, ...]
+    value_corrections: tuple[float, ...]
+    stop_reasons: tuple[tuple[SearchStopReason, int], ...]
+
+
+def adaptive_search_telemetry(
+    games: tuple[IngestedCompletedGame, ...],
+) -> AdaptiveSearchTelemetry | None:
+    observations = tuple(
+        observation
+        for game in games
+        for observation in game.observations
+        if observation.full_search
+    )
+    if not observations:
+        return None
+    return AdaptiveSearchTelemetry(
+        final_visits=tuple(observation.final_visits for observation in observations),
+        new_simulations=tuple(_new_simulations(observation) for observation in observations),
+        search_correction_targets=tuple(observation.search_correction_target for observation in observations),
+        search_correction_predictions=tuple(
+            observation.predicted_search_correction for observation in observations
+        ),
+        policy_corrections=tuple(observation.policy_correction for observation in observations),
+        value_corrections=tuple(observation.value_correction for observation in observations),
+        stop_reasons=tuple(
+            (reason, sum(observation.stop_reason is reason for observation in observations))
+            for reason in SearchStopReason
+        ),
+    )
+
+
+def _new_simulations(observation: SearchObservation) -> int:
+    return observation.final_visits - observation.starting_visits
 
 
 def completed_game_length_telemetry(

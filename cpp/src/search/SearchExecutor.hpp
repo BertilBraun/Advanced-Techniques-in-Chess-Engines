@@ -483,7 +483,9 @@ private:
             if (!task.root.tree().root().expanded() && task.in_flight != 0) {
                 continue;
             }
-            if (!task.stopped && task.root.visits() < task.maximum_visits &&
+            const std::uint32_t schedulingLimit =
+                std::min(task.maximum_visits, task.next_observation_visits);
+            if (!task.stopped && task.root.visits() < schedulingLimit &&
                 task.in_flight < m_searchParameters.parallel_searches) {
                 m_nextTask = (index + 1) % tasks.size();
                 return index;

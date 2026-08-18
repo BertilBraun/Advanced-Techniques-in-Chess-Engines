@@ -10,7 +10,7 @@ from src.games.contracts import GameStateContract, TerminalOracle
 from src.replay.layout import ReplayLayout
 from src.replay.materialization import materialize_completed_game
 from src.replay.store import ReplayStore
-from src.self_play.completed_game import CompletedSelfPlayGame, TerminationReason
+from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, TerminationReason
 from src.self_play.resignation import ResignationCalibrationBatch, ResignationCalibrator
 from src.replay.configuration import ReplayConfiguration
 from src.util.frozen_model import FrozenModel
@@ -23,6 +23,7 @@ PositionT = TypeVar('PositionT')
 class IngestedCompletedGame:
     length_plies: int
     termination_reason: TerminationReason
+    observations: tuple[SearchObservation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -160,6 +161,7 @@ class ReplayManager(Generic[PositionT]):
                 IngestedCompletedGame(
                     length_plies=len(game.action_ids),
                     termination_reason=game.termination_reason,
+                    observations=game.observations,
                 )
             )
         self.store.flush()
