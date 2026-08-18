@@ -1,8 +1,8 @@
 # Adaptive Chess search validation on RTX 4070 SUPER
 
 This is implementation evidence for the adaptive-search design, not threshold calibration for the second four-day
-run. The continuous-root audit and the native adaptive canary used revision
-`ea0edc0b9454f9d1f111f185968bd35f15e4a643` and a seed-zero, randomly initialized copy of the first production model
+run. The continuous-root audit and the native adaptive canary were regenerated at revision
+`4b06f848b1a61e7949611bf56ddc1628a008b0a4` with a seed-zero, randomly initialized copy of the first production model
 stage. A representative trained model with the three-output search-correction ABI was not available on the node, so
 the configured `0.50` learned-gate threshold remains provisional.
 
@@ -17,15 +17,22 @@ the configured `0.50` learned-gate threshold remains provisional.
 ## Protocol and result
 
 `tools.calibrate_adaptive_search` searched 16 fixed opening positions continuously from 400 through 3,200 root
-visits, retaining one root per position and recording policy and root-value snapshots every 100 visits. It then
-replayed every configured maximum and correction threshold offline and ran a fresh native generation-450 adaptive
-search canary.
+visits, retaining one root per position and recording policy and root-value snapshots every 100 visits. Calibration
+requests explicitly enabled detailed policy snapshots; ordinary self-play keeps scalar checkpoint telemetry only. The
+tool then replayed every configured maximum and correction threshold offline and ran a fresh native generation-450
+adaptive search canary.
 
-The 51,200-reference-visit audit completed in 3.935 seconds at 13,011 simulations per second with an average inference
-batch of 63.94. The native adaptive canary averaged 768.75 visits, 10,814 simulations per second, and a 20.49-position
+The 51,200-reference-visit audit completed in 3.902 seconds at 13,123 simulations per second with an average inference
+batch of 63.94. The native adaptive canary averaged 687.50 visits, 11,041 simulations per second, and a 36.60-position
 inference batch; all 16 positions stopped through the deterministic rule. These numbers demonstrate continuous-root
 checkpoint collection, offline rule replay, tail termination, and useful batching. They do not measure playing
 strength or justify any production threshold because the network was random.
+
+Schema version 2 compares the raw most-visited action used for move selection, while retaining the post-pruning policy
+leader for stopping metrics. It also records the final policy correction, value correction, combined search-correction
+target, prediction error by stopping-visit bucket, and unstable-position recall after the learned gate. For example,
+the 1,000-visit/0.50 candidate used 618.75 mean visits and had 62.5% raw move agreement with the 3,200-visit reference;
+its constant random-model prediction is mechanics evidence only, not a threshold recommendation.
 
 The complete per-position snapshots and candidate metrics are in
 [`random-generation450-16.json`](random-generation450-16.json).
@@ -44,12 +51,15 @@ two-output ABI. None contains the learned search-correction output required for 
 - Release C++ extension and `NativeTests` built successfully.
 - Native tests passed after the checkpoint-policy binding was added; one initial run exposed an existing
   Dirichlet-noise-sensitive exact-visit assertion, which was made deterministic by disabling noise in that test.
-- Targeted calibration, self-play-worker, and game-contract tests passed: 33 tests.
-- The full Python suite passed 383 tests and skipped 4. Five Linux queue-process tests failed because they pass a
+- Focused adaptive-search, configuration, self-play-worker, replay, telemetry, and game-contract tests passed: 101 tests.
+- The full Python suite excluding the separately evidenced queue fixture passed 389 tests and skipped 4. The unfiltered
+  suite passed 391 tests, skipped 4, and had five Linux queue-process failures because those tests pass a
   non-Git `tmp_path` to repository validation. Both the failing test file and validation implementation are unchanged
   from base revision `30c4fbf8`; the failures are unrelated to this feature.
-- `ruff format` and `ruff check --fix` passed for the new calibration files. The earlier complete feature-file pass
-  left no warnings introduced by this branch.
+- The Release native suite passed five consecutive runs. The naive Python MCTS benchmark completed an eight-simulation
+  GPU smoke through the three-output inference ABI.
+- `ruff format` was unchanged. `ruff check --fix` left no warnings introduced by this branch; the checked canonical
+  stub name and an older completed-game positional-only hook retain their pre-existing warnings.
 
 Production threshold calibration still requires this same audit on sampled positions from a representative trained
 checkpoint. At minimum, compare thresholds around 0.50 using move agreement, policy total variation, root-value
