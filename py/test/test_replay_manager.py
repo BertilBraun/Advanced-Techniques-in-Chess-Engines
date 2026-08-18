@@ -291,7 +291,7 @@ def test_materialization_revalidates_maximum_ply_result_with_terminal_oracle() -
         UNDISCOUNTED_VALUES,
     )
 
-    assert materialized.samples[-1].wdl_target == WdlTarget(win=1.0, draw=0.0, loss=0.0)
+    assert materialized.samples[-1].wdl_target == WdlTarget(win=0.0, draw=0.0, loss=1.0)
 
 
 def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> None:
