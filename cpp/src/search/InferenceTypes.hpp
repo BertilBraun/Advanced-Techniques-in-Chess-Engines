@@ -50,4 +50,11 @@ struct InferenceStatistics {
     // CUDA inference time measures host submission; event synchronization is tree-owner wait.
     std::uint64_t inferenceNanoseconds = 0;
     float workerUtilization = 0.0F;
+    std::uint64_t cacheTotalPositions = 0;
+    std::uint64_t cacheUniqueHashes = 0;
+    std::uint64_t cacheRepeatedHashes = 0;
+    std::uint64_t cacheSameBatchRepeats = 0;
+    std::uint64_t cachePriorBatchRepeats = 0;
+    std::uint64_t cacheSetSize = 0;
+    double cacheRepeatRate = 0.0;
 };

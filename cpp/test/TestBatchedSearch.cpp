@@ -184,6 +184,13 @@ int runBatchedSearchTests() {
         require(statistics.modelInferencePositions == statistics.evaluations,
                 "model-position accounting diverged from evaluations");
         require(statistics.modelInferenceCalls > 0, "scheduler recorded no model calls");
+        require(statistics.cacheTotalPositions == statistics.modelInferencePositions,
+                "cache tracker did not observe every model position");
+        require(statistics.cacheRepeatedHashes > 0,
+                "identical roots did not produce cache upper-bound repeats");
+        require(statistics.cacheUniqueHashes + statistics.cacheRepeatedHashes ==
+                    statistics.cacheTotalPositions,
+                "cache telemetry totals are inconsistent");
 
         const std::vector<ChessSelfPlaySearchRequest> completedBoards = {
             ChessSelfPlaySearchRequest(results.results[0].root, true),
@@ -195,6 +202,8 @@ int runBatchedSearchTests() {
 
         const InferenceStatistics beforeRefresh = search.inferenceStatistics();
         search.refreshModel(8, updatedModelPath.string());
+        require(search.inferenceStatistics().cacheTotalPositions == 0,
+                "search model refresh retained cache observations");
         require(search.modelGeneration() == 8, "refresh did not publish its model generation");
         require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
                 "refresh retained old model output");

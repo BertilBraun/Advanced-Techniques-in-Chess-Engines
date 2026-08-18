@@ -80,7 +80,14 @@ void bind_search(py::module_ &module) {
         .def_readonly("treeBackupNanoseconds", &InferenceStatistics::treeBackupNanoseconds)
         .def_readonly("treeOwnerWaitNanoseconds", &InferenceStatistics::treeOwnerWaitNanoseconds)
         .def_readonly("inferenceNanoseconds", &InferenceStatistics::inferenceNanoseconds)
-        .def_readonly("workerUtilization", &InferenceStatistics::workerUtilization);
+        .def_readonly("workerUtilization", &InferenceStatistics::workerUtilization)
+        .def_readonly("cacheTotalPositions", &InferenceStatistics::cacheTotalPositions)
+        .def_readonly("cacheUniqueHashes", &InferenceStatistics::cacheUniqueHashes)
+        .def_readonly("cacheRepeatedHashes", &InferenceStatistics::cacheRepeatedHashes)
+        .def_readonly("cacheSameBatchRepeats", &InferenceStatistics::cacheSameBatchRepeats)
+        .def_readonly("cachePriorBatchRepeats", &InferenceStatistics::cachePriorBatchRepeats)
+        .def_readonly("cacheSetSize", &InferenceStatistics::cacheSetSize)
+        .def_readonly("cacheRepeatRate", &InferenceStatistics::cacheRepeatRate);
 
     py::class_<WdlPrediction>(module, "WdlPrediction")
         .def_readonly("win", &WdlPrediction::win)

@@ -34,6 +34,8 @@ public:
                           const BatchedSearchParameters searchParameters,
                           const SdpaBackend sdpaBackend)
         : m_inferenceParameters(inferenceParameters), m_searchParameters(searchParameters),
+          m_cacheTracker(
+              std::make_shared<InferenceCacheTracker>(Game::Encoding::inferenceDimensions())),
           m_pending(inferenceParameters.workers), m_randomEngine(std::random_device{}()),
           m_statistics{.modelBatchSizeHistogram =
                            std::vector<std::size_t>(inferenceParameters.batch_size + 1, 0)} {
@@ -42,7 +44,7 @@ public:
             m_workers[workerIndex] = std::make_unique<InferencePipeline>(
                 modelPath, device, deviceId, inferenceParameters.batch_size,
                 std::max<std::size_t>(2, inferenceParameters.outstanding_batches_per_worker), true,
-                Game::Encoding::inferenceDimensions(), sdpaBackend);
+                Game::Encoding::inferenceDimensions(), m_cacheTracker, sdpaBackend);
         }
     }
 
@@ -189,6 +191,14 @@ public:
                 ? 0.0F
                 : std::min(1.0F, static_cast<float>(statistics.inferenceNanoseconds) /
                                      static_cast<float>(availableWorkerNanoseconds));
+        const InferenceCacheStatistics cacheStatistics = m_cacheTracker->statistics();
+        statistics.cacheTotalPositions = cacheStatistics.total_positions;
+        statistics.cacheUniqueHashes = cacheStatistics.unique_hashes;
+        statistics.cacheRepeatedHashes = cacheStatistics.repeated_hashes;
+        statistics.cacheSameBatchRepeats = cacheStatistics.same_batch_repeats;
+        statistics.cachePriorBatchRepeats = cacheStatistics.prior_batch_repeats;
+        statistics.cacheSetSize = cacheStatistics.set_size;
+        statistics.cacheRepeatRate = cacheStatistics.repeat_rate;
         return statistics;
     }
 
@@ -254,6 +264,7 @@ private:
 
     BatchedInferenceParameters m_inferenceParameters;
     BatchedSearchParameters m_searchParameters;
+    std::shared_ptr<InferenceCacheTracker> m_cacheTracker;
     std::vector<std::unique_ptr<InferencePipeline>> m_workers;
     std::vector<std::deque<PendingBatch>> m_pending;
     std::size_t m_nextWorker = 0;

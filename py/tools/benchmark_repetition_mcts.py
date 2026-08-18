@@ -59,6 +59,14 @@ class BenchmarkResult:
     inference_model_positions: int
     inference_average_batch_size: float
     inference_batch_size_distribution: tuple[BatchSizeCount, ...]
+    cache_total_positions: int
+    cache_unique_hashes: int
+    cache_repeated_hashes: int
+    cache_repeat_rate: float
+    cache_same_batch_repeats: int
+    cache_prior_batch_repeats: int
+    cache_set_size_before_measurement: int
+    cache_set_size_after_measurement: int
 
 
 @dataclass(frozen=True)
@@ -69,6 +77,7 @@ class Arguments:
     games: int
     warmup_steps: int
     steps: int
+    duration_seconds: float | None
     searches: int
     parallel_searches: int
     maximum_batch_size: int
@@ -82,6 +91,7 @@ class SearchStepsResult:
     roots: list[ChessSearchRoot]
     terminal_roots: int
     searches_completed: int
+    steps_completed: int
 
 
 def load_openings(path: Path, number_of_games: int) -> tuple[str, ...]:
@@ -147,10 +157,13 @@ def run_search_steps(
     roots: list[ChessSearchRoot],
     openings: tuple[str, ...],
     steps: int,
+    duration_seconds: float | None = None,
 ) -> SearchStepsResult:
     terminal_roots = 0
     searches_completed = 0
-    for _ in range(steps):
+    steps_completed = 0
+    deadline = None if duration_seconds is None else time.perf_counter() + duration_seconds
+    while (deadline is None and steps_completed < steps) or (deadline is not None and time.perf_counter() < deadline):
         visits_before = sum(root.visits for root in roots)
         search_results = search.search([ChessSelfPlaySearchRequest(root, False) for root in roots])
         searches_completed += sum(result.root.visits for result in search_results.results) - visits_before
@@ -163,10 +176,12 @@ def run_search_steps(
                 root = search.new_root(openings[opening_index])
             next_roots.append(root)
         roots = next_roots
+        steps_completed += 1
     return SearchStepsResult(
         roots=roots,
         terminal_roots=terminal_roots,
         searches_completed=searches_completed,
+        steps_completed=steps_completed,
     )
 
 
@@ -175,6 +190,8 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         raise ValueError('games, steps, and searches must be positive.')
     if args.warmup_steps < 0:
         raise ValueError('warmup steps cannot be negative.')
+    if args.duration_seconds is not None and args.duration_seconds <= 0:
+        raise ValueError('duration seconds must be positive when provided.')
     if args.gpu_sampling_interval_seconds < 0:
         raise ValueError('GPU sampling interval cannot be negative.')
 
@@ -220,7 +237,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
 
     process_time_start = time.process_time()
     wall_time_start = time.perf_counter()
-    measurement_result = run_search_steps(search, roots, openings, args.steps)
+    measurement_result = run_search_steps(search, roots, openings, args.steps, args.duration_seconds)
     elapsed_seconds = time.perf_counter() - wall_time_start
     process_seconds = time.process_time() - process_time_start
     stop_event.set()
@@ -233,6 +250,15 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
     measurement_model_positions = (
         inference_statistics.modelInferencePositions - warmup_inference_statistics.modelInferencePositions
     )
+    cache_total_positions = inference_statistics.cacheTotalPositions - warmup_inference_statistics.cacheTotalPositions
+    cache_unique_hashes = inference_statistics.cacheUniqueHashes - warmup_inference_statistics.cacheUniqueHashes
+    cache_repeated_hashes = inference_statistics.cacheRepeatedHashes - warmup_inference_statistics.cacheRepeatedHashes
+    cache_same_batch_repeats = (
+        inference_statistics.cacheSameBatchRepeats - warmup_inference_statistics.cacheSameBatchRepeats
+    )
+    cache_prior_batch_repeats = (
+        inference_statistics.cachePriorBatchRepeats - warmup_inference_statistics.cachePriorBatchRepeats
+    )
     batch_size_distribution = tuple(
         BatchSizeCount(
             batch_size=batch_size,
@@ -241,14 +267,14 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         for batch_size, calls in enumerate(inference_statistics.modelBatchSizeHistogram)
         if calls > warmup_inference_statistics.modelBatchSizeHistogram[batch_size]
     )
-    completed_game_plies = args.games * args.steps
+    completed_game_plies = args.games * measurement_result.steps_completed
     peak_rss_mib = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
     return BenchmarkResult(
         process_id=os.getpid(),
         device_id=args.device,
         games=args.games,
         warmup_steps=args.warmup_steps,
-        measurement_steps=args.steps,
+        measurement_steps=measurement_result.steps_completed,
         target_searches_per_ply=args.searches,
         elapsed_seconds=elapsed_seconds,
         completed_game_plies=completed_game_plies,
@@ -269,6 +295,14 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             measurement_model_positions / measurement_model_calls if measurement_model_calls else 0.0
         ),
         inference_batch_size_distribution=batch_size_distribution,
+        cache_total_positions=cache_total_positions,
+        cache_unique_hashes=cache_unique_hashes,
+        cache_repeated_hashes=cache_repeated_hashes,
+        cache_repeat_rate=(cache_repeated_hashes / cache_total_positions if cache_total_positions else 0.0),
+        cache_same_batch_repeats=cache_same_batch_repeats,
+        cache_prior_batch_repeats=cache_prior_batch_repeats,
+        cache_set_size_before_measurement=warmup_inference_statistics.cacheSetSize,
+        cache_set_size_after_measurement=inference_statistics.cacheSetSize,
     )
 
 
@@ -280,6 +314,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--games', type=int, default=16)
     parser.add_argument('--warmup-steps', type=int, default=2)
     parser.add_argument('--steps', type=int, default=10)
+    parser.add_argument('--duration-seconds', type=float)
     parser.add_argument('--searches', type=int, default=600)
     parser.add_argument('--parallel-searches', type=int, default=4)
     parser.add_argument('--maximum-batch-size', type=int, default=256)
@@ -294,6 +329,7 @@ def parse_arguments() -> Arguments:
         games=namespace.games,
         warmup_steps=namespace.warmup_steps,
         steps=namespace.steps,
+        duration_seconds=namespace.duration_seconds,
         searches=namespace.searches,
         parallel_searches=namespace.parallel_searches,
         maximum_batch_size=namespace.maximum_batch_size,

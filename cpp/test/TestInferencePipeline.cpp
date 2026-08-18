@@ -38,8 +38,10 @@ void fillBatch(const InferencePipeline::WritableBatch &batch, const std::int8_t 
 
 void testTwoOutstandingBatches(const std::filesystem::path &modelPath, const InferenceDevice device,
                                const bool dedicatedCudaStream) {
+    auto tracker =
+        std::make_shared<InferenceCacheTracker>(ChessGame::Encoding::inferenceDimensions());
     InferencePipeline pipeline(modelPath.string(), device, 0, 4, 2, dedicatedCudaStream,
-                               ChessGame::Encoding::inferenceDimensions());
+                               ChessGame::Encoding::inferenceDimensions(), tracker);
     const InferencePipeline::WritableBatch first = pipeline.acquireWritableBatch();
     fillBatch(first, 0);
     pipeline.submit(first.slotIndex, 2);
@@ -72,8 +74,10 @@ void testTwoOutstandingBatches(const std::filesystem::path &modelPath, const Inf
 }
 
 void testFailureReleasesSlot(const std::filesystem::path &modelPath) {
+    auto tracker =
+        std::make_shared<InferenceCacheTracker>(ChessGame::Encoding::inferenceDimensions());
     InferencePipeline pipeline(modelPath.string(), InferenceDevice::Cpu, 0, 2, 2, false,
-                               ChessGame::Encoding::inferenceDimensions());
+                               ChessGame::Encoding::inferenceDimensions(), tracker);
     const InferencePipeline::WritableBatch failing = pipeline.acquireWritableBatch();
     fillBatch(failing, -1);
     pipeline.submit(failing.slotIndex, 1);
@@ -94,6 +98,55 @@ void testFailureReleasesSlot(const std::filesystem::path &modelPath) {
     require(reused.slotIndex == failing.slotIndex,
             "pipeline did not release a failed slot for reuse");
     pipeline.discardWritableBatch(reused.slotIndex);
+}
+
+void fillRow(const InferencePipeline::WritableBatch &batch, const std::size_t row,
+             const std::int8_t value) {
+    constexpr std::size_t encodedSize = ChessGame::Encoding::inferenceDimensions().encodedSize();
+    std::memset(batch.data + row * encodedSize, value, encodedSize);
+}
+
+void testCacheTelemetryAndRefresh(const std::filesystem::path &modelPath) {
+    auto tracker =
+        std::make_shared<InferenceCacheTracker>(ChessGame::Encoding::inferenceDimensions());
+    InferencePipeline pipeline(modelPath.string(), InferenceDevice::Cpu, 0, 4, 2, false,
+                               ChessGame::Encoding::inferenceDimensions(), tracker);
+
+    const InferencePipeline::WritableBatch first = pipeline.acquireWritableBatch();
+    fillRow(first, 0, 0);
+    fillRow(first, 1, 1);
+    pipeline.submit(first.slotIndex, 2);
+    const std::vector<Board> firstPositions(2);
+    static_cast<void>(pipeline.consume<ChessGame>(first.slotIndex, firstPositions));
+    InferenceCacheStatistics statistics = tracker->statistics();
+    require(statistics.total_positions == 2 && statistics.unique_hashes == 2 &&
+                statistics.repeated_hashes == 0 && statistics.set_size == 2,
+            "cache tracker miscounted first observations");
+
+    const InferencePipeline::WritableBatch second = pipeline.acquireWritableBatch();
+    fillRow(second, 0, 0);
+    fillRow(second, 1, 2);
+    fillRow(second, 2, 2);
+    pipeline.submit(second.slotIndex, 3);
+    const std::vector<Board> secondPositions(3);
+    const std::vector<SearchInferenceResult<ChessGame>> results =
+        pipeline.consume<ChessGame>(second.slotIndex, secondPositions);
+    require(results.size() == 3 && results[0].outcome.loss == 1.0F &&
+                results[1].outcome.win == 1.0F && results[2].outcome.win == 1.0F,
+            "cache instrumentation changed repeated-position inference results");
+    statistics = tracker->statistics();
+    require(statistics.total_positions == 5 && statistics.unique_hashes == 3 &&
+                statistics.repeated_hashes == 2 && statistics.prior_batch_repeats == 1 &&
+                statistics.same_batch_repeats == 1 && statistics.set_size == 3 &&
+                std::abs(statistics.repeat_rate - 0.4) < 1e-12,
+            "cache tracker misclassified repeated inputs");
+
+    PreparedInferenceModel refreshed = pipeline.prepareModelRefresh(modelPath.string());
+    pipeline.commitModelRefresh(std::move(refreshed));
+    statistics = tracker->statistics();
+    require(statistics.total_positions == 0 && statistics.unique_hashes == 0 &&
+                statistics.repeated_hashes == 0 && statistics.set_size == 0,
+            "model refresh did not reset cache telemetry");
 }
 } // namespace
 
@@ -122,6 +175,7 @@ int runInferencePipelineTests() {
 
         testTwoOutstandingBatches(modelPath, InferenceDevice::Cpu, false);
         testFailureReleasesSlot(modelPath);
+        testCacheTelemetryAndRefresh(modelPath);
 #ifdef USE_CUDA
         if (torch::cuda::is_available()) {
             testTwoOutstandingBatches(modelPath, InferenceDevice::Cuda, true);

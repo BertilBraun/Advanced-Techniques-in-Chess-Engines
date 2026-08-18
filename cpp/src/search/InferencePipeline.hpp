@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "games/GameConcepts.hpp"
+#include "search/InferenceCacheTracker.hpp"
 #include "search/InferenceTypes.hpp"
 #include "util/Timing.hpp"
 #include "util/py.hpp"
@@ -101,6 +102,7 @@ public:
     InferencePipeline(const std::string &modelPath, InferenceDevice device, int deviceId,
                       size_t maximumBatchSize, size_t slotCount, bool useDedicatedCudaStream,
                       InferenceDimensions dimensions,
+                      std::shared_ptr<InferenceCacheTracker> cacheTracker,
                       SdpaBackend sdpaBackend = SdpaBackend::Automatic);
     ~InferencePipeline();
 
@@ -136,7 +138,7 @@ public:
     }
     void consumeWithoutResult(size_t slotIndex);
     [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
-    void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
+    void commitModelRefresh(PreparedInferenceModel updatedModel);
     [[nodiscard]] std::uint64_t inferenceNanoseconds() const noexcept {
         return m_statistics.inference_nanoseconds.load(std::memory_order_relaxed);
     }
@@ -170,6 +172,7 @@ private:
     };
 
     InferenceRunner m_runner;
+    std::shared_ptr<InferenceCacheTracker> m_cacheTracker;
     std::vector<std::unique_ptr<Slot>> m_slots;
     size_t m_producerCursor = 0;
     size_t m_consumerCursor = 0;

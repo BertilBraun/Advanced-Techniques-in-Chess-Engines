@@ -193,9 +193,11 @@ nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<
 
 nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> &boards,
                            const std::vector<CompressedEncodedBoard> &encodings) {
+    auto tracker =
+        std::make_shared<InferenceCacheTracker>(ChessGame::Encoding::inferenceDimensions());
     InferencePipeline pipeline(arguments.modelPath, arguments.device, 0, arguments.batchSize,
                                arguments.slots, true, ChessGame::Encoding::inferenceDimensions(),
-                               resolveSdpaBackend(arguments));
+                               tracker, resolveSdpaBackend(arguments));
     std::vector<std::pair<size_t, size_t>> pendingBatches;
     pendingBatches.reserve(arguments.slots);
     constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channel_count *

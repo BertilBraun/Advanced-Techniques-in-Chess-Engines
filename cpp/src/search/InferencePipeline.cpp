@@ -300,9 +300,14 @@ InferencePipeline::InferencePipeline(const std::string &modelPath, const Inferen
                                      const int deviceId, const size_t maximumBatchSize,
                                      const size_t slotCount, const bool useDedicatedCudaStream,
                                      const InferenceDimensions dimensions,
+                                     std::shared_ptr<InferenceCacheTracker> cacheTracker,
                                      const SdpaBackend sdpaBackend)
     : m_runner(modelPath, device, deviceId, maximumBatchSize, useDedicatedCudaStream, dimensions,
-               sdpaBackend) {
+               sdpaBackend),
+      m_cacheTracker(std::move(cacheTracker)) {
+    if (m_cacheTracker == nullptr) {
+        throw std::invalid_argument("Inference cache tracker is required");
+    }
     if (slotCount < 2) {
         throw std::invalid_argument("Inference pipeline requires at least two slots");
     }
@@ -369,6 +374,7 @@ void InferencePipeline::submit(const size_t slotIndex, const size_t batchSize) {
     if (batchSize == 0 || batchSize > m_runner.maximumBatchSize()) {
         throw std::invalid_argument("Inference batch size is outside pipeline capacity");
     }
+    m_cacheTracker->observeBatch(slot.input.data_ptr<std::int8_t>(), batchSize);
     slot.batchSize = batchSize;
     slot.state.store(SlotState::Ready, std::memory_order_release);
     slot.state.notify_one();
@@ -451,7 +457,8 @@ PreparedInferenceModel InferencePipeline::prepareModelRefresh(const std::string 
     return m_runner.prepareModelRefresh(modelPath);
 }
 
-void InferencePipeline::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
+void InferencePipeline::commitModelRefresh(PreparedInferenceModel updatedModel) {
+    m_cacheTracker->reset();
     m_runner.commitModelRefresh(std::move(updatedModel));
 }
 
