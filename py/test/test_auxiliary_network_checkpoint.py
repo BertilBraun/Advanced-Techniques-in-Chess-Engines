@@ -100,7 +100,7 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     assert inference_policy.shape == (2, 10)
     assert inference_wdl.shape == (2, 3)
     assert inference_search_correction.shape == (2, 1)
-    assert torch.count_nonzero(inference_search_correction) == 0
+    torch.testing.assert_close(inference_search_correction, torch.full((2, 1), 0.5))
     torch.testing.assert_close(inference_policy, training_policy_logits)
     torch.testing.assert_close(inference_wdl, torch.softmax(training_wdl_logits, dim=1))
     assert b'"kind":"' + parameters.kind.encode() + b'"' in extra_files['network.json']
@@ -157,4 +157,4 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
     torch.testing.assert_close(loaded_training_output.auxiliary_logits[0], expected_training_output.auxiliary_logits[0])
     torch.testing.assert_close(inference_policy, expected_policy)
     torch.testing.assert_close(inference_wdl, expected_wdl)
-    assert torch.count_nonzero(inference_search_correction) == 0
+    torch.testing.assert_close(inference_search_correction, torch.full((2, 1), 0.5))
