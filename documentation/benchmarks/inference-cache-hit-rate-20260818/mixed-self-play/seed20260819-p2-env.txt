@@ -1,0 +1,17 @@
+Tue Aug 18 14:01:41 UTC 2026
+index, name, uuid, driver_version, utilization.gpu [%], memory.used [MiB], memory.total [MiB]
+0, NVIDIA GeForce RTX 4070 SUPER, GPU-1ef45c53-e153-5c7d-cb9b-79a8eb6d9a9c, 595.71.05, 0 %, 1 MiB, 12282 MiB
+1, NVIDIA GeForce RTX 4070 SUPER, GPU-f07e0697-68d8-2aac-1643-ff307bdeb73a, 595.71.05, 0 %, 1 MiB, 12282 MiB
+    483 root     /usr/bin/python3 /usr/local/bin/jupyter-notebook --no-browser --ContentsManager.allow_hidden=True --ServerApp.root_dir=/ --ServerApp.preferred_dir=/ --ip=0.0.0.0 --port=8080 --NotebookApp.open_browser=False \1[REDACTED] --NotebookApp.allow_remote_access=True --NotebookApp.allow_origin=* --NotebookApp.certfile=/etc/instance.crt --NotebookApp.keyfile=/etc/instance.key --allow-root
+    609 root     /usr/bin/python3 /usr/local/bin/supervisord -n -u root -c /etc/supervisor/supervisord.conf
+    663 root     python3 /usr/local/bin/log-tee /var/log/portal/caddy.log
+    668 root     python3 /usr/local/bin/log-tee /var/log/portal/instance_portal.log
+    669 root     python3 /usr/local/bin/log-tee /var/log/portal/cron.log
+    671 user     python3 /usr/local/bin/log-tee /var/log/portal/syncthing.log
+    683 root     python3 /usr/local/bin/log-tee /var/log/portal/tensorboard.log
+    691 root     python3 /usr/local/bin/log-tee /var/log/portal/tunnel_manager.log
+    745 root     /usr/bin/python3 /usr/local/bin/tensorboard --port 16006 --logdir /workspace
+    746 root     /opt/portal-aio/venv/bin/python3 /opt/portal-aio/venv/bin/fastapi run --host 127.0.0.1 --port 11111 portal.py
+    760 root     /opt/portal-aio/venv/bin/python3 /opt/portal-aio/venv/bin/fastapi run --host 127.0.0.1 --port 11112 tunnel_manager.py
+    888 root     /usr/local/lib/python3.12/dist-packages/tensorboard_data_server/bin/server --logdir=/workspace --reload=5 --samples-per-plugin= --port=0 --port-file=/tmp/tensorboard_data_server_dbe4fzwr/port --die-after-stdin --error-file=/tmp/tensorboard_data_server_dbe4fzwr/startup_error
+  61376 root     bash -c date -u | tee /workspace/codex-inference-cache-mixed-results-2f7599ed/seed20260819-p2-env.txt; nvidia-smi --query-gpu=index,name,uuid,driver_version,utilization.gpu,memory.used,memory.total --format=csv | tee -a /workspace/codex-inference-cache-mixed-results-2f7599ed/seed20260819-p2-env.txt; ps -eo pid,user,cmd | grep -E '[p]ython|[A]lphaZero|[b]enchmark_repetition' | tee -a /workspace/codex-inference-cache-mixed-results-2f7599ed/seed20260819-p2-env.txt; cd /workspace/codex-inference-cache-2f7599ed/py; CUDA_VISIBLE_DEVICES=0,1 /workspace/alphazero-engine-venv/bin/python -m tools.benchmark_repetition_mcts --model /workspace/codex-mcgs-bench-2949744f/benchmark-results-4070s-20260818/current-r3-seed-20260818.jit.pt --device 1 --games 512 --warmup-games 64 --warmup-steps 1 --steps 6 --full-searches 800 --fast-searches 150 --full-search-probability 0.25 --retained-root-visit-fraction 0.6 --parallel-searches 2 --maximum-opening-plies 12 --random-seed 20260819 --inference-workers 2 --maximum-batch-size 64 --outstanding-batches-per-worker 2 --gpu-sampling-interval-seconds 1.0 > /workspace/codex-inference-cache-mixed-results-2f7599ed/seed20260819-p2.json

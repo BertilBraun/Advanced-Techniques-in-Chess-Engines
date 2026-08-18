@@ -2,9 +2,50 @@
 
 ## Decision
 
-A neural-inference cache does not deserve implementation priority for the current chess self-play workload. The corrected self-play experiment found only a 1.33% ideal unbounded repeat rate at 150 searches per move and 4.24–4.25% at 800 searches per move. Same-batch repetition was effectively zero. Those are upper bounds before finite capacity, lookup, synchronization, output storage, and transfer costs.
+A neural-inference cache does not deserve implementation priority for the current chess self-play workload. The decision-relevant mixed experiment, with 25% 800-search requests and 75% 150-search requests, found only a 3.5485% ideal unbounded repeat rate with parallel searches 1 and 3.5295% with parallel searches 2. Same-batch repetition was effectively zero. Those are upper bounds before finite capacity, lookup, synchronization, output storage, and transfer costs.
+
+Parallel searches 2 should remain the production choice for this workload. It did not create a meaningful cache opportunity, but it improved aggregate search throughput by 29.9% over parallel searches 1 in two matched seeds with reversed run order.
 
 The earlier 37.6% high-budget result and 98.5% low-budget result below are rejected methodology evidence. That harness used up to 64 parallel searches, cycled a fixed 50-opening suite, used evaluation-like search settings, and repeatedly restarted completed games from the same openings. It did not represent project self-play and must not drive the decision.
+
+## Mixed self-play experiment
+
+This experiment directly reproduces the current mixed search policy:
+
+- 800 searches for a full request and 150 searches for a fast request.
+- A deterministic 25% full-search Bernoulli schedule, with 60% of retained root visits kept before each full search, matching `SelfPlayWorker.run_batch`.
+- Parallel searches 1 versus 2, with every other setting fixed.
+- 512 distinct random legal starting positions followed for six measured moves, plus a separate 64-game warm-up.
+- Two matched opening, move, and full/fast schedule seeds. Run order was p1 then p2 for seed 20260818 and p2 then p1 for seed 20260819.
+- Production search constants, root noise, two inference workers, batch size 64, and two outstanding batches per worker.
+
+The realized matched schedule contained 1,595 full requests and 4,549 fast requests in each parallel-search arm, or 25.9603% full requests across 6,144 measured game plies.
+
+### Mixed cache and throughput result
+
+Counts and throughput combine both seeds.
+
+| Parallel searches | Inference positions | Potentially avoidable | Upper-bound repeat rate | Same-batch repeats | Searches/s | Throughput vs p1 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1,824,486 | 64,741 | 3.5485% | 0 | 29,420.6 | — |
+| 2 | 1,826,618 | 64,470 | 3.5295% | 1 | 38,222.0 | +29.92% |
+
+The cache result is insensitive to parallel-search count. All 64,741 repeats in p1 were prior-batch repeats; p2 had 64,469 prior-batch repeats and one same-batch repeat. An ideal cache therefore has only about a 3.5% gross opportunity in the actual mixed workload, before paying any cache costs.
+
+The throughput result is consistent in both seeds: p2 improved from 28,192.8 to 37,541.7 searches/s (+33.16%) in seed 20260818 and from 30,737.2 to 38,916.0 searches/s (+26.61%) in seed 20260819. This comparison includes the same instrumentation in both arms and is not an instrumentation-versus-control measurement.
+
+### Mixed hit rate by measured move
+
+Rates combine both seeds. Repetition rises modestly as retained trees advance, but remains below 4.1% through move six.
+
+| Measured move | Parallel 1 | Parallel 2 |
+| ---: | ---: | ---: |
+| 1 | 3.0748% | 3.1245% |
+| 2 | 3.3351% | 3.5080% |
+| 3 | 3.4762% | 3.4204% |
+| 4 | 3.5264% | 3.5535% |
+| 5 | 3.9106% | 3.7145% |
+| 6 | 4.0509% | 3.9253% |
 
 ## Corrected self-play experiment
 
@@ -67,7 +108,7 @@ This is a hash-only upper-bound estimate. A 128-bit collision is negligibly like
 
 ## Compute environment
 
-- Measurement revision: `19c16204fb30541ddee730035ddc01078ae27ae9`; final lint-only revision: `e52de06e90732923d163bc4ae4b03b4e79e96550`. The branch was created from master `897983301495efda8709644d3dffc364e12e01a6` with the documented experiment-worktree workflow.
+- Instrumentation measurement revision: `19c16204fb30541ddee730035ddc01078ae27ae9`; corrected fixed-budget evidence revision: `5d5e5264`; mixed-workload measurement revision: `2f7599edb8fdb05e7c6f2cd5dca2946810f28ac6`. The branch was created from master `897983301495efda8709644d3dffc364e12e01a6` with the documented experiment-worktree workflow.
 - Node: two NVIDIA GeForce RTX 4070 SUPER 12-GiB GPUs; driver 595.71.05; driver API maximum CUDA 13.2; toolkit CUDA 12.8.
 - Runtime: Python 3.12.3, PyTorch 2.12.1+cu126, CUDA 12.6, cuDNN 9.10.2.
 - Assigned device: GPU 1. `nvidia-smi` was recorded immediately before every arm and showed 1 MiB, 0% utilization, and no GPU processes. GPU 0 was not used.
@@ -111,6 +152,7 @@ Compilation and tests were run only on the compute node.
 - Targeted corrected-harness tests: 3 passed in 0.48 seconds at the measurement revision and 3 passed in 0.49 seconds at final code revision `e52de06e90732923d163bc4ae4b03b4e79e96550`.
 - Full Python suite: 397 passed, 4 skipped, 5 failed in 21.59 seconds. All five failures are unrelated experiment-queue process tests whose temporary `repository_directory` fixtures are not Git repositories; each fails at `git rev-parse --show-toplevel`.
 - Node-side `ruff format --check` and `ruff check` passed for the corrected harness and tests at `e52de06e`.
+- The mixed-workload harness was provisioned at exact revision `2f7599ed`; its native extension reused the already validated build cache because the C++ sources were unchanged. Node-side Ruff passed and the targeted deterministic tests passed 4/4 in 0.50 seconds.
 
 Native deterministic coverage includes first observation, a prior-batch repeat, duplicate rows within one batch, tracker reset on committed model refresh, unchanged inference outputs, and unchanged batched-search results.
 
@@ -122,6 +164,7 @@ Native deterministic coverage includes first observation, a prior-batch repeat, 
 - `validation-native.txt` and `validation-python.txt`: full node validation logs.
 - `SHA256SUMS`: checksums of the committed evidence after redaction.
 - `self-play-corrected/`: corrected raw JSON, per-run GPU ownership evidence, validation logs, and checksums. This directory is authoritative for the cache decision.
+- `mixed-self-play/`: raw JSON for the matched 25% full / 75% fast p1-versus-p2 arms, redacted per-run GPU/process evidence, exact revision/model/native hashes, validation record, and independently verified checksums. This directory contains the most decision-relevant workload.
 
 ## Limitations
 
@@ -131,3 +174,4 @@ Native deterministic coverage includes first observation, a prior-batch repeat, 
 - Root noise changes move sampling but does not guarantee divergent trajectories, especially at the low budget.
 - The 128-bit tracker does not verify collisions byte-for-byte.
 - The observed instrumentation penalty and memory growth make this tracker an experiment artifact, not a production cache design.
+- The 29.9% p2 throughput advantage is a same-revision comparison with identical instrumentation. A clean uninstrumented mixed-workload control was not run, so it does not quantify instrumentation overhead.
