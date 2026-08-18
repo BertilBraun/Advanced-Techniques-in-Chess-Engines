@@ -1,0 +1,776 @@
+=== GPU ownership immediately before final Python suite ===
+2026-08-18T12:31:03+00:00
+Tue Aug 18 12:31:03 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070 ...    On  |   00000000:02:00.0 Off |                  N/A |
+|  0%   39C    P8             16W /  220W |       1MiB /  12282MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 4070 ...    On  |   00000000:C4:00.0 Off |                  N/A |
+|  0%   38C    P8              6W /  220W |       1MiB /  12282MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+ssss.................................................................... [ 17%]
+........................................................................ [ 35%]
+....FFFFF............................................................... [ 53%]
+........................................................................ [ 71%]
+........................................................................ [ 89%]
+...........................................                              [100%]
+=================================== FAILURES ===================================
+_____ test_queue_releases_slot_after_success_and_failure_and_runs_next_job _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-12/test_queue_releases_slot_after0')
+
+    def test_queue_releases_slot_after_success_and_failure_and_runs_next_job(tmp_path: Path) -> None:
+        experiment_paths = tuple(tmp_path / name for name in ('success-one.yaml', 'failure.yaml', 'success-two.yaml'))
+        for experiment_path in experiment_paths:
+            shutil.copyfile(EXPERIMENT_TEMPLATE, experiment_path)
+        script = (
+            'import pathlib, sys, time; '
+            'experiment=pathlib.Path(sys.argv[-1]); '
+            'print(experiment.name, flush=True); '
+            'time.sleep(0.05); '
+            "raise SystemExit(7 if 'failure' in experiment.name else 0)"
+        )
+        slot = ResourceSlot(
+            slot_id='only-slot',
+            cuda_devices=(),
+            cpu_affinity=_available_cpu_cores(1),
+            ram_capacity_bytes=2_000_000_000,
+            log_directory=tmp_path / 'logs',
+        )
+        request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
+        configuration = QueueConfiguration(
+            runner=RunnerCommand(command=(sys.executable, '-c', script)),
+            repository_directory=tmp_path,
+            worktree_root=tmp_path / 'worktrees',
+            runtime_directory=tmp_path / 'runtime',
+            tensorboard_log_directory=tmp_path / 'tensorboard',
+            slots=(slot,),
+            experiments=tuple(
+                QueuedExperiment(
+                    experiment_id=f'experiment-{index}',
+                    experiment_file=experiment_path,
+                    source_revision=SOURCE_REVISION,
+                    resources=request,
+                )
+                for index, experiment_path in enumerate(experiment_paths)
+            ),
+            summary_path=tmp_path / 'queue-summary.json',
+            poll_interval_seconds=0.01,
+            termination_grace_seconds=1.0,
+        )
+    
+>       validated_queue = validate_queue_for_launch(configuration)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test/test_experiment_queue_process.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/experiment_queue/validation.py:36: in validate_queue_for_launch
+    _validate_repository(configuration)
+src/experiment_queue/validation.py:114: in _validate_repository
+    if _git_output(configuration.repository_directory, ('rev-parse', '--show-toplevel')) != str(
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/experiment_queue/validation.py:136: in _git_output
+    result = subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = True, timeout = None, check = True
+popenargs = (('git', '-C', '/tmp/pytest-of-root/pytest-12/test_queue_releases_slot_after0', 'rev-parse', '--show-toplevel'),)
+kwargs = {'text': True, 'stdout': -1, 'stderr': -1}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout is given, and the process takes too long, a TimeoutExpired
+        exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '('git', '-C', '/tmp/pytest-of-root/pytest-12/test_queue_releases_slot_after0', 'rev-parse', '--show-toplevel')' returned non-zero exit status 128.
+
+/usr/lib/python3.12/subprocess.py:571: CalledProcessError
+_________ test_queue_reloads_changed_pending_experiment_before_launch __________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-12/test_queue_reloads_changed_pen0')
+
+    def test_queue_reloads_changed_pending_experiment_before_launch(tmp_path: Path) -> None:
+        first_path = tmp_path / 'first.yaml'
+        pending_path = tmp_path / 'pending.yaml'
+        shutil.copyfile(EXPERIMENT_TEMPLATE, first_path)
+        shutil.copyfile(EXPERIMENT_TEMPLATE, pending_path)
+        script = (
+            'import pathlib, sys, time; '
+            'path=pathlib.Path(sys.argv[-1]); '
+            "time.sleep(0.3) if path.name == 'first.yaml' else None; "
+            "print('updated' if 'updated-pending' in path.read_text() else 'original', flush=True)"
+        )
+        slot = ResourceSlot(
+            slot_id='only-slot',
+            cuda_devices=(),
+            cpu_affinity=_available_cpu_cores(1),
+            ram_capacity_bytes=2_000_000_000,
+            log_directory=tmp_path / 'logs',
+        )
+        request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
+        configuration = QueueConfiguration(
+            runner=RunnerCommand(command=(sys.executable, '-c', script)),
+            repository_directory=tmp_path,
+            worktree_root=tmp_path / 'worktrees',
+            runtime_directory=tmp_path / 'runtime',
+            tensorboard_log_directory=tmp_path / 'tensorboard',
+            slots=(slot,),
+            experiments=(
+                QueuedExperiment(
+                    experiment_id='first', experiment_file=first_path, source_revision=SOURCE_REVISION, resources=request
+                ),
+                QueuedExperiment(
+                    experiment_id='pending',
+                    experiment_file=pending_path,
+                    source_revision=SOURCE_REVISION,
+                    resources=request,
+                ),
+            ),
+            summary_path=tmp_path / 'queue-summary.json',
+            poll_interval_seconds=0.01,
+            termination_grace_seconds=1.0,
+        )
+    
+        def update_pending_experiment() -> None:
+            content = pending_path.read_text(encoding='utf-8')
+            pending_path.write_text(content.replace('go-7x7-template', 'updated-pending', 1), encoding='utf-8')
+    
+        update = threading.Timer(0.1, update_pending_experiment)
+        update.start()
+        try:
+>           runner = ExperimentQueueRunner(lambda: validate_queue_for_launch(configuration))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test/test_experiment_queue_process.py:230: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/experiment_queue/runner.py:35: in __init__
+    self._queue = load_queue()
+                  ^^^^^^^^^^^^
+test/test_experiment_queue_process.py:230: in <lambda>
+    runner = ExperimentQueueRunner(lambda: validate_queue_for_launch(configuration))
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/experiment_queue/validation.py:36: in validate_queue_for_launch
+    _validate_repository(configuration)
+src/experiment_queue/validation.py:114: in _validate_repository
+    if _git_output(configuration.repository_directory, ('rev-parse', '--show-toplevel')) != str(
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/experiment_queue/validation.py:136: in _git_output
+    result = subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = True, timeout = None, check = True
+popenargs = (('git', '-C', '/tmp/pytest-of-root/pytest-12/test_queue_reloads_changed_pen0', 'rev-parse', '--show-toplevel'),)
+kwargs = {'text': True, 'stdout': -1, 'stderr': -1}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout is given, and the process takes too long, a TimeoutExpired
+        exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '('git', '-C', '/tmp/pytest-of-root/pytest-12/test_queue_reloads_changed_pen0', 'rev-parse', '--show-toplevel')' returned non-zero exit status 128.
+
+/usr/lib/python3.12/subprocess.py:571: CalledProcessError
+______________ test_empty_queue_waits_for_new_desired_experiment _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-12/test_empty_queue_waits_for_new0')
+
+    def test_empty_queue_waits_for_new_desired_experiment(tmp_path: Path) -> None:
+        first_path = tmp_path / 'first.yaml'
+        added_path = tmp_path / 'added.yaml'
+        shutil.copyfile(EXPERIMENT_TEMPLATE, first_path)
+        shutil.copyfile(EXPERIMENT_TEMPLATE, added_path)
+        slot = ResourceSlot(
+            slot_id='only-slot',
+            cuda_devices=(),
+            cpu_affinity=_available_cpu_cores(1),
+            ram_capacity_bytes=2_000_000_000,
+            log_directory=tmp_path / 'logs',
+        )
+        request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
+        first = QueuedExperiment(
+            experiment_id='first', experiment_file=first_path, source_revision=SOURCE_REVISION, resources=request
+        )
+        added = QueuedExperiment(
+            experiment_id='added', experiment_file=added_path, source_revision=SOURCE_REVISION, resources=request
+        )
+        initial_configuration = QueueConfiguration(
+            runner=RunnerCommand(command=(sys.executable, '-c', "print('completed')")),
+            repository_directory=tmp_path,
+            worktree_root=tmp_path / 'worktrees',
+            runtime_directory=tmp_path / 'runtime',
+            tensorboard_log_directory=tmp_path / 'tensorboard',
+            slots=(slot,),
+            experiments=(first,),
+            summary_path=tmp_path / 'queue-summary.json',
+            poll_interval_seconds=0.01,
+            termination_grace_seconds=1.0,
+            wait_for_updates_when_empty=True,
+        )
+        final_configuration = initial_configuration.model_copy(
+            update={
+                'runner': RunnerCommand(command=(sys.executable, '-c', "print('updated-command')")),
+                'experiments': (first, added),
+                'wait_for_updates_when_empty': False,
+            }
+        )
+>       desired = [validate_queue_for_launch(initial_configuration)]
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test/test_experiment_queue_process.py:283: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/experiment_queue/validation.py:36: in validate_queue_for_launch
+    _validate_repository(configuration)
+src/experiment_queue/validation.py:114: in _validate_repository
+    if _git_output(configuration.repository_directory, ('rev-parse', '--show-toplevel')) != str(
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/experiment_queue/validation.py:136: in _git_output
+    result = subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = True, timeout = None, check = True
+popenargs = (('git', '-C', '/tmp/pytest-of-root/pytest-12/test_empty_queue_waits_for_new0', 'rev-parse', '--show-toplevel'),)
+kwargs = {'text': True, 'stdout': -1, 'stderr': -1}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout is given, and the process takes too long, a TimeoutExpired
+        exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '('git', '-C', '/tmp/pytest-of-root/pytest-12/test_empty_queue_waits_for_new0', 'rev-parse', '--show-toplevel')' returned non-zero exit status 128.
+
+/usr/lib/python3.12/subprocess.py:571: CalledProcessError
+___________ test_queue_terminates_a_process_tree_over_its_rss_limit ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-12/test_queue_terminates_a_proces0')
+
+    def test_queue_terminates_a_process_tree_over_its_rss_limit(tmp_path: Path) -> None:
+        experiment_path = tmp_path / 'memory-limit.yaml'
+        shutil.copyfile(EXPERIMENT_TEMPLATE, experiment_path)
+        child_script = 'import time; allocation = bytearray(30_000_000); time.sleep(60)'
+        parent_script = (
+            'import subprocess, sys, time; allocation = bytearray(30_000_000); '
+            f"subprocess.Popen([sys.executable, '-c', {child_script!r}]); time.sleep(60)"
+        )
+        slot = ResourceSlot(
+            slot_id='memory-slot',
+            cuda_devices=(),
+            cpu_affinity=_available_cpu_cores(1),
+            ram_capacity_bytes=100_000_000,
+            log_directory=tmp_path / 'logs',
+        )
+        configuration = QueueConfiguration(
+            runner=RunnerCommand(command=(sys.executable, '-c', parent_script)),
+            repository_directory=tmp_path,
+            worktree_root=tmp_path / 'worktrees',
+            runtime_directory=tmp_path / 'runtime',
+            tensorboard_log_directory=tmp_path / 'tensorboard',
+            slots=(slot,),
+            experiments=(
+                QueuedExperiment(
+                    experiment_id='memory-limit',
+                    experiment_file=experiment_path,
+                    source_revision=SOURCE_REVISION,
+                    resources=ResourceRequest(
+                        cuda_device_count=0,
+                        cpu_core_count=1,
+                        ram_limit_bytes=50_000_000,
+                    ),
+                ),
+            ),
+            summary_path=tmp_path / 'queue-summary.json',
+            poll_interval_seconds=0.01,
+            termination_grace_seconds=0.1,
+        )
+    
+>       validated_queue = validate_queue_for_launch(configuration)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test/test_experiment_queue_process.py:336: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/experiment_queue/validation.py:36: in validate_queue_for_launch
+    _validate_repository(configuration)
+src/experiment_queue/validation.py:114: in _validate_repository
+    if _git_output(configuration.repository_directory, ('rev-parse', '--show-toplevel')) != str(
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/experiment_queue/validation.py:136: in _git_output
+    result = subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = True, timeout = None, check = True
+popenargs = (('git', '-C', '/tmp/pytest-of-root/pytest-12/test_queue_terminates_a_proces0', 'rev-parse', '--show-toplevel'),)
+kwargs = {'text': True, 'stdout': -1, 'stderr': -1}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout is given, and the process takes too long, a TimeoutExpired
+        exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '('git', '-C', '/tmp/pytest-of-root/pytest-12/test_queue_terminates_a_proces0', 'rev-parse', '--show-toplevel')' returned non-zero exit status 128.
+
+/usr/lib/python3.12/subprocess.py:571: CalledProcessError
+_____ test_queue_termination_records_failure_and_releases_the_running_slot _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-12/test_queue_termination_records0')
+
+    def test_queue_termination_records_failure_and_releases_the_running_slot(tmp_path: Path) -> None:
+        experiment_path = tmp_path / 'long-running.yaml'
+        shutil.copyfile(EXPERIMENT_TEMPLATE, experiment_path)
+        slot = ResourceSlot(
+            slot_id='slot',
+            cuda_devices=(),
+            cpu_affinity=_available_cpu_cores(1),
+            ram_capacity_bytes=2_000_000_000,
+            log_directory=tmp_path / 'logs',
+        )
+        configuration = QueueConfiguration(
+            runner=RunnerCommand(command=(sys.executable, '-c', 'import time; time.sleep(60)')),
+            repository_directory=tmp_path,
+            worktree_root=tmp_path / 'worktrees',
+            runtime_directory=tmp_path / 'runtime',
+            tensorboard_log_directory=tmp_path / 'tensorboard',
+            slots=(slot,),
+            experiments=(
+                QueuedExperiment(
+                    experiment_id='long-running',
+                    experiment_file=experiment_path,
+                    source_revision=SOURCE_REVISION,
+                    resources=ResourceRequest(
+                        cuda_device_count=0,
+                        cpu_core_count=1,
+                        ram_limit_bytes=1_500_000_000,
+                    ),
+                ),
+            ),
+            summary_path=tmp_path / 'queue-summary.json',
+            poll_interval_seconds=0.01,
+            termination_grace_seconds=1.0,
+        )
+>       validated_queue = validate_queue_for_launch(configuration)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test/test_experiment_queue_process.py:378: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/experiment_queue/validation.py:36: in validate_queue_for_launch
+    _validate_repository(configuration)
+src/experiment_queue/validation.py:114: in _validate_repository
+    if _git_output(configuration.repository_directory, ('rev-parse', '--show-toplevel')) != str(
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/experiment_queue/validation.py:136: in _git_output
+    result = subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = True, timeout = None, check = True
+popenargs = (('git', '-C', '/tmp/pytest-of-root/pytest-12/test_queue_termination_records0', 'rev-parse', '--show-toplevel'),)
+kwargs = {'text': True, 'stdout': -1, 'stderr': -1}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout is given, and the process takes too long, a TimeoutExpired
+        exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '('git', '-C', '/tmp/pytest-of-root/pytest-12/test_queue_termination_records0', 'rev-parse', '--show-toplevel')' returned non-zero exit status 128.
+
+/usr/lib/python3.12/subprocess.py:571: CalledProcessError
+=============================== warnings summary ===============================
+test/test_architecture_benchmark_plan.py: 13 warnings
+test/test_auxiliary_network_checkpoint.py: 8 warnings
+test/test_trainer_group.py: 2 warnings
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/jit/_script.py:1488: DeprecationWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+test/test_architecture_benchmark_plan.py::test_architecture_benchmark_model_export_has_primary_inference_heads
+test/test_auxiliary_network_checkpoint.py::test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them[parameters0]
+test/test_auxiliary_network_checkpoint.py::test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them[parameters1]
+test/test_auxiliary_network_checkpoint.py::test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them[parameters2]
+test/test_evaluation_match.py::test_policy_random_match_uses_direct_greedy_policy
+test/test_trainer_group.py::test_trainer_group_runs_blocking_world_size_one_ddp_quantum
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/jit/_serialization.py:89: DeprecationWarning: `torch.jit.save` is deprecated. Please switch to `torch.export`.
+    warnings.warn(
+
+test/test_architecture_benchmark_plan.py::test_architecture_benchmark_model_export_has_primary_inference_heads
+test/test_auxiliary_network_checkpoint.py::test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them[parameters0]
+test/test_auxiliary_network_checkpoint.py::test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them[parameters1]
+test/test_auxiliary_network_checkpoint.py::test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them[parameters2]
+test/test_evaluation_artifacts.py::test_fixed_dataset_evaluates_raw_policy_metrics
+test/test_evaluation_match.py::test_policy_random_match_uses_direct_greedy_policy
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/jit/_serialization.py:176: DeprecationWarning: `torch.jit.load` is deprecated. Please switch to `torch.export`.
+    warnings.warn(
+
+test/test_evaluation_artifacts.py: 1 warning
+test/test_evaluation_match.py: 1 warning
+test/test_interactive_engine.py: 9 warnings
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/jit/_trace.py:1006: DeprecationWarning: `torch.jit.trace` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+test/test_evaluation_artifacts.py: 2 warnings
+test/test_evaluation_match.py: 2 warnings
+test/test_interactive_engine.py: 18 warnings
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/jit/_trace.py:1145: DeprecationWarning: `torch.jit.trace_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+test/test_evaluation_artifacts.py::test_fixed_dataset_evaluates_raw_policy_metrics
+  /workspace/codex-inference-cache-abf5690f/py/test/test_evaluation_artifacts.py:333: TracerWarning: torch.tensor results are registered as constants in the trace. You can safely ignore this warning if you use this function to create tensors out of constant variables that would be the same every time you call this function. In any other case, this might cause the trace to be incorrect.
+    policy = torch.tensor((0.4, 0.3, 0.2, 0.1), device=inputs.device).expand(inputs.shape[0], 4)
+
+test/test_evaluation_artifacts.py::test_fixed_dataset_evaluates_raw_policy_metrics
+  /workspace/codex-inference-cache-abf5690f/py/test/test_evaluation_artifacts.py:334: TracerWarning: torch.tensor results are registered as constants in the trace. You can safely ignore this warning if you use this function to create tensors out of constant variables that would be the same every time you call this function. In any other case, this might cause the trace to be incorrect.
+    value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
+
+test/test_evaluation_match.py::test_policy_random_match_uses_direct_greedy_policy
+  /workspace/codex-inference-cache-abf5690f/py/test/test_evaluation_match.py:138: TracerWarning: torch.tensor results are registered as constants in the trace. You can safely ignore this warning if you use this function to create tensors out of constant variables that would be the same every time you call this function. In any other case, this might cause the trace to be incorrect.
+    policy = torch.tensor((0.1, 0.9), device=inputs.device).expand(inputs.shape[0], 2)
+
+test/test_evaluation_match.py::test_policy_random_match_uses_direct_greedy_policy
+  /workspace/codex-inference-cache-abf5690f/py/test/test_evaluation_match.py:139: TracerWarning: torch.tensor results are registered as constants in the trace. You can safely ignore this warning if you use this function to create tensors out of constant variables that would be the same every time you call this function. In any other case, this might cause the trace to be incorrect.
+    value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
+
+test/test_interactive_engine.py::test_policy_preserves_wdl_and_bypasses_search
+test/test_interactive_engine.py::test_outstanding_batch_limit_is_validated
+test/test_interactive_engine.py::test_fixed_search_reuses_selected_subtree_and_recovers_from_history
+test/test_interactive_engine.py::test_human_reply_reuses_a_less_searched_descendant
+test/test_interactive_engine.py::test_history_replay_and_apply_move_reject_illegal_continuations
+test/test_interactive_engine.py::test_timed_search_drains_direct_workers
+test/test_interactive_engine.py::test_inference_failure_cancels_every_tree_reservation
+test/test_interactive_engine.py::test_uci_search_observes_stop_between_native_slices
+test/test_interactive_engine.py::test_uci_server_returns_legal_bestmove
+  /workspace/codex-inference-cache-abf5690f/py/test/test_interactive_engine.py:42: TracerWarning: torch.tensor results are registered as constants in the trace. You can safely ignore this warning if you use this function to create tensors out of constant variables that would be the same every time you call this function. In any other case, this might cause the trace to be incorrect.
+    outcome = torch.tensor([0.6, 0.3, 0.1], dtype=inputs.dtype, device=inputs.device)
+
+test/test_interactive_engine.py::test_inference_failure_cancels_every_tree_reservation
+  /workspace/codex-inference-cache-abf5690f/py/test/test_interactive_engine.py:49: TracerWarning: torch.tensor results are registered as constants in the trace. You can safely ignore this warning if you use this function to create tensors out of constant variables that would be the same every time you call this function. In any other case, this might cause the trace to be incorrect.
+    outcome = torch.tensor([1.2, -0.1, -0.1], dtype=inputs.dtype, device=inputs.device)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED test/test_experiment_queue_process.py::test_queue_releases_slot_after_success_and_failure_and_runs_next_job
+FAILED test/test_experiment_queue_process.py::test_queue_reloads_changed_pending_experiment_before_launch
+FAILED test/test_experiment_queue_process.py::test_empty_queue_waits_for_new_desired_experiment
+FAILED test/test_experiment_queue_process.py::test_queue_terminates_a_process_tree_over_its_rss_limit
+FAILED test/test_experiment_queue_process.py::test_queue_termination_records_failure_and_releases_the_running_slot
+5 failed, 394 passed, 4 skipped, 82 warnings in 21.19s

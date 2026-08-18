@@ -1,0 +1,132 @@
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+CMake Warning at CMakeLists.txt:25 (message):
+  clang-tidy not found!
+
+
+-- Build type: Release
+-- Native architecture optimization: ON
+-- Adding release flags (-O3 -DNDEBUG)
+-- Looking for a CUDA compiler
+-- Looking for a CUDA compiler - /usr/local/cuda/bin/nvcc
+-- The CUDA compiler identification is NVIDIA 12.8.93
+-- Detecting CUDA compiler ABI info
+-- Detecting CUDA compiler ABI info - done
+-- Check for working CUDA compiler: /usr/local/cuda/bin/nvcc - skipped
+-- Detecting CUDA compile features
+-- Detecting CUDA compile features - done
+-- Using ccache
+-- Found Python3: /workspace/alphazero-engine-venv/bin/python (found version "3.12.3") found components: Interpreter 
+-- Setting CMAKE_PREFIX_PATH to: /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake
+-- Found CUDA: /usr/local/cuda (found version "12.8") 
+-- Found CUDAToolkit: /usr/local/cuda/include (found version "12.8.93") 
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- PyTorch: CUDA detected: 12.8
+-- PyTorch: CUDA nvcc is: /usr/local/cuda/bin/nvcc
+-- PyTorch: CUDA toolkit directory: /usr/local/cuda
+-- PyTorch: Header version is: 12.8
+-- Found Python: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+-- /usr/local/cuda/lib64/libnvrtc.so shorthash is 2bb82d1a
+-- USE_CUDNN is set to 0. Compiling without cuDNN support
+-- USE_CUSPARSELT is set to 0. Compiling without cuSPARSELt support
+-- USE_CUDSS is set to 0. Compiling without cuDSS support
+-- USE_CUFILE is set to 0. Compiling without cuFile support
+-- Autodetected CUDA architecture(s):  8.9 8.9
+CMake Warning at /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake/Caffe2/public/cuda.cmake:340 (message):
+  pytorch is not compatible with `CMAKE_CUDA_ARCHITECTURES` and will ignore
+  its value.  Please configure `TORCH_CUDA_ARCH_LIST` instead.
+Call Stack (most recent call first):
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake/Caffe2/Caffe2Config.cmake:86 (include)
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake/Torch/TorchConfig.cmake:62 (find_package)
+  CMakeLists.txt:122 (find_package)
+
+
+-- Added CUDA NVCC flags for: -gencode;arch=compute_89,code=sm_89
+CMake Warning at /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake/Torch/TorchConfig.cmake:22 (message):
+  library kineto not found.
+Call Stack (most recent call first):
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake/Torch/TorchConfig.cmake:119 (append_torchlib_if_found)
+  CMakeLists.txt:122 (find_package)
+
+
+-- Found Torch: /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/lib/libtorch.so  
+-- Torch reports _GLIBCXX_USE_CXX11_ABI as: True
+-- Setting _GLIBCXX_USE_CXX11_ABI to: 1
+-- pybind11 v2.13.6 
+-- Found PythonInterp: /usr/bin/python3 (found suitable version "3.12.3", minimum required is "3.7") 
+-- Found PythonLibs: /usr/lib/x86_64-linux-gnu/libpython3.12.so
+-- Performing Test HAS_FLTO
+-- Performing Test HAS_FLTO - Success
+-- Using the multi-header code from /workspace/alphazero-engine/cpp/build/_deps/nlohmann_json-src/include/
+-- Configuring done (12.8s)
+-- Generating done (0.0s)
+-- Build files have been written to: /workspace/codex-inference-cache-abf5690f/cpp/test-build
+[0/2] Re-checking globbed directories...
+[1/26] Building CXX object CMakeFiles/NativeTests.dir/src/games/chess/implementation/ChessAction.cpp.o
+[2/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestMain.cpp.o
+[3/26] Building CXX object CMakeFiles/NativeTests.dir/src/search/InferenceCacheTracker.cpp.o
+[4/26] Building CXX object CMakeFiles/NativeTests.dir/workspace/alphazero-engine/cpp/build/_deps/stockfish-src/src/memory.cpp.o
+[5/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestBitBoard.cpp.o
+[6/26] Building CXX object CMakeFiles/NativeTests.dir/workspace/alphazero-engine/cpp/build/_deps/stockfish-src/src/movegen.cpp.o
+[7/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestGameHistory.cpp.o
+[8/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestBoardLegalMovesCache.cpp.o
+[9/26] Building CXX object CMakeFiles/NativeTests.dir/src/games/chess/implementation/ChessBoard.cpp.o
+[10/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestGoGame.cpp.o
+[11/26] Building CXX object CMakeFiles/NativeTests.dir/workspace/alphazero-engine/cpp/build/_deps/stockfish-src/src/bitboard.cpp.o
+[12/26] Building CXX object CMakeFiles/NativeTests.dir/workspace/alphazero-engine/cpp/build/_deps/stockfish-src/src/position.cpp.o
+[13/26] Building CXX object CMakeFiles/NativeTests.dir/workspace/alphazero-engine/cpp/build/_deps/stockfish-src/src/misc.cpp.o
+[14/26] Building CXX object CMakeFiles/NativeTests.dir/src/util/Log.cpp.o
+[15/26] Building CXX object CMakeFiles/NativeTests.dir/src/games/chess/encoding/ChessPolicyEncoding.cpp.o
+[16/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestChessGame.cpp.o
+[17/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestChessEncoding.cpp.o
+[18/26] Building CXX object CMakeFiles/NativeTests.dir/src/games/chess/encoding/ChessEncoding.cpp.o
+[19/26] Building CXX object CMakeFiles/NativeTests.dir/src/games/chess/presentation/ChessSearchPresentation.cpp.o
+[20/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestGameSearchTree.cpp.o
+[21/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestPackedPlaneFixtures.cpp.o
+[22/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestInferencePipeline.cpp.o
+[23/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestMovePolicyProcessing.cpp.o
+[24/26] Building CXX object CMakeFiles/NativeTests.dir/src/search/InferencePipeline.cpp.o
+[25/26] Building CXX object CMakeFiles/NativeTests.dir/test/TestBatchedSearch.cpp.o
+[26/26] Linking CXX executable NativeTests
+lto-wrapper: warning: using serial compilation of 10 LTRANS jobs
+lto-wrapper: note: see the ‘-flto’ option documentation for more information
+=== GPU ownership immediately before final native tests ===
+2026-08-18T12:30:42+00:00
+Tue Aug 18 12:30:42 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070 ...    On  |   00000000:02:00.0 Off |                  N/A |
+|  0%   39C    P8             16W /  220W |       1MiB /  12282MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 4070 ...    On  |   00000000:C4:00.0 Off |                  N/A |
+|  0%   38C    P8              6W /  220W |       1MiB /  12282MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+Internal ctest changing into directory: /workspace/codex-inference-cache-abf5690f/cpp/test-build
+Test project /workspace/codex-inference-cache-abf5690f/cpp/test-build
+    Start 1: NativeTests
+1/1 Test #1: NativeTests ......................   Passed    1.56 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   1.56 sec

@@ -1,0 +1,59 @@
+=== GPU ownership immediately before final 120-second high-budget arm ===
+2026-08-18T12:21:55+00:00
+Tue Aug 18 12:21:55 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070 ...    On  |   00000000:02:00.0 Off |                  N/A |
+|  0%   39C    P8             16W /  220W |       1MiB /  12282MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 4070 ...    On  |   00000000:C4:00.0 Off |                  N/A |
+|  0%   43C    P8              8W /  220W |       1MiB /  12282MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+    PID USER     PSR %CPU %MEM CMD
+    888 root      30  2.4  0.0 /usr/local/lib/python3.12/dist-packages/tensorboard_data_server/bin/server --logdir=/workspace --reload=5 --samples-per-plugin= --port=0 --port-file=/tmp/tensorboard_data_server_dbe4fzwr/port --die-after-stdin --error-file=/tmp/tensorboard_data_server_dbe4fzwr/startup_error
+  42529 root       2  0.6  0.0 sshd: root@notty
+    746 root      40  0.3  0.0 /opt/portal-aio/venv/bin/python3 /opt/portal-aio/venv/bin/fastapi run --host 127.0.0.1 --port 11111 portal.py
+    760 root      38  0.0  0.0 /opt/portal-aio/venv/bin/python3 /opt/portal-aio/venv/bin/fastapi run --host 127.0.0.1 --port 11112 tunnel_manager.py
+    745 root      52  0.0  0.0 /usr/bin/python3 /usr/local/bin/tensorboard --port 16006 --logdir /workspace
+    785 user      55  0.0  0.0 /opt/syncthing/syncthing serve --no-restart --no-browser --gui-address=127.0.0.1:18384 --gui-apikey=[REDACTED] --no-upgrade
+   1293 root      90  0.0  0.0 /opt/portal-aio/tunnel_manager/cloudflared --no-tls-verify --url http://localhost:6006
+   1176 root      68  0.0  0.0 /opt/portal-aio/tunnel_manager/cloudflared --no-tls-verify --url http://localhost:1111
+   1279 root       5  0.0  0.0 /opt/portal-aio/tunnel_manager/cloudflared --no-tls-verify --url http://localhost:8384
+   1264 root      57  0.0  0.0 /opt/portal-aio/tunnel_manager/cloudflared --no-tls-verify --url https://localhost:8080
+   1216 root      17  0.0  0.0 /opt/portal-aio/caddy_manager/caddy run --config /etc/Caddyfile
+    483 root      26  0.0  0.0 /usr/bin/python3 /usr/local/bin/jupyter-notebook --no-browser --ContentsManager.allow_hidden=True --ServerApp.root_dir=/ --ServerApp.preferred_dir=/ --ip=0.0.0.0 --port=8080 --NotebookApp.open_browser=False --NotebookApp.token=[REDACTED] --NotebookApp.allow_remote_access=True --NotebookApp.allow_origin=* --NotebookApp.certfile=/etc/instance.crt --NotebookApp.keyfile=/etc/instance.key --allow-root
+    609 root      67  0.0  0.0 /usr/bin/python3 /usr/local/bin/supervisord -n -u root -c /etc/supervisor/supervisord.conf
+    770 user      39  0.0  0.0 /opt/syncthing/syncthing serve --no-restart --no-browser --gui-address=127.0.0.1:18384 --gui-apikey=[REDACTED] --no-upgrade
+    404 root      88  0.0  0.0 ssh -i /etc/forward_key -R *:18788:localhost:8080 -R *:18789:localhost:22 -N -o TCPKeepAlive=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=2 ubuntu@ssh5.vast.ai -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o RequestTTY=no -o ExitOnForwardFailure=yes
+    392 root      83  0.0  0.0 sshd: /usr/sbin/sshd -E /proc/1/fd/1 [listener] 0 of 10-100 startups
+      1 root      43  0.0  0.0 bash /.launch
+    391 root      88  0.0  0.0 /bin/bash /opt/instance-tools/bin/boot_default.sh
+    674 root      54  0.0  0.0 cron -f
+    738 root      61  0.0  0.0 tclsh8.6 /usr/bin/unbuffer -p /opt/portal-aio/venv/bin/fastapi run --host 127.0.0.1 --port 11112 tunnel_manager.py
+    663 root      59  0.0  0.0 python3 /usr/local/bin/log-tee /var/log/portal/caddy.log
+    668 root      68  0.0  0.0 python3 /usr/local/bin/log-tee /var/log/portal/instance_portal.log
+    683 root      93  0.0  0.0 python3 /usr/local/bin/log-tee /var/log/portal/tensorboard.log
+    691 root      14  0.0  0.0 python3 /usr/local/bin/log-tee /var/log/portal/tunnel_manager.log
+    669 root      69  0.0  0.0 python3 /usr/local/bin/log-tee /var/log/portal/cron.log
+    671 user      34  0.0  0.0 python3 /usr/local/bin/log-tee /var/log/portal/syncthing.log
+    654 root      22  0.0  0.0 /bin/bash /opt/supervisor-scripts/instance_portal.sh
+    657 user      43  0.0  0.0 /bin/bash /opt/supervisor-scripts/syncthing.sh
+    658 root      23  0.0  0.0 /bin/bash /opt/supervisor-scripts/tensorboard.sh
+abf5690ff92efa57c3e50d4a3dd0863460c042c0
+52d735c1e4f6d4c1a651e40240c5453afef8c46b4979fe495c98e53c00a13554  /workspace/codex-mcgs-bench-2949744f/benchmark-results-4070s-20260818/current-r3-seed-20260818.jit.pt
+ec0fe73449d7ec6ff58db6b060d4c2535afef1d2cfdac098fb44b0cff22735b2  /workspace/codex-inference-cache-abf5690f/py/reference/chess-stockfish-8moves-v3-openings-50.tsv
