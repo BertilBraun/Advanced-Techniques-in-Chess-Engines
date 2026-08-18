@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "source_revision": "f77645fa58e4148fb3c03f6fac98bc009696eb82",
+  "device": {
+    "index": 0,
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "compute_capability": "8.9",
+    "driver_version": "595.71.05",
+    "torch_version": "2.12.1+cu126",
+    "cuda_runtime": "12.6",
+    "cudnn_version": 91002
+  },
+  "models": {
+    "chess-cnn-4m": {
+      "parameters": 3809520,
+      "sha256": "79f9e641495b8e72768ada1651e89abe65b3361766fbf746e17af5154c398fe2"
+    },
+    "chess-attention-4m": {
+      "parameters": 3624336,
+      "sha256": "fe5b9b63c55a2dbb1802b634a49efb2ae11b3a846b89fe4f49ae2253e075635f"
+    }
+  },
+  "batch_size": 64,
+  "direct": {
+    "iterations_per_replicate": 5000,
+    "positions_per_replicate": 320000,
+    "positions_per_second": {
+      "cnn_automatic": [34233.778097476476, 33273.24577839375, 33552.17260495459],
+      "attention_automatic": [57417.03965575578, 57721.820546956005, 56181.94559458617],
+      "attention_flash": [56876.96560627761, 54524.70146820751, 54190.25212647642],
+      "attention_memory_efficient": [58269.773173099195, 56788.307639260645, 56290.730309016544],
+      "attention_cudnn": [54823.91341280522, 53921.27245610642, 54316.21469574664]
+    }
+  },
+  "processed_replicas": {
+    "workers": 4,
+    "iterations_per_worker": 2000,
+    "positions_per_replicate": 512000,
+    "positions_per_second": {
+      "cnn_automatic": [67920.11790342412, 68849.0816479721, 76397.3081918172],
+      "attention_automatic": [86168.8082032832, 86549.77146007969, 87833.99355318559],
+      "attention_flash": [85814.43459778522, 86922.17515317586, 86323.30544476357],
+      "attention_memory_efficient": [97521.67730985682, 97846.03504272117, 92479.73634050289],
+      "attention_cudnn": [86189.92875119977, 86541.56936213051, 86226.23078627972]
+    }
+  },
+  "long_interleaved_processed_replicas": {
+    "workers": 4,
+    "iterations_per_worker": 5000,
+    "positions_per_replicate": 1280000,
+    "positions_per_second": {
+      "cnn_automatic": [72064.73502181466, 67655.1845207066],
+      "attention_memory_efficient": [98583.27684194513, 97060.19027338171]
+    }
+  }
+}
