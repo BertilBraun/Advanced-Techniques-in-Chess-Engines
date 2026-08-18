@@ -15,6 +15,14 @@ class ComparisonProtocol(str, Enum):
     EQUAL_WALL_TIME = 'equal_wall_time'
 
 
+class AttentionBackend(str, Enum):
+    AUTOMATIC = 'automatic'
+    FLASH = 'flash'
+    MEMORY_EFFICIENT = 'memory_efficient'
+    CUDNN = 'cudnn'
+    MATH = 'math'
+
+
 class ProductionTopology(FrozenModel):
     trainer_device_ids: tuple[int, ...] = Field(min_length=1)
     global_training_batch_size: int = Field(gt=0)

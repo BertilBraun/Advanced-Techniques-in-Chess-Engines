@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 import gc
 import hashlib
@@ -15,10 +16,12 @@ import torch
 import torch.distributed as distributed
 from pydantic import Field
 from torch import Tensor, nn
+from torch.nn.attention import SDPBackend, sdpa_kernel
 from torch.nn.parallel import DistributedDataParallel
 
 from src.training.architecture_benchmark import (
     ArchitectureBenchmarkPlan,
+    AttentionBackend,
     ComparisonProtocol,
     load_architecture_benchmark_plan,
 )
@@ -69,6 +72,8 @@ class ArchitectureBenchmarkResult(FrozenModel):
     torch_version: str
     cuda_version: str
     device_name: str
+    training_sdpa_backend: AttentionBackend
+    training_compiled: bool
     training: TrainingMeasurement
     inference: tuple[InferenceMeasurement, ...]
 
@@ -99,6 +104,8 @@ def _parse_arguments() -> argparse.Namespace:
     run_parser.add_argument('--frozen-replay', type=Path, required=True)
     run_parser.add_argument('--output', type=Path, required=True)
     run_parser.add_argument('--acknowledge-gpu-load', action='store_true')
+    run_parser.add_argument('--training-sdpa-backend', type=AttentionBackend, default=AttentionBackend.AUTOMATIC)
+    run_parser.add_argument('--compile-training', action='store_true')
     return parser.parse_args()
 
 
@@ -209,31 +216,33 @@ def _training_measurement(
     protocol: ComparisonProtocol,
     rank: int,
     device: torch.device,
+    attention_backend: AttentionBackend,
 ) -> TrainingMeasurement:
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.0001, amsgrad=True, eps=1e-5)
-    for step in range(plan.training.warmup_optimizer_steps):
-        _train_step(model, optimizer, dataset, _batch_indices(dataset.sample_count, step, rank, plan), device)
-    distributed.barrier()
-    torch.cuda.reset_peak_memory_stats(device)
-    started = time.perf_counter()
-    completed_steps = 0
-    while True:
-        _train_step(
-            model,
-            optimizer,
-            dataset,
-            _batch_indices(dataset.sample_count, completed_steps, rank, plan),
-            device,
-        )
-        completed_steps += 1
-        if protocol is ComparisonProtocol.EQUAL_SAMPLES:
-            if completed_steps >= plan.training.equal_sample_optimizer_steps:
-                break
-        else:
-            elapsed_tensor = torch.tensor(time.perf_counter() - started, device=device)
-            distributed.all_reduce(elapsed_tensor, op=distributed.ReduceOp.MAX)
-            if elapsed_tensor.item() >= plan.training.equal_wall_time_seconds:
-                break
+    with _sdpa_backend_context(attention_backend):
+        for step in range(plan.training.warmup_optimizer_steps):
+            _train_step(model, optimizer, dataset, _batch_indices(dataset.sample_count, step, rank, plan), device)
+        distributed.barrier()
+        torch.cuda.reset_peak_memory_stats(device)
+        started = time.perf_counter()
+        completed_steps = 0
+        while True:
+            _train_step(
+                model,
+                optimizer,
+                dataset,
+                _batch_indices(dataset.sample_count, completed_steps, rank, plan),
+                device,
+            )
+            completed_steps += 1
+            if protocol is ComparisonProtocol.EQUAL_SAMPLES:
+                if completed_steps >= plan.training.equal_sample_optimizer_steps:
+                    break
+            else:
+                elapsed_tensor = torch.tensor(time.perf_counter() - started, device=device)
+                distributed.all_reduce(elapsed_tensor, op=distributed.ReduceOp.MAX)
+                if elapsed_tensor.item() >= plan.training.equal_wall_time_seconds:
+                    break
     torch.cuda.synchronize(device)
     distributed.barrier()
     elapsed = time.perf_counter() - started
@@ -254,6 +263,20 @@ def _training_measurement(
         maximum_rank_peak_allocated_bytes=int(measurements[1].item()),
         maximum_rank_peak_reserved_bytes=int(measurements[2].item()),
     )
+
+
+def _sdpa_backend_context(attention_backend: AttentionBackend) -> AbstractContextManager[None]:
+    match attention_backend:
+        case AttentionBackend.AUTOMATIC:
+            return nullcontext()
+        case AttentionBackend.FLASH:
+            return sdpa_kernel(SDPBackend.FLASH_ATTENTION, set_priority=True)
+        case AttentionBackend.MEMORY_EFFICIENT:
+            return sdpa_kernel(SDPBackend.EFFICIENT_ATTENTION, set_priority=True)
+        case AttentionBackend.CUDNN:
+            return sdpa_kernel(SDPBackend.CUDNN_ATTENTION, set_priority=True)
+        case AttentionBackend.MATH:
+            return sdpa_kernel(SDPBackend.MATH, set_priority=True)
 
 
 def _inference_measurements(
@@ -338,11 +361,22 @@ def _run_benchmark(arguments: argparse.Namespace, plan: ArchitectureBenchmarkPla
     parameter_count = sum(parameter.numel() for parameter in network.parameters())
     if parameter_count != entry.expected_training_parameters:
         raise ValueError('Constructed parameter count disagrees with the architecture catalog.')
-    model = DistributedDataParallel(TrainingNetwork(network), device_ids=[device.index])
+    training_network: nn.Module = TrainingNetwork(network)
+    if arguments.compile_training:
+        training_network = torch.compile(training_network)
+    model = DistributedDataParallel(training_network, device_ids=[device.index])
     dataset = _load_frozen_replay(arguments.frozen_replay)
-    training = _training_measurement(model, dataset, plan, arguments.protocol, rank, device)
+    training = _training_measurement(
+        model,
+        dataset,
+        plan,
+        arguments.protocol,
+        rank,
+        device,
+        arguments.training_sdpa_backend,
+    )
     model.zero_grad(set_to_none=True)
-    del model
+    del model, training_network
     gc.collect()
     torch.cuda.empty_cache()
     inference = _inference_measurements(network, plan, device, world_size)
@@ -356,6 +390,8 @@ def _run_benchmark(arguments: argparse.Namespace, plan: ArchitectureBenchmarkPla
             torch_version=torch.__version__,
             cuda_version=torch.version.cuda or 'none',
             device_name=torch.cuda.get_device_name(device),
+            training_sdpa_backend=arguments.training_sdpa_backend,
+            training_compiled=arguments.compile_training,
             training=training,
             inference=inference,
         )

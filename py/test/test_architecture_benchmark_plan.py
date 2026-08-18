@@ -5,10 +5,15 @@ import pytest
 import numpy as np
 import torch
 
-from src.training.architecture_benchmark import load_architecture_benchmark_plan
+from src.training.architecture_benchmark import AttentionBackend, load_architecture_benchmark_plan
 from src.training.architecture_catalog import load_architecture_catalog
 from src.training.network import Network
-from tools.benchmark_chess_architectures import _create_inference_states, _prepare_inference_network, _run_benchmark
+from tools.benchmark_chess_architectures import (
+    _create_inference_states,
+    _prepare_inference_network,
+    _run_benchmark,
+    _sdpa_backend_context,
+)
 from tools.prepare_architecture_benchmark_model import (
     ModelPreparationArguments,
     prepare_architecture_benchmark_model,
@@ -55,6 +60,20 @@ def test_single_gpu_benchmark_plan_preserves_global_training_and_inference_batch
     assert plan.topology.local_training_batch_size == 2048
     assert plan.topology.production_inference_batch_size == 64
     assert plan.training.equal_wall_time_seconds == 15.0
+
+
+def test_single_gpu_batch256_plan_matches_one_training_rank() -> None:
+    plan = load_architecture_benchmark_plan(Path('configs/benchmarks/chess-architecture-single-gpu-batch256-15s.yaml'))
+
+    assert plan.topology.trainer_device_ids == (0,)
+    assert plan.topology.global_training_batch_size == 256
+    assert plan.topology.local_training_batch_size == 256
+
+
+@pytest.mark.parametrize('attention_backend', tuple(AttentionBackend))
+def test_training_sdpa_backend_context_is_constructible(attention_backend: AttentionBackend) -> None:
+    with _sdpa_backend_context(attention_backend):
+        pass
 
 
 def test_chess_architecture_benchmark_refuses_gpu_work_without_acknowledgement() -> None:
