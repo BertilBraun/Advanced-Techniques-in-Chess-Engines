@@ -1,6 +1,6 @@
-from decimal import Decimal
 import hashlib
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import cast
 
@@ -9,16 +9,16 @@ import pytest
 from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions, PackedPlaneLayout
-from src.replay.layout import ReplayLayout
 from src.replay.description import ReplayDescription
+from src.replay.layout import ReplayLayout
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.contracts import CheckpointManifest
 from src.training.checkpoint.persistence import publish_checkpoint
 from src.training.configuration import TrainingArgs
 from src.training.network import (
     AttentionNetworkParams,
-    GoPointPassPolicyHeadConfiguration,
     DisabledResidualContext,
+    GoPointPassPolicyHeadConfiguration,
     NetworkDefinition,
     NetworkParams,
 )
@@ -31,9 +31,9 @@ from src.training.progressive import (
     retain_progressive_candidate_checkpoints,
 )
 from src.training.session import ProgressiveTrainingSession
+from src.training.targets import TrainingTargetLayout
 from src.training.trainer.contracts import TrainerStartup
 from src.util.atomic_file import write_text_atomically
-from src.training.targets import TrainingTargetLayout
 
 
 def _network(width: int) -> NetworkParams:

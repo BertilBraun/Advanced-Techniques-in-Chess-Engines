@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import time
+from pathlib import Path
 
 from src.evaluation.manager import EvaluationManager
 from src.experiment.base_configuration import initial_generation
@@ -17,9 +17,9 @@ from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.retention import CheckpointRetention
 from src.training.credit_ledger import CreditLedger
 from src.training.reporting import TrainingReporter
+from src.training.run_limits import RunLimitMonitor
 from src.training.self_play_group import SelfPlayGroup
 from src.training.session import TrainingSessionQuantum, create_training_session
-from src.training.run_limits import RunLimitMonitor
 from src.util.log import log
 
 
