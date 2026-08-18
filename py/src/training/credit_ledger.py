@@ -39,6 +39,7 @@ class CreditLedger:
         parameters: CreditTrainingParams,
         global_batch_size: int,
         starting_checkpoint: CheckpointReference,
+        adopt_completed_quantum: bool = True,
     ) -> None:
         self.path = run_path / 'credit-ledger.json'
         self.parameters = parameters
@@ -56,7 +57,8 @@ class CreditLedger:
             self.save()
         if self._state.active_checkpoint.generation != self.model_generation:
             raise ValueError('Active checkpoint generation disagrees with completed optimizer progress.')
-        self._adopt_completed_quantum(run_path)
+        if adopt_completed_quantum:
+            self._adopt_completed_quantum(run_path)
 
     @property
     def state(self) -> CreditLedgerState:
@@ -103,20 +105,27 @@ class CreditLedger:
         self.save()
 
     def commit_quantum(self, result: TrainingQuantumResult) -> None:
+        self.commit_checkpoint(result.completed_optimizer_steps, result.checkpoint)
+
+    def commit_checkpoint(
+        self,
+        completed_optimizer_steps: int,
+        checkpoint: CheckpointReference,
+    ) -> None:
         expected_steps = self._state.completed_optimizer_steps + self.parameters.optimizer_steps_per_quantum
-        if result.completed_optimizer_steps != expected_steps:
+        if completed_optimizer_steps != expected_steps:
             raise ValueError('Training result does not advance exactly one configured quantum.')
         expected_generation = self.model_generation + 1
-        if result.checkpoint.generation != expected_generation:
+        if checkpoint.generation != expected_generation:
             raise ValueError('Training checkpoint does not advance exactly one generation.')
         required = Decimal(self.parameters.presentation_credits_per_quantum(self.global_batch_size))
         if self._state.available_credits < required:
             raise ValueError('Training result cannot consume unavailable credits.')
         self._state = self._state.model_copy(
             update={
-                'completed_optimizer_steps': result.completed_optimizer_steps,
+                'completed_optimizer_steps': completed_optimizer_steps,
                 'consumed_credits': self._state.consumed_credits + required,
-                'active_checkpoint': result.checkpoint,
+                'active_checkpoint': checkpoint,
             }
         )
         self.save()

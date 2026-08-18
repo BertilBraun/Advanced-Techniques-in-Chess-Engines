@@ -91,6 +91,7 @@ training:
     minimum_free_disk_gib: 20.0
     resource_telemetry_interval_seconds: 5.0
   random_seed: 20260811
+  progressive_model_sizing: null
 evaluation:
   cadence_seconds: 1200
   job_timeout_seconds: 1800

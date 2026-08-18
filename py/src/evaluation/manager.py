@@ -101,11 +101,17 @@ class EvaluationManager:
             )
             self._save_state()
         self._processes: dict[str, tuple[mp.Process, float]] = {}
-        self._resume_pending_jobs()
+        self._started = False
 
     @property
     def elapsed_seconds(self) -> float:
         return self._elapsed_at_session_start + self.clock() - self.session_started_at
+
+    def start(self) -> None:
+        if self._started:
+            return
+        self._started = True
+        self._resume_pending_jobs()
 
     def collect_completed_jobs(self) -> tuple[EvaluationResult, ...]:
         completed: list[EvaluationResult] = []
@@ -155,6 +161,7 @@ class EvaluationManager:
         return tuple(completed)
 
     def schedule_due_jobs(self, checkpoint: CheckpointReference) -> tuple[EvaluationJob, ...]:
+        self.start()
         elapsed_seconds = self.elapsed_seconds
         self._record_checkpoint_publication(checkpoint, elapsed_seconds)
         scheduled: list[EvaluationJob] = []
@@ -192,6 +199,10 @@ class EvaluationManager:
         )
 
     def close(self) -> None:
+        if not self._started:
+            self._state = self._state.model_copy(update={'accumulated_elapsed_seconds': self.elapsed_seconds})
+            self._save_state()
+            return
         deadline = self.clock() + self.configuration.shutdown_grace_seconds
         while self._processes and self.clock() < deadline:
             self.collect_completed_jobs()

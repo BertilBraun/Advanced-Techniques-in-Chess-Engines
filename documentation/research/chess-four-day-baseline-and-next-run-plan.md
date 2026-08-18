@@ -211,6 +211,34 @@ can reject obviously harmful formulations but cannot prove the self-play learnin
 for the one experimental run, its actual contribution must be reported as part of that run and interpreted without a
 full multi-day ablation.
 
+### Screening result and decision
+
+The cheap screen completed on 2026-08-18 with the frozen R4 generation-624 checkpoint. Each mode played 50 games as
+25 paired openings with colors reversed, using exactly 64 searches per candidate move against Stockfish skill level 4.
+All modes reused the same openings and seeds.
+
+| Mode | W-D-L | Score | Decisive plies mean / median / P90 | Candidate-win plies mean / median / P90 |
+| --- | ---: | ---: | ---: | ---: |
+| No length term | 50-0-0 | 1.00 | 98.9 / 96 / 137 | 98.9 / 96 / 137 |
+| Final-root preference | 48-1-1 | 0.97 | 96.9 / 96 / 138 | 97.0 / 96 / 138 |
+| Decisive-gated PUCT preference | 46-1-3 | 0.93 | 95.8 / 93 / 124 | 98.0 / 94 / 124 |
+
+Final-root selection improved none of the 50 matched opening/color games and worsened two; PUCT improved none and
+worsened four. Final-root selection overrode the ordinary visit leader ten times. The modest changes in mean game
+length are not a useful conversion gain: the final-root median and tail did not improve consistently, and the shorter
+PUCT decisive-game statistic includes newly introduced losses. There were no maximum-ply adjudications.
+
+Final-root-only use also does not meet the learning objective. It changes later trajectories, but it does not alter the
+current root visit distribution and therefore does not teach the policy the length preference at that decision. PUCT
+does alter the policy target, but the tested bounded additive formulation sacrificed playing strength. The existing
+unconditional remaining-game-length head predicts duration under the observed policy rather than action-conditional
+time to safe conversion, so a decisive absolute value gate does not make candidate moves WDL-equivalent.
+
+Do not include remaining-game-length search utility, final-root length selection, or a game-length-reduction objective
+based on this head in the next multi-day run. Reconsider the topic only after a separate sibling-action calibration
+shows that an outcome-conditioned target can rank conversion time among genuinely WDL-equivalent moves. Such a
+redesign is new research, not unfinished work for the planned run.
+
 ## 9. Adaptive search budget
 
 The initial design is an online progressive search, not a fixed-position learned classifier:
@@ -279,7 +307,7 @@ Before proposing the final experimental configuration, complete and review:
 5. a reliable progressive-size transition test;
 6. the adaptive-search audit;
 7. the transposition reuse audit;
-8. the cheap moves-left screening, if inference support is implemented.
+8. the completed moves-left screening, which rejected remaining-length search utility for the planned run.
 
 Select one coherent package for the single four-day experimental run. Any mechanism that has not passed its cheap
 screen remains out of that run.
