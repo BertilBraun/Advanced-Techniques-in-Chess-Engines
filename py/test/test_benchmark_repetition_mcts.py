@@ -1,6 +1,9 @@
+import random
+
 from tools.benchmark_repetition_mcts import (
     CacheCounters,
     UniqueRandomStartGenerator,
+    select_full_searches,
     starting_position_digest,
     subtract_cache_counters,
 )
@@ -54,3 +57,12 @@ def test_cache_counter_delta_preserves_cumulative_set_size() -> None:
         prior_batch_repeats=3,
         set_size=18,
     )
+
+
+def test_mixed_search_schedule_is_deterministic() -> None:
+    first = select_full_searches(512, 0.25, random.Random(23))
+    second = select_full_searches(512, 0.25, random.Random(23))
+
+    assert first == second
+    assert 100 < sum(first) < 160
+    assert len(first) - sum(first) > 350

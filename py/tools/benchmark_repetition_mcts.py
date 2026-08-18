@@ -55,6 +55,8 @@ class CacheCounters:
 @dataclass(frozen=True)
 class PlyResult:
     measured_ply: int
+    full_search_requests: int
+    fast_search_requests: int
     elapsed_seconds: float
     searches_completed: int
     searches_per_second: float
@@ -76,7 +78,10 @@ class BenchmarkResult:
     warmup_games: int
     warmup_steps: int
     measurement_steps: int
-    target_searches_per_ply: int
+    full_searches_per_move: int
+    fast_searches_per_move: int
+    full_search_probability: float
+    retained_root_visit_fraction: float
     parallel_searches: int
     maximum_opening_plies: int
     random_seed: int
@@ -91,6 +96,8 @@ class BenchmarkResult:
     completed_game_plies_per_second: float
     searches_completed: int
     searches_per_second: float
+    full_search_requests: int
+    fast_search_requests: int
     process_cpu_percent: float
     peak_rss_mib: float
     mean_gpu_utilization_percent: float | None
@@ -120,7 +127,10 @@ class Arguments:
     warmup_games: int
     warmup_steps: int
     steps: int
-    searches: int
+    full_searches: int
+    fast_searches: int
+    full_search_probability: float
+    retained_root_visit_fraction: float
     parallel_searches: int
     maximum_opening_plies: int
     random_seed: int
@@ -143,6 +153,8 @@ class SearchStepsResult:
     game_plies: list[int]
     terminal_roots: int
     searches_completed: int
+    full_search_requests: int
+    fast_search_requests: int
     per_ply: tuple[PlyResult, ...]
 
 
@@ -240,13 +252,21 @@ def select_action(result: ChessSelfPlaySearchResult, game_ply: int, generator: r
     return generator.choices([visit.action_id for visit in visits], weights=weights, k=1)[0]
 
 
+def select_full_searches(
+    count: int,
+    probability: float,
+    generator: random.Random,
+) -> tuple[bool, ...]:
+    return tuple(generator.random() < probability for _ in range(count))
+
+
 def create_search(args: Arguments, model_generation: int = 0) -> ChessSelfPlaySearch:
     return ChessSelfPlaySearch(
         InferenceConfiguration(args.device, str(args.model)),
         SelfPlaySearchParameters(
             args.parallel_searches,
-            args.searches,
-            args.searches,
+            args.full_searches,
+            args.fast_searches,
             TreeSearchParameters(
                 1.5,
                 FirstPlayUrgencyParameters(FirstPlayUrgencyKind.REDUCED_PARENT_VALUE, 0.2),
@@ -292,16 +312,34 @@ def run_search_steps(
     game_plies: list[int],
     start_generator: UniqueRandomStartGenerator,
     move_generator: random.Random,
+    schedule_generator: random.Random,
+    full_search_probability: float,
+    retained_root_visit_fraction: float,
     steps: int,
     collect_per_ply: bool,
 ) -> SearchStepsResult:
     terminal_roots = 0
     searches_completed = 0
+    full_search_requests = 0
+    fast_search_requests = 0
     per_ply: list[PlyResult] = []
     for measured_ply in range(1, steps + 1):
         cache_before = cache_counters(search.inference_statistics())
+        full_search_flags = select_full_searches(len(roots), full_search_probability, schedule_generator)
+        for root, full_search in zip(roots, full_search_flags, strict=True):
+            if full_search:
+                root.discount(retained_root_visit_fraction)
+        ply_full_search_requests = sum(full_search_flags)
+        ply_fast_search_requests = len(full_search_flags) - ply_full_search_requests
+        full_search_requests += ply_full_search_requests
+        fast_search_requests += ply_fast_search_requests
         wall_time_start = time.perf_counter()
-        search_results = search.search([ChessSelfPlaySearchRequest(root, True) for root in roots])
+        search_results = search.search(
+            [
+                ChessSelfPlaySearchRequest(root, full_search)
+                for root, full_search in zip(roots, full_search_flags, strict=True)
+            ]
+        )
         ply_elapsed_seconds = time.perf_counter() - wall_time_start
         ply_searches = search_results.simulations_completed
         searches_completed += ply_searches
@@ -328,6 +366,8 @@ def run_search_steps(
             per_ply.append(
                 PlyResult(
                     measured_ply=measured_ply,
+                    full_search_requests=ply_full_search_requests,
+                    fast_search_requests=ply_fast_search_requests,
                     elapsed_seconds=ply_elapsed_seconds,
                     searches_completed=ply_searches,
                     searches_per_second=ply_searches / ply_elapsed_seconds,
@@ -348,6 +388,8 @@ def run_search_steps(
         game_plies=game_plies,
         terminal_roots=terminal_roots,
         searches_completed=searches_completed,
+        full_search_requests=full_search_requests,
+        fast_search_requests=fast_search_requests,
         per_ply=tuple(per_ply),
     )
 
@@ -358,7 +400,8 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         args.warmup_games,
         args.warmup_steps,
         args.steps,
-        args.searches,
+        args.full_searches,
+        args.fast_searches,
         args.parallel_searches,
         args.inference_workers,
         args.maximum_batch_size,
@@ -368,14 +411,19 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         raise ValueError('Game, search, inference, warm-up, and step counts must be positive.')
     if args.parallel_searches > 2:
         raise ValueError('This self-play cache benchmark permits at most two parallel searches.')
-    if args.searches < 150 or args.searches > 800:
-        raise ValueError('Search budget must lie in the self-play experiment range [150, 800].')
+    if not 150 <= args.fast_searches <= args.full_searches <= 800:
+        raise ValueError('Search budgets must satisfy 150 <= fast <= full <= 800.')
+    if not 0.0 < args.full_search_probability <= 1.0:
+        raise ValueError('Full-search probability must lie in (0, 1].')
+    if not 0.0 <= args.retained_root_visit_fraction <= 1.0:
+        raise ValueError('Retained root visit fraction must lie in [0, 1].')
     if args.gpu_sampling_interval_seconds < 0:
         raise ValueError('GPU sampling interval cannot be negative.')
 
     search = create_search(args)
     start_generator = UniqueRandomStartGenerator(args.random_seed, args.maximum_opening_plies)
     move_generator = random.Random(args.random_seed + 1)
+    schedule_generator = random.Random(args.random_seed + 2)
     warmup_roots, warmup_game_plies, _ = new_random_roots(search, start_generator, args.warmup_games)
     run_search_steps(
         search,
@@ -383,6 +431,9 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         warmup_game_plies,
         start_generator,
         move_generator,
+        schedule_generator,
+        args.full_search_probability,
+        args.retained_root_visit_fraction,
         args.warmup_steps,
         collect_per_ply=False,
     )
@@ -414,6 +465,9 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         game_plies,
         start_generator,
         move_generator,
+        schedule_generator,
+        args.full_search_probability,
+        args.retained_root_visit_fraction,
         args.steps,
         collect_per_ply=True,
     )
@@ -445,7 +499,10 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         warmup_games=args.warmup_games,
         warmup_steps=args.warmup_steps,
         measurement_steps=args.steps,
-        target_searches_per_ply=args.searches,
+        full_searches_per_move=args.full_searches,
+        fast_searches_per_move=args.fast_searches,
+        full_search_probability=args.full_search_probability,
+        retained_root_visit_fraction=args.retained_root_visit_fraction,
         parallel_searches=args.parallel_searches,
         maximum_opening_plies=args.maximum_opening_plies,
         random_seed=args.random_seed,
@@ -460,6 +517,8 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         completed_game_plies_per_second=completed_game_plies / elapsed_seconds,
         searches_completed=measurement_result.searches_completed,
         searches_per_second=measurement_result.searches_completed / elapsed_seconds,
+        full_search_requests=measurement_result.full_search_requests,
+        fast_search_requests=measurement_result.fast_search_requests,
         process_cpu_percent=100 * process_seconds / elapsed_seconds,
         peak_rss_mib=peak_rss_mib,
         mean_gpu_utilization_percent=(
@@ -494,7 +553,10 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--warmup-games', type=int, default=64)
     parser.add_argument('--warmup-steps', type=int, default=1)
     parser.add_argument('--steps', type=int, default=6)
-    parser.add_argument('--searches', type=int, choices=range(150, 801), default=800)
+    parser.add_argument('--full-searches', type=int, default=800)
+    parser.add_argument('--fast-searches', type=int, default=150)
+    parser.add_argument('--full-search-probability', type=float, default=0.25)
+    parser.add_argument('--retained-root-visit-fraction', type=float, default=0.6)
     parser.add_argument('--parallel-searches', type=int, choices=(1, 2), default=1)
     parser.add_argument('--maximum-opening-plies', type=int, default=12)
     parser.add_argument('--random-seed', type=int, default=20260818)
@@ -510,7 +572,10 @@ def parse_arguments() -> Arguments:
         warmup_games=namespace.warmup_games,
         warmup_steps=namespace.warmup_steps,
         steps=namespace.steps,
-        searches=namespace.searches,
+        full_searches=namespace.full_searches,
+        fast_searches=namespace.fast_searches,
+        full_search_probability=namespace.full_search_probability,
+        retained_root_visit_fraction=namespace.retained_root_visit_fraction,
         parallel_searches=namespace.parallel_searches,
         maximum_opening_plies=namespace.maximum_opening_plies,
         random_seed=namespace.random_seed,
