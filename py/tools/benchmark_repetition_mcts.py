@@ -26,7 +26,6 @@ from AlphaZeroCpp import (
     TreeSearchParameters,
 )
 
-
 if TYPE_CHECKING:
     from AlphaZeroCpp import ChessSelfPlaySearchResult, InferenceStatistics
 
