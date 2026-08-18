@@ -4,7 +4,7 @@ from enum import Enum
 from math import isfinite
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import Field, model_validator
+from pydantic import Field, JsonValue, model_validator
 
 from src.experiment.generation_schedule import (
     FloatGenerationSchedule,
@@ -125,6 +125,18 @@ class BatchedInferenceParams(FrozenModel):
     inference_batch_size: int = Field(gt=0)
     outstanding_batches_per_worker: int = Field(ge=1, le=2)
     sdpa_backend: SdpaBackend = SdpaBackend.AUTOMATIC
+
+    @model_validator(mode='before')
+    @classmethod
+    def preserve_existing_automatic_dispatch(
+        cls,
+        configuration: BatchedInferenceParams | dict[str, JsonValue],
+    ) -> BatchedInferenceParams | dict[str, JsonValue]:
+        match configuration:
+            case dict() if 'sdpa_backend' not in configuration:
+                return {**configuration, 'sdpa_backend': SdpaBackend.AUTOMATIC.value}
+            case BatchedInferenceParams() | dict():
+                return configuration
 
 
 class RandomOpeningStartConfiguration(FrozenModel):

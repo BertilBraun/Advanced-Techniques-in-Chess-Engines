@@ -21,3 +21,4 @@ def test_existing_inference_configuration_preserves_automatic_dispatch() -> None
     )
 
     assert configuration.sdpa_backend is SdpaBackend.AUTOMATIC
+    assert configuration.model_dump(exclude_unset=True) == configuration.model_dump()
