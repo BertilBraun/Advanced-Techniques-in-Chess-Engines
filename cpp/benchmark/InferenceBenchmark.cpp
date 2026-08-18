@@ -4,6 +4,7 @@
 #include "search/InferencePipeline.hpp"
 #include "util/py.hpp"
 
+#include <ATen/Context.h>
 #include <barrier>
 #include <nlohmann/json.hpp>
 #include <numeric>
@@ -21,6 +22,7 @@ struct Arguments {
     size_t iterations = 20;
     size_t slots = 3;
     uint32_t seed = 0;
+    std::string sdpaBackend = "automatic";
 };
 
 Arguments parseArguments(const int argumentCount, char **argumentValues) {
@@ -53,6 +55,8 @@ Arguments parseArguments(const int argumentCount, char **argumentValues) {
             arguments.slots = std::stoull(value);
         } else if (option == "--seed") {
             arguments.seed = static_cast<uint32_t>(std::stoul(value));
+        } else if (option == "--sdpa-backend") {
+            arguments.sdpaBackend = value;
         } else {
             throw std::invalid_argument("Unknown benchmark option: " + option);
         }
@@ -63,6 +67,27 @@ Arguments parseArguments(const int argumentCount, char **argumentValues) {
             "--model, --mode, --batch-size, --workers, and --iterations are required");
     }
     return arguments;
+}
+
+void configureSdpaBackend(const Arguments &arguments) {
+    if (arguments.sdpaBackend == "automatic") {
+        return;
+    }
+    if (arguments.device != InferenceDevice::Cuda) {
+        throw std::invalid_argument("An explicit SDPA backend requires CUDA inference");
+    }
+    const bool useFlash = arguments.sdpaBackend == "flash";
+    const bool useMemoryEfficient = arguments.sdpaBackend == "memory_efficient";
+    const bool useMath = arguments.sdpaBackend == "math";
+    const bool useCuDNN = arguments.sdpaBackend == "cudnn";
+    if (!useFlash && !useMemoryEfficient && !useMath && !useCuDNN) {
+        throw std::invalid_argument(
+            "SDPA backend must be automatic, flash, memory_efficient, math, or cudnn");
+    }
+    at::globalContext().setSDPUseFlash(useFlash);
+    at::globalContext().setSDPUseMemEfficient(useMemoryEfficient);
+    at::globalContext().setSDPUseMath(useMath);
+    at::globalContext().setSDPUseCuDNN(useCuDNN);
 }
 
 std::vector<Board> generateBoards(const size_t count, const uint32_t seed) {
@@ -335,6 +360,7 @@ int main(const int argumentCount, char **argumentValues) {
         Stockfish::Bitboards::init();
         Stockfish::Position::init();
         const Arguments arguments = parseArguments(argumentCount, argumentValues);
+        configureSdpaBackend(arguments);
         const size_t positions = arguments.batchSize * arguments.iterations * arguments.workers;
         const std::vector<Board> boards = generateBoards(positions, arguments.seed);
         double encodeMilliseconds = 0.0;
@@ -376,6 +402,7 @@ int main(const int argumentCount, char **argumentValues) {
         result["batch_size"] = arguments.batchSize;
         result["workers"] = arguments.workers;
         result["iterations_per_worker"] = arguments.iterations;
+        result["sdpa_backend"] = arguments.sdpaBackend;
         result["positions"] = positions;
         result["positions_per_second"] = static_cast<double>(positions) / elapsedSeconds;
         result["state_generation_seed"] = arguments.seed;

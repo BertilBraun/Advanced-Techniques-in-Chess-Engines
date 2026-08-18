@@ -9,6 +9,10 @@ from src.training.architecture_benchmark import load_architecture_benchmark_plan
 from src.training.architecture_catalog import load_architecture_catalog
 from src.training.network import Network
 from tools.benchmark_chess_architectures import _create_inference_states, _prepare_inference_network, _run_benchmark
+from tools.prepare_architecture_benchmark_model import (
+    ModelPreparationArguments,
+    prepare_architecture_benchmark_model,
+)
 from tools.create_synthetic_architecture_replay import ReplayGenerationArguments, create_synthetic_architecture_replay
 
 
@@ -89,3 +93,21 @@ def test_synthetic_architecture_replay_is_deterministic(tmp_path: Path) -> None:
         assert replay['wdl_targets'].shape == (4, 3)
         assert replay['next_policy_targets'].shape == (4, 1880)
         assert replay['remaining_length_targets'].shape == (4, 1)
+
+
+def test_architecture_benchmark_model_export_has_primary_inference_heads(tmp_path: Path) -> None:
+    output_path = tmp_path / 'attention.jit.pt'
+    parameter_count = prepare_architecture_benchmark_model(
+        ModelPreparationArguments(
+            catalog_path=Path('configs/architectures/chess-cnn-attention-v1.yaml'),
+            model_id='chess-attention-1m',
+            output_path=output_path,
+            random_seed=7,
+        )
+    )
+    model = torch.jit.load(str(output_path), map_location='cpu')
+    policy, wdl = model(torch.zeros(2, 29, 8, 8))
+
+    assert parameter_count == 1043856
+    assert policy.shape == (2, 1880)
+    assert wdl.shape == (2, 3)
