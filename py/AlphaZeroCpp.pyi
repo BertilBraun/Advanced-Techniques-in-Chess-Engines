@@ -50,6 +50,7 @@ __all__ = [
     'InferenceConfiguration',
     'InferenceStatistics',
     'GraphSearchStatistics',
+    'GraphStructureStatistics',
     'MonteCarloGraphSearchParameters',
     'MonteCarloTreeSearchParameters',
     'TreeSearchParameters',
@@ -153,6 +154,11 @@ class GraphSearchStatistics:
     transposition_corrections: int
     correction_clips: int
     continued_transpositions: int
+    transposition_traversals: int
+    shared_node_visits_observed: int
+    incoming_edge_visits_observed: int
+    shared_visit_advantage: int
+    maximum_shared_visit_advantage: int
     cycle_cutoffs: int
     nodes_retained: int
     nodes_reclaimed: int
@@ -164,6 +170,17 @@ class GraphSearchStatistics:
     identity_lookup_nanoseconds: int
     reroot_nanoseconds: int
     pruning_nanoseconds: int
+
+class GraphStructureStatistics:
+    canonical_nodes: int
+    materialized_edges: int
+    expanded_nodes: int
+    shared_nodes: int
+    unfolded_tree_nodes: int
+    unfolded_tree_edges: int
+    unfolded_expanded_nodes: int
+    maximum_path_multiplicity: int
+    saturated: bool
 
 class TreeSearchParameters:
     def __init__(
@@ -308,6 +325,8 @@ class GoSearchRoot7:
     @property
     def graph_statistics(self) -> GraphSearchStatistics: ...
     @property
+    def graph_structure(self) -> GraphStructureStatistics: ...
+    @property
     def position(self) -> GoPosition7: ...
     @property
     def is_terminal(self) -> bool: ...
@@ -322,6 +341,8 @@ class GoSearchRoot7:
 class GoSearchRoot9:
     @property
     def graph_statistics(self) -> GraphSearchStatistics: ...
+    @property
+    def graph_structure(self) -> GraphStructureStatistics: ...
     @property
     def position(self) -> GoPosition9: ...
     @property
@@ -614,6 +635,8 @@ class ChessSearchRoot:
     def reset(self) -> None: ...
     @property
     def graph_statistics(self) -> GraphSearchStatistics: ...
+    @property
+    def graph_structure(self) -> GraphStructureStatistics: ...
     @property
     def arena_capacity(self) -> int: ...
     @property

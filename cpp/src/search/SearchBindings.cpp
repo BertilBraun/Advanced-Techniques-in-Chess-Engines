@@ -61,6 +61,15 @@ void bind_search(py::module_ &module) {
                       &GraphSearchStatistics::transposition_corrections)
         .def_readonly("correction_clips", &GraphSearchStatistics::correction_clips)
         .def_readonly("continued_transpositions", &GraphSearchStatistics::continued_transpositions)
+        .def_readonly("transposition_traversals",
+                      &GraphSearchStatistics::transposition_traversals)
+        .def_readonly("shared_node_visits_observed",
+                      &GraphSearchStatistics::shared_node_visits_observed)
+        .def_readonly("incoming_edge_visits_observed",
+                      &GraphSearchStatistics::incoming_edge_visits_observed)
+        .def_readonly("shared_visit_advantage", &GraphSearchStatistics::shared_visit_advantage)
+        .def_readonly("maximum_shared_visit_advantage",
+                      &GraphSearchStatistics::maximum_shared_visit_advantage)
         .def_readonly("cycle_cutoffs", &GraphSearchStatistics::cycle_cutoffs)
         .def_readonly("nodes_retained", &GraphSearchStatistics::nodes_retained)
         .def_readonly("nodes_reclaimed", &GraphSearchStatistics::nodes_reclaimed)
@@ -73,6 +82,19 @@ void bind_search(py::module_ &module) {
                       &GraphSearchStatistics::identity_lookup_nanoseconds)
         .def_readonly("reroot_nanoseconds", &GraphSearchStatistics::reroot_nanoseconds)
         .def_readonly("pruning_nanoseconds", &GraphSearchStatistics::pruning_nanoseconds);
+
+    py::class_<GraphStructureStatistics>(module, "GraphStructureStatistics")
+        .def_readonly("canonical_nodes", &GraphStructureStatistics::canonical_nodes)
+        .def_readonly("materialized_edges", &GraphStructureStatistics::materialized_edges)
+        .def_readonly("expanded_nodes", &GraphStructureStatistics::expanded_nodes)
+        .def_readonly("shared_nodes", &GraphStructureStatistics::shared_nodes)
+        .def_readonly("unfolded_tree_nodes", &GraphStructureStatistics::unfolded_tree_nodes)
+        .def_readonly("unfolded_tree_edges", &GraphStructureStatistics::unfolded_tree_edges)
+        .def_readonly("unfolded_expanded_nodes",
+                      &GraphStructureStatistics::unfolded_expanded_nodes)
+        .def_readonly("maximum_path_multiplicity",
+                      &GraphStructureStatistics::maximum_path_multiplicity)
+        .def_readonly("saturated", &GraphStructureStatistics::saturated);
 
     py::class_<InferenceConfiguration>(module, "InferenceConfiguration")
         .def(py::init<int, std::string, InferenceDevice>(), py::arg("device_id"),

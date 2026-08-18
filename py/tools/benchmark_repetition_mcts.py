@@ -55,6 +55,7 @@ class BenchmarkResult:
     completed_game_plies_per_second: float
     searches_completed: int
     searches_per_second: float
+    structure_observation_seconds: float
     process_cpu_percent: float
     peak_rss_mib: float
     mean_gpu_utilization_percent: float | None
@@ -66,6 +67,7 @@ class BenchmarkResult:
     inference_average_batch_size: float
     inference_batch_size_distribution: tuple[BatchSizeCount, ...]
     graph: GraphSearchMetrics
+    graph_structure: GraphStructureMetrics
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,11 @@ class GraphSearchMetrics:
     transposition_corrections: int = 0
     correction_clips: int = 0
     continued_transpositions: int = 0
+    transposition_traversals: int = 0
+    shared_node_visits_observed: int = 0
+    incoming_edge_visits_observed: int = 0
+    shared_visit_advantage: int = 0
+    maximum_shared_visit_advantage: int = 0
     cycle_cutoffs: int = 0
     nodes_retained: int = 0
     nodes_reclaimed: int = 0
@@ -88,6 +95,22 @@ class GraphSearchMetrics:
     identity_lookup_nanoseconds: int = 0
     reroot_nanoseconds: int = 0
     pruning_nanoseconds: int = 0
+
+
+@dataclass(frozen=True)
+class GraphStructureMetrics:
+    observations: int = 0
+    canonical_nodes_sum: int = 0
+    materialized_edges_sum: int = 0
+    expanded_nodes_sum: int = 0
+    shared_nodes_sum: int = 0
+    unfolded_tree_nodes_sum: int = 0
+    unfolded_tree_edges_sum: int = 0
+    unfolded_expanded_nodes_sum: int = 0
+    tree_node_instances_saved_sum: int = 0
+    tree_expanded_instances_saved_sum: int = 0
+    maximum_path_multiplicity: int = 0
+    saturated_observations: int = 0
 
 
 @dataclass(frozen=True)
@@ -115,7 +138,10 @@ class SearchStepsResult:
     terminal_roots: int
     searches_completed: int
     completed_steps: int
+    structure_observation_seconds: float
+    structure_observation_process_seconds: float
     graph: GraphSearchMetrics
+    graph_structure: GraphStructureMetrics
 
 
 def graph_metrics(roots: list[ChessSearchRoot]) -> GraphSearchMetrics:
@@ -134,6 +160,11 @@ def graph_metrics(roots: list[ChessSearchRoot]) -> GraphSearchMetrics:
                 transposition_corrections=statistics.transposition_corrections,
                 correction_clips=statistics.correction_clips,
                 continued_transpositions=statistics.continued_transpositions,
+                transposition_traversals=statistics.transposition_traversals,
+                shared_node_visits_observed=statistics.shared_node_visits_observed,
+                incoming_edge_visits_observed=statistics.incoming_edge_visits_observed,
+                shared_visit_advantage=statistics.shared_visit_advantage,
+                maximum_shared_visit_advantage=statistics.maximum_shared_visit_advantage,
                 cycle_cutoffs=statistics.cycle_cutoffs,
                 nodes_retained=statistics.nodes_retained,
                 nodes_reclaimed=statistics.nodes_reclaimed,
@@ -159,6 +190,11 @@ def subtract_graph_metrics(after: GraphSearchMetrics, before: GraphSearchMetrics
         transposition_corrections=after.transposition_corrections - before.transposition_corrections,
         correction_clips=after.correction_clips - before.correction_clips,
         continued_transpositions=after.continued_transpositions - before.continued_transpositions,
+        transposition_traversals=after.transposition_traversals - before.transposition_traversals,
+        shared_node_visits_observed=after.shared_node_visits_observed - before.shared_node_visits_observed,
+        incoming_edge_visits_observed=after.incoming_edge_visits_observed - before.incoming_edge_visits_observed,
+        shared_visit_advantage=after.shared_visit_advantage - before.shared_visit_advantage,
+        maximum_shared_visit_advantage=after.maximum_shared_visit_advantage,
         cycle_cutoffs=after.cycle_cutoffs - before.cycle_cutoffs,
         nodes_retained=after.nodes_retained - before.nodes_retained,
         nodes_reclaimed=after.nodes_reclaimed - before.nodes_reclaimed,
@@ -182,6 +218,14 @@ def add_graph_metrics(left: GraphSearchMetrics, right: GraphSearchMetrics) -> Gr
         transposition_corrections=left.transposition_corrections + right.transposition_corrections,
         correction_clips=left.correction_clips + right.correction_clips,
         continued_transpositions=left.continued_transpositions + right.continued_transpositions,
+        transposition_traversals=left.transposition_traversals + right.transposition_traversals,
+        shared_node_visits_observed=left.shared_node_visits_observed + right.shared_node_visits_observed,
+        incoming_edge_visits_observed=left.incoming_edge_visits_observed + right.incoming_edge_visits_observed,
+        shared_visit_advantage=left.shared_visit_advantage + right.shared_visit_advantage,
+        maximum_shared_visit_advantage=max(
+            left.maximum_shared_visit_advantage,
+            right.maximum_shared_visit_advantage,
+        ),
         cycle_cutoffs=left.cycle_cutoffs + right.cycle_cutoffs,
         nodes_retained=left.nodes_retained + right.nodes_retained,
         nodes_reclaimed=left.nodes_reclaimed + right.nodes_reclaimed,
@@ -191,6 +235,52 @@ def add_graph_metrics(left: GraphSearchMetrics, right: GraphSearchMetrics) -> Gr
         identity_lookup_nanoseconds=left.identity_lookup_nanoseconds + right.identity_lookup_nanoseconds,
         reroot_nanoseconds=left.reroot_nanoseconds + right.reroot_nanoseconds,
         pruning_nanoseconds=left.pruning_nanoseconds + right.pruning_nanoseconds,
+    )
+
+
+def graph_structure_metrics(roots: list[ChessSearchRoot]) -> GraphStructureMetrics:
+    result = GraphStructureMetrics()
+    for root in roots:
+        structure = root.graph_structure
+        result = add_graph_structure_metrics(
+            result,
+            GraphStructureMetrics(
+                observations=1,
+                canonical_nodes_sum=structure.canonical_nodes,
+                materialized_edges_sum=structure.materialized_edges,
+                expanded_nodes_sum=structure.expanded_nodes,
+                shared_nodes_sum=structure.shared_nodes,
+                unfolded_tree_nodes_sum=structure.unfolded_tree_nodes,
+                unfolded_tree_edges_sum=structure.unfolded_tree_edges,
+                unfolded_expanded_nodes_sum=structure.unfolded_expanded_nodes,
+                tree_node_instances_saved_sum=structure.unfolded_tree_nodes - structure.canonical_nodes,
+                tree_expanded_instances_saved_sum=structure.unfolded_expanded_nodes - structure.expanded_nodes,
+                maximum_path_multiplicity=structure.maximum_path_multiplicity,
+                saturated_observations=int(structure.saturated),
+            ),
+        )
+    return result
+
+
+def add_graph_structure_metrics(
+    left: GraphStructureMetrics,
+    right: GraphStructureMetrics,
+) -> GraphStructureMetrics:
+    return GraphStructureMetrics(
+        observations=left.observations + right.observations,
+        canonical_nodes_sum=left.canonical_nodes_sum + right.canonical_nodes_sum,
+        materialized_edges_sum=left.materialized_edges_sum + right.materialized_edges_sum,
+        expanded_nodes_sum=left.expanded_nodes_sum + right.expanded_nodes_sum,
+        shared_nodes_sum=left.shared_nodes_sum + right.shared_nodes_sum,
+        unfolded_tree_nodes_sum=left.unfolded_tree_nodes_sum + right.unfolded_tree_nodes_sum,
+        unfolded_tree_edges_sum=left.unfolded_tree_edges_sum + right.unfolded_tree_edges_sum,
+        unfolded_expanded_nodes_sum=left.unfolded_expanded_nodes_sum + right.unfolded_expanded_nodes_sum,
+        tree_node_instances_saved_sum=left.tree_node_instances_saved_sum + right.tree_node_instances_saved_sum,
+        tree_expanded_instances_saved_sum=(
+            left.tree_expanded_instances_saved_sum + right.tree_expanded_instances_saved_sum
+        ),
+        maximum_path_multiplicity=max(left.maximum_path_multiplicity, right.maximum_path_multiplicity),
+        saturated_observations=left.saturated_observations + right.saturated_observations,
     )
 
 
@@ -263,8 +353,14 @@ def run_search_steps(
     searches_completed = 0
     completed_steps = 0
     measured_graph = GraphSearchMetrics()
+    measured_graph_structure = GraphStructureMetrics()
+    structure_observation_seconds = 0.0
+    structure_observation_process_seconds = 0.0
     start_time = time.perf_counter()
-    while completed_steps < steps or time.perf_counter() - start_time < minimum_elapsed_seconds:
+    while (
+        completed_steps < steps
+        or time.perf_counter() - start_time - structure_observation_seconds < minimum_elapsed_seconds
+    ):
         visits_before = sum(root.visits for root in roots)
         graph_before = graph_metrics(roots)
         search_results = search.search([ChessSelfPlaySearchRequest(root, False) for root in roots])
@@ -273,6 +369,12 @@ def run_search_steps(
             subtract_graph_metrics(graph_metrics(roots), graph_before),
         )
         searches_completed += sum(result.root.visits for result in search_results.results) - visits_before
+        structure_wall_start = time.perf_counter()
+        structure_process_start = time.process_time()
+        observed_structure = graph_structure_metrics([result.root for result in search_results.results])
+        structure_observation_seconds += time.perf_counter() - structure_wall_start
+        structure_observation_process_seconds += time.process_time() - structure_process_start
+        measured_graph_structure = add_graph_structure_metrics(measured_graph_structure, observed_structure)
 
         next_roots: list[ChessSearchRoot] = []
         for opening_index, result in enumerate(search_results.results):
@@ -293,7 +395,10 @@ def run_search_steps(
         terminal_roots=terminal_roots,
         searches_completed=searches_completed,
         completed_steps=completed_steps,
+        structure_observation_seconds=structure_observation_seconds,
+        structure_observation_process_seconds=structure_observation_process_seconds,
         graph=measured_graph,
+        graph_structure=measured_graph_structure,
     )
 
 
@@ -362,8 +467,10 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         args.steps,
         args.minimum_measurement_seconds,
     )
-    elapsed_seconds = time.perf_counter() - wall_time_start
-    process_seconds = time.process_time() - process_time_start
+    elapsed_seconds = time.perf_counter() - wall_time_start - measurement_result.structure_observation_seconds
+    process_seconds = (
+        time.process_time() - process_time_start - measurement_result.structure_observation_process_seconds
+    )
     stop_event.set()
     if sampler is not None:
         sampler.join()
@@ -397,6 +504,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         completed_game_plies_per_second=completed_game_plies / elapsed_seconds,
         searches_completed=measurement_result.searches_completed,
         searches_per_second=measurement_result.searches_completed / elapsed_seconds,
+        structure_observation_seconds=measurement_result.structure_observation_seconds,
         process_cpu_percent=100 * process_seconds / elapsed_seconds,
         peak_rss_mib=peak_rss_mib,
         mean_gpu_utilization_percent=(
@@ -412,6 +520,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         ),
         inference_batch_size_distribution=batch_size_distribution,
         graph=measurement_result.graph,
+        graph_structure=measurement_result.graph_structure,
     )
 
 

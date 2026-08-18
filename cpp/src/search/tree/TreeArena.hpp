@@ -7,8 +7,10 @@
 #include "util/py.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <queue>
 #include <ranges>
@@ -93,6 +95,92 @@ public:
     }
 
     [[nodiscard]] GraphSearchStatistics &graphStatistics() noexcept { return m_graphStatistics; }
+
+    [[nodiscard]] GraphStructureStatistics graphStructureStatistics() const {
+        GraphStructureStatistics result;
+        std::vector<bool> reachable(m_nodes.size(), false);
+        std::vector<std::size_t> pending = {m_rootIndex};
+        while (!pending.empty()) {
+            const std::size_t index = pending.back();
+            pending.pop_back();
+            if (reachable[index]) {
+                continue;
+            }
+            reachable[index] = true;
+            ++result.canonical_nodes;
+            if (node(index).expanded()) {
+                ++result.expanded_nodes;
+            }
+            for (const Edge &edge : node(index).children) {
+                if (edge.child_index.has_value()) {
+                    ++result.materialized_edges;
+                    pending.push_back(*edge.child_index);
+                }
+            }
+        }
+
+        std::vector<std::size_t> remainingIncoming(m_nodes.size(), 0);
+        for (const auto index : range(m_nodes.size())) {
+            if (!reachable[index]) {
+                continue;
+            }
+            for (const Edge &edge : node(index).children) {
+                if (edge.child_index.has_value() && reachable[*edge.child_index]) {
+                    ++remainingIncoming[*edge.child_index];
+                }
+            }
+        }
+        for (const auto index : range(m_nodes.size())) {
+            if (reachable[index] && remainingIncoming[index] > 1) {
+                ++result.shared_nodes;
+            }
+        }
+
+        const auto saturatingAdd = [&result](const std::uint64_t left,
+                                             const std::uint64_t right) {
+            if (right > std::numeric_limits<std::uint64_t>::max() - left) {
+                result.saturated = true;
+                return std::numeric_limits<std::uint64_t>::max();
+            }
+            return left + right;
+        };
+        std::vector<std::uint64_t> pathMultiplicity(m_nodes.size(), 0);
+        pathMultiplicity[m_rootIndex] = 1;
+        std::queue<std::size_t> ready;
+        ready.push(m_rootIndex);
+        std::uint64_t processed = 0;
+        while (!ready.empty()) {
+            const std::size_t index = ready.front();
+            ready.pop();
+            ++processed;
+            const std::uint64_t paths = pathMultiplicity[index];
+            result.maximum_path_multiplicity =
+                std::max(result.maximum_path_multiplicity, paths);
+            result.unfolded_tree_nodes = saturatingAdd(result.unfolded_tree_nodes, paths);
+            if (node(index).expanded()) {
+                result.unfolded_expanded_nodes =
+                    saturatingAdd(result.unfolded_expanded_nodes, paths);
+            }
+            for (const Edge &edge : node(index).children) {
+                if (!edge.child_index.has_value()) {
+                    continue;
+                }
+                const std::size_t childIndex = *edge.child_index;
+                result.unfolded_tree_edges = saturatingAdd(result.unfolded_tree_edges, paths);
+                pathMultiplicity[childIndex] =
+                    saturatingAdd(pathMultiplicity[childIndex], paths);
+                assert(remainingIncoming[childIndex] > 0);
+                --remainingIncoming[childIndex];
+                if (remainingIncoming[childIndex] == 0) {
+                    ready.push(childIndex);
+                }
+            }
+        }
+        if (processed != result.canonical_nodes) {
+            throw std::logic_error("Game search graph structure contains a cycle");
+        }
+        return result;
+    }
 
     void recordEdgesCreated(const std::size_t count) {
         if (!graphSearch()) {

@@ -64,6 +64,11 @@ struct GraphSearchStatistics {
     std::uint64_t transposition_corrections = 0;
     std::uint64_t correction_clips = 0;
     std::uint64_t continued_transpositions = 0;
+    std::uint64_t transposition_traversals = 0;
+    std::uint64_t shared_node_visits_observed = 0;
+    std::uint64_t incoming_edge_visits_observed = 0;
+    std::uint64_t shared_visit_advantage = 0;
+    std::uint64_t maximum_shared_visit_advantage = 0;
     std::uint64_t cycle_cutoffs = 0;
     std::uint64_t nodes_retained = 0;
     std::uint64_t nodes_reclaimed = 0;
@@ -77,4 +82,18 @@ struct GraphSearchStatistics {
     std::uint64_t pruning_nanoseconds = 0;
 
     [[nodiscard]] bool operator==(const GraphSearchStatistics &) const noexcept = default;
+};
+
+struct GraphStructureStatistics {
+    std::uint64_t canonical_nodes = 0;
+    std::uint64_t materialized_edges = 0;
+    std::uint64_t expanded_nodes = 0;
+    std::uint64_t shared_nodes = 0;
+    std::uint64_t unfolded_tree_nodes = 0;
+    std::uint64_t unfolded_tree_edges = 0;
+    std::uint64_t unfolded_expanded_nodes = 0;
+    std::uint64_t maximum_path_multiplicity = 0;
+    bool saturated = false;
+
+    [[nodiscard]] bool operator==(const GraphStructureStatistics &) const noexcept = default;
 };

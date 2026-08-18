@@ -41,6 +41,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def_property_readonly("visits", &Root::visits)
         .def_property_readonly("live_nodes", &Root::liveNodeCount)
         .def_property_readonly("graph_statistics", &Root::graphStatistics)
+        .def_property_readonly("graph_structure", &Root::graphStructureStatistics)
         .def("play", &Root::play, py::arg("action_id"))
         .def("reset", &Root::reset)
         .def(

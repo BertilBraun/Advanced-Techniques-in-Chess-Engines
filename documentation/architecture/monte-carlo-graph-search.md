@@ -102,8 +102,24 @@ the corresponding typed runtime parameter and also defaults to tree search.
 Each retained root exposes cumulative raw graph counters: table probes/hits, verified identity comparisons,
 transposition links, unique nodes and edges, avoided evaluations, corrections and clips, continued transpositions,
 cycle cutoffs, retained/reclaimed/pruned objects, peak live nodes/edges, and identity/reroot/pruning CPU nanoseconds.
+It also records every traversal into a multi-parent node, the shared child's completed visits, the incoming edge's
+local completed visits, and their positive difference. That difference measures how much more accumulated evidence
+was available at the shared node than through the selected parent edge; it is information exposure, not additional
+simulations completed.
+
 The repetition benchmark records per-measurement deltas beside existing inference, throughput, CPU, RAM, and GPU
-telemetry.
+telemetry. After each completed ply it also unfolds the live acyclic graph structurally: every distinct root-to-node
+path becomes one hypothetical tree instance. The snapshot reports canonical versus unfolded nodes, edges, and
+expanded nodes, shared-node count, maximum path multiplicity, and saturation. Thus an early two-parent merge counts
+the shared node and every materialized descendant twice in the unfolded control. Snapshot traversal time is reported
+separately and excluded from search throughput because it is diagnostic work, not production search.
+
+This structural count is an exact property of the materialized DAG, but it is not a claim that graph node visits can
+simply be multiplied by path count. Node visits aggregate trajectories from all parents, while each incoming edge
+retains local visits and values. A counterfactual tree could allocate its visits differently after the paths split;
+there is no exact tree-equivalent visit total without retaining every trajectory or actually running the tree
+control. Use unfolded node instances to quantify topology/evaluation duplication and shared-visit advantage to
+quantify reused statistical evidence.
 
 The later fixed-budget matrix is frozen at `100`, `400`, `1_000`, `3_200`, `10_000`, `30_000`, and `100_000`
 searches per move. For each budget, run matched tree and graph commands with the same model, openings, games,

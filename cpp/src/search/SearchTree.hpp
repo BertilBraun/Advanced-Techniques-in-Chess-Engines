@@ -56,6 +56,9 @@ public:
     [[nodiscard]] const GraphSearchStatistics &graphStatistics() const noexcept {
         return m_arena.graphStatistics();
     }
+    [[nodiscard]] GraphStructureStatistics graphStructureStatistics() const {
+        return m_arena.graphStructureStatistics();
+    }
 
     [[nodiscard]] std::optional<std::size_t>
     selectAvailableLeaf(const TreeSearchParameters &parameters,
@@ -460,6 +463,18 @@ private:
         const std::uint32_t completedChildVisits =
             completedVisits(child.visits, child.virtual_loss);
         const std::uint32_t completedEdgeVisits = completedVisits(edge.visits, edge.virtual_loss);
+        if (materialized.transposition) {
+            GraphSearchStatistics &statistics = m_arena.graphStatistics();
+            ++statistics.transposition_traversals;
+            statistics.shared_node_visits_observed += completedChildVisits;
+            statistics.incoming_edge_visits_observed += completedEdgeVisits;
+            const std::uint64_t advantage = completedChildVisits > completedEdgeVisits
+                                                ? completedChildVisits - completedEdgeVisits
+                                                : 0;
+            statistics.shared_visit_advantage += advantage;
+            statistics.maximum_shared_visit_advantage =
+                std::max(statistics.maximum_shared_visit_advantage, advantage);
+        }
         if (materialized.transposition && completedChildVisits > 0 && completedEdgeVisits > 0) {
             const float childMean = child.value_sum / static_cast<float>(completedChildVisits);
             const float edgeMean = edge.value_sum / static_cast<float>(completedEdgeVisits);
@@ -600,6 +615,9 @@ public:
     [[nodiscard]] std::shared_ptr<Tree> sharedTree() const { return m_tree; }
     [[nodiscard]] const GraphSearchStatistics &graphStatistics() const {
         return m_tree->graphStatistics();
+    }
+    [[nodiscard]] GraphStructureStatistics graphStructureStatistics() const {
+        return m_tree->graphStructureStatistics();
     }
     void discount(const float retainedFraction) { m_tree->discount(retainedFraction); }
     void play(const int actionId) { m_tree->reroot(actionId); }

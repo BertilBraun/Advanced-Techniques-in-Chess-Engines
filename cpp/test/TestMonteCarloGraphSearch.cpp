@@ -11,7 +11,7 @@
 
 namespace {
 
-enum class FixtureKind : std::uint8_t { TerminalDiamond, OpenDiamond, Cycle };
+enum class FixtureKind : std::uint8_t { TerminalDiamond, OpenDiamond, DeepDiamond, Cycle };
 
 struct FixtureState {
     int id;
@@ -47,6 +47,9 @@ struct FixtureGame {
                     .kind = parent.kind,
                     .history_token = parent.history_token};
         }
+        if (parent.kind == FixtureKind::DeepDiamond && parent.id == 3) {
+            return {.id = 4, .kind = parent.kind, .history_token = parent.history_token};
+        }
         return {.id = 3, .kind = parent.kind, .history_token = parent.history_token};
     }
     [[nodiscard]] static std::vector<Action> legalActions(const State &state) {
@@ -59,10 +62,14 @@ struct FixtureGame {
         if (state.id == 1 || state.id == 2) {
             return {0};
         }
+        if (state.kind == FixtureKind::DeepDiamond && state.id == 3) {
+            return {0};
+        }
         return {};
     }
     [[nodiscard]] static bool isTerminal(const State &state) {
-        return state.kind == FixtureKind::TerminalDiamond && state.id == 3;
+        return (state.kind == FixtureKind::TerminalDiamond && state.id == 3) ||
+               (state.kind == FixtureKind::DeepDiamond && state.id == 4);
     }
     [[nodiscard]] static float terminalValue(const State &) { return 0.25F; }
     [[nodiscard]] static float cycleValue(const State &) { return 0.0F; }
@@ -165,6 +172,7 @@ void testSharedNodesAndCorrection() {
     tree.node(shared).value_sum = 5.0F;
     incoming.visits = 2;
     incoming.value_sum = 0.8F;
+    const GraphSearchStatistics statisticsBefore = tree.graphStatistics();
     preferRootEdge(tree, 1);
     const GraphSearchSelection correction = selectGraph(tree);
     require(correction.immediate_value.has_value() && !correction.update_leaf,
@@ -175,6 +183,16 @@ void testSharedNodesAndCorrection() {
                 "Graph correction did not move the edge mean to the shared-node target");
     require(tree.node(shared).visits == 10,
             "Correction-only backup incorrectly revisited the shared node");
+    require(tree.graphStatistics().transposition_traversals ==
+                    statisticsBefore.transposition_traversals + 1 &&
+                tree.graphStatistics().shared_node_visits_observed ==
+                    statisticsBefore.shared_node_visits_observed + 10 &&
+                tree.graphStatistics().incoming_edge_visits_observed ==
+                    statisticsBefore.incoming_edge_visits_observed + 2 &&
+                tree.graphStatistics().shared_visit_advantage ==
+                    statisticsBefore.shared_visit_advantage + 8 &&
+                tree.graphStatistics().maximum_shared_visit_advantage >= 8,
+            "Shared-node visit advantage instrumentation is incorrect");
 
     tree.node(shared).visits = 10;
     tree.node(shared).value_sum = 10.0F;
@@ -190,6 +208,37 @@ void testSharedNodesAndCorrection() {
             "Clipped graph correction did not move monotonically toward the shared-node target");
     require(tree.graphStatistics().correction_clips == clipsBefore + 1,
             "Clipped graph correction was not instrumented");
+}
+
+void testUnfoldedTreeCountsSharedDescendants() {
+    FixtureTree tree = makeGraph(FixtureKind::DeepDiamond);
+    expand(tree, tree.rootIndex());
+
+    preferRootEdge(tree, 0);
+    GraphSearchSelection firstParent = selectGraph(tree);
+    expand(tree, firstParent.path.leaf_index);
+    tree.backPropagateGraph(firstParent.path, 0.0F, true);
+    GraphSearchSelection shared = selectGraph(tree);
+    expand(tree, shared.path.leaf_index);
+    tree.backPropagateGraph(shared.path, 0.0F, true);
+    GraphSearchSelection descendant = selectGraph(tree);
+    tree.backPropagateGraph(descendant.path, *descendant.immediate_value,
+                            descendant.update_leaf);
+
+    preferRootEdge(tree, 1);
+    GraphSearchSelection secondParent = selectGraph(tree);
+    expand(tree, secondParent.path.leaf_index);
+    tree.backPropagateGraph(secondParent.path, 0.0F, true);
+    static_cast<void>(selectGraph(tree));
+
+    const GraphStructureStatistics structure = tree.graphStructureStatistics();
+    require(structure.canonical_nodes == 5 && structure.materialized_edges == 5 &&
+                structure.expanded_nodes == 4 && structure.shared_nodes == 1,
+            "Canonical graph structure counts are incorrect");
+    require(structure.unfolded_tree_nodes == 7 && structure.unfolded_tree_edges == 6 &&
+                structure.unfolded_expanded_nodes == 5 &&
+                structure.maximum_path_multiplicity == 2 && !structure.saturated,
+            "Unfolded tree did not duplicate the shared node and its descendant");
 }
 
 void testHistoryDistinctStatesDoNotMerge() {
@@ -318,6 +367,7 @@ void testNoTranspositionTreeEquivalence() {
 int runMonteCarloGraphSearchTests() {
     try {
         testSharedNodesAndCorrection();
+        testUnfoldedTreeCountsSharedDescendants();
         testHistoryDistinctStatesDoNotMerge();
         testCycleCutoff();
         testParallelReservationCoalescesLeaf();
