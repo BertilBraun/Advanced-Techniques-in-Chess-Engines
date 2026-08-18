@@ -171,8 +171,7 @@ def _snapshot(result: ChessSelfPlaySearchResult) -> SearchSnapshot:
         root_value=result.root_value,
         predicted_search_correction=result.predicted_search_correction,
         policy=tuple(
-            PolicyEntry(action_id=visit.action_id, probability=visit.visit_count / total)
-            for visit in policy_visits
+            PolicyEntry(action_id=visit.action_id, probability=visit.visit_count / total) for visit in policy_visits
         ),
     )
 
@@ -238,8 +237,7 @@ def run_live_canary(arguments: Arguments) -> LiveCanaryMetrics:
         simulations_per_second=simulations / elapsed,
         inference_average_batch_size=statistics.averageNumberOfPositionsInInferenceCall,
         stop_reasons=tuple(
-            StopReasonCount(reason=reason, count=reason_names.count(reason))
-            for reason in sorted(set(reason_names))
+            StopReasonCount(reason=reason, count=reason_names.count(reason)) for reason in sorted(set(reason_names))
         ),
     )
 
@@ -295,7 +293,9 @@ def _selected_snapshot(
 def _policy_total_variation(left: SearchSnapshot, right: SearchSnapshot) -> float:
     left_policy = {entry.action_id: entry.probability for entry in left.policy}
     right_policy = {entry.action_id: entry.probability for entry in right.policy}
-    return 0.5 * sum(abs(left_policy.get(action, 0.0) - right_policy.get(action, 0.0)) for action in left_policy | right_policy)
+    return 0.5 * sum(
+        abs(left_policy.get(action, 0.0) - right_policy.get(action, 0.0)) for action in left_policy | right_policy
+    )
 
 
 def candidate_metrics(
