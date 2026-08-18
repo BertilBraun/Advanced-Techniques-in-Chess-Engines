@@ -286,7 +286,7 @@ The experiment must report:
 
 Reference: [Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search](https://arxiv.org/abs/2012.07910).
 
-## 10. Transposition audit and graph-search decision - rejected
+## 10. Transposition, graph-search, and inference-cache decision - rejected
 
 The full Monte-Carlo graph-search experiment is complete and will not proceed to production. The separate graph path
 implemented shared nodes and descendant statistics, parent-local edge statistics, transposition correction, virtual
@@ -304,9 +304,21 @@ The result does not justify the implementation and maintenance cost. Do not merg
 evaluation-only graph mode, or continue graph-search tuning unless this decision is explicitly reopened based on new
 evidence. Tree search is the production search structure.
 
-Inference caching is a separate question because it can reuse identical neural-network inputs without merging rule
-state, visits, values, or descendants. Any cache work must begin with measurement-only instrumentation and its own
-acceptance decision; it is not a continuation of Monte-Carlo graph search.
+Inference caching was evaluated separately because identical encoded neural-network inputs can be reused without
+merging rule state, visits, values, descendants, or history-distinct search nodes. Measurement-only instrumentation
+tracked exact encoded-input equivalence while continuing to evaluate every position normally. In the production-like
+mixed workload of 25% 800-search requests and 75% 150-search requests, the ideal unbounded-cache upper bound was only
+3.5485% with one parallel search and 3.5295% with two. Across approximately 1.83 million inference positions per arm,
+same-batch reuse was zero and one evaluation, respectively. The rate rose only to approximately 4% after following
+retained trees for six moves.
+
+This opportunity is borderline unusable as a production optimization. It precedes finite-capacity misses and the
+costs of lookup, synchronization, output storage, device transfer, and eviction, while the unbounded measurement
+tracker itself showed approximately 3.65% throughput overhead in a separate control comparison and grew without
+bound. Do not implement an inference cache or merge the instrumentation branch. Preserve
+`codex/inference-cache-hit-rate` as rejection evidence; its committed report and raw evidence are at
+`ade6c5ba`. Reopen the decision only if a materially different workload demonstrates substantially greater exact
+encoded-input reuse.
 
 Reference: [Monte-Carlo Graph Search for AlphaZero](https://arxiv.org/abs/2012.11045).
 
@@ -317,7 +329,8 @@ Reference: [Monte-Carlo Graph Search for AlphaZero](https://arxiv.org/abs/2012.1
 - No second baseline repetition.
 - No multiple multi-day auxiliary-target ablations.
 - No always-on tablebase use before the late game cap.
-- No transposition implementation before measuring reuse.
+- No graph search, transposition reuse, or inference cache; the completed audits rejected all three for the current
+  workload.
 - No assumption that transformer throughput will match CNN throughput.
 
 ## 12. Authorization gate for the experimental run
@@ -330,7 +343,7 @@ Before proposing the final experimental configuration, complete and review:
 4. CNN-versus-attention throughput and frozen-data learning benchmarks;
 5. a reliable progressive-size transition test;
 6. the adaptive-search audit;
-7. the transposition reuse audit;
+7. the completed transposition and inference-repetition audits, which rejected graph search and inference caching;
 8. the completed moves-left screening, which rejected remaining-length search utility for the planned run.
 
 Select one coherent package for the single four-day experimental run. Any mechanism that has not passed its cheap
