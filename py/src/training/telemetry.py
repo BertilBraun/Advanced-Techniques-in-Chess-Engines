@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from itertools import pairwise
 from decimal import Decimal
+from itertools import pairwise
 from statistics import fmean, median
 
 from src.replay.manager import IngestedCompletedGame, ReplayDescription
