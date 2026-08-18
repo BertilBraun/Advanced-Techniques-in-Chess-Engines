@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-
 from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions, PackedPlaneLayout
