@@ -17,7 +17,7 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.replay.layout import ReplayLayout
-from src.replay.manager import ReplayDescription
+from src.replay.description import ReplayDescription
 from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout

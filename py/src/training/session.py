@@ -6,7 +6,7 @@ from pathlib import Path
 
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
-from src.replay.manager import ReplayDescription
+from src.replay.description import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.checkpoint.persistence import import_checkpoint, publish_checkpoint
@@ -87,7 +87,7 @@ class FixedTrainingSession(TrainingSession):
             configuration,
             game,
             TrainerStartup(
-                network=configuration.training.network,
+                network=configuration.training.initial_model.network,
                 save_path=Path(configuration.training.save_path),
                 starting_generation=starting_checkpoint.generation,
             ),
@@ -116,8 +116,6 @@ class FixedTrainingSession(TrainingSession):
 class ProgressiveTrainingSession(TrainingSession):
     def __init__(self, configuration: ExperimentConfiguration, game: GameImplementation) -> None:
         progressive_configuration = configuration.training.progressive_model_sizing
-        if progressive_configuration is None:
-            raise ValueError('Progressive training requires progressive model sizing configuration.')
         self.configuration = configuration
         self.game = game
         self.progressive_configuration = progressive_configuration
@@ -246,6 +244,6 @@ def create_training_session(
     game: GameImplementation,
     starting_checkpoint: CheckpointReference,
 ) -> TrainingSession:
-    if configuration.training.progressive_model_sizing is None:
+    if not configuration.training.progressive_model_sizing.is_progressive:
         return FixedTrainingSession(configuration, game, starting_checkpoint)
     return ProgressiveTrainingSession(configuration, game)

@@ -257,8 +257,6 @@ def _benchmark_models(
 ) -> tuple[BenchmarkModel, ...]:
     configuration = load_chess_experiment_configuration(configuration_path)
     progressive = configuration.training.progressive_model_sizing
-    if progressive is None:
-        raise ValueError('Chess inference benchmark requires progressive model sizing.')
     models = tuple(
         BenchmarkModel(
             model_id=model.model_id,

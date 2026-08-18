@@ -71,7 +71,6 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     assert configuration.training.trainer.precision is TrainingPrecision.BFLOAT16
     assert configuration.training.trainer.compilation is TrainingCompilation.DEFAULT
     progressive_model_sizing = configuration.training.progressive_model_sizing
-    assert progressive_model_sizing is not None
     assert tuple(model.training_start_days for model in progressive_model_sizing.models) == (
         0.0,
         0.75,
@@ -82,7 +81,7 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     assert tuple(
         (model.network.num_layers, model.network.embedding_size) for model in progressive_model_sizing.models
     ) == ((6, 96), (10, 160), (15, 192))
-    assert configuration.training.network == progressive_model_sizing.models[0].network
+    assert configuration.training.initial_model == progressive_model_sizing.models[0]
 
 
 @pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))

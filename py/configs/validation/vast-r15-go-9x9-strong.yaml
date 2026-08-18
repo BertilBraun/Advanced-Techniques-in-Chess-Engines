@@ -13,15 +13,19 @@ run:
     minimum_disk_gib: 20
 training:
   save_path: py/training_data/validation/vast-r15-go-9x9-strong
-  network:
-    num_layers: 2
-    hidden_size: 32
-    residual_context:
-      kind: global_pooling
-      placement: every_second_block
-    policy_head: {kind: go_point_pass_v1}
-    num_value_channels: 1
-    value_fc_size: 16
+  progressive_model_sizing:
+    models:
+      - model_id: validation-go9-strong
+        training_start_days: 0.0
+        network:
+          num_layers: 2
+          hidden_size: 32
+          residual_context:
+            kind: global_pooling
+            placement: every_second_block
+          policy_head: {kind: go_point_pass_v1}
+          num_value_channels: 1
+          value_fc_size: 16
   trainer:
     global_batch_size: 32
     local_batch_size: 16

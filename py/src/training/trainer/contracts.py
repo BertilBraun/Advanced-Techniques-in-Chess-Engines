@@ -4,7 +4,7 @@ from typing import Literal, TypeAlias
 
 from pydantic import Field
 
-from src.replay.manager import ReplayDescription
+from src.replay.description import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective
 from src.training.network import NetworkConfiguration

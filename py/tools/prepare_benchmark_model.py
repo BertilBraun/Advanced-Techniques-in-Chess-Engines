@@ -28,7 +28,7 @@ def main() -> None:
     experiment = load_experiment_configuration(arguments.run_config)
     game = create_game_implementation(experiment)
     network = Network(
-        experiment.training.network,
+        experiment.training.initial_model.network,
         torch.device('cpu'),
         game.network_dimensions,
     )

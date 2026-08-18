@@ -25,16 +25,6 @@ run:
     minimum_open_file_soft_limit: 65536
 training:
   save_path: py/training_data/production/vast-chess-8gpu-optimal
-  network:
-    kind: attention
-    num_layers: 6
-    embedding_size: 96
-    num_heads: 3
-    feedforward_size: 192
-    dropout: 0.0
-    policy_head: {kind: chess_76_plane_direct_v2}
-    num_value_channels: 2
-    value_fc_size: 48
   trainer:
     global_batch_size: 2048
     local_batch_size: 256

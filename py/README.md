@@ -68,9 +68,9 @@ configuration, so changing a base invalidates approvals and queue summaries for 
 
 ### Progressive model sizing
 
-An experiment may add `training.progressive_model_sizing` with exactly three complete network definitions, strictly
-increasing elapsed active-run starts, and typed paired-loss EMA promotion settings. The day-zero definition must
-equal `training.network`. See
+Every experiment defines `training.progressive_model_sizing` as a non-empty tuple of complete model definitions.
+A one-model tuple is fixed-model training; additional definitions use strictly increasing elapsed active-run starts
+and typed paired-loss EMA promotion settings. The day-zero definition is the sole initial-network configuration. See
 [`configs/research/go-9x9-progressive-model-sizing.yaml`](configs/research/go-9x9-progressive-model-sizing.yaml) for
 the complete schema and [Progressive model sizing](../documentation/architecture/progressive-model-sizing.md) for
 training, promotion, restart, retention, and publication semantics.

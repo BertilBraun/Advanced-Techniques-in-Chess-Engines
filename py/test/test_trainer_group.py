@@ -12,7 +12,7 @@ from src.games.chess.training import ChessImplementation
 from src.games.contracts import WdlTarget
 from src.replay.contracts import ReplaySample, SparsePolicyTarget
 from src.replay.layout import ReplayLayout
-from src.replay.manager import ReplayDescription
+from src.replay.description import ReplayDescription
 from src.replay.store import ReplayStore
 from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
@@ -35,7 +35,7 @@ def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
             'learning_rate': 0.001,
         }
     )
-    network = configuration.training.network.validated_copy(
+    network = configuration.training.initial_model.network.validated_copy(
         update={
             'num_layers': 1,
             'hidden_size': 8,
@@ -92,7 +92,7 @@ def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
 def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) -> None:
     configuration = _configuration(tmp_path)
     game = ChessImplementation(configuration)
-    model = Network(configuration.training.network, torch.device('cpu'), game.network_dimensions)
+    model = Network(configuration.training.initial_model.network, torch.device('cpu'), game.network_dimensions)
     save_model_and_optimizer(model, create_optimizer(model, configuration.training.trainer.optimizer), 0, tmp_path)
     starting_checkpoint = CheckpointReference.load(tmp_path, 0)
     layout = ReplayLayout(
@@ -137,7 +137,7 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
         configuration,
         game,
         TrainerStartup(
-            network=configuration.training.network,
+            network=configuration.training.initial_model.network,
             save_path=tmp_path,
             starting_generation=starting_checkpoint.generation,
         ),
@@ -173,7 +173,7 @@ def test_distributed_training_model_has_only_batch_norm_buffers() -> None:
     )
     game = ChessImplementation(configuration)
     model = DistributedTrainingModel(
-        Network(configuration.training.network, torch.device('cpu'), game.network_dimensions)
+        Network(configuration.training.initial_model.network, torch.device('cpu'), game.network_dimensions)
     )
 
     buffer_names = tuple(name for name, _ in model.named_buffers())
@@ -187,7 +187,7 @@ def test_distributed_training_disables_per_forward_buffer_broadcast(monkeypatch:
         Path(__file__).parents[1] / 'test' / 'configs' / 'chess-experiment.yaml'
     )
     game = ChessImplementation(configuration)
-    model = Network(configuration.training.network, torch.device('cpu'), game.network_dimensions)
+    model = Network(configuration.training.initial_model.network, torch.device('cpu'), game.network_dimensions)
 
     class CapturedDistributedModel:
         def __init__(
@@ -219,7 +219,7 @@ def test_distributed_training_compiles_only_the_training_wrapper(monkeypatch: py
         Path(__file__).parents[1] / 'test' / 'configs' / 'chess-experiment.yaml'
     )
     game = ChessImplementation(configuration)
-    model = Network(configuration.training.network, torch.device('cpu'), game.network_dimensions)
+    model = Network(configuration.training.initial_model.network, torch.device('cpu'), game.network_dimensions)
     compiled_modules: list[nn.Module] = []
 
     def compile_model(module: nn.Module) -> nn.Module:

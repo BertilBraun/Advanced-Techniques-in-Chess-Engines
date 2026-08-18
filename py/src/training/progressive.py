@@ -2,18 +2,15 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from pydantic import Field, model_validator
 
+from src.replay.description import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.network import NetworkConfiguration
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
-
-if TYPE_CHECKING:
-    from src.replay.manager import ReplayDescription
-
 
 SECONDS_PER_DAY = 86_400.0
 
@@ -36,7 +33,7 @@ class TotalLossEmaPromotionConfiguration(FrozenModel):
 
 
 class ProgressiveModelSizingConfiguration(FrozenModel):
-    models: tuple[ProgressiveModelDefinition, ProgressiveModelDefinition, ProgressiveModelDefinition]
+    models: tuple[ProgressiveModelDefinition, ...] = Field(min_length=1)
     promotion: TotalLossEmaPromotionConfiguration
 
     @model_validator(mode='after')
@@ -56,6 +53,10 @@ class ProgressiveModelSizingConfiguration(FrozenModel):
             if model.model_id == model_id:
                 return model
         raise ValueError(f'Unknown progressive model ID: {model_id}')
+
+    @property
+    def is_progressive(self) -> bool:
+        return len(self.models) > 1
 
     def eligible_model_ids(self, elapsed_seconds: float) -> tuple[str, ...]:
         return tuple(model.model_id for model in self.models if model.is_eligible(elapsed_seconds))
@@ -96,28 +97,7 @@ class PromotionLossComparison(FrozenModel):
 
 class ReplayBatchIdentity(FrozenModel):
     source_optimizer_steps: int = Field(ge=0)
-    path: Path
-    head: int = Field(ge=0)
-    size: int = Field(ge=0)
-    logical_capacity: int = Field(gt=0)
-    maximum_capacity: int = Field(gt=0)
-    layout_digest: str
-
-    @classmethod
-    def from_replay(
-        cls,
-        replay: ReplayDescription,
-        source_optimizer_steps: int,
-    ) -> ReplayBatchIdentity:
-        return cls(
-            source_optimizer_steps=source_optimizer_steps,
-            path=replay.path,
-            head=replay.head,
-            size=replay.size,
-            logical_capacity=replay.logical_capacity,
-            maximum_capacity=replay.maximum_capacity,
-            layout_digest=replay.layout.digest,
-        )
+    replay: ReplayDescription
 
 
 class CompletedCandidateTraining(FrozenModel):
@@ -175,7 +155,7 @@ class ProgressiveTrainingStateStore:
         source_optimizer_steps: int,
         optimizer_steps_per_quantum: int,
     ) -> PendingProgressiveQuantum:
-        replay_batch = ReplayBatchIdentity.from_replay(replay, source_optimizer_steps)
+        replay_batch = ReplayBatchIdentity(replay=replay, source_optimizer_steps=source_optimizer_steps)
         if self.state.pending_quantum is not None:
             if self.state.pending_quantum.replay_batch != replay_batch:
                 raise ValueError('Pending progressive quantum replay batches changed across restart.')

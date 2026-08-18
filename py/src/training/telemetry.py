@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from statistics import fmean, median
 
-from src.replay.manager import IngestedCompletedGame, ReplayDescription
+from src.replay.description import ReplayDescription
+from src.replay.manager import IngestedCompletedGame
 from src.self_play.completed_game import TerminationReason
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedgerState
