@@ -51,6 +51,8 @@ public:
         return m_executor.inferenceStatistics();
     }
 
+    void resetInferenceCacheTracker() { m_executor.resetInferenceCacheTracker(); }
+
     void updateSearchParameters(const BatchedSearchParameters parameters) {
         m_searchParameters = parameters;
         m_valueDiscountPerPly = parameters.tree_search.value_discount_per_ply;

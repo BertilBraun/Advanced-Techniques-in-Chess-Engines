@@ -202,6 +202,8 @@ public:
         return statistics;
     }
 
+    void resetInferenceCacheTracker() { m_cacheTracker->reset(); }
+
     void updateSearchParameters(const BatchedSearchParameters parameters) {
         m_searchParameters = parameters;
     }

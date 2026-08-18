@@ -387,7 +387,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         args.warmup_steps,
         collect_per_ply=False,
     )
-    search.refresh_model(1, str(args.model))
+    search.reset_inference_cache_tracker()
     roots, game_plies, initial_encodings = new_random_roots(search, start_generator, args.games)
     initial_game_plies = tuple(game_plies)
     initial_unique_positions = len(set(initial_encodings))

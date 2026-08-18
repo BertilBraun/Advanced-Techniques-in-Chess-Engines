@@ -191,6 +191,15 @@ int runBatchedSearchTests() {
         require(statistics.cacheUniqueHashes + statistics.cacheRepeatedHashes ==
                     statistics.cacheTotalPositions,
                 "cache telemetry totals are inconsistent");
+        const std::uint64_t evaluationsBeforeTrackerReset = statistics.evaluations;
+        const std::uint32_t visitsBeforeTrackerReset = results.results[0].root.visits();
+        search.resetInferenceCacheTracker();
+        const InferenceStatistics resetStatistics = search.inferenceStatistics();
+        require(resetStatistics.cacheTotalPositions == 0 && resetStatistics.cacheSetSize == 0,
+                "explicit cache tracker reset retained observations");
+        require(resetStatistics.evaluations == evaluationsBeforeTrackerReset &&
+                    results.results[0].root.visits() == visitsBeforeTrackerReset,
+                "explicit cache tracker reset changed inference or search state");
 
         const std::vector<ChessSelfPlaySearchRequest> completedBoards = {
             ChessSelfPlaySearchRequest(results.results[0].root, true),

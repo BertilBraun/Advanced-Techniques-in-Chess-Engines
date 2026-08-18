@@ -189,6 +189,11 @@ public:
         return m_search->inferenceStatistics();
     }
 
+    void resetInferenceCacheTracker() {
+        const std::unique_lock lock(m_operationMutex);
+        m_search->resetInferenceCacheTracker();
+    }
+
     void refreshModel(const std::uint64_t modelGeneration, const std::string &modelPath) {
         const std::unique_lock lock(m_operationMutex);
         m_search->refreshModel(modelGeneration, modelPath);
