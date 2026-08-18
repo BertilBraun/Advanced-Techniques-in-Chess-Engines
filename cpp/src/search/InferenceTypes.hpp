@@ -34,6 +34,7 @@ template <SearchGame Game> struct SearchInferenceResult {
 };
 
 enum class InferenceDevice { Auto, Cpu, Cuda };
+enum class SdpaBackend { Automatic, Flash, MemoryEfficient, Math, CuDNN };
 
 struct InferenceStatistics {
     std::size_t evaluations = 0;

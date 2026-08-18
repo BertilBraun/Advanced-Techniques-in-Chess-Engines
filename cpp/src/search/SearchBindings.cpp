@@ -19,6 +19,13 @@ void bind_search(py::module_ &module) {
         .value("CPU", InferenceDevice::Cpu)
         .value("CUDA", InferenceDevice::Cuda);
 
+    py::enum_<SdpaBackend>(module, "SdpaBackend")
+        .value("AUTOMATIC", SdpaBackend::Automatic)
+        .value("FLASH", SdpaBackend::Flash)
+        .value("MEMORY_EFFICIENT", SdpaBackend::MemoryEfficient)
+        .value("MATH", SdpaBackend::Math)
+        .value("CUDNN", SdpaBackend::CuDNN);
+
     py::enum_<FirstPlayUrgencyKind>(module, "FirstPlayUrgencyKind")
         .value("ZERO", FirstPlayUrgencyKind::Zero)
         .value("PARENT_VALUE", FirstPlayUrgencyKind::ParentValue)
@@ -39,11 +46,13 @@ void bind_search(py::module_ &module) {
         .def_readonly("value_discount_per_ply", &TreeSearchParameters::value_discount_per_ply);
 
     py::class_<InferenceConfiguration>(module, "InferenceConfiguration")
-        .def(py::init<int, std::string, InferenceDevice>(), py::arg("device_id"),
-             py::arg("model_path"), py::arg("device") = InferenceDevice::Auto)
+        .def(py::init<int, std::string, InferenceDevice, SdpaBackend>(), py::arg("device_id"),
+             py::arg("model_path"), py::arg("device") = InferenceDevice::Auto,
+             py::arg("sdpa_backend") = SdpaBackend::Automatic)
         .def_readwrite("device_id", &InferenceConfiguration::device_id)
         .def_readwrite("model_path", &InferenceConfiguration::model_path)
-        .def_readwrite("device", &InferenceConfiguration::device);
+        .def_readwrite("device", &InferenceConfiguration::device)
+        .def_readwrite("sdpa_backend", &InferenceConfiguration::sdpa_backend);
 
     py::class_<InferenceDimensions>(module, "InferenceDimensions")
         .def(py::init<std::size_t, std::size_t, std::size_t, std::size_t, std::size_t>(),

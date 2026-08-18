@@ -18,6 +18,7 @@ from src.experiment.configuration import (
 )
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.training import ChessImplementation
+from src.self_play.configuration import SdpaBackend
 from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.configuration import EnabledForcedPlayoutConfiguration
 from src.self_play.parameters import (
@@ -217,6 +218,7 @@ def test_eight_gpu_chess_production_configuration_resolves_authored_curriculum()
     topology = configuration.training.topology
     credit = configuration.training.lifecycle.credit
     self_play = configuration.chess.self_play
+    assert self_play.inference.sdpa_backend is SdpaBackend.AUTOMATIC
 
     assert topology.trainer.ddp_device_ids == (0, 1, 2, 3)
     assert trainer.global_batch_size == 2048

@@ -22,6 +22,7 @@ from src.games.chess.interactive.analysis import (
     TimedMctsAnalysis,
 )
 from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+from src.self_play.native_configuration import native_sdpa_backend
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ class InteractiveEngine:
             device_id=configuration.device_id,
             model_path=configuration.model_path,
             device=target_mapping[configuration.inference_target],
+            sdpa_backend=native_sdpa_backend(configuration.sdpa_backend),
         )
         self._bound_analysis = BoundChessAnalysis(
             runtime_parameters,

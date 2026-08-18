@@ -9,6 +9,7 @@ from src.games.chess.interactive.configuration import (
 from src.games.chess.interactive.engine import InteractiveEngine
 from src.games.chess.uci.engine import UciConfiguration, UciEngine
 from src.games.chess.uci.server import UciServer
+from src.self_play.configuration import SdpaBackend
 
 
 def parse_arguments() -> tuple[InteractiveEngineConfiguration, UciConfiguration]:
@@ -20,6 +21,11 @@ def parse_arguments() -> tuple[InteractiveEngineConfiguration, UciConfiguration]
     parser.add_argument('--inference-workers', type=int, default=2)
     parser.add_argument('--outstanding-batches-per-worker', type=int, default=2)
     parser.add_argument('--maximum-batch-size', type=int, default=64)
+    parser.add_argument(
+        '--sdpa-backend',
+        choices=tuple(backend.value for backend in SdpaBackend),
+        default=SdpaBackend.AUTOMATIC.value,
+    )
     parser.add_argument('--search-slice-seconds', type=int, choices=range(1, 31), default=5)
     parser.add_argument(
         '--inference-target',
@@ -36,6 +42,7 @@ def parse_arguments() -> tuple[InteractiveEngineConfiguration, UciConfiguration]
         outstanding_batches_per_worker=arguments.outstanding_batches_per_worker,
         maximum_batch_size=arguments.maximum_batch_size,
         inference_target=InferenceTarget(arguments.inference_target),
+        sdpa_backend=SdpaBackend(arguments.sdpa_backend),
     )
     return engine_configuration, UciConfiguration(search_slice_seconds=arguments.search_slice_seconds)
 

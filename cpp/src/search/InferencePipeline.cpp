@@ -3,6 +3,8 @@
 #include "util/Timing.hpp"
 #include "util/py.hpp"
 
+#include <ATen/Context.h>
+
 namespace {
 template <typename NamedTensorList>
 void validateNamedTensors(const NamedTensorList &currentTensors,
@@ -105,6 +107,20 @@ torch::Dtype dtypeForDevice(const torch::Device &device) {
     return device.is_cuda() ? torch::kBFloat16 : torch::kFloat32;
 }
 
+void configureSdpaBackend(const torch::Device &device, const SdpaBackend backend) {
+    if (!device.is_cuda() && backend != SdpaBackend::Automatic) {
+        throw std::invalid_argument("An explicit SDPA backend requires CUDA inference");
+    }
+    at::globalContext().setSDPUseFlash(backend == SdpaBackend::Automatic ||
+                                       backend == SdpaBackend::Flash);
+    at::globalContext().setSDPUseMemEfficient(backend == SdpaBackend::Automatic ||
+                                              backend == SdpaBackend::MemoryEfficient);
+    at::globalContext().setSDPUseMath(backend == SdpaBackend::Automatic ||
+                                      backend == SdpaBackend::Math);
+    at::globalContext().setSDPUseCuDNN(backend == SdpaBackend::Automatic ||
+                                       backend == SdpaBackend::CuDNN);
+}
+
 constexpr std::int64_t tensorSize(const std::size_t size) noexcept {
     return static_cast<std::int64_t>(size);
 }
@@ -156,11 +172,13 @@ void InferenceCompletion::waitWithoutThrowing() const noexcept {
 InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDevice device,
                                  const int deviceId, const size_t maximumBatchSize,
                                  const bool useDedicatedCudaStream,
-                                 const InferenceDimensions dimensions)
+                                 const InferenceDimensions dimensions,
+                                 const SdpaBackend sdpaBackend)
     : m_device(resolveDevice(device, deviceId)), m_torchDtype(dtypeForDevice(m_device)),
       m_maximumBatchSize(maximumBatchSize), m_dimensions(dimensions),
       m_model(std::make_unique<torch::jit::script::Module>(
           loadInferenceModel(modelPath, m_device, m_torchDtype))) {
+    configureSdpaBackend(m_device, sdpaBackend);
     if (maximumBatchSize == 0) {
         throw std::invalid_argument("Maximum inference batch size must be positive");
     }
@@ -281,8 +299,10 @@ void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) no
 InferencePipeline::InferencePipeline(const std::string &modelPath, const InferenceDevice device,
                                      const int deviceId, const size_t maximumBatchSize,
                                      const size_t slotCount, const bool useDedicatedCudaStream,
-                                     const InferenceDimensions dimensions)
-    : m_runner(modelPath, device, deviceId, maximumBatchSize, useDedicatedCudaStream, dimensions) {
+                                     const InferenceDimensions dimensions,
+                                     const SdpaBackend sdpaBackend)
+    : m_runner(modelPath, device, deviceId, maximumBatchSize, useDedicatedCudaStream, dimensions,
+               sdpaBackend) {
     if (slotCount < 2) {
         throw std::invalid_argument("Inference pipeline requires at least two slots");
     }

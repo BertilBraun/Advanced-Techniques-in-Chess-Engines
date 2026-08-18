@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from math import isfinite
 from typing import Annotated, Literal, TypeAlias
 
@@ -19,6 +20,14 @@ from src.self_play.parameters import (
     ZeroFirstPlayUrgencyParameters,
 )
 from src.util.frozen_model import FrozenModel
+
+
+class SdpaBackend(str, Enum):
+    AUTOMATIC = 'automatic'
+    FLASH = 'flash'
+    MEMORY_EFFICIENT = 'memory_efficient'
+    MATH = 'math'
+    CUDNN = 'cudnn'
 
 
 class DisabledForcedPlayoutConfiguration(FrozenModel):
@@ -115,6 +124,7 @@ class BatchedInferenceParams(FrozenModel):
     inference_workers: int = Field(gt=0)
     inference_batch_size: int = Field(gt=0)
     outstanding_batches_per_worker: int = Field(ge=1, le=2)
+    sdpa_backend: SdpaBackend = SdpaBackend.AUTOMATIC
 
 
 class RandomOpeningStartConfiguration(FrozenModel):

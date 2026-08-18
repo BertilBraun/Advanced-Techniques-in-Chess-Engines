@@ -11,6 +11,7 @@ from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
 from src.self_play.parameters import ResolvedSelfPlayParameters, ZeroFirstPlayUrgencyParameters
 from src.self_play.native_search import NativeSelfPlaySearch
+from src.self_play.native_configuration import native_sdpa_backend
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
@@ -118,7 +119,12 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
 
         device = InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA
         return ChessSelfPlaySearch(
-            InferenceConfiguration(device_id, str(checkpoint.inference_model_path), device),
+            InferenceConfiguration(
+                device_id,
+                str(checkpoint.inference_model_path),
+                device,
+                native_sdpa_backend(inference.sdpa_backend),
+            ),
             self.native_search_parameters(parameters),
             BatchedInferenceParameters(
                 inference.inference_workers,

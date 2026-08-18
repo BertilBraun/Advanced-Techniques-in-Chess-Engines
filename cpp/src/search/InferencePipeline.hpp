@@ -59,7 +59,8 @@ class InferenceRunner {
 public:
     InferenceRunner(const std::string &modelPath, InferenceDevice device, int deviceId,
                     size_t maximumBatchSize, bool useDedicatedCudaStream,
-                    InferenceDimensions dimensions);
+                    InferenceDimensions dimensions,
+                    SdpaBackend sdpaBackend = SdpaBackend::Automatic);
 
     [[nodiscard]] torch::Tensor createInputBuffer() const;
     [[nodiscard]] InferenceOutput createOutputBuffer() const;
@@ -99,7 +100,8 @@ public:
 
     InferencePipeline(const std::string &modelPath, InferenceDevice device, int deviceId,
                       size_t maximumBatchSize, size_t slotCount, bool useDedicatedCudaStream,
-                      InferenceDimensions dimensions);
+                      InferenceDimensions dimensions,
+                      SdpaBackend sdpaBackend = SdpaBackend::Automatic);
     ~InferencePipeline();
 
     InferencePipeline(const InferencePipeline &) = delete;

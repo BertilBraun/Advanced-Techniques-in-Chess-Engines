@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from enum import Enum
 from math import isfinite
 
+from src.self_play.configuration import SdpaBackend
+
 
 class InferenceTarget(str, Enum):
     AUTO = 'auto'
@@ -24,6 +26,7 @@ class InteractiveEngineConfiguration:
     outstanding_batches_per_worker: int = 2
     maximum_batch_size: int | None = None
     inference_target: InferenceTarget = InferenceTarget.AUTO
+    sdpa_backend: SdpaBackend = SdpaBackend.AUTOMATIC
 
     def __post_init__(self) -> None:
         if not self.model_path:

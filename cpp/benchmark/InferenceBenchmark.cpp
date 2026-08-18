@@ -4,7 +4,6 @@
 #include "search/InferencePipeline.hpp"
 #include "util/py.hpp"
 
-#include <ATen/Context.h>
 #include <barrier>
 #include <nlohmann/json.hpp>
 #include <numeric>
@@ -69,25 +68,24 @@ Arguments parseArguments(const int argumentCount, char **argumentValues) {
     return arguments;
 }
 
-void configureSdpaBackend(const Arguments &arguments) {
+SdpaBackend resolveSdpaBackend(const Arguments &arguments) {
     if (arguments.sdpaBackend == "automatic") {
-        return;
+        return SdpaBackend::Automatic;
     }
-    if (arguments.device != InferenceDevice::Cuda) {
-        throw std::invalid_argument("An explicit SDPA backend requires CUDA inference");
+    if (arguments.sdpaBackend == "flash") {
+        return SdpaBackend::Flash;
     }
-    const bool useFlash = arguments.sdpaBackend == "flash";
-    const bool useMemoryEfficient = arguments.sdpaBackend == "memory_efficient";
-    const bool useMath = arguments.sdpaBackend == "math";
-    const bool useCuDNN = arguments.sdpaBackend == "cudnn";
-    if (!useFlash && !useMemoryEfficient && !useMath && !useCuDNN) {
-        throw std::invalid_argument(
-            "SDPA backend must be automatic, flash, memory_efficient, math, or cudnn");
+    if (arguments.sdpaBackend == "memory_efficient") {
+        return SdpaBackend::MemoryEfficient;
     }
-    at::globalContext().setSDPUseFlash(useFlash);
-    at::globalContext().setSDPUseMemEfficient(useMemoryEfficient);
-    at::globalContext().setSDPUseMath(useMath);
-    at::globalContext().setSDPUseCuDNN(useCuDNN);
+    if (arguments.sdpaBackend == "math") {
+        return SdpaBackend::Math;
+    }
+    if (arguments.sdpaBackend == "cudnn") {
+        return SdpaBackend::CuDNN;
+    }
+    throw std::invalid_argument(
+        "SDPA backend must be automatic, flash, memory_efficient, math, or cudnn");
 }
 
 std::vector<Board> generateBoards(const size_t count, const uint32_t seed) {
@@ -142,7 +140,8 @@ double outputChecksum(const InferenceOutput &output) {
 nlohmann::json runDirect(const Arguments &arguments,
                          const std::vector<CompressedEncodedBoard> &encodings) {
     InferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize, true,
-                           ChessGame::Encoding::inferenceDimensions());
+                           ChessGame::Encoding::inferenceDimensions(),
+                           resolveSdpaBackend(arguments));
     torch::Tensor input = runner.createInputBuffer();
     InferenceOutput output = runner.createOutputBuffer();
     fillInput(input, encodings, 0, arguments.batchSize);
@@ -163,7 +162,8 @@ nlohmann::json runDirect(const Arguments &arguments,
 nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<Board> &boards,
                                   const std::vector<CompressedEncodedBoard> &encodings) {
     InferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize, true,
-                           ChessGame::Encoding::inferenceDimensions());
+                           ChessGame::Encoding::inferenceDimensions(),
+                           resolveSdpaBackend(arguments));
     torch::Tensor input = runner.createInputBuffer();
     InferenceOutput output = runner.createOutputBuffer();
     fillInput(input, encodings, 0, arguments.batchSize);
@@ -194,7 +194,8 @@ nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<
 nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> &boards,
                            const std::vector<CompressedEncodedBoard> &encodings) {
     InferencePipeline pipeline(arguments.modelPath, arguments.device, 0, arguments.batchSize,
-                               arguments.slots, true, ChessGame::Encoding::inferenceDimensions());
+                               arguments.slots, true, ChessGame::Encoding::inferenceDimensions(),
+                               resolveSdpaBackend(arguments));
     std::vector<std::pair<size_t, size_t>> pendingBatches;
     pendingBatches.reserve(arguments.slots);
     constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channel_count *
@@ -360,7 +361,6 @@ int main(const int argumentCount, char **argumentValues) {
         Stockfish::Bitboards::init();
         Stockfish::Position::init();
         const Arguments arguments = parseArguments(argumentCount, argumentValues);
-        configureSdpaBackend(arguments);
         const size_t positions = arguments.batchSize * arguments.iterations * arguments.workers;
         const std::vector<Board> boards = generateBoards(positions, arguments.seed);
         double encodeMilliseconds = 0.0;

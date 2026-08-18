@@ -21,8 +21,10 @@ public:
     BatchedGameSearch(const std::string &modelPath, const InferenceDevice device,
                       const int deviceId, const BatchedInferenceParameters inferenceParameters,
                       const BatchedSearchParameters searchParameters,
-                      const std::uint64_t modelGeneration, const bool resetTreesOnRefresh = true)
-        : m_executor(modelPath, device, deviceId, inferenceParameters, searchParameters),
+                      const std::uint64_t modelGeneration, const bool resetTreesOnRefresh = true,
+                      const SdpaBackend sdpaBackend = SdpaBackend::Automatic)
+        : m_executor(modelPath, device, deviceId, inferenceParameters, searchParameters,
+                     sdpaBackend),
           m_searchParameters(searchParameters), m_modelGeneration(modelGeneration),
           m_resetTreesOnRefresh(resetTreesOnRefresh),
           m_valueDiscountPerPly(searchParameters.tree_search.value_discount_per_ply) {}

@@ -96,7 +96,8 @@ public:
           m_search(std::make_unique<BatchedGameSearch<Game>>(
               m_runtimeParameters.model_path, m_runtimeParameters.device,
               m_runtimeParameters.device_id, m_inferenceParameters,
-              engineParameters(m_searchParameters), initialModelGeneration, true)) {}
+              engineParameters(m_searchParameters), initialModelGeneration, true,
+              m_runtimeParameters.sdpa_backend)) {}
 
     [[nodiscard]] Root newRoot(Position position) const {
         const std::shared_lock lock(m_operationMutex);

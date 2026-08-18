@@ -110,6 +110,16 @@ int runInferencePipelineTests() {
         require(std::abs(output.policies[0].sum().item<float>() - 1.0F) < 0.001F,
                 "runner returned invalid policy");
 
+        bool rejectedCudaBackendOnCpu = false;
+        try {
+            InferenceRunner explicitCudaRunner(modelPath.string(), InferenceDevice::Cpu, 0, 4,
+                                               false, ChessGame::Encoding::inferenceDimensions(),
+                                               SdpaBackend::MemoryEfficient);
+        } catch (const std::invalid_argument &) {
+            rejectedCudaBackendOnCpu = true;
+        }
+        require(rejectedCudaBackendOnCpu, "runner accepted an explicit CUDA SDPA backend on CPU");
+
         testTwoOutstandingBatches(modelPath, InferenceDevice::Cpu, false);
         testFailureReleasesSlot(modelPath);
 #ifdef USE_CUDA
