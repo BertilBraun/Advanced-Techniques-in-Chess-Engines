@@ -70,9 +70,7 @@ class LinearStateContract(GameStateContract[LinearPosition]):
             raise ValueError('Action is not legal in the linear test game.')
         return LinearPosition(position.action_ids + (action_id,))
 
-    def is_irreversible_transition(
-        self, position: LinearPosition, action_id: int, child: LinearPosition
-    ) -> bool:
+    def is_irreversible_transition(self, position: LinearPosition, action_id: int, child: LinearPosition) -> bool:
         del position, child
         return action_id == 2
 

@@ -164,12 +164,8 @@ def _auxiliary_distribution(
             legal = target[eligible] > 0.5
             illegal = ~legal
             return LegalMovesTrainingDistribution(
-                legal_probability=_floats(
-                    (probabilities * legal).sum(dim=1) / legal.sum(dim=1).clamp_min(1)
-                ),
-                illegal_probability=_floats(
-                    (probabilities * illegal).sum(dim=1) / illegal.sum(dim=1).clamp_min(1)
-                ),
+                legal_probability=_floats((probabilities * legal).sum(dim=1) / legal.sum(dim=1).clamp_min(1)),
+                illegal_probability=_floats((probabilities * illegal).sum(dim=1) / illegal.sum(dim=1).clamp_min(1)),
             )
 
 

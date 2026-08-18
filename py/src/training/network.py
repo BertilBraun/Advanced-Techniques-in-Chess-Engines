@@ -305,9 +305,7 @@ class InferenceNetwork(nn.Module):
         self.network_definition = NetworkDefinition(
             architecture=training_model.network_args,
             dimensions=training_model.dimensions,
-            auxiliary_heads=tuple(
-                head for head in training_model.auxiliary_heads if head.kind == 'search_correction'
-            ),
+            auxiliary_heads=tuple(head for head in training_model.auxiliary_heads if head.kind == 'search_correction'),
         )
 
     def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor, Tensor]:

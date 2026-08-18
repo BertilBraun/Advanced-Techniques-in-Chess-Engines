@@ -111,9 +111,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
             case FixedFullSearchBudget(visits=visits):
                 full_search_budget = FixedSearchLimit(visits)
             case AdaptiveFullSearchBudget() as adaptive:
-                gate_visit = adaptive.minimum_visits + (
-                    adaptive.maximum_visits - adaptive.minimum_visits
-                ) // 2
+                gate_visit = adaptive.minimum_visits + (adaptive.maximum_visits - adaptive.minimum_visits) // 2
                 gate = (
                     DisabledSearchCorrectionGate()
                     if adaptive.minimum_search_correction_to_unlock_tail is None

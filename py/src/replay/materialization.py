@@ -189,7 +189,11 @@ def _future_search_value_target(
     future_ply = observation.ply + ply_offset
     future = observations.get(future_ply)
     if future is not None:
-        sign = 1.0 if state.current_player(positions[observation.ply]) == state.current_player(positions[future_ply]) else -1.0
+        sign = (
+            1.0
+            if state.current_player(positions[observation.ply]) == state.current_player(positions[future_ply])
+            else -1.0
+        )
         return EligibleScalarAuxiliaryTarget(kind='future_search_value', value=sign * future.root_value)
     if future_ply < len(positions):
         return IneligibleScalarAuxiliaryTarget(kind='future_search_value')

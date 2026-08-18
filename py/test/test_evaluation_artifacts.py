@@ -248,9 +248,7 @@ class FakeState(GameStateContract[FakePosition]):
             raise ValueError('Illegal fake action.')
         return FakePosition((*position.actions, action_id))
 
-    def is_irreversible_transition(
-        self, position: FakePosition, action_id: int, child: FakePosition
-    ) -> bool:
+    def is_irreversible_transition(self, position: FakePosition, action_id: int, child: FakePosition) -> bool:
         del position, action_id, child
         return False
 

@@ -264,13 +264,15 @@ class ReplayStore:
                 case RemainingGameLengthHeadLayout(), IneligibleRemainingGameLengthTarget():
                     row[f'auxiliary_{index}_eligible'] = 0
                 case (
-                    FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()
-                ), EligibleScalarAuxiliaryTarget(value=value):
+                    (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
+                    EligibleScalarAuxiliaryTarget(value=value),
+                ):
                     row[f'auxiliary_{index}_value'] = value
                     row[f'auxiliary_{index}_eligible'] = 1
                 case (
-                    FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()
-                ), IneligibleScalarAuxiliaryTarget():
+                    (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
+                    IneligibleScalarAuxiliaryTarget(),
+                ):
                     row[f'auxiliary_{index}_eligible'] = 0
                 case SearchCorrectionHeadLayout(), EligibleScalarAuxiliaryTarget(value=value):
                     row[f'auxiliary_{index}_value'] = value

@@ -55,21 +55,14 @@ class AdaptiveSearchTelemetry:
 def adaptive_search_telemetry(
     games: tuple[IngestedCompletedGame, ...],
 ) -> AdaptiveSearchTelemetry | None:
-    observations = tuple(
-        observation
-        for game in games
-        for observation in game.observations
-        if observation.full_search
-    )
+    observations = tuple(observation for game in games for observation in game.observations if observation.full_search)
     if not observations:
         return None
     return AdaptiveSearchTelemetry(
         final_visits=tuple(observation.final_visits for observation in observations),
         new_simulations=tuple(_new_simulations(observation) for observation in observations),
         search_correction_targets=tuple(observation.search_correction_target for observation in observations),
-        search_correction_predictions=tuple(
-            observation.predicted_search_correction for observation in observations
-        ),
+        search_correction_predictions=tuple(observation.predicted_search_correction for observation in observations),
         policy_corrections=tuple(observation.policy_correction for observation in observations),
         value_corrections=tuple(observation.value_correction for observation in observations),
         stop_reasons=tuple(

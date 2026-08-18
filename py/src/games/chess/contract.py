@@ -177,11 +177,7 @@ class ChessStateContract(GameStateContract[ChessPosition]):
             match target:
                 case EligibleNextPolicyTarget(policy=policy):
                     transformed_auxiliary.append(EligibleNextPolicyTarget(policy=transform_policy(policy)))
-                case (
-                    EligibleRemainingGameLengthTarget()
-                    | EligibleScalarAuxiliaryTarget()
-                    | EligibleLegalMovesTarget()
-                ):
+                case EligibleRemainingGameLengthTarget() | EligibleScalarAuxiliaryTarget() | EligibleLegalMovesTarget():
                     transformed_auxiliary.append(target)
                 case _:
                     transformed_auxiliary.append(target)
