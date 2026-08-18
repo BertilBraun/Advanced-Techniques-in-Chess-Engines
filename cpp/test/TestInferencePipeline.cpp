@@ -107,8 +107,8 @@ int runInferencePipelineTests() {
         InferenceOutput output = runner.createOutputBuffer();
         runner.forwardInto(input, 3, output);
         require(output.policies.size(0) == 4, "runner changed reusable policy capacity");
-        require(std::abs(output.policies[0].sum().item<float>() - 1.0F) < 0.001F,
-                "runner returned invalid policy");
+        require(torch::isfinite(output.policies[0]).all().item<bool>(),
+                "runner returned nonfinite policy logits");
 
         bool rejectedCudaBackendOnCpu = false;
         try {

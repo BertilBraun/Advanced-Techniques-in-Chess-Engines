@@ -80,8 +80,7 @@ prepareInferenceModelUpdate(const torch::jit::script::Module &model, const std::
     if (policy.dim() != 2 || policy.size(0) != 1 || policy.size(1) != actionCount ||
         outcome.dim() != 2 || outcome.size(0) != 1 || outcome.size(1) != outcomeCount ||
         !torch::isfinite(policy).all().item<bool>() ||
-        !torch::isfinite(outcome).all().item<bool>() || (policy < 0).any().item<bool>() ||
-        (outcome < 0).any().item<bool>() || std::abs(policy.sum().item<float>() - 1.0F) > 1e-2F ||
+        !torch::isfinite(outcome).all().item<bool>() || (outcome < 0).any().item<bool>() ||
         std::abs(outcome.sum().item<float>() - 1.0F) > 1e-2F) {
         throw std::invalid_argument("Updated inference model returned invalid output");
     }

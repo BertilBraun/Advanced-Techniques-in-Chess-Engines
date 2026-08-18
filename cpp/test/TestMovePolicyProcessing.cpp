@@ -116,6 +116,9 @@ void testStableLegalOnlySoftmax() {
                 "legal-only softmax returned a non-uniform probability");
     }
 
+    for (const Stockfish::Move move : board.validMoves()) {
+        policy[ChessEncoding::actionId(ChessAction(move), board)] = 0.0F;
+    }
     const int preferredAction =
         ChessEncoding::actionId(ChessAction(board.validMoves().front()), board);
     policy[preferredAction] += std::log(2.0F);
