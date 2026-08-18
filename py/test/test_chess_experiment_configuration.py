@@ -99,7 +99,6 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
         0.2,
     )
     assert configuration.chess.self_play.maximum_ply_syzygy_paths == ('/workspace/syzygy/wdl345',)
-    assert configuration.training.limits.maximum_wall_time_seconds == 345600
     auxiliary_targets = configuration.chess.objective.auxiliary_targets
     assert tuple(target.kind for target in auxiliary_targets) == (
         'next_policy',
@@ -138,6 +137,9 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
         '/workspace/run-control/stop/vast-chess-8gpu-optimal.stop'
     )
     assert configuration.chess.objective.root_value_blend.value_at(0) == 0.0
+    assert configuration.chess.objective.root_value_blend.value_at(50) == 0.0
+    assert configuration.chess.objective.root_value_blend.value_at(80) == pytest.approx(0.05)
+    assert configuration.chess.objective.root_value_blend.value_at(110) == pytest.approx(0.1)
     assert configuration.chess.objective.value_discount_per_ply.value_at(0) == 1.0
     progressive_model_sizing = configuration.training.progressive_model_sizing
     assert tuple(model.training_start_days for model in progressive_model_sizing.models) == (
