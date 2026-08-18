@@ -66,6 +66,12 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     )
     assert configuration.training.lifecycle.credit.replay_ratio == 10
     assert configuration.chess.self_play.search.parallel_searches == 2
+    assert configuration.training.progressive_model_sizing is not None
+    assert tuple(model.training_start_days for model in configuration.training.progressive_model_sizing.models) == (
+        0.0,
+        0.75,
+        2.0,
+    )
 
 
 @pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))

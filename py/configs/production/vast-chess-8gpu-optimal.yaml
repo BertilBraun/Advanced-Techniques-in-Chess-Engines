@@ -120,7 +120,7 @@ training:
           num_value_channels: 2
           value_fc_size: 48
       - model_id: chess-18x160
-        training_start_days: 1.5
+        training_start_days: 2.0
         network:
           num_layers: 18
           hidden_size: 160
