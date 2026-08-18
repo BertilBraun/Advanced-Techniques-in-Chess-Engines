@@ -1,5 +1,6 @@
 #include "TestRunner.hpp"
 #include "games/chess/ChessGame.hpp"
+#include "games/go/GoGame.hpp"
 #include "search/InferencePipeline.hpp"
 #include "util/py.hpp"
 
@@ -22,6 +23,32 @@ void require(const bool condition, const std::string &message) {
     if (!condition) {
         throw std::runtime_error(message);
     }
+}
+
+template <typename Operation>
+void requireInvalidArgument(Operation operation, const std::string &message) {
+    bool rejected = false;
+    try {
+        operation();
+    } catch (const std::invalid_argument &) {
+        rejected = true;
+    }
+    require(rejected, message);
+}
+
+void requireLegalRoundTrips(const Board &board, const std::string &description) {
+    std::vector<int> actionIds;
+    actionIds.reserve(board.validMoves().size());
+    for (const Stockfish::Move move : board.validMoves()) {
+        const ChessAction action(move);
+        const int actionId = ChessEncoding::actionId(action, board);
+        require(ChessEncoding::decodeAction(actionId, board) == action,
+                description + ": legal action did not round trip");
+        actionIds.push_back(actionId);
+    }
+    std::ranges::sort(actionIds);
+    require(std::ranges::adjacent_find(actionIds) == actionIds.end(),
+            description + ": legal actions did not have unique ids");
 }
 
 std::vector<float> finiteLogits() {
@@ -99,6 +126,86 @@ void testDirectPolicyLayout() {
     }
 }
 
+void testSpecialMoveRoundTrips() {
+    const Board initial;
+    const Board blackInitial("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
+    const Board castling("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+    const Board enPassant("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1");
+    const Board whitePromotion("1r5k/P7/8/8/8/8/8/7K w - - 0 1");
+    const Board blackPromotion("7k/8/8/8/8/8/p7/1R5K b - - 0 1");
+
+    requireLegalRoundTrips(initial, "initial position");
+    requireLegalRoundTrips(blackInitial, "black-to-move initial position");
+    requireLegalRoundTrips(castling, "castling position");
+    requireLegalRoundTrips(enPassant, "en-passant position");
+    requireLegalRoundTrips(whitePromotion, "white promotion-capture position");
+    requireLegalRoundTrips(blackPromotion, "black promotion-capture position");
+
+    require(std::ranges::count_if(castling.validMoves(),
+                                  [](const Stockfish::Move move) {
+                                      return move.type_of() == Stockfish::CASTLING;
+                                  }) == 2,
+            "castling fixture did not contain both castling actions");
+    require(std::ranges::count_if(enPassant.validMoves(),
+                                  [](const Stockfish::Move move) {
+                                      return move.type_of() == Stockfish::EN_PASSANT;
+                                  }) == 1,
+            "en-passant fixture did not contain its capture");
+    for (const Board *promotion : {&whitePromotion, &blackPromotion}) {
+        int straightPromotions = 0;
+        int capturePromotions = 0;
+        for (const Stockfish::Move move : promotion->validMoves()) {
+            if (move.type_of() != Stockfish::PROMOTION) {
+                continue;
+            }
+            if (Stockfish::file_of(move.from_sq()) == Stockfish::file_of(move.to_sq())) {
+                ++straightPromotions;
+            } else {
+                ++capturePromotions;
+            }
+        }
+        require(straightPromotions == 4 && capturePromotions == 4,
+                "promotion fixture did not contain all straight and capture choices");
+    }
+}
+
+void testSemanticMirroring() {
+    const Board original("1r5k/P7/8/8/8/8/8/7K w - - 0 1");
+    const Board mirrored("k5r1/7P/8/8/8/8/8/K7 w - - 0 1");
+    std::vector<int> mirroredActionIds;
+    mirroredActionIds.reserve(mirrored.validMoves().size());
+    for (const Stockfish::Move move : mirrored.validMoves()) {
+        mirroredActionIds.push_back(ChessEncoding::actionId(ChessAction(move), mirrored));
+    }
+    std::ranges::sort(mirroredActionIds);
+    require(original.validMoves().size() == mirrored.validMoves().size(),
+            "mirrored positions produced different legal-action counts");
+    for (const Stockfish::Move move : original.validMoves()) {
+        const int mirroredActionId =
+            ChessEncoding::mirrorActionId(ChessEncoding::actionId(ChessAction(move), original));
+        require(std::ranges::binary_search(mirroredActionIds, mirroredActionId),
+                "policy-plane mirror did not map to the mirrored legal action set");
+    }
+}
+
+void testDecodeRejections() {
+    const Board initial;
+    requireInvalidArgument(
+        [&initial] { static_cast<void>(ChessEncoding::decodeAction(-1, initial)); },
+        "negative chess action id was accepted");
+    requireInvalidArgument(
+        [&initial] {
+            static_cast<void>(ChessEncoding::decodeAction(ChessEncoding::action_count, initial));
+        },
+        "out-of-range chess action id was accepted");
+    requireInvalidArgument(
+        [&initial] { static_cast<void>(ChessEncoding::decodeAction(63, initial)); },
+        "off-board chess action id was accepted");
+    requireInvalidArgument(
+        [&initial] { static_cast<void>(ChessEncoding::decodeAction(0, initial)); },
+        "position-illegal chess action id was accepted");
+}
+
 void testStableLegalOnlySoftmax() {
     const Board board;
     std::vector<float> policy(ChessEncoding::action_count, std::numeric_limits<float>::quiet_NaN());
@@ -133,6 +240,32 @@ void testStableLegalOnlySoftmax() {
             "softmax did not preserve the requested legal-logit ratio");
 }
 
+void testGoPointPassLegalOnlySoftmax() {
+    const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
+    const Go7Game::State position(rules);
+    const Go7Game::State occupied = position.child(GoAction<7>(0));
+    std::vector<float> policy(GoRepresentationDimensions<7>::action_count,
+                              std::numeric_limits<float>::quiet_NaN());
+    for (const GoAction<7> action : Go7Game::legalActions(occupied)) {
+        policy[Go7Game::Encoding::actionId(action, occupied)] = 0.0F;
+    }
+    policy[GoAction<7>::pass_id] += std::log(3.0F);
+
+    const SearchInferenceResult<Go7Game> result =
+        processInferencePosition<Go7Game>(policy.data(), validOutcome.data(), occupied);
+    require(result.actions.size() == 49, "Go legal-only softmax returned the wrong action count");
+    require(result.actions.back().first.is_pass(), "Go pass was not the final point-pass action");
+    require(std::abs(result.actions.back().second - 1.0F / 17.0F) <= scoreTolerance,
+            "Go legal-only softmax did not preserve the pass-logit ratio");
+    float probabilitySum = 0.0F;
+    for (const auto &[action, probability] : result.actions) {
+        require(action.id != 0, "Go legal-only softmax returned an occupied point");
+        probabilitySum += probability;
+    }
+    require(std::abs(probabilitySum - 1.0F) <= scoreTolerance,
+            "Go point-pass policy was not normalized over legal actions");
+}
+
 void testTerminalAndOutcomeValidation() {
     const Board terminal("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
     const std::vector<float> policy = finiteLogits();
@@ -164,7 +297,11 @@ int runMovePolicyProcessingTests() {
     Stockfish::Position::init();
     testRepresentativePositions();
     testDirectPolicyLayout();
+    testSpecialMoveRoundTrips();
+    testSemanticMirroring();
+    testDecodeRejections();
     testStableLegalOnlySoftmax();
+    testGoPointPassLegalOnlySoftmax();
     testTerminalAndOutcomeValidation();
     std::cout << "Move policy processing tests passed\n";
     return 0;
