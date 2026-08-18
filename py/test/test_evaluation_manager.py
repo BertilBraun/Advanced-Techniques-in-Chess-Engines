@@ -439,6 +439,10 @@ def test_manager_relaunches_unfinished_jobs_after_restart(tmp_path: Path) -> Non
         restarted_context,
     )
 
+    assert restarted_context.processes == []
+
+    restarted_manager.start()
+
     assert len(restarted_context.processes) == len(jobs)
     assert all(process.started for process in restarted_context.processes)
 

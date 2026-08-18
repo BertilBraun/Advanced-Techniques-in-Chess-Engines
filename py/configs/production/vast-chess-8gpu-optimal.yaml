@@ -26,8 +26,8 @@ run:
 training:
   save_path: py/training_data/production/vast-chess-8gpu-optimal
   network:
-    num_layers: 12
-    hidden_size: 112
+    num_layers: 6
+    hidden_size: 64
     residual_context:
       kind: global_pooling
       placement: every_second_block
@@ -67,16 +67,18 @@ training:
   lifecycle:
     replay:
       capacity:
-        kind: linear
-        start_generation: 0
-        end_generation: 100
-        start_value: 300000
-        end_value: 1500000
-        rounding: nearest
-      maximum_capacity: 1500000
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 300000}
+          - {start_generation: 25, value: 600000}
+          - {start_generation: 50, value: 1000000}
+          - {start_generation: 100, value: 1500000}
+          - {start_generation: 250, value: 2000000}
+          - {start_generation: 400, value: 2500000}
+      maximum_capacity: 2500000
       maximum_policy_entries: 60
     credit:
-      replay_ratio: 8
+      replay_ratio: 10
       optimizer_steps_per_quantum: 500
       maximum_optimizer_steps: null
       retained_checkpoint_interval_generations: 6
@@ -93,6 +95,45 @@ training:
     minimum_free_disk_gib: 10.0
     resource_telemetry_interval_seconds: 5.0
   random_seed: 20260811
+  progressive_model_sizing:
+    models:
+      - model_id: chess-6x64
+        training_start_days: 0.0
+        network:
+          num_layers: 6
+          hidden_size: 64
+          residual_context:
+            kind: global_pooling
+            placement: every_second_block
+          num_policy_channels: 4
+          num_value_channels: 2
+          value_fc_size: 48
+      - model_id: chess-12x120
+        training_start_days: 0.75
+        network:
+          num_layers: 12
+          hidden_size: 120
+          residual_context:
+            kind: global_pooling
+            placement: every_second_block
+          num_policy_channels: 4
+          num_value_channels: 2
+          value_fc_size: 48
+      - model_id: chess-18x160
+        training_start_days: 2.0
+        network:
+          num_layers: 18
+          hidden_size: 160
+          residual_context:
+            kind: global_pooling
+            placement: every_second_block
+          num_policy_channels: 4
+          num_value_channels: 2
+          value_fc_size: 48
+    promotion:
+      decay: 0.8
+      warmup_quanta: 10
+      maximum_relative_loss: 1.01
 evaluation:
   cadence_seconds: 1200
   job_timeout_seconds: 1800
@@ -223,7 +264,7 @@ chess:
           - {start_generation: 0, value: 50}
           - {start_generation: 30, value: 100}
           - {start_generation: 90, value: 150}
-      parallel_searches: 1
+      parallel_searches: 2
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
       exploration_constant: 1.5

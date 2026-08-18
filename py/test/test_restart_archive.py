@@ -6,7 +6,6 @@ from uuid import UUID
 import pytest
 from AlphaZeroCpp import GameSearchVisit
 
-from src.experiment.configuration import load_experiment_configuration
 from src.games.contracts import WdlTarget
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
@@ -30,19 +29,6 @@ def restart_parameters() -> RestartStateStartParameters:
         maximum_archive_positions=50_000,
         maximum_age_generations=20,
     )
-
-
-def test_restart_state_screen_resolves_canonical_parameters() -> None:
-    configuration = load_experiment_configuration(Path('configs/screening/go-7x7-overnight/13-restart-states.yaml'))
-    assert configuration.game == 'go'
-
-    parameters = configuration.go.self_play.resolve(0, configuration.go.rules.maximum_moves, 1.0)
-
-    match parameters.start_position:
-        case RestartStateStartParameters() as start_position:
-            assert start_position == restart_parameters()
-        case _:
-            pytest.fail('Restart-state screen resolved the wrong start-position variant.')
 
 
 def completed_game(

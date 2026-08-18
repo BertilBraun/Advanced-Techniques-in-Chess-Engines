@@ -93,12 +93,31 @@ This improves value labels for already excessive games without suppressing ordin
 before the cap. The generic platform should own only an optional terminal-oracle contract; chess owns the Syzygy
 implementation.
 
-Retain 200 plies as the default candidate. Current games are about 100 plies on average and P90 is about 174, while
-raising the cap beyond 200 correlated with a pronounced training deterioration. Before fixing the next-run value,
-compare historical counterfactual coverage at 180, 200, 220, and 300 plies and review the maximum-game treatment in
-AlphaZero-style literature. Do not choose 150 without evidence because it would truncate a nontrivial part of the
-ordinary distribution. The purpose of this analysis is to distinguish 200 from a nearby value such as 220, not to
-reopen very long games.
+Retain **200 plies** as the recommendation. Current games are about 100 plies on average and P90 is about 174, while
+raising the cap beyond 200 correlated with a pronounced training deterioration. The existing evidence distinguishes
+the candidates as follows:
+
+| Cap | Existing-evidence assessment |
+| ---: | --- |
+| 180 | Only six plies beyond the observed P90, so it would truncate a material part of the ordinary long tail. |
+| 200 | Twenty-six plies beyond P90, preserves the established late-game tail, and avoids the previously harmful longer-cap regime. |
+| 220 | Adds ten percent more capped-game search than 200 without current coverage or strength evidence that those plies improve labels. |
+| 300 | Re-enters the long-game regime associated with deterioration and spends 100 extra plies before applying the same safety adjudication. |
+
+The external references are deliberately treated as design context rather than transferable numeric tuning. AlphaZero
+used a remote 512-step draw cutoff, scored Go at its separate 722-step cutoff, and used no endgame tablebases
+([supplementary methods](https://arxiv.org/pdf/1712.01815)). Current Lc0 self-play has a 450-ply safety cutoff and
+can expose Syzygy to its search
+([official source](https://github.com/LeelaChessZero/lc0/blob/master/src/selfplay/game.cc)); that always-available
+search behavior is explicitly not adopted here. KataGo plays games to completion, reduces visits after sustained
+low win rate, stochastically downweights those late samples, and uses Go-specific mechanisms to finish games sooner
+([paper, Appendix D](https://arxiv.org/abs/1902.10565)). Together these sources support having a safety mechanism and
+preserving natural endgame experience, but none justifies increasing this project's empirically problematic cap.
+
+Before authorizing a run, still compute exact historical counterfactual coverage at 180, 200, 220, and 300 from the
+preserved corpus. That audit may reject 200 if it reveals unexpected label coverage, but absent such contrary evidence
+200 is the coherent choice. Do not choose 150 without evidence because it would truncate a nontrivial part of the
+ordinary distribution.
 
 ## 5. Architecture and throughput experiments
 
@@ -192,6 +211,34 @@ can reject obviously harmful formulations but cannot prove the self-play learnin
 for the one experimental run, its actual contribution must be reported as part of that run and interpreted without a
 full multi-day ablation.
 
+### Screening result and decision
+
+The cheap screen completed on 2026-08-18 with the frozen R4 generation-624 checkpoint. Each mode played 50 games as
+25 paired openings with colors reversed, using exactly 64 searches per candidate move against Stockfish skill level 4.
+All modes reused the same openings and seeds.
+
+| Mode | W-D-L | Score | Decisive plies mean / median / P90 | Candidate-win plies mean / median / P90 |
+| --- | ---: | ---: | ---: | ---: |
+| No length term | 50-0-0 | 1.00 | 98.9 / 96 / 137 | 98.9 / 96 / 137 |
+| Final-root preference | 48-1-1 | 0.97 | 96.9 / 96 / 138 | 97.0 / 96 / 138 |
+| Decisive-gated PUCT preference | 46-1-3 | 0.93 | 95.8 / 93 / 124 | 98.0 / 94 / 124 |
+
+Final-root selection improved none of the 50 matched opening/color games and worsened two; PUCT improved none and
+worsened four. Final-root selection overrode the ordinary visit leader ten times. The modest changes in mean game
+length are not a useful conversion gain: the final-root median and tail did not improve consistently, and the shorter
+PUCT decisive-game statistic includes newly introduced losses. There were no maximum-ply adjudications.
+
+Final-root-only use also does not meet the learning objective. It changes later trajectories, but it does not alter the
+current root visit distribution and therefore does not teach the policy the length preference at that decision. PUCT
+does alter the policy target, but the tested bounded additive formulation sacrificed playing strength. The existing
+unconditional remaining-game-length head predicts duration under the observed policy rather than action-conditional
+time to safe conversion, so a decisive absolute value gate does not make candidate moves WDL-equivalent.
+
+Do not include remaining-game-length search utility, final-root length selection, or a game-length-reduction objective
+based on this head in the next multi-day run. Reconsider the topic only after a separate sibling-action calibration
+shows that an outcome-conditioned target can rank conversion time among genuinely WDL-equivalent moves. Such a
+redesign is new research, not unfinished work for the planned run.
+
 ## 9. Adaptive search budget
 
 The initial design is an online progressive search, not a fixed-position learned classifier:
@@ -260,7 +307,7 @@ Before proposing the final experimental configuration, complete and review:
 5. a reliable progressive-size transition test;
 6. the adaptive-search audit;
 7. the transposition reuse audit;
-8. the cheap moves-left screening, if inference support is implemented.
+8. the completed moves-left screening, which rejected remaining-length search utility for the planned run.
 
 Select one coherent package for the single four-day experimental run. Any mechanism that has not passed its cheap
 screen remains out of that run.

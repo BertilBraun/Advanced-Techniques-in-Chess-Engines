@@ -7,7 +7,6 @@ import socket
 
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
-from src.replay.manager import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
 from src.training.trainer.contracts import (
@@ -17,6 +16,8 @@ from src.training.trainer.contracts import (
     StopTrainerCommand,
     TrainerResponse,
     TrainerStopped,
+    TrainerStartup,
+    TrainerQuantum,
     TrainingQuantumResult,
     TrainingStatistics,
     TrainQuantumCommand,
@@ -29,11 +30,10 @@ class TrainerGroup:
         self,
         configuration: ExperimentConfiguration,
         game: GameImplementation,
-        starting_checkpoint: CheckpointReference,
+        startup: TrainerStartup,
     ) -> None:
         self.configuration = configuration
         self.game = game
-        self.starting_checkpoint = starting_checkpoint
         topology = configuration.training.topology.trainer
         self.world_size = len(topology.ddp_device_ids)
         self._closed = False
@@ -51,7 +51,7 @@ class TrainerGroup:
                     self.world_size,
                     rendezvous_port,
                     configuration.model_dump_json(),
-                    starting_checkpoint,
+                    startup,
                 ),
                 name=f'trainer-rank-{rank}',
             )
@@ -62,20 +62,21 @@ class TrainerGroup:
 
     def train_quantum(
         self,
-        replay: ReplayDescription,
-        progress: TrainingProgress,
+        quantum: TrainerQuantum,
     ) -> TrainingQuantumResult:
         self._ensure_open()
-        source_generation = progress.model_generation
-        target_progress = progress.next_generation
+        source_generation = quantum.model_progress.model_generation
+        target_progress = quantum.model_progress.next_generation
+        comparable_generation = quantum.replay_source_progress.model_generation
         command = TrainQuantumCommand(
-            replay=replay,
-            source_progress=progress,
+            replay=quantum.replay,
+            source_progress=quantum.model_progress,
             target_progress=target_progress,
             parameters=ResolvedTrainingParameters(
                 learning_rate=self.configuration.training.trainer.learning_rate.value_at(source_generation),
-                objective=self.game.training_objective_at(source_generation),
+                objective=self.game.training_objective_at(comparable_generation),
             ),
+            replay_source_optimizer_steps=quantum.replay_source_progress.completed_optimizer_steps,
         )
         for connection in self._connections:
             connection.send(command)

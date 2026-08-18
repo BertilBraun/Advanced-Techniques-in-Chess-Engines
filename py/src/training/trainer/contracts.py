@@ -1,9 +1,13 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, TypeAlias
+
+from pydantic import Field
 
 from src.replay.manager import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective
+from src.training.network import NetworkConfiguration
 from src.training.progress import TrainingProgress
 from src.training.distributions import TrainingDistributionSnapshot
 from src.util.frozen_model import FrozenModel
@@ -14,12 +18,26 @@ class ResolvedTrainingParameters(FrozenModel):
     objective: ResolvedTrainingObjective
 
 
+class TrainerStartup(FrozenModel):
+    network: NetworkConfiguration
+    save_path: Path
+    starting_generation: int = Field(ge=0)
+
+
+@dataclass(frozen=True)
+class TrainerQuantum:
+    replay: ReplayDescription
+    model_progress: TrainingProgress
+    replay_source_progress: TrainingProgress
+
+
 class TrainQuantumCommand(FrozenModel):
     kind: Literal['train_quantum'] = 'train_quantum'
     replay: ReplayDescription
     source_progress: TrainingProgress
     target_progress: TrainingProgress
     parameters: ResolvedTrainingParameters
+    replay_source_optimizer_steps: int
 
 
 class StopTrainerCommand(FrozenModel):

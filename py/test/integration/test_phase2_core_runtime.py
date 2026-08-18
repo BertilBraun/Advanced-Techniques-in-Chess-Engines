@@ -15,6 +15,7 @@ from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
+from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.checkpoint.persistence import create_model, create_optimizer, save_model_and_optimizer
 
 
@@ -179,6 +180,7 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
         configuration.training.lifecycle.replay,
         model_generation=0,
         value_discount_per_ply=game.value_discount_per_ply,
+        terminal_oracle=None,
     )
     ingestion = replay_manager.ingest_available_games(0)
     description = replay_manager.description()
@@ -203,13 +205,27 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
     )
     assert batch.states.shape[0] == 1
 
-    trainer_group = TrainerGroup(configuration, game, checkpoint)
-    result = trainer_group.train_quantum(
-        description,
-        TrainingProgress(
-            completed_optimizer_steps=0,
-            optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
+    trainer_group = TrainerGroup(
+        configuration,
+        game,
+        TrainerStartup(
+            network=configuration.training.network,
+            save_path=Path(configuration.training.save_path),
+            starting_generation=checkpoint.generation,
         ),
+    )
+    result = trainer_group.train_quantum(
+        TrainerQuantum(
+            replay=description,
+            model_progress=TrainingProgress(
+                completed_optimizer_steps=0,
+                optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
+            ),
+            replay_source_progress=TrainingProgress(
+                completed_optimizer_steps=0,
+                optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
+            ),
+        )
     )
     trainer_group.close()
     worker.refresh_published_model(result.checkpoint)

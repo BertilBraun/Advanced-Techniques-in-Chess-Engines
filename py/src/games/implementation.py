@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from src.experiment.configuration import ExperimentConfiguration
 from src.experiment.generation_schedule import FloatGenerationSchedule
-from src.games.contracts import GameStateContract
+from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration
 from src.self_play.parameters import (
@@ -51,6 +51,13 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
     @abstractmethod
     def state(self) -> GameStateContract[PositionT]:
         raise NotImplementedError
+
+    @property
+    def terminal_oracle(self) -> TerminalOracle[PositionT] | None:
+        return None
+
+    def close(self) -> None:
+        pass
 
     @property
     @abstractmethod

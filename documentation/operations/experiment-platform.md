@@ -28,6 +28,12 @@ replay-ratio-8, and constant-LR-0.007 runs complete the authored twelve-run camp
 
 ## Training and evaluation lifecycle
 
+The optional progressive-sizing policy is documented in
+[Progressive model sizing](../architecture/progressive-model-sizing.md). Its coordinator pauses all self-play,
+trains every eligible model sequentially on one replay-batch identity, and publishes only the active stage after the
+complete quantum. Candidate checkpoints under `models/` are private restart state and are not production inference
+artifacts.
+
 Run preparation verifies a clean exact source revision, approval, hardware/runtime contract, output paths, and
 immutable evaluation inputs. The coordinator starts self-play, ingests completed games into replay, grants trainer
 credits at the configured replay ratio, publishes inference checkpoints after DDP quanta, schedules evaluation,
@@ -66,6 +72,22 @@ use the checked-in pinned CUDA default. A different official CUDA/cuDNN release 
 TensorRT KataGo builds are forbidden. Success requires `engines/INSTALLATION.txt` to name CUDA, `katago version` to
 report the CUDA backend, and both board-size smokes to pass. Exact assets and hashes remain in
 [Evaluation engines](evaluation-engines.md).
+
+The bootstrap also installs and smoke-probes the complete 3-5-piece Syzygy WDL set in
+`/workspace/syzygy/wdl345`. The installer downloads only the 145 `.rtbw` files, verifies each against the pinned
+Lichess SHA-512 manifest, and rejects DTZ or larger table sets. The destination must not already exist. Set
+`ENGINE_SYZYGY_WDL_DIRECTORY` to select another destination or
+`ENGINE_SYZYGY_WDL_BASE_URL` to use a mirror containing the same pinned files. A chess experiment enables
+maximum-ply probing explicitly with:
+
+```yaml
+chess:
+  self_play:
+    maximum_ply_syzygy_paths:
+      - /workspace/syzygy/wdl345
+```
+
+Provisioning the files does not expose them to search and does not enable the optional terminal oracle by itself.
 
 For later supervised commands, preserve the bootstrap runtime requirements: raise the soft open-file limit above
 the configured minimum, set `TRAINING_RUNTIME_IMAGE`, and include every locked-venv `site-packages/nvidia/*/lib`

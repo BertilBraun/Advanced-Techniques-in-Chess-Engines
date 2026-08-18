@@ -50,15 +50,18 @@ The coordinator is the main process. Cheap synchronous orchestration components 
 Coordinator process
 ├── ReplayManager object
 ├── CreditLedger object
-├── TrainerGroup object
-│   ├── persistent DDP rank 0 process
-│   ├── persistent DDP rank 1 process
-│   └── additional persistent DDP rank processes
+├── TrainingSession object
+│   └── TrainerGroup object
+│       ├── DDP rank 0 process
+│       ├── DDP rank 1 process
+│       └── additional DDP rank processes
+├── TrainingReporter object
 ├── self-play worker processes
 └── short-lived evaluation processes
 ```
 
-The coordinator sees one `TrainerGroup`, never individual trainer ranks. `TrainerGroup` is a local facade that owns rank processes and their connections.
+The coordinator sees one `TrainingSession`, never trainer ranks. `TrainerGroup` is the session-local facade that owns
+rank processes and their connections.
 
 There is no:
 
@@ -247,7 +250,7 @@ Each component evaluates its schedules once at its natural generation boundary:
 
 - `ReplayManager.ingest_available_games(generation)` applies replay capacity before ingestion;
 - `CreditLedger.add_samples(count, generation)` applies the credit policy for newly ingested samples;
-- `TrainerGroup.train_quantum(replay, progress)` resolves learning rate and objective once before dispatching the quantum;
+- `TrainerGroup.train_quantum(quantum)` resolves learning rate and objective once before dispatching the quantum;
 - self-play workers resolve search and game-policy parameters once while loading the target generation;
 - `EvaluationManager` owns its separate elapsed-time cadence and evaluates it on every coordinator-loop iteration.
 
@@ -267,12 +270,17 @@ Static values that affect artifact or process compatibility cannot be scheduled.
 
 ## Coordinator ownership
 
+Architecture-agnostic progressive sizing is specified separately in
+[Progressive model sizing](progressive-model-sizing.md). It composes the same replay, DDP, checkpoint, objective,
+self-play, and evaluation boundaries; its private candidate checkpoints are never published directly.
+
 The coordinator owns:
 
 - the public run loop;
 - `ReplayManager`;
 - `CreditLedger`;
-- the `TrainerGroup` facade;
+- one `TrainingSession`, which owns the required `TrainerGroup` lifecycle;
+- `TrainingReporter`, which owns TensorBoard formatting and lifecycle telemetry;
 - self-play process handles and duplex connections;
 - evaluation process handles;
 - checkpoint activation;
@@ -311,7 +319,8 @@ def run(self) -> None:
     self._shutdown()
 ```
 
-Focused helpers contain the necessary sequencing without adding a lifecycle-state framework.
+Focused helpers and the training-session boundary contain the necessary sequencing without adding lifecycle modes
+to the coordinator.
 
 ```python
 def _ingest_available_games(self) -> None:
@@ -330,18 +339,28 @@ def _ingest_available_games(self) -> None:
 def _train_next_generation(self) -> None:
     self._pause_all_self_play_workers()
 
-    result = self.trainer_group.train_quantum(
-        self.replay_manager.description(),
-        self.ledger.progress,
+    result = self.training_session.train_quantum(
+        TrainingSessionQuantum(
+            replay=self.replay_manager.description(),
+            progress=self.ledger.progress,
+            active_checkpoint=self.ledger.active_checkpoint,
+            elapsed_seconds=self.evaluation_manager.elapsed_seconds,
+        )
     )
 
-    self.ledger.commit_quantum(result)
+    self.ledger.commit_checkpoint(
+        result.publication.completed_optimizer_steps,
+        result.publication.checkpoint,
+    )
     self.ledger.save()
 
-    self._transition_self_play_workers(result.checkpoint)
+    self._transition_self_play_workers(result.publication.checkpoint)
 ```
 
-`TrainerGroup.train_quantum()` is deliberately blocking. The coordinator does not poll self-play, ingest replay, or launch evaluations until the quantum returns. Evaluation processes already running may continue independently.
+`TrainingSession.train_quantum()` is deliberately blocking. The coordinator does not poll self-play, ingest replay,
+or launch evaluations until every required model returns. Evaluation processes already running may continue
+independently. On startup, the evaluation manager does not resume persisted work until pending progressive training
+has completed.
 
 ### Startup, failure, and shutdown
 
@@ -351,7 +370,7 @@ Startup is ordered:
 2. open or create the replay mmap;
 3. load the atomic ledger and select its latest complete checkpoint, adopting a newer complete manifest only when
    its optimizer-step generation is the unique next valid quantum;
-4. create `TrainerGroup`, whose ranks load the complete training model and optimizer checkpoint;
+4. create the selected `TrainingSession`, whose trainer ranks load complete model and optimizer checkpoints;
 5. start self-play workers and send a running desired state with the active checkpoint and no statistics request;
 6. wait for every worker to acknowledge the exact generation and inference hash;
 7. create the local evaluation manager and enter the public loop.
@@ -604,14 +623,16 @@ The ledger is atomically saved after each nonempty replay ingestion and complete
 
 ## TrainerGroup and DDP ranks
 
-`TrainerGroup` is a coordinator-owned orchestration object. It is not itself a DDP rank and does not own a loaded model.
+`TrainerGroup` is a training-session-owned orchestration object. It is not itself a DDP rank and does not own a
+loaded model.
 
 ```text
 Coordinator process
-└── TrainerGroup object
-    ├── DDP rank 0 process
-    ├── DDP rank 1 process
-    └── additional DDP rank processes
+└── TrainingSession
+    └── TrainerGroup object
+        ├── DDP rank 0 process
+        ├── DDP rank 1 process
+        └── additional DDP rank processes
 ```
 
 All ranks, including rank zero, are symmetric child processes. This keeps CUDA initialization and distributed collectives out of the coordinator and gives every rank the same lifecycle.
@@ -624,7 +645,10 @@ Always initialize DDP:
 
 ### Persistent rank state
 
-Ranks load the selected model and optimizer checkpoint during `TrainerGroup` initialization and retain them across quanta. Reloading model and optimizer during every quantum is not required and would defeat the value of persistent ranks.
+Ranks load the selected model and optimizer checkpoint during `TrainerGroup` initialization. The fixed session
+retains its group across quanta. The progressive session closes each candidate group after its sequential quantum so
+only one architecture occupies trainer devices at a time; the next quantum reloads the candidate's exact private
+checkpoint.
 
 After a coordinator restart, a new `TrainerGroup` starts new rank processes and loads the latest complete checkpoint.
 
@@ -635,15 +659,12 @@ class TrainerGroup:
     def __init__(
         self,
         configuration: ExperimentConfiguration,
-        starting_checkpoint: CheckpointReference,
+        game: GameImplementation,
+        startup: TrainerStartup,
     ) -> None:
         ...
 
-    def train_quantum(
-        self,
-        replay: ReplayDescription,
-        progress: TrainingProgress,
-    ) -> TrainingQuantumResult:
+    def train_quantum(self, quantum: TrainerQuantum) -> TrainingQuantumResult:
         ...
 
     def close(self) -> None:
@@ -659,6 +680,19 @@ and not a generic communication module. Its command union contains only `TrainQu
 class ResolvedTrainingParameters(FrozenModel):
     learning_rate: float
     objective: ResolvedTrainingObjective
+
+
+class TrainerStartup(FrozenModel):
+    network: NetworkParams
+    save_path: Path
+    starting_generation: int
+
+
+@dataclass(frozen=True)
+class TrainerQuantum:
+    replay: ReplayDescription
+    model_progress: TrainingProgress
+    replay_source_progress: TrainingProgress
 
 
 class TrainQuantumCommand(FrozenModel):
@@ -1646,7 +1680,8 @@ The ordinary turn algorithm is fully specified:
 10. repeated-move penalties and other chess-only sampling modifications are not part of the base algorithm;
 11. the selected action advances the retained root through `root.play(action_id)`;
 12. a natural terminal position uses `state.terminal_wdl()`; a configured maximum-ply ending uses
-    `state.adjudicated_wdl()` and records that termination reason;
+    the optional game terminal oracle once at the cap, falls back to `state.adjudicated_wdl()` when the oracle is
+    absent or does not cover the position, and records that termination reason;
 13. a nonterminal search result without a positive visit is an invariant failure, not a silently discarded game;
 14. loading a new generation keeps action and observation history but resets every retained tree before play resumes.
 
@@ -1783,6 +1818,16 @@ The shared trainer owns the optimizer hot loop, transfer overlap, gradient handl
 statistics. The game-owned `ResolvedTrainingObjective` owns only model-output interpretation and loss construction
 for one resolved generation.
 
+The terminal oracle is a typed game-agnostic `position -> WdlTarget | None` boundary owned by the concrete game
+composition. Chess may configure a Syzygy WDL implementation; Go currently supplies no oracle. The shared worker
+calls it only after the move that reaches `maximum_game_plies`, never during ordinary search, and the replay manager
+uses the same boundary only to validate the completed result while reconstructing that capped trajectory. An oracle
+result changes only the final WDL value target. It does not add visits, policy targets, search priors, move choices,
+or pre-cap tablebase probes. Chess collapses Syzygy's cursed wins and blessed losses to draws, preserving the
+fifty-move-rule interpretation when converting five-state tablebase WDL to the network's three-state target. At the
+Python/C++ boundary, the chess adapter reads the native `ChessPosition.fen` property already exposed by the binding;
+search requests, retained roots, visits, and native move selection remain unchanged.
+
 ### Network and inference outputs
 
 The training model has a run-fixed output layout: policy logits, three WDL logits, and zero or more configured
@@ -1898,8 +1943,8 @@ The phase ends with current runtime behavior intact but configuration, progress,
 - simplify the ledger to atomic progress, credit, and checkpoint state;
 - remove trainer-rank replay ownership;
 - remove exact archive rebuild and prepared-publication recovery machinery that no longer has an owner;
-- introduce the coordinator-owned `TrainerGroup` facade;
-- make all ranks persistent symmetric child processes;
+- introduce the training-session-owned `TrainerGroup` facade;
+- make all ranks symmetric child processes and retain fixed-session ranks across quanta;
 - always initialize DDP, including world size one;
 - send small replay descriptions rather than replay objects;
 - map the replay read-only in every rank;
