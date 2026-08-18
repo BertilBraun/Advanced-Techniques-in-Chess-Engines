@@ -23,6 +23,11 @@ class AttentionBackend(str, Enum):
     MATH = 'math'
 
 
+class DistributedTrainingMode(str, Enum):
+    STANDARD = 'standard'
+    STATIC_BUCKET_VIEW = 'static_bucket_view'
+
+
 class ProductionTopology(FrozenModel):
     trainer_device_ids: tuple[int, ...] = Field(min_length=1)
     global_training_batch_size: int = Field(gt=0)

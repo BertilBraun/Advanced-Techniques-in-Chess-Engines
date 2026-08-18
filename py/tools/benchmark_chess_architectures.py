@@ -23,6 +23,7 @@ from src.training.architecture_benchmark import (
     ArchitectureBenchmarkPlan,
     AttentionBackend,
     ComparisonProtocol,
+    DistributedTrainingMode,
     load_architecture_benchmark_plan,
 )
 from src.training.architecture_catalog import ArchitectureCatalogEntry, load_architecture_catalog
@@ -74,6 +75,7 @@ class ArchitectureBenchmarkResult(FrozenModel):
     device_name: str
     training_sdpa_backend: AttentionBackend
     training_compiled: bool
+    distributed_training_mode: DistributedTrainingMode
     training: TrainingMeasurement
     inference: tuple[InferenceMeasurement, ...]
 
@@ -106,6 +108,11 @@ def _parse_arguments() -> argparse.Namespace:
     run_parser.add_argument('--acknowledge-gpu-load', action='store_true')
     run_parser.add_argument('--training-sdpa-backend', type=AttentionBackend, default=AttentionBackend.AUTOMATIC)
     run_parser.add_argument('--compile-training', action='store_true')
+    run_parser.add_argument(
+        '--distributed-training-mode',
+        type=DistributedTrainingMode,
+        default=DistributedTrainingMode.STANDARD,
+    )
     return parser.parse_args()
 
 
@@ -364,7 +371,16 @@ def _run_benchmark(arguments: argparse.Namespace, plan: ArchitectureBenchmarkPla
     training_network: nn.Module = TrainingNetwork(network)
     if arguments.compile_training:
         training_network = torch.compile(training_network)
-    model = DistributedDataParallel(training_network, device_ids=[device.index])
+    match arguments.distributed_training_mode:
+        case DistributedTrainingMode.STANDARD:
+            model = DistributedDataParallel(training_network, device_ids=[device.index])
+        case DistributedTrainingMode.STATIC_BUCKET_VIEW:
+            model = DistributedDataParallel(
+                training_network,
+                device_ids=[device.index],
+                static_graph=True,
+                gradient_as_bucket_view=True,
+            )
     dataset = _load_frozen_replay(arguments.frozen_replay)
     training = _training_measurement(
         model,
@@ -392,6 +408,7 @@ def _run_benchmark(arguments: argparse.Namespace, plan: ArchitectureBenchmarkPla
             device_name=torch.cuda.get_device_name(device),
             training_sdpa_backend=arguments.training_sdpa_backend,
             training_compiled=arguments.compile_training,
+            distributed_training_mode=arguments.distributed_training_mode,
             training=training,
             inference=inference,
         )

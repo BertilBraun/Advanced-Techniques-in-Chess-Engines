@@ -5,7 +5,11 @@ import pytest
 import numpy as np
 import torch
 
-from src.training.architecture_benchmark import AttentionBackend, load_architecture_benchmark_plan
+from src.training.architecture_benchmark import (
+    AttentionBackend,
+    DistributedTrainingMode,
+    load_architecture_benchmark_plan,
+)
 from src.training.architecture_catalog import load_architecture_catalog
 from src.training.network import Network
 from tools.benchmark_chess_architectures import (
@@ -70,10 +74,25 @@ def test_single_gpu_batch256_plan_matches_one_training_rank() -> None:
     assert plan.topology.local_training_batch_size == 256
 
 
+def test_two_gpu_batch256_plan_matches_two_training_ranks() -> None:
+    plan = load_architecture_benchmark_plan(Path('configs/benchmarks/chess-architecture-two-gpu-batch256-15s.yaml'))
+
+    assert plan.topology.trainer_device_ids == (0, 1)
+    assert plan.topology.global_training_batch_size == 512
+    assert plan.topology.local_training_batch_size == 256
+
+
 @pytest.mark.parametrize('attention_backend', tuple(AttentionBackend))
 def test_training_sdpa_backend_context_is_constructible(attention_backend: AttentionBackend) -> None:
     with _sdpa_backend_context(attention_backend):
         pass
+
+
+def test_distributed_training_modes_are_explicit() -> None:
+    assert tuple(DistributedTrainingMode) == (
+        DistributedTrainingMode.STANDARD,
+        DistributedTrainingMode.STATIC_BUCKET_VIEW,
+    )
 
 
 def test_chess_architecture_benchmark_refuses_gpu_work_without_acknowledgement() -> None:
