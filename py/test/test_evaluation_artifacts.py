@@ -68,6 +68,7 @@ def test_checked_in_go_baseline_reference_artifacts_match_configuration() -> Non
 
     assert 480 <= dataset_manifest.position_count <= 520
     assert dataset_manifest.label_search_limit == engine.label_max_visits
+    assert dataset_manifest.maximum_legal_actions <= 50
     assert hashlib.sha256(dataset_path.read_bytes()).hexdigest() == dataset_manifest.data_sha256
     assert len(opening_manifest.openings) == experiment.evaluation.openings.opening_count == 200
     assert opening_manifest.label_search_limit == engine.label_max_visits
@@ -119,6 +120,7 @@ def test_checked_in_go_9x9_derived_artifacts_use_book_policy_and_production_rule
     assert dataset_manifest.position_count == dataset_source.position_count == 500
     assert dataset_manifest.soft_policy_source == 'katago_book_prior'
     assert dataset_manifest.book_export_sha256 == dataset_source.selection.export_sha256
+    assert dataset_manifest.maximum_legal_actions <= 82
     assert hashlib.sha256(dataset_path.read_bytes()).hexdigest() == dataset_manifest.data_sha256
     assert len(opening_manifest.openings) == experiment.evaluation.openings.opening_count == 200
     assert opening_manifest.book_export_sha256 == opening_source.selection.export_sha256
