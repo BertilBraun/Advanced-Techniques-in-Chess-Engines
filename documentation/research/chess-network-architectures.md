@@ -33,12 +33,15 @@ The attention variant is a mutually exclusive square-token backbone:
 3. learned row and column embeddings provide board position;
 4. pre-normalized multi-head self-attention and GELU feed-forward blocks update all tokens;
 5. tokens are reshaped back to spatial features;
-6. the existing project heads produce the canonical flat policy, three-way WDL, next-policy, and remaining-length
-   outputs.
+6. compact spatial policy heads produce 76 move planes and gather the 1,880 canonical action logits;
+7. the value and remaining-length heads retain their canonical outputs.
 
-This intentionally does not copy Lc0's chess-specific from-square/to-square attention policy map, DeepNorm,
-Smolgen, or current large-network scale. Keeping the project's existing heads isolates the backbone comparison and
-preserves replay action IDs, objectives, JIT `(policy, WDL)` inference output, and native search integration.
+The spatial policy layout contains 56 ray planes, eight knight planes, and 12 explicit promotion planes. The native
+chess encoder remains the mapping authority and exposes one immutable gather index per canonical action. Both the
+primary and next-policy heads use `backbone -> 32-channel 1x1 projection -> normalization/activation -> 76-channel
+1x1 projection -> fixed gather`. Replay action IDs, sparse targets, losses, JIT `(policy, WDL)` inference output,
+and native search integration therefore remain unchanged. Impossible spatial slots never enter the canonical
+softmax. Legal-action masking remains search-owned; legal-move prediction is deliberately outside this rework.
 
 ## Frozen model catalog
 
@@ -48,15 +51,20 @@ length (1).
 
 | Definition | Backbone | Body | Exact parameters |
 | --- | --- | --- | ---: |
-| `chess-cnn-1m` | convolutional global pooling | 2 blocks x 32 channels | 1,017,032 |
-| `chess-attention-1m` | square-token attention | 2 layers x 64, 4 heads, FFN 128 | 1,043,856 |
-| `chess-cnn-4m` | convolutional global pooling | 10 blocks x 128 channels | 3,809,520 |
-| `chess-attention-4m` | square-token attention | 5 layers x 256, 8 heads, FFN 512 | 3,624,336 |
-| `chess-cnn-9m` | convolutional global pooling | 16 blocks x 176 channels | 9,490,464 |
-| `chess-attention-9m` | square-token attention | 7 layers x 384, 12 heads, FFN 768 | 9,283,856 |
+| `chess-cnn-1m` | convolutional global pooling | 8 blocks x 88 channels | 1,100,730 |
+| `chess-attention-1m` | square-token attention | 8 layers x 128, 4 heads, FFN 256 | 1,086,114 |
+| `chess-cnn-4m` | convolutional global pooling | 10 blocks x 144 channels | 3,603,454 |
+| `chess-attention-4m` | square-token attention | 13 layers x 192, 6 heads, FFN 384 | 3,894,946 |
+| `chess-cnn-9m` | convolutional global pooling | 16 blocks x 176 channels | 8,538,402 |
+| `chess-attention-9m` | square-token attention | 17 layers x 256, 8 heads, FFN 512 | 9,001,762 |
 
-The 1M band is dominated by the two 1,880-action policy heads. That limits how closely either backbone can approach
-one million parameters without changing the fixed experimental head contract.
+The learned primary policy, WDL, next-policy, and remaining-length heads total 20,130, 24,418, and 28,706 parameters
+for the three attention widths. The backbone therefore owns at least 98% of every attention candidate's capacity.
+The fixed native gather indices are registered model buffers and are not trainable parameters.
+
+The benchmark artifacts below predate the spatial policy rework and describe the former shallow models with dense
+policy projections. They remain historical evidence for attention-kernel and SDPA decisions, not throughput claims
+for this catalog. The revised models require a separately authorized benchmark before production use.
 
 ## Benchmark protocol and first contended comparison
 

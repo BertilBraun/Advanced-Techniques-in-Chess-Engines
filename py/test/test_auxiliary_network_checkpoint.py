@@ -6,6 +6,7 @@ import torch
 from src.games.representation import NetworkDimensions
 from src.training.network import (
     AttentionNetworkParams,
+    DensePolicyHeadConfiguration,
     DisabledResidualContext,
     GlobalPoolingResidualContext,
     Network,
@@ -13,6 +14,7 @@ from src.training.network import (
     NetworkParams,
     ResidualContextPlacement,
 )
+from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 from src.training.checkpoint.persistence import (
     create_optimizer,
     load_model,
@@ -29,7 +31,7 @@ from src.training.checkpoint.contracts import load_checkpoint_manifest
             num_layers=1,
             hidden_size=8,
             residual_context=DisabledResidualContext(),
-            num_policy_channels=2,
+            policy_head=DensePolicyHeadConfiguration(channels=2),
             num_value_channels=2,
             value_fc_size=8,
         ),
@@ -37,7 +39,7 @@ from src.training.checkpoint.contracts import load_checkpoint_manifest
             num_layers=1,
             hidden_size=8,
             residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_BLOCK),
-            num_policy_channels=2,
+            policy_head=DensePolicyHeadConfiguration(channels=2),
             num_value_channels=2,
             value_fc_size=8,
         ),
@@ -46,7 +48,7 @@ from src.training.checkpoint.contracts import load_checkpoint_manifest
             embedding_size=8,
             num_heads=2,
             feedforward_size=16,
-            num_policy_channels=2,
+            policy_head=DensePolicyHeadConfiguration(channels=2),
             num_value_channels=2,
             value_fc_size=8,
         ),
@@ -57,7 +59,11 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     parameters: NetworkConfiguration,
 ) -> None:
     dimensions = NetworkDimensions(channels=3, rows=3, columns=3, actions=10)
-    model = Network(parameters, torch.device('cpu'), dimensions, auxiliary_output_sizes=(10, 1))
+    auxiliary_heads = (
+        NextPolicyHeadLayout(kind='next_policy', action_size=10, ply_offset=1),
+        RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
+    )
+    model = Network(parameters, torch.device('cpu'), dimensions, auxiliary_heads=auxiliary_heads)
     output = model.training_output(torch.zeros((2, 3, 3, 3)))
 
     assert output.policy_logits.shape == (2, 10)
@@ -79,7 +85,7 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
         parameters,
         torch.device('cpu'),
         dimensions,
-        auxiliary_output_sizes=(10, 1),
+        auxiliary_heads=auxiliary_heads,
     )
     loaded_model.eval()
     loaded_output = loaded_model.training_output(torch.zeros((2, 3, 3, 3)))
@@ -99,10 +105,10 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     with pytest.raises(ValueError, match='network definition'):
         load_model_and_optimizer(
             1,
-            NetworkParams(num_layers=1, hidden_size=4),
+            parameters.model_copy(update={'num_layers': 2}),
             torch.device('cpu'),
             tmp_path,
             'adamw',
             dimensions,
-            auxiliary_output_sizes=(10, 1),
+            auxiliary_heads=auxiliary_heads,
         )

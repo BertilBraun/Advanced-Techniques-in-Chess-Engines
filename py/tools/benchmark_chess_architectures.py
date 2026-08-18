@@ -333,7 +333,7 @@ def _inference_measurements(
 
 def _prepare_inference_network(network: Network) -> torch.jit.ScriptModule:
     network.auxiliaryHeads = nn.ModuleList()
-    network.auxiliary_output_sizes = ()
+    network.auxiliary_heads = ()
     network.eval()
     network.fuse_model()
     inference_network = torch.jit.script(network)
@@ -363,7 +363,7 @@ def _run_benchmark(arguments: argparse.Namespace, plan: ArchitectureBenchmarkPla
         definition.architecture,
         device,
         definition.dimensions,
-        definition.auxiliary_output_sizes,
+        definition.auxiliary_heads,
     )
     parameter_count = sum(parameter.numel() for parameter in network.parameters())
     if parameter_count != entry.expected_training_parameters:

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <vector>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -96,6 +97,11 @@ void bind_chess_game(py::module_ &module) {
             return ChessEncoding::mirrorActionId(actionId);
         },
         py::arg("action_id"));
+
+    module.def("chess_policy_plane_indices", []() {
+        const auto &indices = ChessEncoding::policyPlaneIndices();
+        return std::vector(indices.begin(), indices.end());
+    });
 
     module.def(
         "encode_board_packed_bytes",

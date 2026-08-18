@@ -27,12 +27,12 @@ training:
   save_path: py/training_data/production/vast-chess-8gpu-optimal
   network:
     kind: attention
-    num_layers: 2
-    embedding_size: 64
+    num_layers: 8
+    embedding_size: 128
     num_heads: 4
-    feedforward_size: 128
+    feedforward_size: 256
     dropout: 0.0
-    num_policy_channels: 4
+    policy_head: {kind: chess_spatial, hidden_channels: 32}
     num_value_channels: 2
     value_fc_size: 48
   trainer:
@@ -102,36 +102,36 @@ training:
         training_start_days: 0.0
         network:
           kind: attention
-          num_layers: 2
-          embedding_size: 64
+          num_layers: 8
+          embedding_size: 128
           num_heads: 4
-          feedforward_size: 128
+          feedforward_size: 256
           dropout: 0.0
-          num_policy_channels: 4
+          policy_head: {kind: chess_spatial, hidden_channels: 32}
           num_value_channels: 2
           value_fc_size: 48
       - model_id: chess-attention-4m
         training_start_days: 0.75
         network:
           kind: attention
-          num_layers: 5
-          embedding_size: 256
-          num_heads: 8
-          feedforward_size: 512
+          num_layers: 13
+          embedding_size: 192
+          num_heads: 6
+          feedforward_size: 384
           dropout: 0.0
-          num_policy_channels: 4
+          policy_head: {kind: chess_spatial, hidden_channels: 32}
           num_value_channels: 2
           value_fc_size: 48
       - model_id: chess-attention-9m
         training_start_days: 2.0
         network:
           kind: attention
-          num_layers: 7
-          embedding_size: 384
-          num_heads: 12
-          feedforward_size: 768
+          num_layers: 17
+          embedding_size: 256
+          num_heads: 8
+          feedforward_size: 512
           dropout: 0.0
-          num_policy_channels: 4
+          policy_head: {kind: chess_spatial, hidden_channels: 32}
           num_value_channels: 2
           value_fc_size: 48
     promotion:

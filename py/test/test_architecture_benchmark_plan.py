@@ -111,7 +111,7 @@ def test_inference_measurement_uses_bfloat16_model_and_inputs() -> None:
         definition.architecture,
         torch.device('cpu'),
         definition.dimensions,
-        definition.auxiliary_output_sizes,
+        definition.auxiliary_heads,
     )
     inference_network = _prepare_inference_network(network)
     states = _create_inference_states(network, batch_size=64, device=torch.device('cpu'))
@@ -156,6 +156,6 @@ def test_architecture_benchmark_model_export_has_primary_inference_heads(tmp_pat
     model = torch.jit.load(str(output_path), map_location='cpu')
     policy, wdl = model(torch.zeros(2, 29, 8, 8))
 
-    assert parameter_count == 1043856
+    assert parameter_count == 1086114
     assert policy.shape == (2, 1880)
     assert wdl.shape == (2, 3)

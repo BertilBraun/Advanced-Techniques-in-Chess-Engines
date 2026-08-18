@@ -20,7 +20,7 @@ from src.training.trainer import TrainerGroup
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.configuration import TrainingCompilation, TrainingPrecision
-from src.training.network import Network
+from src.training.network import DensePolicyHeadConfiguration, Network
 import src.training.trainer.rank as trainer_rank
 from src.training.trainer.rank import DistributedTrainingModel
 
@@ -39,7 +39,7 @@ def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
         update={
             'num_layers': 1,
             'hidden_size': 8,
-            'num_policy_channels': 2,
+            'policy_head': DensePolicyHeadConfiguration(channels=2),
             'num_value_channels': 2,
             'value_fc_size': 8,
         }

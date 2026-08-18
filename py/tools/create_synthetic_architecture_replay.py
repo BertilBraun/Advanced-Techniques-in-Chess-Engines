@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from src.training.architecture_catalog import load_architecture_catalog
+from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 
 
 @dataclass(frozen=True)
@@ -41,12 +42,15 @@ def _parse_arguments() -> ReplayGenerationArguments:
 def create_synthetic_architecture_replay(arguments: ReplayGenerationArguments) -> None:
     catalog = load_architecture_catalog(arguments.catalog_path)
     dimensions = {entry.definition.dimensions for entry in catalog.models}
-    auxiliary_output_sizes = {entry.definition.auxiliary_output_sizes for entry in catalog.models}
-    if len(dimensions) != 1 or len(auxiliary_output_sizes) != 1:
+    auxiliary_heads = {entry.definition.auxiliary_heads for entry in catalog.models}
+    if len(dimensions) != 1 or len(auxiliary_heads) != 1:
         raise ValueError('Architecture catalog models must share one output contract.')
     network_dimensions = dimensions.pop()
-    auxiliary_sizes = auxiliary_output_sizes.pop()
-    if auxiliary_sizes != (network_dimensions.actions, 1):
+    expected_auxiliary_heads = (
+        NextPolicyHeadLayout(kind='next_policy', action_size=network_dimensions.actions, ply_offset=1),
+        RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
+    )
+    if auxiliary_heads.pop() != expected_auxiliary_heads:
         raise ValueError('Synthetic replay requires next-policy and remaining-length auxiliary heads.')
 
     generator = np.random.default_rng(arguments.random_seed)

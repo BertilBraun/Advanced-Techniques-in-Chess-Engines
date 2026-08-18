@@ -9,13 +9,13 @@ from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint import CheckpointManifest, CheckpointReference
 from src.training.checkpoint.retention import CheckpointRetention
-from src.training.network import NetworkDefinition, NetworkParams
+from src.training.network import DensePolicyHeadConfiguration, NetworkDefinition, NetworkParams
 
 
 NETWORK_DEFINITION = NetworkDefinition(
-    architecture=NetworkParams(num_layers=1, hidden_size=8),
+    architecture=NetworkParams(num_layers=1, hidden_size=8, policy_head=DensePolicyHeadConfiguration(channels=2)),
     dimensions=NetworkDimensions(channels=3, rows=3, columns=3, actions=10),
-    auxiliary_output_sizes=(),
+    auxiliary_heads=(),
 )
 
 

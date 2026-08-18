@@ -10,6 +10,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -60,6 +61,29 @@ void testRepresentativePositions() {
                                   }) == 4,
             "promotion position did not contain four promotion choices");
     requireNormalized(promotion, positivePolicy(), "promotion position");
+}
+
+void testSpatialPolicyMapping() {
+    const auto &indices = ChessEncoding::policyPlaneIndices();
+    const std::set<int> unique(indices.begin(), indices.end());
+    require(unique.size() == ChessEncoding::action_count,
+            "spatial policy mapping contains duplicate slots");
+    require(*unique.begin() >= 0, "spatial policy mapping contains a negative slot");
+    require(*unique.rbegin() < ChessEncoding::policy_plane_count * 64,
+            "spatial policy mapping exceeds its plane layout");
+
+    const Board promotion("7k/P7/8/8/8/8/8/7K w - - 0 1");
+    std::set<int> promotionPlanes;
+    for (const Stockfish::Move move : promotion.validMoves()) {
+        if (move.type_of() == Stockfish::PROMOTION) {
+            const int actionId = ChessEncoding::actionId(ChessAction(move), promotion);
+            promotionPlanes.insert(indices[actionId] / 64);
+        }
+    }
+    require(promotionPlanes.size() == 4,
+            "promotion choices do not occupy distinct spatial policy planes");
+    require(*promotionPlanes.begin() >= 64,
+            "promotion choices did not use explicit promotion planes");
 }
 
 void testUniformFallbackAndSparsePolicy() {
@@ -113,6 +137,7 @@ int runMovePolicyProcessingTests() {
     Stockfish::Bitboards::init();
     Stockfish::Position::init();
     testRepresentativePositions();
+    testSpatialPolicyMapping();
     testUniformFallbackAndSparsePolicy();
     testTerminalAndOutcomeValidation();
     std::cout << "Move policy processing tests passed\n";

@@ -52,13 +52,13 @@ def prepare_architecture_benchmark_model(arguments: ModelPreparationArguments) -
         definition.architecture,
         torch.device('cpu'),
         definition.dimensions,
-        definition.auxiliary_output_sizes,
+        definition.auxiliary_heads,
     )
     parameter_count = sum(parameter.numel() for parameter in network.parameters())
     if parameter_count != entry.expected_training_parameters:
         raise ValueError('Constructed parameter count disagrees with the architecture catalog.')
     network.auxiliaryHeads = nn.ModuleList()
-    network.auxiliary_output_sizes = ()
+    network.auxiliary_heads = ()
     network.eval()
     network.fuse_model()
     arguments.output_path.parent.mkdir(parents=True, exist_ok=True)

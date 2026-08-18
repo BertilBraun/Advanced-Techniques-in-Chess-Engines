@@ -32,13 +32,13 @@ from src.experiment_queue.state import (
 )
 from src.experiment_queue.validation import queue_configuration_fingerprint
 from src.training.checkpoint import CheckpointManifest, CheckpointReference
-from src.training.network import NetworkDefinition, NetworkParams
+from src.training.network import DensePolicyHeadConfiguration, NetworkDefinition, NetworkParams
 
 
 NETWORK_DEFINITION = NetworkDefinition(
-    architecture=NetworkParams(num_layers=1, hidden_size=8),
+    architecture=NetworkParams(num_layers=1, hidden_size=8, policy_head=DensePolicyHeadConfiguration(channels=2)),
     dimensions=NetworkDimensions(channels=3, rows=3, columns=3, actions=10),
-    auxiliary_output_sizes=(),
+    auxiliary_heads=(),
 )
 
 

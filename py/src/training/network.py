@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
 import torch
+from AlphaZeroCpp import chess_policy_plane_indices
 from pydantic import BeforeValidator, Field, JsonValue, model_validator
 
 from torch import nn, Tensor
@@ -11,6 +12,7 @@ from torch.nn import functional
 
 from src.games.representation import NetworkDimensions
 from src.training.batch import TrainingModelOutput
+from src.training.targets import AuxiliaryHeadLayout, NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 from src.util.frozen_model import FrozenModel
 from src.util.log import log
 
@@ -45,8 +47,24 @@ ResidualContextConfiguration: TypeAlias = Annotated[
 ]
 
 
+class DensePolicyHeadConfiguration(FrozenModel):
+    kind: Literal['dense'] = 'dense'
+    channels: int = Field(gt=0)
+
+
+class ChessSpatialPolicyHeadConfiguration(FrozenModel):
+    kind: Literal['chess_spatial'] = 'chess_spatial'
+    hidden_channels: int = Field(default=32, gt=0)
+
+
+PolicyHeadConfiguration: TypeAlias = Annotated[
+    DensePolicyHeadConfiguration | ChessSpatialPolicyHeadConfiguration,
+    Field(discriminator='kind'),
+]
+
+
 class NetworkHeadParams(FrozenModel):
-    num_policy_channels: int = Field(default=4, gt=0)
+    policy_head: PolicyHeadConfiguration
     num_value_channels: int = Field(default=2, gt=0)
     value_fc_size: int = Field(default=48, gt=0)
 
@@ -101,7 +119,7 @@ NetworkConfiguration: TypeAlias = Annotated[
 class NetworkDefinition(FrozenModel):
     architecture: NetworkConfiguration
     dimensions: NetworkDimensions
-    auxiliary_output_sizes: tuple[int, ...]
+    auxiliary_heads: tuple[AuxiliaryHeadLayout, ...]
 
 
 class Network(nn.Module):
@@ -112,14 +130,14 @@ class Network(nn.Module):
         args: NetworkConfiguration,
         device: torch.device,
         dimensions: NetworkDimensions,
-        auxiliary_output_sizes: tuple[int, ...] = (),
+        auxiliary_heads: tuple[AuxiliaryHeadLayout, ...] = (),
     ) -> None:
         super().__init__()
 
         self.device = device
         self.network_args = args
         self.dimensions = dimensions
-        self.auxiliary_output_sizes = auxiliary_output_sizes
+        self.auxiliary_heads = auxiliary_heads
 
         encoding_channels = dimensions.channels
         row_count = dimensions.rows
@@ -162,12 +180,12 @@ class Network(nn.Module):
                 )
                 self.finishBlock = AttentionOutput(row_count, column_count)
 
-        self.policyHead = nn.Sequential(
-            nn.Conv2d(hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(args.num_policy_channels),
-            nn.ReLU(inplace=True),
-            nn.Flatten(),
-            nn.Linear(args.num_policy_channels * row_count * column_count, action_size),
+        self.policyHead = _build_policy_head(
+            hidden_size,
+            row_count,
+            column_count,
+            action_size,
+            args.policy_head,
         )
 
         self.valueHead = nn.Sequential(
@@ -180,16 +198,15 @@ class Network(nn.Module):
             nn.Linear(args.value_fc_size, dimensions.outcomes),
         )
         self.auxiliaryHeads = nn.ModuleList(
-            (
-                nn.Sequential(
-                    nn.Conv2d(hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
-                    nn.BatchNorm2d(args.num_policy_channels),
-                    nn.ReLU(inplace=True),
-                    nn.Flatten(),
-                    nn.Linear(args.num_policy_channels * row_count * column_count, auxiliary_output_size),
-                )
-                for auxiliary_output_size in auxiliary_output_sizes
+            _build_auxiliary_head(
+                hidden_size,
+                row_count,
+                column_count,
+                action_size,
+                args.policy_head,
+                auxiliary_head,
             )
+            for auxiliary_head in auxiliary_heads
         )
 
         # init weights
@@ -207,7 +224,7 @@ class Network(nn.Module):
         return NetworkDefinition(
             architecture=self.network_args,
             dimensions=self.dimensions,
-            auxiliary_output_sizes=self.auxiliary_output_sizes,
+            auxiliary_heads=self.auxiliary_heads,
         )
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
@@ -264,6 +281,80 @@ class Network(nn.Module):
         log(
             f'Total number of trainable parameters: {sum_of_trainable_params} ({sum_of_trainable_params / sum_of_params * 100:.2f}%)'
         )
+
+
+class ChessSpatialPolicyHead(nn.Module):
+    plane_count: int = 76
+
+    def __init__(self, input_channels: int, hidden_channels: int, action_size: int) -> None:
+        super().__init__()
+        action_plane_indices = torch.tensor(chess_policy_plane_indices(), dtype=torch.long)
+        if action_plane_indices.shape != (action_size,):
+            raise ValueError('Chess spatial policy mapping does not match the configured action space.')
+        if torch.unique(action_plane_indices).numel() != action_size:
+            raise ValueError('Chess spatial policy mapping must be one-to-one.')
+        self.projection = nn.Sequential(
+            nn.Conv2d(input_channels, hidden_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(hidden_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden_channels, self.plane_count, kernel_size=1, bias=True),
+        )
+        self.register_buffer('action_plane_indices', action_plane_indices, persistent=True)
+
+    def forward(self, features: Tensor) -> Tensor:
+        plane_logits = self.projection(features).flatten(start_dim=1)
+        return torch.index_select(plane_logits, 1, self.action_plane_indices)
+
+
+def _build_policy_head(
+    input_channels: int,
+    row_count: int,
+    column_count: int,
+    action_size: int,
+    configuration: PolicyHeadConfiguration,
+) -> nn.Module:
+    match configuration:
+        case DensePolicyHeadConfiguration(channels=channels):
+            return nn.Sequential(
+                nn.Conv2d(input_channels, channels, kernel_size=1, bias=False),
+                nn.BatchNorm2d(channels),
+                nn.ReLU(inplace=True),
+                nn.Flatten(),
+                nn.Linear(channels * row_count * column_count, action_size),
+            )
+        case ChessSpatialPolicyHeadConfiguration(hidden_channels=hidden_channels):
+            if row_count != 8 or column_count != 8:
+                raise ValueError('Chess spatial policy heads require an 8x8 board.')
+            return ChessSpatialPolicyHead(input_channels, hidden_channels, action_size)
+
+
+def _build_auxiliary_head(
+    input_channels: int,
+    row_count: int,
+    column_count: int,
+    action_size: int,
+    policy_configuration: PolicyHeadConfiguration,
+    layout: AuxiliaryHeadLayout,
+) -> nn.Module:
+    match layout:
+        case NextPolicyHeadLayout(action_size=next_policy_action_size):
+            if next_policy_action_size != action_size:
+                raise ValueError('Next-policy action space must match the primary policy action space.')
+            return _build_policy_head(
+                input_channels,
+                row_count,
+                column_count,
+                action_size,
+                policy_configuration,
+            )
+        case RemainingGameLengthHeadLayout(output_size=output_size):
+            return nn.Sequential(
+                nn.Conv2d(input_channels, 1, kernel_size=1, bias=False),
+                nn.BatchNorm2d(1),
+                nn.ReLU(inplace=True),
+                nn.Flatten(),
+                nn.Linear(row_count * column_count, output_size),
+            )
 
 
 class ResBlock(nn.Module):

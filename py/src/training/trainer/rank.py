@@ -21,7 +21,6 @@ from src.training.checkpoint.persistence import load_model_and_optimizer, save_m
 from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.network import Network
 from src.training.objective import ResolvedTrainingObjective
-from src.training.targets import auxiliary_head_output_size
 from src.training.distributions import TrainingDistributionSnapshot, capture_training_distributions
 from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
 from src.training.trainer.contracts import (
@@ -99,7 +98,6 @@ def _initialize_rank(
         rank=rank,
         world_size=world_size,
     )
-    auxiliary_sizes = tuple(auxiliary_head_output_size(head) for head in game.target_layout.auxiliary_heads)
     initial_checkpoint_exists = checkpoint_manifest_path(startup.starting_generation, startup.save_path).exists()
     model, optimizer = load_model_and_optimizer(
         startup.starting_generation,
@@ -108,7 +106,7 @@ def _initialize_rank(
         startup.save_path,
         configuration.training.trainer.optimizer,
         game.network_dimensions,
-        auxiliary_sizes,
+        game.target_layout.auxiliary_heads,
     )
     distributed_model = _create_distributed_model(
         model,

@@ -22,7 +22,7 @@ def test_chess_architecture_parameter_counts(entry: ArchitectureCatalogEntry) ->
         definition.architecture,
         torch.device('cpu'),
         definition.dimensions,
-        definition.auxiliary_output_sizes,
+        definition.auxiliary_heads,
     )
 
     assert sum(parameter.numel() for parameter in model.parameters()) == entry.expected_training_parameters
@@ -39,7 +39,7 @@ def test_chess_backbones_support_cpu_forward_backward_and_canonical_heads(entry:
         definition.architecture,
         torch.device('cpu'),
         definition.dimensions,
-        definition.auxiliary_output_sizes,
+        definition.auxiliary_heads,
     )
     states = torch.randn(
         1,
@@ -70,7 +70,9 @@ def test_chess_architecture_configuration_round_trip(entry: ArchitectureCatalogE
 
 
 def test_current_convolutional_configuration_gets_explicit_architecture_discriminator() -> None:
-    configuration = TypeAdapter(NetworkConfiguration).validate_python({'num_layers': 2, 'hidden_size': 32})
+    configuration = TypeAdapter(NetworkConfiguration).validate_python(
+        {'num_layers': 2, 'hidden_size': 32, 'policy_head': {'kind': 'dense', 'channels': 4}}
+    )
 
     assert isinstance(configuration, NetworkParams)
     assert configuration.kind == 'convolutional'
@@ -84,4 +86,5 @@ def test_attention_configuration_requires_even_head_partition() -> None:
             embedding_size=63,
             num_heads=4,
             feedforward_size=128,
+            policy_head={'kind': 'dense', 'channels': 4},
         )

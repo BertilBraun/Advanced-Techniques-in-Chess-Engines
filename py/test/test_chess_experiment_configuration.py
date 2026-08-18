@@ -88,9 +88,9 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
         catalog_by_model_id[model_id].definition.architecture for model_id in expected_model_ids
     )
     assert tuple(catalog_by_model_id[model_id].expected_training_parameters for model_id in expected_model_ids) == (
-        1_043_856,
-        3_624_336,
-        9_283_856,
+        1_086_114,
+        3_894_946,
+        9_001_762,
     )
     assert configuration.training.network == progressive_model_sizing.models[0].network
 

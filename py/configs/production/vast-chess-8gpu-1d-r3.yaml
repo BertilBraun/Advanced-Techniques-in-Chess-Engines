@@ -30,7 +30,7 @@ training:
     residual_context:
       kind: global_pooling
       placement: every_second_block
-    num_policy_channels: 4
+    policy_head: {kind: dense, channels: 4}
     num_value_channels: 2
     value_fc_size: 48
   trainer:

@@ -4,7 +4,9 @@
 #include "games/chess/implementation/ChessBoard.hpp"
 
 #include <array>
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <ranges>
 #include <tuple>
 #include <utility>
@@ -106,6 +108,47 @@ using ReverseMoveMapping =
 
 const MoveMapping moveMappings = calculateMoveMappings();
 const ReverseMoveMapping reverseMoveMappings = calculateReverseMoveMappings(moveMappings);
+
+[[nodiscard]] int policyPlane(const Stockfish::Square fromSquare, const Stockfish::Square toSquare,
+                              const Stockfish::PieceType promotionType) {
+    const auto [fromRow, fromColumn] = squareCoordinates(fromSquare);
+    const auto [toRow, toColumn] = squareCoordinates(toSquare);
+    const int rowDelta = toRow - fromRow;
+    const int columnDelta = toColumn - fromColumn;
+    if (promotionType != Stockfish::PieceType::NO_PIECE_TYPE) {
+        const auto piece = std::ranges::find(promotionPieces, promotionType);
+        assert(piece != promotionPieces.end());
+        return 64 + (columnDelta + 1) * static_cast<int>(promotionPieces.size()) +
+               static_cast<int>(piece - promotionPieces.begin());
+    }
+    const auto knight = std::ranges::find(knightMoves, std::pair{rowDelta, columnDelta});
+    if (knight != knightMoves.end()) {
+        return 56 + static_cast<int>(knight - knightMoves.begin());
+    }
+    const int distance = std::max(std::abs(rowDelta), std::abs(columnDelta));
+    const std::pair direction{rowDelta / distance, columnDelta / distance};
+    const auto ray = std::ranges::find(directions, direction);
+    assert(ray != directions.end());
+    return static_cast<int>(ray - directions.begin()) * 7 + distance - 1;
+}
+
+[[nodiscard]] std::array<int, ChessEncoding::action_count> calculatePolicyPlaneIndices() {
+    std::array<int, ChessEncoding::action_count> indices{};
+    std::array<bool, ChessEncoding::policy_plane_count * boardSquareCount> occupied{};
+    for (const int actionId : range(ChessEncoding::action_count)) {
+        const auto [fromSquare, toSquare, promotionType] = reverseMoveMappings[actionId];
+        const int index = policyPlane(fromSquare, toSquare, promotionType) * boardSquareCount +
+                          static_cast<int>(fromSquare);
+        assert(0 <= index && index < static_cast<int>(occupied.size()));
+        assert(!occupied[index]);
+        occupied[index] = true;
+        indices[actionId] = index;
+    }
+    return indices;
+}
+
+const std::array<int, ChessEncoding::action_count> policyPlaneIndices =
+    calculatePolicyPlaneIndices();
 } // namespace
 
 int ChessEncoding::actionId(const ChessAction action, const Board &state) {
@@ -153,4 +196,8 @@ int ChessEncoding::mirrorActionId(const int actionId) {
     const int mirrored = moveMappings[mirroredFrom][mirroredTo][promotionType];
     assert(0 <= mirrored && mirrored < action_count);
     return mirrored;
+}
+
+const std::array<int, ChessEncoding::action_count> &ChessEncoding::policyPlaneIndices() {
+    return ::policyPlaneIndices;
 }
