@@ -333,7 +333,9 @@ def test_irreversible_progress_records_event_distance_and_terminal_censoring() -
             'action_ids': (0, 1, 0, 0),
             'observations': (
                 *_completed_game().observations[:-1],
-                _completed_game().observations[-1].model_copy(
+                _completed_game()
+                .observations[-1]
+                .model_copy(
                     update={
                         'selected_action_id': 0,
                         'highest_visited_child_action_id': 0,
@@ -359,12 +361,16 @@ def test_search_correction_materializes_final_larger_correction() -> None:
         wdl_size=3,
         auxiliary_heads=(SearchCorrectionHeadLayout(kind='search_correction'),),
     )
-    observation = _completed_game().observations[0].model_copy(
-        update={
-            'policy_correction': 0.1,
-            'value_correction': 0.3,
-            'search_correction_target': 0.3,
-        }
+    observation = (
+        _completed_game()
+        .observations[0]
+        .model_copy(
+            update={
+                'policy_correction': 0.1,
+                'value_correction': 0.3,
+                'search_correction_target': 0.3,
+            }
+        )
     )
     game = _completed_game().model_copy(update={'observations': (observation, *_completed_game().observations[1:])})
 

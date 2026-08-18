@@ -213,9 +213,7 @@ def collect_audits(arguments: Arguments) -> tuple[tuple[PositionAudit, ...], flo
     )
     roots = [search.new_root(ChessPosition(fen)) for fen in openings]
     started = time.perf_counter()
-    batch = search.search(
-        [ChessSelfPlaySearchRequest(root, True, SearchCheckpointDetail.POLICIES) for root in roots]
-    )
+    batch = search.search([ChessSelfPlaySearchRequest(root, True, SearchCheckpointDetail.POLICIES) for root in roots])
     elapsed = time.perf_counter() - started
     statistics = search.inference_statistics()
     game.close()
