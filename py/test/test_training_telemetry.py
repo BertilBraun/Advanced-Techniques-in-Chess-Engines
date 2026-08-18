@@ -3,8 +3,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from AlphaZeroCpp import GameSearchVisit
 import src.training.reporting as reporting_module
+from AlphaZeroCpp import GameSearchVisit
 from src.games.representation import PackedPlaneLayout
 from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame, ReplayDescription

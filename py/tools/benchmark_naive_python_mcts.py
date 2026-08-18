@@ -16,7 +16,6 @@ import numpy as np
 import torch
 from AlphaZeroCpp import ChessPosition
 from pydantic import BaseModel, ConfigDict
-
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.representation import decode_packed_planes
 

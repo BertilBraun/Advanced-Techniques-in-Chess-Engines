@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import model_validator
-
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.experiment.generation_schedule import IntegerGenerationSchedule
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS

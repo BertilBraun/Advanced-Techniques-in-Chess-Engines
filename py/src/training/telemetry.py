@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from itertools import pairwise
 from decimal import Decimal
 from statistics import fmean, median
 
@@ -93,7 +94,7 @@ def adaptive_search_telemetry(
 
 def _leader_changes(observation: SearchObservation) -> int:
     leaders = tuple(checkpoint.leader_action_id for checkpoint in observation.checkpoints)
-    return sum(left != right for left, right in zip(leaders, leaders[1:]))
+    return sum(left != right for left, right in pairwise(leaders))
 
 
 def _new_simulations(observation: SearchObservation) -> int:

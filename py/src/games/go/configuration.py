@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import Field, model_validator
-
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration

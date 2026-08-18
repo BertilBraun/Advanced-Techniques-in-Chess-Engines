@@ -11,9 +11,9 @@ from src.games.chess.training import ChessImplementation
 from src.games.contracts import Player, WdlTarget
 from src.games.go.contract import GoStateContract
 from src.replay.contracts import (
+    EligibleLegalMovesTarget,
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
-    EligibleLegalMovesTarget,
     EligibleScalarAuxiliaryTarget,
     IneligibleNextPolicyTarget,
     ReplaySample,
@@ -29,8 +29,8 @@ from src.self_play.completed_game import (
 )
 from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.objective import (
-    ResolvedNextPolicyLoss,
     ResolvedLegalMovesLoss,
+    ResolvedNextPolicyLoss,
     ResolvedRemainingGameLengthLoss,
     ResolvedTrainingObjective,
 )
