@@ -31,7 +31,7 @@ def test_download_manifest_rejects_wrong_file_count() -> None:
         parse_download_manifest(_checksum_manifest(contents))
 
 
-def test_installer_downloads_verifies_and_reuses_existing_files(tmp_path: Path) -> None:
+def test_installer_downloads_verified_files_and_rejects_existing_destination(tmp_path: Path) -> None:
     source = tmp_path / 'source'
     source.mkdir()
     contents = (b'first table', b'second table')
@@ -45,8 +45,17 @@ def test_installer_downloads_verifies_and_reuses_existing_files(tmp_path: Path) 
 
     install_wdl_files(destination, source.as_uri(), files)
     assert (destination / 'INSTALLATION.txt').is_file()
-    install_wdl_files(destination, source.as_uri(), files)
+    assert tuple((destination / file.name).read_bytes() for file in files) == contents
 
-    (destination / files[0].name).write_bytes(b'corrupt')
-    with pytest.raises(ValueError, match='checksum mismatch'):
+    with pytest.raises(ValueError, match='already exists'):
         install_wdl_files(destination, source.as_uri(), files)
+
+
+def test_installer_rejects_download_checksum_mismatch(tmp_path: Path) -> None:
+    source = tmp_path / 'source'
+    source.mkdir()
+    (source / 'KQvK.rtbw').write_bytes(b'corrupt')
+    file = WdlFile(name='KQvK.rtbw', sha512=hashlib.sha512(b'expected').hexdigest())
+
+    with pytest.raises(ValueError, match='Download checksum mismatch'):
+        install_wdl_files(tmp_path / 'installed', source.as_uri(), (file,))

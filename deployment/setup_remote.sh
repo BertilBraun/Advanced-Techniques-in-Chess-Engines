@@ -19,7 +19,7 @@ if [[ $# -eq 0 ]]; then
     exit 2
 fi
 
-for required_command in git cmake "${python_command}"; do
+for required_command in git cmake curl "${python_command}"; do
     if ! command -v "${required_command}" >/dev/null 2>&1; then
         echo "Required command is unavailable: ${required_command}" >&2
         exit 1
