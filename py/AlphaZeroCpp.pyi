@@ -13,7 +13,6 @@ __all__ = [
     'ChessSearchChild',
     'ChessSearchRoot',
     'ChessPosition',
-    'ChessPolicyMapping',
     'ChessAnalysis',
     'ChessAnalysisSession',
     'ChessSelfPlaySearch',
@@ -53,7 +52,6 @@ __all__ = [
     'TreeSearchParameters',
     'WdlPrediction',
     'encode_board_packed_bytes',
-    'chess_policy_mapping',
     'mirror_chess_action_id',
     'new_root',
 ]
@@ -79,12 +77,6 @@ class GameSearchVisit:
     def visit_count(self) -> int: ...
     def __eq__(self, other: object) -> bool: ...
     def __repr__(self) -> str: ...
-
-class ChessPolicyMapping:
-    @property
-    def plane_count(self) -> int: ...
-    @property
-    def action_plane_indices(self) -> tuple[int, ...]: ...
 
 class GameSearchResult:
     @property
@@ -670,4 +662,3 @@ def new_root_with_history(
     """Create a fixed-capacity MCTS root by replaying bounded UCI history."""
 
 def mirror_chess_action_id(action_id: int) -> int: ...
-def chess_policy_mapping() -> ChessPolicyMapping: ...

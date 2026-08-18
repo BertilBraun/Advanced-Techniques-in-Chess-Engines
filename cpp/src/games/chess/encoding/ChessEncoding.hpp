@@ -8,8 +8,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <array>
-
 #include <torch/torch.h>
 
 struct ChessRepresentationDimensions {
@@ -17,18 +15,13 @@ struct ChessRepresentationDimensions {
     static constexpr int channel_count = 29;
     static constexpr int binary_channel_count = 22;
     static constexpr int scalar_channel_count = 7;
-    static constexpr int action_count = 1880;
     static constexpr int policy_plane_count = 76;
+    static constexpr int action_count = policy_plane_count * board_length * board_length;
 };
 
 static_assert(ChessRepresentationDimensions::channel_count ==
               ChessRepresentationDimensions::binary_channel_count +
                   ChessRepresentationDimensions::scalar_channel_count);
-
-struct ChessPolicyMapping {
-    int plane_count;
-    std::array<int, ChessRepresentationDimensions::action_count> action_plane_indices;
-};
 
 struct ChessEncoding {
     static constexpr int action_count = ChessRepresentationDimensions::action_count;
@@ -46,7 +39,6 @@ struct ChessEncoding {
     [[nodiscard]] static int actionId(ChessAction action, const Board &state);
     [[nodiscard]] static ChessAction decodeAction(int actionId, const Board &state);
     [[nodiscard]] static int mirrorActionId(int actionId);
-    [[nodiscard]] static const ChessPolicyMapping &policyMapping();
     static void encodeInputInto(const Board &state, std::int8_t *destination);
 };
 

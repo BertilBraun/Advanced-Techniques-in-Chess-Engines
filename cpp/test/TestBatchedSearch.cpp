@@ -30,7 +30,7 @@ std::filesystem::path createTestModel(const std::string &name, const float win, 
     model.define(R"JIT(
         def forward(self, boards):
             batch_size = boards.size(0)
-            policies = torch.ones((batch_size, 1880), device=boards.device) / 1880.0
+            policies = torch.zeros((batch_size, 4864), device=boards.device)
             outcome = torch.cat((self.outcome_parameter, self.outcome_buffer))
             outcomes = outcome.unsqueeze(0).repeat((batch_size, 1))
             return policies, outcomes

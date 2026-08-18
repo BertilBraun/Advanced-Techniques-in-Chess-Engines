@@ -1,14 +1,12 @@
 #include "games/chess/encoding/ChessEncoding.hpp"
-#include "util/py.hpp"
-
 #include "games/chess/implementation/ChessBoard.hpp"
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
+#include <optional>
 #include <ranges>
-#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -25,14 +23,6 @@ constexpr std::array promotionPieces = {
     Stockfish::PieceType::BISHOP,
     Stockfish::PieceType::KNIGHT,
 };
-constexpr int promotionTypeCount = static_cast<int>(Stockfish::PieceType::PIECE_TYPE_NB);
-
-using MoveMapping =
-    std::array<std::array<std::array<int, promotionTypeCount>, boardSquareCount>, boardSquareCount>;
-using ReverseMoveMapping =
-    std::array<std::tuple<Stockfish::Square, Stockfish::Square, Stockfish::PieceType>,
-               ChessEncoding::action_count>;
-
 [[nodiscard]] constexpr std::pair<int, int> squareCoordinates(const int square) {
     return {square / boardLength, square % boardLength};
 }
@@ -42,72 +32,6 @@ using ReverseMoveMapping =
     assert(row >= 0 && row < boardLength);
     return static_cast<Stockfish::Square>(row * boardLength + column);
 }
-
-[[nodiscard]] MoveMapping calculateMoveMappings() {
-    MoveMapping mappings{};
-    for (auto &fromSquare : mappings) {
-        for (auto &toSquare : fromSquare) {
-            toSquare.fill(-1);
-        }
-    }
-
-    int actionId = 0;
-    const auto addMove = [&mappings, &actionId](const int fromSquare, const int toSquare,
-                                                const Stockfish::PieceType promotionType) {
-        mappings[fromSquare][toSquare][static_cast<int>(promotionType)] = actionId++;
-    };
-    for (const int fromSquare : range(boardSquareCount)) {
-        const auto [row, column] = squareCoordinates(fromSquare);
-        for (const auto &[rowStep, columnStep] : directions) {
-            for (const int distance : range(1, boardLength)) {
-                const int toRow = row + rowStep * distance;
-                const int toColumn = column + columnStep * distance;
-                if (0 <= toRow && toRow < boardLength && 0 <= toColumn && toColumn < boardLength) {
-                    addMove(fromSquare, square(toColumn, toRow),
-                            Stockfish::PieceType::NO_PIECE_TYPE);
-                }
-            }
-        }
-        for (const auto &[rowStep, columnStep] : knightMoves) {
-            const int toRow = row + rowStep;
-            const int toColumn = column + columnStep;
-            if (0 <= toRow && toRow < boardLength && 0 <= toColumn && toColumn < boardLength) {
-                addMove(fromSquare, square(toColumn, toRow), Stockfish::PieceType::NO_PIECE_TYPE);
-            }
-        }
-        if (row == 6) {
-            for (const int columnOffset : {-1, 0, 1}) {
-                if (0 <= column + columnOffset && column + columnOffset < boardLength) {
-                    const int toSquare = square(column + columnOffset, 7);
-                    for (const Stockfish::PieceType promotionType : promotionPieces) {
-                        addMove(fromSquare, toSquare, promotionType);
-                    }
-                }
-            }
-        }
-    }
-    return mappings;
-}
-
-[[nodiscard]] ReverseMoveMapping calculateReverseMoveMappings(const MoveMapping &mappings) {
-    ReverseMoveMapping reverseMappings{};
-    for (const int fromSquare : range(boardSquareCount)) {
-        for (const int toSquare : range(boardSquareCount)) {
-            for (const int promotionType : range(promotionTypeCount)) {
-                const int actionId = mappings[fromSquare][toSquare][promotionType];
-                if (actionId >= 0) {
-                    reverseMappings[actionId] = {static_cast<Stockfish::Square>(fromSquare),
-                                                 static_cast<Stockfish::Square>(toSquare),
-                                                 static_cast<Stockfish::PieceType>(promotionType)};
-                }
-            }
-        }
-    }
-    return reverseMappings;
-}
-
-const MoveMapping moveMappings = calculateMoveMappings();
-const ReverseMoveMapping reverseMoveMappings = calculateReverseMoveMappings(moveMappings);
 
 [[nodiscard]] int policyPlane(const Stockfish::Square fromSquare, const Stockfish::Square toSquare,
                               const Stockfish::PieceType promotionType) {
@@ -132,26 +56,64 @@ const ReverseMoveMapping reverseMoveMappings = calculateReverseMoveMappings(move
     return static_cast<int>(ray - directions.begin()) * 7 + distance - 1;
 }
 
-[[nodiscard]] std::array<int, ChessEncoding::action_count> calculatePolicyPlaneIndices() {
-    std::array<int, ChessEncoding::action_count> indices{};
-    std::array<bool, ChessRepresentationDimensions::policy_plane_count * boardSquareCount>
-        occupied{};
-    for (const int actionId : range(ChessEncoding::action_count)) {
-        const auto [fromSquare, toSquare, promotionType] = reverseMoveMappings[actionId];
-        const int index = policyPlane(fromSquare, toSquare, promotionType) * boardSquareCount +
-                          static_cast<int>(fromSquare);
-        assert(0 <= index && index < static_cast<int>(occupied.size()));
-        assert(!occupied[index]);
-        occupied[index] = true;
-        indices[actionId] = index;
+[[nodiscard]] int reflectedPlane(const int plane) {
+    if (plane < 56) {
+        const int directionIndex = plane / 7;
+        const int distanceIndex = plane % 7;
+        const auto [rowStep, columnStep] = directions[directionIndex];
+        const auto reflected = std::ranges::find(directions, std::pair{rowStep, -columnStep});
+        assert(reflected != directions.end());
+        return static_cast<int>(reflected - directions.begin()) * 7 + distanceIndex;
     }
-    return indices;
+    if (plane < 64) {
+        const auto [rowStep, columnStep] = knightMoves[plane - 56];
+        const auto reflected = std::ranges::find(knightMoves, std::pair{rowStep, -columnStep});
+        assert(reflected != knightMoves.end());
+        return 56 + static_cast<int>(reflected - knightMoves.begin());
+    }
+    const int promotionIndex = plane - 64;
+    const int columnDelta = promotionIndex / static_cast<int>(promotionPieces.size()) - 1;
+    const int pieceIndex = promotionIndex % static_cast<int>(promotionPieces.size());
+    return 64 + (-columnDelta + 1) * static_cast<int>(promotionPieces.size()) + pieceIndex;
 }
 
-const ChessPolicyMapping policyMapping = {
-    .plane_count = ChessRepresentationDimensions::policy_plane_count,
-    .action_plane_indices = calculatePolicyPlaneIndices(),
+struct PolicyMove {
+    Stockfish::Square from;
+    Stockfish::Square to;
+    Stockfish::PieceType promotion;
 };
+
+[[nodiscard]] std::optional<PolicyMove> decodeCanonicalActionId(const int actionId) {
+    const int plane = actionId / boardSquareCount;
+    const int fromSquare = actionId % boardSquareCount;
+    const auto [fromRow, fromColumn] = squareCoordinates(fromSquare);
+    int toRow;
+    int toColumn;
+    Stockfish::PieceType promotion = Stockfish::PieceType::NO_PIECE_TYPE;
+    if (plane < 56) {
+        const auto [rowStep, columnStep] = directions[plane / 7];
+        const int distance = plane % 7 + 1;
+        toRow = fromRow + rowStep * distance;
+        toColumn = fromColumn + columnStep * distance;
+    } else if (plane < 64) {
+        const auto [rowStep, columnStep] = knightMoves[plane - 56];
+        toRow = fromRow + rowStep;
+        toColumn = fromColumn + columnStep;
+    } else {
+        const int promotionIndex = plane - 64;
+        toRow = fromRow + 1;
+        toColumn = fromColumn + promotionIndex / static_cast<int>(promotionPieces.size()) - 1;
+        promotion = promotionPieces[promotionIndex % static_cast<int>(promotionPieces.size())];
+    }
+    if (toRow < 0 || toRow >= boardLength || toColumn < 0 || toColumn >= boardLength) {
+        return std::nullopt;
+    }
+    return PolicyMove{
+        .from = static_cast<Stockfish::Square>(fromSquare),
+        .to = square(toColumn, toRow),
+        .promotion = promotion,
+    };
+}
 } // namespace
 
 int ChessEncoding::actionId(const ChessAction action, const Board &state) {
@@ -164,25 +126,29 @@ int ChessEncoding::actionId(const ChessAction action, const Board &state) {
         fromSquare = Stockfish::flip_rank(fromSquare);
         toSquare = Stockfish::flip_rank(toSquare);
     }
-    const int actionId = moveMappings[fromSquare][toSquare][promotionType];
+    const int actionId = policyPlane(fromSquare, toSquare, promotionType) * boardSquareCount +
+                         static_cast<int>(fromSquare);
     assert(0 <= actionId && actionId < ChessEncoding::action_count);
     return actionId;
 }
 
 ChessAction ChessEncoding::decodeAction(const int actionId, const Board &state) {
     assert(0 <= actionId && actionId < action_count);
-    const std::vector<Stockfish::Move> &legalMoves = state.validMoves();
-    auto [fromSquare, toSquare, promotionType] = reverseMoveMappings[actionId];
+    const std::optional<PolicyMove> decoded = decodeCanonicalActionId(actionId);
+    assert(decoded.has_value());
+    Stockfish::Square fromSquare = decoded->from;
+    Stockfish::Square toSquare = decoded->to;
     if (state.currentPlayer() == -1) {
         fromSquare = Stockfish::flip_rank(fromSquare);
         toSquare = Stockfish::flip_rank(toSquare);
     }
-    const auto legal = std::ranges::find_if(legalMoves, [&](const Stockfish::Move candidate) {
-        const bool correctSquares =
-            candidate.from_sq() == fromSquare && candidate.to_sq() == toSquare;
-        const bool correctPromotion = candidate.type_of() == Stockfish::PROMOTION
-                                          ? candidate.promotion_type() == promotionType
-                                          : promotionType == Stockfish::PieceType::NO_PIECE_TYPE;
+    const std::vector<Stockfish::Move> &legalMoves = state.validMoves();
+    const auto legal = std::ranges::find_if(legalMoves, [&](const Stockfish::Move move) {
+        const bool correctSquares = move.from_sq() == fromSquare && move.to_sq() == toSquare;
+        const bool correctPromotion =
+            move.type_of() == Stockfish::PROMOTION
+                ? move.promotion_type() == decoded->promotion
+                : decoded->promotion == Stockfish::PieceType::NO_PIECE_TYPE;
         return correctSquares && correctPromotion;
     });
     assert(legal != legalMoves.end());
@@ -191,16 +157,11 @@ ChessAction ChessEncoding::decodeAction(const int actionId, const Board &state) 
 
 int ChessEncoding::mirrorActionId(const int actionId) {
     assert(0 <= actionId && actionId < action_count);
-    const auto [fromSquare, toSquare, promotionType] = reverseMoveMappings[actionId];
+    const int plane = actionId / boardSquareCount;
+    const int fromSquare = actionId % boardSquareCount;
     const auto [fromRow, fromColumn] = squareCoordinates(fromSquare);
-    const auto [toRow, toColumn] = squareCoordinates(toSquare);
     const int mirroredFrom = square(boardLength - 1 - fromColumn, fromRow);
-    const int mirroredTo = square(boardLength - 1 - toColumn, toRow);
-    const int mirrored = moveMappings[mirroredFrom][mirroredTo][promotionType];
+    const int mirrored = reflectedPlane(plane) * boardSquareCount + mirroredFrom;
     assert(0 <= mirrored && mirrored < action_count);
     return mirrored;
-}
-
-const ChessPolicyMapping &ChessEncoding::policyMapping() {
-    return ::policyMapping;
 }

@@ -9,7 +9,7 @@ std::filesystem::path createTestModel() {
         def forward(self, boards):
             batch_size = boards.size(0)
             torch._assert(torch.all(boards >= 0), "negative test input")
-            policies = torch.ones((batch_size, 1880), device=boards.device) / 1880.0
+            policies = torch.zeros((batch_size, 4864), device=boards.device)
             wins = torch.clamp(boards[:, 0, 0, 0].float(), 0.0, 1.0)
             draws = torch.zeros_like(wins)
             outcomes = torch.stack((wins, draws, 1.0 - wins), 1)

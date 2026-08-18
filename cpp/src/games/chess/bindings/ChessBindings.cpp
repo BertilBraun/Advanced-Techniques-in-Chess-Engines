@@ -98,22 +98,6 @@ void bind_chess_game(py::module_ &module) {
         },
         py::arg("action_id"));
 
-    py::class_<ChessPolicyMapping>(module, "ChessPolicyMapping")
-        .def_property_readonly("plane_count",
-                               [](const ChessPolicyMapping &mapping) {
-                                   return mapping.plane_count;
-                               })
-        .def_property_readonly("action_plane_indices", [](const ChessPolicyMapping &mapping) {
-            py::tuple indices(mapping.action_plane_indices.size());
-            for (std::size_t index = 0; index < mapping.action_plane_indices.size(); ++index) {
-                indices[index] = mapping.action_plane_indices[index];
-            }
-            return indices;
-        });
-
-    module.def("chess_policy_mapping", &ChessEncoding::policyMapping,
-               py::return_value_policy::reference);
-
     module.def(
         "encode_board_packed_bytes",
         [](const std::string &fen) {

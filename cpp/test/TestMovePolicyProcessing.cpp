@@ -10,7 +10,6 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -25,10 +24,11 @@ void require(const bool condition, const std::string &message) {
     }
 }
 
-std::vector<float> positivePolicy() {
+std::vector<float> finiteLogits() {
     std::vector<float> policy(ChessEncoding::action_count);
     for (const int actionId : range(ChessEncoding::action_count)) {
-        policy[actionId] = static_cast<float>(actionId + 1);
+        policy[actionId] = 1000.0F + static_cast<float>(actionId) /
+                                         static_cast<float>(ChessEncoding::action_count);
     }
     return policy;
 }
@@ -42,7 +42,7 @@ void requireNormalized(const Board &board, const std::vector<float> &policy,
     for (const auto &[action, probability] : result.actions) {
         const int actionId = ChessGame::Encoding::actionId(action, board);
         require(actionId > previousActionId, description + ": actions are not ordered by id");
-        require(probability > 0.0F, description + ": retained non-positive probability");
+        require(probability >= 0.0F, description + ": returned a negative probability");
         previousActionId = actionId;
         sum += probability;
     }
@@ -51,47 +51,60 @@ void requireNormalized(const Board &board, const std::vector<float> &policy,
 
 void testRepresentativePositions() {
     const Board initial;
-    requireNormalized(initial, positivePolicy(), "starting position");
+    requireNormalized(initial, finiteLogits(), "starting position");
     requireNormalized(Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1"),
-                      positivePolicy(), "black-to-move position");
+                      finiteLogits(), "black-to-move position");
     const Board promotion("7k/P7/8/8/8/8/8/7K w - - 0 1");
     require(std::ranges::count_if(promotion.validMoves(),
                                   [](const Stockfish::Move move) {
                                       return move.type_of() == Stockfish::PROMOTION;
                                   }) == 4,
             "promotion position did not contain four promotion choices");
-    requireNormalized(promotion, positivePolicy(), "promotion position");
+    requireNormalized(promotion, finiteLogits(), "promotion position");
 }
 
-void testSpatialPolicyMapping() {
-    const ChessPolicyMapping &mapping = ChessEncoding::policyMapping();
-    const auto &indices = mapping.action_plane_indices;
-    const std::set<int> unique(indices.begin(), indices.end());
-    require(unique.size() == ChessEncoding::action_count,
-            "spatial policy mapping contains duplicate slots");
-    require(*unique.begin() >= 0, "spatial policy mapping contains a negative slot");
-    require(mapping.plane_count == ChessRepresentationDimensions::policy_plane_count,
-            "spatial policy mapping returned an incorrect plane count");
-    require(*unique.rbegin() < mapping.plane_count * 64,
-            "spatial policy mapping exceeds its plane layout");
-
+void testDirectPolicyLayout() {
+    require(ChessEncoding::action_count == ChessRepresentationDimensions::policy_plane_count * 64,
+            "chess action space is not the direct policy-plane layout");
+    for (const int actionId : range(ChessEncoding::action_count)) {
+        require(ChessEncoding::mirrorActionId(ChessEncoding::mirrorActionId(actionId)) == actionId,
+                "policy-plane mirroring is not an involution");
+    }
     const Board promotion("7k/P7/8/8/8/8/8/7K w - - 0 1");
-    std::set<int> promotionPlanes;
+    std::vector<int> promotionPlanes;
     for (const Stockfish::Move move : promotion.validMoves()) {
         if (move.type_of() == Stockfish::PROMOTION) {
             const int actionId = ChessEncoding::actionId(ChessAction(move), promotion);
-            promotionPlanes.insert(indices[actionId] / 64);
+            require(actionId % 64 == static_cast<int>(move.from_sq()),
+                    "white promotion action does not retain its canonical origin square");
+            promotionPlanes.push_back(actionId / 64);
         }
     }
-    require(promotionPlanes.size() == 4,
+    std::ranges::sort(promotionPlanes);
+    require(std::ranges::unique(promotionPlanes).begin() == promotionPlanes.end() &&
+                promotionPlanes.size() == 4,
             "promotion choices do not occupy distinct spatial policy planes");
-    require(*promotionPlanes.begin() >= 64,
+    require(promotionPlanes.front() >= 64,
             "promotion choices did not use explicit promotion planes");
+
+    const Board blackPromotion("7K/8/8/8/8/8/p7/7k b - - 0 1");
+    for (const Stockfish::Move move : blackPromotion.validMoves()) {
+        if (move.type_of() == Stockfish::PROMOTION) {
+            const int actionId = ChessEncoding::actionId(ChessAction(move), blackPromotion);
+            require(actionId % 64 == static_cast<int>(Stockfish::flip_rank(move.from_sq())),
+                    "black promotion action does not retain its canonical origin square");
+            require(ChessEncoding::decodeAction(actionId, blackPromotion) == ChessAction(move),
+                    "black promotion action did not round-trip through the direct layout");
+        }
+    }
 }
 
-void testUniformFallbackAndSparsePolicy() {
+void testStableLegalOnlySoftmax() {
     const Board board;
-    std::vector<float> policy(ChessEncoding::action_count, 0.0F);
+    std::vector<float> policy(ChessEncoding::action_count, std::numeric_limits<float>::quiet_NaN());
+    for (const Stockfish::Move move : board.validMoves()) {
+        policy[ChessEncoding::actionId(ChessAction(move), board)] = 1'000.0F;
+    }
     SearchInferenceResult<ChessGame> uniform =
         processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), board);
     require(uniform.actions.size() == board.validMoves().size(),
@@ -100,19 +113,26 @@ void testUniformFallbackAndSparsePolicy() {
     for (const auto &[action, probability] : uniform.actions) {
         static_cast<void>(action);
         require(std::abs(probability - expected) <= scoreTolerance,
-                "uniform fallback returned a non-uniform probability");
+                "legal-only softmax returned a non-uniform probability");
     }
 
-    policy[ChessEncoding::actionId(ChessAction(board.validMoves()[0]), board)] = 1.0F;
-    policy[ChessEncoding::actionId(ChessAction(board.validMoves()[1]), board)] = 2.0F;
-    const SearchInferenceResult<ChessGame> sparse =
+    const int preferredAction =
+        ChessEncoding::actionId(ChessAction(board.validMoves().front()), board);
+    policy[preferredAction] += std::log(2.0F);
+    const SearchInferenceResult<ChessGame> weighted =
         processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), board);
-    require(sparse.actions.size() == 2, "zero-probability legal actions were retained");
+    require(weighted.actions.size() == board.validMoves().size(), "softmax omitted legal actions");
+    const auto preferred = std::ranges::find_if(weighted.actions, [&](const auto &entry) {
+        return ChessEncoding::actionId(entry.first, board) == preferredAction;
+    });
+    require(preferred != weighted.actions.end(), "softmax omitted the preferred legal action");
+    require(std::abs(preferred->second - 2.0F / 21.0F) <= scoreTolerance,
+            "softmax did not preserve the requested legal-logit ratio");
 }
 
 void testTerminalAndOutcomeValidation() {
     const Board terminal("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
-    const std::vector<float> policy = positivePolicy();
+    const std::vector<float> policy = finiteLogits();
     require(processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), terminal)
                 .actions.empty(),
             "terminal position returned policy actions");
@@ -140,8 +160,8 @@ int runMovePolicyProcessingTests() {
     Stockfish::Bitboards::init();
     Stockfish::Position::init();
     testRepresentativePositions();
-    testSpatialPolicyMapping();
-    testUniformFallbackAndSparsePolicy();
+    testDirectPolicyLayout();
+    testStableLegalOnlySoftmax();
     testTerminalAndOutcomeValidation();
     std::cout << "Move policy processing tests passed\n";
     return 0;
