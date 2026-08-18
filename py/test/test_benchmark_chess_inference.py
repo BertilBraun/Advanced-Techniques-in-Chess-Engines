@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import pytest
+import torch
+
+from src.experiment.configuration import load_chess_experiment_configuration
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.training.network import Network
+from src.training.targets import build_training_target_layout
+from tools.benchmark_chess_inference import parameter_counts, parse_execution_modes, parse_positive_integer_list
+
+
+CONFIGURATION_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
+
+
+@pytest.mark.parametrize(
+    ('value', 'expected'),
+    (
+        ('1', (1,)),
+        ('1,16,64,256', (1, 16, 64, 256)),
+    ),
+)
+def test_parse_positive_integer_list(value: str, expected: tuple[int, ...]) -> None:
+    assert parse_positive_integer_list(value) == expected
+
+
+@pytest.mark.parametrize('value', ('', '0', '-1', '1,1', 'one'))
+def test_parse_positive_integer_list_rejects_invalid_values(value: str) -> None:
+    with pytest.raises(argparse.ArgumentTypeError):
+        parse_positive_integer_list(value)
+
+
+def test_parse_execution_modes() -> None:
+    assert tuple(mode.value for mode in parse_execution_modes('eager,compiled')) == ('eager', 'compiled')
+
+
+def test_production_progressive_model_parameter_counts_are_derived_directly() -> None:
+    configuration = load_chess_experiment_configuration(CONFIGURATION_PATH)
+    progressive = configuration.training.progressive_model_sizing
+    assert progressive is not None
+    target_layout = build_training_target_layout(
+        CHESS_NETWORK_DIMENSIONS.actions,
+        configuration.chess.objective.auxiliary_targets,
+    )
+
+    expected_counts = (
+        (474_754, 467_219, 453_312, 7_372, 6_535, 7_535),
+        (2_104_642, 2_092_179, 2_073_280, 12_236, 6_663, 12_463),
+        (4_797_922, 4_782_995, 4_761_600, 14_668, 6_727, 14_927),
+    )
+
+    for model, expected in zip(progressive.models, expected_counts, strict=True):
+        network = Network(
+            model.network,
+            torch.device('cpu'),
+            CHESS_NETWORK_DIMENSIONS,
+            target_layout.auxiliary_heads,
+        )
+        count = parameter_counts(network)
+
+        assert (
+            count.training_total,
+            count.inference_total,
+            count.backbone,
+            count.primary_policy_head,
+            count.value_head,
+            count.auxiliary_heads,
+        ) == expected
+        assert count.training_total == sum(parameter.numel() for parameter in network.parameters())
+        assert count.training_total == count.inference_total + count.auxiliary_heads
+        assert count.inference_total == count.backbone + count.primary_policy_head + count.value_head

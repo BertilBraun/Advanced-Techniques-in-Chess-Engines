@@ -4,6 +4,9 @@ This directory contains historical measurements and artifacts, not current archi
 Every result is scoped to its recorded source revision, hardware, configuration, and date. Commands in an artifact
 README may reproduce that historical run but may reference paths or interfaces removed later.
 
+The [Chess progressive-model inference benchmark](chess-progressive-inference.md) is the sole active harness for
+measuring the retained production Chess models. It loads those models directly from the production configuration.
+
 Use the [platform ledger](../architecture/platform-rework.md) for current acceptance evidence and the
 [operations guides](../operations/README.md) for current deployment commands.
 
