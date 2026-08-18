@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import argparse
-import itertools
+import hashlib
 import json
 import os
+import random
 import resource
 import subprocess
 import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
@@ -25,6 +27,10 @@ from AlphaZeroCpp import (
 )
 
 
+if TYPE_CHECKING:
+    from AlphaZeroCpp import ChessSelfPlaySearchResult, InferenceStatistics
+
+
 @dataclass(frozen=True)
 class GpuSample:
     utilization_percent: float
@@ -38,13 +44,48 @@ class BatchSizeCount:
 
 
 @dataclass(frozen=True)
+class CacheCounters:
+    total_positions: int
+    unique_hashes: int
+    repeated_hashes: int
+    same_batch_repeats: int
+    prior_batch_repeats: int
+    set_size: int
+
+
+@dataclass(frozen=True)
+class PlyResult:
+    measured_ply: int
+    elapsed_seconds: float
+    searches_completed: int
+    searches_per_second: float
+    inference_positions: int
+    unique_hashes: int
+    repeated_hashes: int
+    repeat_rate: float
+    same_batch_repeats: int
+    prior_batch_repeats: int
+    cumulative_set_size: int
+    terminal_roots: int
+
+
+@dataclass(frozen=True)
 class BenchmarkResult:
     process_id: int
     device_id: int
     games: int
+    warmup_games: int
     warmup_steps: int
     measurement_steps: int
     target_searches_per_ply: int
+    parallel_searches: int
+    maximum_opening_plies: int
+    random_seed: int
+    unique_start_positions: int
+    starting_position_digest: str
+    minimum_starting_ply: int
+    maximum_starting_ply: int
+    mean_starting_ply: float
     root_noise: bool
     elapsed_seconds: float
     completed_game_plies: int
@@ -69,43 +110,73 @@ class BenchmarkResult:
     cache_prior_batch_repeats: int
     cache_set_size_before_measurement: int
     cache_set_size_after_measurement: int
+    per_ply: tuple[PlyResult, ...]
 
 
 @dataclass(frozen=True)
 class Arguments:
     model: Path
-    openings: Path
     device: int
     games: int
+    warmup_games: int
     warmup_steps: int
     steps: int
-    duration_seconds: float | None
     searches: int
     parallel_searches: int
+    maximum_opening_plies: int
+    random_seed: int
+    inference_workers: int
     maximum_batch_size: int
-    root_noise: bool
+    outstanding_batches_per_worker: int
     gpu_sampling_interval_seconds: float
-    ready_file: Path | None
-    start_barrier: Path | None
+
+
+@dataclass(frozen=True)
+class RandomStart:
+    position: ChessPosition
+    opening_plies: int
+    encoding: bytes
 
 
 @dataclass(frozen=True)
 class SearchStepsResult:
     roots: list[ChessSearchRoot]
+    game_plies: list[int]
     terminal_roots: int
     searches_completed: int
-    steps_completed: int
+    per_ply: tuple[PlyResult, ...]
 
 
-def load_openings(path: Path, number_of_games: int) -> tuple[str, ...]:
-    openings = tuple(
-        line.rsplit('\t', maxsplit=1)[1]
-        for line in path.read_text(encoding='utf-8').splitlines()
-        if line and not line.startswith('#')
-    )
-    if not openings:
-        raise ValueError(f'Opening suite is empty: {path}')
-    return tuple(itertools.islice(itertools.cycle(openings), number_of_games))
+class UniqueRandomStartGenerator:
+    def __init__(self, random_seed: int, maximum_opening_plies: int) -> None:
+        if maximum_opening_plies < 1:
+            raise ValueError('Maximum random opening plies must be positive.')
+        self._random = random.Random(random_seed)
+        self._maximum_opening_plies = maximum_opening_plies
+        self._seen_encodings: set[bytes] = set()
+
+    @property
+    def unique_positions(self) -> int:
+        return len(self._seen_encodings)
+
+    def next(self) -> RandomStart:
+        while True:
+            position = ChessPosition()
+            opening_plies = self._random.randint(1, self._maximum_opening_plies)
+            completed_plies = 0
+            for _ in range(opening_plies):
+                legal_actions = position.legal_actions()
+                position = position.child(self._random.choice(legal_actions))
+                completed_plies += 1
+                if position.is_terminal:
+                    break
+            if position.is_terminal:
+                continue
+            encoding = bytes(position.packed_encoding())
+            if encoding in self._seen_encodings:
+                continue
+            self._seen_encodings.add(encoding)
+            return RandomStart(position=position, opening_plies=completed_plies, encoding=encoding)
 
 
 def query_gpu(device_id: int) -> GpuSample:
@@ -137,92 +208,193 @@ def sample_gpu_until_stopped(
         samples.append(query_gpu(device_id))
 
 
-def choose_root(result_root: ChessSearchRoot) -> ChessSearchRoot:
-    children = result_root.children
-    if not children:
-        raise ValueError('MCTS returned no visits for a nonterminal root.')
-    child_index = max(range(len(children)), key=lambda index: children[index].visits)
-    return result_root.make_new_root(child_index)
-
-
-def wait_for_synchronized_start(args: Arguments) -> None:
-    if args.ready_file is None and args.start_barrier is None:
-        return
-    if args.ready_file is None or args.start_barrier is None:
-        raise ValueError('--ready-file and --start-barrier must be provided together.')
-
-    args.ready_file.touch()
-    while not args.start_barrier.exists():
-        time.sleep(0.05)
-
-
-def run_search_steps(
-    search: ChessSelfPlaySearch,
-    roots: list[ChessSearchRoot],
-    openings: tuple[str, ...],
-    steps: int,
-    root_noise: bool,
-    duration_seconds: float | None = None,
-) -> SearchStepsResult:
-    terminal_roots = 0
-    searches_completed = 0
-    steps_completed = 0
-    deadline = None if duration_seconds is None else time.perf_counter() + duration_seconds
-    while (deadline is None and steps_completed < steps) or (deadline is not None and time.perf_counter() < deadline):
-        visits_before = sum(root.visits for root in roots)
-        search_results = search.search([ChessSelfPlaySearchRequest(root, root_noise) for root in roots])
-        searches_completed += sum(result.root.visits for result in search_results.results) - visits_before
-
-        next_roots: list[ChessSearchRoot] = []
-        for opening_index, result in enumerate(search_results.results):
-            root = choose_root(result.root)
-            if root.is_terminal:
-                terminal_roots += 1
-                root = search.new_root(ChessPosition(openings[opening_index]))
-            next_roots.append(root)
-        roots = next_roots
-        steps_completed += 1
-    return SearchStepsResult(
-        roots=roots,
-        terminal_roots=terminal_roots,
-        searches_completed=searches_completed,
-        steps_completed=steps_completed,
+def cache_counters(statistics: InferenceStatistics) -> CacheCounters:
+    return CacheCounters(
+        total_positions=statistics.cacheTotalPositions,
+        unique_hashes=statistics.cacheUniqueHashes,
+        repeated_hashes=statistics.cacheRepeatedHashes,
+        same_batch_repeats=statistics.cacheSameBatchRepeats,
+        prior_batch_repeats=statistics.cachePriorBatchRepeats,
+        set_size=statistics.cacheSetSize,
     )
 
 
-def run_benchmark(args: Arguments) -> BenchmarkResult:
-    if args.games < 1 or args.steps < 1 or args.searches < 1:
-        raise ValueError('games, steps, and searches must be positive.')
-    if args.warmup_steps < 0:
-        raise ValueError('warmup steps cannot be negative.')
-    if args.duration_seconds is not None and args.duration_seconds <= 0:
-        raise ValueError('duration seconds must be positive when provided.')
-    if args.gpu_sampling_interval_seconds < 0:
-        raise ValueError('GPU sampling interval cannot be negative.')
+def subtract_cache_counters(after: CacheCounters, before: CacheCounters) -> CacheCounters:
+    return CacheCounters(
+        total_positions=after.total_positions - before.total_positions,
+        unique_hashes=after.unique_hashes - before.unique_hashes,
+        repeated_hashes=after.repeated_hashes - before.repeated_hashes,
+        same_batch_repeats=after.same_batch_repeats - before.same_batch_repeats,
+        prior_batch_repeats=after.prior_batch_repeats - before.prior_batch_repeats,
+        set_size=after.set_size,
+    )
 
-    search = ChessSelfPlaySearch(
+
+def select_action(result: ChessSelfPlaySearchResult, game_ply: int, generator: random.Random) -> int:
+    visits = result.search_visits
+    if not visits:
+        raise ValueError('MCTS returned no visits for a nonterminal root.')
+    greedy_after_ply = 60
+    progress = min(game_ply / greedy_after_ply, 1.0)
+    temperature = 1.3 + (0.1 - 1.3) * progress
+    weights = [float(visit.visit_count) ** (1.0 / temperature) for visit in visits]
+    return generator.choices([visit.action_id for visit in visits], weights=weights, k=1)[0]
+
+
+def create_search(args: Arguments, model_generation: int = 0) -> ChessSelfPlaySearch:
+    return ChessSelfPlaySearch(
         InferenceConfiguration(args.device, str(args.model)),
         SelfPlaySearchParameters(
             args.parallel_searches,
             args.searches,
             args.searches,
             TreeSearchParameters(
-                1.0,
-                FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO),
-                0.0,
+                1.5,
+                FirstPlayUrgencyParameters(FirstPlayUrgencyKind.REDUCED_PARENT_VALUE, 0.2),
+                1.5,
                 1.0,
             ),
             0.3,
-            0.0,
+            0.25,
         ),
-        BatchedInferenceParameters(1, args.maximum_batch_size, 1),
+        BatchedInferenceParameters(
+            args.inference_workers,
+            args.maximum_batch_size,
+            args.outstanding_batches_per_worker,
+        ),
+        model_generation,
     )
-    openings = load_openings(args.openings, args.games)
-    roots = [search.new_root(ChessPosition(fen)) for fen in openings]
-    warmup_result = run_search_steps(search, roots, openings, args.warmup_steps, args.root_noise)
-    roots = warmup_result.roots
-    warmup_inference_statistics = search.inference_statistics()
-    wait_for_synchronized_start(args)
+
+
+def new_random_roots(
+    search: ChessSelfPlaySearch,
+    start_generator: UniqueRandomStartGenerator,
+    count: int,
+) -> tuple[list[ChessSearchRoot], list[int], tuple[bytes, ...]]:
+    starts = tuple(start_generator.next() for _ in range(count))
+    return (
+        [search.new_root(start.position) for start in starts],
+        [start.opening_plies for start in starts],
+        tuple(start.encoding for start in starts),
+    )
+
+
+def starting_position_digest(encodings: tuple[bytes, ...]) -> str:
+    digest = hashlib.sha256()
+    for encoding in encodings:
+        digest.update(len(encoding).to_bytes(8, byteorder='little'))
+        digest.update(encoding)
+    return digest.hexdigest()
+
+
+def run_search_steps(
+    search: ChessSelfPlaySearch,
+    roots: list[ChessSearchRoot],
+    game_plies: list[int],
+    start_generator: UniqueRandomStartGenerator,
+    move_generator: random.Random,
+    steps: int,
+    collect_per_ply: bool,
+) -> SearchStepsResult:
+    terminal_roots = 0
+    searches_completed = 0
+    per_ply: list[PlyResult] = []
+    for measured_ply in range(1, steps + 1):
+        cache_before = cache_counters(search.inference_statistics())
+        wall_time_start = time.perf_counter()
+        search_results = search.search([ChessSelfPlaySearchRequest(root, True) for root in roots])
+        ply_elapsed_seconds = time.perf_counter() - wall_time_start
+        ply_searches = search_results.simulations_completed
+        searches_completed += ply_searches
+        next_roots: list[ChessSearchRoot] = []
+        next_game_plies: list[int] = []
+        ply_terminal_roots = 0
+        for root, game_ply, result in zip(roots, game_plies, search_results.results, strict=True):
+            action_id = select_action(result, game_ply, move_generator)
+            root.play(action_id)
+            if root.is_terminal:
+                ply_terminal_roots += 1
+                replacement = start_generator.next()
+                root = search.new_root(replacement.position)
+                game_ply = replacement.opening_plies
+            else:
+                game_ply += 1
+            next_roots.append(root)
+            next_game_plies.append(game_ply)
+        roots = next_roots
+        game_plies = next_game_plies
+        terminal_roots += ply_terminal_roots
+        if collect_per_ply:
+            counters = subtract_cache_counters(cache_counters(search.inference_statistics()), cache_before)
+            per_ply.append(
+                PlyResult(
+                    measured_ply=measured_ply,
+                    elapsed_seconds=ply_elapsed_seconds,
+                    searches_completed=ply_searches,
+                    searches_per_second=ply_searches / ply_elapsed_seconds,
+                    inference_positions=counters.total_positions,
+                    unique_hashes=counters.unique_hashes,
+                    repeated_hashes=counters.repeated_hashes,
+                    repeat_rate=(
+                        counters.repeated_hashes / counters.total_positions if counters.total_positions else 0.0
+                    ),
+                    same_batch_repeats=counters.same_batch_repeats,
+                    prior_batch_repeats=counters.prior_batch_repeats,
+                    cumulative_set_size=counters.set_size,
+                    terminal_roots=ply_terminal_roots,
+                )
+            )
+    return SearchStepsResult(
+        roots=roots,
+        game_plies=game_plies,
+        terminal_roots=terminal_roots,
+        searches_completed=searches_completed,
+        per_ply=tuple(per_ply),
+    )
+
+
+def run_benchmark(args: Arguments) -> BenchmarkResult:
+    positive_values = (
+        args.games,
+        args.warmup_games,
+        args.warmup_steps,
+        args.steps,
+        args.searches,
+        args.parallel_searches,
+        args.inference_workers,
+        args.maximum_batch_size,
+        args.outstanding_batches_per_worker,
+    )
+    if any(value < 1 for value in positive_values):
+        raise ValueError('Game, search, inference, warm-up, and step counts must be positive.')
+    if args.parallel_searches > 2:
+        raise ValueError('This self-play cache benchmark permits at most two parallel searches.')
+    if args.searches < 150 or args.searches > 800:
+        raise ValueError('Search budget must lie in the self-play experiment range [150, 800].')
+    if args.gpu_sampling_interval_seconds < 0:
+        raise ValueError('GPU sampling interval cannot be negative.')
+
+    search = create_search(args)
+    start_generator = UniqueRandomStartGenerator(args.random_seed, args.maximum_opening_plies)
+    move_generator = random.Random(args.random_seed + 1)
+    warmup_roots, warmup_game_plies, _ = new_random_roots(search, start_generator, args.warmup_games)
+    run_search_steps(
+        search,
+        warmup_roots,
+        warmup_game_plies,
+        start_generator,
+        move_generator,
+        args.warmup_steps,
+        collect_per_ply=False,
+    )
+    search.refresh_model(1, str(args.model))
+    roots, game_plies, initial_encodings = new_random_roots(search, start_generator, args.games)
+    initial_game_plies = tuple(game_plies)
+    initial_unique_positions = len(set(initial_encodings))
+    if initial_unique_positions != args.games:
+        raise RuntimeError('Random start generation did not produce unique encoded positions.')
+    inference_before = search.inference_statistics()
+    cache_before = cache_counters(inference_before)
 
     gpu_samples: list[GpuSample] = []
     stop_event = threading.Event()
@@ -230,58 +402,60 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
     if args.gpu_sampling_interval_seconds > 0:
         sampler = threading.Thread(
             target=sample_gpu_until_stopped,
-            args=(
-                args.device,
-                args.gpu_sampling_interval_seconds,
-                stop_event,
-                gpu_samples,
-            ),
+            args=(args.device, args.gpu_sampling_interval_seconds, stop_event, gpu_samples),
             daemon=True,
         )
         sampler.start()
 
     process_time_start = time.process_time()
     wall_time_start = time.perf_counter()
-    measurement_result = run_search_steps(search, roots, openings, args.steps, args.root_noise, args.duration_seconds)
+    measurement_result = run_search_steps(
+        search,
+        roots,
+        game_plies,
+        start_generator,
+        move_generator,
+        args.steps,
+        collect_per_ply=True,
+    )
     elapsed_seconds = time.perf_counter() - wall_time_start
     process_seconds = time.process_time() - process_time_start
     stop_event.set()
     if sampler is not None:
         sampler.join()
 
-    inference_statistics = search.inference_statistics()
-    measurement_evaluations = inference_statistics.evaluations - warmup_inference_statistics.evaluations
-    measurement_model_calls = inference_statistics.modelInferenceCalls - warmup_inference_statistics.modelInferenceCalls
-    measurement_model_positions = (
-        inference_statistics.modelInferencePositions - warmup_inference_statistics.modelInferencePositions
-    )
-    cache_total_positions = inference_statistics.cacheTotalPositions - warmup_inference_statistics.cacheTotalPositions
-    cache_unique_hashes = inference_statistics.cacheUniqueHashes - warmup_inference_statistics.cacheUniqueHashes
-    cache_repeated_hashes = inference_statistics.cacheRepeatedHashes - warmup_inference_statistics.cacheRepeatedHashes
-    cache_same_batch_repeats = (
-        inference_statistics.cacheSameBatchRepeats - warmup_inference_statistics.cacheSameBatchRepeats
-    )
-    cache_prior_batch_repeats = (
-        inference_statistics.cachePriorBatchRepeats - warmup_inference_statistics.cachePriorBatchRepeats
-    )
+    inference_after = search.inference_statistics()
+    counters = subtract_cache_counters(cache_counters(inference_after), cache_before)
+    measurement_evaluations = inference_after.evaluations - inference_before.evaluations
+    measurement_model_calls = inference_after.modelInferenceCalls - inference_before.modelInferenceCalls
+    measurement_model_positions = inference_after.modelInferencePositions - inference_before.modelInferencePositions
     batch_size_distribution = tuple(
         BatchSizeCount(
             batch_size=batch_size,
-            calls=calls - warmup_inference_statistics.modelBatchSizeHistogram[batch_size],
+            calls=calls - inference_before.modelBatchSizeHistogram[batch_size],
         )
-        for batch_size, calls in enumerate(inference_statistics.modelBatchSizeHistogram)
-        if calls > warmup_inference_statistics.modelBatchSizeHistogram[batch_size]
+        for batch_size, calls in enumerate(inference_after.modelBatchSizeHistogram)
+        if calls > inference_before.modelBatchSizeHistogram[batch_size]
     )
-    completed_game_plies = args.games * measurement_result.steps_completed
+    completed_game_plies = args.games * args.steps
     peak_rss_mib = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
     return BenchmarkResult(
         process_id=os.getpid(),
         device_id=args.device,
         games=args.games,
+        warmup_games=args.warmup_games,
         warmup_steps=args.warmup_steps,
-        measurement_steps=measurement_result.steps_completed,
+        measurement_steps=args.steps,
         target_searches_per_ply=args.searches,
-        root_noise=args.root_noise,
+        parallel_searches=args.parallel_searches,
+        maximum_opening_plies=args.maximum_opening_plies,
+        random_seed=args.random_seed,
+        unique_start_positions=initial_unique_positions,
+        starting_position_digest=starting_position_digest(initial_encodings),
+        minimum_starting_ply=min(initial_game_plies),
+        maximum_starting_ply=max(initial_game_plies),
+        mean_starting_ply=sum(initial_game_plies) / len(initial_game_plies),
+        root_noise=True,
         elapsed_seconds=elapsed_seconds,
         completed_game_plies=completed_game_plies,
         completed_game_plies_per_second=completed_game_plies / elapsed_seconds,
@@ -301,49 +475,50 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             measurement_model_positions / measurement_model_calls if measurement_model_calls else 0.0
         ),
         inference_batch_size_distribution=batch_size_distribution,
-        cache_total_positions=cache_total_positions,
-        cache_unique_hashes=cache_unique_hashes,
-        cache_repeated_hashes=cache_repeated_hashes,
-        cache_repeat_rate=(cache_repeated_hashes / cache_total_positions if cache_total_positions else 0.0),
-        cache_same_batch_repeats=cache_same_batch_repeats,
-        cache_prior_batch_repeats=cache_prior_batch_repeats,
-        cache_set_size_before_measurement=warmup_inference_statistics.cacheSetSize,
-        cache_set_size_after_measurement=inference_statistics.cacheSetSize,
+        cache_total_positions=counters.total_positions,
+        cache_unique_hashes=counters.unique_hashes,
+        cache_repeated_hashes=counters.repeated_hashes,
+        cache_repeat_rate=(counters.repeated_hashes / counters.total_positions if counters.total_positions else 0.0),
+        cache_same_batch_repeats=counters.same_batch_repeats,
+        cache_prior_batch_repeats=counters.prior_batch_repeats,
+        cache_set_size_before_measurement=cache_before.set_size,
+        cache_set_size_after_measurement=counters.set_size,
+        per_ply=measurement_result.per_ply,
     )
 
 
 def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', required=True, type=Path)
-    parser.add_argument('--openings', required=True, type=Path)
-    parser.add_argument('--device', type=int, default=3)
-    parser.add_argument('--games', type=int, default=16)
-    parser.add_argument('--warmup-steps', type=int, default=2)
-    parser.add_argument('--steps', type=int, default=10)
-    parser.add_argument('--duration-seconds', type=float)
-    parser.add_argument('--searches', type=int, default=600)
-    parser.add_argument('--parallel-searches', type=int, default=4)
-    parser.add_argument('--maximum-batch-size', type=int, default=256)
-    parser.add_argument('--root-noise', action='store_true')
+    parser.add_argument('--device', type=int, default=1)
+    parser.add_argument('--games', type=int, default=512)
+    parser.add_argument('--warmup-games', type=int, default=64)
+    parser.add_argument('--warmup-steps', type=int, default=1)
+    parser.add_argument('--steps', type=int, default=6)
+    parser.add_argument('--searches', type=int, choices=range(150, 801), default=800)
+    parser.add_argument('--parallel-searches', type=int, choices=(1, 2), default=1)
+    parser.add_argument('--maximum-opening-plies', type=int, default=12)
+    parser.add_argument('--random-seed', type=int, default=20260818)
+    parser.add_argument('--inference-workers', type=int, default=2)
+    parser.add_argument('--maximum-batch-size', type=int, default=64)
+    parser.add_argument('--outstanding-batches-per-worker', type=int, default=2)
     parser.add_argument('--gpu-sampling-interval-seconds', type=float, default=1.0)
-    parser.add_argument('--ready-file', type=Path)
-    parser.add_argument('--start-barrier', type=Path)
     namespace = parser.parse_args()
     return Arguments(
         model=namespace.model,
-        openings=namespace.openings,
         device=namespace.device,
         games=namespace.games,
+        warmup_games=namespace.warmup_games,
         warmup_steps=namespace.warmup_steps,
         steps=namespace.steps,
-        duration_seconds=namespace.duration_seconds,
         searches=namespace.searches,
         parallel_searches=namespace.parallel_searches,
+        maximum_opening_plies=namespace.maximum_opening_plies,
+        random_seed=namespace.random_seed,
+        inference_workers=namespace.inference_workers,
         maximum_batch_size=namespace.maximum_batch_size,
-        root_noise=namespace.root_noise,
+        outstanding_batches_per_worker=namespace.outstanding_batches_per_worker,
         gpu_sampling_interval_seconds=namespace.gpu_sampling_interval_seconds,
-        ready_file=namespace.ready_file,
-        start_barrier=namespace.start_barrier,
     )
 
 
