@@ -7,7 +7,7 @@ import torch
 
 from src.experiment.configuration import load_experiment_configuration
 from src.games.composition import create_game_implementation
-from src.training.network import Network
+from src.training.network import InferenceNetwork, Network
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -31,14 +31,16 @@ def main() -> None:
         experiment.training.network,
         torch.device('cpu'),
         game.network_dimensions,
+        game.target_layout.auxiliary_heads,
     )
     if arguments.zero_parameters:
         with torch.no_grad():
             for parameter in network.parameters():
                 parameter.zero_()
-    network.eval()
-    network.fuse_model()
-    torch.jit.script(network).save(str(arguments.output))
+    inference_network = InferenceNetwork(network)
+    inference_network.eval()
+    inference_network.fuse_model()
+    torch.jit.script(inference_network).save(str(arguments.output))
     print(f'parameters={sum(parameter.numel() for parameter in network.parameters())}')
     print(f'bytes={arguments.output.stat().st_size}')
 

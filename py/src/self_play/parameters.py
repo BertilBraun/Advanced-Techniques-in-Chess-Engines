@@ -98,7 +98,11 @@ class AdaptiveFullSearchBudget:
     def __post_init__(self) -> None:
         if self.minimum_visits <= 0 or self.maximum_visits < self.minimum_visits:
             raise ValueError('Adaptive full-search visit bounds are invalid.')
-        if self.observation_interval <= 0 or self.leader_stability_window < self.observation_interval:
+        if (
+            self.observation_interval <= 0
+            or self.leader_stability_window < self.observation_interval
+            or self.threshold_relaxation_visits <= 0
+        ):
             raise ValueError('Adaptive observation cadence is invalid.')
         if self.leader_stability_window % self.observation_interval:
             raise ValueError('Adaptive leader window must divide into observation intervals.')
