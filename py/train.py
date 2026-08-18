@@ -27,23 +27,23 @@ if __name__ == '__main__':
 
     mp.set_start_method('spawn')
 
-    import torch  # noqa
+    import torch
 
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    from src.experiment.training_startup import prepare_training_startup
-    from src.util.log import log
-    from src.util.profiler import start_gpu_usage_logger
-    from src.training.coordinator import Coordinator
-    from src.util.tensorboard import (
-        TensorboardWriter,
-        log_text,
-    )
-    from src.experiment.resource_telemetry import start_resource_telemetry
     from src.experiment.progress_telemetry import (
         RunOutcomeStatus,
         write_run_outcome,
+    )
+    from src.experiment.resource_telemetry import start_resource_telemetry
+    from src.experiment.training_startup import prepare_training_startup
+    from src.training.coordinator import Coordinator
+    from src.util.log import log
+    from src.util.profiler import start_gpu_usage_logger
+    from src.util.tensorboard import (
+        TensorboardWriter,
+        log_text,
     )
 
     startup = prepare_training_startup(
