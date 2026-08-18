@@ -117,11 +117,10 @@ class BatchOneEvaluator:
 
         legal_moves = tuple(board.legal_moves)
         action_ids = tuple(native_position.action_id_from_uci(move.uci()) for move in legal_moves)
-        legal_probabilities = policy[0, list(action_ids)].to(device='cpu', dtype=torch.float64).numpy()
-        probability_sum = float(legal_probabilities.sum())
-        if not np.isfinite(probability_sum) or probability_sum <= 0.0:
-            raise ValueError('Model returned invalid probability mass for legal chess moves.')
-        normalized = legal_probabilities / probability_sum
+        legal_logits = policy[0, list(action_ids)].to(device='cpu', dtype=torch.float64)
+        normalized = torch.softmax(legal_logits, dim=0).numpy()
+        if not np.isfinite(normalized).all():
+            raise ValueError('Model returned invalid logits for legal chess moves.')
         outcome = wdl[0].to(device='cpu', dtype=torch.float64)
         value = float(outcome[0] - outcome[2])
         return Evaluation(
