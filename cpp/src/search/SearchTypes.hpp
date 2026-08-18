@@ -38,6 +38,7 @@ struct SearchCheckpoint {
 struct FixedSearchLimit {
     std::uint32_t visits;
 
+    FixedSearchLimit() : visits(1) {}
     explicit FixedSearchLimit(const std::uint32_t visitLimit) : visits(visitLimit) {
         if (visits == 0) {
             throw std::invalid_argument("Fixed search limit must be positive");
