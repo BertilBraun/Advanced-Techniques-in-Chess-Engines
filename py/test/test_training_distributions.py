@@ -119,13 +119,21 @@ def test_training_distribution_capture_promotes_mixed_precision_predictions() ->
 
 
 def test_masked_dense_policy_loss_remains_finite() -> None:
-    logits = torch.tensor(((1.0, 2.0, 100.0),), requires_grad=True)
-    targets = torch.tensor(((0.5, 0.5, 0.0),))
-    masked = mask_policy_logits(logits, torch.tensor(((0, 1),)))
+    logits = torch.tensor(((1.0, 2.0, 100.0, 100.0),), requires_grad=True)
+    targets = torch.tensor(((0.5, 0.5, 0.0, 0.0),))
+    masked = mask_policy_logits(logits, torch.tensor(((0, 1, -1, -1),)))
 
     loss = torch.nn.functional.cross_entropy(masked, targets)
     loss.backward()
 
     assert torch.isfinite(loss)
     assert logits.grad is not None
+    assert torch.isfinite(masked[0, 0])
     assert logits.grad[0, 2] == 0.0
+    assert logits.grad[0, 3] == 0.0
+
+
+@pytest.mark.parametrize('legal_action_ids', (((-2,),), ((4,),)))
+def test_policy_mask_rejects_invalid_legal_action_ids(legal_action_ids: tuple[tuple[int, ...], ...]) -> None:
+    with pytest.raises(ValueError, match='valid policy indices'):
+        mask_policy_logits(torch.zeros((1, 4)), torch.tensor(legal_action_ids))

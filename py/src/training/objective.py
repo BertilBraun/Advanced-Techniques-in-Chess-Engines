@@ -35,11 +35,14 @@ def blended_wdl_targets(
 def mask_policy_logits(logits: torch.Tensor, legal_action_ids: torch.Tensor) -> torch.Tensor:
     if logits.ndim != 2 or legal_action_ids.ndim != 2 or logits.shape[0] != legal_action_ids.shape[0]:
         raise ValueError('Policy logits and legal action IDs must be aligned rank-two tensors.')
+    if bool(torch.any(legal_action_ids < -1)) or bool(torch.any(legal_action_ids >= logits.shape[1])):
+        raise ValueError('Legal action IDs must be valid policy indices or -1 padding.')
     legal_entries = legal_action_ids >= 0
     if not bool(torch.all(legal_entries.any(dim=1))):
         raise ValueError('Every policy row requires at least one legal action.')
-    legal_mask = torch.zeros_like(logits, dtype=torch.bool)
-    legal_mask.scatter_(1, legal_action_ids.clamp_min(0), legal_entries)
+    legal_counts = torch.zeros_like(logits, dtype=torch.int32)
+    legal_counts.scatter_add_(1, legal_action_ids.clamp_min(0), legal_entries.to(dtype=torch.int32))
+    legal_mask = legal_counts > 0
     return logits.masked_fill(~legal_mask, torch.finfo(logits.dtype).min)
 
 
