@@ -134,7 +134,8 @@ const ReverseMoveMapping reverseMoveMappings = calculateReverseMoveMappings(move
 
 [[nodiscard]] std::array<int, ChessEncoding::action_count> calculatePolicyPlaneIndices() {
     std::array<int, ChessEncoding::action_count> indices{};
-    std::array<bool, ChessEncoding::policy_plane_count * boardSquareCount> occupied{};
+    std::array<bool, ChessRepresentationDimensions::policy_plane_count * boardSquareCount>
+        occupied{};
     for (const int actionId : range(ChessEncoding::action_count)) {
         const auto [fromSquare, toSquare, promotionType] = reverseMoveMappings[actionId];
         const int index = policyPlane(fromSquare, toSquare, promotionType) * boardSquareCount +
@@ -147,8 +148,10 @@ const ReverseMoveMapping reverseMoveMappings = calculateReverseMoveMappings(move
     return indices;
 }
 
-const std::array<int, ChessEncoding::action_count> policyPlaneIndices =
-    calculatePolicyPlaneIndices();
+const ChessPolicyMapping policyMapping = {
+    .plane_count = ChessRepresentationDimensions::policy_plane_count,
+    .action_plane_indices = calculatePolicyPlaneIndices(),
+};
 } // namespace
 
 int ChessEncoding::actionId(const ChessAction action, const Board &state) {
@@ -198,6 +201,6 @@ int ChessEncoding::mirrorActionId(const int actionId) {
     return mirrored;
 }
 
-const std::array<int, ChessEncoding::action_count> &ChessEncoding::policyPlaneIndices() {
-    return ::policyPlaneIndices;
+const ChessPolicyMapping &ChessEncoding::policyMapping() {
+    return ::policyMapping;
 }

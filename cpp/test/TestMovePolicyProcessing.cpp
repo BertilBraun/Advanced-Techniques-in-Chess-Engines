@@ -64,12 +64,15 @@ void testRepresentativePositions() {
 }
 
 void testSpatialPolicyMapping() {
-    const auto &indices = ChessEncoding::policyPlaneIndices();
+    const ChessPolicyMapping &mapping = ChessEncoding::policyMapping();
+    const auto &indices = mapping.action_plane_indices;
     const std::set<int> unique(indices.begin(), indices.end());
     require(unique.size() == ChessEncoding::action_count,
             "spatial policy mapping contains duplicate slots");
     require(*unique.begin() >= 0, "spatial policy mapping contains a negative slot");
-    require(*unique.rbegin() < ChessEncoding::policy_plane_count * 64,
+    require(mapping.plane_count == ChessRepresentationDimensions::policy_plane_count,
+            "spatial policy mapping returned an incorrect plane count");
+    require(*unique.rbegin() < mapping.plane_count * 64,
             "spatial policy mapping exceeds its plane layout");
 
     const Board promotion("7k/P7/8/8/8/8/8/7K w - - 0 1");

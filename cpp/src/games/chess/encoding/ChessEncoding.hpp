@@ -18,15 +18,20 @@ struct ChessRepresentationDimensions {
     static constexpr int binary_channel_count = 22;
     static constexpr int scalar_channel_count = 7;
     static constexpr int action_count = 1880;
+    static constexpr int policy_plane_count = 76;
 };
 
 static_assert(ChessRepresentationDimensions::channel_count ==
               ChessRepresentationDimensions::binary_channel_count +
                   ChessRepresentationDimensions::scalar_channel_count);
 
+struct ChessPolicyMapping {
+    int plane_count;
+    std::array<int, ChessRepresentationDimensions::action_count> action_plane_indices;
+};
+
 struct ChessEncoding {
     static constexpr int action_count = ChessRepresentationDimensions::action_count;
-    static constexpr int policy_plane_count = 76;
 
     [[nodiscard]] static constexpr InferenceDimensions inferenceDimensions() noexcept {
         return {
@@ -41,7 +46,7 @@ struct ChessEncoding {
     [[nodiscard]] static int actionId(ChessAction action, const Board &state);
     [[nodiscard]] static ChessAction decodeAction(int actionId, const Board &state);
     [[nodiscard]] static int mirrorActionId(int actionId);
-    [[nodiscard]] static const std::array<int, action_count> &policyPlaneIndices();
+    [[nodiscard]] static const ChessPolicyMapping &policyMapping();
     static void encodeInputInto(const Board &state, std::int8_t *destination);
 };
 

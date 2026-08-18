@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
 import torch
-from AlphaZeroCpp import chess_policy_plane_indices
+from AlphaZeroCpp import chess_policy_mapping
 from pydantic import BeforeValidator, Field, JsonValue, model_validator
 
 from torch import nn, Tensor
@@ -284,20 +284,26 @@ class Network(nn.Module):
 
 
 class ChessSpatialPolicyHead(nn.Module):
-    plane_count: int = 76
-
-    def __init__(self, input_channels: int, hidden_channels: int, action_size: int) -> None:
+    def __init__(self, input_channels: int, hidden_channels: int, square_count: int, action_size: int) -> None:
         super().__init__()
-        action_plane_indices = torch.tensor(chess_policy_plane_indices(), dtype=torch.long)
+        mapping = chess_policy_mapping()
+        action_plane_indices = torch.tensor(mapping.action_plane_indices, dtype=torch.long)
         if action_plane_indices.shape != (action_size,):
             raise ValueError('Chess spatial policy mapping does not match the configured action space.')
         if torch.unique(action_plane_indices).numel() != action_size:
             raise ValueError('Chess spatial policy mapping must be one-to-one.')
+        maximum_plane_index = mapping.plane_count * square_count
+        if (
+            mapping.plane_count <= 0
+            or torch.any(action_plane_indices < 0)
+            or torch.any(action_plane_indices >= maximum_plane_index)
+        ):
+            raise ValueError('Chess spatial policy mapping contains an out-of-bounds plane index.')
         self.projection = nn.Sequential(
             nn.Conv2d(input_channels, hidden_channels, kernel_size=1, bias=False),
             nn.BatchNorm2d(hidden_channels),
             nn.ReLU(inplace=True),
-            nn.Conv2d(hidden_channels, self.plane_count, kernel_size=1, bias=True),
+            nn.Conv2d(hidden_channels, mapping.plane_count, kernel_size=1, bias=True),
         )
         self.register_buffer('action_plane_indices', action_plane_indices, persistent=True)
 
@@ -325,7 +331,12 @@ def _build_policy_head(
         case ChessSpatialPolicyHeadConfiguration(hidden_channels=hidden_channels):
             if row_count != 8 or column_count != 8:
                 raise ValueError('Chess spatial policy heads require an 8x8 board.')
-            return ChessSpatialPolicyHead(input_channels, hidden_channels, action_size)
+            return ChessSpatialPolicyHead(
+                input_channels,
+                hidden_channels,
+                row_count * column_count,
+                action_size,
+            )
 
 
 def _build_auxiliary_head(
