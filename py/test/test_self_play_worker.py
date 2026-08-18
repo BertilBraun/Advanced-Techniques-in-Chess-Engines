@@ -527,7 +527,7 @@ def restart_source_game() -> CompletedSelfPlayGame:
                 full_search=True,
                 sample_weight=1.0,
                 search_budget=256,
-                network_root_value=root_value,
+                network_root_value=0.0,
                 policy_correction=0.0,
                 value_correction=0.0,
                 search_correction_target=0.0,
