@@ -254,13 +254,12 @@ chess:
         maximum_visits:
           kind: staged
           stages:
-            - {start_generation: 0, value: 400}
-            - {start_generation: 30, value: 500}
-            - {start_generation: 50, value: 800}
-            - {start_generation: 70, value: 1000}
-            - {start_generation: 150, value: 1200}
-            - {start_generation: 250, value: 1600}
-            - {start_generation: 350, value: 2400}
+            - {start_generation: 0, value: 1200}
+            - {start_generation: 50, value: 1400}
+            - {start_generation: 70, value: 1600}
+            - {start_generation: 150, value: 1800}
+            - {start_generation: 250, value: 2200}
+            - {start_generation: 350, value: 2800}
             - {start_generation: 450, value: 3200}
         observation_interval: 100
         leader_stability_window: 200

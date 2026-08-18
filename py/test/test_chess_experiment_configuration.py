@@ -81,7 +81,7 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     assert tuple(
         full_search_budget.maximum_visits.value_at(generation)
         for generation in (0, 29, 30, 49, 50, 69, 70, 149, 150, 249, 250, 349, 350, 449, 450)
-    ) == (400, 400, 500, 500, 800, 800, 1000, 1000, 1200, 1200, 1600, 1600, 2400, 2400, 3200)
+    ) == (1200, 1200, 1200, 1200, 1400, 1400, 1600, 1600, 1800, 1800, 2200, 2200, 2800, 2800, 3200)
     assert full_search_budget.resolve(49).minimum_search_correction_to_unlock_tail is None
     assert full_search_budget.resolve(50).minimum_search_correction_to_unlock_tail == 0.4
     full_search_probability = configuration.chess.self_play.full_search_probability

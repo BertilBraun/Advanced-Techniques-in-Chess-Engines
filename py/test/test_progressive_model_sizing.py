@@ -2,9 +2,12 @@ from decimal import Decimal
 import hashlib
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 
+from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration
+from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions, PackedPlaneLayout
 from src.replay.layout import ReplayLayout
 from src.replay.description import ReplayDescription
@@ -27,6 +30,8 @@ from src.training.progressive import (
     TotalLossEmaPromotionConfiguration,
     retain_progressive_candidate_checkpoints,
 )
+from src.training.session import ProgressiveTrainingSession
+from src.training.trainer.contracts import TrainerStartup
 from src.util.atomic_file import write_text_atomically
 from src.training.targets import TrainingTargetLayout
 
@@ -310,3 +315,45 @@ def test_candidate_retention_keeps_only_exact_restart_state(tmp_path: Path) -> N
     assert not obsolete.model_path.exists()
     assert not obsolete.optimizer_path.exists()
     assert not obsolete.inference_model_path.exists()
+
+
+def test_progressive_trainer_groups_remain_alive_across_quanta(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    configuration = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    network = configuration.training.progressive_model_sizing.models[0].network
+
+    class _FakeTrainerGroup:
+        def __init__(
+            self,
+            experiment: ExperimentConfiguration,
+            game: GameImplementation,
+            startup: TrainerStartup,
+        ) -> None:
+            self.experiment = experiment
+            self.game = game
+            self.startup = startup
+            self.closed = False
+            created.append(self)
+
+        def close(self) -> None:
+            self.closed = True
+
+    created: list[_FakeTrainerGroup] = []
+    monkeypatch.setattr('src.training.session.TrainerGroup', _FakeTrainerGroup)
+    session = cast(ProgressiveTrainingSession, object.__new__(ProgressiveTrainingSession))
+    session.configuration = configuration
+    session.game = cast(GameImplementation, object())
+    session.trainers = {}
+
+    first = session._trainer_group('small', network, tmp_path / 'small', 0)
+    repeated = session._trainer_group('small', network, tmp_path / 'small', 1)
+    second = session._trainer_group('large', network, tmp_path / 'large', 0)
+
+    assert first is repeated
+    assert first is not second
+    assert len(created) == 2
+    session.close()
+    assert all(trainer.closed for trainer in created)
+    assert session.trainers == {}

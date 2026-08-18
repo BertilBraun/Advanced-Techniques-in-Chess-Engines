@@ -51,7 +51,7 @@ Coordinator process
 ├── ReplayManager object
 ├── CreditLedger object
 ├── TrainingSession object
-│   └── TrainerGroup object
+│   └── one persistent TrainerGroup per eligible model
 │       ├── DDP rank 0 process
 │       ├── DDP rank 1 process
 │       └── additional DDP rank processes
@@ -308,13 +308,12 @@ def run(self) -> None:
             self.ledger.active_checkpoint,
             self.run_clock.elapsed_seconds,
         )
-        self._ensure_self_play_workers_are_running()
-        self._ingest_available_games()
-
         if self.ledger.can_train_quantum(self.replay_manager.live_samples):
             self._train_next_generation()
         else:
-            self._wait_for_self_play()
+            self._ensure_self_play_workers_are_running()
+            self._ingest_available_games()
+            self._wait_for_self_play_when_credits_are_still_insufficient()
 
     self._shutdown()
 ```
@@ -337,7 +336,7 @@ def _ingest_available_games(self) -> None:
 
 ```python
 def _train_next_generation(self) -> None:
-    self._pause_all_self_play_workers()
+    self._pause_configured_self_play_workers()
 
     result = self.training_session.train_quantum(
         TrainingSessionQuantum(
@@ -355,6 +354,7 @@ def _train_next_generation(self) -> None:
     self.ledger.save()
 
     self._transition_self_play_workers(result.publication.checkpoint)
+    self.training_reporter.record_training_outcome(result)
 ```
 
 `TrainingSession.train_quantum()` is deliberately blocking. The coordinator does not poll self-play, ingest replay,
@@ -646,9 +646,9 @@ Always initialize DDP:
 ### Persistent rank state
 
 Ranks load the selected model and optimizer checkpoint during `TrainerGroup` initialization. The fixed session
-retains its group across quanta. The progressive session closes each candidate group after its sequential quantum so
-only one architecture occupies trainer devices at a time; the next quantum reloads the candidate's exact private
-checkpoint.
+retains its group across quanta. The progressive session retains one group for every eligible candidate, allowing
+each model's ranks, loaded state, CUDA context, and compiled graph to survive across quanta. The configured hardware
+contract must therefore provide memory for the eligible trainer groups together with active self-play workers.
 
 After a coordinator restart, a new `TrainerGroup` starts new rank processes and loads the latest complete checkpoint.
 
@@ -966,13 +966,12 @@ while not self.ledger.training_complete:
     self.evaluation_manager.schedule_due_jobs(
         self.ledger.state.active_checkpoint,
     )
-    self._ensure_self_play_workers_are_running()
-    self._ingest_available_games()
-
     if self.ledger.can_train_quantum(self.replay_manager.live_samples):
         self._train_next_generation()
     else:
-        self._wait_for_self_play()
+        self._ensure_self_play_workers_are_running()
+        self._ingest_available_games()
+        self._wait_for_self_play_when_credits_are_still_insufficient()
 ```
 
 An evaluation process receives the frozen experiment configuration, one resolved `EvaluationJob`, and one assigned

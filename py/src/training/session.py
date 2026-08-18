@@ -10,6 +10,7 @@ from src.replay.description import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.checkpoint.persistence import import_checkpoint, publish_checkpoint
+from src.training.network import NetworkConfiguration
 from src.training.progress import TrainingProgress
 from src.training.progressive import (
     CompletedCandidateTraining,
@@ -125,14 +126,11 @@ class ProgressiveTrainingSession(TrainingSession):
             self.run_path / 'progressive-training.json',
             progressive_configuration,
         )
+        self.trainers: dict[str, TrainerGroup] = {}
 
     @property
     def has_pending_quantum(self) -> bool:
         return self.state.state.pending_quantum is not None
-
-    @property
-    def pauses_all_self_play_workers(self) -> bool:
-        return True
 
     def recover_published_checkpoint(self, progress: TrainingProgress) -> CheckpointReference | None:
         if self.has_pending_quantum:
@@ -206,25 +204,19 @@ class ProgressiveTrainingSession(TrainingSession):
             completed_optimizer_steps=candidate.completed_optimizer_steps,
             optimizer_steps_per_generation=self.optimizer_steps_per_quantum,
         )
-        trainer = TrainerGroup(
-            self.configuration,
-            self.game,
-            TrainerStartup(
-                network=definition.network,
-                save_path=model_path,
-                starting_generation=0 if candidate.checkpoint is None else candidate.checkpoint.generation,
-            ),
+        trainer = self._trainer_group(
+            model_id,
+            definition.network,
+            model_path,
+            0 if candidate.checkpoint is None else candidate.checkpoint.generation,
         )
-        try:
-            result = trainer.train_quantum(
-                TrainerQuantum(
-                    replay=replay,
-                    model_progress=model_progress,
-                    replay_source_progress=replay_source_progress,
-                )
+        result = trainer.train_quantum(
+            TrainerQuantum(
+                replay=replay,
+                model_progress=model_progress,
+                replay_source_progress=replay_source_progress,
             )
-        finally:
-            trainer.close()
+        )
         self.state.record_candidate(
             CompletedCandidateTraining(
                 model_id=model_id,
@@ -234,6 +226,32 @@ class ProgressiveTrainingSession(TrainingSession):
             )
         )
         return ModelTrainingResult(model_id=model_id, result=result)
+
+    def _trainer_group(
+        self,
+        model_id: str,
+        network: NetworkConfiguration,
+        model_path: Path,
+        starting_generation: int,
+    ) -> TrainerGroup:
+        trainer = self.trainers.get(model_id)
+        if trainer is None:
+            trainer = TrainerGroup(
+                self.configuration,
+                self.game,
+                TrainerStartup(
+                    network=network,
+                    save_path=model_path,
+                    starting_generation=starting_generation,
+                ),
+            )
+            self.trainers[model_id] = trainer
+        return trainer
+
+    def close(self) -> None:
+        for trainer in self.trainers.values():
+            trainer.close()
+        self.trainers.clear()
 
     def _model_index(self, model_id: str) -> int:
         return tuple(model.model_id for model in self.progressive_configuration.models).index(model_id)

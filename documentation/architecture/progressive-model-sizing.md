@@ -26,7 +26,7 @@ This platform intentionally differs:
 
 - training is synchronous at the coordinator boundary, so every eligible model trains sequentially within one
   quantum on the same immutable replay snapshot and deterministic sample identity;
-- the coordinator waits for all required models before it resumes self-play or starts newly due evaluation jobs;
+- the coordinator waits for all required models before publishing the checkpoint and transitioning self-play;
 - promotion compares paired exponential moving averages built only from quanta seen by both the active model and its
   immediate successor, rather than an unspecified lifetime average;
 - no match gate decides promotion, and evaluation results remain user-facing evidence only;
@@ -60,11 +60,15 @@ the learned output heads remain a small fraction of every stage.
 
 ## Quantum and replay semantics
 
-At a progressive training boundary the coordinator pauses every self-play worker. It freezes a typed replay-batch
-identity containing the canonical `ReplayDescription` and global source optimizer step. The active model and every
-eligible larger model, in configured order, receive those same values. The existing deterministic rank sampler
-consequently chooses the same rows in the same optimizer-step order for every model. Models may have different
-execution times but cannot observe different batches.
+At a progressive training boundary the coordinator pauses the self-play workers selected by the configured topology.
+It freezes a typed replay-batch identity containing the canonical `ReplayDescription` and global source optimizer
+step. The active model and every eligible larger model, in configured order, receive those same values. The existing
+deterministic rank sampler consequently chooses the same rows in the same optimizer-step order for every model.
+Models may have different execution times but cannot observe different batches.
+
+Each eligible model owns one persistent `TrainerGroup`. Its DDP ranks remain resident across generations and close
+only at run shutdown. Newly eligible candidates start their trainer group once, so ordinary quantum transitions do
+not repeatedly pay process startup, checkpoint loading, CUDA-context creation, or compilation costs.
 
 After a promotion, superseded smaller models stop training. The new active model and its immediate or later eligible
 successors continue. A later stage that becomes eligible after many quanta starts from scratch at model-local
@@ -123,8 +127,10 @@ quantum; older private model, optimizer, inference, and manifest files are remov
 retention remains unchanged.
 
 The coordinator delegates the complete quantum to a `TrainingSession`. Fixed training and progressive training are
-separate implementations with typed result variants; the coordinator only pauses the workers selected by the
-session, commits one publication, hands the result to `TrainingReporter`, and resumes self-play.
+separate implementations with typed result variants; the coordinator pauses the workers selected by the experiment
+topology, commits one publication, transitions self-play immediately, and then hands the already-collected outcome
+to `TrainingReporter`. Replay ingestion is not part of quantum finalization. When existing credits already fund the
+next quantum, the coordinator starts it without first draining the inbox.
 `ProgressiveTrainingSession` owns
 candidate ordering, private checkpoint import, shared-replay training, promotion, publication, and recovery.
 

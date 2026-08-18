@@ -106,6 +106,10 @@ class Coordinator:
                 self.final_stop_reason = self.run_limit_monitor.stop_reason()
                 if self.final_stop_reason is not None:
                     break
+                if self.ledger.can_train_quantum(self.replay_manager.live_samples):
+                    self._train_quantum(self_play_started=True)
+                    self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
+                    continue
                 self._apply_self_play_backpressure()
                 self._ingest_available_games()
                 self._apply_self_play_backpressure()
@@ -141,6 +145,10 @@ class Coordinator:
         self.ledger.add_samples(ingestion.samples_added, generation)
         self._completed_games_since_last_quantum.extend(ingestion.completed_games)
         if ingestion.games_ingested:
+            log(
+                f'Ingested {ingestion.games_ingested} games and {ingestion.samples_added} samples in '
+                f'{ingestion.elapsed_seconds:.1f}s ({ingestion.samples_per_second:.0f} samples/s).'
+            )
             self._record_resignation_diagnostics(generation)
 
     def _train_quantum(self, self_play_started: bool) -> None:
@@ -158,18 +166,9 @@ class Coordinator:
         publication = outcome.publication
         self.ledger.commit_checkpoint(publication.completed_optimizer_steps, publication.checkpoint)
         self.latest_completed_model_version = self.ledger.model_generation
-        self._ingest_available_games()
         if self.resignation_calibrator is not None:
             self.resignation_calibrator.advance_generation(self.ledger.model_generation)
-            self._record_resignation_diagnostics(self.ledger.model_generation)
-        self.reporter.record_training_outcome(
-            outcome,
-            credit_wait_seconds,
-            self.ledger.state,
-            self.replay_manager.description(),
-            tuple(self._completed_games_since_last_quantum),
-        )
-        self._completed_games_since_last_quantum.clear()
+        checkpoint_activation_started_at = time.perf_counter()
         if self_play_started:
             detailed_workers = self._detailed_statistics_workers()
             desired_states = tuple(
@@ -185,9 +184,26 @@ class Coordinator:
             applied = self.self_play_group.apply(desired_states)
             if any(response.kind != 'running' for response in applied):
                 raise RuntimeError('Self-play workers did not apply the trained checkpoint.')
+        checkpoint_activation_seconds = time.perf_counter() - checkpoint_activation_started_at
         if self_play_started:
             self._backpressure_pause_requested = False
             self._apply_self_play_backpressure()
+        if self.resignation_calibrator is not None:
+            self._record_resignation_diagnostics(self.ledger.model_generation)
+        reporting_started_at = time.perf_counter()
+        self.reporter.record_training_outcome(
+            outcome,
+            credit_wait_seconds,
+            self.ledger.state,
+            self.replay_manager.description(),
+            tuple(self._completed_games_since_last_quantum),
+        )
+        reporting_seconds = time.perf_counter() - reporting_started_at
+        log(
+            f'Finalized generation {publication.checkpoint.generation}: '
+            f'checkpoint-activation={checkpoint_activation_seconds:.1f}s, reporting={reporting_seconds:.1f}s.'
+        )
+        self._completed_games_since_last_quantum.clear()
         self._apply_checkpoint_retention()
         self._credit_wait_started_at = time.perf_counter()
 

@@ -195,6 +195,30 @@ def test_shared_materialization_reconstructs_perspective_and_trajectory_targets(
     assert materialized.samples[0].policy.visits[0].visit_count == 10
 
 
+def test_materialization_reuses_trajectory_legal_actions_for_all_targets() -> None:
+    class CountingLinearStateContract(LinearStateContract):
+        def __init__(self) -> None:
+            super().__init__()
+            self.legal_action_calls = 0
+
+        def legal_action_ids(self, position: LinearPosition) -> tuple[int, ...]:
+            self.legal_action_calls += 1
+            return super().legal_action_ids(position)
+
+    state = CountingLinearStateContract()
+
+    materialize_completed_game(
+        _completed_game(),
+        state,
+        None,
+        _target_layout(),
+        1,
+        UNDISCOUNTED_VALUES,
+    )
+
+    assert state.legal_action_calls == 2 * len(_completed_game().action_ids)
+
+
 def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
     game = CompletedSelfPlayGame(
         identity=GameIdentity(

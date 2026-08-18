@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isclose
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from src.experiment.generation_schedule import FloatGenerationSchedule
-from src.games.contracts import GameStateContract, TerminalOracle, WdlTarget
+from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget
 from src.replay.contracts import (
     EligibleLegalMovesTarget,
     EligibleNextPolicyTarget,
@@ -47,6 +47,13 @@ class MaterializedGame:
     discarded_visit_mass: int
 
 
+@dataclass(frozen=True)
+class _ReconstructedTrajectory(Generic[PositionT]):
+    positions: tuple[PositionT, ...]
+    legal_action_ids: tuple[tuple[int, ...], ...]
+    players: tuple[Player, ...]
+
+
 def retain_policy(
     observation: SearchObservation,
     legal_action_ids: tuple[int, ...],
@@ -78,26 +85,26 @@ def materialize_completed_game(
     if maximum_policy_entries <= 0:
         raise ValueError('Maximum retained policy entries must be positive.')
 
-    positions = _reconstruct_trajectory(game, state)
+    trajectory = _reconstruct_trajectory(game, state)
+    positions = trajectory.positions
     observations = {observation.ply: observation for observation in game.observations}
     _validate_result(game, state, terminal_oracle, positions[-1])
 
     samples: list[ReplaySample] = []
-    policies_truncated = 0
-    retained_visit_mass = 0
-    discarded_visit_mass = 0
-    final_player = state.current_player(positions[-1])
+    used_policies: list[PolicyRetention] = []
+    retained_policies: dict[int, PolicyRetention] = {}
+    final_player = trajectory.players[-1]
+    reversed_final_wdl = game.final_wdl.reversed()
     for observation in game.observations:
         if not observation.full_search:
             continue
-        primary = retain_policy(
+        primary = _retained_policy(
             observation,
-            state.legal_action_ids(positions[observation.ply]),
+            trajectory.legal_action_ids,
             maximum_policy_entries,
+            retained_policies,
         )
-        policies_truncated += int(primary.truncated)
-        retained_visit_mass += primary.retained_visit_mass
-        discarded_visit_mass += primary.discarded_visit_mass
+        used_policies.append(primary)
 
         auxiliary_targets = []
         for head in targets.auxiliary_heads:
@@ -107,14 +114,13 @@ def materialize_completed_game(
                     if future_observation is None:
                         auxiliary_targets.append(IneligibleNextPolicyTarget())
                         continue
-                    auxiliary = retain_policy(
+                    auxiliary = _retained_policy(
                         future_observation,
-                        state.legal_action_ids(positions[future_observation.ply]),
+                        trajectory.legal_action_ids,
                         maximum_policy_entries,
+                        retained_policies,
                     )
-                    policies_truncated += int(auxiliary.truncated)
-                    retained_visit_mass += auxiliary.retained_visit_mass
-                    discarded_visit_mass += auxiliary.discarded_visit_mass
+                    used_policies.append(auxiliary)
                     auxiliary_targets.append(EligibleNextPolicyTarget(policy=auxiliary.policy))
                 case RemainingGameLengthHeadLayout(normalization_scale=normalization_scale):
                     remaining_plies = len(game.action_ids) - observation.ply
@@ -127,8 +133,8 @@ def materialize_completed_game(
                             game,
                             observation,
                             observations,
-                            positions,
-                            state,
+                            trajectory.players,
+                            reversed_final_wdl,
                             ply_offset,
                         )
                     )
@@ -153,7 +159,7 @@ def materialize_completed_game(
                     )
 
         position = positions[observation.ply]
-        position_wdl = game.final_wdl if state.current_player(position) == final_player else game.final_wdl.reversed()
+        position_wdl = game.final_wdl if trajectory.players[observation.ply] == final_player else reversed_final_wdl
         remaining_plies = len(game.action_ids) - observation.ply
         discount = value_discount_per_ply.value_at(observation.model_generation) ** remaining_plies
         discounted_position_wdl = _uniformly_blurred_wdl(position_wdl, discount)
@@ -171,34 +177,43 @@ def materialize_completed_game(
         )
     return MaterializedGame(
         samples=tuple(samples),
-        policies_truncated=policies_truncated,
-        retained_visit_mass=retained_visit_mass,
-        discarded_visit_mass=discarded_visit_mass,
+        policies_truncated=sum(policy.truncated for policy in used_policies),
+        retained_visit_mass=sum(policy.retained_visit_mass for policy in used_policies),
+        discarded_visit_mass=sum(policy.discarded_visit_mass for policy in used_policies),
     )
+
+
+def _retained_policy(
+    observation: SearchObservation,
+    legal_action_ids: tuple[tuple[int, ...], ...],
+    maximum_entries: int,
+    retained_policies: dict[int, PolicyRetention],
+) -> PolicyRetention:
+    retained = retained_policies.get(observation.ply)
+    if retained is None:
+        retained = retain_policy(observation, legal_action_ids[observation.ply], maximum_entries)
+        retained_policies[observation.ply] = retained
+    return retained
 
 
 def _future_search_value_target(
     game: CompletedSelfPlayGame,
     observation: SearchObservation,
     observations: dict[int, SearchObservation],
-    positions: tuple[PositionT, ...],
-    state: GameStateContract[PositionT],
+    players: tuple[Player, ...],
+    reversed_final_wdl: WdlTarget,
     ply_offset: int,
 ) -> EligibleScalarAuxiliaryTarget | IneligibleScalarAuxiliaryTarget:
     future_ply = observation.ply + ply_offset
     future = observations.get(future_ply)
     if future is not None:
-        sign = (
-            1.0
-            if state.current_player(positions[observation.ply]) == state.current_player(positions[future_ply])
-            else -1.0
-        )
+        sign = 1.0 if players[observation.ply] == players[future_ply] else -1.0
         return EligibleScalarAuxiliaryTarget(kind='future_search_value', value=sign * future.root_value)
     if future_ply < len(game.action_ids):
         return IneligibleScalarAuxiliaryTarget(kind='future_search_value')
-    final_player = state.current_player(positions[-1])
-    current_player = state.current_player(positions[observation.ply])
-    final_wdl = game.final_wdl if current_player == final_player else game.final_wdl.reversed()
+    final_player = players[-1]
+    current_player = players[observation.ply]
+    final_wdl = game.final_wdl if current_player == final_player else reversed_final_wdl
     return EligibleScalarAuxiliaryTarget(
         kind='future_search_value',
         value=final_wdl.win - final_wdl.loss,
@@ -230,6 +245,8 @@ def _irreversible_progress_target(
 
 
 def _uniformly_blurred_wdl(target: WdlTarget, retained_weight: float) -> WdlTarget:
+    if retained_weight == 1.0:
+        return target
     uniform_weight = (1.0 - retained_weight) / 3.0
     return WdlTarget(
         win=retained_weight * target.win + uniform_weight,
@@ -241,28 +258,44 @@ def _uniformly_blurred_wdl(target: WdlTarget, retained_weight: float) -> WdlTarg
 def _reconstruct_trajectory(
     game: CompletedSelfPlayGame,
     state: GameStateContract[PositionT],
-) -> tuple[PositionT, ...]:
+) -> _ReconstructedTrajectory[PositionT]:
     positions = [state.initial_position()]
+    legal_actions_by_ply: list[tuple[int, ...]] = []
     observations = {observation.ply: observation for observation in game.observations}
     for ply, action_id in enumerate(game.action_ids):
         position = positions[-1]
         legal_actions = state.legal_action_ids(position)
+        legal_actions_by_ply.append(legal_actions)
         if action_id not in legal_actions:
             raise ValueError(f'Played action {action_id} is illegal at ply {ply}.')
         observation = observations.get(ply)
         if observation is not None:
             if observation.selected_action_id != action_id:
                 raise ValueError(f'Observed action does not match the played action at ply {ply}.')
-            if any(visit.action_id not in legal_actions for visit in observation.policy_target_visits):
-                raise ValueError(f'Observation at ply {ply} contains an illegal action.')
+            _validate_observation_actions(observation, legal_actions)
         positions.append(state.child_position(position, action_id))
-    for observation in game.observations:
-        legal_actions = state.legal_action_ids(positions[observation.ply])
-        if any(visit.action_id not in legal_actions for visit in observation.policy_target_visits):
-            raise ValueError(f'Observation at ply {observation.ply} contains an illegal action.')
-        if observation.highest_visited_child_action_id not in legal_actions:
-            raise ValueError(f'Observation at ply {observation.ply} has an illegal highest-visited child.')
-    return tuple(positions)
+    trailing_observation = observations.get(len(game.action_ids))
+    if trailing_observation is None:
+        legal_actions_by_ply.append(())
+    else:
+        trailing_legal_actions = state.legal_action_ids(positions[-1])
+        legal_actions_by_ply.append(trailing_legal_actions)
+        _validate_observation_actions(trailing_observation, trailing_legal_actions)
+    return _ReconstructedTrajectory(
+        positions=tuple(positions),
+        legal_action_ids=tuple(legal_actions_by_ply),
+        players=tuple(state.current_player(position) for position in positions),
+    )
+
+
+def _validate_observation_actions(
+    observation: SearchObservation,
+    legal_action_ids: tuple[int, ...],
+) -> None:
+    if any(visit.action_id not in legal_action_ids for visit in observation.policy_target_visits):
+        raise ValueError(f'Observation at ply {observation.ply} contains an illegal action.')
+    if observation.highest_visited_child_action_id not in legal_action_ids:
+        raise ValueError(f'Observation at ply {observation.ply} has an illegal highest-visited child.')
 
 
 def _validate_result(

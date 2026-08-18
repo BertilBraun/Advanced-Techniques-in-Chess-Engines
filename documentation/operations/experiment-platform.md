@@ -30,10 +30,10 @@ replay-ratio-8, and constant-LR-0.007 runs complete the authored twelve-run camp
 
 The model schedule is documented in [Progressive model sizing](../architecture/progressive-model-sizing.md). Every
 experiment declares a non-empty tuple of complete model definitions; one definition uses ordinary fixed-model
-training, while multiple definitions enable progressive sizing. The progressive coordinator pauses all self-play,
-trains every eligible model sequentially on one replay-batch identity, and publishes only the active stage after the
-complete quantum. Candidate checkpoints under `models/` are private restart state and are not production inference
-artifacts.
+training, while multiple definitions enable progressive sizing. Progressive sizing obeys the configured self-play
+pause topology, trains every eligible model sequentially on one replay-batch identity through persistent trainer
+groups, and publishes only the active stage after the complete quantum. Candidate checkpoints under `models/` are
+private restart state and are not production inference artifacts.
 
 Run preparation verifies a clean exact source revision, approval, hardware/runtime contract, output paths, and
 immutable evaluation inputs. The coordinator starts self-play, ingests completed games into replay, grants trainer
