@@ -26,11 +26,12 @@ run:
 training:
   save_path: py/training_data/production/vast-chess-8gpu-optimal
   network:
-    num_layers: 6
-    hidden_size: 64
-    residual_context:
-      kind: global_pooling
-      placement: every_second_block
+    kind: attention
+    num_layers: 2
+    embedding_size: 64
+    num_heads: 4
+    feedforward_size: 128
+    dropout: 0.0
     num_policy_channels: 4
     num_value_channels: 2
     value_fc_size: 48
@@ -39,7 +40,7 @@ training:
     local_batch_size: 256
     optimizer: adamw
     precision: bfloat16
-    compilation: disabled
+    compilation: default
     learning_rate:
       kind: staged
       stages:
@@ -97,36 +98,39 @@ training:
   random_seed: 20260811
   progressive_model_sizing:
     models:
-      - model_id: chess-6x64
+      - model_id: chess-attention-1m
         training_start_days: 0.0
         network:
-          num_layers: 6
-          hidden_size: 64
-          residual_context:
-            kind: global_pooling
-            placement: every_second_block
+          kind: attention
+          num_layers: 2
+          embedding_size: 64
+          num_heads: 4
+          feedforward_size: 128
+          dropout: 0.0
           num_policy_channels: 4
           num_value_channels: 2
           value_fc_size: 48
-      - model_id: chess-12x120
+      - model_id: chess-attention-4m
         training_start_days: 0.75
         network:
-          num_layers: 12
-          hidden_size: 120
-          residual_context:
-            kind: global_pooling
-            placement: every_second_block
+          kind: attention
+          num_layers: 5
+          embedding_size: 256
+          num_heads: 8
+          feedforward_size: 512
+          dropout: 0.0
           num_policy_channels: 4
           num_value_channels: 2
           value_fc_size: 48
-      - model_id: chess-18x160
+      - model_id: chess-attention-9m
         training_start_days: 2.0
         network:
-          num_layers: 18
-          hidden_size: 160
-          residual_context:
-            kind: global_pooling
-            placement: every_second_block
+          kind: attention
+          num_layers: 7
+          embedding_size: 384
+          num_heads: 12
+          feedforward_size: 768
+          dropout: 0.0
           num_policy_channels: 4
           num_value_channels: 2
           value_fc_size: 48
@@ -176,6 +180,7 @@ evaluation:
           inference_workers: 1
           inference_batch_size: 64
           outstanding_batches_per_worker: 1
+          sdpa_backend: memory_efficient
     - kind: policy_random
       definition_id: policy-random
       maximum_game_plies: 200
@@ -278,6 +283,7 @@ chess:
       inference_workers: 2
       inference_batch_size: 64
       outstanding_batches_per_worker: 2
+      sdpa_backend: memory_efficient
     start_position:
       kind: restart_state
       true_start_probability: 0.5

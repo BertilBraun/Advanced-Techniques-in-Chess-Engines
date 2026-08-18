@@ -24,12 +24,15 @@ from src.self_play.parameters import (
     ReducedParentValueFirstPlayUrgencyParameters,
     ZeroFirstPlayUrgencyParameters,
 )
+from src.training.architecture_catalog import load_architecture_catalog
+from src.training.configuration import TrainingCompilation, TrainingPrecision
 from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
 from src.util.frozen_model import JsonValue
 
 
 CHESS_EXPERIMENT_TEMPLATE_PATH = Path('configs/chess-experiment-template.yaml')
 OPTIMAL_CHESS_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
+CHESS_ARCHITECTURE_CATALOG_PATH = Path('configs/architectures/chess-cnn-attention-v1.yaml')
 
 
 def test_every_checked_in_experiment_uses_the_current_contract_and_dependency_lock() -> None:
@@ -66,13 +69,30 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     )
     assert configuration.training.lifecycle.credit.replay_ratio == 10
     assert configuration.chess.self_play.search.parallel_searches == 2
-    assert configuration.chess.self_play.inference.sdpa_backend is SdpaBackend.AUTOMATIC
-    assert configuration.training.progressive_model_sizing is not None
-    assert tuple(model.training_start_days for model in configuration.training.progressive_model_sizing.models) == (
+    assert configuration.chess.self_play.inference.sdpa_backend is SdpaBackend.MEMORY_EFFICIENT
+    assert configuration.training.trainer.precision is TrainingPrecision.BFLOAT16
+    assert configuration.training.trainer.compilation is TrainingCompilation.DEFAULT
+    progressive_model_sizing = configuration.training.progressive_model_sizing
+    assert progressive_model_sizing is not None
+    assert tuple(model.training_start_days for model in progressive_model_sizing.models) == (
         0.0,
         0.75,
         2.0,
     )
+    expected_model_ids = ('chess-attention-1m', 'chess-attention-4m', 'chess-attention-9m')
+    catalog_by_model_id = {
+        entry.model_id: entry for entry in load_architecture_catalog(CHESS_ARCHITECTURE_CATALOG_PATH).models
+    }
+    assert tuple(model.model_id for model in progressive_model_sizing.models) == expected_model_ids
+    assert tuple(model.network for model in progressive_model_sizing.models) == tuple(
+        catalog_by_model_id[model_id].definition.architecture for model_id in expected_model_ids
+    )
+    assert tuple(catalog_by_model_id[model_id].expected_training_parameters for model_id in expected_model_ids) == (
+        1_043_856,
+        3_624_336,
+        9_283_856,
+    )
+    assert configuration.training.network == progressive_model_sizing.models[0].network
 
 
 @pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))
