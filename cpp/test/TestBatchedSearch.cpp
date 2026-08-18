@@ -7,6 +7,7 @@ namespace {
 using ChessSelfPlaySearch = GameSelfPlaySearch<ChessGame>;
 using ChessSelfPlaySearchParameters = SelfPlaySearchParameters;
 using ChessSelfPlaySearchRequest = SelfPlaySearchRequest<ChessGame>;
+using ChessSelfPlaySearchResult = SelfPlaySearchResult<ChessGame>;
 using ChessSelfPlaySearchBatch = SelfPlaySearchBatch<ChessGame>;
 using ChessInferenceResult = SearchInferenceResult<ChessGame>;
 
@@ -288,7 +289,7 @@ int runBatchedSearchTests() {
                     forcedResults.results[1].policy_target_visits,
                 "fast search applied forced playouts or pruning");
 
-        const GameSearchResult &correctionResult = forcedResults.results[0];
+        const ChessSelfPlaySearchResult &correctionResult = forcedResults.results[0];
         const Board initialBoard{};
         const std::vector<ChessAction> legalActions = ChessGame::legalActions(initialBoard);
         const float cleanPrior = 1.0F / static_cast<float>(legalActions.size());
