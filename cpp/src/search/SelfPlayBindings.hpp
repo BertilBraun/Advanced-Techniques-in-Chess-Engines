@@ -52,7 +52,8 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
     py::class_<Request>(module, names.request)
         .def(py::init<Root, bool, SearchCheckpointDetail>(), py::arg("root"),
              py::arg("full_search"),
-             py::arg("checkpoint_detail") = SearchCheckpointDetail::Scalars)
+             py::arg_v("checkpoint_detail", SearchCheckpointDetail::Scalars,
+                       "SearchCheckpointDetail.SCALARS"))
         .def_readonly("root", &Request::root)
         .def_readonly("full_search", &Request::full_search)
         .def_readonly("checkpoint_detail", &Request::checkpoint_detail);
@@ -99,7 +100,8 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
                 return Request(std::move(selectedRoot), fullSearch, checkpointDetail);
             },
             py::arg("root"), py::arg("full_search"),
-            py::arg("checkpoint_detail") = SearchCheckpointDetail::Scalars)
+            py::arg_v("checkpoint_detail", SearchCheckpointDetail::Scalars,
+                      "SearchCheckpointDetail.SCALARS"))
         .def("search", &Search::search, py::arg("requests"), py::arg("collect_statistics") = false,
              py::call_guard<py::gil_scoped_release>())
         .def("refresh_model", &Search::refreshModel, py::arg("model_generation"),
