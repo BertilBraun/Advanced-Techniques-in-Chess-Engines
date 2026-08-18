@@ -4,7 +4,6 @@ import argparse
 from pathlib import Path
 
 import torch
-
 from src.experiment.configuration import load_experiment_configuration
 from src.games.composition import create_game_implementation
 from src.training.network import InferenceNetwork, Network

@@ -16,7 +16,6 @@ from AlphaZeroCpp import (
     SelfPlaySearchParameters,
 )
 from pydantic import Field
-
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.experiment.generation_schedule import defined_schedule_values
 from src.games.chess.training import ChessImplementation
