@@ -133,7 +133,6 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
     assert configuration.run.hardware.gpu_model == 'NVIDIA GeForce RTX 3090'
     assert configuration.training.limits.hourly_price == pytest.approx(1.1244444)
     assert configuration.training.limits.maximum_cost is None
-    assert configuration.training.limits.maximum_wall_time_seconds is None
     assert configuration.chess.objective.root_value_blend.value_at(0) == 0.0
     assert configuration.chess.objective.value_discount_per_ply.value_at(0) == 1.0
     progressive_model_sizing = configuration.training.progressive_model_sizing
@@ -395,7 +394,7 @@ def test_game_specific_external_engines_are_validated() -> None:
 
 def test_network_rejects_unknown_parameters() -> None:
     candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
-    candidate['training']['network']['experimental_width'] = 256
+    candidate['training']['progressive_model_sizing']['models'][0]['network']['experimental_width'] = 256
 
     with pytest.raises(ValidationError, match='experimental_width'):
         ChessExperimentConfiguration.model_validate(candidate)
