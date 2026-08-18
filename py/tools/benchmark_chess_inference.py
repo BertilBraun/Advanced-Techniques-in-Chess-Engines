@@ -18,7 +18,15 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
-from src.training.network import Network, NetworkConfiguration
+from src.training.network import (
+    AttentionNetworkParams,
+    Chess76PlaneDirectPolicyHeadConfiguration,
+    GlobalPoolingResidualContext,
+    Network,
+    NetworkConfiguration,
+    NetworkParams,
+    ResidualContextPlacement,
+)
 from src.training.targets import build_training_target_layout
 from src.util.frozen_model import FrozenModel
 
@@ -29,12 +37,23 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 class ExecutionMode(str, Enum):
     EAGER = 'eager'
+    SCRIPTED = 'scripted'
     COMPILED = 'compiled'
 
 
 class AttentionBackend(str, Enum):
     AUTOMATIC = 'automatic'
+    FLASH = 'flash'
     MEMORY_EFFICIENT = 'memory_efficient'
+    CUDNN = 'cudnn'
+    MATH = 'math'
+
+
+@dataclass(frozen=True)
+class BenchmarkModel:
+    model_id: str
+    training_start_days: float
+    network: NetworkConfiguration
 
 
 @dataclass(frozen=True)
@@ -47,6 +66,7 @@ class BenchmarkArguments:
     attention_backend: AttentionBackend
     warmup_iterations: int
     duration_seconds: float
+    include_diagnostic_controls: bool
     acknowledge_gpu_load: bool
 
 
@@ -92,7 +112,7 @@ class HardwareDescription(FrozenModel):
 
 
 class ChessInferenceBenchmarkReport(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     source_revision: SourceRevision
     configuration_path: str = Field(min_length=1)
     configuration_sha256: str = Field(min_length=64, max_length=64)
@@ -103,6 +123,7 @@ class ChessInferenceBenchmarkReport(FrozenModel):
     execution_modes: tuple[ExecutionMode, ...] = Field(min_length=1)
     warmup_iterations: int = Field(ge=0)
     target_duration_seconds: float = Field(gt=0.0)
+    includes_diagnostic_controls: bool
     models: tuple[ModelDescription, ...] = Field(min_length=1)
     measurements: tuple[InferenceMeasurement, ...] = Field(min_length=1)
 
@@ -123,7 +144,7 @@ def parse_execution_modes(value: str) -> tuple[ExecutionMode, ...]:
     try:
         modes = tuple(ExecutionMode(item) for item in value.split(','))
     except ValueError as error:
-        raise argparse.ArgumentTypeError('modes must be eager and/or compiled') from error
+        raise argparse.ArgumentTypeError('modes must be eager, scripted, and/or compiled') from error
     if not modes or len(set(modes)) != len(modes):
         raise argparse.ArgumentTypeError('modes must be nonempty and unique')
     return modes
@@ -137,10 +158,11 @@ def parse_arguments() -> BenchmarkArguments:
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--gpu-id', type=int, required=True)
     parser.add_argument('--batch-sizes', type=parse_positive_integer_list, default=(1, 16, 64, 256))
-    parser.add_argument('--modes', type=parse_execution_modes, default=(ExecutionMode.EAGER, ExecutionMode.COMPILED))
-    parser.add_argument('--attention-backend', type=AttentionBackend, default=AttentionBackend.MEMORY_EFFICIENT)
+    parser.add_argument('--modes', type=parse_execution_modes, default=(ExecutionMode.SCRIPTED,))
+    parser.add_argument('--attention-backend', type=AttentionBackend, default=AttentionBackend.AUTOMATIC)
     parser.add_argument('--warmup-iterations', type=int, default=10)
     parser.add_argument('--duration-seconds', type=float, default=5.0)
+    parser.add_argument('--include-diagnostic-controls', action='store_true')
     parser.add_argument('--acknowledge-gpu-load', action='store_true')
     parsed = parser.parse_args()
     if parsed.gpu_id < 0:
@@ -158,6 +180,7 @@ def parse_arguments() -> BenchmarkArguments:
         attention_backend=parsed.attention_backend,
         warmup_iterations=parsed.warmup_iterations,
         duration_seconds=parsed.duration_seconds,
+        include_diagnostic_controls=parsed.include_diagnostic_controls,
         acknowledge_gpu_load=parsed.acknowledge_gpu_load,
     )
 
@@ -218,8 +241,61 @@ def _attention_backend_context(backend: AttentionBackend) -> AbstractContextMana
     match backend:
         case AttentionBackend.AUTOMATIC:
             return nullcontext()
+        case AttentionBackend.FLASH:
+            return sdpa_kernel(SDPBackend.FLASH_ATTENTION, set_priority=True)
         case AttentionBackend.MEMORY_EFFICIENT:
             return sdpa_kernel(SDPBackend.EFFICIENT_ATTENTION, set_priority=True)
+        case AttentionBackend.CUDNN:
+            return sdpa_kernel(SDPBackend.CUDNN_ATTENTION, set_priority=True)
+        case AttentionBackend.MATH:
+            return sdpa_kernel(SDPBackend.MATH, set_priority=True)
+
+
+def _benchmark_models(
+    configuration_path: Path,
+    include_diagnostic_controls: bool,
+) -> tuple[BenchmarkModel, ...]:
+    configuration = load_chess_experiment_configuration(configuration_path)
+    progressive = configuration.training.progressive_model_sizing
+    if progressive is None:
+        raise ValueError('Chess inference benchmark requires progressive model sizing.')
+    models = tuple(
+        BenchmarkModel(
+            model_id=model.model_id,
+            training_start_days=float(model.training_start_days),
+            network=model.network,
+        )
+        for model in progressive.models
+    )
+    if not include_diagnostic_controls:
+        return models
+    policy_head = Chess76PlaneDirectPolicyHeadConfiguration()
+    controls = (
+        BenchmarkModel(
+            model_id='control-cnn-10x128-direct-policy',
+            training_start_days=0.0,
+            network=NetworkParams(
+                num_layers=10,
+                hidden_size=128,
+                residual_context=GlobalPoolingResidualContext(
+                    placement=ResidualContextPlacement.EVERY_SECOND_BLOCK,
+                ),
+                policy_head=policy_head,
+            ),
+        ),
+        BenchmarkModel(
+            model_id='control-attention-5x256-direct-policy',
+            training_start_days=0.0,
+            network=AttentionNetworkParams(
+                num_layers=5,
+                embedding_size=256,
+                num_heads=8,
+                feedforward_size=512,
+                policy_head=policy_head,
+            ),
+        ),
+    )
+    return (*controls, *models)
 
 
 def _prepare_inference_network(network: Network) -> Network:
@@ -298,9 +374,6 @@ def run_benchmark(arguments: BenchmarkArguments) -> ChessInferenceBenchmarkRepor
         raise ValueError(f'GPU ID {arguments.gpu_id} is not available.')
 
     configuration = load_chess_experiment_configuration(arguments.configuration_path)
-    progressive = configuration.training.progressive_model_sizing
-    if progressive is None:
-        raise ValueError('Chess inference benchmark requires progressive model sizing.')
     target_layout = build_training_target_layout(
         CHESS_NETWORK_DIMENSIONS.actions,
         configuration.chess.objective.auxiliary_targets,
@@ -311,31 +384,39 @@ def run_benchmark(arguments: BenchmarkArguments) -> ChessInferenceBenchmarkRepor
     measurements: list[InferenceMeasurement] = []
 
     with _attention_backend_context(arguments.attention_backend):
-        for progressive_model in progressive.models:
+        for benchmark_model in _benchmark_models(
+            arguments.configuration_path,
+            arguments.include_diagnostic_controls,
+        ):
             network = Network(
-                progressive_model.network,
+                benchmark_model.network,
                 device,
                 CHESS_NETWORK_DIMENSIONS,
                 target_layout.auxiliary_heads,
             )
             descriptions.append(
                 ModelDescription(
-                    model_id=progressive_model.model_id,
-                    training_start_days=float(progressive_model.training_start_days),
-                    network=progressive_model.network,
+                    model_id=benchmark_model.model_id,
+                    training_start_days=benchmark_model.training_start_days,
+                    network=benchmark_model.network,
                     parameters=parameter_counts(network),
                 )
             )
             inference_network = _prepare_inference_network(network)
             for execution_mode in arguments.execution_modes:
                 benchmark_network: nn.Module = inference_network
-                if execution_mode is ExecutionMode.COMPILED:
-                    benchmark_network = torch.compile(inference_network)
+                match execution_mode:
+                    case ExecutionMode.EAGER:
+                        pass
+                    case ExecutionMode.SCRIPTED:
+                        benchmark_network = torch.jit.script(inference_network)
+                    case ExecutionMode.COMPILED:
+                        benchmark_network = torch.compile(inference_network)
                 for batch_size in arguments.batch_sizes:
                     measurements.append(
                         _measure(
                             benchmark_network,
-                            progressive_model.model_id,
+                            benchmark_model.model_id,
                             execution_mode,
                             batch_size,
                             arguments.warmup_iterations,
@@ -364,6 +445,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> ChessInferenceBenchmarkRepor
         execution_modes=arguments.execution_modes,
         warmup_iterations=arguments.warmup_iterations,
         target_duration_seconds=arguments.duration_seconds,
+        includes_diagnostic_controls=arguments.include_diagnostic_controls,
         models=tuple(descriptions),
         measurements=tuple(measurements),
     )

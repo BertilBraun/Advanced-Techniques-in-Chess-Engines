@@ -10,7 +10,12 @@ from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import Network
 from src.training.targets import build_training_target_layout
-from tools.benchmark_chess_inference import parameter_counts, parse_execution_modes, parse_positive_integer_list
+from tools.benchmark_chess_inference import (
+    _benchmark_models,
+    parameter_counts,
+    parse_execution_modes,
+    parse_positive_integer_list,
+)
 
 
 CONFIGURATION_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
@@ -34,7 +39,21 @@ def test_parse_positive_integer_list_rejects_invalid_values(value: str) -> None:
 
 
 def test_parse_execution_modes() -> None:
-    assert tuple(mode.value for mode in parse_execution_modes('eager,compiled')) == ('eager', 'compiled')
+    assert tuple(mode.value for mode in parse_execution_modes('eager,scripted,compiled')) == (
+        'eager',
+        'scripted',
+        'compiled',
+    )
+
+
+def test_diagnostic_controls_preserve_historical_backbones_with_direct_policy() -> None:
+    models = _benchmark_models(CONFIGURATION_PATH, include_diagnostic_controls=True)
+
+    assert tuple(model.model_id for model in models[:2]) == (
+        'control-cnn-10x128-direct-policy',
+        'control-attention-5x256-direct-policy',
+    )
+    assert len(models) == 5
 
 
 def test_production_progressive_model_parameter_counts_are_derived_directly() -> None:
