@@ -45,6 +45,7 @@ class BenchmarkResult:
     warmup_steps: int
     measurement_steps: int
     target_searches_per_ply: int
+    root_noise: bool
     elapsed_seconds: float
     completed_game_plies: int
     completed_game_plies_per_second: float
@@ -82,6 +83,7 @@ class Arguments:
     searches: int
     parallel_searches: int
     maximum_batch_size: int
+    root_noise: bool
     gpu_sampling_interval_seconds: float
     ready_file: Path | None
     start_barrier: Path | None
@@ -159,6 +161,7 @@ def run_search_steps(
     roots: list[ChessSearchRoot],
     openings: tuple[str, ...],
     steps: int,
+    root_noise: bool,
     duration_seconds: float | None = None,
 ) -> SearchStepsResult:
     terminal_roots = 0
@@ -167,7 +170,7 @@ def run_search_steps(
     deadline = None if duration_seconds is None else time.perf_counter() + duration_seconds
     while (deadline is None and steps_completed < steps) or (deadline is not None and time.perf_counter() < deadline):
         visits_before = sum(root.visits for root in roots)
-        search_results = search.search([ChessSelfPlaySearchRequest(root, False) for root in roots])
+        search_results = search.search([ChessSelfPlaySearchRequest(root, root_noise) for root in roots])
         searches_completed += sum(result.root.visits for result in search_results.results) - visits_before
 
         next_roots: list[ChessSearchRoot] = []
@@ -216,7 +219,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
     )
     openings = load_openings(args.openings, args.games)
     roots = [search.new_root(ChessPosition(fen)) for fen in openings]
-    warmup_result = run_search_steps(search, roots, openings, args.warmup_steps)
+    warmup_result = run_search_steps(search, roots, openings, args.warmup_steps, args.root_noise)
     roots = warmup_result.roots
     warmup_inference_statistics = search.inference_statistics()
     wait_for_synchronized_start(args)
@@ -239,7 +242,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
 
     process_time_start = time.process_time()
     wall_time_start = time.perf_counter()
-    measurement_result = run_search_steps(search, roots, openings, args.steps, args.duration_seconds)
+    measurement_result = run_search_steps(search, roots, openings, args.steps, args.root_noise, args.duration_seconds)
     elapsed_seconds = time.perf_counter() - wall_time_start
     process_seconds = time.process_time() - process_time_start
     stop_event.set()
@@ -278,6 +281,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         warmup_steps=args.warmup_steps,
         measurement_steps=measurement_result.steps_completed,
         target_searches_per_ply=args.searches,
+        root_noise=args.root_noise,
         elapsed_seconds=elapsed_seconds,
         completed_game_plies=completed_game_plies,
         completed_game_plies_per_second=completed_game_plies / elapsed_seconds,
@@ -320,6 +324,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--searches', type=int, default=600)
     parser.add_argument('--parallel-searches', type=int, default=4)
     parser.add_argument('--maximum-batch-size', type=int, default=256)
+    parser.add_argument('--root-noise', action='store_true')
     parser.add_argument('--gpu-sampling-interval-seconds', type=float, default=1.0)
     parser.add_argument('--ready-file', type=Path)
     parser.add_argument('--start-barrier', type=Path)
@@ -335,6 +340,7 @@ def parse_arguments() -> Arguments:
         searches=namespace.searches,
         parallel_searches=namespace.parallel_searches,
         maximum_batch_size=namespace.maximum_batch_size,
+        root_noise=namespace.root_noise,
         gpu_sampling_interval_seconds=namespace.gpu_sampling_interval_seconds,
         ready_file=namespace.ready_file,
         start_barrier=namespace.start_barrier,
