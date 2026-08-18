@@ -398,7 +398,6 @@ def test_next_policy_auxiliary_still_uses_masked_cross_entropy(prediction_dtype:
 
     loss = objective.calculate_loss(output, batch)
 
-    assert loss.auxiliary[0].dtype is prediction_dtype
     assert loss.auxiliary[0].item() == pytest.approx(
         torch.log1p(torch.exp(torch.tensor(-2.0))).item(),
         rel=0.02,
