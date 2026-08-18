@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "model_id": "chess-attention-4m",
+  "parameter_count": 3624336,
+  "world_size": 2,
+  "plan": {
+    "schema_version": 1,
+    "catalog_path": "/workspace/alphazero-engine/py/configs/architectures/chess-cnn-attention-v1.yaml",
+    "topology": {
+      "trainer_device_ids": [
+        0,
+        1
+      ],
+      "global_training_batch_size": 512,
+      "local_training_batch_size": 256,
+      "self_play_processes_per_device": 2,
+      "inference_workers_per_process": 2,
+      "outstanding_batches_per_worker": 2,
+      "production_inference_batch_size": 64
+    },
+    "training": {
+      "warmup_optimizer_steps": 10,
+      "equal_sample_optimizer_steps": 128,
+      "equal_wall_time_seconds": 15.0,
+      "precision": "bfloat16"
+    },
+    "inference": {
+      "batch_sizes": [
+        64
+      ],
+      "warmup_batches": 20,
+      "measured_batches": 100
+    }
+  },
+  "frozen_replay_sha256": "6ff14bf9f605132c788e325351ea423f9315d96881c0bab8551af4aeb3f897f2",
+  "torch_version": "2.12.1+cu126",
+  "cuda_version": "12.6",
+  "device_name": "NVIDIA GeForce RTX 4070 SUPER",
+  "training_sdpa_backend": "automatic",
+  "training_compiled": true,
+  "distributed_training_mode": "static_bucket_view",
+  "training": {
+    "protocol": "equal_wall_time",
+    "optimizer_steps": 468,
+    "global_samples": 239616,
+    "elapsed_seconds": 15.030455122992862,
+    "samples_per_second": 15942.032229845592,
+    "maximum_rank_peak_allocated_bytes": 770309120,
+    "maximum_rank_peak_reserved_bytes": 864026624
+  },
+  "inference": [
+    {
+      "batch_size": 64,
+      "mean_seconds": 0.0010797614499460906,
+      "minimum_rank_positions_per_second": 59272.35131722413,
+      "aggregate_positions_per_second": 118544.70263444826,
+      "maximum_rank_peak_allocated_bytes": 49188864,
+      "maximum_rank_peak_reserved_bytes": 92274688
+    }
+  ]
+}

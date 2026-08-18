@@ -16,7 +16,7 @@ intended local batch of 256, and measure two relevant optimizations: explicit SD
 - Frozen replay SHA-256: `6ff14bf9f605132c788e325351ea423f9315d96881c0bab8551af4aeb3f897f2`.
 - GPU 1 was not used or controlled. An unrelated benchmark was active there and shared the node's CPU quota.
 
-The 4M labels identify the existing catalog controls: the CNN has 3,864,208 parameters and attention has 3,624,336.
+The 4M labels identify the existing catalog controls: the CNN has 3,809,520 parameters and attention has 3,624,336.
 
 ## Results
 
