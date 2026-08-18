@@ -22,7 +22,7 @@ class EvaluationSourceGame(FrozenModel):
 
 
 class EvaluationDatasetManifest(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     game: Literal['chess', 'go']
     rules_digest: str = Field(min_length=64, max_length=64)
     representation_digest: str = Field(min_length=64, max_length=64)
@@ -36,6 +36,7 @@ class EvaluationDatasetManifest(FrozenModel):
     engine_artifact_sha256: tuple[str, ...]
     label_search_limit: int = Field(gt=0)
     maximum_policy_entries: int = Field(gt=0, le=255)
+    maximum_legal_actions: int = Field(gt=0, le=255)
     packed_payload_bytes: int = Field(gt=0)
     row_layout_digest: str = Field(min_length=64, max_length=64)
     data_sha256: str = Field(min_length=64, max_length=64)
@@ -49,7 +50,7 @@ class KataGoBookDatasetPositionProvenance(FrozenModel):
 
 
 class KataGoBookDatasetManifest(FrozenModel):
-    schema_version: Literal[3] = 3
+    schema_version: Literal[4] = 4
     game: Literal['go'] = 'go'
     rules_digest: str = Field(min_length=64, max_length=64)
     representation_digest: str = Field(min_length=64, max_length=64)
@@ -57,6 +58,7 @@ class KataGoBookDatasetManifest(FrozenModel):
     source_games: tuple[EvaluationSourceGame, ...] = Field(min_length=1)
     book_positions: tuple[KataGoBookDatasetPositionProvenance, ...] = Field(min_length=1)
     maximum_policy_entries: int = Field(gt=0, le=255)
+    maximum_legal_actions: int = Field(gt=0, le=255)
     packed_payload_bytes: int = Field(gt=0)
     row_layout_digest: str = Field(min_length=64, max_length=64)
     data_sha256: str = Field(min_length=64, max_length=64)

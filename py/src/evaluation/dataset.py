@@ -53,6 +53,7 @@ class EvaluationDatasetRow:
     packed_state: bytes
     action_ids: tuple[int, ...]
     probabilities: tuple[float, ...]
+    legal_action_ids: tuple[int, ...]
     top_action_id: int
     source_game_id: int
     ply: int
@@ -91,13 +92,19 @@ def _sample_action(policy: EnginePolicy, temperature: float, generator: random.R
     )[0]
 
 
-def _dataset_dtype(packed_payload_bytes: int, maximum_policy_entries: int) -> np.dtype:
+def _dataset_dtype(
+    packed_payload_bytes: int,
+    maximum_policy_entries: int,
+    maximum_legal_actions: int,
+) -> np.dtype:
     return np.dtype(
         [
             ('packed_state', f'V{packed_payload_bytes}'),
             ('policy_count', 'u1'),
             ('action_ids', '<u2', (maximum_policy_entries,)),
             ('probabilities', '<f4', (maximum_policy_entries,)),
+            ('legal_count', 'u1'),
+            ('legal_action_ids', '<u2', (maximum_legal_actions,)),
             ('top_action_id', '<u2'),
             ('source_game_id', '<u4'),
             ('ply', '<u2'),
@@ -120,6 +127,8 @@ def _write_dataset(path: Path, rows: tuple[EvaluationDatasetRow, ...], dtype: np
         data[row_index]['policy_count'] = count
         data[row_index]['action_ids'][:count] = row.action_ids
         data[row_index]['probabilities'][:count] = row.probabilities
+        data[row_index]['legal_count'] = len(row.legal_action_ids)
+        data[row_index]['legal_action_ids'][: len(row.legal_action_ids)] = row.legal_action_ids
         data[row_index]['top_action_id'] = row.top_action_id
         data[row_index]['source_game_id'] = row.source_game_id
         data[row_index]['ply'] = row.ply
@@ -193,6 +202,7 @@ def _generate_source_game(
                         packed_state=state.encode_network_input(position).payload,
                         action_ids=tuple(entry.action_id for entry in ordered_entries),
                         probabilities=tuple(entry.probability for entry in ordered_entries),
+                        legal_action_ids=tuple(sorted(legal_actions)),
                         top_action_id=policy.selected_action_id,
                         source_game_id=source_game_id,
                         ply=ply,
@@ -261,9 +271,14 @@ def build_evaluation_dataset(
         return existing
     resolved_rows, source_games, retained_offset = _collect_dataset_rows(configuration, state, engine)
     maximum_policy_entries = max(len(row.action_ids) for row in resolved_rows)
+    maximum_legal_actions = max(len(row.legal_action_ids) for row in resolved_rows)
     if maximum_policy_entries > 255:
         raise ValueError('Evaluation dataset sparse policies cannot exceed 255 entries.')
-    dtype = _dataset_dtype(state.packed_plane_layout.payload_bytes, maximum_policy_entries)
+    dtype = _dataset_dtype(
+        state.packed_plane_layout.payload_bytes,
+        maximum_policy_entries,
+        maximum_legal_actions,
+    )
     _write_dataset(path, resolved_rows, dtype)
     manifest = EvaluationDatasetManifest(
         game=engine.game_name,
@@ -278,6 +293,7 @@ def build_evaluation_dataset(
         engine_artifact_sha256=engine.engine_artifact_sha256,
         label_search_limit=engine.label_search_limit,
         maximum_policy_entries=maximum_policy_entries,
+        maximum_legal_actions=maximum_legal_actions,
         packed_payload_bytes=state.packed_plane_layout.payload_bytes,
         row_layout_digest=_layout_digest(dtype),
         data_sha256=_file_sha256(path),
@@ -359,6 +375,7 @@ def build_katago_book_evaluation_dataset(
                 packed_state=state.encode_network_input(position).payload,
                 action_ids=tuple(entry.action_id for entry in ordered_entries),
                 probabilities=tuple(entry.probability for entry in ordered_entries),
+                legal_action_ids=tuple(sorted(legal_actions)),
                 top_action_id=book_position.preferred_action_id,
                 source_game_id=source_game_id,
                 ply=len(book_position.action_ids),
@@ -379,9 +396,14 @@ def build_katago_book_evaluation_dataset(
             )
         )
     maximum_policy_entries = max(len(row.action_ids) for row in rows)
+    maximum_legal_actions = max(len(row.legal_action_ids) for row in rows)
     if maximum_policy_entries > 255:
         raise ValueError('Evaluation dataset sparse policies cannot exceed 255 entries.')
-    dtype = _dataset_dtype(state.packed_plane_layout.payload_bytes, maximum_policy_entries)
+    dtype = _dataset_dtype(
+        state.packed_plane_layout.payload_bytes,
+        maximum_policy_entries,
+        maximum_legal_actions,
+    )
     resolved_rows = tuple(rows)
     _write_dataset(path, resolved_rows, dtype)
     manifest = KataGoBookDatasetManifest(
@@ -391,6 +413,7 @@ def build_katago_book_evaluation_dataset(
         source_games=tuple(source_games),
         book_positions=tuple(book_positions),
         maximum_policy_entries=maximum_policy_entries,
+        maximum_legal_actions=maximum_legal_actions,
         packed_payload_bytes=state.packed_plane_layout.payload_bytes,
         row_layout_digest=_layout_digest(dtype),
         data_sha256=_file_sha256(path),
@@ -408,7 +431,11 @@ def load_evaluation_dataset(
     path: Path,
     manifest: AnyEvaluationDatasetManifest,
 ) -> npt.NDArray[np.void]:
-    dtype = _dataset_dtype(manifest.packed_payload_bytes, manifest.maximum_policy_entries)
+    dtype = _dataset_dtype(
+        manifest.packed_payload_bytes,
+        manifest.maximum_policy_entries,
+        manifest.maximum_legal_actions,
+    )
     if _layout_digest(dtype) != manifest.row_layout_digest:
         raise ValueError('Evaluation dataset row layout does not match its manifest.')
     expected_size = manifest.position_count * dtype.itemsize
@@ -449,11 +476,20 @@ def evaluate_fixed_dataset(
                 count = int(row['policy_count'])
                 action_ids = torch.from_numpy(row['action_ids'][:count].astype(np.int64))
                 targets = torch.from_numpy(row['probabilities'][:count].astype(np.float32))
-                legal_logits = policy_logits[row_index, action_ids]
-                predicted = torch.softmax(legal_logits, dim=0)
-                top_action = int(action_ids[int(legal_logits.argmax())])
+                legal_count = int(row['legal_count'])
+                if legal_count <= 0:
+                    raise ValueError('Evaluation dataset row has no legal actions.')
+                legal_action_ids = torch.from_numpy(row['legal_action_ids'][:legal_count].astype(np.int64))
+                legal_logits = policy_logits[row_index, legal_action_ids]
+                legal_log_probabilities = torch.log_softmax(legal_logits, dim=0)
+                target_positions = torch.searchsorted(legal_action_ids, action_ids)
+                if bool(torch.any(target_positions >= legal_count)):
+                    raise ValueError('Evaluation policy target contains an action outside its legal set.')
+                if not torch.equal(legal_action_ids[target_positions], action_ids):
+                    raise ValueError('Evaluation policy target contains an action outside its legal set.')
+                top_action = int(legal_action_ids[int(legal_logits.argmax())])
                 correct += int(top_action == int(row['top_action_id']))
-                cross_entropy -= float(torch.sum(targets * torch.log(predicted)).item())
+                cross_entropy -= float(torch.sum(targets * legal_log_probabilities[target_positions]).item())
     return FixedDatasetEvaluationResult(
         kind='fixed_dataset',
         job=job,
