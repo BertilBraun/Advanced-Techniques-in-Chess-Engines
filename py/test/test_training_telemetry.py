@@ -49,6 +49,7 @@ def test_training_lifecycle_telemetry_reports_credit_backlog_and_observed_ratio(
             packed_planes=PackedPlaneLayout(board_size=7, binary_plane_count=1, scalar_count=1),
             targets=TrainingTargetLayout(action_size=50, wdl_size=3, auxiliary_heads=()),
             maximum_policy_entries=50,
+            maximum_legal_actions=50,
         ),
     )
 

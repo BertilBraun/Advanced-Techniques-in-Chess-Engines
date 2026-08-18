@@ -17,6 +17,7 @@ class ReplayLayout(FrozenModel):
     packed_planes: PackedPlaneLayout
     targets: TrainingTargetLayout
     maximum_policy_entries: int = Field(ge=1, le=255)
+    maximum_legal_actions: int = Field(ge=1, le=255)
 
     @model_validator(mode='after')
     def validate_dimensions(self) -> ReplayLayout:
@@ -24,6 +25,8 @@ class ReplayLayout(FrozenModel):
             raise ValueError('Replay action IDs must fit uint16.')
         if self.maximum_policy_entries > self.targets.action_size:
             raise ValueError('Maximum retained policy entries cannot exceed the action count.')
+        if self.maximum_legal_actions > self.targets.action_size:
+            raise ValueError('Maximum legal actions cannot exceed the action count.')
         return self
 
     @property
@@ -33,6 +36,8 @@ class ReplayLayout(FrozenModel):
             ('policy_entry_count', 'u1'),
             ('policy_action_ids', '<u2', (self.maximum_policy_entries,)),
             ('policy_visit_counts', '<u2', (self.maximum_policy_entries,)),
+            ('policy_legal_count', 'u1'),
+            ('policy_legal_action_ids', '<u2', (self.maximum_legal_actions,)),
             ('wdl_target', '<f4', (3,)),
             ('root_value', '<f4'),
         ]
@@ -44,6 +49,8 @@ class ReplayLayout(FrozenModel):
                             (f'auxiliary_{index}_entry_count', 'u1'),
                             (f'auxiliary_{index}_action_ids', '<u2', (self.maximum_policy_entries,)),
                             (f'auxiliary_{index}_visit_counts', '<u2', (self.maximum_policy_entries,)),
+                            (f'auxiliary_{index}_legal_count', 'u1'),
+                            (f'auxiliary_{index}_legal_action_ids', '<u2', (self.maximum_legal_actions,)),
                             (f'auxiliary_{index}_eligible', 'u1'),
                         )
                     )
@@ -81,6 +88,7 @@ class ReplayLayout(FrozenModel):
                 'auxiliary_heads': [_head_digest_fields(head) for head in self.targets.auxiliary_heads],
             },
             'maximum_policy_entries': self.maximum_policy_entries,
+            'maximum_legal_actions': self.maximum_legal_actions,
             'dtype': self.row_dtype.descr,
         }
         encoded = json.dumps(payload, sort_keys=True, separators=(',', ':')).encode('utf-8')

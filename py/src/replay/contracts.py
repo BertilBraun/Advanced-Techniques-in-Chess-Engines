@@ -12,6 +12,7 @@ from src.games.representation import PackedPlanePayload
 @dataclass(frozen=True)
 class SparsePolicyTarget:
     visits: tuple[GameSearchVisit, ...]
+    legal_action_ids: tuple[int, ...]
 
     def __post_init__(self) -> None:
         if not self.visits or any(visit.visit_count <= 0 for visit in self.visits):
@@ -19,6 +20,12 @@ class SparsePolicyTarget:
         action_ids = tuple(visit.action_id for visit in self.visits)
         if len(set(action_ids)) != len(action_ids):
             raise ValueError('Sparse policy action IDs must be unique.')
+        if not self.legal_action_ids or any(action_id < 0 for action_id in self.legal_action_ids):
+            raise ValueError('Sparse policy targets require nonnegative legal action IDs.')
+        if len(set(self.legal_action_ids)) != len(self.legal_action_ids):
+            raise ValueError('Sparse policy legal action IDs must be unique.')
+        if not set(action_ids).issubset(self.legal_action_ids):
+            raise ValueError('Sparse policy visits must be legal.')
 
 
 @dataclass(frozen=True)

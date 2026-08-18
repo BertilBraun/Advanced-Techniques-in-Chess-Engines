@@ -8,7 +8,6 @@
 
 #include <cstddef>
 #include <cstdint>
-
 #include <torch/torch.h>
 
 struct ChessRepresentationDimensions {
@@ -16,7 +15,8 @@ struct ChessRepresentationDimensions {
     static constexpr int channel_count = 29;
     static constexpr int binary_channel_count = 22;
     static constexpr int scalar_channel_count = 7;
-    static constexpr int action_count = 1880;
+    static constexpr int policy_plane_count = 76;
+    static constexpr int action_count = policy_plane_count * board_length * board_length;
 };
 
 static_assert(ChessRepresentationDimensions::channel_count ==

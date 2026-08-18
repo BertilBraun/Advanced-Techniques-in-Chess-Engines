@@ -4,15 +4,19 @@ import pytest
 import torch
 
 from src.games.representation import NetworkDimensions
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import (
     AttentionNetworkParams,
+    Chess76PlaneDirectPolicyHeadConfiguration,
     DisabledResidualContext,
     GlobalPoolingResidualContext,
+    GoPointPassPolicyHeadConfiguration,
     Network,
     NetworkConfiguration,
     NetworkParams,
     ResidualContextPlacement,
 )
+from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 from src.training.checkpoint.persistence import (
     create_optimizer,
     load_model,
@@ -29,7 +33,7 @@ from src.training.checkpoint.contracts import load_checkpoint_manifest
             num_layers=1,
             hidden_size=8,
             residual_context=DisabledResidualContext(),
-            num_policy_channels=2,
+            policy_head=GoPointPassPolicyHeadConfiguration(),
             num_value_channels=2,
             value_fc_size=8,
         ),
@@ -37,7 +41,7 @@ from src.training.checkpoint.contracts import load_checkpoint_manifest
             num_layers=1,
             hidden_size=8,
             residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_BLOCK),
-            num_policy_channels=2,
+            policy_head=GoPointPassPolicyHeadConfiguration(),
             num_value_channels=2,
             value_fc_size=8,
         ),
@@ -46,7 +50,7 @@ from src.training.checkpoint.contracts import load_checkpoint_manifest
             embedding_size=8,
             num_heads=2,
             feedforward_size=16,
-            num_policy_channels=2,
+            policy_head=GoPointPassPolicyHeadConfiguration(),
             num_value_channels=2,
             value_fc_size=8,
         ),
@@ -57,7 +61,11 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     parameters: NetworkConfiguration,
 ) -> None:
     dimensions = NetworkDimensions(channels=3, rows=3, columns=3, actions=10)
-    model = Network(parameters, torch.device('cpu'), dimensions, auxiliary_output_sizes=(10, 1))
+    auxiliary_heads = (
+        NextPolicyHeadLayout(kind='next_policy', action_size=10, ply_offset=1),
+        RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
+    )
+    model = Network(parameters, torch.device('cpu'), dimensions, auxiliary_heads=auxiliary_heads)
     output = model.training_output(torch.zeros((2, 3, 3, 3)))
 
     assert output.policy_logits.shape == (2, 10)
@@ -79,7 +87,7 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
         parameters,
         torch.device('cpu'),
         dimensions,
-        auxiliary_output_sizes=(10, 1),
+        auxiliary_heads=auxiliary_heads,
     )
     loaded_model.eval()
     loaded_output = loaded_model.training_output(torch.zeros((2, 3, 3, 3)))
@@ -92,17 +100,59 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     assert tuple(output.shape for output in loaded_output.auxiliary_logits) == ((2, 10), (2, 1))
     assert inference_policy.shape == (2, 10)
     assert inference_wdl.shape == (2, 3)
-    torch.testing.assert_close(inference_policy, torch.softmax(training_policy_logits, dim=1))
+    torch.testing.assert_close(inference_policy, training_policy_logits)
     torch.testing.assert_close(inference_wdl, torch.softmax(training_wdl_logits, dim=1))
     assert b'"kind":"' + parameters.kind.encode() + b'"' in extra_files['network.json']
 
     with pytest.raises(ValueError, match='network definition'):
         load_model_and_optimizer(
             1,
-            NetworkParams(num_layers=1, hidden_size=4),
+            parameters.model_copy(update={'num_layers': 2}),
             torch.device('cpu'),
             tmp_path,
             'adamw',
             dimensions,
-            auxiliary_output_sizes=(10, 1),
+            auxiliary_heads=auxiliary_heads,
         )
+
+
+def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_path: Path) -> None:
+    parameters = NetworkParams(
+        num_layers=1,
+        hidden_size=16,
+        residual_context=DisabledResidualContext(),
+        policy_head=Chess76PlaneDirectPolicyHeadConfiguration(),
+        num_value_channels=2,
+        value_fc_size=8,
+    )
+    auxiliary_heads = (
+        NextPolicyHeadLayout(kind='next_policy', action_size=4864, ply_offset=1),
+        RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
+    )
+    model = Network(parameters, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, auxiliary_heads)
+    model.eval()
+    inputs = torch.randn((2, 29, 8, 8))
+    expected_training_output = model.training_output(inputs)
+    expected_policy, expected_wdl = model(inputs)
+
+    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 1, tmp_path)
+    loaded = load_model(
+        tmp_path / 'model_1.pt',
+        parameters,
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+        auxiliary_heads,
+    )
+    loaded.eval()
+    loaded_training_output = loaded.training_output(inputs)
+    inference_model = torch.jit.load(str(tmp_path / 'model_1.jit.pt'), map_location='cpu')
+    inference_policy, inference_wdl = inference_model(inputs)
+
+    assert expected_training_output.policy_logits.shape == (2, 4864)
+    assert tuple(output.shape for output in expected_training_output.auxiliary_logits) == ((2, 4864), (2, 1))
+    assert all('action_plane_indices' not in name for name, _ in loaded.named_buffers())
+    assert all(not name.startswith('auxiliaryHeads.') for name, _ in inference_model.named_buffers())
+    torch.testing.assert_close(loaded_training_output.policy_logits, expected_training_output.policy_logits)
+    torch.testing.assert_close(loaded_training_output.auxiliary_logits[0], expected_training_output.auxiliary_logits[0])
+    torch.testing.assert_close(inference_policy, expected_policy)
+    torch.testing.assert_close(inference_wdl, expected_wdl)

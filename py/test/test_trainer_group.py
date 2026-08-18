@@ -20,14 +20,14 @@ from src.training.trainer import TrainerGroup
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.configuration import TrainingCompilation, TrainingPrecision
-from src.training.network import Network
+from src.training.network import Chess76PlaneDirectPolicyHeadConfiguration, Network
 import src.training.trainer.rank as trainer_rank
 from src.training.trainer.rank import DistributedTrainingModel
 
 
 def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
     root = Path(__file__).parents[1]
-    configuration = load_experiment_configuration(root / 'configs' / 'chess-experiment-template.yaml')
+    configuration = load_experiment_configuration(root / 'test' / 'configs' / 'chess-experiment.yaml')
     trainer = configuration.training.trainer.validated_copy(
         update={
             'global_batch_size': 2,
@@ -39,7 +39,7 @@ def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
         update={
             'num_layers': 1,
             'hidden_size': 8,
-            'num_policy_channels': 2,
+            'policy_head': Chess76PlaneDirectPolicyHeadConfiguration(),
             'num_value_channels': 2,
             'value_fc_size': 8,
         }
@@ -99,6 +99,7 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
         packed_planes=game.state.packed_plane_layout,
         targets=game.target_layout,
         maximum_policy_entries=2,
+        maximum_legal_actions=game.state.maximum_legal_action_count,
     )
     replay_path = tmp_path / 'replay.bin'
     store = ReplayStore.create(replay_path, layout, maximum_capacity=2, logical_capacity=2)
@@ -110,7 +111,8 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
                     visits=(
                         GameSearchVisit(action_id=0, visit_count=3),
                         GameSearchVisit(action_id=1, visit_count=1),
-                    )
+                    ),
+                    legal_action_ids=(0, 1),
                 ),
                 wdl_target=WdlTarget(win=0.0, draw=1.0, loss=0.0),
                 root_value=0.0,
@@ -167,7 +169,7 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
 
 def test_distributed_training_model_has_only_batch_norm_buffers() -> None:
     configuration = load_experiment_configuration(
-        Path(__file__).parents[1] / 'configs' / 'chess-experiment-template.yaml'
+        Path(__file__).parents[1] / 'test' / 'configs' / 'chess-experiment.yaml'
     )
     game = ChessImplementation(configuration)
     model = DistributedTrainingModel(
@@ -182,7 +184,7 @@ def test_distributed_training_model_has_only_batch_norm_buffers() -> None:
 
 def test_distributed_training_disables_per_forward_buffer_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
     configuration = load_experiment_configuration(
-        Path(__file__).parents[1] / 'configs' / 'chess-experiment-template.yaml'
+        Path(__file__).parents[1] / 'test' / 'configs' / 'chess-experiment.yaml'
     )
     game = ChessImplementation(configuration)
     model = Network(configuration.training.network, torch.device('cpu'), game.network_dimensions)
@@ -214,7 +216,7 @@ def test_distributed_training_disables_per_forward_buffer_broadcast(monkeypatch:
 
 def test_distributed_training_compiles_only_the_training_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
     configuration = load_experiment_configuration(
-        Path(__file__).parents[1] / 'configs' / 'chess-experiment-template.yaml'
+        Path(__file__).parents[1] / 'test' / 'configs' / 'chess-experiment.yaml'
     )
     game = ChessImplementation(configuration)
     model = Network(configuration.training.network, torch.device('cpu'), game.network_dimensions)

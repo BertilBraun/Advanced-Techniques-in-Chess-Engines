@@ -224,7 +224,10 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
                         visit_count=visit.visit_count,
                     )
                     for visit in policy.visits
-                )
+                ),
+                legal_action_ids=tuple(
+                    self.transform_action_id(action_id, augmentation_index) for action_id in policy.legal_action_ids
+                ),
             )
 
         transformed_auxiliary = []

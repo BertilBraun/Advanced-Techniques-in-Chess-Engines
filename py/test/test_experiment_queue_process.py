@@ -28,7 +28,7 @@ from src.experiment_queue.validation import validate_queue_for_launch
 
 pytestmark = pytest.mark.skipif(sys.platform != 'linux', reason='Linux process controls are required.')
 
-EXPERIMENT_TEMPLATE = Path(__file__).parents[1] / 'configs' / 'go-7x7-experiment-template.yaml'
+EXPERIMENT_TEMPLATE = Path(__file__).parent / 'configs' / 'go-7x7-experiment.yaml'
 SOURCE_REVISION = '1' * 40
 
 

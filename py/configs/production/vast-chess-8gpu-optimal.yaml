@@ -27,12 +27,12 @@ training:
   save_path: py/training_data/production/vast-chess-8gpu-optimal
   network:
     kind: attention
-    num_layers: 2
-    embedding_size: 64
-    num_heads: 4
-    feedforward_size: 128
+    num_layers: 6
+    embedding_size: 96
+    num_heads: 3
+    feedforward_size: 192
     dropout: 0.0
-    num_policy_channels: 4
+    policy_head: {kind: chess_76_plane_direct_v2}
     num_value_channels: 2
     value_fc_size: 48
   trainer:
@@ -98,40 +98,40 @@ training:
   random_seed: 20260811
   progressive_model_sizing:
     models:
-      - model_id: chess-attention-1m
+      - model_id: chess-attention-500k
         training_start_days: 0.0
         network:
           kind: attention
-          num_layers: 2
-          embedding_size: 64
-          num_heads: 4
-          feedforward_size: 128
+          num_layers: 6
+          embedding_size: 96
+          num_heads: 3
+          feedforward_size: 192
           dropout: 0.0
-          num_policy_channels: 4
+          policy_head: {kind: chess_76_plane_direct_v2}
           num_value_channels: 2
           value_fc_size: 48
-      - model_id: chess-attention-4m
+      - model_id: chess-attention-2m
         training_start_days: 0.75
         network:
           kind: attention
-          num_layers: 5
-          embedding_size: 256
-          num_heads: 8
-          feedforward_size: 512
+          num_layers: 10
+          embedding_size: 160
+          num_heads: 5
+          feedforward_size: 320
           dropout: 0.0
-          num_policy_channels: 4
+          policy_head: {kind: chess_76_plane_direct_v2}
           num_value_channels: 2
           value_fc_size: 48
-      - model_id: chess-attention-9m
+      - model_id: chess-attention-4m5
         training_start_days: 2.0
         network:
           kind: attention
-          num_layers: 7
-          embedding_size: 384
-          num_heads: 12
-          feedforward_size: 768
+          num_layers: 15
+          embedding_size: 192
+          num_heads: 6
+          feedforward_size: 384
           dropout: 0.0
-          num_policy_channels: 4
+          policy_head: {kind: chess_76_plane_direct_v2}
           num_value_channels: 2
           value_fc_size: 48
     promotion:
@@ -145,13 +145,13 @@ evaluation:
   bootstrap_samples: 10000
   maximum_concurrent_jobs: 10
   dataset:
-    path: /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v1.bin
+    path: /workspace/evaluation-artifacts/chess/chess-stockfish-direct-policy-evaluation-v2.bin
     source:
       kind: engine_self_play
       random_seed: 20260811
       move_sampling_temperature: 1.0
   openings:
-    path: /workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-openings-v1.json
+    path: /workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-direct-policy-openings-v2.json
     opening_count: 50
     source:
       kind: chess_book

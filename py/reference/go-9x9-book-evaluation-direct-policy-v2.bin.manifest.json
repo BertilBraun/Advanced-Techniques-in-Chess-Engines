@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "game": "go",
   "rules_digest": "aa766285c00369a510908dec4c99efb80d6ec3d8ec4537f4ae98b7cc8c8cf307",
   "representation_digest": "098a2df044bdcd238201f17a018dc96e50fbde82af84c47ea106a2fd03872b9a",
@@ -9451,9 +9451,10 @@
     }
   ],
   "maximum_policy_entries": 20,
+  "maximum_legal_actions": 78,
   "packed_payload_bytes": 257,
-  "row_layout_digest": "763634334ff0eaee8735f738d655670e180bc6128c7e44c566de4bf92e00c1ce",
-  "data_sha256": "6764f24aa570b6e8c6841ca9f703ee9425da7dd7ae9d2548b2fa6aed68dc1cb0",
+  "row_layout_digest": "feedca625b8669cd000300f42458fc76c9e5fc3bd17a6baf0ec18bb1b95cd4b3",
+  "data_sha256": "d4fa90181e358abfc7d2c7e887059ebdc1001b5b98f87473cb40dc3d1c6bfa2b",
   "book_export_sha256": "e1f1fe4acb40e830a3f8a3762a6c5ec0b3a7586b3ce2063508f7d2eed436c1ef",
   "book_selection_sha256": "4d8909707451e6d977011a2d15f562a47071e101b594066ac1062268fe7e430a",
   "book_source_root_url": "https://katagobooks.org/book9x9tt/root/root.html",
@@ -9464,5 +9465,5 @@
   "orientation_scheme": "selection_index_modulo_8",
   "top_action_source": "katago_book_preference",
   "soft_policy_source": "katago_book_prior",
-  "builder_source_revision": "569c09a2a393408b67cf2572698b0a755df460fc"
+  "builder_source_revision": "040f330eef2b989188997a4cdc44d5ad0f910692"
 }

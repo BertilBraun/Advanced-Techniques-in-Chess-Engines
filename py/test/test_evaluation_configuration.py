@@ -17,7 +17,7 @@ from src.training.checkpoint import CheckpointReference
 
 
 def test_evaluation_definition_ids_must_be_unique() -> None:
-    experiment = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    experiment = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
     payload = experiment.evaluation.model_dump(mode='json')
     payload['definitions'][1]['definition_id'] = payload['definitions'][0]['definition_id']
 
@@ -26,7 +26,7 @@ def test_evaluation_definition_ids_must_be_unique() -> None:
 
 
 def test_opening_suite_must_cover_largest_match_definition() -> None:
-    experiment = load_experiment_configuration(Path('configs/go-7x7-experiment-template.yaml'))
+    experiment = load_experiment_configuration(Path('test/configs/go-7x7-experiment.yaml'))
     payload = experiment.evaluation.model_dump(mode='json')
     payload['openings']['opening_count'] = 1
     payload['definitions'][1]['opening_pair_count'] = 2
@@ -49,7 +49,7 @@ def test_opening_line_requires_exactly_four_plies() -> None:
 
 
 def test_resolved_match_opponent_must_match_its_definition() -> None:
-    experiment = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    experiment = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
     stockfish_definition = experiment.evaluation.definitions[-1]
     checkpoint = CheckpointReference(
         generation=1,
@@ -76,7 +76,7 @@ def test_resolved_match_opponent_must_match_its_definition() -> None:
 
 
 def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opponent(tmp_path: Path) -> None:
-    experiment = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    experiment = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
     skill_definition = next(
         definition for definition in experiment.evaluation.definitions if definition.kind == 'stockfish'
     )

@@ -23,7 +23,7 @@ from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLa
 
 
 _REPLAY_MAGIC = b'AZRPLY01'
-_REPLAY_SCHEMA_VERSION = 1
+_REPLAY_SCHEMA_VERSION = 2
 _HEADER_DTYPE = np.dtype(
     [
         ('magic', 'S8'),
@@ -266,9 +266,15 @@ class ReplayStore:
             raise ValueError('Sparse policy contains an action outside the action space.')
         if any(visit.visit_count > 65_535 for visit in policy.visits):
             raise ValueError('Sparse policy visit count does not fit uint16.')
+        if len(policy.legal_action_ids) > self.layout.maximum_legal_actions:
+            raise ValueError('Sparse policy exceeds the game maximum legal-action count.')
+        if any(action_id >= self.layout.targets.action_size for action_id in policy.legal_action_ids):
+            raise ValueError('Sparse policy contains a legal action outside the action space.')
         row[f'{prefix}_entry_count'] = len(policy.visits)
         row[f'{prefix}_action_ids'][: len(policy.visits)] = tuple(visit.action_id for visit in policy.visits)
         row[f'{prefix}_visit_counts'][: len(policy.visits)] = tuple(visit.visit_count for visit in policy.visits)
+        row[f'{prefix}_legal_count'] = len(policy.legal_action_ids)
+        row[f'{prefix}_legal_action_ids'][: len(policy.legal_action_ids)] = policy.legal_action_ids
 
     def _read_sample(self, row: np.void) -> ReplaySample:
         auxiliary_targets = []
@@ -305,11 +311,13 @@ class ReplayStore:
         count = int(row[f'{prefix}_entry_count'])
         actions = row[f'{prefix}_action_ids'][:count]
         visits = row[f'{prefix}_visit_counts'][:count]
+        legal_count = int(row[f'{prefix}_legal_count'])
         return SparsePolicyTarget(
             visits=tuple(
                 GameSearchVisit(action_id=int(action), visit_count=int(visit_count))
                 for action, visit_count in zip(actions, visits)
-            )
+            ),
+            legal_action_ids=tuple(int(action_id) for action_id in row[f'{prefix}_legal_action_ids'][:legal_count]),
         )
 
     def _ensure_writable(self) -> None:

@@ -37,14 +37,18 @@ class MaterializedGame:
     discarded_visit_mass: int
 
 
-def retain_policy(observation: SearchObservation, maximum_entries: int) -> PolicyRetention:
+def retain_policy(
+    observation: SearchObservation,
+    legal_action_ids: tuple[int, ...],
+    maximum_entries: int,
+) -> PolicyRetention:
     ordered = ordered_search_visits(observation)
     if not ordered:
         raise ValueError(f'Observation at ply {observation.ply} has no policy-target visits.')
     retained = ordered[:maximum_entries]
     discarded = ordered[maximum_entries:]
     return PolicyRetention(
-        policy=SparsePolicyTarget(visits=retained),
+        policy=SparsePolicyTarget(visits=retained, legal_action_ids=legal_action_ids),
         truncated=bool(discarded),
         retained_visit_mass=sum(visit.visit_count for visit in retained),
         discarded_visit_mass=sum(visit.visit_count for visit in discarded),
@@ -76,7 +80,11 @@ def materialize_completed_game(
     for observation in game.observations:
         if not observation.full_search:
             continue
-        primary = retain_policy(observation, maximum_policy_entries)
+        primary = retain_policy(
+            observation,
+            state.legal_action_ids(positions[observation.ply]),
+            maximum_policy_entries,
+        )
         policies_truncated += int(primary.truncated)
         retained_visit_mass += primary.retained_visit_mass
         discarded_visit_mass += primary.discarded_visit_mass
@@ -89,7 +97,11 @@ def materialize_completed_game(
                     if future_observation is None:
                         auxiliary_targets.append(IneligibleNextPolicyTarget())
                         continue
-                    auxiliary = retain_policy(future_observation, maximum_policy_entries)
+                    auxiliary = retain_policy(
+                        future_observation,
+                        state.legal_action_ids(positions[future_observation.ply]),
+                        maximum_policy_entries,
+                    )
                     policies_truncated += int(auxiliary.truncated)
                     retained_visit_mass += auxiliary.retained_visit_mass
                     discarded_visit_mass += auxiliary.discarded_visit_mass

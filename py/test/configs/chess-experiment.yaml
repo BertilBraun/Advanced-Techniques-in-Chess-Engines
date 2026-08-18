@@ -30,7 +30,7 @@ training:
     residual_context:
       kind: squeeze_excitation
       placement: every_second_block
-    num_policy_channels: 4
+    policy_head: {kind: chess_76_plane_direct_v2}
     num_value_channels: 2
     value_fc_size: 48
   trainer:

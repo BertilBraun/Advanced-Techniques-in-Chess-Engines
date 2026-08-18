@@ -16,17 +16,19 @@ class TrainingModelOutput:
 class TrainingBatch:
     states: torch.Tensor
     policy_targets: torch.Tensor
+    policy_legal_action_ids: torch.Tensor
     wdl_targets: torch.Tensor
     root_values: torch.Tensor
     auxiliary_targets: tuple[torch.Tensor, ...]
+    auxiliary_legal_action_ids: tuple[torch.Tensor, ...]
     auxiliary_eligibility: tuple[torch.Tensor, ...]
     sample_weights: torch.Tensor
     source_model_generations: torch.Tensor
     source_created_at_seconds: torch.Tensor
 
     def __post_init__(self) -> None:
-        if len(self.auxiliary_targets) != len(self.auxiliary_eligibility):
-            raise ValueError('Auxiliary targets and eligibility masks must have equal lengths.')
+        if not (len(self.auxiliary_targets) == len(self.auxiliary_legal_action_ids) == len(self.auxiliary_eligibility)):
+            raise ValueError('Auxiliary targets, legal actions, and eligibility masks must have equal lengths.')
 
     def __len__(self) -> int:
         return int(self.states.shape[0])
@@ -35,9 +37,11 @@ class TrainingBatch:
         return TrainingBatch(
             states=self.states.pin_memory(),
             policy_targets=self.policy_targets.pin_memory(),
+            policy_legal_action_ids=self.policy_legal_action_ids.pin_memory(),
             wdl_targets=self.wdl_targets.pin_memory(),
             root_values=self.root_values.pin_memory(),
             auxiliary_targets=tuple(target.pin_memory() for target in self.auxiliary_targets),
+            auxiliary_legal_action_ids=tuple(actions.pin_memory() for actions in self.auxiliary_legal_action_ids),
             auxiliary_eligibility=tuple(mask.pin_memory() for mask in self.auxiliary_eligibility),
             sample_weights=self.sample_weights.pin_memory(),
             source_model_generations=self.source_model_generations.pin_memory(),
@@ -48,10 +52,14 @@ class TrainingBatch:
         return TrainingBatch(
             states=self.states.to(device=device, non_blocking=non_blocking),
             policy_targets=self.policy_targets.to(device=device, non_blocking=non_blocking),
+            policy_legal_action_ids=self.policy_legal_action_ids.to(device=device, non_blocking=non_blocking),
             wdl_targets=self.wdl_targets.to(device=device, non_blocking=non_blocking),
             root_values=self.root_values.to(device=device, non_blocking=non_blocking),
             auxiliary_targets=tuple(
                 target.to(device=device, non_blocking=non_blocking) for target in self.auxiliary_targets
+            ),
+            auxiliary_legal_action_ids=tuple(
+                actions.to(device=device, non_blocking=non_blocking) for actions in self.auxiliary_legal_action_ids
             ),
             auxiliary_eligibility=tuple(
                 mask.to(device=device, non_blocking=non_blocking) for mask in self.auxiliary_eligibility

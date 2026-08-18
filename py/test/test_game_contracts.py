@@ -93,7 +93,7 @@ def test_go_adjudication_area_scores_nonterminal_positions(
 
 @pytest.mark.parametrize(
     ('path', 'expected_action_size', 'expected_augmentations'),
-    ((Path('configs/chess-experiment-template.yaml'), 1_880, 2),),
+    ((Path('test/configs/chess-experiment.yaml'), 4_864, 2),),
 )
 def test_root_game_implementation_owns_state_and_fixed_target_layout(
     path: Path,
@@ -166,7 +166,7 @@ def test_canonical_completed_game_publication_needs_no_publisher_state(tmp_path:
 
 
 def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
-    configuration = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    configuration = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
     assert configuration.game == 'chess'
     objective = configuration.chess.objective.validated_copy(
         update={
@@ -187,7 +187,7 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
     layout = build_training_target_layout(CHESS_STATE_CONTRACT.action_size, objective.auxiliary_targets)
 
     assert tuple(head.ply_offset for head in layout.auxiliary_heads) == (1, 3)
-    assert all(head.action_size == 1_880 for head in layout.auxiliary_heads)
+    assert all(head.action_size == 4_864 for head in layout.auxiliary_heads)
 
     chess_configuration = configuration.chess.validated_copy(update={'objective': objective.model_dump(mode='json')})
     resolved = configuration.validated_copy(update={'chess': chess_configuration.model_dump(mode='json')})
@@ -195,7 +195,10 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
 
 
 def test_next_policy_eligibility_is_explicit_and_uses_future_action_space() -> None:
-    future_policy = SparsePolicyTarget(visits=(GameSearchVisit(action_id=42, visit_count=10),))
+    future_policy = SparsePolicyTarget(
+        visits=(GameSearchVisit(action_id=42, visit_count=10),),
+        legal_action_ids=(42, 43),
+    )
 
     eligible = EligibleNextPolicyTarget(policy=future_policy)
     terminal_tail = IneligibleNextPolicyTarget()
@@ -206,7 +209,7 @@ def test_next_policy_eligibility_is_explicit_and_uses_future_action_space() -> N
 
 
 def test_remaining_game_length_layout_is_a_scalar_target() -> None:
-    configuration = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    configuration = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
     assert configuration.game == 'chess'
     objective = configuration.chess.objective.validated_copy(
         update={
@@ -243,7 +246,10 @@ def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_togeth
     pytest.importorskip('AlphaZeroCpp')
     position = CHESS_STATE_CONTRACT.initial_position()
     action_id = CHESS_STATE_CONTRACT.legal_action_ids(position)[0]
-    policy = SparsePolicyTarget(visits=(GameSearchVisit(action_id=action_id, visit_count=3),))
+    policy = SparsePolicyTarget(
+        visits=(GameSearchVisit(action_id=action_id, visit_count=3),),
+        legal_action_ids=CHESS_STATE_CONTRACT.legal_action_ids(position),
+    )
     sample = ReplaySample(
         encoded_state=CHESS_STATE_CONTRACT.encode_network_input(position),
         policy=policy,
@@ -272,15 +278,17 @@ def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_togeth
 
 
 def test_canonical_batch_and_model_output_are_the_objective_boundary() -> None:
-    configuration = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    configuration = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
     assert configuration.game == 'chess'
     objective = ChessImplementation(configuration).training_objective_at(0)
     batch = TrainingBatch(
         states=torch.zeros((2, 1)),
         policy_targets=torch.tensor(((1.0, 0.0), (0.0, 1.0))),
+        policy_legal_action_ids=torch.tensor(((0, 1), (0, 1))),
         wdl_targets=torch.tensor(((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))),
         root_values=torch.tensor((0.5, -0.5)),
         auxiliary_targets=(),
+        auxiliary_legal_action_ids=(),
         auxiliary_eligibility=(),
         sample_weights=torch.ones(2),
         source_model_generations=torch.zeros(2, dtype=torch.int64),
@@ -298,6 +306,37 @@ def test_canonical_batch_and_model_output_are_the_objective_boundary() -> None:
     assert loss.auxiliary == ()
 
 
+def test_policy_loss_normalizes_only_over_legal_actions() -> None:
+    objective = ResolvedTrainingObjective(
+        policy_loss_weight=1.0,
+        value_loss_weight=0.0,
+        root_value_blend=0.0,
+        auxiliary_losses=(),
+    )
+    batch = TrainingBatch(
+        states=torch.zeros((1, 1)),
+        policy_targets=torch.tensor(((1.0, 0.0, 0.0),)),
+        policy_legal_action_ids=torch.tensor(((0, 1),)),
+        wdl_targets=torch.tensor(((0.0, 1.0, 0.0),)),
+        root_values=torch.zeros(1),
+        auxiliary_targets=(),
+        auxiliary_legal_action_ids=(),
+        auxiliary_eligibility=(),
+        sample_weights=torch.ones(1),
+        source_model_generations=torch.zeros(1, dtype=torch.int64),
+        source_created_at_seconds=torch.zeros(1, dtype=torch.float64),
+    )
+    output = TrainingModelOutput(
+        policy_logits=torch.tensor(((0.0, 0.0, 100.0),)),
+        wdl_logits=torch.zeros((1, 3)),
+        auxiliary_logits=(),
+    )
+
+    loss = objective.calculate_loss(output, batch)
+
+    assert loss.policy.item() == pytest.approx(torch.log(torch.tensor(2.0)).item())
+
+
 def test_remaining_game_length_uses_masked_smooth_l1_loss() -> None:
     objective = ResolvedTrainingObjective(
         policy_loss_weight=0.0,
@@ -308,9 +347,11 @@ def test_remaining_game_length_uses_masked_smooth_l1_loss() -> None:
     batch = TrainingBatch(
         states=torch.zeros((2, 1)),
         policy_targets=torch.tensor(((1.0, 0.0), (1.0, 0.0))),
+        policy_legal_action_ids=torch.tensor(((0, 1), (0, 1))),
         wdl_targets=torch.tensor(((1.0, 0.0, 0.0), (1.0, 0.0, 0.0))),
         root_values=torch.zeros(2),
         auxiliary_targets=(torch.tensor(((0.5,), (1.0,))),),
+        auxiliary_legal_action_ids=(torch.empty((2, 0), dtype=torch.int64),),
         auxiliary_eligibility=(torch.tensor((True, False)),),
         sample_weights=torch.ones(2),
         source_model_generations=torch.zeros(2, dtype=torch.int64),
@@ -338,9 +379,11 @@ def test_next_policy_auxiliary_still_uses_masked_cross_entropy() -> None:
     batch = TrainingBatch(
         states=torch.zeros((2, 1)),
         policy_targets=torch.tensor(((1.0, 0.0), (1.0, 0.0))),
+        policy_legal_action_ids=torch.tensor(((0, 1), (0, 1))),
         wdl_targets=torch.tensor(((1.0, 0.0, 0.0), (1.0, 0.0, 0.0))),
         root_values=torch.zeros(2),
         auxiliary_targets=(torch.tensor(((1.0, 0.0), (0.0, 1.0))),),
+        auxiliary_legal_action_ids=(torch.tensor(((0, 1), (0, 1))),),
         auxiliary_eligibility=(torch.tensor((True, False)),),
         sample_weights=torch.ones(2),
         source_model_generations=torch.zeros(2, dtype=torch.int64),

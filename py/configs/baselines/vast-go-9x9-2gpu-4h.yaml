@@ -30,7 +30,7 @@ training:
     residual_context:
       kind: global_pooling
       placement: every_second_block
-    num_policy_channels: 2
+    policy_head: {kind: go_point_pass_v1}
     num_value_channels: 1
     value_fc_size: 32
   trainer:
@@ -98,7 +98,7 @@ evaluation:
   bootstrap_samples: 10000
   maximum_concurrent_jobs: 10
   dataset:
-    path: py/reference/go-9x9-book-evaluation-v1.bin
+    path: py/reference/go-9x9-book-evaluation-direct-policy-v2.bin
     source:
       kind: katago_book
       position_count: 500

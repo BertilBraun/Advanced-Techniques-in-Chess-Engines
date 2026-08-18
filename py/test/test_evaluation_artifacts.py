@@ -6,6 +6,7 @@ from math import log
 from pathlib import Path
 import random
 
+import numpy as np
 import pytest
 import torch
 
@@ -68,13 +69,14 @@ def test_checked_in_go_baseline_reference_artifacts_match_configuration() -> Non
 
     assert 480 <= dataset_manifest.position_count <= 520
     assert dataset_manifest.label_search_limit == engine.label_max_visits
+    assert dataset_manifest.maximum_legal_actions <= 50
     assert hashlib.sha256(dataset_path.read_bytes()).hexdigest() == dataset_manifest.data_sha256
     assert len(opening_manifest.openings) == experiment.evaluation.openings.opening_count == 200
     assert opening_manifest.label_search_limit == engine.label_max_visits
 
 
 def test_checked_in_go_9x9_book_export_matches_configuration() -> None:
-    experiment = load_experiment_configuration(Path('configs/go-9x9-experiment-template.yaml'))
+    experiment = load_experiment_configuration(Path('test/configs/go-9x9-experiment.yaml'))
     opening_source = experiment.evaluation.openings.source
     dataset_source = experiment.evaluation.dataset.source
     assert opening_source.kind == 'katago_book'
@@ -119,6 +121,7 @@ def test_checked_in_go_9x9_derived_artifacts_use_book_policy_and_production_rule
     assert dataset_manifest.position_count == dataset_source.position_count == 500
     assert dataset_manifest.soft_policy_source == 'katago_book_prior'
     assert dataset_manifest.book_export_sha256 == dataset_source.selection.export_sha256
+    assert dataset_manifest.maximum_legal_actions <= 82
     assert hashlib.sha256(dataset_path.read_bytes()).hexdigest() == dataset_manifest.data_sha256
     assert len(opening_manifest.openings) == experiment.evaluation.openings.opening_count == 200
     assert opening_manifest.book_export_sha256 == opening_source.selection.export_sha256
@@ -285,6 +288,12 @@ class FakeGoBookState(FakeState):
         return () if len(position.actions) == 60 else tuple(range(82))
 
 
+class PartiallyLegalFakeState(FakeState):
+    @property
+    def action_size(self) -> int:
+        return 5
+
+
 class FakeEngine:
     game_name = 'go'
     rules_digest = '1' * 64
@@ -330,9 +339,63 @@ class TerminalGuardEngine(FakeEngine):
 
 class FixedPolicyModel(torch.nn.Module):
     def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        policy = torch.tensor((0.4, 0.3, 0.2, 0.1), device=inputs.device).expand(inputs.shape[0], 4)
+        policy = torch.log(torch.tensor((0.4, 0.3, 0.2, 0.1), device=inputs.device)).expand(inputs.shape[0], 4)
         value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
         return policy, value
+
+
+class FixedPolicyWithIllegalLogitModel(torch.nn.Module):
+    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        policy = torch.tensor(
+            (log(0.4), log(0.3), log(0.2), log(0.1), 100.0),
+            device=inputs.device,
+        ).expand(inputs.shape[0], 5)
+        value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
+        return policy, value
+
+
+def _build_fake_evaluation_dataset(
+    tmp_path: Path,
+    state: GameStateContract[FakePosition],
+) -> tuple[Path, EvaluationDatasetManifest]:
+    dataset_path = tmp_path / 'evaluation.bin'
+    manifest = build_evaluation_dataset(
+        dataset_path,
+        EvaluationDatasetConfiguration(
+            path=str(dataset_path),
+            source=EngineSelfPlayDatasetSource(kind='engine_self_play', random_seed=7, move_sampling_temperature=1.0),
+        ),
+        state,
+        FakeEngine(),
+        'revision',
+    )
+    return dataset_path, manifest
+
+
+def _fixed_dataset_job(
+    tmp_path: Path,
+    model: torch.nn.Module,
+) -> FixedDatasetEvaluationJob:
+    inference_path = tmp_path / 'inference.pt'
+    torch.jit.trace(model, torch.zeros((1, 1, 8, 8))).save(str(inference_path))
+    return FixedDatasetEvaluationJob(
+        kind='fixed_dataset',
+        job_id='fixed-dataset',
+        definition=FixedDatasetEvaluationDefinition(kind='fixed_dataset', definition_id='fixed-dataset'),
+        boundary_seconds=1200,
+        candidate=CheckpointReference(
+            generation=1,
+            manifest_path=tmp_path / 'checkpoint.json',
+            model_path=tmp_path / 'model.pt',
+            optimizer_path=tmp_path / 'optimizer.pt',
+            inference_model_path=inference_path,
+            inference_model_sha256='0' * 64,
+        ),
+        device_id=0,
+        deadline_seconds=60,
+        random_seed=7,
+        result_path=tmp_path / 'result.json',
+    )
 
 
 def _base_four_actions(value: int, length: int = 5) -> tuple[int, ...]:
@@ -500,6 +563,13 @@ def test_dataset_builder_retains_every_third_position_in_requested_range(tmp_pat
     assert manifest.retained_ply_interval == 3
     assert all(int(row['ply']) % 3 == manifest.retained_ply_offset for row in data)
     assert all(int(row['policy_count']) == 4 for row in data)
+    assert manifest.maximum_legal_actions == 4
+    assert all(int(row['legal_count']) == 4 for row in data)
+    assert all(tuple(int(action_id) for action_id in row['legal_action_ids']) == (0, 1, 2, 3) for row in data)
+    persisted_manifest = EvaluationDatasetManifest.model_validate_json(
+        dataset_manifest_path(path).read_text(encoding='utf-8')
+    )
+    assert persisted_manifest == manifest
     assert build_evaluation_dataset(path, configuration, FakeState(), FakeEngine(), 'revision') == manifest
 
 
@@ -521,42 +591,48 @@ def test_dataset_builder_stops_at_natural_terminal_with_remaining_legal_actions(
 
 
 def test_fixed_dataset_evaluates_raw_policy_metrics(tmp_path: Path) -> None:
-    dataset_path = tmp_path / 'evaluation.bin'
-    manifest = build_evaluation_dataset(
-        dataset_path,
-        EvaluationDatasetConfiguration(
-            path=str(dataset_path),
-            source=EngineSelfPlayDatasetSource(kind='engine_self_play', random_seed=7, move_sampling_temperature=1.0),
-        ),
-        FakeState(),
-        FakeEngine(),
-        'revision',
-    )
-    inference_path = tmp_path / 'inference.pt'
-    traced = torch.jit.trace(FixedPolicyModel(), torch.zeros((1, 1, 8, 8)))
-    traced.save(str(inference_path))
-    checkpoint = CheckpointReference(
-        generation=1,
-        manifest_path=tmp_path / 'checkpoint.json',
-        model_path=tmp_path / 'model.pt',
-        optimizer_path=tmp_path / 'optimizer.pt',
-        inference_model_path=inference_path,
-        inference_model_sha256='0' * 64,
-    )
-    job = FixedDatasetEvaluationJob(
-        kind='fixed_dataset',
-        job_id='fixed-dataset',
-        definition=FixedDatasetEvaluationDefinition(kind='fixed_dataset', definition_id='fixed-dataset'),
-        boundary_seconds=1200,
-        candidate=checkpoint,
-        device_id=0,
-        deadline_seconds=60,
-        random_seed=7,
-        result_path=tmp_path / 'result.json',
-    )
+    state = FakeState()
+    dataset_path, manifest = _build_fake_evaluation_dataset(tmp_path, state)
+    job = _fixed_dataset_job(tmp_path, FixedPolicyModel())
 
-    result = evaluate_fixed_dataset(job, FakeState(), dataset_path, 'cpu')
+    result = evaluate_fixed_dataset(job, state, dataset_path, 'cpu')
 
     assert result.position_count == manifest.position_count
     assert result.top_action_accuracy == 1.0
     assert result.policy_cross_entropy == pytest.approx(-sum(log(value) for value in (0.4, 0.3, 0.2, 0.1)) / 4)
+
+
+def test_fixed_dataset_excludes_illegal_logits_from_policy_metrics(tmp_path: Path) -> None:
+    state = PartiallyLegalFakeState()
+    dataset_path, manifest = _build_fake_evaluation_dataset(tmp_path, state)
+    job = _fixed_dataset_job(tmp_path, FixedPolicyWithIllegalLogitModel())
+
+    result = evaluate_fixed_dataset(job, state, dataset_path, 'cpu')
+
+    assert result.position_count == manifest.position_count
+    assert result.top_action_accuracy == 1.0
+    assert result.policy_cross_entropy == pytest.approx(-sum(log(value) for value in (0.4, 0.3, 0.2, 0.1)) / 4)
+
+
+def test_fixed_dataset_rejects_policy_targets_outside_stored_legal_set(tmp_path: Path) -> None:
+    state = PartiallyLegalFakeState()
+    dataset_path, manifest = _build_fake_evaluation_dataset(tmp_path, state)
+    data = load_evaluation_dataset(dataset_path, manifest)
+    data_dtype = data.dtype
+    data_shape = data.shape
+    del data
+    writable = np.memmap(dataset_path, mode='r+', dtype=data_dtype, shape=data_shape)
+    writable[0]['action_ids'][0] = 4
+    writable.flush()
+    del writable
+    updated_manifest = manifest.model_copy(
+        update={'data_sha256': hashlib.sha256(dataset_path.read_bytes()).hexdigest()}
+    )
+    dataset_manifest_path(dataset_path).write_text(
+        updated_manifest.model_dump_json(indent=2) + '\n',
+        encoding='utf-8',
+    )
+    job = _fixed_dataset_job(tmp_path, FixedPolicyWithIllegalLogitModel())
+
+    with pytest.raises(ValueError, match='outside its legal set'):
+        evaluate_fixed_dataset(job, state, dataset_path, 'cpu')

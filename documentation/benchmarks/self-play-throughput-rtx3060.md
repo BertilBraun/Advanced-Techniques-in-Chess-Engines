@@ -214,7 +214,7 @@ BENCHMARK_GENERATION=20 \
 PYTHON_BINARY=/workspace/alphazero-engine-venv/bin/python \
 bash py/tools/run_self_play_search_benchmark.sh \
   /workspace/r11-benchmark-models/go7.jit.pt \
-  py/configs/go-7x7-experiment-template.yaml
+  py/configs/baselines/vast-go-7x7-2gpu-4h.yaml
 ```
 
 Raw Go manifests, worker reports, batch histograms, and CPU/GPU telemetry are retained outside Git in

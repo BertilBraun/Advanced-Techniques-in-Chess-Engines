@@ -20,7 +20,7 @@ from src.experiment_queue.validation import ValidatedQueuedExperiment
 from src.experiment_queue.workspace import ExperimentWorkspaceManager
 
 
-TEMPLATE = Path(__file__).parents[1] / 'configs' / 'go-7x7-experiment-template.yaml'
+TEMPLATE = Path(__file__).parent / 'configs' / 'go-7x7-experiment.yaml'
 WORKTREE_CHILD = Path(__file__).parents[1] / 'src' / 'experiment_queue' / 'worktree_child.py'
 
 

@@ -99,13 +99,13 @@ The node must initially provide `git`, `cmake`, Python with `venv`, `curl`, `tar
 export ENGINE_REPOSITORY_REF=reviewed-branch-or-tag
 bash deployment/setup_remote.sh \
   python py/train.py \
-  --run-config py/configs/go-7x7-experiment-template.yaml \
+  --run-config py/configs/baselines/vast-go-7x7-2gpu-4h.yaml \
   --expected-source-revision EXPECTED_FULL_COMMIT \
   --approval-file /absolute/path/to/approval.json
 ```
 
-Production configuration and approval files remain explicit inputs. The templates still describe unconfirmed local
-hardware and CPU training; they must be copied, reviewed, and updated for the rented offer before approval.
+Production configuration and approval files remain explicit inputs. Retained baseline configurations describe a
+specific rented offer and must be copied, reviewed, and updated for the new offer before approval.
 `setup_remote.sh` also prepends the NVIDIA libraries installed by the locked PyTorch wheel to `LD_LIBRARY_PATH`.
 This supplies the CUDA 12 libraries needed by the selected KataGo binary even when the host image provides a newer
 toolkit; the host-injected NVIDIA driver remains untouched. The CUDA/cuDNN versions reported by the driver, host

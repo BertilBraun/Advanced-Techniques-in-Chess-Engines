@@ -11,6 +11,7 @@ from torch.nn import functional
 
 from src.games.representation import NetworkDimensions
 from src.training.batch import TrainingModelOutput
+from src.training.targets import AuxiliaryHeadLayout, NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 from src.util.frozen_model import FrozenModel
 from src.util.log import log
 
@@ -45,8 +46,22 @@ ResidualContextConfiguration: TypeAlias = Annotated[
 ]
 
 
+class Chess76PlaneDirectPolicyHeadConfiguration(FrozenModel):
+    kind: Literal['chess_76_plane_direct_v2'] = 'chess_76_plane_direct_v2'
+
+
+class GoPointPassPolicyHeadConfiguration(FrozenModel):
+    kind: Literal['go_point_pass_v1'] = 'go_point_pass_v1'
+
+
+PolicyHeadConfiguration: TypeAlias = Annotated[
+    Chess76PlaneDirectPolicyHeadConfiguration | GoPointPassPolicyHeadConfiguration,
+    Field(discriminator='kind'),
+]
+
+
 class NetworkHeadParams(FrozenModel):
-    num_policy_channels: int = Field(default=4, gt=0)
+    policy_head: PolicyHeadConfiguration
     num_value_channels: int = Field(default=2, gt=0)
     value_fc_size: int = Field(default=48, gt=0)
 
@@ -101,7 +116,7 @@ NetworkConfiguration: TypeAlias = Annotated[
 class NetworkDefinition(FrozenModel):
     architecture: NetworkConfiguration
     dimensions: NetworkDimensions
-    auxiliary_output_sizes: tuple[int, ...]
+    auxiliary_heads: tuple[AuxiliaryHeadLayout, ...]
 
 
 class Network(nn.Module):
@@ -112,14 +127,14 @@ class Network(nn.Module):
         args: NetworkConfiguration,
         device: torch.device,
         dimensions: NetworkDimensions,
-        auxiliary_output_sizes: tuple[int, ...] = (),
+        auxiliary_heads: tuple[AuxiliaryHeadLayout, ...] = (),
     ) -> None:
         super().__init__()
 
         self.device = device
         self.network_args = args
         self.dimensions = dimensions
-        self.auxiliary_output_sizes = auxiliary_output_sizes
+        self.auxiliary_heads = auxiliary_heads
 
         encoding_channels = dimensions.channels
         row_count = dimensions.rows
@@ -162,12 +177,12 @@ class Network(nn.Module):
                 )
                 self.finishBlock = AttentionOutput(row_count, column_count)
 
-        self.policyHead = nn.Sequential(
-            nn.Conv2d(hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(args.num_policy_channels),
-            nn.ReLU(inplace=True),
-            nn.Flatten(),
-            nn.Linear(args.num_policy_channels * row_count * column_count, action_size),
+        self.policyHead = _build_policy_head(
+            hidden_size,
+            row_count,
+            column_count,
+            action_size,
+            args.policy_head,
         )
 
         self.valueHead = nn.Sequential(
@@ -180,16 +195,15 @@ class Network(nn.Module):
             nn.Linear(args.value_fc_size, dimensions.outcomes),
         )
         self.auxiliaryHeads = nn.ModuleList(
-            (
-                nn.Sequential(
-                    nn.Conv2d(hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
-                    nn.BatchNorm2d(args.num_policy_channels),
-                    nn.ReLU(inplace=True),
-                    nn.Flatten(),
-                    nn.Linear(args.num_policy_channels * row_count * column_count, auxiliary_output_size),
-                )
-                for auxiliary_output_size in auxiliary_output_sizes
+            _build_auxiliary_head(
+                hidden_size,
+                row_count,
+                column_count,
+                action_size,
+                args.policy_head,
+                auxiliary_head,
             )
+            for auxiliary_head in auxiliary_heads
         )
 
         # init weights
@@ -207,7 +221,7 @@ class Network(nn.Module):
         return NetworkDefinition(
             architecture=self.network_args,
             dimensions=self.dimensions,
-            auxiliary_output_sizes=self.auxiliary_output_sizes,
+            auxiliary_heads=self.auxiliary_heads,
         )
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
@@ -215,9 +229,8 @@ class Network(nn.Module):
         policy_logits = self.policyHead(x)
         value_logits = self.valueHead(x)
 
-        policy = torch.softmax(policy_logits, dim=1)
         value = torch.softmax(value_logits, dim=1)
-        return policy, value
+        return policy_logits, value
 
     def _features(self, x: Tensor) -> Tensor:
         x = self.startBlock(x)
@@ -264,6 +277,69 @@ class Network(nn.Module):
         log(
             f'Total number of trainable parameters: {sum_of_trainable_params} ({sum_of_trainable_params / sum_of_params * 100:.2f}%)'
         )
+
+
+class GoPointPassPolicyHead(nn.Module):
+    def __init__(self, input_channels: int) -> None:
+        super().__init__()
+        self.point_projection = nn.Conv2d(input_channels, 1, kernel_size=1, bias=True)
+        self.pass_projection = nn.Linear(input_channels, 1)
+
+    def forward(self, features: Tensor) -> Tensor:
+        point_logits = self.point_projection(features).flatten(start_dim=1)
+        pooled_features = torch.mean(features, dim=(2, 3))
+        pass_logit = self.pass_projection(pooled_features)
+        return torch.cat((point_logits, pass_logit), dim=1)
+
+
+def _build_policy_head(
+    input_channels: int,
+    row_count: int,
+    column_count: int,
+    action_size: int,
+    configuration: PolicyHeadConfiguration,
+) -> nn.Module:
+    match configuration:
+        case Chess76PlaneDirectPolicyHeadConfiguration():
+            if row_count != 8 or column_count != 8 or action_size != 76 * 64:
+                raise ValueError('Chess direct policy heads require an 8x8 board and 4,864 actions.')
+            return nn.Sequential(
+                nn.Conv2d(input_channels, 76, kernel_size=1, bias=True),
+                nn.Flatten(),
+            )
+        case GoPointPassPolicyHeadConfiguration():
+            if action_size != row_count * column_count + 1:
+                raise ValueError('Go point-pass policy heads require one action per point plus pass.')
+            return GoPointPassPolicyHead(input_channels)
+
+
+def _build_auxiliary_head(
+    input_channels: int,
+    row_count: int,
+    column_count: int,
+    action_size: int,
+    policy_configuration: PolicyHeadConfiguration,
+    layout: AuxiliaryHeadLayout,
+) -> nn.Module:
+    match layout:
+        case NextPolicyHeadLayout(action_size=next_policy_action_size):
+            if next_policy_action_size != action_size:
+                raise ValueError('Next-policy action space must match the primary policy action space.')
+            return _build_policy_head(
+                input_channels,
+                row_count,
+                column_count,
+                action_size,
+                policy_configuration,
+            )
+        case RemainingGameLengthHeadLayout(output_size=output_size):
+            return nn.Sequential(
+                nn.Conv2d(input_channels, 1, kernel_size=1, bias=False),
+                nn.BatchNorm2d(1),
+                nn.ReLU(inplace=True),
+                nn.Flatten(),
+                nn.Linear(row_count * column_count, output_size),
+            )
 
 
 class ResBlock(nn.Module):

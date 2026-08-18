@@ -1,0 +1,142 @@
+{
+  "schema_version": 2,
+  "source_revision": {
+    "commit": "401463904bad682667c3d267db5ad7ec8baf37f6",
+    "dirty": false
+  },
+  "configuration_path": "/workspace/codex-direct-policy-validation-d1fb7283/py/configs/production/vast-chess-8gpu-optimal.yaml",
+  "configuration_sha256": "b0e870dc4aee5a4a5c6a3a1dcbf4fd56fa7a5ce75df541dae8935e5c4a971bf2",
+  "policy_semantics": "chess_76_plane_direct_v2_logits",
+  "hardware": {
+    "gpu_id": 0,
+    "device_name": "NVIDIA GeForce RTX 4070 SUPER",
+    "compute_capability": [
+      8,
+      9
+    ],
+    "torch_version": "2.12.1+cu126",
+    "cuda_version": "12.6"
+  },
+  "attention_backend": "memory_efficient",
+  "batch_sizes": [
+    64
+  ],
+  "execution_modes": [
+    "scripted"
+  ],
+  "warmup_iterations": 20,
+  "target_duration_seconds": 5.0,
+  "includes_diagnostic_controls": false,
+  "models": [
+    {
+      "model_id": "chess-attention-500k",
+      "training_start_days": 0.0,
+      "network": {
+        "policy_head": {
+          "kind": "chess_76_plane_direct_v2"
+        },
+        "num_value_channels": 2,
+        "value_fc_size": 48,
+        "kind": "attention",
+        "num_layers": 6,
+        "embedding_size": 96,
+        "num_heads": 3,
+        "feedforward_size": 192,
+        "dropout": 0.0
+      },
+      "parameters": {
+        "backbone": 453312,
+        "primary_policy_head": 7372,
+        "value_head": 6535,
+        "auxiliary_heads": 7535,
+        "inference_total": 467219,
+        "training_total": 474754
+      }
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "training_start_days": 0.75,
+      "network": {
+        "policy_head": {
+          "kind": "chess_76_plane_direct_v2"
+        },
+        "num_value_channels": 2,
+        "value_fc_size": 48,
+        "kind": "attention",
+        "num_layers": 10,
+        "embedding_size": 160,
+        "num_heads": 5,
+        "feedforward_size": 320,
+        "dropout": 0.0
+      },
+      "parameters": {
+        "backbone": 2073280,
+        "primary_policy_head": 12236,
+        "value_head": 6663,
+        "auxiliary_heads": 12463,
+        "inference_total": 2092179,
+        "training_total": 2104642
+      }
+    },
+    {
+      "model_id": "chess-attention-4m5",
+      "training_start_days": 2.0,
+      "network": {
+        "policy_head": {
+          "kind": "chess_76_plane_direct_v2"
+        },
+        "num_value_channels": 2,
+        "value_fc_size": 48,
+        "kind": "attention",
+        "num_layers": 15,
+        "embedding_size": 192,
+        "num_heads": 6,
+        "feedforward_size": 384,
+        "dropout": 0.0
+      },
+      "parameters": {
+        "backbone": 4464576,
+        "primary_policy_head": 14668,
+        "value_head": 6727,
+        "auxiliary_heads": 14927,
+        "inference_total": 4485971,
+        "training_total": 4500898
+      }
+    }
+  ],
+  "measurements": [
+    {
+      "model_id": "chess-attention-500k",
+      "execution_mode": "scripted",
+      "batch_size": 64,
+      "measured_iterations": 4193,
+      "elapsed_seconds": 4.992910125001799,
+      "mean_batch_seconds": 0.0011907727462441688,
+      "positions_per_second": 53746.611351211395,
+      "peak_allocated_bytes": 13642240,
+      "peak_reserved_bytes": 25165824
+    },
+    {
+      "model_id": "chess-attention-2m",
+      "execution_mode": "scripted",
+      "batch_size": 64,
+      "measured_iterations": 2873,
+      "elapsed_seconds": 5.009282652987167,
+      "mean_batch_seconds": 0.0017435721033717952,
+      "positions_per_second": 36706.2537168575,
+      "peak_allocated_bytes": 19514880,
+      "peak_reserved_bytes": 31457280
+    },
+    {
+      "model_id": "chess-attention-4m5",
+      "execution_mode": "scripted",
+      "batch_size": 64,
+      "measured_iterations": 2030,
+      "elapsed_seconds": 4.972660446946975,
+      "mean_batch_seconds": 0.0024495864270674753,
+      "positions_per_second": 26126.859331359727,
+      "peak_allocated_bytes": 29821440,
+      "peak_reserved_bytes": 44040192
+    }
+  ]
+}

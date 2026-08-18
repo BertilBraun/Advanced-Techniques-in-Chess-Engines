@@ -16,8 +16,8 @@ from src.replay.contracts import EligibleRemainingGameLengthTarget, ReplaySample
 @pytest.mark.parametrize(
     ('path', 'expected_action_size'),
     (
-        (Path('configs/go-7x7-experiment-template.yaml'), 50),
-        (Path('configs/go-9x9-experiment-template.yaml'), 82),
+        (Path('test/configs/go-7x7-experiment.yaml'), 50),
+        (Path('test/configs/go-9x9-experiment.yaml'), 82),
     ),
 )
 def test_go_root_implementation_owns_action_id_state_and_fixed_target_layout(
@@ -36,14 +36,17 @@ def test_go_root_implementation_owns_action_id_state_and_fixed_target_layout(
 
 
 def test_go_symmetry_leaves_remaining_game_length_unchanged() -> None:
-    configuration = load_experiment_configuration(Path('configs/go-7x7-experiment-template.yaml'))
+    configuration = load_experiment_configuration(Path('test/configs/go-7x7-experiment.yaml'))
     assert isinstance(configuration, GoExperimentConfiguration)
     state = GoImplementation(configuration).state
     position = state.initial_position()
     action_id = state.legal_action_ids(position)[0]
     sample = ReplaySample(
         encoded_state=state.encode_network_input(position),
-        policy=SparsePolicyTarget(visits=(GameSearchVisit(action_id=action_id, visit_count=1),)),
+        policy=SparsePolicyTarget(
+            visits=(GameSearchVisit(action_id=action_id, visit_count=1),),
+            legal_action_ids=state.legal_action_ids(position),
+        ),
         wdl_target=WdlTarget(win=0.0, draw=1.0, loss=0.0),
         root_value=0.0,
         auxiliary_targets=(EligibleRemainingGameLengthTarget(normalized_length=0.5),),

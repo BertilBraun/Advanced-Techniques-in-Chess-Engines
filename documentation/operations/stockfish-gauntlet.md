@@ -26,7 +26,7 @@ Build its native opening manifest in a prepared revision:
 
 ```text
 python -m tools.build_chess_opening_manifest \
-  --experiment configs/production/vast-chess-8gpu-1d-r4.yaml \
+  --experiment configs/production/vast-chess-8gpu-optimal.yaml \
   --selection reference/chess-elite-2025-11-balanced-4moves-200-v1.tsv \
   --stockfish-executable /workspace/alphazero-engine/engines/stockfish \
   --output /workspace/evaluation-artifacts/chess/chess-elite-2025-11-balanced-4moves-200-v1.json
@@ -47,8 +47,8 @@ Example for a 64-search candidate:
 
 ```text
 python -m tools.run_stockfish_ladder \
-  --experiment configs/production/vast-chess-8gpu-1d-r4.yaml \
-  --run-directory /workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-1d-r4 \
+  --experiment configs/production/vast-chess-8gpu-optimal.yaml \
+  --run-directory /workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-optimal \
   --checkpoint-generation FINAL_GENERATION \
   --opening-manifest /workspace/evaluation-artifacts/chess/chess-elite-2025-11-balanced-4moves-200-v1.json \
   --stockfish-executable /workspace/evaluation-engines/stockfish-13-source/src/stockfish \
@@ -72,8 +72,8 @@ After choosing the opponent rung, run all 200 pairs through the gauntlet:
 
 ```text
 python -m tools.run_stockfish_gauntlet \
-  --experiment configs/production/vast-chess-8gpu-1d-r4.yaml \
-  --run-directory /workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-1d-r4 \
+  --experiment configs/production/vast-chess-8gpu-optimal.yaml \
+  --run-directory /workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-optimal \
   --checkpoint-generation FINAL_GENERATION \
   --opening-manifest /workspace/evaluation-artifacts/chess/chess-elite-2025-11-balanced-4moves-200-v1.json \
   --stockfish-executable /workspace/evaluation-engines/stockfish-13-source/src/stockfish \
@@ -110,8 +110,8 @@ while distributing the 50 pairs over all eight GPUs:
 
 ```text
 python -m tools.run_stockfish_gauntlet \
-  --experiment configs/production/vast-chess-8gpu-1d-r4.yaml \
-  --run-directory /workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-1d-r4 \
+  --experiment configs/production/vast-chess-8gpu-optimal.yaml \
+  --run-directory /workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-optimal \
   --checkpoint-generation FINAL_GENERATION \
   --opening-manifest /workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-openings-v1.json \
   --stockfish-executable /workspace/evaluation-engines/stockfish-13-source/src/stockfish \
@@ -132,8 +132,8 @@ Stop training and every other CUDA process before a timed run. The one-second co
 
 ```text
 python -m tools.run_stockfish_gauntlet \
-  --experiment configs/production/vast-chess-8gpu-1d-r4.yaml \
-  --run-directory /workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-1d-r4 \
+  --experiment configs/production/vast-chess-8gpu-optimal.yaml \
+  --run-directory /workspace/chess-experiment-artifacts/py/training_data/production/vast-chess-8gpu-optimal \
   --checkpoint-generation FINAL_GENERATION \
   --opening-manifest /workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-openings-v1.json \
   --stockfish-executable /workspace/evaluation-engines/stockfish-13-source/src/stockfish \
