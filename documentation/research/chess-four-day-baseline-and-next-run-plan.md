@@ -46,6 +46,24 @@ openings and reversed colors. Report WDL, score, paired confidence interval, des
 approximate calibrated Elo. The calibration uncertainty and dependence on hardware, openings, and time control must
 remain explicit.
 
+### Observed baseline results
+
+The completed exploratory sweeps used eight calibrated Stockfish 13 rungs with 10 games per rung. Brackets below are
+match-sampling intervals from the descriptive ladder fit; they exclude uncertainty in the approximate Stockfish-to-Elo
+calibration. The day-four confirmations used 200 games at the selected rung rather than the planned 400. Policy-only
+and 50-millisecond modes were omitted by decision.
+
+| Candidate mode | Day-three ladder Elo | Day-four ladder Elo | Day-four 200-game confirmation |
+| --- | ---: | ---: | --- |
+| 64 searches | 1,949 [1,843, 2,027] | 1,915 [1,868, 2,005] | vs. 1,900: 95-41-64, 57.75% [51.75%, 63.50%]; approximately 1,954 Elo [1,912, 1,996] |
+| 1,000 searches | 2,522 [2,400, 2,646] | 2,461 [2,390, 2,543] | vs. 2,500: 72-87-41, 57.75% [52.75%, 62.75%]; approximately 2,554 Elo [2,519, 2,591] |
+| 10,000 searches | 2,806 [2,709, 2,908] | 2,720 [2,636, 2,817] | vs. 2,700: 96-75-29, 66.75% [61.50%, 72.00%]; approximately 2,821 Elo [2,781, 2,864] |
+| 1 second | 2,584 [2,512, 2,646] | 2,678 [2,636, 2,709] | vs. 2,700: 44-109-47, 49.25% [44.25%, 54.25%]; approximately 2,695 Elo [2,660, 2,730] |
+| 5 seconds | 2,688 [2,564, 2,806] | 2,763 [2,657, 2,862] | Unavailable; the compute node was lost before a completed result was preserved. |
+
+The confirmation intervals likewise describe paired match sampling only. Timed results are specific to the evaluated
+hardware and search implementation; neither table column should be read as a calibration-uncertainty interval.
+
 The final-model evaluation must not reuse the generation-445 result as its strength estimate, although that result
 can serve as a historical comparison. Timed modes must run on an otherwise idle GPU allocation and record actual
 latency, inference batch behavior, and achieved simulations per move.
