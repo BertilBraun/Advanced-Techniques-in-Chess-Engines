@@ -9,6 +9,7 @@ from typing import Literal
 
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
+    ChessPosition,
     ChessSelfPlaySearch,
     ChessSelfPlaySearchRequest,
     ChessSelfPlaySearchResult,
@@ -195,7 +196,7 @@ def collect_audits(arguments: Arguments) -> tuple[tuple[PositionAudit, ...], flo
         _fixed_parameters(game, arguments.generation, budgets[0]),
         BatchedInferenceParameters(1, arguments.batch_size, 1),
     )
-    roots = [search.new_root(fen) for fen in openings]
+    roots = [search.new_root(ChessPosition(fen)) for fen in openings]
     snapshots: list[list[SearchSnapshot]] = [[] for _ in roots]
     started = time.perf_counter()
     for budget in budgets:
@@ -223,7 +224,7 @@ def run_live_canary(arguments: Arguments) -> LiveCanaryMetrics:
         game.native_search_parameters(game.self_play_parameters_at(arguments.generation)),
         BatchedInferenceParameters(1, arguments.batch_size, 1),
     )
-    roots = [search.new_root(fen) for fen in openings]
+    roots = [search.new_root(ChessPosition(fen)) for fen in openings]
     started = time.perf_counter()
     batch = search.search([ChessSelfPlaySearchRequest(root, True) for root in roots])
     elapsed = time.perf_counter() - started
