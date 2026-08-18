@@ -3,7 +3,7 @@ import torch
 
 from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.distributions import RemainingGameLengthTrainingDistribution, capture_training_distributions
-from src.training.objective import ResolvedRemainingGameLengthLoss, ResolvedTrainingObjective
+from src.training.objective import mask_policy_logits, ResolvedRemainingGameLengthLoss, ResolvedTrainingObjective
 
 
 def test_training_distributions_capture_targets_predictions_losses_and_replay_age() -> None:
@@ -116,3 +116,16 @@ def test_training_distribution_capture_promotes_mixed_precision_predictions() ->
 
     assert distributions.predicted_value == pytest.approx((0.0,))
     assert distributions.policy.prediction_entropy == pytest.approx((0.693147,), rel=1e-5)
+
+
+def test_masked_dense_policy_loss_remains_finite() -> None:
+    logits = torch.tensor(((1.0, 2.0, 100.0),), requires_grad=True)
+    targets = torch.tensor(((0.5, 0.5, 0.0),))
+    masked = mask_policy_logits(logits, torch.tensor(((0, 1),)))
+
+    loss = torch.nn.functional.cross_entropy(masked, targets)
+    loss.backward()
+
+    assert torch.isfinite(loss)
+    assert logits.grad is not None
+    assert logits.grad[0, 2] == 0.0

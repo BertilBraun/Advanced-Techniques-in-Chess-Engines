@@ -40,7 +40,7 @@ def mask_policy_logits(logits: torch.Tensor, legal_action_ids: torch.Tensor) -> 
         raise ValueError('Every policy row requires at least one legal action.')
     legal_mask = torch.zeros_like(logits, dtype=torch.bool)
     legal_mask.scatter_(1, legal_action_ids.clamp_min(0), legal_entries)
-    return logits.masked_fill(~legal_mask, -torch.inf)
+    return logits.masked_fill(~legal_mask, torch.finfo(logits.dtype).min)
 
 
 @dataclass(frozen=True)
