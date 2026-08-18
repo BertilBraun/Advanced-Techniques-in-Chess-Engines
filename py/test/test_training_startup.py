@@ -6,7 +6,6 @@ from src.experiment import training_startup
 from src.experiment.configuration import ExperimentConfiguration
 from src.experiment.run_contract import load_approval_record
 
-
 CHESS_EXPERIMENT_PATH = Path(__file__).parent / 'configs' / 'chess-experiment.yaml'
 
 
