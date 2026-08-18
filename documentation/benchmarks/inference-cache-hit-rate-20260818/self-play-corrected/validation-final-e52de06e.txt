@@ -1,0 +1,10 @@
+Downloading ruff (10.5MiB)
+ Downloaded ruff
+Installed 1 package in 49ms
+2 files already formatted
+Downloading ruff (10.5MiB)
+ Downloaded ruff
+Installed 1 package in 37ms
+All checks passed!
+...                                                                      [100%]
+3 passed in 0.49s
