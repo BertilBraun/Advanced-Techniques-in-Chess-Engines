@@ -376,6 +376,17 @@ private:
         bool stable = task.checkpoints.size() >= historyCount;
         const int leaderAction =
             Game::Encoding::actionId(rootNode.children[leader].action, rootNode.position);
+        std::vector<GameSearchVisit> checkpointVisits;
+        checkpointVisits.reserve(policyVisits.size());
+        for (const auto index : range(policyVisits.size())) {
+            if (policyVisits[index] > 0) {
+                checkpointVisits.push_back({
+                    .action_id = Game::Encoding::actionId(
+                        rootNode.children[index].action, rootNode.position),
+                    .visit_count = policyVisits[index],
+                });
+            }
+        }
         if (stable) {
             for (const SearchCheckpoint &previous :
                  std::span(task.checkpoints).last(historyCount)) {
@@ -388,6 +399,7 @@ private:
         return {
             .visits = task.root.visits(),
             .leader_action_id = leaderAction,
+            .policy_target_visits = std::move(checkpointVisits),
             .top_visit_share = topShare,
             .top_two_margin = topShare - secondShare,
             .root_value = rootValue,

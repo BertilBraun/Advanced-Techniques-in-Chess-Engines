@@ -28,6 +28,7 @@ enum class SearchStopReason { FixedLimit, Deterministic, LearnedGate, Maximum };
 struct SearchCheckpoint {
     std::uint32_t visits;
     int leader_action_id;
+    std::vector<GameSearchVisit> policy_target_visits;
     float top_visit_share;
     float top_two_margin;
     float root_value;

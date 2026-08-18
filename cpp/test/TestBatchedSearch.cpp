@@ -348,6 +348,8 @@ int runBatchedSearchTests() {
         require(deterministicResults.results[0].stop_reason == SearchStopReason::Deterministic &&
                     deterministicResults.results[0].final_visits == 4,
                 "deterministic adaptive search did not stop at its first eligible checkpoint");
+        require(!deterministicResults.results[0].checkpoints[0].policy_target_visits.empty(),
+                "adaptive checkpoint omitted its policy snapshot");
 
         const AdaptiveSearchLimit learnedLimit(
             4, 12, 2, 2, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 8,

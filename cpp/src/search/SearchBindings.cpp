@@ -115,6 +115,7 @@ void bind_search(py::module_ &module) {
     py::class_<SearchCheckpoint>(module, "SearchCheckpoint")
         .def_readonly("visits", &SearchCheckpoint::visits)
         .def_readonly("leader_action_id", &SearchCheckpoint::leader_action_id)
+        .def_readonly("policy_target_visits", &SearchCheckpoint::policy_target_visits)
         .def_readonly("top_visit_share", &SearchCheckpoint::top_visit_share)
         .def_readonly("top_two_margin", &SearchCheckpoint::top_two_margin)
         .def_readonly("root_value", &SearchCheckpoint::root_value)

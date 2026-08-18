@@ -95,6 +95,7 @@ class SearchStopReason:
 class SearchCheckpoint:
     visits: int
     leader_action_id: int
+    policy_target_visits: list[GameSearchVisit]
     top_visit_share: float
     top_two_margin: float
     root_value: float

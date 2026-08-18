@@ -12,9 +12,8 @@ from AlphaZeroCpp import (
     ChessPosition,
     ChessSelfPlaySearch,
     ChessSelfPlaySearchRequest,
-    ChessSelfPlaySearchResult,
     InferenceConfiguration,
-    SelfPlaySearchParameters,
+    SearchCheckpoint,
 )
 from pydantic import Field
 from src.experiment.configuration import load_chess_experiment_configuration
@@ -147,29 +146,16 @@ def _load_openings(path: Path, count: int) -> tuple[str, ...]:
     return openings[:count]
 
 
-def _fixed_parameters(
-    game: ChessImplementation,
-    generation: int,
-    visits: int,
-) -> SelfPlaySearchParameters:
-    parameters = replace(
-        game.self_play_parameters_at(generation),
-        full_search_budget=FixedFullSearchBudget(kind='fixed', visits=visits),
-        fast_searches=visits,
-    )
-    return game.native_search_parameters(parameters)
-
-
-def _snapshot(result: ChessSelfPlaySearchResult) -> SearchSnapshot:
-    policy_visits = result.policy_target_visits
+def _snapshot(checkpoint: SearchCheckpoint, predicted_search_correction: float) -> SearchSnapshot:
+    policy_visits = checkpoint.policy_target_visits
     total = sum(visit.visit_count for visit in policy_visits)
     leader = max(policy_visits, key=lambda visit: (visit.visit_count, -visit.action_id))
     return SearchSnapshot(
-        visits=result.final_visits,
-        selected_action_id=result.highest_visited_child_action_id,
+        visits=checkpoint.visits,
+        selected_action_id=checkpoint.leader_action_id,
         policy_leader_action_id=leader.action_id,
-        root_value=result.root_value,
-        predicted_search_correction=result.predicted_search_correction,
+        root_value=checkpoint.root_value,
+        predicted_search_correction=predicted_search_correction,
         policy=tuple(
             PolicyEntry(action_id=visit.action_id, probability=visit.visit_count / total) for visit in policy_visits
         ),
@@ -187,31 +173,42 @@ def collect_audits(arguments: Arguments) -> tuple[tuple[PositionAudit, ...], flo
             raise ValueError('Calibration requires an adaptive full-search configuration.')
     if arguments.reference_visits < adaptive.maximum_visits:
         raise ValueError('Reference visits must cover the configured adaptive maximum.')
-    budgets = tuple(range(adaptive.minimum_visits, arguments.reference_visits + 1, adaptive.observation_interval))
-    if budgets[-1] != arguments.reference_visits:
+    if (arguments.reference_visits - adaptive.minimum_visits) % adaptive.observation_interval:
         raise ValueError('Reference visits must align with the adaptive observation interval.')
+    audit_budget = replace(
+        adaptive,
+        maximum_visits=arguments.reference_visits,
+        leader_stability_window=arguments.reference_visits + adaptive.observation_interval,
+        root_value_tolerance=0.0,
+        initial_top_visit_share=1.0,
+        final_top_visit_share=1.0,
+        initial_top_two_margin=1.0,
+        final_top_two_margin=1.0,
+        minimum_search_correction_to_unlock_tail=None,
+    )
+    audit_parameters = replace(parameters, full_search_budget=audit_budget, fast_searches=arguments.reference_visits)
     openings = _load_openings(arguments.openings, arguments.positions)
     search = ChessSelfPlaySearch(
         InferenceConfiguration(arguments.device, str(arguments.model)),
-        _fixed_parameters(game, arguments.generation, arguments.reference_visits),
+        game.native_search_parameters(audit_parameters),
         BatchedInferenceParameters(1, arguments.batch_size, 1),
     )
     roots = [search.new_root(ChessPosition(fen)) for fen in openings]
-    snapshots: list[list[SearchSnapshot]] = [[] for _ in roots]
     started = time.perf_counter()
-    for budget in budgets:
-        search.update_search_schedule(_fixed_parameters(game, arguments.generation, budget))
-        batch = search.search([ChessSelfPlaySearchRequest(root, True) for root in roots])
-        for position_snapshots, result in zip(snapshots, batch.results, strict=True):
-            position_snapshots.append(_snapshot(result))
+    batch = search.search([ChessSelfPlaySearchRequest(root, True) for root in roots])
     elapsed = time.perf_counter() - started
     statistics = search.inference_statistics()
     game.close()
     audits = tuple(
-        PositionAudit(fen=fen, snapshots=tuple(position_snapshots))
-        for fen, position_snapshots in zip(openings, snapshots, strict=True)
+        PositionAudit(
+            fen=fen,
+            snapshots=tuple(
+                _snapshot(checkpoint, result.predicted_search_correction) for checkpoint in result.checkpoints
+            ),
+        )
+        for fen, result in zip(openings, batch.results, strict=True)
     )
-    simulations = sum(position_snapshots[-1].visits for position_snapshots in snapshots)
+    simulations = sum(result.final_visits - result.starting_visits for result in batch.results)
     return audits, elapsed, simulations / elapsed, statistics.averageNumberOfPositionsInInferenceCall
 
 
@@ -283,9 +280,9 @@ def _selected_snapshot(
             break
         if _deterministic_stop(audit.snapshots, index, adaptive):
             return snapshot
-        if snapshot.visits == gate_visit and snapshot.predicted_search_correction < threshold:
+        if snapshot.visits >= gate_visit and snapshot.predicted_search_correction < threshold:
             return snapshot
-        if snapshot.visits == maximum_visits:
+        if snapshot.visits >= maximum_visits:
             return snapshot
     raise ValueError(f'Audit omitted required maximum visit snapshot {maximum_visits}.')
 
@@ -310,7 +307,7 @@ def candidate_metrics(
         maximum_visits=maximum_visits,
         minimum_search_correction=threshold,
         mean_visits=sum(snapshot.visits for snapshot in selected) / len(selected),
-        maximum_visits_reached_fraction=sum(snapshot.visits == maximum_visits for snapshot in selected) / len(selected),
+        maximum_visits_reached_fraction=sum(snapshot.visits >= maximum_visits for snapshot in selected) / len(selected),
         selected_move_agreement=sum(
             snapshot.selected_action_id == reference.selected_action_id
             for snapshot, reference in zip(selected, references, strict=True)
