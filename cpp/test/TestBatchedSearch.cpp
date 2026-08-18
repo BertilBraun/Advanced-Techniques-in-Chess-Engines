@@ -340,7 +340,7 @@ int runBatchedSearchTests() {
             4, 12, 2, 2, 1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 8,
             DisabledSearchCorrectionGate{});
         const ChessSelfPlaySearchParameters deterministicParameters(
-            1, deterministicLimit, 1, treeSearchParameters(1.5F), 0.3F, 0.25F);
+            1, deterministicLimit, 1, treeSearchParameters(1.5F), 0.3F, 0.0F);
         ChessSelfPlaySearch deterministicSearch(runtimeParameters, deterministicParameters,
                                                 inferenceParameters);
         const ChessSelfPlaySearchBatch deterministicResults = deterministicSearch.search(
