@@ -106,7 +106,7 @@ def experiment_configuration(
     job_timeout_seconds: float = 10.0,
     shutdown_grace_seconds: float = 0.1,
 ) -> ChessExperimentConfiguration:
-    loaded = load_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    loaded = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
     assert isinstance(loaded, ChessExperimentConfiguration)
     training = loaded.training.model_copy(
         update={

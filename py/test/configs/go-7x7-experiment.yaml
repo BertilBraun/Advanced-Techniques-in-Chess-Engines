@@ -1,7 +1,7 @@
 game: go
 run:
-  run_name: go-9x9-template
-  tensorboard_run_directory: go-9x9-template
+  run_name: go-7x7-template
+  tensorboard_run_directory: go-7x7-template
   stage: clean_retrain
   requires_explicit_approval: true
   resume:
@@ -23,14 +23,14 @@ run:
     dependency_lock_sha256: f027ad99a12742660107a2857b18cbc6b821a95971c2ecf2c4ad814c38116171
     minimum_open_file_soft_limit: 1024
 training:
-  save_path: py/training_data/go-9x9
+  save_path: py/training_data/go-7x7
   network:
-    num_layers: 8
-    hidden_size: 96
+    num_layers: 6
+    hidden_size: 64
     residual_context:
       kind: squeeze_excitation
       placement: every_second_block
-    policy_head: {kind: dense, channels: 2}
+    policy_head: {kind: go_point_pass_v1}
     num_value_channels: 1
     value_fc_size: 32
   trainer:
@@ -65,7 +65,7 @@ training:
         end_value: 2500000
         rounding: nearest
       maximum_capacity: 2500000
-      maximum_policy_entries: 82
+      maximum_policy_entries: 50
     credit:
       replay_ratio: 8
       optimizer_steps_per_quantum: 100
@@ -85,40 +85,24 @@ training:
   random_seed: 0
 evaluation:
   cadence_seconds: 1200
-  job_timeout_seconds: 1800
+  job_timeout_seconds: 1200
   shutdown_grace_seconds: 30
   bootstrap_samples: 10000
   maximum_concurrent_jobs: 10
   dataset:
-    path: py/reference/go-9x9-book-evaluation-v1.bin
+    path: py/reference/go-7x7-evaluation-v1.bin
     source:
-      kind: katago_book
-      position_count: 500
-      selection:
-        export_path: py/reference/go-9x9-katago-book-20260226-v2.json
-        export_sha256: e1f1fe4acb40e830a3f8a3762a6c5ec0b3a7586b3ce2063508f7d2eed436c1ef
-        minimum_ply: 4
-        maximum_ply: 12
-        maximum_absolute_black_score: 7.0
-        maximum_black_win_probability_deviation: 0.5
-        maximum_win_probability_uncertainty: 0.3
-        maximum_score_uncertainty: 6.0
-        minimum_visits: 10000
+      kind: engine_self_play
+      random_seed: 0
+      move_sampling_temperature: 1.0
   openings:
-    path: py/reference/go-9x9-book-openings-v1.json
-    opening_count: 200
+    path: py/reference/go-7x7-openings-v1.json
+    opening_count: 50
     source:
-      kind: katago_book
-      selection:
-        export_path: py/reference/go-9x9-katago-book-20260226-v2.json
-        export_sha256: e1f1fe4acb40e830a3f8a3762a6c5ec0b3a7586b3ce2063508f7d2eed436c1ef
-        minimum_ply: 4
-        maximum_ply: 12
-        maximum_absolute_black_score: 1.0
-        maximum_black_win_probability_deviation: 0.1
-        maximum_win_probability_uncertainty: 0.15
-        maximum_score_uncertainty: 1.5
-        minimum_visits: 10000
+      kind: engine_beam
+      random_seed: 0
+      expanded_actions_per_position: 8
+      beam_width: 512
   engine:
     kind: katago
     executable_path: engines/katago
@@ -131,8 +115,7 @@ evaluation:
     - kind: previous_checkpoint
       definition_id: previous-20m
       boundary_offset: 1
-      opening_pair_count: 100
-      maximum_game_plies: 324
+      maximum_game_plies: 196
       search: &evaluation_search
         searches_per_move: 64
         parallel_searches: 1
@@ -144,27 +127,24 @@ evaluation:
     - kind: previous_checkpoint
       definition_id: previous-40m
       boundary_offset: 2
-      opening_pair_count: 100
-      maximum_game_plies: 324
+      maximum_game_plies: 196
       search: *evaluation_search
     - kind: previous_checkpoint
       definition_id: previous-60m
       boundary_offset: 3
-      opening_pair_count: 100
-      maximum_game_plies: 324
+      maximum_game_plies: 196
       search: *evaluation_search
     - kind: katago
       definition_id: katago-64
       maximum_visits: 64
-      opening_pair_count: 50
-      maximum_game_plies: 324
+      maximum_game_plies: 196
       search: *evaluation_search
 go:
   self_play:
     search:
-      full_searches: 256
-      fast_searches: 64
-      parallel_searches: 1
+      full_searches: 128
+      fast_searches: 32
+      parallel_searches: 2
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
       exploration_constant: 1.5
@@ -181,15 +161,15 @@ go:
       maximum_plies: 0
     full_search_probability: 1.0
     retained_root_visit_fraction: 0.0
-    greedy_after_ply: 60
+    greedy_after_ply: 40
     starting_temperature: 1.0
     final_temperature: 0.1
     primary_sample_weight: 1.0
   rules:
-    komi_half_points: 14
-    maximum_moves: 324
+    komi_half_points: 15
+    maximum_moves: 196
   representation:
-    board_size: 9
+    board_size: 7
     history_length: 8
     binary_channel_count: 16
     scalar_channel_count: 1

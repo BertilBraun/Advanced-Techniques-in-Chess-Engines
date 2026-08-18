@@ -66,6 +66,7 @@ class Coordinator:
             packed_planes=game.state.packed_plane_layout,
             targets=game.target_layout,
             maximum_policy_entries=training.lifecycle.replay.maximum_policy_entries,
+            maximum_legal_actions=game.state.maximum_legal_action_count,
         )
         self.replay_manager = ReplayManager.open(
             run_path,

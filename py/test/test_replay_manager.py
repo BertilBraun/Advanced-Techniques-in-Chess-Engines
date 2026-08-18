@@ -312,11 +312,13 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
         capacity=4,
         maximum_capacity=6,
         maximum_policy_entries=1,
+        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
     )
     layout = ReplayLayout(
         packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
         targets=_target_layout(),
         maximum_policy_entries=1,
+        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
     )
     manager = ReplayManager.open(
         tmp_path,
@@ -367,11 +369,13 @@ def test_replay_manager_keeps_malformed_game_for_inspection(tmp_path: Path) -> N
         capacity=4,
         maximum_capacity=4,
         maximum_policy_entries=1,
+        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
     )
     layout = ReplayLayout(
         packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
         targets=_target_layout(),
         maximum_policy_entries=1,
+        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
     )
     manager = ReplayManager.open(
         tmp_path,
@@ -411,6 +415,7 @@ def test_replay_ingestion_updates_central_resignation_state(tmp_path: Path) -> N
         packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
         targets=_target_layout(),
         maximum_policy_entries=1,
+        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
     )
     resignation_configuration = CalibratedResignationConfiguration(
         first_production_generation=50,

@@ -17,7 +17,7 @@ from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.checkpoint.persistence import create_model, create_optimizer, save_model_and_optimizer
-from src.training.network import DensePolicyHeadConfiguration
+from src.training.network import GoPointPassPolicyHeadConfiguration
 
 
 pytestmark = [
@@ -32,7 +32,7 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
         update={
             'num_layers': 1,
             'hidden_size': 8,
-            'policy_head': DensePolicyHeadConfiguration(channels=2),
+            'policy_head': GoPointPassPolicyHeadConfiguration(),
             'num_value_channels': 2,
             'value_fc_size': 8,
         }
@@ -142,10 +142,10 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
 
 @pytest.mark.parametrize(
     'configuration_name',
-    ('chess-experiment-template.yaml', 'go-7x7-experiment-template.yaml'),
+    ('chess-experiment.yaml', 'go-7x7-experiment.yaml'),
 )
 def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> None:
-    configuration_path = Path(__file__).parents[2] / 'configs' / configuration_name
+    configuration_path = Path(__file__).parents[1] / 'configs' / configuration_name
     configuration = _tiny_configuration(configuration_path, tmp_path)
     game = create_game_implementation(configuration)
     device = torch.device('cpu')
@@ -173,6 +173,7 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
         packed_planes=game.state.packed_plane_layout,
         targets=game.target_layout,
         maximum_policy_entries=configuration.training.lifecycle.replay.maximum_policy_entries,
+        maximum_legal_actions=game.state.maximum_legal_action_count,
     )
     replay_manager = ReplayManager.open(
         tmp_path,

@@ -12,7 +12,7 @@ from src.training.checkpoint.contracts import CheckpointManifest
 from src.training.checkpoint.persistence import publish_checkpoint
 from src.training.network import (
     AttentionNetworkParams,
-    DensePolicyHeadConfiguration,
+    GoPointPassPolicyHeadConfiguration,
     DisabledResidualContext,
     NetworkDefinition,
     NetworkParams,
@@ -34,7 +34,7 @@ def _network(width: int) -> NetworkParams:
         num_layers=2,
         hidden_size=width,
         residual_context=DisabledResidualContext(),
-        policy_head=DensePolicyHeadConfiguration(channels=2),
+        policy_head=GoPointPassPolicyHeadConfiguration(),
         num_value_channels=1,
         value_fc_size=8,
     )
@@ -64,7 +64,7 @@ def test_progressive_model_definition_accepts_attention_architecture() -> None:
             embedding_size=64,
             num_heads=4,
             feedforward_size=128,
-            policy_head=DensePolicyHeadConfiguration(channels=4),
+            policy_head=GoPointPassPolicyHeadConfiguration(),
         ),
     )
 
@@ -92,6 +92,7 @@ def _replay(tmp_path: Path, head: int = 3) -> ReplaySnapshot:
             packed_planes=PackedPlaneLayout(board_size=7, binary_plane_count=2, scalar_count=1),
             targets=TrainingTargetLayout(action_size=50, wdl_size=3, auxiliary_heads=()),
             maximum_policy_entries=50,
+            maximum_legal_actions=50,
         ),
     )
 

@@ -69,7 +69,11 @@ class ChessStateContract(GameStateContract[ChessPosition]):
 
     @property
     def action_size(self) -> int:
-        return 1880
+        return 4864
+
+    @property
+    def maximum_legal_action_count(self) -> int:
+        return 218
 
     @property
     def representation(self) -> RepresentationDimensions:
@@ -148,7 +152,10 @@ class ChessStateContract(GameStateContract[ChessPosition]):
                         visit_count=visit.visit_count,
                     )
                     for visit in policy.visits
-                )
+                ),
+                legal_action_ids=tuple(
+                    self.transform_action_id(action_id, augmentation_index) for action_id in policy.legal_action_ids
+                ),
             )
 
         transformed_auxiliary = []

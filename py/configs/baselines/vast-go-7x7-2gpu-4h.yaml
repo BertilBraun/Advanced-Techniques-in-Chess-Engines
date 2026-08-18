@@ -30,7 +30,7 @@ training:
     residual_context:
       kind: squeeze_excitation
       placement: every_second_block
-    policy_head: {kind: dense, channels: 2}
+    policy_head: {kind: go_point_pass_v1}
     num_value_channels: 1
     value_fc_size: 32
   trainer:

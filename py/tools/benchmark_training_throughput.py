@@ -112,6 +112,7 @@ def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
         packed_planes=game.state.packed_plane_layout,
         targets=game.target_layout,
         maximum_policy_entries=benchmark_configuration.training.lifecycle.replay.maximum_policy_entries,
+        maximum_legal_actions=game.state.maximum_legal_action_count,
     )
     replay_store = ReplayStore.open(arguments.run_directory / 'replay.bin', replay_layout, writable=False)
     replay_state = replay_store.state

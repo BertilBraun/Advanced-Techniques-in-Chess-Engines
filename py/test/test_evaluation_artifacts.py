@@ -74,7 +74,7 @@ def test_checked_in_go_baseline_reference_artifacts_match_configuration() -> Non
 
 
 def test_checked_in_go_9x9_book_export_matches_configuration() -> None:
-    experiment = load_experiment_configuration(Path('configs/go-9x9-experiment-template.yaml'))
+    experiment = load_experiment_configuration(Path('test/configs/go-9x9-experiment.yaml'))
     opening_source = experiment.evaluation.openings.source
     dataset_source = experiment.evaluation.dataset.source
     assert opening_source.kind == 'katago_book'
@@ -330,7 +330,7 @@ class TerminalGuardEngine(FakeEngine):
 
 class FixedPolicyModel(torch.nn.Module):
     def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        policy = torch.tensor((0.4, 0.3, 0.2, 0.1), device=inputs.device).expand(inputs.shape[0], 4)
+        policy = torch.log(torch.tensor((0.4, 0.3, 0.2, 0.1), device=inputs.device)).expand(inputs.shape[0], 4)
         value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
         return policy, value
 

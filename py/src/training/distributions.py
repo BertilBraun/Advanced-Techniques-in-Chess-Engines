@@ -7,7 +7,7 @@ import torch.nn.functional as functional
 from pydantic import Field
 
 from src.training.batch import TrainingBatch, TrainingModelOutput
-from src.training.objective import ResolvedTrainingObjective, blended_wdl_targets
+from src.training.objective import ResolvedTrainingObjective, blended_wdl_targets, mask_policy_logits
 from src.util.frozen_model import FrozenModel
 
 
@@ -68,7 +68,7 @@ def capture_training_distributions(
     wdl_logits = output.wdl_logits[rows].float()
     wdl_targets = batch.wdl_targets[rows]
     root_values = batch.root_values[rows]
-    policy = _policy_distribution(policy_logits, policy_targets)
+    policy = _policy_distribution(policy_logits, policy_targets, batch.policy_legal_action_ids[rows])
     blended_wdl = blended_wdl_targets(wdl_targets, root_values, objective.root_value_blend)
     wdl_loss = functional.cross_entropy(wdl_logits, blended_wdl, reduction='none')
     predicted_wdl = torch.softmax(wdl_logits, dim=1)
@@ -78,10 +78,13 @@ def capture_training_distributions(
     generation_ages = source_generation - batch.source_model_generations[rows]
     replay_ages = captured_at_seconds - batch.source_created_at_seconds[rows]
     auxiliary = tuple(
-        _auxiliary_distribution(prediction[rows].float(), target[rows], eligibility[rows], configuration.kind)
-        for prediction, target, eligibility, configuration in zip(
+        _auxiliary_distribution(
+            prediction[rows].float(), target[rows], legal_actions[rows], eligibility[rows], configuration.kind
+        )
+        for prediction, target, legal_actions, eligibility, configuration in zip(
             output.auxiliary_logits,
             batch.auxiliary_targets,
+            batch.auxiliary_legal_action_ids,
             batch.auxiliary_eligibility,
             objective.auxiliary_losses,
             strict=True,
@@ -104,13 +107,16 @@ def capture_training_distributions(
 def _auxiliary_distribution(
     prediction: torch.Tensor,
     target: torch.Tensor,
+    legal_action_ids: torch.Tensor,
     eligibility: torch.Tensor,
     kind: Literal['next_policy', 'remaining_game_length'],
 ) -> AuxiliaryTrainingDistribution:
     eligible = eligibility.to(dtype=torch.bool)
     match kind:
         case 'next_policy':
-            return NextPolicyTrainingDistribution(policy=_policy_distribution(prediction[eligible], target[eligible]))
+            return NextPolicyTrainingDistribution(
+                policy=_policy_distribution(prediction[eligible], target[eligible], legal_action_ids[eligible])
+            )
         case 'remaining_game_length':
             eligible_predictions = prediction[eligible].squeeze(1)
             eligible_targets = target[eligible].squeeze(1)
@@ -121,7 +127,11 @@ def _auxiliary_distribution(
             )
 
 
-def _policy_distribution(logits: torch.Tensor, targets: torch.Tensor) -> PolicyTrainingDistribution:
+def _policy_distribution(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    legal_action_ids: torch.Tensor,
+) -> PolicyTrainingDistribution:
     if not len(logits):
         return PolicyTrainingDistribution(
             loss=(),
@@ -131,15 +141,16 @@ def _policy_distribution(logits: torch.Tensor, targets: torch.Tensor) -> PolicyT
             target_entropy=(),
             prediction_entropy=(),
         )
+    masked_logits = mask_policy_logits(logits, legal_action_ids)
     target_masses = torch.sort(targets, dim=1, descending=True).values
     cumulative_masses = torch.cumsum(target_masses, dim=1)
     return PolicyTrainingDistribution(
-        loss=_floats(functional.cross_entropy(logits, targets, reduction='none')),
+        loss=_floats(functional.cross_entropy(masked_logits, targets, reduction='none')),
         target_top1_mass=_floats(cumulative_masses[:, 0]),
         target_top2_mass=_floats(cumulative_masses[:, min(1, cumulative_masses.shape[1] - 1)]),
         target_top3_mass=_floats(cumulative_masses[:, min(2, cumulative_masses.shape[1] - 1)]),
         target_entropy=_floats(_entropy(targets)),
-        prediction_entropy=_floats(_entropy(torch.softmax(logits, dim=1))),
+        prediction_entropy=_floats(_entropy(torch.softmax(masked_logits, dim=1))),
     )
 
 

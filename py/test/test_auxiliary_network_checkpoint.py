@@ -7,10 +7,10 @@ from src.games.representation import NetworkDimensions
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import (
     AttentionNetworkParams,
-    Chess76PlanePolicyHeadConfiguration,
-    DensePolicyHeadConfiguration,
+    Chess76PlaneDirectPolicyHeadConfiguration,
     DisabledResidualContext,
     GlobalPoolingResidualContext,
+    GoPointPassPolicyHeadConfiguration,
     Network,
     NetworkConfiguration,
     NetworkParams,
@@ -33,7 +33,7 @@ from src.training.checkpoint.contracts import load_checkpoint_manifest
             num_layers=1,
             hidden_size=8,
             residual_context=DisabledResidualContext(),
-            policy_head=DensePolicyHeadConfiguration(channels=2),
+            policy_head=GoPointPassPolicyHeadConfiguration(),
             num_value_channels=2,
             value_fc_size=8,
         ),
@@ -41,7 +41,7 @@ from src.training.checkpoint.contracts import load_checkpoint_manifest
             num_layers=1,
             hidden_size=8,
             residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_BLOCK),
-            policy_head=DensePolicyHeadConfiguration(channels=2),
+            policy_head=GoPointPassPolicyHeadConfiguration(),
             num_value_channels=2,
             value_fc_size=8,
         ),
@@ -50,7 +50,7 @@ from src.training.checkpoint.contracts import load_checkpoint_manifest
             embedding_size=8,
             num_heads=2,
             feedforward_size=16,
-            policy_head=DensePolicyHeadConfiguration(channels=2),
+            policy_head=GoPointPassPolicyHeadConfiguration(),
             num_value_channels=2,
             value_fc_size=8,
         ),
@@ -100,7 +100,7 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     assert tuple(output.shape for output in loaded_output.auxiliary_logits) == ((2, 10), (2, 1))
     assert inference_policy.shape == (2, 10)
     assert inference_wdl.shape == (2, 3)
-    torch.testing.assert_close(inference_policy, torch.softmax(training_policy_logits, dim=1))
+    torch.testing.assert_close(inference_policy, training_policy_logits)
     torch.testing.assert_close(inference_wdl, torch.softmax(training_wdl_logits, dim=1))
     assert b'"kind":"' + parameters.kind.encode() + b'"' in extra_files['network.json']
 
@@ -121,12 +121,12 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
         num_layers=1,
         hidden_size=16,
         residual_context=DisabledResidualContext(),
-        policy_head=Chess76PlanePolicyHeadConfiguration(hidden_channels=32),
+        policy_head=Chess76PlaneDirectPolicyHeadConfiguration(),
         num_value_channels=2,
         value_fc_size=8,
     )
     auxiliary_heads = (
-        NextPolicyHeadLayout(kind='next_policy', action_size=1880, ply_offset=1),
+        NextPolicyHeadLayout(kind='next_policy', action_size=4864, ply_offset=1),
         RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
     )
     model = Network(parameters, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, auxiliary_heads)
@@ -148,16 +148,9 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
     inference_model = torch.jit.load(str(tmp_path / 'model_1.jit.pt'), map_location='cpu')
     inference_policy, inference_wdl = inference_model(inputs)
 
-    assert expected_training_output.policy_logits.shape == (2, 1880)
-    assert tuple(output.shape for output in expected_training_output.auxiliary_logits) == ((2, 1880), (2, 1))
-    assert 'policyHead.action_plane_indices' not in loaded.state_dict()
-    assert 'auxiliaryHeads.0.action_plane_indices' not in loaded.state_dict()
-    assert torch.equal(model.policyHead.action_plane_indices, loaded.policyHead.action_plane_indices)
-    assert torch.equal(
-        model.auxiliaryHeads[0].action_plane_indices,
-        loaded.auxiliaryHeads[0].action_plane_indices,
-    )
-    assert any(name == 'policyHead.action_plane_indices' for name, _ in inference_model.named_buffers())
+    assert expected_training_output.policy_logits.shape == (2, 4864)
+    assert tuple(output.shape for output in expected_training_output.auxiliary_logits) == ((2, 4864), (2, 1))
+    assert all('action_plane_indices' not in name for name, _ in loaded.named_buffers())
     assert all(not name.startswith('auxiliaryHeads.') for name, _ in inference_model.named_buffers())
     torch.testing.assert_close(loaded_training_output.policy_logits, expected_training_output.policy_logits)
     torch.testing.assert_close(loaded_training_output.auxiliary_logits[0], expected_training_output.auxiliary_logits[0])

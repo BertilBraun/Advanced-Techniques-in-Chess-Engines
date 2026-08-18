@@ -20,7 +20,7 @@ from tools.run_stockfish_gauntlet import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-EXPERIMENT_PATH = PROJECT_ROOT / 'py/configs/production/vast-chess-8gpu-1d-r3.yaml'
+EXPERIMENT_PATH = PROJECT_ROOT / 'py/configs/production/vast-chess-8gpu-optimal.yaml'
 
 
 def test_fixed_budget_reproduces_production_evaluation_search() -> None:

@@ -70,6 +70,10 @@ class GameStateContract(ABC, Generic[PositionT]):
         raise NotImplementedError
 
     @property
+    def maximum_legal_action_count(self) -> int:
+        return self.action_size
+
+    @property
     @abstractmethod
     def representation(self) -> RepresentationDimensions:
         raise NotImplementedError

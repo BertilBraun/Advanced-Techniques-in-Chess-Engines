@@ -50,6 +50,7 @@ def _layout() -> ReplayLayout:
             ),
         ),
         maximum_policy_entries=2,
+        maximum_legal_actions=CHESS_STATE_CONTRACT.maximum_legal_action_count,
     )
 
 
@@ -58,7 +59,8 @@ def _sample(weight: float) -> ReplaySample:
         visits=(
             GameSearchVisit(action_id=0, visit_count=3),
             GameSearchVisit(action_id=1, visit_count=1),
-        )
+        ),
+        legal_action_ids=(0, 1, 2),
     )
     return ReplaySample(
         encoded_state=CHESS_STATE_CONTRACT.packed_plane_layout.value(
@@ -114,6 +116,7 @@ def test_mapped_loader_builds_canonical_batches_and_disjoint_rank_slices(tmp_pat
     assert rank_zero.states.shape == (2, CHESS_STATE_CONTRACT.representation.channels, 8, 8)
     assert rank_zero.policy_targets.shape == (2, CHESS_STATE_CONTRACT.action_size)
     assert torch.allclose(rank_zero.policy_targets.sum(dim=1), torch.ones(2))
+    assert torch.equal(rank_zero.policy_legal_action_ids[:, :3], torch.tensor(((0, 1, 2),) * 2))
     assert torch.allclose(rank_zero.wdl_targets, torch.tensor(((0.25, 0.5, 0.25),) * 2))
     assert torch.all(rank_zero.auxiliary_eligibility[0])
     assert rank_zero.auxiliary_targets[0].shape == (2, CHESS_STATE_CONTRACT.action_size)

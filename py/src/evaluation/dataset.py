@@ -443,15 +443,16 @@ def evaluate_fixed_dataset(
                 state,
                 tuple(state.packed_plane_layout.value(bytes(row['packed_state'])) for row in batch),
             )
-            policy, _ = model(torch.from_numpy(decoded).to(device))
-            policy = policy.float().cpu()
-            top_actions = policy.argmax(dim=1).numpy()
-            correct += int(np.count_nonzero(top_actions == batch['top_action_id']))
+            policy_logits, _ = model(torch.from_numpy(decoded).to(device))
+            policy_logits = policy_logits.float().cpu()
             for row_index, row in enumerate(batch):
                 count = int(row['policy_count'])
                 action_ids = torch.from_numpy(row['action_ids'][:count].astype(np.int64))
                 targets = torch.from_numpy(row['probabilities'][:count].astype(np.float32))
-                predicted = policy[row_index, action_ids].clamp_min(1e-12)
+                legal_logits = policy_logits[row_index, action_ids]
+                predicted = torch.softmax(legal_logits, dim=0)
+                top_action = int(action_ids[int(legal_logits.argmax())])
+                correct += int(top_action == int(row['top_action_id']))
                 cross_entropy -= float(torch.sum(targets * torch.log(predicted)).item())
     return FixedDatasetEvaluationResult(
         kind='fixed_dataset',

@@ -24,19 +24,17 @@ from src.self_play.parameters import (
     ReducedParentValueFirstPlayUrgencyParameters,
     ZeroFirstPlayUrgencyParameters,
 )
-from src.training.architecture_catalog import load_architecture_catalog
 from src.training.configuration import TrainingCompilation, TrainingPrecision
 from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
 from src.util.frozen_model import JsonValue
 
 
-CHESS_EXPERIMENT_TEMPLATE_PATH = Path('configs/chess-experiment-template.yaml')
+CHESS_EXPERIMENT_TEMPLATE_PATH = Path('test/configs/chess-experiment.yaml')
 OPTIMAL_CHESS_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
-CHESS_ARCHITECTURE_CATALOG_PATH = Path('configs/architectures/chess-cnn-attention-v1.yaml')
 
 
-def test_every_checked_in_experiment_uses_the_current_contract_and_dependency_lock() -> None:
-    paths = tuple(sorted(Path('configs').glob('*-experiment-template.yaml')))
+def test_test_experiment_fixtures_use_the_current_contract_and_dependency_lock() -> None:
+    paths = tuple(sorted(Path('test/configs').glob('*-experiment.yaml')))
     configurations = validate_experiment_queue(paths)
     dependency_lock_sha256 = hashlib.sha256(Path('requirements-training.lock').read_bytes()).hexdigest()
 
@@ -79,19 +77,11 @@ def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() 
         0.75,
         2.0,
     )
-    expected_model_ids = ('chess-attention-1m', 'chess-attention-4m', 'chess-attention-9m')
-    catalog_by_model_id = {
-        entry.model_id: entry for entry in load_architecture_catalog(CHESS_ARCHITECTURE_CATALOG_PATH).models
-    }
+    expected_model_ids = ('chess-attention-500k', 'chess-attention-2m', 'chess-attention-5m')
     assert tuple(model.model_id for model in progressive_model_sizing.models) == expected_model_ids
-    assert tuple(model.network for model in progressive_model_sizing.models) == tuple(
-        catalog_by_model_id[model_id].definition.architecture for model_id in expected_model_ids
-    )
-    assert tuple(catalog_by_model_id[model_id].expected_training_parameters for model_id in expected_model_ids) == (
-        1_086_114,
-        3_894_946,
-        9_001_762,
-    )
+    assert tuple(
+        (model.network.num_layers, model.network.embedding_size) for model in progressive_model_sizing.models
+    ) == ((6, 96), (10, 160), (16, 192))
     assert configuration.training.network == progressive_model_sizing.models[0].network
 
 
@@ -111,7 +101,7 @@ def test_game_experiments_extend_the_shared_run_and_training_configuration() -> 
     ('configuration_type', 'path'),
     (
         (ChessExperimentConfiguration, CHESS_EXPERIMENT_TEMPLATE_PATH),
-        (GoExperimentConfiguration, Path('configs/go-7x7-experiment-template.yaml')),
+        (GoExperimentConfiguration, Path('test/configs/go-7x7-experiment.yaml')),
     ),
 )
 def test_base_configuration_validates_shared_training_arguments(
@@ -139,8 +129,8 @@ def test_experiment_queue_validation_loads_multiple_experiments() -> None:
 @pytest.mark.parametrize(
     ('path', 'board_size', 'action_count'),
     (
-        (Path('configs/go-7x7-experiment-template.yaml'), 7, 50),
-        (Path('configs/go-9x9-experiment-template.yaml'), 9, 82),
+        (Path('test/configs/go-7x7-experiment.yaml'), 7, 50),
+        (Path('test/configs/go-9x9-experiment.yaml'), 9, 82),
     ),
 )
 def test_go_experiments_resolve_deterministically(path: Path, board_size: int, action_count: int) -> None:
@@ -167,7 +157,7 @@ def test_first_play_urgency_modes_resolve_explicitly(
     authored: JsonValue,
     expected: FirstPlayUrgencyParameters,
 ) -> None:
-    candidate = yaml.safe_load(Path('configs/go-9x9-experiment-template.yaml').read_text(encoding='utf-8'))
+    candidate = yaml.safe_load(Path('test/configs/go-9x9-experiment.yaml').read_text(encoding='utf-8'))
     candidate['go']['self_play']['search']['first_play_urgency'] = authored
     configuration = GoExperimentConfiguration.model_validate(candidate)
 
@@ -180,8 +170,8 @@ def test_queue_validation_supports_both_games() -> None:
     configurations = validate_experiment_queue(
         (
             CHESS_EXPERIMENT_TEMPLATE_PATH,
-            Path('configs/go-7x7-experiment-template.yaml'),
-            Path('configs/go-9x9-experiment-template.yaml'),
+            Path('test/configs/go-7x7-experiment.yaml'),
+            Path('test/configs/go-9x9-experiment.yaml'),
         )
     )
 
@@ -212,7 +202,7 @@ def test_queue_validation_supports_both_games() -> None:
     ),
 )
 def test_invalid_go_combinations_fail_precisely(field_path: tuple[str, ...], value: JsonValue, message: str) -> None:
-    candidate = yaml.safe_load(Path('configs/go-7x7-experiment-template.yaml').read_text(encoding='utf-8'))
+    candidate = yaml.safe_load(Path('test/configs/go-7x7-experiment.yaml').read_text(encoding='utf-8'))
     owner = candidate
     for segment in field_path[:-1]:
         owner = owner[segment]
@@ -233,7 +223,7 @@ def test_resolved_experiment_round_trips_as_canonical_json(tmp_path: Path) -> No
 
 def test_experiment_configuration_extends_and_deeply_overrides_a_base(tmp_path: Path) -> None:
     base_path = tmp_path / 'base.yaml'
-    base_path.write_text(Path('configs/go-7x7-experiment-template.yaml').read_text(encoding='utf-8'), encoding='utf-8')
+    base_path.write_text(Path('test/configs/go-7x7-experiment.yaml').read_text(encoding='utf-8'), encoding='utf-8')
     override_path = tmp_path / 'override.yaml'
     override_path.write_text(
         '\n'.join(
@@ -266,7 +256,7 @@ def test_experiment_configuration_extends_and_deeply_overrides_a_base(tmp_path: 
 
 def test_experiment_configuration_hash_includes_resolved_base_content(tmp_path: Path) -> None:
     base_path = tmp_path / 'base.yaml'
-    source = Path('configs/go-7x7-experiment-template.yaml').read_text(encoding='utf-8')
+    source = Path('test/configs/go-7x7-experiment.yaml').read_text(encoding='utf-8')
     base_path.write_text(source, encoding='utf-8')
     override_path = tmp_path / 'override.yaml'
     override_path.write_text('extends: base.yaml\n', encoding='utf-8')

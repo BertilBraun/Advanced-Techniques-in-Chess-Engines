@@ -61,12 +61,12 @@ class PolicyActionSelector(Generic[PositionT]):
             return ()
         decoded = decode_network_inputs(self.state, positions)
         with torch.inference_mode():
-            policy, _ = self.model(torch.from_numpy(decoded).to(self.device))
-        policy = policy.float().cpu()
+            policy_logits, _ = self.model(torch.from_numpy(decoded).to(self.device))
+        policy_logits = policy_logits.float().cpu()
         return tuple(
             max(
                 self.state.legal_action_ids(position),
-                key=lambda action_id: (float(policy[row_index, action_id]), -action_id),
+                key=lambda action_id: (float(policy_logits[row_index, action_id]), -action_id),
             )
             for row_index, position in enumerate(positions)
         )

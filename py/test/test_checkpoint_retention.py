@@ -9,11 +9,11 @@ from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint import CheckpointManifest, CheckpointReference
 from src.training.checkpoint.retention import CheckpointRetention
-from src.training.network import DensePolicyHeadConfiguration, NetworkDefinition, NetworkParams
+from src.training.network import GoPointPassPolicyHeadConfiguration, NetworkDefinition, NetworkParams
 
 
 NETWORK_DEFINITION = NetworkDefinition(
-    architecture=NetworkParams(num_layers=1, hidden_size=8, policy_head=DensePolicyHeadConfiguration(channels=2)),
+    architecture=NetworkParams(num_layers=1, hidden_size=8, policy_head=GoPointPassPolicyHeadConfiguration()),
     dimensions=NetworkDimensions(channels=3, rows=3, columns=3, actions=10),
     auxiliary_heads=(),
 )
@@ -44,7 +44,7 @@ def _write_checkpoint(run_path: Path, generation: int) -> None:
 
 
 def _retention(run_path: Path) -> CheckpointRetention:
-    experiment = load_chess_experiment_configuration(Path('configs/chess-experiment-template.yaml'))
+    experiment = load_chess_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
     inference_retention = experiment.training.lifecycle.inference_retention.validated_copy(
         update={'recent_checkpoint_count': 3, 'milestone_interval': 5}
     )

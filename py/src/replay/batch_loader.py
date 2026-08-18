@@ -222,11 +222,20 @@ def build_training_batch(
         dtype=np.float32,
     )
     policies = np.zeros((len(samples), state.action_size), dtype=np.float32)
+    policy_legal_action_ids = np.full(
+        (len(samples), store.layout.maximum_legal_actions),
+        -1,
+        dtype=np.int64,
+    )
     auxiliary_targets = tuple(
         np.zeros((len(samples), auxiliary_head_output_size(head)), dtype=np.float32)
         for head in store.layout.targets.auxiliary_heads
     )
     auxiliary_eligibility = tuple(np.zeros(len(samples), dtype=np.bool_) for _ in store.layout.targets.auxiliary_heads)
+    auxiliary_legal_action_ids = tuple(
+        np.full((len(samples), store.layout.maximum_legal_actions), -1, dtype=np.int64)
+        for _ in store.layout.targets.auxiliary_heads
+    )
     for row, sample in enumerate(samples):
         states[row] = decode_packed_planes(
             sample.encoded_state,
@@ -235,10 +244,14 @@ def build_training_batch(
             representation.scalar_channels,
         )
         _write_dense_policy(policies[row], sample.policy.visits)
+        policy_legal_action_ids[row, : len(sample.policy.legal_action_ids)] = sample.policy.legal_action_ids
         for target_index, target in enumerate(sample.auxiliary_targets):
             match target:
                 case EligibleNextPolicyTarget(policy=policy):
                     _write_dense_policy(auxiliary_targets[target_index][row], policy.visits)
+                    auxiliary_legal_action_ids[target_index][row, : len(policy.legal_action_ids)] = (
+                        policy.legal_action_ids
+                    )
                     auxiliary_eligibility[target_index][row] = True
                 case EligibleRemainingGameLengthTarget(normalized_length=normalized_length):
                     auxiliary_targets[target_index][row, 0] = normalized_length
@@ -246,12 +259,14 @@ def build_training_batch(
     return TrainingBatch(
         states=torch.from_numpy(states),
         policy_targets=torch.from_numpy(policies),
+        policy_legal_action_ids=torch.from_numpy(policy_legal_action_ids),
         wdl_targets=torch.tensor(
             [(sample.wdl_target.win, sample.wdl_target.draw, sample.wdl_target.loss) for sample in samples],
             dtype=torch.float32,
         ),
         root_values=torch.tensor([sample.root_value for sample in samples], dtype=torch.float32),
         auxiliary_targets=tuple(torch.from_numpy(target) for target in auxiliary_targets),
+        auxiliary_legal_action_ids=tuple(torch.from_numpy(actions) for actions in auxiliary_legal_action_ids),
         auxiliary_eligibility=tuple(torch.from_numpy(mask) for mask in auxiliary_eligibility),
         sample_weights=torch.tensor([sample.sample_weight for sample in samples], dtype=torch.float32),
         source_model_generations=torch.tensor(

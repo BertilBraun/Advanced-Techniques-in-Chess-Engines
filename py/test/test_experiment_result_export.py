@@ -32,11 +32,11 @@ from src.experiment_queue.state import (
 )
 from src.experiment_queue.validation import queue_configuration_fingerprint
 from src.training.checkpoint import CheckpointManifest, CheckpointReference
-from src.training.network import DensePolicyHeadConfiguration, NetworkDefinition, NetworkParams
+from src.training.network import GoPointPassPolicyHeadConfiguration, NetworkDefinition, NetworkParams
 
 
 NETWORK_DEFINITION = NetworkDefinition(
-    architecture=NetworkParams(num_layers=1, hidden_size=8, policy_head=DensePolicyHeadConfiguration(channels=2)),
+    architecture=NetworkParams(num_layers=1, hidden_size=8, policy_head=GoPointPassPolicyHeadConfiguration()),
     dimensions=NetworkDimensions(channels=3, rows=3, columns=3, actions=10),
     auxiliary_heads=(),
 )
@@ -78,7 +78,7 @@ def _fixture(tmp_path: Path) -> tuple[ExportRequest, Path, Path]:
     tensorboard_path.mkdir(parents=True)
     (tensorboard_path / 'events.out.tfevents.test').write_bytes(b'tensorboard')
 
-    template_path = Path('configs/go-7x7-experiment-template.yaml').resolve()
+    template_path = Path('test/configs/go-7x7-experiment.yaml').resolve()
     template = load_experiment_configuration(template_path)
     run = template.run.validated_copy(update={'run_name': 'export-test', 'tensorboard_run_directory': 'export-test'})
     training = template.training.validated_copy(update={'save_path': 'training-data/experiment'})
