@@ -29,6 +29,7 @@ from src.util.frozen_model import JsonValue
 
 
 CHESS_EXPERIMENT_TEMPLATE_PATH = Path('configs/chess-experiment-template.yaml')
+OPTIMAL_CHESS_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
 
 
 def test_every_checked_in_experiment_uses_the_current_contract_and_dependency_lock() -> None:
@@ -47,6 +48,24 @@ def test_every_screening_configuration_parses() -> None:
     paths = tuple(sorted(Path('configs/screening').rglob('*.yaml')))
 
     assert all(load_experiment_configuration(path) for path in paths)
+
+
+def test_optimal_chess_experiment_uses_progressive_replay_and_parallel_search() -> None:
+    configuration = load_experiment_configuration(OPTIMAL_CHESS_EXPERIMENT_PATH)
+
+    assert isinstance(configuration, ChessExperimentConfiguration)
+    replay = configuration.training.lifecycle.replay
+    assert replay.maximum_capacity == 2_500_000
+    assert tuple(replay.capacity_at(generation) for generation in (0, 25, 50, 100, 250, 400)) == (
+        300_000,
+        600_000,
+        1_000_000,
+        1_500_000,
+        2_000_000,
+        2_500_000,
+    )
+    assert configuration.training.lifecycle.credit.replay_ratio == 10
+    assert configuration.chess.self_play.search.parallel_searches == 2
 
 
 @pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))

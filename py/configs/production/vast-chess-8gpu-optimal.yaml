@@ -67,16 +67,18 @@ training:
   lifecycle:
     replay:
       capacity:
-        kind: linear
-        start_generation: 0
-        end_generation: 100
-        start_value: 300000
-        end_value: 1500000
-        rounding: nearest
-      maximum_capacity: 1500000
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 300000}
+          - {start_generation: 25, value: 600000}
+          - {start_generation: 50, value: 1000000}
+          - {start_generation: 100, value: 1500000}
+          - {start_generation: 250, value: 2000000}
+          - {start_generation: 400, value: 2500000}
+      maximum_capacity: 2500000
       maximum_policy_entries: 60
     credit:
-      replay_ratio: 8
+      replay_ratio: 10
       optimizer_steps_per_quantum: 500
       maximum_optimizer_steps: null
       retained_checkpoint_interval_generations: 6
@@ -262,7 +264,7 @@ chess:
           - {start_generation: 0, value: 50}
           - {start_generation: 30, value: 100}
           - {start_generation: 90, value: 150}
-      parallel_searches: 1
+      parallel_searches: 2
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
       exploration_constant: 1.5
