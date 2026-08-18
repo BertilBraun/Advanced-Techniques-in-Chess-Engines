@@ -268,21 +268,27 @@ The experiment must report:
 
 Reference: [Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search](https://arxiv.org/abs/2012.07910).
 
-## 10. Transposition audit and graph-search decision
+## 10. Transposition audit and graph-search decision - rejected
 
-Instrument search without merging nodes first. Hash every expanded full game state and measure exact duplicates at
-100, 400, 1,000, 3,200, 10,000, 30,000, and 100,000 simulations. Report duplicate rate, potential repeated inference,
-depth, source paths, state-history constraints, and hashing overhead.
+The full Monte-Carlo graph-search experiment is complete and will not proceed to production. The separate graph path
+implemented shared nodes and descendant statistics, parent-local edge statistics, transposition correction, virtual
+loss, cycle rejection, graph-aware rerooting and pruning, and exact chess rule/history identity. Tree search remained
+the control and default throughout.
 
-The preferred eventual optimization is full Monte-Carlo graph search rather than reviving a generic evaluation cache.
-The audit still measures repeated neural evaluations because it provides an upper bound on avoidable inference. A flat
-node arena may simplify identity and storage, but it does not remove the hard parts: multiple-parent statistics,
-virtual loss, backup semantics, root retention, cycle prevention, repetition history, castling and en-passant rights,
-and the halfmove clock.
+Corrected sustained RTX 4070 SUPER measurements still showed an 8.63% throughput loss at 1,000 searches and an 8.28%
+loss at 10,000 searches. Only 0.0249% and 0.1769% of inference evaluations, respectively, were avoidable, while the
+hypothetical unfolded tree contained only 0.0814% and 0.5007% more node instances. Earlier 30,000- and 60,000-search
+tests with 64 parallel searches found equality-verified transposition-table hit rates of 2.37% and 3.46%, but graph
+throughput remained 7.06% and 5.76% lower. Exact repetition semantics exclude most apparent move-order
+transpositions because their retained histories remain relevant to future threefold adjudication.
 
-Use the measurements to decide separately for self-play and evaluation. Low reuse at 100 to 1,000 simulations should
-leave self-play unchanged. Material reuse at 10,000 to 100,000 simulations can justify evaluation-only graph search.
-No implementation is authorized merely from theoretical reuse.
+The result does not justify the implementation and maintenance cost. Do not merge the graph-search branch, add an
+evaluation-only graph mode, or continue graph-search tuning unless this decision is explicitly reopened based on new
+evidence. Tree search is the production search structure.
+
+Inference caching is a separate question because it can reuse identical neural-network inputs without merging rule
+state, visits, values, or descendants. Any cache work must begin with measurement-only instrumentation and its own
+acceptance decision; it is not a continuation of Monte-Carlo graph search.
 
 Reference: [Monte-Carlo Graph Search for AlphaZero](https://arxiv.org/abs/2012.11045).
 
