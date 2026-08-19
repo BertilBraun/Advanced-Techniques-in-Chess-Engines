@@ -98,6 +98,7 @@ legend, .time-control label { margin-bottom: 9px; color: var(--muted); font-size
 .primary-button:disabled { cursor: wait; opacity: .55; }
 
 .analysis-panel, .history-panel { margin-top: 17px; }
+.run-summary-panel { margin-top: 17px; }
 .empty-state { padding: 34px 20px; border: 1px dashed var(--line); color: var(--muted); text-align: center; font-size: 12px; }
 .perspective-note { color: var(--muted); font-size: 10px; margin: -8px 0 12px; }
 .wdl { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); background: var(--paper); }
@@ -117,6 +118,11 @@ legend, .time-control label { margin-bottom: 9px; color: var(--muted); font-size
 .candidate-heading h3 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .candidate-heading span { color: var(--muted); font-size: 9px; }
 .table-wrap { max-height: 260px; overflow: auto; }
+.run-summary-subtitle { margin: 16px 0 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.kv-grid { margin: 0 0 8px; padding: 0; display: grid; gap: 8px 18px; grid-template-columns: auto 1fr; align-items: baseline; }
+.kv-grid > div { display: contents; }
+.kv-grid dt { color: var(--muted); font: 500 10px "DM Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
+.kv-grid dd { margin: 0; color: var(--ink); font: 500 12px "DM Mono", monospace; word-break: break-word; }
 table { width: 100%; border-collapse: collapse; font: 10px "DM Mono", monospace; }
 th { padding: 8px 5px; border-bottom: 1px solid var(--line); color: var(--muted); text-align: right; font-weight: 400; }
 th:first-child, td:first-child { text-align: left; }

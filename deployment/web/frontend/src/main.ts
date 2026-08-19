@@ -7,6 +7,7 @@ import {
 } from "cm-chessboard/src/Chessboard.js";
 import "cm-chessboard/assets/chessboard.css";
 import piecesUrl from "cm-chessboard/assets/pieces/staunty.svg?url";
+import baselinePlanMarkdown from "../../../../documentation/research/chess-four-day-baseline-and-next-run-plan.md?raw";
 
 import { ChessApi, normalizeApiBaseUrl } from "./api.ts";
 import type {
@@ -33,9 +34,80 @@ import {
 import "./style.css";
 
 type UiPhase = "setup" | "cold" | "thinking" | "playing" | "game-over" | "error";
+type BaselineRunRow = {
+  duration: string;
+  elo: string;
+  confidence: string;
+  available: boolean;
+};
 
 const root = document.querySelector<HTMLDivElement>("#app");
 if (!root) throw new Error("App container is missing.");
+
+const fallbackBaselineRows: readonly BaselineRunRow[] = [
+  { duration: "64 searches", elo: "1,954 (1,912–1,996)", confidence: "57.75% [51.75%, 63.50%]", available: true },
+  { duration: "1,000 searches", elo: "2,554 (2,519–2,591)", confidence: "57.75% [52.75%, 62.75%]", available: true },
+  { duration: "10,000 searches", elo: "2,821 (2,781–2,864)", confidence: "66.75% [61.50%, 72.00%]", available: true },
+  { duration: "1 second", elo: "2,695 (2,660–2,730)", confidence: "49.25% [44.25%, 54.25%]", available: true },
+  { duration: "5 seconds", elo: "unavailable", confidence: "unavailable", available: false },
+];
+
+const baselineRunRows: readonly BaselineRunRow[] = (() => {
+  const sectionMarker = "### Observed baseline results";
+  const tableStart = "| Candidate mode";
+  const sectionStart = baselinePlanMarkdown.indexOf(sectionMarker);
+  if (sectionStart < 0) return fallbackBaselineRows;
+  const tableText = baselinePlanMarkdown.slice(sectionStart);
+  const tableStartIndex = tableText.indexOf(tableStart);
+  if (tableStartIndex < 0) return fallbackBaselineRows;
+  const tableContent = tableText.slice(tableStartIndex).split(/\r?\n/);
+  const rows = tableContent
+    .filter((line) => line.startsWith("|"))
+    .filter((line) => line.includes("Candidate mode") === false && line.includes("---") === false)
+    .map((row): BaselineRunRow | null => {
+      const line = row.trim();
+      const match = line.match(/^\|\s*([^|]+?)\s*\|\s*(?:[^|]*?)\s*\|\s*(?:[^|]*?)\s*\|\s*(.*?)\s*\|$/);
+      if (!match) return null;
+      const duration = match[1].trim();
+      const confirmation = match[2].trim();
+      if (!/search|second/i.test(duration)) return null;
+      const unavailable = /unavailable/i.test(confirmation);
+      const eloMatch = confirmation.match(/approximately\s+([^;]+?)(?=;|$)/i);
+      const scoreMatch = confirmation.match(/:\s*([^;]+?)(?:;|$)/);
+      return {
+        duration,
+        elo: eloMatch === null ? "unavailable" : eloMatch[1].replace(/\s*Elo/i, "").trim(),
+        confidence: unavailable || scoreMatch === null ? "unavailable" : scoreMatch[1].trim(),
+        available: !unavailable,
+      };
+    })
+    .filter((entry): entry is BaselineRunRow => entry !== null);
+  return rows.length === 0 ? fallbackBaselineRows : rows.slice(0, 5);
+})();
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"]/g, (match) => {
+    switch (match) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case "\"": return "&quot;";
+      default: return match;
+    }
+  });
+}
+
+function baselineRowsHtml(): string {
+  return baselineRunRows
+    .map(
+      (row) => `<tr>
+        <td>${escapeHtml(row.duration)}</td>
+        <td>${escapeHtml(row.elo)}</td>
+        <td>${row.available ? escapeHtml(row.confidence) : "not available"}</td>
+      </tr>`,
+    )
+    .join("");
+}
 
 root.innerHTML = `
   <header class="site-header">
@@ -127,8 +199,30 @@ root.innerHTML = `
           </div>
         </section>
 
+
+        <section class="panel run-summary-panel" aria-labelledby="run-summary-title">
+          <div class="panel-heading"><span>03</span><h2 id="run-summary-title">Run snapshot</h2></div>
+          <dl class="kv-grid">
+            <div><dt>Run</dt><dd>four-day baseline (v4 freeze)</dd></div>
+            <div><dt>Training</dt><dd>4 days (approx. 96h)</dd></div>
+            <div><dt>Hardware</dt><dd>eight NVIDIA RTX 3060 12-GiB GPUs, 64 vCPUs, ~188 GiB RAM</dd></div>
+            <div><dt>Approx. cost</dt><dd>about $0.45/hr &times; 96h ≈ $43.2</dd></div>
+          </dl>
+          <h3 class="run-summary-subtitle">Approximate Elo by search budget</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Search budget</th><th>Elo (confidence)</th><th>95% score interval</th></tr>
+              </thead>
+              <tbody id="baseline-summary-body">
+                ${baselineRowsHtml()}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section class="panel history-panel" aria-labelledby="history-title">
-          <div class="panel-heading"><span>03</span><h2 id="history-title">Move history</h2></div>
+          <div class="panel-heading"><span>04</span><h2 id="history-title">Move history</h2></div>
           <ol id="move-history" class="move-history"><li class="history-empty">No moves yet.</li></ol>
         </section>
       </aside>
