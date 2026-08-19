@@ -71,6 +71,26 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
     assert replay.materialization_processes == 8
     assert replay.materialization_batch_games == 128
     assert configuration.training.lifecycle.credit.replay_ratio == 8
+    self_play_topology = configuration.training.topology.self_play
+    assert self_play_topology.device_ids == tuple(device_id for device_id in range(8) for _ in range(3))
+    assert self_play_topology.node_ids_to_pause_during_training == (
+        1,
+        2,
+        4,
+        5,
+        7,
+        8,
+        10,
+        11,
+        13,
+        14,
+        16,
+        17,
+        19,
+        20,
+        22,
+        23,
+    )
     assert configuration.chess.self_play.search.parallel_searches == 4
     full_search_budget = configuration.chess.self_play.search.full_search_budget
     assert isinstance(full_search_budget, FixedFullSearchBudgetConfiguration)
