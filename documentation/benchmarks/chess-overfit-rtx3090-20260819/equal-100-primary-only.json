@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "replay_path": "/workspace/chess-run-source/bounded-ingestion-final2/py/training_data/production/vast-chess-8gpu-optimal/replay.bin",
+  "replay_rows": 1000000,
+  "batch_size": 256,
+  "model_generation": 94,
+  "random_seed": 20260819,
+  "objective_profile": "primary-only",
+  "results": [
+    {
+      "model_id": "attention-1m",
+      "network": {
+        "architecture": {
+          "policy_head": {
+            "kind": "chess_76_plane_direct_v2"
+          },
+          "num_value_channels": 2,
+          "value_fc_size": 48,
+          "kind": "attention",
+          "num_layers": 8,
+          "embedding_size": 128,
+          "num_heads": 4,
+          "feedforward_size": 256,
+          "dropout": 0.0
+        },
+        "dimensions": {
+          "channels": 29,
+          "rows": 8,
+          "columns": 8,
+          "actions": 4864,
+          "outcomes": 3
+        },
+        "auxiliary_heads": [
+          {
+            "kind": "next_policy",
+            "action_size": 4864,
+            "ply_offset": 1
+          },
+          {
+            "kind": "remaining_game_length",
+            "normalization_scale": 200.0,
+            "output_size": 1
+          },
+          {
+            "kind": "future_search_value",
+            "ply_offset": 4,
+            "smooth_l1_beta": 0.1,
+            "output_size": 1
+          },
+          {
+            "kind": "irreversible_progress",
+            "horizon_plies": 16,
+            "output_size": 1
+          },
+          {
+            "kind": "legal_moves",
+            "action_size": 4864
+          },
+          {
+            "kind": "search_correction",
+            "output_size": 1
+          }
+        ]
+      },
+      "objective_profile": "primary-only",
+      "model_generation": 94,
+      "parameter_count": 1102775,
+      "trainable_parameter_count": 1102775,
+      "batch_size": 256,
+      "learning_rate": 0.005,
+      "precision": "bfloat16",
+      "maximum_optimizer_steps": 100,
+      "completed_optimizer_steps": 100,
+      "elapsed_seconds": 4.3155575529672205,
+      "optimizer_steps_per_second": 23.17197691668916,
+      "peak_allocated_mib": 610.4072265625,
+      "achievable_loss_floor": {
+        "policy": 1.7316858768463135,
+        "wdl": 0.227425217628479,
+        "auxiliary": [
+          1.9838029146194458,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "total": 1.9591110944747925
+      },
+      "steps_to_fifty_percent_above_floor": 100,
+      "steps_to_ten_percent_above_floor": null,
+      "steps_to_one_percent_above_floor": null,
+      "observations": [
+        {
+          "optimizer_step": 0,
+          "elapsed_seconds": 0.0,
+          "training": {
+            "policy": 14.857152938842773,
+            "wdl": 1.0814415216445923,
+            "auxiliary": [
+              16.444040298461914,
+              4.280839920043945,
+              3.0249805450439453,
+              0.05953117087483406,
+              4.013275623321533,
+              0.08323889225721359
+            ],
+            "total": 15.938594818115234
+          },
+          "holdout": {
+            "policy": 14.883155822753906,
+            "wdl": 1.265594244003296,
+            "auxiliary": [
+              15.765907287597656,
+              4.129678726196289,
+              3.411339282989502,
+              0.06399646401405334,
+              4.0245561599731445,
+              0.08992792665958405
+            ],
+            "total": 16.14875030517578
+          },
+          "training_excess_ratio_to_floor": 7.135625826971352
+        },
+        {
+          "optimizer_step": 25,
+          "elapsed_seconds": 1.2274229149334133,
+          "training": {
+            "policy": 7.290798187255859,
+            "wdl": 0.8873459100723267,
+            "auxiliary": [
+              32.369163513183594,
+              0.23215064406394958,
+              1.6521793603897095,
+              0.05860820412635803,
+              6.737473964691162,
+              0.023728124797344208
+            ],
+            "total": 8.178144454956055
+          },
+          "holdout": {
+            "policy": 10.467367172241211,
+            "wdl": 1.013211727142334,
+            "auxiliary": [
+              31.05682373046875,
+              0.22586600482463837,
+              1.7018088102340698,
+              0.0638805478811264,
+              6.909966945648193,
+              0.022058960050344467
+            ],
+            "total": 11.480579376220703
+          },
+          "training_excess_ratio_to_floor": 3.174415875659409
+        },
+        {
+          "optimizer_step": 50,
+          "elapsed_seconds": 2.156483966857195,
+          "training": {
+            "policy": 4.794357776641846,
+            "wdl": 0.6682392358779907,
+            "auxiliary": [
+              21.686399459838867,
+              0.07618817687034607,
+              0.4779368042945862,
+              0.06191770359873772,
+              3.705071210861206,
+              0.02992095611989498
+            ],
+            "total": 5.462596893310547
+          },
+          "holdout": {
+            "policy": 6.930704116821289,
+            "wdl": 0.7704823017120361,
+            "auxiliary": [
+              20.885986328125,
+              0.07779847085475922,
+              0.4775277376174927,
+              0.06696170568466187,
+              3.6739981174468994,
+              0.02693844586610794
+            ],
+            "total": 7.701186180114746
+          },
+          "training_excess_ratio_to_floor": 1.7883037918148206
+        },
+        {
+          "optimizer_step": 75,
+          "elapsed_seconds": 3.1412475139368325,
+          "training": {
+            "policy": 2.9169483184814453,
+            "wdl": 0.4922882318496704,
+            "auxiliary": [
+              16.204364776611328,
+              0.18483391404151917,
+              1.0281224250793457,
+              0.042712897062301636,
+              2.926581859588623,
+              0.027235794812440872
+            ],
+            "total": 3.409236431121826
+          },
+          "holdout": {
+            "policy": 4.827559471130371,
+            "wdl": 0.8057398796081543,
+            "auxiliary": [
+              14.811843872070312,
+              0.19228914380073547,
+              1.051354169845581,
+              0.04868727922439575,
+              2.9329323768615723,
+              0.0255868062376976
+            ],
+            "total": 5.633299350738525
+          },
+          "training_excess_ratio_to_floor": 0.7401955615160201
+        },
+        {
+          "optimizer_step": 100,
+          "elapsed_seconds": 4.279593236045912,
+          "training": {
+            "policy": 2.166728973388672,
+            "wdl": 0.31396228075027466,
+            "auxiliary": [
+              14.128999710083008,
+              0.14533469080924988,
+              1.0048331022262573,
+              0.05088973417878151,
+              2.624049663543701,
+              0.03261733055114746
+            ],
+            "total": 2.4806911945343018
+          },
+          "holdout": {
+            "policy": 3.9771790504455566,
+            "wdl": 1.106595516204834,
+            "auxiliary": [
+              13.058547973632812,
+              0.14244019985198975,
+              1.035879373550415,
+              0.055750273168087006,
+              2.5762975215911865,
+              0.032604776322841644
+            ],
+            "total": 5.083774566650391
+          },
+          "training_excess_ratio_to_floor": 0.26623303881566596
+        }
+      ]
+    }
+  ]
+}
