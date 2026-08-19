@@ -1,0 +1,71 @@
+extends: vast-chess-8gpu-optimal.yaml
+
+run:
+  run_name: vast-chess-8gpu-cnn-reference
+  tensorboard_run_directory: vast-chess-8gpu-cnn-reference
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-cnn-reference
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-cnn-reference.stop
+  progressive_model_sizing:
+    models:
+      - model_id: chess-cnn-12x144
+        training_start_days: 0.0
+        network:
+          kind: convolutional
+          num_layers: 12
+          hidden_size: 144
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: chess_76_plane_direct_v2}
+          num_value_channels: 2
+          value_fc_size: 48
+
+chess:
+  self_play:
+    search:
+      full_search_budget:
+        kind: fixed
+        visits:
+          kind: staged
+          stages:
+            - {start_generation: 0, value: 200}
+            - {start_generation: 10, value: 300}
+            - {start_generation: 30, value: 400}
+            - {start_generation: 50, value: 500}
+            - {start_generation: 90, value: 600}
+            - {start_generation: 180, value: 700}
+            - {start_generation: 250, value: 800}
+            - {start_generation: 550, value: 1000}
+      fast_searches:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 50}
+          - {start_generation: 10, value: 75}
+          - {start_generation: 30, value: 100}
+          - {start_generation: 50, value: 125}
+          - {start_generation: 90, value: 150}
+      parallel_searches: 4
+    start_position:
+      minimum_remaining_plies: 15
+    full_search_probability:
+      kind: linear
+      start_generation: 0
+      end_generation: 70
+      start_value: 1.0
+      end_value: 0.25
+      rounding: none
+    greedy_after_ply:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 60}
+        - {start_generation: 110, value: 80}
+    maximum_game_plies:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 150}
+        - {start_generation: 50, value: 160}
+        - {start_generation: 80, value: 180}
+        - {start_generation: 110, value: 200}
+        - {start_generation: 140, value: 250}
+    force_fast_search_after_ply: 200
