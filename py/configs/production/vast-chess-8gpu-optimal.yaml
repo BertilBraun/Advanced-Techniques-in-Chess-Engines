@@ -68,8 +68,10 @@ training:
           - {start_generation: 400, value: 2500000}
       maximum_capacity: 2500000
       maximum_policy_entries: 60
+      materialization_processes: 8
+      materialization_batch_games: 128
     credit:
-      replay_ratio: 10
+      replay_ratio: 8
       optimizer_steps_per_quantum: 500
       maximum_optimizer_steps: null
       retained_checkpoint_interval_generations: 6
@@ -89,14 +91,14 @@ training:
   random_seed: 20260811
   progressive_model_sizing:
     models:
-      - model_id: chess-attention-500k
+      - model_id: chess-attention-1m
         training_start_days: 0.0
         network:
           kind: attention
-          num_layers: 6
-          embedding_size: 96
-          num_heads: 3
-          feedforward_size: 192
+          num_layers: 8
+          embedding_size: 128
+          num_heads: 4
+          feedforward_size: 256
           dropout: 0.0
           policy_head: {kind: chess_76_plane_direct_v2}
           num_value_channels: 2
@@ -249,28 +251,20 @@ chess:
       maximum_relaxation_per_generation: 0.01
     search:
       full_search_budget:
-        kind: adaptive
-        minimum_visits: 400
-        maximum_visits:
+        kind: fixed
+        visits:
           kind: staged
           stages:
-            - {start_generation: 0, value: 1200}
-            - {start_generation: 50, value: 1400}
-            - {start_generation: 70, value: 1600}
-            - {start_generation: 150, value: 1800}
-            - {start_generation: 250, value: 2200}
-            - {start_generation: 350, value: 2800}
-            - {start_generation: 450, value: 3200}
-        observation_interval: 100
-        leader_stability_window: 200
-        root_value_tolerance: 0.04
-        initial_top_visit_share: 0.70
-        final_top_visit_share: 0.50
-        initial_top_two_margin: 0.45
-        final_top_two_margin: 0.15
-        threshold_relaxation_visits: 1200
-        learned_gate_start_generation: 50
-        minimum_search_correction_to_unlock_tail: 0.40
+            - {start_generation: 0, value: 200}
+            - {start_generation: 10, value: 300}
+            - {start_generation: 30, value: 400}
+            - {start_generation: 50, value: 500}
+            - {start_generation: 90, value: 600}
+            - {start_generation: 180, value: 800}
+            - {start_generation: 250, value: 1000}
+            - {start_generation: 350, value: 1200}
+            - {start_generation: 450, value: 1400}
+            - {start_generation: 500, value: 1600}
       fast_searches:
         kind: staged
         stages:
@@ -346,18 +340,18 @@ chess:
     auxiliary_targets:
       - kind: next_policy
         ply_offset: 1
-        loss_weight: 0.1
-      - kind: remaining_game_length
         loss_weight: 0.05
+      - kind: remaining_game_length
+        loss_weight: 0.025
         normalization_scale: 200.0
       - kind: future_search_value
         ply_offset: 4
         smooth_l1_beta: 0.1
-        loss_weight: 0.05
+        loss_weight: 0.025
       - kind: irreversible_progress
         horizon_plies: 16
-        loss_weight: 0.025
+        loss_weight: 0.0125
       - kind: legal_moves
-        loss_weight: 0.025
+        loss_weight: 0.0125
       - kind: search_correction
-        loss_weight: 0.1
+        loss_weight: 0.05
