@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Generic, TypeVar
 
+from src.experiment.configuration import ExperimentConfiguration
 from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.replay.configuration import ReplayConfiguration
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.materialization import materialize_completed_game
+from src.replay.parallel_materialization import (
+    MaterializedCompletedGame,
+    initialize_materialization_worker,
+    materialize_completed_game_path,
+)
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, TerminationReason
 from src.self_play.resignation import ResignationCalibrationBatch, ResignationCalibrator
@@ -52,6 +59,7 @@ class ReplayManager(Generic[PositionT]):
         value_discount_per_ply: FloatGenerationSchedule,
         resignation_calibrator: ResignationCalibrator | None,
         terminal_oracle: TerminalOracle[PositionT] | None,
+        experiment_configuration: ExperimentConfiguration | None,
     ) -> None:
         if store.layout.packed_planes != state.packed_plane_layout:
             raise ValueError('Replay layout does not match the game packed-plane representation.')
@@ -68,6 +76,17 @@ class ReplayManager(Generic[PositionT]):
         self.value_discount_per_ply = value_discount_per_ply
         self.resignation_calibrator = resignation_calibrator
         self.terminal_oracle = terminal_oracle
+        if configuration.materialization_processes > 1 and experiment_configuration is None:
+            raise ValueError('Parallel replay materialization requires the experiment configuration.')
+        self.materialization_executor = (
+            None
+            if configuration.materialization_processes == 1
+            else ProcessPoolExecutor(
+                max_workers=configuration.materialization_processes,
+                initializer=initialize_materialization_worker,
+                initargs=(experiment_configuration.model_dump_json(), configuration.maximum_policy_entries),
+            )
+        )
 
     @classmethod
     def open(
@@ -80,6 +99,7 @@ class ReplayManager(Generic[PositionT]):
         value_discount_per_ply: FloatGenerationSchedule,
         terminal_oracle: TerminalOracle[PositionT] | None,
         resignation_calibrator: ResignationCalibrator | None = None,
+        experiment_configuration: ExperimentConfiguration | None = None,
     ) -> ReplayManager[PositionT]:
         replay_path = run_path / 'replay.bin'
         if replay_path.exists():
@@ -99,6 +119,7 @@ class ReplayManager(Generic[PositionT]):
             value_discount_per_ply,
             resignation_calibrator,
             terminal_oracle,
+            experiment_configuration,
         )
 
     @property
@@ -145,40 +166,41 @@ class ReplayManager(Generic[PositionT]):
         retained_visit_mass = 0
         discarded_visit_mass = 0
         completed_games: list[IngestedCompletedGame] = []
-        for path in self._available_games():
-            game = CompletedSelfPlayGame.model_validate_json(path.read_text(encoding='utf-8'))
-            if path.name != game.identity.file_name:
-                raise ValueError(f'Completed-game identity does not match its file name: {path}')
-            materialized = materialize_completed_game(
-                game,
-                self.state,
-                self.terminal_oracle,
-                self.store.layout.targets,
-                self.store.layout.maximum_policy_entries,
-                self.value_discount_per_ply,
+        ingested_paths: list[Path] = []
+        available_paths = self._available_games()
+        batch_size = 1 if self.materialization_executor is None else self.configuration.materialization_batch_games
+        for batch_start in range(0, len(available_paths), batch_size):
+            paths = available_paths[batch_start : batch_start + batch_size]
+            materialized_batch = self._materialize_paths(paths)
+            self.store.extend(
+                tuple(sample for completed in materialized_batch for sample in completed.materialized_game.samples)
             )
-            for sample in materialized.samples:
-                self.store.append(sample)
-            if calibration_batch is not None:
-                calibration_batch.observe_completed_game(game)
-            path.unlink()
-            games_ingested += 1
-            samples_added += len(materialized.samples)
-            policies_truncated += materialized.policies_truncated
-            retained_visit_mass += materialized.retained_visit_mass
-            discarded_visit_mass += materialized.discarded_visit_mass
-            completed_games.append(
-                IngestedCompletedGame(
-                    length_plies=len(game.action_ids),
-                    termination_reason=game.termination_reason,
-                    observations=game.observations,
+            for path, completed in zip(paths, materialized_batch, strict=True):
+                game = completed.completed_game
+                materialized = completed.materialized_game
+                if calibration_batch is not None:
+                    calibration_batch.observe_completed_game(game)
+                ingested_paths.append(path)
+                games_ingested += 1
+                samples_added += len(materialized.samples)
+                policies_truncated += materialized.policies_truncated
+                retained_visit_mass += materialized.retained_visit_mass
+                discarded_visit_mass += materialized.discarded_visit_mass
+                completed_games.append(
+                    IngestedCompletedGame(
+                        length_plies=len(game.action_ids),
+                        termination_reason=game.termination_reason,
+                        observations=game.observations,
+                    )
                 )
-            )
             if maximum_samples is not None and samples_added >= maximum_samples:
                 break
             if maximum_elapsed_seconds is not None and time.perf_counter() - started_at >= maximum_elapsed_seconds:
                 break
-        self.store.flush()
+        if ingested_paths:
+            self.store.flush()
+            for path in ingested_paths:
+                path.unlink()
         after = self.store.state
         return ReplayIngestion(
             games_ingested=games_ingested,
@@ -204,7 +226,32 @@ class ReplayManager(Generic[PositionT]):
         )
 
     def close(self) -> None:
+        if self.materialization_executor is not None:
+            self.materialization_executor.shutdown()
         self.store.close()
+
+    def _materialize_paths(self, paths: tuple[Path, ...]) -> tuple[MaterializedCompletedGame, ...]:
+        if self.materialization_executor is not None:
+            return tuple(self.materialization_executor.map(materialize_completed_game_path, paths))
+        completed: list[MaterializedCompletedGame] = []
+        for path in paths:
+            game = CompletedSelfPlayGame.model_validate_json(path.read_text(encoding='utf-8'))
+            if path.name != game.identity.file_name:
+                raise ValueError(f'Completed-game identity does not match its file name: {path}')
+            completed.append(
+                MaterializedCompletedGame(
+                    completed_game=game,
+                    materialized_game=materialize_completed_game(
+                        game,
+                        self.state,
+                        self.terminal_oracle,
+                        self.store.layout.targets,
+                        self.store.layout.maximum_policy_entries,
+                        self.value_discount_per_ply,
+                    ),
+                )
+            )
+        return tuple(completed)
 
     def _available_games(self) -> tuple[Path, ...]:
         if not self.inbox_path.exists():

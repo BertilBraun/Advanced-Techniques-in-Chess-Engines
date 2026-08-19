@@ -24,6 +24,7 @@ from src.self_play.completed_game import (
     GameIdentity,
     SearchObservation,
     SearchStopReason,
+    SearchVisitCounts,
     TerminationReason,
     publish_completed_self_play_game,
 )
@@ -118,7 +119,7 @@ def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> 
     observation = SearchObservation(
         ply=0,
         model_generation=3,
-        policy_target_visits=(GameSearchVisit(action_id=7, visit_count=12),),
+        policy_target_visits=SearchVisitCounts.from_native((GameSearchVisit(action_id=7, visit_count=12),)),
         root_value=0.25,
         highest_visited_child_action_id=7,
         highest_visited_child_visit_count=12,
@@ -208,7 +209,7 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
 
 def test_next_policy_eligibility_is_explicit_and_uses_future_action_space() -> None:
     future_policy = SparsePolicyTarget(
-        visits=(GameSearchVisit(action_id=42, visit_count=10),),
+        visits=SearchVisitCounts.from_native((GameSearchVisit(action_id=42, visit_count=10),)),
         legal_action_ids=(42, 43),
     )
 
@@ -216,7 +217,7 @@ def test_next_policy_eligibility_is_explicit_and_uses_future_action_space() -> N
     terminal_tail = IneligibleNextPolicyTarget()
 
     assert eligible.eligible
-    assert eligible.policy.visits[0].action_id == 42
+    assert eligible.policy.visits.action_ids[0] == 42
     assert not terminal_tail.eligible
 
 
@@ -259,7 +260,7 @@ def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_togeth
     position = CHESS_STATE_CONTRACT.initial_position()
     action_id = CHESS_STATE_CONTRACT.legal_action_ids(position)[0]
     policy = SparsePolicyTarget(
-        visits=(GameSearchVisit(action_id=action_id, visit_count=3),),
+        visits=SearchVisitCounts.from_native((GameSearchVisit(action_id=action_id, visit_count=3),)),
         legal_action_ids=CHESS_STATE_CONTRACT.legal_action_ids(position),
     )
     sample = ReplaySample(
@@ -284,10 +285,10 @@ def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_togeth
     transformed = CHESS_STATE_CONTRACT.transform_replay_targets(sample, augmentation_index=1)
     transformed_action = CHESS_STATE_CONTRACT.transform_action_id(action_id, augmentation_index=1)
 
-    assert transformed.policy.visits[0].action_id == transformed_action
+    assert transformed.policy.visits.action_ids[0] == transformed_action
     auxiliary = transformed.auxiliary_targets[0]
     assert isinstance(auxiliary, EligibleNextPolicyTarget)
-    assert auxiliary.policy.visits[0].action_id == transformed_action
+    assert auxiliary.policy.visits.action_ids[0] == transformed_action
     assert transformed.auxiliary_targets[1] == IneligibleNextPolicyTarget()
     assert transformed.auxiliary_targets[2] == EligibleRemainingGameLengthTarget(normalized_length=0.5)
     assert transformed.auxiliary_targets[3:] == sample.auxiliary_targets[3:]

@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Protocol
 
 import numpy as np
-from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import (
     NetworkDimensions,
@@ -21,7 +20,7 @@ from src.replay.contracts import (
     ReplaySample,
     SparsePolicyTarget,
 )
-from src.self_play.completed_game import TerminationReason
+from src.self_play.completed_game import SearchVisitCounts, TerminationReason
 
 
 class ChessPosition(Protocol):
@@ -159,12 +158,12 @@ class ChessStateContract(GameStateContract[ChessPosition]):
     def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
         def transform_policy(policy: SparsePolicyTarget) -> SparsePolicyTarget:
             return SparsePolicyTarget(
-                visits=tuple(
-                    GameSearchVisit(
-                        action_id=self.transform_action_id(visit.action_id, augmentation_index),
-                        visit_count=visit.visit_count,
-                    )
-                    for visit in policy.visits
+                visits=SearchVisitCounts(
+                    action_ids=tuple(
+                        self.transform_action_id(action_id, augmentation_index)
+                        for action_id in policy.visits.action_ids
+                    ),
+                    visit_counts=policy.visits.visit_counts,
                 ),
                 legal_action_ids=tuple(
                     self.transform_action_id(action_id, augmentation_index) for action_id in policy.legal_action_ids

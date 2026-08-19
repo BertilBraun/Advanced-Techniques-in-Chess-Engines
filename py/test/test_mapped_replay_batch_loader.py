@@ -19,6 +19,7 @@ from src.replay.contracts import (
 from src.replay.layout import ReplayLayout
 from src.replay.description import ReplayDescription
 from src.replay.store import ReplayStore
+from src.self_play.completed_game import SearchVisitCounts
 from src.training.batch import TrainingBatch
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 
@@ -56,9 +57,11 @@ def _layout() -> ReplayLayout:
 
 def _sample(weight: float) -> ReplaySample:
     primary = SparsePolicyTarget(
-        visits=(
-            GameSearchVisit(action_id=0, visit_count=3),
-            GameSearchVisit(action_id=1, visit_count=1),
+        visits=SearchVisitCounts.from_native(
+            (
+                GameSearchVisit(action_id=0, visit_count=3),
+                GameSearchVisit(action_id=1, visit_count=1),
+            )
         ),
         legal_action_ids=(0, 1, 2),
     )

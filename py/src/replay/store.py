@@ -7,7 +7,6 @@ from typing import BinaryIO
 
 import numpy as np
 import numpy.typing as npt
-from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import WdlTarget
 from src.replay.contracts import (
     EligibleLegalMovesTarget,
@@ -21,6 +20,7 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.replay.layout import ReplayLayout
+from src.self_play.completed_game import SearchVisitCounts
 from src.training.targets import (
     FutureSearchValueHeadLayout,
     IrreversibleProgressHeadLayout,
@@ -188,18 +188,30 @@ class ReplayStore:
         self._header[0]['logical_capacity'] = logical_capacity
 
     def append(self, sample: ReplaySample) -> None:
+        self.extend((sample,))
+
+    def extend(self, samples: tuple[ReplaySample, ...]) -> None:
         self._ensure_writable()
-        encoded_row = np.zeros((1,), dtype=self.layout.row_dtype)
-        self._write_sample(encoded_row[0], sample)
+        maximum_capacity = self.state.maximum_capacity
+        for start in range(0, len(samples), maximum_capacity):
+            self._extend_chunk(samples[start : start + maximum_capacity])
+
+    def _extend_chunk(self, samples: tuple[ReplaySample, ...]) -> None:
+        if not samples:
+            return
+        encoded_rows = np.zeros((len(samples),), dtype=self.layout.row_dtype)
+        for row, sample in zip(encoded_rows, samples, strict=True):
+            self._write_sample(row, sample)
         state = self.state
-        if state.size == state.logical_capacity:
-            physical_index = (state.head + state.size) % state.maximum_capacity
-            self._header[0]['head'] = (state.head + 1) % state.maximum_capacity
-            self._header[0]['evicted_rows'] = state.evicted_rows + 1
-        else:
-            physical_index = (state.head + state.size) % state.maximum_capacity
-            self._header[0]['size'] = state.size + 1
-        self._rows[physical_index] = encoded_row[0]
+        write_start = (state.head + state.size) % state.maximum_capacity
+        first_count = min(len(samples), state.maximum_capacity - write_start)
+        self._rows[write_start : write_start + first_count] = encoded_rows[:first_count]
+        if first_count < len(samples):
+            self._rows[: len(samples) - first_count] = encoded_rows[first_count:]
+        evicted_rows = max(0, state.size + len(samples) - state.logical_capacity)
+        self._header[0]['head'] = (state.head + evicted_rows) % state.maximum_capacity
+        self._header[0]['size'] = min(state.logical_capacity, state.size + len(samples))
+        self._header[0]['evicted_rows'] = state.evicted_rows + evicted_rows
 
     def sample_at(self, logical_index: int) -> ReplaySample:
         state = self.state
@@ -283,19 +295,20 @@ class ReplayStore:
         row['source_timestamp'] = sample.source_created_at_seconds
 
     def _write_policy(self, row: np.void, prefix: str, policy: SparsePolicyTarget) -> None:
-        if len(policy.visits) > self.layout.maximum_policy_entries:
+        if len(policy.visits.action_ids) > self.layout.maximum_policy_entries:
             raise ValueError('Sparse policy exceeds the configured retained-entry count.')
-        if any(visit.action_id >= self.layout.targets.action_size for visit in policy.visits):
+        if any(action_id >= self.layout.targets.action_size for action_id in policy.visits.action_ids):
             raise ValueError('Sparse policy contains an action outside the action space.')
-        if any(visit.visit_count > 65_535 for visit in policy.visits):
+        if any(visit_count > 65_535 for visit_count in policy.visits.visit_counts):
             raise ValueError('Sparse policy visit count does not fit uint16.')
         if len(policy.legal_action_ids) > self.layout.maximum_legal_actions:
             raise ValueError('Sparse policy exceeds the game maximum legal-action count.')
         if any(action_id >= self.layout.targets.action_size for action_id in policy.legal_action_ids):
             raise ValueError('Sparse policy contains a legal action outside the action space.')
-        row[f'{prefix}_entry_count'] = len(policy.visits)
-        row[f'{prefix}_action_ids'][: len(policy.visits)] = tuple(visit.action_id for visit in policy.visits)
-        row[f'{prefix}_visit_counts'][: len(policy.visits)] = tuple(visit.visit_count for visit in policy.visits)
+        entry_count = len(policy.visits.action_ids)
+        row[f'{prefix}_entry_count'] = entry_count
+        row[f'{prefix}_action_ids'][:entry_count] = policy.visits.action_ids
+        row[f'{prefix}_visit_counts'][:entry_count] = policy.visits.visit_counts
         row[f'{prefix}_legal_count'] = len(policy.legal_action_ids)
         row[f'{prefix}_legal_action_ids'][: len(policy.legal_action_ids)] = policy.legal_action_ids
 
@@ -355,9 +368,9 @@ class ReplayStore:
         visits = row[f'{prefix}_visit_counts'][:count]
         legal_count = int(row[f'{prefix}_legal_count'])
         return SparsePolicyTarget(
-            visits=tuple(
-                GameSearchVisit(action_id=int(action), visit_count=int(visit_count))
-                for action, visit_count in zip(actions, visits)
+            visits=SearchVisitCounts(
+                action_ids=tuple(int(action) for action in actions),
+                visit_counts=tuple(int(visit_count) for visit_count in visits),
             ),
             legal_action_ids=tuple(int(action_id) for action_id in row[f'{prefix}_legal_action_ids'][:legal_count]),
         )

@@ -11,6 +11,7 @@ from src.self_play.completed_game import (
     GameIdentity,
     SearchObservation,
     SearchStopReason,
+    SearchVisitCounts,
     TerminationReason,
 )
 from src.self_play.parameters import RestartStateStartParameters
@@ -58,8 +59,11 @@ def completed_game(
             SearchObservation(
                 ply=observation_ply,
                 model_generation=model_generation,
-                policy_target_visits=tuple(
-                    GameSearchVisit(action_id=action_id, visit_count=visit_count) for action_id, visit_count in visits
+                policy_target_visits=SearchVisitCounts.from_native(
+                    tuple(
+                        GameSearchVisit(action_id=action_id, visit_count=visit_count)
+                        for action_id, visit_count in visits
+                    )
                 ),
                 root_value=root_value,
                 highest_visited_child_action_id=max(visits, key=lambda item: item[1])[0],

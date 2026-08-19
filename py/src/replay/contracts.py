@@ -3,22 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, TypeAlias
 
-from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlanePayload
+from src.self_play.completed_game import SearchVisitCounts
 
 
 @dataclass(frozen=True)
 class SparsePolicyTarget:
-    visits: tuple[GameSearchVisit, ...]
+    visits: SearchVisitCounts
     legal_action_ids: tuple[int, ...]
 
     def __post_init__(self) -> None:
-        if not self.visits or any(visit.visit_count <= 0 for visit in self.visits):
-            raise ValueError('Sparse policy targets require positive visits.')
-        action_ids = tuple(visit.action_id for visit in self.visits)
-        if len(set(action_ids)) != len(action_ids):
-            raise ValueError('Sparse policy action IDs must be unique.')
+        action_ids = self.visits.action_ids
         if not self.legal_action_ids or any(action_id < 0 for action_id in self.legal_action_ids):
             raise ValueError('Sparse policy targets require nonnegative legal action IDs.')
         if len(set(self.legal_action_ids)) != len(self.legal_action_ids):

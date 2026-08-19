@@ -14,6 +14,7 @@ from src.replay.contracts import (
 )
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
+from src.self_play.completed_game import SearchVisitCounts
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 
 
@@ -35,9 +36,11 @@ def _layout(ply_offset: int = 1) -> ReplayLayout:
 
 def _sample(layout: ReplayLayout, action_id: int, generation: int, auxiliary_eligible: bool = True) -> ReplaySample:
     policy = SparsePolicyTarget(
-        visits=(
-            GameSearchVisit(action_id=action_id, visit_count=7),
-            GameSearchVisit(action_id=(action_id + 1) % 10, visit_count=3),
+        visits=SearchVisitCounts.from_native(
+            (
+                GameSearchVisit(action_id=action_id, visit_count=7),
+                GameSearchVisit(action_id=(action_id + 1) % 10, visit_count=3),
+            )
         ),
         legal_action_ids=tuple(range(10)),
     )
@@ -99,12 +102,32 @@ def test_replay_store_rejects_layout_with_same_width_but_different_target_semant
         ReplayStore.open(path, _layout(ply_offset=2))
 
 
+def test_replay_store_bulk_extend_matches_individual_appends_across_wraparound(tmp_path: Path) -> None:
+    layout = _layout()
+    samples = tuple(_sample(layout, action_id % 9, action_id) for action_id in range(8))
+    appended = ReplayStore.create(tmp_path / 'appended.bin', layout, maximum_capacity=5, logical_capacity=3)
+    extended = ReplayStore.create(tmp_path / 'extended.bin', layout, maximum_capacity=5, logical_capacity=3)
+
+    for sample in samples:
+        appended.append(sample)
+    extended.extend(samples)
+
+    assert extended.state == appended.state
+    assert tuple(extended.sample_at(index) for index in range(3)) == tuple(
+        appended.sample_at(index) for index in range(3)
+    )
+    appended.close()
+    extended.close()
+
+
 def test_replay_store_rejects_sparse_policy_beyond_fixed_width(tmp_path: Path) -> None:
     layout = _layout()
     store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=2, logical_capacity=2)
     sample = _sample(layout, 0, 0)
     oversized_policy = SparsePolicyTarget(
-        visits=tuple(GameSearchVisit(action_id=action_id, visit_count=1) for action_id in range(5)),
+        visits=SearchVisitCounts.from_native(
+            tuple(GameSearchVisit(action_id=action_id, visit_count=1) for action_id in range(5))
+        ),
         legal_action_ids=tuple(range(10)),
     )
     oversized = ReplaySample(

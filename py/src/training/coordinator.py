@@ -80,6 +80,7 @@ class Coordinator:
             game.value_discount_per_ply,
             game.terminal_oracle,
             self.resignation_calibrator,
+            self.configuration,
         )
         self.self_play_group = SelfPlayGroup(game)
         self.evaluation_manager = EvaluationManager(self.configuration, self.ledger.state.active_checkpoint)

@@ -13,6 +13,7 @@ from src.self_play.completed_game import (
     SearchCheckpointObservation,
     SearchObservation,
     SearchStopReason,
+    SearchVisitCounts,
     TerminationReason,
 )
 from src.training.checkpoint import CheckpointReference
@@ -139,7 +140,7 @@ def test_adaptive_search_telemetry_reports_scalar_checkpoints_and_gate_outcome()
     observation = SearchObservation(
         ply=0,
         model_generation=50,
-        policy_target_visits=(GameSearchVisit(action_id=2, visit_count=500),),
+        policy_target_visits=SearchVisitCounts.from_native((GameSearchVisit(action_id=2, visit_count=500),)),
         root_value=0.22,
         highest_visited_child_action_id=2,
         highest_visited_child_visit_count=500,

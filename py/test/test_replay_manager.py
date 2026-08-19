@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
@@ -24,6 +25,7 @@ from src.self_play.completed_game import (
     GameIdentity,
     SearchObservation,
     SearchStopReason,
+    SearchVisitCounts,
     TerminationReason,
     publish_completed_self_play_game,
 )
@@ -127,9 +129,11 @@ def _completed_game() -> CompletedSelfPlayGame:
             SearchObservation(
                 ply=ply,
                 model_generation=2,
-                policy_target_visits=(
-                    GameSearchVisit(action_id=other_action, visit_count=3),
-                    GameSearchVisit(action_id=selected_action, visit_count=10),
+                policy_target_visits=SearchVisitCounts.from_native(
+                    (
+                        GameSearchVisit(action_id=other_action, visit_count=3),
+                        GameSearchVisit(action_id=selected_action, visit_count=10),
+                    )
                 ),
                 root_value=0.25,
                 highest_visited_child_action_id=selected_action,
@@ -192,7 +196,7 @@ def test_shared_materialization_reconstructs_perspective_and_trajectory_targets(
     assert materialized.samples[0].wdl_target == WdlTarget(win=0.0, draw=0.0, loss=1.0)
     assert isinstance(materialized.samples[0].auxiliary_targets[0], EligibleNextPolicyTarget)
     assert isinstance(materialized.samples[-1].auxiliary_targets[0], IneligibleNextPolicyTarget)
-    assert materialized.samples[0].policy.visits[0].visit_count == 10
+    assert materialized.samples[0].policy.visits.visit_counts[0] == 10
 
 
 def test_materialization_reuses_trajectory_legal_actions_for_all_targets() -> None:
@@ -233,7 +237,7 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
             SearchObservation(
                 ply=2,
                 model_generation=1,
-                policy_target_visits=(GameSearchVisit(action_id=2, visit_count=8),),
+                policy_target_visits=SearchVisitCounts.from_native((GameSearchVisit(action_id=2, visit_count=8),)),
                 root_value=0.0,
                 highest_visited_child_action_id=2,
                 highest_visited_child_visit_count=8,
@@ -563,6 +567,68 @@ def test_replay_manager_stops_after_reaching_sample_limit(tmp_path: Path) -> Non
     assert ingestion.games_ingested == 1
     assert ingestion.samples_added == 3
     assert len(tuple(inbox.glob('*.json'))) == 1
+    manager.close()
+
+
+def test_replay_manager_does_not_flush_when_inbox_is_empty(tmp_path: Path) -> None:
+    configuration = ReplayConfiguration(capacity=6, maximum_capacity=6, maximum_policy_entries=1)
+    layout = ReplayLayout(
+        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
+        targets=_target_layout(),
+        maximum_policy_entries=1,
+        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
+    )
+    manager = ReplayManager.open(
+        tmp_path,
+        LINEAR_STATE_CONTRACT,
+        layout,
+        configuration,
+        model_generation=2,
+        value_discount_per_ply=UNDISCOUNTED_VALUES,
+        terminal_oracle=None,
+    )
+    flush = Mock()
+    manager.store.flush = flush
+
+    ingestion = manager.ingest_available_games(2)
+
+    assert ingestion.games_ingested == 0
+    flush.assert_not_called()
+    manager.close()
+
+
+def test_replay_manager_flushes_before_removing_ingested_games(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    publish_completed_self_play_game(inbox, _completed_game())
+    configuration = ReplayConfiguration(capacity=6, maximum_capacity=6, maximum_policy_entries=1)
+    layout = ReplayLayout(
+        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
+        targets=_target_layout(),
+        maximum_policy_entries=1,
+        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
+    )
+    manager = ReplayManager.open(
+        tmp_path,
+        LINEAR_STATE_CONTRACT,
+        layout,
+        configuration,
+        model_generation=2,
+        value_discount_per_ply=UNDISCOUNTED_VALUES,
+        terminal_oracle=None,
+    )
+    original_flush = manager.store.flush
+    completed_path = next(inbox.glob('*.json'))
+
+    def assert_game_remains_until_flush() -> None:
+        assert completed_path.exists()
+        original_flush()
+
+    manager.store.flush = assert_game_remains_until_flush
+
+    manager.ingest_available_games(2)
+
+    assert not completed_path.exists()
+    manager.store.flush = original_flush
     manager.close()
 
 

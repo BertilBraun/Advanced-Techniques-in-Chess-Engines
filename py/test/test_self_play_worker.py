@@ -15,6 +15,7 @@ from src.self_play.completed_game import (
     GameIdentity,
     SearchObservation,
     SearchStopReason,
+    SearchVisitCounts,
     TerminationReason,
 )
 from src.self_play.parameters import (
@@ -301,7 +302,7 @@ def test_worker_owns_shared_search_move_selection_and_generation_transition(tmp_
     assert [game.root.reset_count for game in worker.active_games] == [1, 1, 1]
     assert all(game.action_ids == [0] for game in worker.active_games)
     assert all(
-        game.observations[0].policy_target_visits == (GameSearchVisit(action_id=0, visit_count=3),)
+        game.observations[0].policy_target_visits.native_visits() == (GameSearchVisit(action_id=0, visit_count=3),)
         for game in worker.active_games
     )
     assert game.search.generations == [1]
@@ -408,7 +409,9 @@ def test_worker_selects_from_actual_visits_and_records_pruned_target_visits(tmp_
     worker.run_batch()
 
     assert worker.active_games[0].action_ids == [1]
-    assert worker.active_games[0].observations[0].policy_target_visits == (GameSearchVisit(action_id=0, visit_count=7),)
+    assert worker.active_games[0].observations[0].policy_target_visits.native_visits() == (
+        GameSearchVisit(action_id=0, visit_count=7),
+    )
 
 
 def test_worker_resigns_with_frozen_published_threshold(tmp_path: Path) -> None:
@@ -521,10 +524,12 @@ def restart_source_game() -> CompletedSelfPlayGame:
             SearchObservation(
                 ply=0,
                 model_generation=0,
-                policy_target_visits=(
-                    GameSearchVisit(action_id=0, visit_count=45),
-                    GameSearchVisit(action_id=1, visit_count=30),
-                    GameSearchVisit(action_id=2, visit_count=25),
+                policy_target_visits=SearchVisitCounts.from_native(
+                    (
+                        GameSearchVisit(action_id=0, visit_count=45),
+                        GameSearchVisit(action_id=1, visit_count=30),
+                        GameSearchVisit(action_id=2, visit_count=25),
+                    )
                 ),
                 root_value=0.0,
                 highest_visited_child_action_id=0,

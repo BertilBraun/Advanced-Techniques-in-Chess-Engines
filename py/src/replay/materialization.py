@@ -16,7 +16,12 @@ from src.replay.contracts import (
     ReplaySample,
     SparsePolicyTarget,
 )
-from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, TerminationReason
+from src.self_play.completed_game import (
+    CompletedSelfPlayGame,
+    SearchObservation,
+    SearchVisitCounts,
+    TerminationReason,
+)
 from src.self_play.policy import ordered_search_visits
 from src.training.targets import (
     FutureSearchValueHeadLayout,
@@ -65,7 +70,10 @@ def retain_policy(
     retained = ordered[:maximum_entries]
     discarded = ordered[maximum_entries:]
     return PolicyRetention(
-        policy=SparsePolicyTarget(visits=retained, legal_action_ids=legal_action_ids),
+        policy=SparsePolicyTarget(
+            visits=SearchVisitCounts.from_native(retained),
+            legal_action_ids=legal_action_ids,
+        ),
         truncated=bool(discarded),
         retained_visit_mass=sum(visit.visit_count for visit in retained),
         discarded_visit_mass=sum(visit.visit_count for visit in discarded),
@@ -292,7 +300,7 @@ def _validate_observation_actions(
     observation: SearchObservation,
     legal_action_ids: tuple[int, ...],
 ) -> None:
-    if any(visit.action_id not in legal_action_ids for visit in observation.policy_target_visits):
+    if any(action_id not in legal_action_ids for action_id in observation.policy_target_visits.action_ids):
         raise ValueError(f'Observation at ply {observation.ply} contains an illegal action.')
     if observation.highest_visited_child_action_id not in legal_action_ids:
         raise ValueError(f'Observation at ply {observation.ply} has an illegal highest-visited child.')

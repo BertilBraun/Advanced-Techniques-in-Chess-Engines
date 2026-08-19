@@ -14,6 +14,7 @@ from src.replay.contracts import ReplaySample, SparsePolicyTarget
 from src.replay.layout import ReplayLayout
 from src.replay.description import ReplayDescription
 from src.replay.store import ReplayStore
+from src.self_play.completed_game import SearchVisitCounts
 from src.training.checkpoint import CheckpointReference
 from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
@@ -114,9 +115,11 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
             ReplaySample(
                 encoded_state=game.state.packed_plane_layout.value(bytes(game.state.packed_plane_layout.payload_bytes)),
                 policy=SparsePolicyTarget(
-                    visits=(
-                        GameSearchVisit(action_id=0, visit_count=3),
-                        GameSearchVisit(action_id=1, visit_count=1),
+                    visits=SearchVisitCounts.from_native(
+                        (
+                            GameSearchVisit(action_id=0, visit_count=3),
+                            GameSearchVisit(action_id=1, visit_count=1),
+                        )
                     ),
                     legal_action_ids=(0, 1),
                 ),

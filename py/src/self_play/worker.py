@@ -14,6 +14,7 @@ from src.self_play.completed_game import (
     SearchCheckpointObservation,
     SearchObservation,
     SearchStopReason,
+    SearchVisitCounts,
     TerminationReason,
     publish_completed_self_play_game,
 )
@@ -256,7 +257,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         observation = SearchObservation(
             ply=ply,
             model_generation=self.model_generation,
-            policy_target_visits=policy_target_visits,
+            policy_target_visits=SearchVisitCounts.from_native(policy_target_visits),
             root_value=result.root_value,
             highest_visited_child_action_id=result.highest_visited_child_action_id,
             highest_visited_child_visit_count=result.highest_visited_child_visit_count,

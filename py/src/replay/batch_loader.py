@@ -10,7 +10,6 @@ from typing import Generic, TypeVar
 import numpy as np
 import numpy.typing as npt
 import torch
-from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import GameStateContract
 from src.games.representation import decode_packed_planes
 from src.replay.contracts import (
@@ -21,6 +20,7 @@ from src.replay.contracts import (
 )
 from src.replay.description import ReplayDescription
 from src.replay.store import ReplayStore
+from src.self_play.completed_game import SearchVisitCounts
 from src.training.batch import TrainingBatch
 from src.training.targets import auxiliary_head_output_size
 
@@ -293,8 +293,8 @@ def build_training_batch(
 
 def _write_dense_policy(
     destination: npt.NDArray[np.float32],
-    visits: Sequence[GameSearchVisit],
+    visits: SearchVisitCounts,
 ) -> None:
-    total_visits = sum(visit.visit_count for visit in visits)
-    for visit in visits:
-        destination[visit.action_id] = visit.visit_count / total_visits
+    action_ids = np.asarray(visits.action_ids, dtype=np.int64)
+    visit_counts = np.asarray(visits.visit_counts, dtype=np.float32)
+    destination[action_ids] = visit_counts / visit_counts.sum()
