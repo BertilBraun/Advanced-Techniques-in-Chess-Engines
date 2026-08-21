@@ -40,5 +40,6 @@ def materialize_completed_game_path(path: Path) -> MaterializedCompletedGame:
             _worker_game.target_layout,
             _maximum_policy_entries,
             _worker_game.value_discount_per_ply,
+            censor_remaining_game_length_on_cut_games=_worker_game.censor_remaining_game_length_on_cut_games,
         ),
     )
