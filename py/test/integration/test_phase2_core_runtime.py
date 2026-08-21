@@ -82,10 +82,16 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
             'credit': credit.model_dump(mode='json'),
         }
     )
+    initial_model = configuration.training.initial_model.validated_copy(
+        update={'network': network.model_dump(mode='json')}
+    )
+    progressive_model_sizing = configuration.training.progressive_model_sizing.validated_copy(
+        update={'models': [initial_model.model_dump(mode='json')]}
+    )
     training = configuration.training.validated_copy(
         update={
             'save_path': str(output_path),
-            'network': network.model_dump(mode='json'),
+            'progressive_model_sizing': progressive_model_sizing.model_dump(mode='json'),
             'trainer': trainer.model_dump(mode='json'),
             'topology': topology.model_dump(mode='json'),
             'lifecycle': lifecycle.model_dump(mode='json'),
