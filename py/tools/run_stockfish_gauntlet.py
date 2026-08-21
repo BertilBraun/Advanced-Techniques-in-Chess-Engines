@@ -420,6 +420,7 @@ def _run_shard(request: _ShardRequest) -> GauntletShardResult:
     definition = StockfishFixedNodesEvaluationDefinition(
         kind='stockfish_fixed_nodes',
         definition_id=f'stockfish-fixed-nodes-{request.stockfish_nodes}',
+        nodes=request.stockfish_nodes,
         opening_pair_count=request.pair_count,
         maximum_game_plies=300,
         search=_search_configuration(request.model_search_budget),
@@ -430,7 +431,7 @@ def _run_shard(request: _ShardRequest) -> GauntletShardResult:
         definition=definition,
         boundary_seconds=1,
         candidate=checkpoint,
-        opponent=StockfishFixedNodesOpponent(kind='stockfish_fixed_nodes'),
+        opponent=StockfishFixedNodesOpponent(kind='stockfish_fixed_nodes', nodes=request.stockfish_nodes),
         device_id=request.device_id,
         deadline_seconds=7 * 24 * 60 * 60,
         random_seed=request.match_random_seed + request.first_pair_index,
@@ -440,7 +441,7 @@ def _run_shard(request: _ShardRequest) -> GauntletShardResult:
     engine_configuration = _stockfish_configuration(loaded, request.stockfish_executable, request.stockfish_nodes)
     client = StockfishClient(engine_configuration, game.state, request.stockfish_executable.resolve())
     stockfish_identity = client.engine_identity
-    external_engine = StockfishFixedNodesMatchEngine(client)
+    external_engine = StockfishFixedNodesMatchEngine(client, request.stockfish_nodes)
     timed_selector: _TimedSearchActionSelector | None = None
     if isinstance(request.model_search_budget, TimedModelSearchBudget):
         timed_selector = _TimedSearchActionSelector(

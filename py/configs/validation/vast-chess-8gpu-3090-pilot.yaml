@@ -71,6 +71,7 @@ evaluation:
           sdpa_backend: memory_efficient
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-pilot
+      nodes: 1000
       opening_pair_count: 1
       maximum_game_plies: 40
       search: *pilot_evaluation_search

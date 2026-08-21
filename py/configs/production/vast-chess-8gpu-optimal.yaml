@@ -229,7 +229,26 @@ evaluation:
       maximum_game_plies: 300
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-30
+      nodes: 30
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-100
+      nodes: 100
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-300
+      nodes: 300
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-1000
+      nodes: 1000
       opening_pair_count: 50
       maximum_game_plies: 300
       search: *evaluation_search
