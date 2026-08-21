@@ -12,7 +12,7 @@
 #
 # Keys owned by parallel Phase A streams that do not resolve until phase-a merges (marked WP1/WP3 below):
 #   trainer.warmup_optimizer_steps, policy_head kind, staged parallel_searches, virtual_loss_weight,
-#   per-definition match_nodes on stockfish_fixed_nodes.
+#   per-definition nodes on stockfish_fixed_nodes.
 game: chess
 run:
   run_name: vast-chess-8gpu-run1
@@ -210,28 +210,28 @@ evaluation:
       opening_pair_count: 50
       maximum_game_plies: 300
       search: *evaluation_search
-    # New fixed-node rungs (WP3): per-definition match_nodes resolves after phase-a merge.
+    # New fixed-node rungs (WP3): per-definition node counts per the WP3 schema.
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-30
-      match_nodes: 30
+      nodes: 30
       opening_pair_count: 50
       maximum_game_plies: 300
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-100
-      match_nodes: 100
+      nodes: 100
       opening_pair_count: 50
       maximum_game_plies: 300
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-300
-      match_nodes: 300
+      nodes: 300
       opening_pair_count: 50
       maximum_game_plies: 300
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-1000
-      match_nodes: 1000
+      nodes: 1000
       opening_pair_count: 50
       maximum_game_plies: 300
       search: *evaluation_search
