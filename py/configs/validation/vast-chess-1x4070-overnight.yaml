@@ -1,0 +1,46 @@
+# Overnight WP7-style smoke of the "everything on" recipe on the Phase A test node (1x RTX 4070,
+# instance 48316653). Identical to run2 in every training-relevant respect — batch, credits per
+# generation, replay, objective, schedules — only the topology is 1-GPU, so wall time per generation
+# is ~8x the 8-GPU node. Gating is by time / 8, per the 2026-08-21 decision.
+extends: vast-chess-8gpu-run2.yaml
+
+run:
+  run_name: vast-chess-1x4070-overnight
+  tensorboard_run_directory: vast-chess-1x4070-overnight
+  hardware:
+    provider_name: vast.ai
+    offer_id: '48316653'
+    gpu_model: NVIDIA GeForce RTX 4070
+    gpu_count: 1
+    logical_cpu_count: 16
+    minimum_ram_gib: 28
+    minimum_disk_gib: 100
+
+training:
+  save_path: py/training_data/validation/vast-chess-1x4070-overnight
+  trainer:
+    local_batch_size: 2048
+  topology:
+    trainer:
+      device_type: cuda
+      process_group_backend: nccl
+      rank_zero_device_id: 0
+      ddp_device_ids: [0]
+      cpu_threads: 4
+      interop_threads: 1
+    self_play:
+      device_ids: [0, 0, 0]
+      parallel_games_per_process: 512
+      tensorboard_processes: 1
+      node_ids_to_pause_during_training: [1, 2]
+    evaluation:
+      device_cycle: [0]
+  limits:
+    hourly_price: 0.135
+    maximum_cost: null
+    maximum_wall_time_seconds: 36000
+    manual_stop_file: /workspace/run-control/stop/vast-chess-1x4070-overnight.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 20.0
+    resource_telemetry_interval_seconds: 5.0
