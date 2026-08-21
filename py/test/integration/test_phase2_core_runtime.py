@@ -15,7 +15,6 @@ from src.replay.manager import ReplayManager
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.persistence import create_model, create_optimizer, save_model_and_optimizer
-from src.training.network import GoPointPassPolicyHeadConfiguration
 from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
@@ -32,7 +31,6 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
         update={
             'num_layers': 1,
             'hidden_size': 8,
-            'policy_head': GoPointPassPolicyHeadConfiguration(),
             'num_value_channels': 2,
             'value_fc_size': 8,
         }
