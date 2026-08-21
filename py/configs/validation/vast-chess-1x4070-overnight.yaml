@@ -18,6 +18,22 @@ run:
 
 training:
   save_path: py/training_data/validation/vast-chess-1x4070-overnight
+  # Attention 8x128 with the plane heads per the 2026-08-21 WP4/WP5 results (first progressive rung;
+  # sizing itself stays off for this smoke). LR schedule and 1,000-step warm-up inherited from run1/run2.
+  progressive_model_sizing:
+    models:
+      - model_id: chess-attention-8x128
+        training_start_days: 0.0
+        network:
+          kind: attention
+          num_layers: 8
+          embedding_size: 128
+          num_heads: 4
+          feedforward_size: 256
+          dropout: 0.0
+          policy_head: {kind: chess_76_plane_direct_v2}
+          num_value_channels: 2
+          value_fc_size: 48
   trainer:
     local_batch_size: 2048
   topology:
