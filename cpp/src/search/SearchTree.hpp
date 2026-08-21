@@ -271,7 +271,8 @@ private:
     [[nodiscard]] float edgeValueForParent(const Node &parent, const Edge &edge,
                                            const TreeSearchParameters &parameters) const {
         if (edge.visits > 0) {
-            return (-m_valueDiscountPerPly * edge.value_sum - edge.virtual_loss) /
+            return (-m_valueDiscountPerPly * edge.value_sum -
+                    parameters.virtual_loss_weight * edge.virtual_loss) /
                    static_cast<float>(edge.visits);
         }
         const float parentMean =

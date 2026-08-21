@@ -141,6 +141,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
                 first_play_urgency=first_play_urgency,
                 forced_playout_coefficient=parameters.forced_playout_coefficient,
                 value_discount_per_ply=parameters.value_discount_per_ply,
+                virtual_loss_weight=parameters.virtual_loss_weight,
             ),
             dirichlet_alpha=parameters.dirichlet_alpha,
             dirichlet_epsilon=parameters.dirichlet_epsilon,

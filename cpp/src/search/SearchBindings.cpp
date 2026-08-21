@@ -36,14 +36,16 @@ void bind_search(py::module_ &module) {
         .def_readonly("kind", &FirstPlayUrgencyParameters::kind)
         .def_readonly("reduction", &FirstPlayUrgencyParameters::reduction);
     py::class_<TreeSearchParameters>(module, "TreeSearchParameters")
-        .def(py::init<float, FirstPlayUrgencyParameters, float, float>(),
+        .def(py::init<float, FirstPlayUrgencyParameters, float, float, float>(),
              py::arg("exploration_constant"), py::arg("first_play_urgency"),
-             py::arg("forced_playout_coefficient"), py::arg("value_discount_per_ply"))
+             py::arg("forced_playout_coefficient"), py::arg("value_discount_per_ply"),
+             py::arg("virtual_loss_weight") = 1.0F)
         .def_readonly("exploration_constant", &TreeSearchParameters::exploration_constant)
         .def_readonly("first_play_urgency", &TreeSearchParameters::first_play_urgency)
         .def_readonly("forced_playout_coefficient",
                       &TreeSearchParameters::forced_playout_coefficient)
-        .def_readonly("value_discount_per_ply", &TreeSearchParameters::value_discount_per_ply);
+        .def_readonly("value_discount_per_ply", &TreeSearchParameters::value_discount_per_ply)
+        .def_readonly("virtual_loss_weight", &TreeSearchParameters::virtual_loss_weight);
 
     py::class_<InferenceConfiguration>(module, "InferenceConfiguration")
         .def(py::init<int, std::string, InferenceDevice, SdpaBackend>(), py::arg("device_id"),

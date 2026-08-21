@@ -179,6 +179,53 @@ void testReservationLifecycle() {
     requireNear(tree.root().virtual_loss, 0.0F, "Completion did not remove root virtual loss");
 }
 
+bool reservedSubtreeStaysPreferred(const float virtualLossWeight) {
+    GoTree tree = makeGoTree(8);
+    expandRoot(tree, 2);
+    const std::size_t firstChild = materializeRootEdge(tree, 0);
+    tree.backPropagate(firstChild, -0.6F);
+    const std::vector<Go7Game::Action> legalActions =
+        Go7Game::legalActions(tree.node(firstChild).position);
+    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, 0.5F};
+    inference.actions.emplace_back(legalActions[0], 0.5F);
+    inference.actions.emplace_back(legalActions[1], 0.5F);
+    tree.expand(firstChild, inference);
+    for (GameSearchEdge<Go7Game::Action> &edge : tree.root().children) {
+        edge.prior = 0.5F;
+    }
+    const TreeSearchParameters materialization(
+        1e-4F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero), 0.0F, 1.0F);
+    const std::size_t grandchild = *tree.selectAvailableLeaf(materialization);
+    require(tree.node(grandchild).parent_index == firstChild,
+            "Virtual-loss fixture did not materialize a grandchild");
+    tree.reserve(grandchild);
+
+    const TreeSearchParameters parameters(1e-4F,
+                                          FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
+                                          0.0F, 1.0F, virtualLossWeight);
+    const std::optional<std::size_t> leaf = tree.selectAvailableLeaf(parameters);
+    require(leaf.has_value(), "Virtual-loss fixture left no selectable leaf");
+    return tree.node(*leaf).parent_index == firstChild;
+}
+
+void testFractionalVirtualLossWeight() {
+    // The reserved-path root edge holds value_sum -0.6 over two visits, so the root sees
+    // (0.6 - weight) / 2: a full loss pushes selection to the sibling root edge, a half
+    // loss keeps the reserved subtree preferred and descends to its free sibling leaf.
+    require(!reservedSubtreeStaysPreferred(1.0F),
+            "Full virtual loss did not divert selection away from the reserved subtree");
+    require(reservedSubtreeStaysPreferred(0.5F),
+            "Half virtual loss did not keep the reserved subtree preferred");
+    bool weightRejected = false;
+    try {
+        static_cast<void>(TreeSearchParameters(
+            1.0F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero), 0.0F, 1.0F, 1.5F));
+    } catch (const std::invalid_argument &) {
+        weightRejected = true;
+    }
+    require(weightRejected, "Virtual-loss weight above one was not rejected");
+}
+
 void testRecursiveDiscount() {
     GoTree tree = makeGoTree(8);
     expandRoot(tree, 1);
@@ -385,6 +432,7 @@ int runGameSearchTreeTests() {
         testConsistentDiscount();
         testLocalAndZeroVisitRetention();
         testReservationLifecycle();
+        testFractionalVirtualLossWeight();
         testRecursiveDiscount();
         testImportancePruningAndRematerialization();
         testFreshRootNoiseUsesRawPriors();
