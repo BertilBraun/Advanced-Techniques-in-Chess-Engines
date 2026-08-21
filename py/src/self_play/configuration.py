@@ -9,6 +9,7 @@ from src.experiment.generation_schedule import (
     FloatGenerationSchedule,
     IntegerGenerationSchedule,
     defined_schedule_values,
+    schedule_change_generations,
 )
 from src.self_play.parameters import (
     AdaptiveFullSearchBudget,
@@ -163,7 +164,8 @@ FullSearchBudgetConfiguration: TypeAlias = Annotated[
 class SelfPlaySearchParams(FrozenModel):
     full_search_budget: FullSearchBudgetConfiguration
     fast_searches: IntegerGenerationSchedule
-    parallel_searches: int = Field(gt=0)
+    parallel_searches: IntegerGenerationSchedule
+    virtual_loss_weight: float = Field(default=1.0, ge=0.0, le=1.0)
     dirichlet_epsilon: FloatGenerationSchedule
     dirichlet_alpha: FloatGenerationSchedule
     exploration_constant: FloatGenerationSchedule
@@ -174,10 +176,21 @@ class SelfPlaySearchParams(FrozenModel):
     def validate_scheduled_values(self) -> SelfPlaySearchParams:
         match self.full_search_budget:
             case FixedFullSearchBudgetConfiguration(visits=visits):
-                maximum_visits = defined_schedule_values(visits)
+                maximum_visits_schedule = visits
             case AdaptiveFullSearchBudgetConfiguration(maximum_visits=maximum_visits_schedule):
-                maximum_visits = defined_schedule_values(maximum_visits_schedule)
-        if any(value <= self.parallel_searches for value in maximum_visits):
+                pass
+        if any(value <= 0 for value in defined_schedule_values(self.parallel_searches)):
+            raise ValueError('Every parallel-search count must be positive.')
+        comparison_generations = sorted(
+            {
+                *schedule_change_generations(maximum_visits_schedule),
+                *schedule_change_generations(self.parallel_searches),
+            }
+        )
+        if any(
+            maximum_visits_schedule.value_at(generation) <= self.parallel_searches.value_at(generation)
+            for generation in comparison_generations
+        ):
             raise ValueError('Every full-search budget must exceed the parallel-search count.')
         if any(value <= 0 for value in defined_schedule_values(self.fast_searches)):
             raise ValueError('Every fast-search budget must be positive.')
@@ -306,7 +319,8 @@ class SelfPlayConfiguration(FrozenModel):
         return ResolvedSelfPlayParameters(
             start_position=self.start_position.resolve(model_generation),
             full_search_probability=self.full_search_probability.value_at(model_generation),
-            parallel_searches=search.parallel_searches,
+            parallel_searches=search.parallel_searches.value_at(model_generation),
+            virtual_loss_weight=search.virtual_loss_weight,
             full_search_budget=search.full_search_budget.resolve(model_generation),
             fast_searches=search.fast_searches.value_at(model_generation),
             forced_playout_coefficient=search.forced_playouts.resolved_coefficient(),

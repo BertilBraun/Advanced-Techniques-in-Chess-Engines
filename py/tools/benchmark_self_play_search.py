@@ -213,7 +213,7 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         inference_device=arguments.inference_device,
         model_generation=arguments.generation,
         parallel_games=arguments.games,
-        parallel_searches=game.self_play_configuration.search.parallel_searches,
+        parallel_searches=game.self_play_configuration.search.parallel_searches.value_at(arguments.generation),
         inference_workers=game.self_play_configuration.inference.inference_workers,
         inference_batch_size=game.self_play_configuration.inference.inference_batch_size,
         outstanding_batches_per_worker=game.self_play_configuration.inference.outstanding_batches_per_worker,

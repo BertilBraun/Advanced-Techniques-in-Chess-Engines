@@ -113,15 +113,17 @@ class StockfishClient:
 
     def choose_action_at_skill_level(self, position: ChessPosition, skill_level: int) -> int:
         self._engine.configure({'Skill Level': skill_level})
-        return self._play_fixed_nodes(position)
+        return self._play_fixed_nodes(position, self.configuration.match_nodes)
 
-    def choose_action_at_full_strength(self, position: ChessPosition) -> int:
-        return self._play_fixed_nodes(position)
+    def choose_action_at_full_strength(self, position: ChessPosition, nodes: int) -> int:
+        return self._play_fixed_nodes(position, nodes)
 
-    def _play_fixed_nodes(self, position: ChessPosition) -> int:
+    def _play_fixed_nodes(self, position: ChessPosition, nodes: int) -> int:
+        if nodes <= 0:
+            raise ValueError('Stockfish fixed-node move selection requires a positive node count.')
         result = self._engine.play(
             chess.Board(position.fen),
-            chess.engine.Limit(nodes=self.configuration.match_nodes),
+            chess.engine.Limit(nodes=nodes),
             ponder=False,
         )
         if result.move is None:
@@ -174,8 +176,11 @@ class StockfishMatchEngine:
 
 
 class StockfishFixedNodesMatchEngine:
-    def __init__(self, client: StockfishClient) -> None:
+    def __init__(self, client: StockfishClient, nodes: int) -> None:
+        if nodes <= 0:
+            raise ValueError('Stockfish fixed-node match engine requires a positive node count.')
         self.client = client
+        self.nodes = nodes
 
     def choose_actions(
         self,
@@ -184,7 +189,7 @@ class StockfishFixedNodesMatchEngine:
     ) -> tuple[int, ...]:
         if len(positions) != len(action_sequences):
             raise ValueError('Stockfish match positions and histories must have equal lengths.')
-        return tuple(self.client.choose_action_at_full_strength(position) for position in positions)
+        return tuple(self.client.choose_action_at_full_strength(position, self.nodes) for position in positions)
 
     def close(self) -> None:
         self.client.close()

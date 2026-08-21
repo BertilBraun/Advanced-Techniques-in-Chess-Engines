@@ -217,11 +217,13 @@ class TreeSearchParameters:
         first_play_urgency: FirstPlayUrgencyParameters,
         forced_playout_coefficient: float,
         value_discount_per_ply: float,
+        virtual_loss_weight: float = 1.0,
     ) -> None: ...
     exploration_constant: float
     first_play_urgency: FirstPlayUrgencyParameters
     forced_playout_coefficient: float
     value_discount_per_ply: float
+    virtual_loss_weight: float
 
 class BatchedInferenceParameters:
     def __init__(

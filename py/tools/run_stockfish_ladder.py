@@ -8,6 +8,14 @@ from typing import Literal
 
 from pydantic import Field
 
+from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult
+from src.evaluation.ladder import (
+    STOCKFISH_FIXED_NODES_ANCHOR_ELO,
+    LadderRungObservation,
+    LadderRungPairScores,
+    bootstrap_ladder_elo_interval,
+    fit_ladder_elo,
+)
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from tools.run_stockfish_gauntlet import (
@@ -37,8 +45,16 @@ class LadderBracket(FrozenModel):
     upper_stockfish_nodes: int = Field(gt=0)
 
 
+class LadderEloFit(FrozenModel):
+    anchor_source: Literal['melonimarco-ssdf-20260820'] = 'melonimarco-ssdf-20260820'
+    bootstrap_samples: int = Field(gt=0)
+    ladder_elo: float
+    confidence_low: float
+    confidence_high: float
+
+
 class StockfishLadderResult(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     source_revision: str = Field(min_length=40, max_length=40)
     tool_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     checkpoint_generation: int = Field(ge=0)
@@ -55,6 +71,7 @@ class StockfishLadderResult(FrozenModel):
     probes: tuple[LadderProbe, ...] = Field(min_length=1)
     closest_stockfish_nodes: int = Field(gt=0)
     score_bracket: LadderBracket | None
+    ladder_elo_fit: LadderEloFit | None
 
 
 @dataclass(frozen=True)
@@ -71,6 +88,57 @@ class Arguments:
     devices: tuple[int, ...]
     model_search_budget: FixedModelSearchBudget | TimedModelSearchBudget
     output_directory: Path
+
+
+_LADDER_BOOTSTRAP_SAMPLES = 20_000
+_OUTCOME_SCORE = {
+    CandidateOutcome.WIN: 1.0,
+    CandidateOutcome.DRAW: 0.5,
+    CandidateOutcome.LOSS: 0.0,
+}
+
+
+def _pair_scores(games: tuple[EvaluationGameResult, ...]) -> tuple[float, ...]:
+    scores_by_pair: dict[int, list[float]] = {}
+    for game in games:
+        scores_by_pair.setdefault(game.pair_index, []).append(_OUTCOME_SCORE[game.outcome])
+    if any(len(scores) != 2 for scores in scores_by_pair.values()):
+        raise ValueError('Every ladder opening pair must contain exactly two color-swapped games.')
+    return tuple(sum(scores_by_pair[pair_index]) / 2.0 for pair_index in sorted(scores_by_pair))
+
+
+def _ladder_elo_fit(
+    pair_scores_by_nodes: dict[int, tuple[float, ...]],
+    bootstrap_seed: int,
+) -> LadderEloFit | None:
+    if any(nodes not in STOCKFISH_FIXED_NODES_ANCHOR_ELO for nodes in pair_scores_by_nodes):
+        return None
+    observations = tuple(
+        LadderRungObservation(
+            anchor_elo=STOCKFISH_FIXED_NODES_ANCHOR_ELO[nodes],
+            score=sum(pair_scores) / len(pair_scores),
+            game_count=2 * len(pair_scores),
+        )
+        for nodes, pair_scores in sorted(pair_scores_by_nodes.items())
+    )
+    rungs = tuple(
+        LadderRungPairScores(
+            anchor_elo=STOCKFISH_FIXED_NODES_ANCHOR_ELO[nodes],
+            pair_scores=pair_scores,
+        )
+        for nodes, pair_scores in sorted(pair_scores_by_nodes.items())
+    )
+    confidence_low, confidence_high = bootstrap_ladder_elo_interval(
+        rungs,
+        _LADDER_BOOTSTRAP_SAMPLES,
+        bootstrap_seed,
+    )
+    return LadderEloFit(
+        bootstrap_samples=_LADDER_BOOTSTRAP_SAMPLES,
+        ladder_elo=fit_ladder_elo(observations),
+        confidence_low=confidence_low,
+        confidence_high=confidence_high,
+    )
 
 
 def _score_bracket(probes: tuple[LadderProbe, ...]) -> LadderBracket | None:
@@ -96,6 +164,7 @@ def run_ladder(arguments: Arguments) -> StockfishLadderResult:
     arguments.output_directory.mkdir(parents=True, exist_ok=False)
     opening_pairs = arguments.probe_games // 2
     probes: list[LadderProbe] = []
+    pair_scores_by_nodes: dict[int, tuple[float, ...]] = {}
     first_gauntlet_result: StockfishGauntletResult | None = None
     for stockfish_nodes in arguments.stockfish_node_ladder:
         run_directory = arguments.output_directory / f'stockfish-nodes-{stockfish_nodes}'
@@ -116,6 +185,7 @@ def run_ladder(arguments: Arguments) -> StockfishLadderResult:
             )
         )
         aggregate = result.aggregate
+        pair_scores_by_nodes[stockfish_nodes] = _pair_scores(result.games)
         if first_gauntlet_result is None:
             first_gauntlet_result = result
         probes.append(
@@ -152,6 +222,7 @@ def run_ladder(arguments: Arguments) -> StockfishLadderResult:
             key=lambda probe: (abs(probe.score - 0.5), probe.stockfish_nodes),
         ).stockfish_nodes,
         score_bracket=_score_bracket(ordered_probes),
+        ladder_elo_fit=_ladder_elo_fit(pair_scores_by_nodes, arguments.match_random_seed),
     )
     write_text_atomically(arguments.output_directory / 'ladder-result.json', result.model_dump_json(indent=2) + '\n')
     return result

@@ -167,6 +167,7 @@ class ReplayManager(Generic[PositionT]):
         resignation_calibrator: ResignationCalibrator | None,
         terminal_oracle: TerminalOracle[PositionT] | None,
         experiment_configuration: ExperimentConfiguration | None,
+        censor_remaining_game_length_on_cut_games: bool = False,
     ) -> None:
         if store.layout.packed_planes != state.packed_plane_layout:
             raise ValueError('Replay layout does not match the game packed-plane representation.')
@@ -187,6 +188,7 @@ class ReplayManager(Generic[PositionT]):
         self.value_discount_per_ply = value_discount_per_ply
         self.resignation_calibrator = resignation_calibrator
         self.terminal_oracle = terminal_oracle
+        self.censor_remaining_game_length_on_cut_games = censor_remaining_game_length_on_cut_games
         if configuration.materialization_processes > 1 and experiment_configuration is None:
             raise ValueError('Parallel replay materialization requires the experiment configuration.')
         self.materialization_executor = (
@@ -213,6 +215,7 @@ class ReplayManager(Generic[PositionT]):
         terminal_oracle: TerminalOracle[PositionT] | None,
         resignation_calibrator: ResignationCalibrator | None = None,
         experiment_configuration: ExperimentConfiguration | None = None,
+        censor_remaining_game_length_on_cut_games: bool = False,
     ) -> ReplayManager[PositionT]:
         replay_path = run_path / 'replay.bin'
         if replay_path.exists():
@@ -233,6 +236,7 @@ class ReplayManager(Generic[PositionT]):
             resignation_calibrator,
             terminal_oracle,
             experiment_configuration,
+            censor_remaining_game_length_on_cut_games,
         )
 
     @property
@@ -365,6 +369,7 @@ class ReplayManager(Generic[PositionT]):
             self.terminal_oracle,
             self.store.layout,
             self.value_discount_per_ply,
+            self.censor_remaining_game_length_on_cut_games,
         )
 
     def _complete_staged_games(self) -> tuple[_CompleteStagedGame, ...]:

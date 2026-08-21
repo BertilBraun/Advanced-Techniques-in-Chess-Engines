@@ -15,6 +15,7 @@ from src.experiment.configuration import (
     write_resolved_chess_experiment,
 )
 from src.games.chess.configuration import ChessExperimentConfiguration
+from src.games.chess.training import ChessImplementation
 from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.configuration import (
     EnabledForcedPlayoutConfiguration,
@@ -90,7 +91,7 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
         22,
         23,
     )
-    assert configuration.chess.self_play.search.parallel_searches == 4
+    assert configuration.chess.self_play.search.parallel_searches.value_at(0) == 4
     full_search_budget = configuration.chess.self_play.search.full_search_budget
     assert isinstance(full_search_budget, FixedFullSearchBudgetConfiguration)
     assert tuple(
@@ -319,6 +320,54 @@ def test_invalid_go_combinations_fail_precisely(field_path: tuple[str, ...], val
 
     with pytest.raises(ValidationError, match=message):
         GoExperimentConfiguration.model_validate(candidate)
+
+
+def test_early_termination_caps_maximum_game_plies_and_censors_cut_games() -> None:
+    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
+    candidate['chess']['self_play']['early_termination'] = {
+        'maximum_game_plies': {
+            'kind': 'staged',
+            'stages': [
+                {'start_generation': 0, 'value': 80},
+                {'start_generation': 10, 'value': 160},
+                {'start_generation': 20, 'value': 100000},
+            ],
+        },
+        'censor_remaining_game_length_target': True,
+    }
+    configuration = ChessExperimentConfiguration.model_validate(candidate)
+    implementation = ChessImplementation(configuration)
+
+    # The base template schedule is linear 200 -> 600 over generations 0..50.
+    assert configuration.chess.self_play.maximum_game_plies_at(0) == 80
+    assert configuration.chess.self_play.maximum_game_plies_at(10) == 160
+    assert configuration.chess.self_play.maximum_game_plies_at(50) == 600
+    assert implementation.self_play_parameters_at(0).maximum_game_plies == 80
+    assert implementation.self_play_parameters_at(50).maximum_game_plies == 600
+    assert implementation.censor_remaining_game_length_on_cut_games is True
+
+
+def test_early_termination_defaults_to_disabled_without_censoring() -> None:
+    configuration = load_chess_experiment_configuration(CHESS_EXPERIMENT_TEMPLATE_PATH)
+    implementation = ChessImplementation(configuration)
+
+    assert configuration.chess.self_play.early_termination is None
+    assert configuration.chess.self_play.maximum_game_plies_at(0) == 200
+    assert implementation.censor_remaining_game_length_on_cut_games is False
+
+
+def test_early_termination_requires_positive_plies_and_an_explicit_censoring_flag() -> None:
+    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
+    candidate['chess']['self_play']['early_termination'] = {
+        'maximum_game_plies': 0,
+        'censor_remaining_game_length_target': False,
+    }
+    with pytest.raises(ValidationError, match='must remain positive'):
+        ChessExperimentConfiguration.model_validate(candidate)
+
+    candidate['chess']['self_play']['early_termination'] = {'maximum_game_plies': 80}
+    with pytest.raises(ValidationError, match='censor_remaining_game_length_target'):
+        ChessExperimentConfiguration.model_validate(candidate)
 
 
 def test_resolved_experiment_round_trips_as_canonical_json(tmp_path: Path) -> None:

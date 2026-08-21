@@ -64,6 +64,7 @@ def stage_completed_game(
     terminal_oracle: TerminalOracle[PositionT] | None,
     layout: ReplayLayout,
     value_discount_per_ply: FloatGenerationSchedule,
+    censor_remaining_game_length_on_cut_games: bool,
 ) -> StagedGame:
     game = CompletedSelfPlayGame.model_validate_json(inbox_file.read_text(encoding='utf-8'))
     if inbox_file.name != game.identity.file_name:
@@ -75,6 +76,7 @@ def stage_completed_game(
         layout.targets,
         layout.maximum_policy_entries,
         value_discount_per_ply,
+        censor_remaining_game_length_on_cut_games=censor_remaining_game_length_on_cut_games,
     )
     rows = encode_replay_rows(layout, materialized.samples)
     metadata = StagedGameMetadata(
@@ -124,4 +126,5 @@ def stage_completed_game_path(inbox_file: Path, staging_path: Path) -> StagedGam
         _worker_game.terminal_oracle,
         _worker_layout,
         _worker_game.value_discount_per_ply,
+        _worker_game.censor_remaining_game_length_on_cut_games,
     )

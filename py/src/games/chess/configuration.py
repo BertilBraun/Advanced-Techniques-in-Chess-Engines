@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import model_validator
 from src.experiment.base_configuration import BaseExperimentConfiguration
-from src.experiment.generation_schedule import IntegerGenerationSchedule
+from src.experiment.generation_schedule import IntegerGenerationSchedule, defined_schedule_values
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration
@@ -13,9 +13,21 @@ from src.training.configuration import TrainingObjectiveConfiguration
 from src.util.frozen_model import FrozenModel
 
 
+class EarlyTerminationConfiguration(FrozenModel):
+    maximum_game_plies: IntegerGenerationSchedule
+    censor_remaining_game_length_target: bool
+
+    @model_validator(mode='after')
+    def validate_maximum_game_plies(self) -> EarlyTerminationConfiguration:
+        if any(value <= 0 for value in defined_schedule_values(self.maximum_game_plies)):
+            raise ValueError('Early-termination maximum game plies must remain positive.')
+        return self
+
+
 class ChessSelfPlayConfiguration(SelfPlayConfiguration):
     maximum_game_plies: IntegerGenerationSchedule | None = None
     maximum_ply_syzygy_paths: tuple[str, ...] | None = None
+    early_termination: EarlyTerminationConfiguration | None = None
     resignation: ResignationConfiguration
 
     @model_validator(mode='after')
@@ -25,6 +37,14 @@ class ChessSelfPlayConfiguration(SelfPlayConfiguration):
         ):
             raise ValueError('Maximum-ply Syzygy paths must contain at least one nonempty directory path.')
         return self
+
+    def maximum_game_plies_at(self, model_generation: int) -> int | None:
+        limits: list[int] = []
+        if self.maximum_game_plies is not None:
+            limits.append(self.maximum_game_plies.value_at(model_generation))
+        if self.early_termination is not None:
+            limits.append(self.early_termination.maximum_game_plies.value_at(model_generation))
+        return min(limits) if limits else None
 
 
 class ChessConfiguration(FrozenModel):

@@ -175,10 +175,10 @@ def _job_for_definition(
             )
         case StockfishEvaluationDefinition(skill_level=skill_level):
             return _match_job(definition, StockfishOpponent(kind='stockfish', skill_level=skill_level), context)
-        case StockfishFixedNodesEvaluationDefinition():
+        case StockfishFixedNodesEvaluationDefinition(nodes=nodes):
             return _match_job(
                 definition,
-                StockfishFixedNodesOpponent(kind='stockfish_fixed_nodes'),
+                StockfishFixedNodesOpponent(kind='stockfish_fixed_nodes', nodes=nodes),
                 context,
             )
         case KataGoEvaluationDefinition(maximum_visits=maximum_visits):

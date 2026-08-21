@@ -14,6 +14,7 @@ from src.replay.contracts import (
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
     IneligibleNextPolicyTarget,
+    IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
     ReplaySample,
 )
@@ -465,6 +466,83 @@ def test_materialization_revalidates_maximum_ply_result_with_terminal_oracle() -
     )
 
     assert materialized.samples[-1].wdl_target == WdlTarget(win=0.0, draw=0.0, loss=1.0)
+
+
+def _remaining_game_length_layout() -> TrainingTargetLayout:
+    return TrainingTargetLayout(
+        action_size=3,
+        wdl_size=3,
+        auxiliary_heads=(RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=4.0),),
+    )
+
+
+def _maximum_plies_game() -> CompletedSelfPlayGame:
+    natural_game = _completed_game()
+    return CompletedSelfPlayGame.model_validate(
+        {
+            **natural_game.model_dump(),
+            'action_ids': natural_game.action_ids[:3],
+            'observations': natural_game.observations[:3],
+            'final_wdl': WdlTarget(win=1.0, draw=0.0, loss=0.0),
+            'termination_reason': TerminationReason.MAXIMUM_PLIES,
+        }
+    )
+
+
+def test_censoring_marks_remaining_game_length_ineligible_on_cut_games() -> None:
+    materialized = materialize_completed_game(
+        _maximum_plies_game(),
+        LINEAR_STATE_CONTRACT,
+        WinningTerminalOracle(),
+        _remaining_game_length_layout(),
+        3,
+        UNDISCOUNTED_VALUES,
+        censor_remaining_game_length_on_cut_games=True,
+    )
+
+    assert materialized.samples
+    assert all(
+        isinstance(target, IneligibleRemainingGameLengthTarget)
+        for sample in materialized.samples
+        for target in sample.auxiliary_targets
+    )
+
+
+def test_cut_games_keep_length_targets_when_censoring_is_disabled() -> None:
+    materialized = materialize_completed_game(
+        _maximum_plies_game(),
+        LINEAR_STATE_CONTRACT,
+        WinningTerminalOracle(),
+        _remaining_game_length_layout(),
+        3,
+        UNDISCOUNTED_VALUES,
+    )
+
+    assert materialized.samples
+    assert all(
+        isinstance(target, EligibleRemainingGameLengthTarget)
+        for sample in materialized.samples
+        for target in sample.auxiliary_targets
+    )
+
+
+def test_censoring_leaves_naturally_finished_games_eligible() -> None:
+    materialized = materialize_completed_game(
+        _completed_game(),
+        LINEAR_STATE_CONTRACT,
+        None,
+        _remaining_game_length_layout(),
+        3,
+        UNDISCOUNTED_VALUES,
+        censor_remaining_game_length_on_cut_games=True,
+    )
+
+    assert materialized.samples
+    assert all(
+        isinstance(target, EligibleRemainingGameLengthTarget)
+        for sample in materialized.samples
+        for target in sample.auxiliary_targets
+    )
 
 
 def _replay_layout() -> ReplayLayout:

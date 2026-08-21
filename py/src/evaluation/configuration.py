@@ -169,6 +169,7 @@ class StockfishEvaluationDefinition(PairedMatchEvaluationDefinition):
 class StockfishFixedNodesEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['stockfish_fixed_nodes']
     definition_id: str = Field(min_length=1)
+    nodes: int = Field(gt=0)
     search: EvaluationSearchConfiguration
 
 
@@ -232,4 +233,11 @@ class EvaluationConfiguration(FrozenModel):
         )
         if any(definition.opening_pair_count > self.openings.opening_count for definition in match_definitions):
             raise ValueError('Evaluation opening suite must cover every requested opening pair.')
+        fixed_node_counts = tuple(
+            definition.nodes
+            for definition in self.definitions
+            if isinstance(definition, StockfishFixedNodesEvaluationDefinition)
+        )
+        if len(set(fixed_node_counts)) != len(fixed_node_counts):
+            raise ValueError('Stockfish fixed-node rungs must use unique node counts.')
         return self

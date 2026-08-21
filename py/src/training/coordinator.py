@@ -90,6 +90,7 @@ class Coordinator:
             game.terminal_oracle,
             self.resignation_calibrator,
             self.configuration,
+            censor_remaining_game_length_on_cut_games=game.censor_remaining_game_length_on_cut_games,
         )
         # A crash between staging and crediting loses the credit; the directories are the ground truth.
         self.ledger.reconcile_materialized_samples(self.replay_manager.total_materialized_samples())

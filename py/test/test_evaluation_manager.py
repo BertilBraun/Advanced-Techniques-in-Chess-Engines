@@ -9,18 +9,28 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 from tensorboard.plugins.custom_scalar import layout_pb2
 
 from src.evaluation.contracts import (
+    CandidateOutcome,
     CheckpointOpponent,
     EvaluationFailurePhase,
     EVALUATION_JOB_ADAPTER,
+    EvaluationGameResult,
     EvaluationReferenceManifest,
     EvaluationResult,
+    EvaluationTerminationReason,
     FailedEvaluationResult,
     FixedDatasetEvaluationJob,
     FixedDatasetEvaluationResult,
+    MatchAggregate,
     MatchEvaluationJob,
+    MatchEvaluationResult,
     ElapsedCheckpointReference,
 )
-from src.evaluation.configuration import ReferenceCheckpointEvaluationDefinition
+from src.evaluation.configuration import (
+    EvaluationConfiguration,
+    ReferenceCheckpointEvaluationDefinition,
+    StockfishFixedNodesEvaluationDefinition,
+)
+from src.evaluation.ladder import STOCKFISH_FIXED_NODES_ANCHOR_ELO
 from src.evaluation.manager import EvaluationManager
 from src.evaluation.process import write_evaluation_result
 from src.evaluation.scheduling import ScheduledEvaluationSuite, jobs_for_suite
@@ -353,6 +363,98 @@ def test_same_time_reference_checkpoint_is_resolved_from_manifest(tmp_path: Path
     assert isinstance(reference_job, MatchEvaluationJob)
     assert isinstance(reference_job.opponent, CheckpointOpponent)
     assert reference_job.opponent.checkpoint == reference
+
+
+def _expected_rung_score(anchor_elo: float, rating: float) -> float:
+    return 1.0 / (1.0 + 10.0 ** ((anchor_elo - rating) / 400.0))
+
+
+def _rung_pair_games(job: MatchEvaluationJob) -> tuple[EvaluationGameResult, ...]:
+    return tuple(
+        EvaluationGameResult(
+            game_index=game_index,
+            pair_index=0,
+            opening_id='opening-0',
+            candidate_player=candidate_player,
+            pair_seed=0,
+            initial_action_ids=(),
+            played_action_ids=(),
+            outcome=CandidateOutcome.DRAW,
+            termination_reason=EvaluationTerminationReason.NATURAL,
+            plies=0,
+            duration_seconds=1.0,
+        )
+        for game_index, candidate_player in ((0, 'first'), (1, 'second'))
+    )
+
+
+def test_manager_publishes_ladder_elo_once_every_fixed_node_rung_reports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = experiment_configuration(tmp_path)
+    skill_definition = next(
+        definition for definition in experiment.evaluation.definitions if definition.kind == 'stockfish'
+    )
+    evaluation_payload = experiment.evaluation.model_dump(mode='json')
+    evaluation_payload['maximum_concurrent_jobs'] = 16
+    for nodes in (30, 100, 300, 1000):
+        rung_payload = skill_definition.model_dump(mode='json')
+        rung_payload['kind'] = 'stockfish_fixed_nodes'
+        rung_payload['definition_id'] = f'stockfish-fixed-nodes-{nodes}'
+        rung_payload['nodes'] = nodes
+        del rung_payload['skill_level']
+        evaluation_payload['definitions'].append(rung_payload)
+    experiment = experiment.model_copy(
+        update={'evaluation': EvaluationConfiguration.model_validate(evaluation_payload)}
+    )
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
+    clock.now = 21.0
+    jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 1))
+    rung_jobs = tuple(
+        job for job in jobs if isinstance(job, MatchEvaluationJob) and job.definition.kind == 'stockfish_fixed_nodes'
+    )
+    assert len(rung_jobs) == 4
+
+    scalar_events: list[tuple[str, float, int]] = []
+    monkeypatch.setattr(
+        'src.evaluation.manager.log_scalar',
+        lambda name, value, step: scalar_events.append((name, value, step)),
+    )
+    generating_rating = 1500.0
+    for job in rung_jobs:
+        assert isinstance(job.definition, StockfishFixedNodesEvaluationDefinition)
+        score = _expected_rung_score(STOCKFISH_FIXED_NODES_ANCHOR_ELO[job.definition.nodes], generating_rating)
+        write_evaluation_result(
+            MatchEvaluationResult(
+                kind='match',
+                job=job,
+                games=_rung_pair_games(job),
+                aggregate=MatchAggregate(
+                    wins=1,
+                    draws=0,
+                    losses=1,
+                    score=score,
+                    first_player_score=score,
+                    second_player_score=score,
+                    pair_count=1,
+                    score_confidence_low=max(0.0, score - 0.1),
+                    score_confidence_high=min(1.0, score + 0.1),
+                ),
+                duration_seconds=1.0,
+            ),
+            job.result_path,
+        )
+    for process in context.processes:
+        process.exitcode = 0
+    manager.collect_completed_jobs()
+
+    ladder_events = tuple(event for event in scalar_events if event[0] == 'evaluation/ladder_elo')
+    assert ladder_events
+    assert all(step == 20 for _, _, step in ladder_events)
+    assert ladder_events[-1][1] == pytest.approx(generating_rating, abs=1.0)
 
 
 def test_manager_publishes_missing_artifact_and_deadline_failures(tmp_path: Path) -> None:

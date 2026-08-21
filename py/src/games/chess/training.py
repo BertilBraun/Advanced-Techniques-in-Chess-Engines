@@ -75,16 +75,16 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
         configuration = self.self_play_configuration
-        maximum_game_plies = (
-            None
-            if configuration.maximum_game_plies is None
-            else configuration.maximum_game_plies.value_at(model_generation)
-        )
         return configuration.resolve(
             model_generation,
-            maximum_game_plies,
+            configuration.maximum_game_plies_at(model_generation),
             self.value_discount_per_ply.value_at(model_generation),
         )
+
+    @property
+    def censor_remaining_game_length_on_cut_games(self) -> bool:
+        early_termination = self.self_play_configuration.early_termination
+        return early_termination is not None and early_termination.censor_remaining_game_length_target
 
     @property
     def resignation_configuration(self) -> CalibratedResignationConfiguration | None:

@@ -83,6 +83,7 @@ def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opp
     definition_payload = skill_definition.model_dump(mode='json')
     definition_payload['kind'] = 'stockfish_fixed_nodes'
     definition_payload['definition_id'] = 'stockfish-fixed-nodes'
+    definition_payload['nodes'] = 300
     del definition_payload['skill_level']
     evaluation_payload = experiment.evaluation.model_dump(mode='json')
     evaluation_payload['definitions'].append(definition_payload)
@@ -91,6 +92,7 @@ def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opp
     fixed_definition = round_tripped.definitions[-1]
 
     assert isinstance(fixed_definition, StockfishFixedNodesEvaluationDefinition)
+    assert fixed_definition.nodes == 300
     assert 'skill_level' not in fixed_definition.model_dump()
 
     configured_experiment = experiment.model_copy(update={'evaluation': round_tripped})
@@ -114,5 +116,24 @@ def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opp
 
     assert isinstance(job, MatchEvaluationJob)
     assert isinstance(job.opponent, StockfishFixedNodesOpponent)
+    assert job.opponent.nodes == 300
     serialized_job = TypeAdapter(EvaluationJob).validate_json(job.model_dump_json()).model_dump(mode='json')
-    assert serialized_job['opponent'] == {'kind': 'stockfish_fixed_nodes'}
+    assert serialized_job['opponent'] == {'kind': 'stockfish_fixed_nodes', 'nodes': 300}
+
+
+def test_stockfish_fixed_node_rungs_require_unique_node_counts() -> None:
+    experiment = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    skill_definition = next(
+        definition for definition in experiment.evaluation.definitions if definition.kind == 'stockfish'
+    )
+    evaluation_payload = experiment.evaluation.model_dump(mode='json')
+    for definition_id in ('rung-a', 'rung-b'):
+        definition_payload = skill_definition.model_dump(mode='json')
+        definition_payload['kind'] = 'stockfish_fixed_nodes'
+        definition_payload['definition_id'] = definition_id
+        definition_payload['nodes'] = 100
+        del definition_payload['skill_level']
+        evaluation_payload['definitions'].append(definition_payload)
+
+    with pytest.raises(ValidationError, match='unique node counts'):
+        EvaluationConfiguration.model_validate(evaluation_payload)
