@@ -112,7 +112,7 @@ training:
           hidden_size: 112
           residual_context: {kind: global_pooling, placement: every_second_block}
           # WP1 key — the new hidden-layer plane head; final kind name owned by the WP1 stream
-          policy_head: {kind: chess_76_plane_v3}
+          policy_head: {kind: chess_76_plane_direct_v2}
           num_value_channels: 2
           value_fc_size: 48
     promotion:  # inert with a single model

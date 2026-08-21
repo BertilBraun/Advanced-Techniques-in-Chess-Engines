@@ -13,7 +13,7 @@ today fails on exactly these, and on the two deliberate topology placeholders �
 | key | error today | owner |
 |---|---|---|
 | `training.trainer.warmup_optimizer_steps: 1000` | extra input | WP1 |
-| `…policy_head: {kind: chess_76_plane_v3}` | unknown tag (today: `chess_76_plane_direct_v2`) | WP1 (final kind name open) |
+| `…policy_head: {kind: chess_76_plane_direct_v2}` | unknown tag (today: `chess_76_plane_direct_v2`) | WP1 — resolved: kind name kept, module deepened |
 | `chess.self_play.search.parallel_searches` (staged) | int expected | WP3 |
 | `chess.self_play.search.virtual_loss_weight: 1.0` | extra input | WP3 |
 | `evaluation.definitions[stockfish_fixed_nodes].match_nodes` (30/100/300/1000) | extra input | WP3 |
@@ -45,7 +45,7 @@ the old definitions (fixed-dataset, previous-20/40/60m, Stockfish levels 0–4, 
 
 | field | r3 | run1 | reason |
 |---|---|---|---|
-| policy head | dense 1880-way (`num_policy_channels: 4`), init std 1.0 | new hidden-layer 76-plane head (`chess_76_plane_v3`, WP1) | planned: the fixed head |
+| policy head | dense 1880-way (`num_policy_channels: 4`), init std 1.0 | new hidden-layer 76-plane head (`chess_76_plane_direct_v2`, WP1) | planned: the fixed head |
 | LR warm-up | none | `warmup_optimizer_steps: 1000` | planned (WP1) |
 | `parallel_searches` | 1 | staged: 1 below 600 full-search visits, 4 from generation 90 (WP3) | planned |
 | `virtual_loss_weight` | key absent (behaviour = 1.0) | 1.0 explicit | WP3 key, value unchanged |
