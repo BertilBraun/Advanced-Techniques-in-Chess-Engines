@@ -196,6 +196,16 @@ def trainer_rank_main(
         connection.close()
 
 
+def warmup_scaled_learning_rate(
+    base_learning_rate: float,
+    warmup_optimizer_steps: int,
+    completed_optimizer_steps: int,
+) -> float:
+    if warmup_optimizer_steps <= 0 or completed_optimizer_steps >= warmup_optimizer_steps:
+        return base_learning_rate
+    return base_learning_rate * (completed_optimizer_steps + 1) / warmup_optimizer_steps
+
+
 def _train_batches(
     loader: MappedReplayBatchLoader,
     distributed_model: DistributedDataParallel,
@@ -207,6 +217,9 @@ def _train_batches(
     collect_distributions: bool,
     source_generation: int,
     precision: TrainingPrecision,
+    base_learning_rate: float,
+    warmup_optimizer_steps: int,
+    completed_optimizer_steps: int,
 ) -> _TrainingBatchResult:
     totals = _DeviceLossTotals(
         policy=torch.zeros((), device=device),
@@ -217,7 +230,14 @@ def _train_batches(
     )
     distributions = None
     with loader.prefetch(device, uses_cuda) as prefetched_batches:
-        for batch in prefetched_batches:
+        for batch_index, batch in enumerate(prefetched_batches):
+            learning_rate = warmup_scaled_learning_rate(
+                base_learning_rate,
+                warmup_optimizer_steps,
+                completed_optimizer_steps + batch_index,
+            )
+            for parameter_group in optimizer.param_groups:
+                parameter_group['lr'] = learning_rate
             optimizer.zero_grad(set_to_none=True)
             with torch.autocast(
                 device_type=device.type,
@@ -289,8 +309,6 @@ def train_rank_quantum(
     command: TrainQuantumCommand,
 ) -> RankTrainingResult:
     started_at = time.perf_counter()
-    for group in optimizer.param_groups:
-        group['lr'] = command.parameters.learning_rate
     optimizer_steps = (
         command.target_progress.completed_optimizer_steps - command.source_progress.completed_optimizer_steps
     )
@@ -317,6 +335,9 @@ def train_rank_quantum(
         collect_distributions=rank == 0,
         source_generation=command.source_progress.model_generation,
         precision=configuration.training.trainer.precision,
+        base_learning_rate=command.parameters.learning_rate,
+        warmup_optimizer_steps=configuration.training.trainer.warmup_optimizer_steps,
+        completed_optimizer_steps=command.source_progress.completed_optimizer_steps,
     )
     totals = _resolve_loss_totals(training_result.totals)
     checkpoint = _save_rank_checkpoint(rank, model, optimizer, command, save_path)

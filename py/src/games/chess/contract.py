@@ -22,6 +22,11 @@ from src.replay.contracts import (
 )
 from src.self_play.completed_game import SearchVisitCounts, TerminationReason
 
+OWN_KING_SIDE_CASTLING_PLANE = 12
+OWN_QUEEN_SIDE_CASTLING_PLANE = 13
+OPPONENT_KING_SIDE_CASTLING_PLANE = 14
+OPPONENT_QUEEN_SIDE_CASTLING_PLANE = 15
+
 
 class ChessPosition(Protocol):
     @property
@@ -148,8 +153,25 @@ class ChessStateContract(GameStateContract[ChessPosition]):
             representation.binary_channels,
             representation.scalar_channels,
         )
+        mirrored = np.flip(state, axis=2).copy()
+        # File mirroring exchanges the king-side and queen-side castling rights of both colours.
+        mirrored[
+            [
+                OWN_KING_SIDE_CASTLING_PLANE,
+                OWN_QUEEN_SIDE_CASTLING_PLANE,
+                OPPONENT_KING_SIDE_CASTLING_PLANE,
+                OPPONENT_QUEEN_SIDE_CASTLING_PLANE,
+            ]
+        ] = mirrored[
+            [
+                OWN_QUEEN_SIDE_CASTLING_PLANE,
+                OWN_KING_SIDE_CASTLING_PLANE,
+                OPPONENT_QUEEN_SIDE_CASTLING_PLANE,
+                OPPONENT_KING_SIDE_CASTLING_PLANE,
+            ]
+        ]
         return encode_packed_planes(
-            np.flip(state, axis=2),
+            mirrored,
             representation.packed_planes,
             representation.binary_channels,
             representation.scalar_channels,
