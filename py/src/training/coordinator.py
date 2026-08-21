@@ -3,24 +3,33 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import torch
 from src.evaluation.manager import EvaluationManager
 from src.experiment.base_configuration import initial_generation
 from src.games.implementation import GameImplementation
+from src.replay.batch_loader import build_training_batch
 from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame, ReplayManager
+from src.replay.store import ReplayStore
 from src.self_play.protocol import (
     RunningSelfPlayState,
     StatisticsLevel,
 )
 from src.self_play.resignation import PublishedResignationPolicy, ResignationCalibrator
 from src.training.checkpoint import CheckpointReference
+from src.training.checkpoint.persistence import load_model
 from src.training.checkpoint.retention import CheckpointRetention
 from src.training.credit_ledger import CreditLedger
+from src.training.initialization_guard import (
+    assert_healthy_policy_initialization,
+    probe_policy_initialization,
+)
 from src.training.reporting import TrainingReporter
 from src.training.run_limits import RunLimitMonitor
 from src.training.self_play_group import SelfPlayGroup
 from src.training.session import TrainingSessionQuantum, create_training_session
 from src.util.log import log
+from src.util.tensorboard import log_scalar
 
 INGESTION_SLICE_SECONDS = 10.0
 INGESTION_PAUSE_BACKLOG_GAMES = 100
@@ -92,6 +101,7 @@ class Coordinator:
         self._ingestion_pause_requested = False
         self._credit_wait_started_at = time.perf_counter()
         self._completed_games_since_last_quantum: list[IngestedCompletedGame] = []
+        self._initialization_guard_pending = self.ledger.progress.completed_optimizer_steps == 0
         self.reporter.record_initial_settings(self.ledger.model_generation)
 
     def run(self) -> None:
@@ -178,7 +188,40 @@ class Coordinator:
         ):
             self._resume_ingestion_paused_workers()
 
+    def _run_initialization_guard(self) -> None:
+        training = self.configuration.training
+        model = load_model(
+            self.ledger.state.active_checkpoint.model_path,
+            training.initial_model.network,
+            torch.device('cpu'),
+            self.game.network_dimensions,
+            self.game.target_layout.auxiliary_heads,
+        )
+        description = self.replay_manager.description()
+        store = ReplayStore.open(description.path, description.layout, writable=False)
+        try:
+            batch_size = min(training.trainer.global_batch_size, description.size)
+            batch = build_training_batch(
+                store,
+                self.game.state,
+                tuple(range(batch_size)),
+                (0,) * batch_size,
+            )
+        finally:
+            store.close()
+        probe = probe_policy_initialization(model, batch.states, batch.policy_legal_action_ids)
+        log_scalar('init/policy_logit_std', probe.policy_logit_std, 0)
+        log_scalar('init/policy_entropy_ratio', probe.policy_entropy_ratio, 0)
+        log(
+            f'Initialization guard at generation 0: policy_logit_std={probe.policy_logit_std:.3f}, '
+            f'policy_entropy_ratio={probe.policy_entropy_ratio:.3f}.'
+        )
+        assert_healthy_policy_initialization(probe)
+
     def _train_quantum(self, self_play_started: bool) -> None:
+        if self._initialization_guard_pending:
+            self._run_initialization_guard()
+            self._initialization_guard_pending = False
         credit_wait_seconds = time.perf_counter() - self._credit_wait_started_at
         if self_play_started:
             self.self_play_group.request_pause(self._training_pause_worker_ids())
