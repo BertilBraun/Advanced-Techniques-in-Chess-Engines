@@ -9,6 +9,7 @@ from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.composition import ConfiguredGame, create_game_implementation
 from src.games.go.configuration import GoExperimentConfiguration
 from src.replay.batch_loader import MappedReplayBatchLoader
+from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayManager
 from src.self_play.worker import SelfPlayWorker
@@ -129,6 +130,7 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
                     'self_play': {
                         **common_self_play,
                         'maximum_game_plies': 1,
+                        'resignation': configuration.chess.self_play.resignation.model_dump(mode='json'),
                     }
                 }
             )
@@ -213,7 +215,10 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
     )
     assert batch.states.shape[0] == 1
 
-    _assert_pool_ingestion_matches_inline_result(configuration, game, worker, tmp_path, ingestion.samples_added)
+    # The pool check appends into the same store, so the quantum below must train on its fresh description.
+    description = _assert_pool_ingestion_matches_inline_result(
+        configuration, game, worker, tmp_path, ingestion.samples_added
+    )
 
     trainer_group = TrainerGroup(
         configuration,
@@ -256,7 +261,7 @@ def _assert_pool_ingestion_matches_inline_result(
     worker: SelfPlayWorker,
     tmp_path: Path,
     already_appended_rows: int,
-) -> None:
+) -> ReplayDescription:
     inbox_path = tmp_path / 'completed-games' / 'inbox'
     maximum_batches = 100
     for _ in range(maximum_batches):
@@ -298,4 +303,6 @@ def _assert_pool_ingestion_matches_inline_result(
     assert ingestion.games_ingested == flooded_games
     assert ingestion.samples_added == sum(staged_row_counts)
     assert manager.store.total_appended_rows == already_appended_rows + ingestion.samples_added
+    description = manager.description()
     manager.close()
+    return description
