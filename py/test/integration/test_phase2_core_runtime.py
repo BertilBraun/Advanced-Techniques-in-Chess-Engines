@@ -1,11 +1,12 @@
 import os
+import time
 from pathlib import Path
 
 import pytest
 import torch
 from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
-from src.games.composition import create_game_implementation
+from src.games.composition import ConfiguredGame, create_game_implementation
 from src.games.go.configuration import GoExperimentConfiguration
 from src.replay.batch_loader import MappedReplayBatchLoader
 from src.replay.layout import ReplayLayout
@@ -182,7 +183,8 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
         value_discount_per_ply=game.value_discount_per_ply,
         terminal_oracle=None,
     )
-    ingestion = replay_manager.ingest_available_games(0)
+    replay_manager.materialize_available_games(lambda staged: None)
+    ingestion = replay_manager.append_staged_games(0)
     description = replay_manager.description()
     replay_manager.close()
     assert ingestion.games_ingested == 1
@@ -204,6 +206,8 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
         )
     )
     assert batch.states.shape[0] == 1
+
+    _assert_pool_ingestion_matches_inline_result(configuration, game, worker, tmp_path, ingestion.samples_added)
 
     trainer_group = TrainerGroup(
         configuration,
@@ -238,3 +242,54 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
         f'replay={result.statistics.replay_rows_per_second:.0f} rows/s, '
         f'ddp={result.statistics.training_samples_per_second:.1f} samples/s'
     )
+
+
+def _assert_pool_ingestion_matches_inline_result(
+    configuration: ExperimentConfiguration,
+    game: ConfiguredGame,
+    worker: SelfPlayWorker,
+    tmp_path: Path,
+    already_appended_rows: int,
+) -> None:
+    inbox_path = tmp_path / 'completed-games' / 'inbox'
+    maximum_batches = 100
+    for _ in range(maximum_batches):
+        worker.run_batch()
+        if tuple(inbox_path.glob('*.json')):
+            break
+    else:
+        raise AssertionError('CPU self-play did not produce a game for the pool-mode ingestion check.')
+    flooded_games = len(tuple(inbox_path.glob('*.json')))
+
+    replay_layout = ReplayLayout(
+        packed_planes=game.state.packed_plane_layout,
+        targets=game.target_layout,
+        maximum_policy_entries=configuration.training.lifecycle.replay.maximum_policy_entries,
+        maximum_legal_actions=game.state.maximum_legal_action_count,
+    )
+    pool_replay_configuration = configuration.training.lifecycle.replay.validated_copy(
+        update={'materialization_processes': 2}
+    )
+    manager = ReplayManager.open(
+        tmp_path,
+        game.state,
+        replay_layout,
+        pool_replay_configuration,
+        model_generation=0,
+        value_discount_per_ply=game.value_discount_per_ply,
+        terminal_oracle=None,
+        experiment_configuration=configuration,
+    )
+    staged_row_counts: list[int] = []
+    manager.start_materialization(lambda staged: staged_row_counts.append(staged.row_count), 0.1)
+    deadline = time.monotonic() + 300.0
+    while (manager.inbox_depth > 0 or len(staged_row_counts) < flooded_games) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert manager.inbox_depth == 0
+    assert len(staged_row_counts) == flooded_games
+
+    ingestion = manager.append_staged_games(0)
+    assert ingestion.games_ingested == flooded_games
+    assert ingestion.samples_added == sum(staged_row_counts)
+    assert manager.store.total_appended_rows == already_appended_rows + ingestion.samples_added
+    manager.close()

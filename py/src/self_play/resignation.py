@@ -9,6 +9,7 @@ from typing import Annotated, Iterator, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 
+from src.games.contracts import WdlTarget
 from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, TerminationReason
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -151,7 +152,36 @@ class ResignationCalibrationBatch:
         self.has_changes = False
 
     def observe_completed_game(self, game: CompletedSelfPlayGame) -> None:
-        triggered = _continuation_evidence(game, self.configuration) if game.is_resignation_continuation else None
+        self.observe_game_record(
+            archive_key=game.identity.archive_key,
+            is_resignation_continuation=game.is_resignation_continuation,
+            termination_reason=game.termination_reason,
+            final_wdl=game.final_wdl,
+            length_plies=len(game.action_ids),
+            observations=game.observations,
+        )
+
+    def observe_game_record(
+        self,
+        archive_key: str,
+        is_resignation_continuation: bool,
+        termination_reason: TerminationReason,
+        final_wdl: WdlTarget,
+        length_plies: int,
+        observations: tuple[SearchObservation, ...],
+    ) -> None:
+        triggered = (
+            _continuation_evidence(
+                archive_key,
+                termination_reason,
+                final_wdl,
+                length_plies,
+                observations,
+                self.configuration,
+            )
+            if is_resignation_continuation
+            else None
+        )
         cursor = self.journal.execute(
             """
             INSERT OR IGNORE INTO completed_games (
@@ -162,9 +192,9 @@ class ResignationCalibrationBatch:
             ) VALUES (?, ?, ?, ?)
             """,
             (
-                game.identity.archive_key,
-                int(game.is_resignation_continuation),
-                int(game.termination_reason is TerminationReason.RESIGNATION),
+                archive_key,
+                int(is_resignation_continuation),
+                int(termination_reason is TerminationReason.RESIGNATION),
                 None if triggered is None else triggered.model_dump_json(),
             ),
         )
@@ -180,9 +210,8 @@ class ResignationCalibrationBatch:
             selected_threshold_safe=state.selected_threshold_safe,
             last_relaxation_generation=state.last_relaxation_generation,
             triggered_continuation_games=rolling,
-            completed_continuation_games=state.completed_continuation_games + int(game.is_resignation_continuation),
-            actual_resignations=state.actual_resignations
-            + int(game.termination_reason is TerminationReason.RESIGNATION),
+            completed_continuation_games=state.completed_continuation_games + int(is_resignation_continuation),
+            actual_resignations=state.actual_resignations + int(termination_reason is TerminationReason.RESIGNATION),
             broadest_candidate_triggers=state.broadest_candidate_triggers + int(triggered is not None),
             false_nonlosses_at_selected_threshold=state.false_nonlosses_at_selected_threshold,
             selected_trigger_ply_total=state.selected_trigger_ply_total,
@@ -400,28 +429,32 @@ class ResignationCalibrator:
 
 
 def _continuation_evidence(
-    game: CompletedSelfPlayGame,
+    archive_key: str,
+    termination_reason: TerminationReason,
+    game_final_wdl: WdlTarget,
+    length_plies: int,
+    observations: tuple[SearchObservation, ...],
     configuration: CalibratedResignationConfiguration,
 ) -> TriggeredContinuationGame | None:
-    if game.termination_reason is not TerminationReason.NATURAL:
+    if termination_reason is not TerminationReason.NATURAL:
         return None
     evidence = []
     for threshold in configuration.candidate_thresholds:
-        trigger = next((item for item in game.observations if resignation_predicate(item, threshold)), None)
+        trigger = next((item for item in observations if resignation_predicate(item, threshold)), None)
         if trigger is None:
             continue
-        final_wdl = game.final_wdl if (len(game.action_ids) - trigger.ply) % 2 == 0 else game.final_wdl.reversed()
+        final_wdl = game_final_wdl if (length_plies - trigger.ply) % 2 == 0 else game_final_wdl.reversed()
         evidence.append(
             CandidateAuditEvidence(
                 threshold=threshold,
                 trigger_ply=trigger.ply,
-                saved_plies=len(game.action_ids) - trigger.ply,
+                saved_plies=length_plies - trigger.ply,
                 false_nonloss=final_wdl.loss <= final_wdl.win,
             )
         )
     if not evidence:
         return None
-    return TriggeredContinuationGame(game_identity=game.identity.archive_key, evidence=tuple(evidence))
+    return TriggeredContinuationGame(game_identity=archive_key, evidence=tuple(evidence))
 
 
 def _threshold_statistics(

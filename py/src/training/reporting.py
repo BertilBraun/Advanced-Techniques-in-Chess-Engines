@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 from src.experiment.configuration import ExperimentConfiguration
 from src.replay.description import ReplayDescription
@@ -41,6 +43,14 @@ from src.util.log import log
 from src.util.tensorboard import log_histogram, log_scalar
 
 
+@dataclass(frozen=True)
+class ReplayIngestionTelemetry:
+    ingest_seconds: float
+    inbox_depth: int
+    staging_depth: int
+    materialization_failures: int
+
+
 class TrainingReporter:
     def __init__(
         self,
@@ -60,6 +70,7 @@ class TrainingReporter:
         ledger_state: CreditLedgerState,
         replay: ReplayDescription,
         completed_games: tuple[IngestedCompletedGame, ...],
+        ingestion: ReplayIngestionTelemetry,
     ) -> None:
         match outcome:
             case FixedTrainingSessionResult(publication=publication, statistics=statistics):
@@ -98,9 +109,17 @@ class TrainingReporter:
                     f'Published progressive model {active_model_id} at generation '
                     f'{publication.checkpoint.generation} after {credit_wait_seconds:.1f}s of credit wait.'
                 )
+        self._record_ingestion(ingestion, outcome.publication.checkpoint.generation)
         self._record_completed_game_lengths(completed_games, outcome.publication.checkpoint.generation)
         self._record_adaptive_search(completed_games, outcome.publication.checkpoint.generation)
         self._record_scheduled_settings(outcome.publication.checkpoint.generation)
+
+    @staticmethod
+    def _record_ingestion(ingestion: ReplayIngestionTelemetry, generation: int) -> None:
+        log_scalar('replay/ingest_seconds', ingestion.ingest_seconds, generation)
+        log_scalar('replay/inbox_depth', ingestion.inbox_depth, generation)
+        log_scalar('replay/staging_depth', ingestion.staging_depth, generation)
+        log_scalar('replay/materialization_failures', ingestion.materialization_failures, generation)
 
     def record_resignation(self, diagnostics: ResignationDiagnostics, generation: int) -> None:
         if diagnostics.selected_threshold is not None:
