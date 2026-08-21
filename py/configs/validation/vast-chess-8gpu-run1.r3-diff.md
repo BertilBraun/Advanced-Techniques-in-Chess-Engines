@@ -5,25 +5,19 @@ Reference: the r3 `TrainingArgs` repr in the frozen TensorBoard export
 entry, run `vast-chess-8gpu-1d-r3`) plus, for the self-play/objective/evaluation sections the snapshot does not
 contain, the generations-0–149 slice of `documentation/experiments/vast-chess-8-gpu-config.yaml`.
 
-## Resolution status (2026-08-21, branch wp8-run-control)
+## Resolution status (2026-08-21, phase-a @ 7c146d79, locked venv on the Phase A test node)
 
-The configuration intentionally uses key names owned by parallel Phase A streams. `load_experiment_configuration`
-today fails on exactly these, and on the two deliberate topology placeholders — nothing else:
+All cross-stream keys resolve after the phase-a merge (`warmup_optimizer_steps`, the deepened
+`chess_76_plane_direct_v2` head, staged `parallel_searches`, `virtual_loss_weight`, per-definition `nodes` on
+`stockfish_fixed_nodes`). `load_experiment_configuration` fails on exactly the two deliberate topology
+placeholders (`training.topology.self_play.device_ids`, `node_ids_to_pause_during_training`) — nothing else.
 
-| key | error today | owner |
-|---|---|---|
-| `training.trainer.warmup_optimizer_steps: 1000` | extra input | WP1 |
-| `…policy_head: {kind: chess_76_plane_direct_v2}` | unknown tag (today: `chess_76_plane_direct_v2`) | WP1 — resolved: kind name kept, module deepened |
-| `chess.self_play.search.parallel_searches` (staged) | int expected | WP3 |
-| `chess.self_play.search.virtual_loss_weight: 1.0` | extra input | WP3 |
-| `evaluation.definitions[stockfish_fixed_nodes].match_nodes` (30/100/300/1000) | extra input | WP3 |
-| `training.topology.self_play.device_ids` / `node_ids_to_pause_during_training` | placeholder string | deliberate — node unknown |
-
-Verified complement: with only those keys reverted to today's schema (drop warm-up/virtual-loss/match_nodes/
-staged parallel searches, head kind `chess_76_plane_direct_v2`, a 3-per-GPU topology in place of the placeholders)
-the configuration resolves cleanly through the pydantic models. Final resolution, the canonical
-`experiment_configuration_sha256` and a regenerated resolved-JSON diff happen after the orchestrator merges all
-streams into `phase-a`.
+With the documented stand-in topology (3 processes/GPU on 8 GPUs, every third worker unpaused) the
+configuration resolves fully; provisional `experiment_configuration_sha256`
+`f52e87ae8ee34e22bf60a3453147d4dddb4f49c214ee8b1e84af83bc244563d3` (run2:
+`6e6161cf011bf796f7f96ff93a1f6ba3ff770bd37a8036c9b81f393451e29f3b`). Resolved JSON archived under
+`.codex-diagnostics/wp6-resolution-20260821/`. The canonical SHA is recomputed when the real node topology,
+`offer_id` and `hourly_price` replace the placeholders.
 
 ## Identical to r3
 

@@ -4,16 +4,14 @@ Run 2 extends `vast-chess-8gpu-run1.yaml`; everything in
 [`vast-chess-8gpu-run1.r3-diff.md`](vast-chess-8gpu-run1.r3-diff.md) applies unchanged unless listed here,
 including the resolution status, the pending WP1/WP3 keys and the topology/hourly-price placeholders.
 
-## Resolution status (2026-08-21, branch wp8-run-control)
+## Resolution status (2026-08-21, phase-a @ 7c146d79, locked venv on the Phase A test node)
 
-Same failure set as Run 1 plus exactly one more pending key:
-
-| key | error today | owner |
-|---|---|---|
-| `chess.self_play.early_termination` (staged `maximum_game_plies` + `censor_remaining_game_length_target`) | extra input | WP3 |
-
-With that key and the Run-1 set reverted to today's schema, the merged configuration resolves cleanly through the
-pydantic models (verified). Final resolution and diff regeneration after the `phase-a` merge.
+All cross-stream keys resolve after the phase-a merge, including `chess.self_play.early_termination`.
+`load_experiment_configuration` fails only on the two topology placeholders inherited from Run 1. With the
+stand-in topology documented in the Run-1 note the configuration resolves fully; provisional
+`experiment_configuration_sha256` `6e6161cf011bf796f7f96ff93a1f6ba3ff770bd37a8036c9b81f393451e29f3b`.
+Resolved JSON archived under `.codex-diagnostics/wp6-resolution-20260821/`. Canonical SHA follows the real
+node topology.
 
 ## Additional differences from r3 (Run 2 deltas over Run 1)
 
