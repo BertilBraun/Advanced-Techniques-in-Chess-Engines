@@ -65,3 +65,9 @@ training:
     maximum_host_ram_percent: 92.0
     minimum_free_disk_gib: 20.0
     resource_telemetry_interval_seconds: 5.0
+
+evaluation:
+  # 2 instead of the default 10: ten torch-loaded evaluation processes spawning at each 1,200 s cadence
+  # boundary caused ~15 GiB RAM bursts that tripped the 92% guard on this 30 GiB node (restarts at every
+  # boundary). Definitions unchanged; jobs serialize.
+  maximum_concurrent_jobs: 2
