@@ -69,7 +69,6 @@ training:
       maximum_capacity: 2500000
       maximum_policy_entries: 60
       materialization_processes: 8
-      materialization_batch_games: 128
     credit:
       replay_ratio: 8
       optimizer_steps_per_quantum: 500

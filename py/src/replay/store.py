@@ -166,6 +166,11 @@ class ReplayStore:
             raise ValueError('Replay logical capacity must lie within its maximum capacity.')
 
     @property
+    def total_appended_rows(self) -> int:
+        state = self.state
+        return state.evicted_rows + state.size
+
+    @property
     def state(self) -> ReplayStoreState:
         header = self._header[0]
         return ReplayStoreState(
@@ -191,26 +196,28 @@ class ReplayStore:
         self.extend((sample,))
 
     def extend(self, samples: tuple[ReplaySample, ...]) -> None:
-        self._ensure_writable()
-        maximum_capacity = self.state.maximum_capacity
-        for start in range(0, len(samples), maximum_capacity):
-            self._extend_chunk(samples[start : start + maximum_capacity])
+        self.extend_rows(encode_replay_rows(self.layout, samples))
 
-    def _extend_chunk(self, samples: tuple[ReplaySample, ...]) -> None:
-        if not samples:
+    def extend_rows(self, rows: npt.NDArray[np.void]) -> None:
+        self._ensure_writable()
+        if rows.dtype != self.layout.row_dtype:
+            raise ValueError('Replay rows do not match the store row layout.')
+        maximum_capacity = self.state.maximum_capacity
+        for start in range(0, len(rows), maximum_capacity):
+            self._extend_chunk(rows[start : start + maximum_capacity])
+
+    def _extend_chunk(self, encoded_rows: npt.NDArray[np.void]) -> None:
+        if not len(encoded_rows):
             return
-        encoded_rows = np.zeros((len(samples),), dtype=self.layout.row_dtype)
-        for row, sample in zip(encoded_rows, samples, strict=True):
-            self._write_sample(row, sample)
         state = self.state
         write_start = (state.head + state.size) % state.maximum_capacity
-        first_count = min(len(samples), state.maximum_capacity - write_start)
+        first_count = min(len(encoded_rows), state.maximum_capacity - write_start)
         self._rows[write_start : write_start + first_count] = encoded_rows[:first_count]
-        if first_count < len(samples):
-            self._rows[: len(samples) - first_count] = encoded_rows[first_count:]
-        evicted_rows = max(0, state.size + len(samples) - state.logical_capacity)
+        if first_count < len(encoded_rows):
+            self._rows[: len(encoded_rows) - first_count] = encoded_rows[first_count:]
+        evicted_rows = max(0, state.size + len(encoded_rows) - state.logical_capacity)
         self._header[0]['head'] = (state.head + evicted_rows) % state.maximum_capacity
-        self._header[0]['size'] = min(state.logical_capacity, state.size + len(samples))
+        self._header[0]['size'] = min(state.logical_capacity, state.size + len(encoded_rows))
         self._header[0]['evicted_rows'] = state.evicted_rows + evicted_rows
 
     def sample_at(self, logical_index: int) -> ReplaySample:
@@ -251,66 +258,6 @@ class ReplayStore:
         expected_size = _HEADER_DTYPE.itemsize + state.maximum_capacity * self.layout.row_bytes
         if self.path.stat().st_size != expected_size:
             raise ValueError('Replay store file size does not match its header and layout.')
-
-    def _write_sample(self, row: np.void, sample: ReplaySample) -> None:
-        if len(sample.encoded_state) != self.layout.packed_planes.payload_bytes:
-            raise ValueError('Replay sample packed state has the wrong width.')
-        if len(sample.auxiliary_targets) != len(self.layout.targets.auxiliary_heads):
-            raise ValueError('Replay sample auxiliary targets do not match the fixed layout.')
-        row['encoded_state'] = np.frombuffer(bytes(sample.encoded_state), dtype=np.uint8)
-        self._write_policy(row, 'policy', sample.policy)
-        row['wdl_target'] = (sample.wdl_target.win, sample.wdl_target.draw, sample.wdl_target.loss)
-        row['root_value'] = sample.root_value
-        for index, (head, target) in enumerate(zip(self.layout.targets.auxiliary_heads, sample.auxiliary_targets)):
-            match head, target:
-                case NextPolicyHeadLayout(), EligibleNextPolicyTarget(policy=policy):
-                    self._write_policy(row, f'auxiliary_{index}', policy)
-                    row[f'auxiliary_{index}_eligible'] = 1
-                case NextPolicyHeadLayout(), IneligibleNextPolicyTarget():
-                    row[f'auxiliary_{index}_eligible'] = 0
-                case RemainingGameLengthHeadLayout(), EligibleRemainingGameLengthTarget(normalized_length=value):
-                    row[f'auxiliary_{index}_value'] = value
-                    row[f'auxiliary_{index}_eligible'] = 1
-                case RemainingGameLengthHeadLayout(), IneligibleRemainingGameLengthTarget():
-                    row[f'auxiliary_{index}_eligible'] = 0
-                case (
-                    (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
-                    EligibleScalarAuxiliaryTarget(value=value),
-                ):
-                    row[f'auxiliary_{index}_value'] = value
-                    row[f'auxiliary_{index}_eligible'] = 1
-                case (
-                    (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
-                    IneligibleScalarAuxiliaryTarget(),
-                ):
-                    row[f'auxiliary_{index}_eligible'] = 0
-                case SearchCorrectionHeadLayout(), EligibleScalarAuxiliaryTarget(value=value):
-                    row[f'auxiliary_{index}_value'] = value
-                case LegalMovesHeadLayout(), EligibleLegalMovesTarget():
-                    pass
-                case _:
-                    raise ValueError('Replay auxiliary target does not match its fixed layout.')
-        row['sample_weight'] = sample.sample_weight
-        row['source_model_generation'] = sample.source_model_generation
-        row['source_timestamp'] = sample.source_created_at_seconds
-
-    def _write_policy(self, row: np.void, prefix: str, policy: SparsePolicyTarget) -> None:
-        if len(policy.visits.action_ids) > self.layout.maximum_policy_entries:
-            raise ValueError('Sparse policy exceeds the configured retained-entry count.')
-        if any(action_id >= self.layout.targets.action_size for action_id in policy.visits.action_ids):
-            raise ValueError('Sparse policy contains an action outside the action space.')
-        if any(visit_count > 65_535 for visit_count in policy.visits.visit_counts):
-            raise ValueError('Sparse policy visit count does not fit uint16.')
-        if len(policy.legal_action_ids) > self.layout.maximum_legal_actions:
-            raise ValueError('Sparse policy exceeds the game maximum legal-action count.')
-        if any(action_id >= self.layout.targets.action_size for action_id in policy.legal_action_ids):
-            raise ValueError('Sparse policy contains a legal action outside the action space.')
-        entry_count = len(policy.visits.action_ids)
-        row[f'{prefix}_entry_count'] = entry_count
-        row[f'{prefix}_action_ids'][:entry_count] = policy.visits.action_ids
-        row[f'{prefix}_visit_counts'][:entry_count] = policy.visits.visit_counts
-        row[f'{prefix}_legal_count'] = len(policy.legal_action_ids)
-        row[f'{prefix}_legal_action_ids'][: len(policy.legal_action_ids)] = policy.legal_action_ids
 
     def _read_sample(self, row: np.void) -> ReplaySample:
         auxiliary_targets = []
@@ -380,3 +327,72 @@ class ReplayStore:
             raise RuntimeError('Replay store is closed.')
         if not self._writable:
             raise RuntimeError('Replay store is read-only.')
+
+
+def encode_replay_rows(layout: ReplayLayout, samples: tuple[ReplaySample, ...]) -> npt.NDArray[np.void]:
+    encoded_rows = np.zeros((len(samples),), dtype=layout.row_dtype)
+    for row, sample in zip(encoded_rows, samples, strict=True):
+        _encode_sample(layout, row, sample)
+    return encoded_rows
+
+
+def _encode_sample(layout: ReplayLayout, row: np.void, sample: ReplaySample) -> None:
+    if len(sample.encoded_state) != layout.packed_planes.payload_bytes:
+        raise ValueError('Replay sample packed state has the wrong width.')
+    if len(sample.auxiliary_targets) != len(layout.targets.auxiliary_heads):
+        raise ValueError('Replay sample auxiliary targets do not match the fixed layout.')
+    row['encoded_state'] = np.frombuffer(bytes(sample.encoded_state), dtype=np.uint8)
+    _encode_policy(layout, row, 'policy', sample.policy)
+    row['wdl_target'] = (sample.wdl_target.win, sample.wdl_target.draw, sample.wdl_target.loss)
+    row['root_value'] = sample.root_value
+    for index, (head, target) in enumerate(zip(layout.targets.auxiliary_heads, sample.auxiliary_targets)):
+        match head, target:
+            case NextPolicyHeadLayout(), EligibleNextPolicyTarget(policy=policy):
+                _encode_policy(layout, row, f'auxiliary_{index}', policy)
+                row[f'auxiliary_{index}_eligible'] = 1
+            case NextPolicyHeadLayout(), IneligibleNextPolicyTarget():
+                row[f'auxiliary_{index}_eligible'] = 0
+            case RemainingGameLengthHeadLayout(), EligibleRemainingGameLengthTarget(normalized_length=value):
+                row[f'auxiliary_{index}_value'] = value
+                row[f'auxiliary_{index}_eligible'] = 1
+            case RemainingGameLengthHeadLayout(), IneligibleRemainingGameLengthTarget():
+                row[f'auxiliary_{index}_eligible'] = 0
+            case (
+                (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
+                EligibleScalarAuxiliaryTarget(value=value),
+            ):
+                row[f'auxiliary_{index}_value'] = value
+                row[f'auxiliary_{index}_eligible'] = 1
+            case (
+                (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
+                IneligibleScalarAuxiliaryTarget(),
+            ):
+                row[f'auxiliary_{index}_eligible'] = 0
+            case SearchCorrectionHeadLayout(), EligibleScalarAuxiliaryTarget(value=value):
+                row[f'auxiliary_{index}_value'] = value
+            case LegalMovesHeadLayout(), EligibleLegalMovesTarget():
+                pass
+            case _:
+                raise ValueError('Replay auxiliary target does not match its fixed layout.')
+    row['sample_weight'] = sample.sample_weight
+    row['source_model_generation'] = sample.source_model_generation
+    row['source_timestamp'] = sample.source_created_at_seconds
+
+
+def _encode_policy(layout: ReplayLayout, row: np.void, prefix: str, policy: SparsePolicyTarget) -> None:
+    if len(policy.visits.action_ids) > layout.maximum_policy_entries:
+        raise ValueError('Sparse policy exceeds the configured retained-entry count.')
+    if any(action_id >= layout.targets.action_size for action_id in policy.visits.action_ids):
+        raise ValueError('Sparse policy contains an action outside the action space.')
+    if any(visit_count > 65_535 for visit_count in policy.visits.visit_counts):
+        raise ValueError('Sparse policy visit count does not fit uint16.')
+    if len(policy.legal_action_ids) > layout.maximum_legal_actions:
+        raise ValueError('Sparse policy exceeds the game maximum legal-action count.')
+    if any(action_id >= layout.targets.action_size for action_id in policy.legal_action_ids):
+        raise ValueError('Sparse policy contains a legal action outside the action space.')
+    entry_count = len(policy.visits.action_ids)
+    row[f'{prefix}_entry_count'] = entry_count
+    row[f'{prefix}_action_ids'][:entry_count] = policy.visits.action_ids
+    row[f'{prefix}_visit_counts'][:entry_count] = policy.visits.visit_counts
+    row[f'{prefix}_legal_count'] = len(policy.legal_action_ids)
+    row[f'{prefix}_legal_action_ids'][: len(policy.legal_action_ids)] = policy.legal_action_ids

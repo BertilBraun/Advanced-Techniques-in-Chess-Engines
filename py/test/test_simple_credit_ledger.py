@@ -55,7 +55,7 @@ def _parameters() -> CreditTrainingParams:
 
 def test_credit_ledger_persists_only_approximate_counters_and_active_checkpoint(tmp_path: Path) -> None:
     ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
-    ledger.add_samples(16, model_generation=0)
+    ledger.add_materialized_samples(16)
 
     assert ledger.can_train_quantum(live_samples=8)
     result = TrainingQuantumResult(
@@ -93,21 +93,47 @@ def test_credit_ledger_without_optimizer_limit_never_completes(tmp_path: Path) -
     assert not ledger.training_complete
 
 
-def test_credit_ledger_reports_samples_needed_for_next_quantum(tmp_path: Path) -> None:
+def test_credit_ledger_separates_credit_gate_from_live_sample_gate(tmp_path: Path) -> None:
     ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
 
-    assert ledger.samples_needed_for_quantum(live_samples=0) == 16
-    ledger.add_samples(5, model_generation=0)
-    assert ledger.samples_needed_for_quantum(live_samples=5) == 11
-    ledger.add_samples(11, model_generation=0)
-    assert ledger.samples_needed_for_quantum(live_samples=16) == 0
+    assert not ledger.has_quantum_credits
+    ledger.add_materialized_samples(16)
+    assert ledger.has_quantum_credits
+    assert not ledger.can_train_quantum(live_samples=7)
+    assert ledger.can_train_quantum(live_samples=8)
 
 
-def test_credit_ledger_rejects_negative_live_sample_count(tmp_path: Path) -> None:
+def test_credit_ledger_rejects_negative_materialized_sample_count(tmp_path: Path) -> None:
     ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
 
-    with pytest.raises(ValueError, match='Live replay sample count'):
-        ledger.samples_needed_for_quantum(live_samples=-1)
+    with pytest.raises(ValueError, match='Materialized sample count'):
+        ledger.add_materialized_samples(-1)
+
+
+def test_credit_ledger_reconciliation_recovers_credits_lost_in_a_crash(tmp_path: Path) -> None:
+    ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
+    ledger.add_materialized_samples(5)
+
+    ledger.reconcile_materialized_samples(9)
+
+    assert ledger.state.earned_credits == Decimal(18)
+
+
+def test_credit_ledger_reconciliation_is_a_no_op_when_credits_match(tmp_path: Path) -> None:
+    ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
+    ledger.add_materialized_samples(5)
+
+    ledger.reconcile_materialized_samples(5)
+
+    assert ledger.state.earned_credits == Decimal(10)
+
+
+def test_credit_ledger_reconciliation_rejects_credits_beyond_materialized_data(tmp_path: Path) -> None:
+    ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
+    ledger.add_materialized_samples(5)
+
+    with pytest.raises(ValueError, match='earned more credits'):
+        ledger.reconcile_materialized_samples(4)
 
 
 def test_credit_ledger_initializes_progress_from_checkpoint_generation(tmp_path: Path) -> None:
@@ -124,7 +150,7 @@ def test_credit_ledger_adopts_one_complete_checkpoint_after_interrupted_commit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
-    ledger.add_samples(16, model_generation=0)
+    ledger.add_materialized_samples(16)
     completed = _checkpoint(tmp_path, 1)
     completed.manifest_path.write_text('{}', encoding='utf-8')
 
