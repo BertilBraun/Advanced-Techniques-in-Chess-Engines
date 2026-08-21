@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import math
 from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
@@ -57,14 +58,25 @@ class Chess76PlaneDirectPolicyHeadConfiguration(FrozenModel):
     kind: Literal['chess_76_plane_direct_v2'] = 'chess_76_plane_direct_v2'
 
 
+class DensePolicyHeadConfiguration(FrozenModel):
+    kind: Literal['dense'] = 'dense'
+    channels: int = Field(gt=0)
+
+
 class GoPointPassPolicyHeadConfiguration(FrozenModel):
     kind: Literal['go_point_pass_v1'] = 'go_point_pass_v1'
 
 
 PolicyHeadConfiguration: TypeAlias = Annotated[
-    Chess76PlaneDirectPolicyHeadConfiguration | GoPointPassPolicyHeadConfiguration,
+    Chess76PlaneDirectPolicyHeadConfiguration | DensePolicyHeadConfiguration | GoPointPassPolicyHeadConfiguration,
     Field(discriminator='kind'),
 ]
+
+POLICY_PLANE_PRIMARY_HIDDEN_CHANNELS = 64
+POLICY_PLANE_AUXILIARY_HIDDEN_CHANNELS = 32
+CHESS_POLICY_PLANE_COUNT = 76
+SMALL_OUTPUT_INITIALIZATION_STD = 0.01
+ATTENTION_LINEAR_INITIALIZATION_STD = 0.02
 
 
 class NetworkHeadParams(FrozenModel):
@@ -182,7 +194,10 @@ class Network(nn.Module):
                         for _ in range(args.num_layers)
                     ]
                 )
-                self.finishBlock = AttentionOutput(row_count, column_count)
+                self.finishBlock = nn.Sequential(
+                    nn.LayerNorm(hidden_size),
+                    AttentionOutput(row_count, column_count),
+                )
 
         self.policyHead = _build_policy_head(
             hidden_size,
@@ -213,15 +228,31 @@ class Network(nn.Module):
             for auxiliary_head in auxiliary_heads
         )
 
-        # init weights
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
-            elif isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
-                nn.init.zeros_(m.bias)
+        self._initialize_parameters(args)
 
         self.to(device=self.device, dtype=torch.float32)
+
+    @torch.jit.unused
+    def _initialize_parameters(self, args: NetworkConfiguration) -> None:
+        for module in self.modules():
+            match module:
+                case nn.Conv2d() | nn.Linear():
+                    nn.init.kaiming_normal_(module.weight, nonlinearity='relu')
+                    if module.bias is not None:
+                        nn.init.zeros_(module.bias)
+        match args:
+            case AttentionNetworkParams(num_layers=num_layers):
+                _initialize_attention_trunk(self.startBlock, self.backBone, num_layers)
+            case NetworkParams():
+                pass
+        _initialize_small_policy_output(self.policyHead)
+        _initialize_small_linear_output(self.valueHead[-1])
+        for auxiliary_module, auxiliary_layout in zip(self.auxiliaryHeads, self.auxiliary_heads):
+            match auxiliary_layout:
+                case NextPolicyHeadLayout() | LegalMovesHeadLayout():
+                    _initialize_small_policy_output(auxiliary_module)
+                case _:
+                    _initialize_small_linear_output(auxiliary_module[-1])
 
     @torch.jit.unused
     def checkpoint_definition(self) -> NetworkDefinition:
@@ -344,6 +375,25 @@ def _search_correction_head(training_model: Network) -> nn.Module:
     return ZeroSearchCorrectionHead()
 
 
+class PolicyPlaneHead(nn.Module):
+    def __init__(self, input_channels: int, hidden_channels: int, plane_count: int) -> None:
+        super().__init__()
+        self.input_block = nn.Sequential(
+            nn.Conv2d(input_channels, hidden_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(hidden_channels),
+            nn.ReLU(inplace=True),
+        )
+        self.spatial_block = nn.Sequential(
+            nn.Conv2d(hidden_channels, hidden_channels, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(hidden_channels),
+            nn.ReLU(inplace=True),
+        )
+        self.output_projection = nn.Conv2d(hidden_channels, plane_count, kernel_size=1, bias=True)
+
+    def forward(self, features: Tensor) -> Tensor:
+        return self.output_projection(self.spatial_block(self.input_block(features))).flatten(start_dim=1)
+
+
 class GoPointPassPolicyHead(nn.Module):
     def __init__(self, input_channels: int) -> None:
         super().__init__()
@@ -363,14 +413,20 @@ def _build_policy_head(
     column_count: int,
     action_size: int,
     configuration: PolicyHeadConfiguration,
+    plane_hidden_channels: int = POLICY_PLANE_PRIMARY_HIDDEN_CHANNELS,
 ) -> nn.Module:
     match configuration:
         case Chess76PlaneDirectPolicyHeadConfiguration():
-            if row_count != 8 or column_count != 8 or action_size != 76 * 64:
+            if row_count != 8 or column_count != 8 or action_size != CHESS_POLICY_PLANE_COUNT * 64:
                 raise ValueError('Chess direct policy heads require an 8x8 board and 4,864 actions.')
+            return PolicyPlaneHead(input_channels, plane_hidden_channels, CHESS_POLICY_PLANE_COUNT)
+        case DensePolicyHeadConfiguration(channels=channels):
             return nn.Sequential(
-                nn.Conv2d(input_channels, 76, kernel_size=1, bias=True),
+                nn.Conv2d(input_channels, channels, kernel_size=1, bias=False),
+                nn.BatchNorm2d(channels),
+                nn.ReLU(inplace=True),
                 nn.Flatten(),
+                nn.Linear(channels * row_count * column_count, action_size),
             )
         case GoPointPassPolicyHeadConfiguration():
             if action_size != row_count * column_count + 1:
@@ -396,6 +452,7 @@ def _build_auxiliary_head(
                 column_count,
                 action_size,
                 policy_configuration,
+                plane_hidden_channels=POLICY_PLANE_AUXILIARY_HIDDEN_CHANNELS,
             )
         case RemainingGameLengthHeadLayout(output_size=output_size):
             return nn.Sequential(
@@ -418,9 +475,47 @@ def _build_auxiliary_head(
                 column_count,
                 action_size,
                 policy_configuration,
+                plane_hidden_channels=POLICY_PLANE_AUXILIARY_HIDDEN_CHANNELS,
             )
         case SearchCorrectionHeadLayout(output_size=output_size):
             return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
+
+
+def _initialize_attention_trunk(
+    start_block: nn.Module,
+    back_bone: nn.ModuleList,
+    num_layers: int,
+) -> None:
+    residual_output_std = ATTENTION_LINEAR_INITIALIZATION_STD / math.sqrt(2 * num_layers)
+    match start_block:
+        case AttentionInput(projection=projection):
+            nn.init.normal_(projection.weight, std=ATTENTION_LINEAR_INITIALIZATION_STD)
+            nn.init.zeros_(projection.bias)
+    for block in back_bone:
+        match block:
+            case AttentionEncoderBlock():
+                for linear in (block.query_key_value_projection, block.feedforward[0]):
+                    nn.init.normal_(linear.weight, std=ATTENTION_LINEAR_INITIALIZATION_STD)
+                    nn.init.zeros_(linear.bias)
+                for residual_projection in (block.attention_output_projection, block.feedforward[3]):
+                    nn.init.normal_(residual_projection.weight, std=residual_output_std)
+                    nn.init.zeros_(residual_projection.bias)
+
+
+def _initialize_small_policy_output(module: nn.Module) -> None:
+    match module:
+        case PolicyPlaneHead(output_projection=output_projection):
+            nn.init.normal_(output_projection.weight, std=SMALL_OUTPUT_INITIALIZATION_STD)
+            nn.init.zeros_(output_projection.bias)
+        case _:
+            # The dense replica head and the Go point-pass head keep their historical Kaiming initialization.
+            pass
+
+
+def _initialize_small_linear_output(module: nn.Module) -> None:
+    assert isinstance(module, nn.Linear), 'Small-output initialization expects the final head layer to be linear.'
+    nn.init.normal_(module.weight, std=SMALL_OUTPUT_INITIALIZATION_STD)
+    nn.init.zeros_(module.bias)
 
 
 def _build_scalar_auxiliary_head(
