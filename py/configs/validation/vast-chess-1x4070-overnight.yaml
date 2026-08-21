@@ -38,7 +38,7 @@ training:
   limits:
     hourly_price: 0.135
     maximum_cost: null
-    maximum_wall_time_seconds: 36000
+    maximum_wall_time_seconds: 57600
     manual_stop_file: /workspace/run-control/stop/vast-chess-1x4070-overnight.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
