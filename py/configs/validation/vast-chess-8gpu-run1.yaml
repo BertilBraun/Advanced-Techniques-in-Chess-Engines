@@ -1,20 +1,34 @@
-# Distilled clean-retrain configuration based on the R3/R4 Vast chess experiments.
+# Phase B Run 1 — "old recipe, new head" (recovery plan WP6 / section 3).
+#
+# r3's values (CNN 12x112 global pooling, optimizer, replay capacity/ratio 8, visit/fast/ply/greedy schedules,
+# the two old auxiliary targets at the old weights, compilation disabled, no Syzygy, no adaptive budget) derived
+# from documentation/images/four-day-analysis/training_args.txt and
+# documentation/experiments/vast-chess-8-gpu-config.yaml (generations 0-149 slice); PLUS the new plane head,
+# LR warm-up 1000 steps, fixed ingestion (WP2, code-side), mirror fix (WP1, code-side), the v1 evaluation
+# dataset, the old evaluation definitions and the new fixed-node rungs 30/100/300/1000.
+#
+# Deliberately standalone (no extends): the previous cnn-reference replica failed exactly because it inherited
+# the new stack through extends (regression analysis section 4.4).
+#
+# Keys owned by parallel Phase A streams that do not resolve until phase-a merges (marked WP1/WP3 below):
+#   trainer.warmup_optimizer_steps, policy_head kind, staged parallel_searches, virtual_loss_weight,
+#   per-definition nodes on stockfish_fixed_nodes.
 game: chess
 run:
-  run_name: vast-chess-8gpu-optimal
-  tensorboard_run_directory: vast-chess-8gpu-optimal
+  run_name: vast-chess-8gpu-run1
+  tensorboard_run_directory: vast-chess-8gpu-run1
   stage: clean_retrain
   requires_explicit_approval: true
   resume:
     mode: random_initialization
   hardware:
     provider_name: vast.ai
-    offer_id: instance-48042270-machine-79780-host-399360
+    offer_id: unconfirmed  # PLACEHOLDER — node not rented yet; validation rejects 'unconfirmed' at start
     gpu_model: NVIDIA GeForce RTX 3090
     gpu_count: 8
-    logical_cpu_count: 80
+    logical_cpu_count: 64
     minimum_ram_gib: 200
-    minimum_disk_gib: 10
+    minimum_disk_gib: 150
   environment:
     runtime_image: vastai/pytorch:cuda-13.0.3-auto
     python_version: '3.12'
@@ -24,20 +38,20 @@ run:
     dependency_lock_sha256: f027ad99a12742660107a2857b18cbc6b821a95971c2ecf2c4ad814c38116171
     minimum_open_file_soft_limit: 65536
 training:
-  save_path: py/training_data/production/vast-chess-8gpu-optimal
+  save_path: py/training_data/validation/vast-chess-8gpu-run1
   trainer:
     global_batch_size: 2048
     local_batch_size: 256
     optimizer: adamw
     precision: bfloat16
-    compilation: default
+    compilation: disabled
     learning_rate:
       kind: staged
       stages:
         - {start_generation: 0, value: 0.005}
-        - {start_generation: 100, value: 0.004}
-        - {start_generation: 350, value: 0.003}
-        - {start_generation: 550, value: 0.002}
+        - {start_generation: 100, value: 0.0035}
+        - {start_generation: 300, value: 0.002}
+    warmup_optimizer_steps: 1000  # WP1 key — resolves after phase-a merge
     max_grad_norm: 0.5
     duplicate_multiplicity_weight_cap: null
   topology:
@@ -49,24 +63,24 @@ training:
       cpu_threads: 4
       interop_threads: 1
     self_play:
-      device_ids: [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7]
+      # PLACEHOLDER — node topology unknown: set processes per GPU and the paused-during-training set once the
+      # node is rented. The string sentinels below fail resolution loudly on purpose.
+      device_ids: PLACEHOLDER — node topology unknown
       parallel_games_per_process: 512
       tensorboard_processes: 1
-      node_ids_to_pause_during_training: [1, 2, 4, 5, 7, 8, 10, 11, 13, 14, 16, 17, 19, 20, 22, 23]
+      node_ids_to_pause_during_training: PLACEHOLDER — node topology unknown
     evaluation:
       device_cycle: [4, 5, 6, 7]
   lifecycle:
     replay:
       capacity:
-        kind: staged
-        stages:
-          - {start_generation: 0, value: 300000}
-          - {start_generation: 25, value: 600000}
-          - {start_generation: 50, value: 1000000}
-          - {start_generation: 100, value: 1500000}
-          - {start_generation: 250, value: 2000000}
-          - {start_generation: 400, value: 2500000}
-      maximum_capacity: 2500000
+        kind: linear
+        start_generation: 0
+        end_generation: 100
+        start_value: 300000
+        end_value: 2000000
+        rounding: nearest
+      maximum_capacity: 2000000
       maximum_policy_entries: 60
       materialization_processes: 8
     credit:
@@ -74,59 +88,34 @@ training:
       optimizer_steps_per_quantum: 500
       maximum_optimizer_steps: null
       retained_checkpoint_interval_generations: 6
-      self_play_backpressure_quanta: 2
+      self_play_backpressure_quanta: 5
     inference_retention:
       recent_checkpoint_count: 22
       milestone_interval: 20
   limits:
-    hourly_price: 1.1244444
+    hourly_price: 0.0  # PLACEHOLDER — set with the rented offer; the approval must match
     maximum_cost: null
-    maximum_wall_time_seconds: null
-    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-optimal.stop
+    maximum_wall_time_seconds: 14400
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-run1.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
-    minimum_free_disk_gib: 10.0
+    minimum_free_disk_gib: 20.0
     resource_telemetry_interval_seconds: 5.0
   random_seed: 20260811
   progressive_model_sizing:
     models:
-      - model_id: chess-attention-1m
+      - model_id: chess-cnn-12x112
         training_start_days: 0.0
         network:
-          kind: attention
-          num_layers: 8
-          embedding_size: 128
-          num_heads: 4
-          feedforward_size: 256
-          dropout: 0.0
+          kind: convolutional
+          num_layers: 12
+          hidden_size: 112
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          # WP1 key — the new hidden-layer plane head; final kind name owned by the WP1 stream
           policy_head: {kind: chess_76_plane_direct_v2}
           num_value_channels: 2
           value_fc_size: 48
-      - model_id: chess-attention-2m
-        training_start_days: 0.75
-        network:
-          kind: attention
-          num_layers: 10
-          embedding_size: 160
-          num_heads: 5
-          feedforward_size: 320
-          dropout: 0.0
-          policy_head: {kind: chess_76_plane_direct_v2}
-          num_value_channels: 2
-          value_fc_size: 48
-      - model_id: chess-attention-4m5
-        training_start_days: 2.0
-        network:
-          kind: attention
-          num_layers: 15
-          embedding_size: 192
-          num_heads: 6
-          feedforward_size: 384
-          dropout: 0.0
-          policy_head: {kind: chess_76_plane_direct_v2}
-          num_value_channels: 2
-          value_fc_size: 48
-    promotion:
+    promotion:  # inert with a single model
       decay: 0.8
       warmup_quanta: 10
       maximum_relative_loss: 1.01
@@ -137,13 +126,13 @@ evaluation:
   bootstrap_samples: 10000
   maximum_concurrent_jobs: 10
   dataset:
-    path: /workspace/evaluation-artifacts/chess/chess-stockfish-direct-policy-evaluation-v2.bin
+    path: /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v1.bin
     source:
       kind: engine_self_play
       random_seed: 20260811
       move_sampling_temperature: 1.0
   openings:
-    path: /workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-direct-policy-openings-v2.json
+    path: /workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-openings-v1.json
     opening_count: 50
     source:
       kind: chess_book
@@ -161,9 +150,12 @@ evaluation:
   definitions:
     - kind: fixed_dataset
       definition_id: fixed-dataset
-    - kind: random
-      definition_id: search-random
-      maximum_game_plies: 200
+    - kind: previous_checkpoint
+      definition_id: previous-20m
+      boundary_offset: 1
+      boundary_parity: every
+      opening_pair_count: 50
+      maximum_game_plies: 300
       search: &evaluation_search
         searches_per_move: 64
         parallel_searches: 1
@@ -173,16 +165,6 @@ evaluation:
           inference_batch_size: 64
           outstanding_batches_per_worker: 1
           sdpa_backend: memory_efficient
-    - kind: policy_random
-      definition_id: policy-random
-      maximum_game_plies: 200
-    - kind: previous_checkpoint
-      definition_id: previous-20m
-      boundary_offset: 1
-      boundary_parity: every
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
     - kind: previous_checkpoint
       definition_id: previous-40m
       boundary_offset: 2
@@ -197,6 +179,7 @@ evaluation:
       opening_pair_count: 50
       maximum_game_plies: 300
       search: *evaluation_search
+    # Levels 0 and 4 are kept only during the test runs for comparability with the four-day yardstick.
     - kind: stockfish
       definition_id: stockfish-level-0
       skill_level: 0
@@ -227,6 +210,7 @@ evaluation:
       opening_pair_count: 50
       maximum_game_plies: 300
       search: *evaluation_search
+    # New fixed-node rungs (WP3): per-definition node counts per the WP3 schema.
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-30
       nodes: 30
@@ -253,12 +237,10 @@ evaluation:
       search: *evaluation_search
 chess:
   self_play:
-    maximum_ply_syzygy_paths:
-      - /workspace/syzygy/wdl345
     resignation:
       kind: calibrated
       first_production_generation: 70
-      false_nonloss_rate_ceiling: 0.025
+      false_nonloss_rate_ceiling: 0.03
       continuation_game_probability: 0.1
       triggered_game_window: 2000
       candidate_threshold_minimum: -0.99
@@ -278,18 +260,25 @@ chess:
             - {start_generation: 30, value: 400}
             - {start_generation: 50, value: 500}
             - {start_generation: 90, value: 600}
-            - {start_generation: 180, value: 800}
-            - {start_generation: 250, value: 1000}
-            - {start_generation: 350, value: 1200}
-            - {start_generation: 450, value: 1400}
-            - {start_generation: 500, value: 1600}
+            - {start_generation: 180, value: 700}
+            - {start_generation: 250, value: 800}
+            - {start_generation: 550, value: 1000}
       fast_searches:
         kind: staged
         stages:
           - {start_generation: 0, value: 50}
+          - {start_generation: 10, value: 75}
           - {start_generation: 30, value: 100}
+          - {start_generation: 50, value: 125}
           - {start_generation: 90, value: 150}
-      parallel_searches: 4
+      # WP3 keys — staged parallel searches (1 below 600 full-search visits, 4 from 600 on) and the
+      # virtual-loss fraction resolve after phase-a merge.
+      parallel_searches:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 2}
+          - {start_generation: 90, value: 4}
+      virtual_loss_weight: 1.0
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
       exploration_constant: 1.5
@@ -311,35 +300,31 @@ chess:
       minimum_candidates: 2
       maximum_candidates: 3
       maximum_absolute_root_value: 0.8
-      minimum_remaining_plies: 25
+      minimum_remaining_plies: 15
       maximum_archive_positions: 50000
       maximum_age_generations: 40
     full_search_probability:
-      kind: staged
-      stages:
-        - {start_generation: 0, value: 1.0}
-        - {start_generation: 30, value: 0.5}
-        - {start_generation: 50, value: 0.35}
-        - {start_generation: 70, value: 0.25}
-        - {start_generation: 250, value: 0.2}
+      kind: linear
+      start_generation: 0
+      end_generation: 70
+      start_value: 1.0
+      end_value: 0.25
+      rounding: none
     retained_root_visit_fraction: 0.6
     greedy_after_ply:
       kind: staged
       stages:
         - {start_generation: 0, value: 60}
-        - {start_generation: 100, value: 80}
+        - {start_generation: 110, value: 80}
     maximum_game_plies:
       kind: staged
       stages:
         - {start_generation: 0, value: 150}
-        - {start_generation: 50, value: 180}
-        - {start_generation: 100, value: 200}
-    force_fast_search_after_ply:
-      kind: staged
-      stages:
-        - {start_generation: 0, value: 110}
-        - {start_generation: 50, value: 140}
-        - {start_generation: 100, value: 160}
+        - {start_generation: 50, value: 160}
+        - {start_generation: 80, value: 180}
+        - {start_generation: 110, value: 200}
+        - {start_generation: 140, value: 250}
+    force_fast_search_after_ply: 200
     starting_temperature: 1.3
     final_temperature: 0.1
     primary_sample_weight: 1.0
@@ -352,24 +337,13 @@ chess:
       start_generation: 50
       end_generation: 110
       start_value: 0.0
-      end_value: 0.1
+      end_value: 0.15
       rounding: none
     value_discount_per_ply: 1.0
     auxiliary_targets:
       - kind: next_policy
         ply_offset: 1
-        loss_weight: 0.05
+        loss_weight: 0.1
       - kind: remaining_game_length
-        loss_weight: 0.025
-        normalization_scale: 200.0
-      - kind: future_search_value
-        ply_offset: 4
-        smooth_l1_beta: 0.1
-        loss_weight: 0.025
-      - kind: irreversible_progress
-        horizon_plies: 16
-        loss_weight: 0.0125
-      - kind: legal_moves
-        loss_weight: 0.0125
-      - kind: search_correction
-        loss_weight: 0.05
+        loss_weight: 0.1
+        normalization_scale: 400.0

@@ -41,13 +41,15 @@ struct TreeSearchParameters {
     FirstPlayUrgencyParameters first_play_urgency;
     float forced_playout_coefficient;
     float value_discount_per_ply;
+    float virtual_loss_weight;
 
     TreeSearchParameters(const float explorationConstant,
                          FirstPlayUrgencyParameters firstPlayUrgency,
-                         const float forcedPlayoutCoefficient, const float valueDiscountPerPly)
+                         const float forcedPlayoutCoefficient, const float valueDiscountPerPly,
+                         const float virtualLossWeight = 1.0F)
         : exploration_constant(explorationConstant), first_play_urgency(firstPlayUrgency),
           forced_playout_coefficient(forcedPlayoutCoefficient),
-          value_discount_per_ply(valueDiscountPerPly) {
+          value_discount_per_ply(valueDiscountPerPly), virtual_loss_weight(virtualLossWeight) {
         if (!std::isfinite(exploration_constant) || exploration_constant <= 0.0F) {
             throw std::invalid_argument("Exploration constant must be finite and positive");
         }
@@ -58,6 +60,10 @@ struct TreeSearchParameters {
         if (!std::isfinite(value_discount_per_ply) || value_discount_per_ply <= 0.0F ||
             value_discount_per_ply > 1.0F) {
             throw std::invalid_argument("Value discount per ply must be finite and in (0, 1]");
+        }
+        if (!std::isfinite(virtual_loss_weight) || virtual_loss_weight < 0.0F ||
+            virtual_loss_weight > 1.0F) {
+            throw std::invalid_argument("Virtual-loss weight must be finite and in [0, 1]");
         }
     }
 };

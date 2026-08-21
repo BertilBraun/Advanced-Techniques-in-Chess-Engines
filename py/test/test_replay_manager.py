@@ -1,6 +1,6 @@
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
@@ -14,12 +14,14 @@ from src.replay.contracts import (
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
     IneligibleNextPolicyTarget,
+    IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
     ReplaySample,
 )
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayManager
 from src.replay.materialization import materialize_completed_game
+from src.replay.parallel_materialization import StagedGame
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
@@ -466,42 +468,148 @@ def test_materialization_revalidates_maximum_ply_result_with_terminal_oracle() -
     assert materialized.samples[-1].wdl_target == WdlTarget(win=0.0, draw=0.0, loss=1.0)
 
 
-def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> None:
-    game = _completed_game()
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    publish_completed_self_play_game(inbox, game)
-    second_game = game.validated_copy(
-        update={
-            'identity': {
-                'worker_id': 3,
-                'process_instance_id': '38c8809f-a49d-4d98-8da5-034614893665',
-                'game_number': 8,
-            }
+def _remaining_game_length_layout() -> TrainingTargetLayout:
+    return TrainingTargetLayout(
+        action_size=3,
+        wdl_size=3,
+        auxiliary_heads=(RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=4.0),),
+    )
+
+
+def _maximum_plies_game() -> CompletedSelfPlayGame:
+    natural_game = _completed_game()
+    return CompletedSelfPlayGame.model_validate(
+        {
+            **natural_game.model_dump(),
+            'action_ids': natural_game.action_ids[:3],
+            'observations': natural_game.observations[:3],
+            'final_wdl': WdlTarget(win=1.0, draw=0.0, loss=0.0),
+            'termination_reason': TerminationReason.MAXIMUM_PLIES,
         }
     )
-    publish_completed_self_play_game(inbox, second_game)
-    configuration = ReplayConfiguration(
-        capacity=4,
-        maximum_capacity=6,
-        maximum_policy_entries=1,
+
+
+def test_censoring_marks_remaining_game_length_ineligible_on_cut_games() -> None:
+    materialized = materialize_completed_game(
+        _maximum_plies_game(),
+        LINEAR_STATE_CONTRACT,
+        WinningTerminalOracle(),
+        _remaining_game_length_layout(),
+        3,
+        UNDISCOUNTED_VALUES,
+        censor_remaining_game_length_on_cut_games=True,
     )
-    layout = ReplayLayout(
+
+    assert materialized.samples
+    assert all(
+        isinstance(target, IneligibleRemainingGameLengthTarget)
+        for sample in materialized.samples
+        for target in sample.auxiliary_targets
+    )
+
+
+def test_cut_games_keep_length_targets_when_censoring_is_disabled() -> None:
+    materialized = materialize_completed_game(
+        _maximum_plies_game(),
+        LINEAR_STATE_CONTRACT,
+        WinningTerminalOracle(),
+        _remaining_game_length_layout(),
+        3,
+        UNDISCOUNTED_VALUES,
+    )
+
+    assert materialized.samples
+    assert all(
+        isinstance(target, EligibleRemainingGameLengthTarget)
+        for sample in materialized.samples
+        for target in sample.auxiliary_targets
+    )
+
+
+def test_censoring_leaves_naturally_finished_games_eligible() -> None:
+    materialized = materialize_completed_game(
+        _completed_game(),
+        LINEAR_STATE_CONTRACT,
+        None,
+        _remaining_game_length_layout(),
+        3,
+        UNDISCOUNTED_VALUES,
+        censor_remaining_game_length_on_cut_games=True,
+    )
+
+    assert materialized.samples
+    assert all(
+        isinstance(target, EligibleRemainingGameLengthTarget)
+        for sample in materialized.samples
+        for target in sample.auxiliary_targets
+    )
+
+
+def _replay_layout() -> ReplayLayout:
+    return ReplayLayout(
         packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
         targets=_target_layout(),
         maximum_policy_entries=1,
         maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
     )
-    manager = ReplayManager.open(
+
+
+def _open_manager(
+    tmp_path: Path,
+    capacity: int,
+    maximum_capacity: int,
+    resignation_calibrator: ResignationCalibrator | None = None,
+) -> ReplayManager[LinearPosition]:
+    configuration = ReplayConfiguration(
+        capacity=capacity,
+        maximum_capacity=maximum_capacity,
+        maximum_policy_entries=1,
+    )
+    return ReplayManager.open(
         tmp_path,
         LINEAR_STATE_CONTRACT,
-        layout,
+        _replay_layout(),
         configuration,
         model_generation=2,
         value_discount_per_ply=UNDISCOUNTED_VALUES,
         terminal_oracle=None,
+        resignation_calibrator=resignation_calibrator,
     )
 
-    ingestion = manager.ingest_available_games(2)
+
+def _publish_games(inbox: Path, count: int, first_game_number: int = 7) -> None:
+    game = _completed_game()
+    for game_number in range(first_game_number, first_game_number + count):
+        publish_completed_self_play_game(
+            inbox,
+            game.validated_copy(
+                update={
+                    'identity': {
+                        'worker_id': 3,
+                        'process_instance_id': '38c8809f-a49d-4d98-8da5-034614893665',
+                        'game_number': game_number,
+                    }
+                }
+            ),
+        )
+
+
+SAMPLES_PER_GAME = 3
+
+
+def test_replay_manager_stages_appends_and_reopens_fifo(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 2)
+    manager = _open_manager(tmp_path, capacity=4, maximum_capacity=6)
+    staged: list[StagedGame] = []
+
+    manager.materialize_available_games(staged.append)
+
+    assert manager.inbox_depth == 0
+    assert manager.staging_depth == 2
+    assert sorted(result.row_count for result in staged) == [3, 3]
+
+    ingestion = manager.append_staged_games(2)
 
     assert ingestion.games_ingested == 2
     assert ingestion.samples_added == 6
@@ -513,121 +621,167 @@ def test_replay_manager_drains_all_games_and_reopens_fifo(tmp_path: Path) -> Non
         TerminationReason.NATURAL,
         TerminationReason.NATURAL,
     )
-    assert not tuple(inbox.glob('*.json'))
-    description = manager.description()
-    assert description.size == 4
+    assert manager.staging_depth == 0
+    assert manager.description().size == 4
     manager.close()
 
-    reopened = ReplayManager.open(
-        tmp_path,
-        LINEAR_STATE_CONTRACT,
-        layout,
-        configuration,
-        model_generation=2,
-        value_discount_per_ply=UNDISCOUNTED_VALUES,
-        terminal_oracle=None,
-    )
+    reopened = _open_manager(tmp_path, capacity=4, maximum_capacity=6)
     assert reopened.live_samples == 4
     reopened.close()
 
 
-def test_replay_manager_stops_after_reaching_sample_limit(tmp_path: Path) -> None:
+def test_synthetic_flood_appends_every_game_exactly_once_with_bounded_inbox(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    manager = _open_manager(tmp_path, capacity=128, maximum_capacity=128)
+    staged_game_ids: list[str] = []
+    appended_samples = 0
+    flood_waves = 3
+    games_per_wave = 10
+
+    for wave in range(flood_waves):
+        _publish_games(inbox, games_per_wave, first_game_number=wave * games_per_wave)
+        manager.materialize_available_games(lambda staged: staged_game_ids.append(staged.game_id))
+        assert manager.inbox_depth == 0
+        appended_samples += manager.append_staged_games(2).samples_added
+        assert manager.staging_depth == 0
+
+    total_games = flood_waves * games_per_wave
+    assert len(staged_game_ids) == total_games
+    assert len(set(staged_game_ids)) == total_games
+    assert appended_samples == total_games * SAMPLES_PER_GAME
+    assert manager.store.total_appended_rows == total_games * SAMPLES_PER_GAME
+    manager.close()
+
+
+def test_dispatcher_thread_stages_flood_without_inbox_growth(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    manager = _open_manager(tmp_path, capacity=128, maximum_capacity=128)
+    staged_row_counts: list[int] = []
+    manager.start_materialization(
+        lambda staged: staged_row_counts.append(staged.row_count),
+        poll_interval_seconds=0.02,
+    )
+
+    total_games = 20
+    for wave in range(4):
+        _publish_games(inbox, 5, first_game_number=wave * 5)
+        deadline = time.monotonic() + 10.0
+        while manager.inbox_depth > 0 and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert manager.inbox_depth == 0
+
+    deadline = time.monotonic() + 10.0
+    while len(staged_row_counts) < total_games and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert staged_row_counts == [SAMPLES_PER_GAME] * total_games
+    assert manager.staging_depth == total_games
+
+    ingestion = manager.append_staged_games(2)
+    assert ingestion.games_ingested == total_games
+    assert ingestion.samples_added == total_games * SAMPLES_PER_GAME
+    manager.close()
+
+
+def test_restart_removes_inbox_copy_of_already_staged_game(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
     game = _completed_game()
-    inbox = tmp_path / 'completed-games' / 'inbox'
     publish_completed_self_play_game(inbox, game)
-    second_game = game.validated_copy(
-        update={
-            'identity': {
-                'worker_id': 3,
-                'process_instance_id': '38c8809f-a49d-4d98-8da5-034614893665',
-                'game_number': 8,
-            }
-        }
-    )
-    publish_completed_self_play_game(inbox, second_game)
-    configuration = ReplayConfiguration(capacity=6, maximum_capacity=6, maximum_policy_entries=1)
-    layout = ReplayLayout(
-        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
-        targets=_target_layout(),
-        maximum_policy_entries=1,
-        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
-    )
-    manager = ReplayManager.open(
-        tmp_path,
-        LINEAR_STATE_CONTRACT,
-        layout,
-        configuration,
-        model_generation=2,
-        value_discount_per_ply=UNDISCOUNTED_VALUES,
-        terminal_oracle=None,
-    )
+    manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
+    manager.materialize_available_games(lambda staged: None)
+    assert manager.inbox_depth == 0
+    # A worker killed between writing the staging files and unlinking the inbox original leaves both.
+    publish_completed_self_play_game(inbox, game)
+    manager.close()
 
-    ingestion = manager.ingest_available_games(2, maximum_samples=1)
+    restarted = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
 
+    assert restarted.inbox_depth == 0
+    assert restarted.staging_depth == 1
+    ingestion = restarted.append_staged_games(2)
     assert ingestion.games_ingested == 1
-    assert ingestion.samples_added == 3
-    assert len(tuple(inbox.glob('*.json'))) == 1
-    manager.close()
+    assert ingestion.samples_added == SAMPLES_PER_GAME
+    assert restarted.store.total_appended_rows == SAMPLES_PER_GAME
+    restarted.close()
 
 
-def test_replay_manager_does_not_flush_when_inbox_is_empty(tmp_path: Path) -> None:
-    configuration = ReplayConfiguration(capacity=6, maximum_capacity=6, maximum_policy_entries=1)
-    layout = ReplayLayout(
-        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
-        targets=_target_layout(),
-        maximum_policy_entries=1,
-        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
-    )
-    manager = ReplayManager.open(
-        tmp_path,
-        LINEAR_STATE_CONTRACT,
-        layout,
-        configuration,
-        model_generation=2,
-        value_discount_per_ply=UNDISCOUNTED_VALUES,
-        terminal_oracle=None,
-    )
-    flush = Mock()
-    manager.store.flush = flush
-
-    ingestion = manager.ingest_available_games(2)
-
-    assert ingestion.games_ingested == 0
-    flush.assert_not_called()
-    manager.close()
-
-
-def test_replay_manager_flushes_before_removing_ingested_games(tmp_path: Path) -> None:
+def test_restart_after_kill_between_append_and_staged_cleanup_duplicates_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
-    publish_completed_self_play_game(inbox, _completed_game())
-    configuration = ReplayConfiguration(capacity=6, maximum_capacity=6, maximum_policy_entries=1)
-    layout = ReplayLayout(
-        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
-        targets=_target_layout(),
-        maximum_policy_entries=1,
-        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
-    )
-    manager = ReplayManager.open(
-        tmp_path,
-        LINEAR_STATE_CONTRACT,
-        layout,
-        configuration,
-        model_generation=2,
-        value_discount_per_ply=UNDISCOUNTED_VALUES,
-        terminal_oracle=None,
-    )
-    original_flush = manager.store.flush
-    completed_path = next(inbox.glob('*.json'))
+    _publish_games(inbox, 2)
+    manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
+    manager.materialize_available_games(lambda staged: None)
 
-    def assert_game_remains_until_flush() -> None:
-        assert completed_path.exists()
+    def simulated_kill(staged_games: object) -> None:
+        raise RuntimeError('simulated kill -9 after the append flush')
+
+    monkeypatch.setattr(manager, '_unlink_staged_games', simulated_kill)
+    with pytest.raises(RuntimeError, match='simulated kill'):
+        manager.append_staged_games(2)
+
+    assert manager.store.total_appended_rows == 2 * SAMPLES_PER_GAME
+    assert manager.staging_depth == 2
+    assert manager.append_manifest_path.exists()
+    manager.close()
+
+    restarted = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
+
+    assert restarted.staging_depth == 0
+    assert not restarted.append_manifest_path.exists()
+    ingestion = restarted.append_staged_games(2)
+    assert ingestion.games_ingested == 0
+    assert restarted.store.total_appended_rows == 2 * SAMPLES_PER_GAME
+    restarted.close()
+
+
+def test_restart_after_kill_before_append_appends_exactly_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 2)
+    manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
+    manager.materialize_available_games(lambda staged: None)
+
+    def simulated_kill(rows: object) -> None:
+        raise RuntimeError('simulated kill -9 before the append')
+
+    monkeypatch.setattr(manager.store, 'extend_rows', simulated_kill)
+    with pytest.raises(RuntimeError, match='simulated kill'):
+        manager.append_staged_games(2)
+
+    assert manager.store.total_appended_rows == 0
+    assert manager.append_manifest_path.exists()
+    manager.close()
+
+    restarted = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
+
+    assert restarted.staging_depth == 2
+    ingestion = restarted.append_staged_games(2)
+    assert ingestion.games_ingested == 2
+    assert restarted.store.total_appended_rows == 2 * SAMPLES_PER_GAME
+    restarted.close()
+
+
+def test_append_flushes_before_removing_staged_games(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 1)
+    manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
+    staged: list[StagedGame] = []
+    manager.materialize_available_games(staged.append)
+    rows_path = manager.staging_path / f'{staged[0].game_id}.rows.npy'
+    original_flush = manager.store.flush
+
+    def assert_staged_rows_remain_until_flush() -> None:
+        assert rows_path.exists()
         original_flush()
 
-    manager.store.flush = assert_game_remains_until_flush
+    manager.store.flush = assert_staged_rows_remain_until_flush
 
-    manager.ingest_available_games(2)
+    manager.append_staged_games(2)
 
-    assert not completed_path.exists()
+    assert not rows_path.exists()
     manager.store.flush = original_flush
     manager.close()
 
@@ -637,31 +791,15 @@ def test_replay_manager_keeps_malformed_game_for_inspection(tmp_path: Path) -> N
     inbox.mkdir(parents=True)
     malformed = inbox / 'malformed.json'
     malformed.write_text('{}', encoding='utf-8')
-    configuration = ReplayConfiguration(
-        capacity=4,
-        maximum_capacity=4,
-        maximum_policy_entries=1,
-    )
-    layout = ReplayLayout(
-        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
-        targets=_target_layout(),
-        maximum_policy_entries=1,
-        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
-    )
-    manager = ReplayManager.open(
-        tmp_path,
-        LINEAR_STATE_CONTRACT,
-        layout,
-        configuration,
-        model_generation=0,
-        value_discount_per_ply=UNDISCOUNTED_VALUES,
-        terminal_oracle=None,
-    )
+    manager = _open_manager(tmp_path, capacity=4, maximum_capacity=4)
 
-    with pytest.raises(ValueError):
-        manager.ingest_available_games(0)
+    manager.materialize_available_games(lambda staged: None)
 
     assert malformed.exists()
+    assert manager.materialization_failures == 1
+    assert manager.staging_depth == 0
+    ingestion = manager.append_staged_games(2)
+    assert ingestion.games_ingested == 0
     manager.close()
 
 
@@ -677,17 +815,6 @@ def test_replay_ingestion_updates_central_resignation_state(tmp_path: Path) -> N
     )
     inbox = tmp_path / 'completed-games' / 'inbox'
     publish_completed_self_play_game(inbox, game)
-    replay_configuration = ReplayConfiguration(
-        capacity=4,
-        maximum_capacity=4,
-        maximum_policy_entries=1,
-    )
-    layout = ReplayLayout(
-        packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
-        targets=_target_layout(),
-        maximum_policy_entries=1,
-        maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
-    )
     resignation_configuration = CalibratedResignationConfiguration(
         first_production_generation=50,
         false_nonloss_rate_ceiling=0.99,
@@ -702,18 +829,10 @@ def test_replay_ingestion_updates_central_resignation_state(tmp_path: Path) -> N
     )
     calibration_path = tmp_path / 'resignation' / 'calibration.json'
     calibrator = ResignationCalibrator(calibration_path, resignation_configuration)
-    manager = ReplayManager.open(
-        tmp_path,
-        LINEAR_STATE_CONTRACT,
-        layout,
-        replay_configuration,
-        model_generation=2,
-        value_discount_per_ply=UNDISCOUNTED_VALUES,
-        terminal_oracle=None,
-        resignation_calibrator=calibrator,
-    )
+    manager = _open_manager(tmp_path, capacity=4, maximum_capacity=4, resignation_calibrator=calibrator)
 
-    manager.ingest_available_games(2)
+    manager.materialize_available_games(lambda staged: None)
+    manager.append_staged_games(2)
     calibrator.advance_generation(50)
     manager.close()
 

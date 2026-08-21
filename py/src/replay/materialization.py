@@ -12,6 +12,7 @@ from src.replay.contracts import (
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
     IneligibleNextPolicyTarget,
+    IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
     ReplaySample,
     SparsePolicyTarget,
@@ -87,6 +88,7 @@ def materialize_completed_game(
     targets: TrainingTargetLayout,
     maximum_policy_entries: int,
     value_discount_per_ply: FloatGenerationSchedule,
+    censor_remaining_game_length_on_cut_games: bool = False,
 ) -> MaterializedGame:
     if targets.action_size != state.action_size:
         raise ValueError('Training target action count does not match the game state contract.')
@@ -131,6 +133,11 @@ def materialize_completed_game(
                     used_policies.append(auxiliary)
                     auxiliary_targets.append(EligibleNextPolicyTarget(policy=auxiliary.policy))
                 case RemainingGameLengthHeadLayout(normalization_scale=normalization_scale):
+                    if censor_remaining_game_length_on_cut_games and (
+                        game.termination_reason is TerminationReason.MAXIMUM_PLIES
+                    ):
+                        auxiliary_targets.append(IneligibleRemainingGameLengthTarget())
+                        continue
                     remaining_plies = len(game.action_ids) - observation.ply
                     auxiliary_targets.append(
                         EligibleRemainingGameLengthTarget(normalized_length=remaining_plies / normalization_scale)

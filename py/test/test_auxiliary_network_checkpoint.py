@@ -14,6 +14,7 @@ from src.training.checkpoint.persistence import (
 from src.training.network import (
     AttentionNetworkParams,
     Chess76PlaneDirectPolicyHeadConfiguration,
+    DensePolicyHeadConfiguration,
     DisabledResidualContext,
     GlobalPoolingResidualContext,
     GoPointPassPolicyHeadConfiguration,
@@ -22,7 +23,7 @@ from src.training.network import (
     NetworkParams,
     ResidualContextPlacement,
 )
-from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
+from src.training.targets import LegalMovesHeadLayout, NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 
 
 @pytest.mark.parametrize(
@@ -158,3 +159,58 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
     torch.testing.assert_close(inference_policy, expected_policy)
     torch.testing.assert_close(inference_wdl, expected_wdl)
     torch.testing.assert_close(inference_search_correction, torch.full((2, 1), 0.5))
+
+
+@pytest.mark.parametrize(
+    'parameters',
+    (
+        NetworkParams(
+            num_layers=2,
+            hidden_size=64,
+            residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
+            policy_head=Chess76PlaneDirectPolicyHeadConfiguration(),
+            num_value_channels=2,
+            value_fc_size=16,
+        ),
+        AttentionNetworkParams(
+            num_layers=2,
+            embedding_size=64,
+            num_heads=2,
+            feedforward_size=128,
+            policy_head=Chess76PlaneDirectPolicyHeadConfiguration(),
+            num_value_channels=2,
+            value_fc_size=16,
+        ),
+        NetworkParams(
+            num_layers=1,
+            hidden_size=32,
+            residual_context=DisabledResidualContext(),
+            policy_head=DensePolicyHeadConfiguration(channels=8),
+            num_value_channels=2,
+            value_fc_size=16,
+        ),
+    ),
+)
+def test_jit_export_matches_training_forward_for_chess_heads(
+    tmp_path: Path,
+    parameters: NetworkConfiguration,
+) -> None:
+    torch.manual_seed(17)
+    auxiliary_heads = (
+        NextPolicyHeadLayout(kind='next_policy', action_size=4864, ply_offset=1),
+        LegalMovesHeadLayout(kind='legal_moves', action_size=4864),
+        RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
+    )
+    model = Network(parameters, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, auxiliary_heads)
+    model.eval()
+    inputs = torch.rand((4, 29, 8, 8))
+    expected_policy_logits, expected_value = model(inputs)
+
+    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 1, tmp_path)
+    inference_model = torch.jit.load(str(tmp_path / 'model_1.jit.pt'), map_location='cpu')
+    inference_model.eval()
+    inference_policy, inference_wdl, _ = inference_model(inputs)
+
+    assert inference_policy.shape == (4, 4864)
+    torch.testing.assert_close(inference_policy, expected_policy_logits, rtol=0.0, atol=1e-5)
+    torch.testing.assert_close(inference_wdl, expected_value, rtol=0.0, atol=1e-5)

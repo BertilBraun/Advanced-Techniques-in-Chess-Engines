@@ -131,17 +131,20 @@ def _create_external_match_engine(
             )
             return StockfishMatchEngine(client, job.opponent.skill_level)
         case 'stockfish_fixed_nodes':
+            from src.evaluation.contracts import StockfishFixedNodesOpponent
             from src.games.chess.stockfish import StockfishClient
 
             engine_configuration = experiment.evaluation.engine
             if not isinstance(engine_configuration, StockfishEngineConfiguration):
                 raise ValueError('Stockfish fixed-node job requires Stockfish engine configuration.')
+            if not isinstance(job.opponent, StockfishFixedNodesOpponent):
+                raise ValueError('Stockfish fixed-node job requires a fixed-node opponent.')
             client = StockfishClient(
                 engine_configuration,
                 game.state,
                 resolve_project_path(engine_configuration.executable_path),
             )
-            return StockfishFixedNodesMatchEngine(client)
+            return StockfishFixedNodesMatchEngine(client, job.opponent.nodes)
         case 'katago':
             from src.games.go.katago import KataGoClient
 

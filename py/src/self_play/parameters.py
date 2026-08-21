@@ -144,6 +144,7 @@ class ResolvedSelfPlayParameters:
     primary_sample_weight: float
     value_discount_per_ply: float
     force_fast_search_after_ply: int | None = None
+    virtual_loss_weight: float = 1.0
 
     def __post_init__(self) -> None:
         if not 0.0 < self.full_search_probability <= 1.0:
@@ -170,6 +171,8 @@ class ResolvedSelfPlayParameters:
             raise ValueError('Greedy ply must be positive.')
         if self.force_fast_search_after_ply is not None and self.force_fast_search_after_ply <= 0:
             raise ValueError('Forced-fast-search ply must be positive.')
+        if not isfinite(self.virtual_loss_weight) or not 0.0 <= self.virtual_loss_weight <= 1.0:
+            raise ValueError('Virtual-loss weight must be finite and lie in [0, 1].')
         match self.start_position:
             case RandomOpeningStartParameters(maximum_plies=maximum_plies):
                 if self.maximum_game_plies is not None and self.maximum_game_plies <= maximum_plies:

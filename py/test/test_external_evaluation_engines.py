@@ -32,6 +32,7 @@ class FakeStockfishEngine:
 
     def __init__(self) -> None:
         self.configurations: list[dict[str, int | bool]] = []
+        self.played_node_limits: list[int] = []
 
     def configure(self, configuration: dict[str, int | bool]) -> None:
         self.configurations.append(configuration)
@@ -56,8 +57,8 @@ class FakeStockfishEngine:
         ponder: bool,
     ) -> chess.engine.PlayResult:
         assert board.fen() == chess.STARTING_FEN
-        assert limit.nodes == 10
         assert ponder is False
+        self.played_node_limits.append(limit.nodes)
         return chess.engine.PlayResult(chess.Move.from_uci('e2e4'), None)
 
     def quit(self) -> None:
@@ -114,10 +115,11 @@ def test_stockfish_full_strength_match_never_configures_skill_level(
     )()
 
     client = StockfishClient(configuration, state, executable)
-    action_id = client.choose_action_at_full_strength(FakeChessPosition())
+    action_id = client.choose_action_at_full_strength(FakeChessPosition(), nodes=300)
     client.close()
 
     assert action_id == 1
+    assert engine.played_node_limits == [300]
     assert all('Skill Level' not in configured for configured in engine.configurations)
 
 

@@ -3,27 +3,36 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import torch
 from src.evaluation.manager import EvaluationManager
 from src.experiment.base_configuration import initial_generation
 from src.games.implementation import GameImplementation
+from src.replay.batch_loader import build_training_batch
 from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame, ReplayManager
+from src.replay.parallel_materialization import StagedGame
+from src.replay.store import ReplayStore
 from src.self_play.protocol import (
     RunningSelfPlayState,
     StatisticsLevel,
 )
 from src.self_play.resignation import PublishedResignationPolicy, ResignationCalibrator
 from src.training.checkpoint import CheckpointReference
+from src.training.checkpoint.persistence import load_model
 from src.training.checkpoint.retention import CheckpointRetention
 from src.training.credit_ledger import CreditLedger
-from src.training.reporting import TrainingReporter
+from src.training.initialization_guard import (
+    assert_healthy_policy_initialization,
+    probe_policy_initialization,
+)
+from src.training.reporting import ReplayIngestionTelemetry, TrainingReporter
 from src.training.run_limits import RunLimitMonitor
 from src.training.self_play_group import SelfPlayGroup
 from src.training.session import TrainingSessionQuantum, create_training_session
 from src.util.log import log
+from src.util.tensorboard import log_scalar
 
-INGESTION_SLICE_SECONDS = 10.0
-INGESTION_PAUSE_BACKLOG_GAMES = 100
+IDLE_WAIT_SECONDS = 1.0
 
 
 class Coordinator:
@@ -81,7 +90,10 @@ class Coordinator:
             game.terminal_oracle,
             self.resignation_calibrator,
             self.configuration,
+            censor_remaining_game_length_on_cut_games=game.censor_remaining_game_length_on_cut_games,
         )
+        # A crash between staging and crediting loses the credit; the directories are the ground truth.
+        self.ledger.reconcile_materialized_samples(self.replay_manager.total_materialized_samples())
         self.self_play_group = SelfPlayGroup(game)
         self.evaluation_manager = EvaluationManager(self.configuration, self.ledger.state.active_checkpoint)
         self.checkpoint_retention = CheckpointRetention(run_path, training.lifecycle)
@@ -89,9 +101,10 @@ class Coordinator:
         self.latest_completed_model_version = self.ledger.model_generation
         self.final_stop_reason: str | None = None
         self._backpressure_pause_requested = False
-        self._ingestion_pause_requested = False
         self._credit_wait_started_at = time.perf_counter()
         self._completed_games_since_last_quantum: list[IngestedCompletedGame] = []
+        self._ingest_seconds_since_last_quantum = 0.0
+        self._initialization_guard_pending = self.ledger.progress.completed_optimizer_steps == 0
         self.reporter.record_initial_settings(self.ledger.model_generation)
 
     def run(self) -> None:
@@ -100,6 +113,7 @@ class Coordinator:
                 self._train_quantum(self_play_started=False)
             self.evaluation_manager.start()
             self._start_self_play()
+            self.replay_manager.start_materialization(self._credit_staged_game)
             while not self.ledger.training_complete:
                 self.evaluation_manager.collect_completed_jobs()
                 restarted_workers = self.self_play_group.restart_exited_workers(
@@ -111,19 +125,15 @@ class Coordinator:
                 self.final_stop_reason = self.run_limit_monitor.stop_reason()
                 if self.final_stop_reason is not None:
                     break
-                if self.ledger.can_train_quantum(self.replay_manager.live_samples):
-                    self._train_quantum(self_play_started=True)
+                self._apply_self_play_backpressure()
+                if not self.ledger.has_quantum_credits:
                     self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
+                    time.sleep(IDLE_WAIT_SECONDS)
                     continue
-                self._apply_self_play_backpressure()
-                self._ingest_toward_next_quantum()
-                self._apply_self_play_backpressure()
-                self.final_stop_reason = self.run_limit_monitor.stop_reason()
-                if self.final_stop_reason is not None:
-                    break
+                self._append_staged_games()
                 if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
                     self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
-                    time.sleep(0.1)
+                    time.sleep(IDLE_WAIT_SECONDS)
                     continue
                 self._train_quantum(self_play_started=True)
                 self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
@@ -147,38 +157,55 @@ class Coordinator:
             raise RuntimeError('Self-play workers did not enter the running state.')
         self._credit_wait_started_at = time.perf_counter()
 
-    def _ingest_toward_next_quantum(self) -> None:
+    def _credit_staged_game(self, staged: StagedGame) -> None:
+        self.ledger.add_materialized_samples(staged.row_count)
+
+    def _append_staged_games(self) -> None:
         generation = self.ledger.model_generation
-        maximum_samples = self.ledger.samples_needed_for_quantum(self.replay_manager.live_samples)
-        if maximum_samples == 0:
-            return
-        if (
-            not self._ingestion_pause_requested
-            and self.replay_manager.available_game_count >= INGESTION_PAUSE_BACKLOG_GAMES
-        ):
-            self.self_play_group.request_pause(self._topology_pause_worker_ids())
-            self._ingestion_pause_requested = True
-        ingestion = self.replay_manager.ingest_available_games(
-            generation,
-            maximum_samples,
-            maximum_elapsed_seconds=INGESTION_SLICE_SECONDS,
-        )
-        self.ledger.add_samples(ingestion.samples_added, generation)
+        ingestion = self.replay_manager.append_staged_games(generation)
+        self._ingest_seconds_since_last_quantum += ingestion.elapsed_seconds
         self._completed_games_since_last_quantum.extend(ingestion.completed_games)
         if ingestion.games_ingested:
             log(
-                f'Ingested {ingestion.games_ingested} games and {ingestion.samples_added} samples in '
+                f'Appended {ingestion.games_ingested} staged games and {ingestion.samples_added} samples in '
                 f'{ingestion.elapsed_seconds:.1f}s ({ingestion.samples_per_second:.0f} samples/s).'
             )
             self._record_resignation_diagnostics(generation)
-        if (
-            self._ingestion_pause_requested
-            and self.replay_manager.available_game_count == 0
-            and not self.ledger.can_train_quantum(self.replay_manager.live_samples)
-        ):
-            self._resume_ingestion_paused_workers()
+
+    def _run_initialization_guard(self) -> None:
+        training = self.configuration.training
+        model = load_model(
+            self.ledger.state.active_checkpoint.model_path,
+            training.initial_model.network,
+            torch.device('cpu'),
+            self.game.network_dimensions,
+            self.game.target_layout.auxiliary_heads,
+        )
+        description = self.replay_manager.description()
+        store = ReplayStore.open(description.path, description.layout, writable=False)
+        try:
+            batch_size = min(training.trainer.global_batch_size, description.size)
+            batch = build_training_batch(
+                store,
+                self.game.state,
+                tuple(range(batch_size)),
+                (0,) * batch_size,
+            )
+        finally:
+            store.close()
+        probe = probe_policy_initialization(model, batch.states, batch.policy_legal_action_ids)
+        log_scalar('init/policy_logit_std', probe.policy_logit_std, 0)
+        log_scalar('init/policy_entropy_ratio', probe.policy_entropy_ratio, 0)
+        log(
+            f'Initialization guard at generation 0: policy_logit_std={probe.policy_logit_std:.3f}, '
+            f'policy_entropy_ratio={probe.policy_entropy_ratio:.3f}.'
+        )
+        assert_healthy_policy_initialization(probe)
 
     def _train_quantum(self, self_play_started: bool) -> None:
+        if self._initialization_guard_pending:
+            self._run_initialization_guard()
+            self._initialization_guard_pending = False
         credit_wait_seconds = time.perf_counter() - self._credit_wait_started_at
         if self_play_started:
             self.self_play_group.request_pause(self._training_pause_worker_ids())
@@ -214,7 +241,6 @@ class Coordinator:
         checkpoint_activation_seconds = time.perf_counter() - checkpoint_activation_started_at
         if self_play_started:
             self._backpressure_pause_requested = False
-            self._ingestion_pause_requested = False
             self._apply_self_play_backpressure()
         if self.resignation_calibrator is not None:
             self._record_resignation_diagnostics(self.ledger.model_generation)
@@ -225,6 +251,12 @@ class Coordinator:
             self.ledger.state,
             self.replay_manager.description(),
             tuple(self._completed_games_since_last_quantum),
+            ReplayIngestionTelemetry(
+                ingest_seconds=self._ingest_seconds_since_last_quantum,
+                inbox_depth=self.replay_manager.inbox_depth,
+                staging_depth=self.replay_manager.staging_depth,
+                materialization_failures=self.replay_manager.materialization_failures,
+            ),
         )
         reporting_seconds = time.perf_counter() - reporting_started_at
         log(
@@ -232,38 +264,35 @@ class Coordinator:
             f'checkpoint-activation={checkpoint_activation_seconds:.1f}s, reporting={reporting_seconds:.1f}s.'
         )
         self._completed_games_since_last_quantum.clear()
+        self._ingest_seconds_since_last_quantum = 0.0
         self._apply_checkpoint_retention()
         self._credit_wait_started_at = time.perf_counter()
 
     def _training_pause_worker_ids(self) -> tuple[int, ...]:
         if self.training_session.pauses_all_self_play_workers:
             return tuple(range(self.self_play_group.worker_count))
-        if self._backpressure_pause_requested:
-            return ()
-        if self._ingestion_pause_requested:
-            return ()
-        if self._self_play_backpressure_required():
-            return tuple(range(self.self_play_group.worker_count))
         return self._topology_pause_worker_ids()
 
     def _topology_pause_worker_ids(self) -> tuple[int, ...]:
         return self.configuration.training.topology.self_play.node_ids_to_pause_during_training
 
-    def _resume_ingestion_paused_workers(self) -> None:
+    def _apply_self_play_backpressure(self) -> None:
+        required = self._self_play_backpressure_required()
+        if required and not self._backpressure_pause_requested:
+            self.self_play_group.request_pause(self._topology_pause_worker_ids())
+            self._backpressure_pause_requested = True
+        elif not required and self._backpressure_pause_requested:
+            self._resume_backpressure_paused_workers()
+
+    def _resume_backpressure_paused_workers(self) -> None:
         state = RunningSelfPlayState(
             checkpoint=self.ledger.state.active_checkpoint,
             resignation_policy=self._resignation_policy(),
         )
         applied = self.self_play_group.apply_to_workers(self._topology_pause_worker_ids(), state)
         if any(response.kind != 'running' for response in applied):
-            raise RuntimeError('Self-play workers did not resume after replay ingestion.')
-        self._ingestion_pause_requested = False
-
-    def _apply_self_play_backpressure(self) -> None:
-        if not self._self_play_backpressure_required() or self._backpressure_pause_requested:
-            return
-        self.self_play_group.request_pause(tuple(range(self.self_play_group.worker_count)))
-        self._backpressure_pause_requested = True
+            raise RuntimeError('Self-play workers did not resume after backpressure ended.')
+        self._backpressure_pause_requested = False
 
     def _self_play_backpressure_required(self) -> bool:
         training = self.configuration.training

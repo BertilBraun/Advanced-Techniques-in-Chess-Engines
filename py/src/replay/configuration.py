@@ -11,7 +11,6 @@ class ReplayConfiguration(FrozenModel):
     maximum_capacity: int = Field(gt=0)
     maximum_policy_entries: int = Field(ge=1, le=255)
     materialization_processes: int = Field(default=1, ge=1)
-    materialization_batch_games: int = Field(default=32, ge=1)
 
     @model_validator(mode='after')
     def validate_capacity(self) -> ReplayConfiguration:
@@ -20,8 +19,6 @@ class ReplayConfiguration(FrozenModel):
             raise ValueError('Replay capacity must remain positive.')
         if any(capacity > self.maximum_capacity for capacity in capacities):
             raise ValueError('Scheduled replay capacity cannot exceed its static maximum capacity.')
-        if self.materialization_batch_games < self.materialization_processes:
-            raise ValueError('Replay materialization batch must cover every materialization process.')
         return self
 
     def capacity_at(self, model_generation: int) -> int:

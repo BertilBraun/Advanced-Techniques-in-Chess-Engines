@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from decimal import ROUND_CEILING, Decimal
+import threading
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 
@@ -43,6 +44,8 @@ class CreditLedger:
         self.path = run_path / 'credit-ledger.json'
         self.parameters = parameters
         self.global_batch_size = global_batch_size
+        # The materialization dispatcher thread credits samples while the main loop reads and commits.
+        self._lock = threading.RLock()
         if self.path.exists():
             self._state = CreditLedgerState.model_validate_json(self.path.read_text(encoding='utf-8'))
         else:
@@ -83,34 +86,38 @@ class CreditLedger:
         maximum_optimizer_steps = self.parameters.maximum_optimizer_steps
         return maximum_optimizer_steps is not None and self._state.completed_optimizer_steps >= maximum_optimizer_steps
 
-    def can_train_quantum(self, live_samples: int) -> bool:
+    @property
+    def has_quantum_credits(self) -> bool:
         required = self.parameters.presentation_credits_per_quantum(self.global_batch_size)
-        return (
-            not self.training_complete
-            and live_samples >= self.global_batch_size
-            and self._state.available_credits >= Decimal(required)
-        )
+        return not self.training_complete and self._state.available_credits >= Decimal(required)
 
-    def samples_needed_for_quantum(self, live_samples: int) -> int:
-        if live_samples < 0:
-            raise ValueError('Live replay sample count cannot be negative.')
-        required_credits = Decimal(self.parameters.presentation_credits_per_quantum(self.global_batch_size))
-        missing_credits = max(Decimal(0), required_credits - self._state.available_credits)
-        credit_samples = int((missing_credits / self.parameters.replay_ratio).to_integral_value(rounding=ROUND_CEILING))
-        replay_samples = max(0, self.global_batch_size - live_samples)
-        return max(credit_samples, replay_samples)
+    def can_train_quantum(self, live_samples: int) -> bool:
+        return self.has_quantum_credits and live_samples >= self.global_batch_size
 
-    def add_samples(self, sample_count: int, model_generation: int) -> None:
+    def add_materialized_samples(self, sample_count: int) -> None:
         if sample_count < 0:
-            raise ValueError('Ingested sample count cannot be negative.')
-        if model_generation != self.model_generation:
-            raise ValueError('Replay samples must be credited to the active model generation.')
+            raise ValueError('Materialized sample count cannot be negative.')
         if sample_count == 0:
             return
-        self._state = self._state.model_copy(
-            update={'earned_credits': self._state.earned_credits + Decimal(sample_count) * self.parameters.replay_ratio}
-        )
-        self.save()
+        with self._lock:
+            self._state = self._state.model_copy(
+                update={
+                    'earned_credits': self._state.earned_credits + Decimal(sample_count) * self.parameters.replay_ratio
+                }
+            )
+            self.save()
+
+    def reconcile_materialized_samples(self, total_materialized_samples: int) -> None:
+        if total_materialized_samples < 0:
+            raise ValueError('Total materialized sample count cannot be negative.')
+        with self._lock:
+            expected_earned = Decimal(total_materialized_samples) * self.parameters.replay_ratio
+            if self._state.earned_credits > expected_earned:
+                raise ValueError('Credit ledger has earned more credits than the replay data can account for.')
+            if self._state.earned_credits == expected_earned:
+                return
+            self._state = self._state.model_copy(update={'earned_credits': expected_earned})
+            self.save()
 
     def commit_quantum(self, result: TrainingQuantumResult) -> None:
         self.commit_checkpoint(result.completed_optimizer_steps, result.checkpoint)
@@ -120,26 +127,28 @@ class CreditLedger:
         completed_optimizer_steps: int,
         checkpoint: CheckpointReference,
     ) -> None:
-        expected_steps = self._state.completed_optimizer_steps + self.parameters.optimizer_steps_per_quantum
-        if completed_optimizer_steps != expected_steps:
-            raise ValueError('Training result does not advance exactly one configured quantum.')
-        expected_generation = self.model_generation + 1
-        if checkpoint.generation != expected_generation:
-            raise ValueError('Training checkpoint does not advance exactly one generation.')
-        required = Decimal(self.parameters.presentation_credits_per_quantum(self.global_batch_size))
-        if self._state.available_credits < required:
-            raise ValueError('Training result cannot consume unavailable credits.')
-        self._state = self._state.model_copy(
-            update={
-                'completed_optimizer_steps': completed_optimizer_steps,
-                'consumed_credits': self._state.consumed_credits + required,
-                'active_checkpoint': checkpoint,
-            }
-        )
-        self.save()
+        with self._lock:
+            expected_steps = self._state.completed_optimizer_steps + self.parameters.optimizer_steps_per_quantum
+            if completed_optimizer_steps != expected_steps:
+                raise ValueError('Training result does not advance exactly one configured quantum.')
+            expected_generation = self.model_generation + 1
+            if checkpoint.generation != expected_generation:
+                raise ValueError('Training checkpoint does not advance exactly one generation.')
+            required = Decimal(self.parameters.presentation_credits_per_quantum(self.global_batch_size))
+            if self._state.available_credits < required:
+                raise ValueError('Training result cannot consume unavailable credits.')
+            self._state = self._state.model_copy(
+                update={
+                    'completed_optimizer_steps': completed_optimizer_steps,
+                    'consumed_credits': self._state.consumed_credits + required,
+                    'active_checkpoint': checkpoint,
+                }
+            )
+            self.save()
 
     def save(self) -> None:
-        write_text_atomically(self.path, self._state.model_dump_json(indent=2) + '\n')
+        with self._lock:
+            write_text_atomically(self.path, self._state.model_dump_json(indent=2) + '\n')
 
     def _adopt_completed_quantum(self, run_path: Path) -> None:
         newer_generations = sorted(

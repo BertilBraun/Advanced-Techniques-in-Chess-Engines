@@ -156,3 +156,18 @@ def defined_schedule_values(
             return tuple(stage.value for stage in stages)
         case LinearSchedule(start_value=start_value, end_value=end_value):
             return (start_value, end_value)
+
+
+def schedule_change_generations(
+    schedule: ConstantSchedule[ScheduleValueT]
+    | StagedSchedule[ScheduleValueT]
+    | LinearSchedule[int]
+    | LinearSchedule[float],
+) -> tuple[int, ...]:
+    match schedule:
+        case ConstantSchedule():
+            return (0,)
+        case StagedSchedule(stages=stages):
+            return tuple(stage.start_generation for stage in stages)
+        case LinearSchedule(start_generation=start_generation, end_generation=end_generation):
+            return (0, *range(start_generation, end_generation + 1))

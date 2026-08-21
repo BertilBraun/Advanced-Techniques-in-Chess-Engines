@@ -22,6 +22,12 @@ from src.evaluation.contracts import (
     MatchEvaluationJob,
     MatchEvaluationResult,
 )
+from src.evaluation.configuration import StockfishFixedNodesEvaluationDefinition
+from src.evaluation.ladder import (
+    STOCKFISH_FIXED_NODES_ANCHOR_ELO,
+    LadderRungObservation,
+    fit_ladder_elo,
+)
 from src.evaluation.process import run_evaluation_job, write_evaluation_result
 from src.evaluation.scheduling import (
     CheckpointPublication,
@@ -423,7 +429,37 @@ class EvaluationManager:
                 )
             case 'failed':
                 log(f'Evaluation {definition_id} at {step}s failed: {result.message}')
+        if isinstance(result.job.definition, StockfishFixedNodesEvaluationDefinition):
+            self._publish_ladder_elo(step)
         self._write_boundary_summary(step, generation, optimizer_steps)
+
+    def _publish_ladder_elo(self, boundary_seconds: int) -> None:
+        fixed_node_definitions = tuple(
+            definition
+            for definition in self.configuration.definitions
+            if isinstance(definition, StockfishFixedNodesEvaluationDefinition)
+        )
+        observations: list[LadderRungObservation] = []
+        for definition in fixed_node_definitions:
+            paths = sorted(self.result_directory.glob(f'{boundary_seconds:010d}-{definition.definition_id}-g*.json'))
+            if not paths:
+                return
+            result = TypeAdapter(EvaluationResult).validate_json(paths[-1].read_text(encoding='utf-8'))
+            anchor_elo = STOCKFISH_FIXED_NODES_ANCHOR_ELO.get(definition.nodes)
+            if anchor_elo is None or not isinstance(result, MatchEvaluationResult):
+                continue
+            observations.append(
+                LadderRungObservation(
+                    anchor_elo=anchor_elo,
+                    score=result.aggregate.score,
+                    game_count=len(result.games),
+                )
+            )
+        if not observations:
+            return
+        ladder_elo = fit_ladder_elo(tuple(observations))
+        log_scalar('evaluation/ladder_elo', ladder_elo, boundary_seconds)
+        log(f'Evaluation ladder Elo at {boundary_seconds}s: {ladder_elo:.0f} over {len(observations)} rungs')
 
     def _write_boundary_summary(self, boundary_seconds: int, generation: int, optimizer_steps: int) -> None:
         results: list[EvaluationResult] = []
