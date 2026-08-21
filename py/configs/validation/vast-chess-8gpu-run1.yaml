@@ -276,7 +276,7 @@ chess:
       parallel_searches:
         kind: staged
         stages:
-          - {start_generation: 0, value: 1}
+          - {start_generation: 0, value: 2}
           - {start_generation: 90, value: 4}
       virtual_loss_weight: 1.0
       dirichlet_epsilon: 0.25
