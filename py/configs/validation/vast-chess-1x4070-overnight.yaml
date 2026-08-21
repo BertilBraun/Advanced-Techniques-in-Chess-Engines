@@ -36,6 +36,11 @@ training:
           value_fc_size: 48
   trainer:
     local_batch_size: 2048
+  lifecycle:
+    replay:
+      # 2 instead of 8: eight torch-loaded pool workers cost ~4 GiB on this 30 GiB node and tripped the
+      # 92% RAM guard at T+22min; two kept staging ahead of demand in the Phase A tests.
+      materialization_processes: 2
   topology:
     trainer:
       device_type: cuda
