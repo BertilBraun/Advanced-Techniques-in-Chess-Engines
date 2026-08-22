@@ -415,9 +415,7 @@ class ReplayStore:
         self._ensure_writable()
         flattened_slices = self._validate_append_plan_slices(column_slices, plan)
         current = self.state
-        if current == plan.after:
-            return
-        if not _is_interrupted_append_state(current, plan):
+        if current != plan.after and not _is_interrupted_append_state(current, plan):
             raise ValueError('Replay append recovery found an ambiguous store state.')
         self._apply_column_slices_for_plan(flattened_slices, plan)
 

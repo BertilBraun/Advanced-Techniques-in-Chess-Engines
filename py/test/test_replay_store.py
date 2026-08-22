@@ -730,6 +730,8 @@ def test_multi_slice_zero_row_plan_updates_header_once_without_columns(tmp_path:
     assert store.state.append_sequence == before.append_sequence + 1
     store.apply_append_plan_slices((), plan)
     assert store.state == plan.after
+    store.reapply_append_plan_slices((), plan)
+    assert store.state == plan.after
     store.close()
 
 
@@ -798,6 +800,47 @@ def test_multi_slice_reapply_recovers_second_plan_from_first_plan_boundary(tmp_p
     recovering.reapply_append_plan_slices(second_slices, plans[1])
     assert recovering.state == plans[1].after
     recovering.close()
+
+
+def test_reapply_overwrites_corrupt_wrapped_data_when_final_header_already_persisted(tmp_path: Path) -> None:
+    layout = _layout()
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, layout, maximum_capacity=5, logical_capacity=3)
+    store.extend((_sample(layout, 0, 0), _sample(layout, 1, 1)))
+    slices = (
+        _column_views(layout, (_sample(layout, 2, 2), _sample(layout, 3, 3))),
+        _column_views(layout, (_sample(layout, 4, 4), _sample(layout, 5, 5))),
+    )
+    plan = store.plan_append(4, 'wrapped-recovery')
+    store.apply_append_plan_slices(slices, plan)
+    physical_indices = store.logical_to_physical(np.arange(3, dtype=np.int64))
+    generation_column = next(
+        column
+        for column in store.physical_columns
+        if column.descriptor.key.kind is ReplayColumnKind.SOURCE_MODEL_GENERATION
+    )
+    store.close()
+    expected_bytes = path.read_bytes()
+    generations = np.memmap(
+        path,
+        mode='r+',
+        dtype=np.uint32,
+        offset=generation_column.offset,
+        shape=(plan.after.maximum_capacity,),
+    )
+    generations[physical_indices] = 999
+    generations.flush()
+    del generations
+    recovering = ReplayStore.open(path, layout)
+
+    recovering.apply_append_plan_slices(slices, plan)
+    assert tuple(recovering.sample_at(index).source_model_generation for index in range(3)) == (999, 999, 999)
+    recovering.reapply_append_plan_slices(slices, plan)
+
+    assert recovering.state == plan.after
+    assert tuple(recovering.sample_at(index).source_model_generation for index in range(3)) == (3, 4, 5)
+    recovering.close()
+    assert path.read_bytes() == expected_bytes
 
 
 def test_interrupted_header_can_be_opened_and_reapplied_from_exact_plan(tmp_path: Path) -> None:
