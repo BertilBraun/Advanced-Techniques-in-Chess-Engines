@@ -15,8 +15,6 @@ from src.replay.configuration import ReplayConfiguration
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.parallel_materialization import (
-    STAGED_METADATA_SUFFIX,
-    STAGED_ROWS_SUFFIX,
     SealedReplayShard,
     initialize_materialization_worker,
     stage_replay_shard,
@@ -45,6 +43,8 @@ DISPATCH_INTERVAL_SECONDS = 1.0
 _QUEUE_FILE = 'shard-queue.json'
 _APPEND_FILE = 'last-append.json'
 _RECEIPT_SUFFIX = '.ingestion-receipt.json'
+_LEGACY_STAGED_ROWS_SUFFIX = '.rows.npy'
+_LEGACY_STAGED_METADATA_SUFFIX = '.meta.json'
 _MINIMUM_PENDING_SHARD_LIMIT = 32
 
 
@@ -864,8 +864,8 @@ class ReplayManager(Generic[PositionT]):
         return receipt
 
     def _recover_directories(self) -> None:
-        legacy = tuple(self.staging_path.glob(f'*{STAGED_ROWS_SUFFIX}')) + tuple(
-            self.staging_path.glob(f'*{STAGED_METADATA_SUFFIX}')
+        legacy = tuple(self.staging_path.glob(f'*{_LEGACY_STAGED_ROWS_SUFFIX}')) + tuple(
+            self.staging_path.glob(f'*{_LEGACY_STAGED_METADATA_SUFFIX}')
         )
         if legacy:
             raise ValueError('Legacy per-game replay staging exists; an explicit replay migration is required.')
