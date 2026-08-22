@@ -226,7 +226,6 @@ if (BUILD_TESTING)
             src/games/chess/encoding/ChessPolicyEncoding.cpp
             src/games/chess/presentation/ChessSearchPresentation.cpp
             src/search/InferencePipeline.cpp
-            src/util/Log.cpp
             "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
             "${stockfish_SOURCE_DIR}/src/memory.cpp"
             "${stockfish_SOURCE_DIR}/src/misc.cpp"

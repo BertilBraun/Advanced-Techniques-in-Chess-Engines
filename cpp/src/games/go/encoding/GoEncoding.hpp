@@ -48,7 +48,7 @@ template <std::size_t BoardSize, std::size_t HistoryLength> struct GoEncoding {
             .rows = GoRepresentationDimensions<BoardSize, HistoryLength>::board_length,
             .columns = GoRepresentationDimensions<BoardSize, HistoryLength>::board_length,
             .actions = GoRepresentationDimensions<BoardSize, HistoryLength>::action_count,
-            .outcomes = 3,
+            .outcomes = WDL_OUTPUT_SIZE,
         };
     }
 

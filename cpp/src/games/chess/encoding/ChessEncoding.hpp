@@ -32,7 +32,7 @@ struct ChessEncoding {
             .rows = ChessRepresentationDimensions::board_length,
             .columns = ChessRepresentationDimensions::board_length,
             .actions = ChessRepresentationDimensions::action_count,
-            .outcomes = 3,
+            .outcomes = WDL_OUTPUT_SIZE,
         };
     }
 
@@ -46,19 +46,5 @@ using CompressedEncodedBoard = EncodedPlanes<ChessRepresentationDimensions::boar
                                              ChessRepresentationDimensions::binary_channel_count,
                                              ChessRepresentationDimensions::scalar_channel_count>;
 
-struct BoardFingerprint {
-    std::uint64_t first;
-    std::uint64_t second;
-
-    [[nodiscard]] bool operator==(const BoardFingerprint &other) const noexcept {
-        return first == other.first && second == other.second;
-    }
-};
-
-struct BoardFingerprintHash {
-    [[nodiscard]] std::size_t operator()(const BoardFingerprint &fingerprint) const noexcept;
-};
-
 [[nodiscard]] CompressedEncodedBoard encodeBoard(const Board &board);
-[[nodiscard]] BoardFingerprint fingerprintBoard(const CompressedEncodedBoard &compressed);
 [[nodiscard]] torch::Tensor tensorEncoding(const CompressedEncodedBoard &compressed);

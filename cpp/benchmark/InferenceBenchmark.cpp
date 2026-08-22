@@ -182,7 +182,7 @@ nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<
         const float *correctionData = output.search_corrections.data_ptr<float>();
         for (const auto position : range(arguments.batchSize)) {
             const SearchInferenceResult<ChessGame> result = processInferencePosition<ChessGame>(
-                policyData + position * ChessEncoding::action_count, outcomeData + position * 3,
+                policyData + position * ChessEncoding::action_count, outcomeData + position * WDL_OUTPUT_SIZE,
                 correctionData[position], boards[position]);
             checksum += result.value() + static_cast<double>(result.actions.size());
         }
@@ -338,7 +338,7 @@ nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vecto
                     const SearchInferenceResult<ChessGame> result =
                         processInferencePosition<ChessGame>(
                             policyData + position * ChessEncoding::action_count,
-                            outcomeData + position * 3, correctionData[position], boards[boardIndex]);
+                            outcomeData + position * WDL_OUTPUT_SIZE, correctionData[position], boards[boardIndex]);
                     checksums[worker] +=
                         result.value() + static_cast<double>(result.actions.size());
                 }

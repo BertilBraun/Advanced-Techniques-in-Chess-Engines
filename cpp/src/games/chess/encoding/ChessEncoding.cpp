@@ -25,35 +25,6 @@ constexpr Bitboard flipRanks(const Bitboard bits) noexcept {
            ((bits & 0x00FF'0000'0000'0000ULL) >> 40) | ((bits & 0xFF00'0000'0000'0000ULL) >> 56);
 }
 
-constexpr std::uint64_t splitmix64(std::uint64_t x) noexcept {
-    x += 0x9E3779B97F4A7C15ull;
-    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
-    x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
-    return x ^ (x >> 31);
-}
-
-std::size_t BoardFingerprintHash::operator()(const BoardFingerprint &fingerprint) const noexcept {
-    return static_cast<std::size_t>(fingerprint.first ^ std::rotl(fingerprint.second, 29));
-}
-
-BoardFingerprint fingerprintBoard(const CompressedEncodedBoard &compressed) {
-    std::uint64_t first = 0x243F6A8885A308D3ULL;
-    std::uint64_t second = 0x13198A2E03707344ULL;
-    for (const BitBoard<ChessRepresentationDimensions::board_length> &board :
-         compressed.binary_planes) {
-        for (const std::uint64_t value : board.words()) {
-            first = splitmix64(first ^ value);
-            second = splitmix64(second ^ std::rotl(value, 31));
-        }
-    }
-    for (const std::int8_t value : compressed.scalar_planes) {
-        const std::uint64_t unsignedValue = static_cast<std::uint8_t>(value);
-        first = splitmix64(first ^ unsignedValue);
-        second = splitmix64(second ^ (unsignedValue + 0x9E3779B97F4A7C15ULL));
-    }
-    return {.first = first, .second = second};
-}
-
 CompressedEncodedBoard encodeBoard(const Board &board) {
     CompressedEncodedBoard out{};
 
