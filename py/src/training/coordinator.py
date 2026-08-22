@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -11,7 +10,7 @@ from src.experiment.base_configuration import initial_generation
 from src.games.implementation import GameImplementation
 from src.replay.batch_loader import build_training_batch
 from src.replay.layout import ReplayLayout
-from src.replay.manager import IngestedCompletedGame, ReplayIngestionReceipt, ReplayManager
+from src.replay.manager import IngestedCompletedGame, ReplayManager
 from src.replay.parallel_materialization import SealedReplayShard
 from src.replay.store import ReplayStore
 from src.self_play.protocol import (
@@ -35,28 +34,6 @@ from src.util.log import log
 from src.util.tensorboard import log_scalar
 
 IDLE_WAIT_SECONDS = 1.0
-
-
-@dataclass
-class _PendingReplayReporting:
-    completed_games: list[IngestedCompletedGame] = field(default_factory=list)
-    ingest_seconds: float = 0.0
-    receipt_identities: list[str] = field(default_factory=list)
-    _seen_receipt_identities: set[str] = field(default_factory=set)
-
-    def add(self, receipt: ReplayIngestionReceipt) -> None:
-        if receipt.receipt_identity in self._seen_receipt_identities:
-            return
-        self._seen_receipt_identities.add(receipt.receipt_identity)
-        self.receipt_identities.append(receipt.receipt_identity)
-        self.completed_games.extend(receipt.completed_games)
-        self.ingest_seconds += receipt.elapsed_seconds
-
-    def clear(self) -> None:
-        self.completed_games.clear()
-        self.ingest_seconds = 0.0
-        self.receipt_identities.clear()
-        self._seen_receipt_identities.clear()
 
 
 class Coordinator:
@@ -118,8 +95,6 @@ class Coordinator:
         )
         # Durable replay state is the credit ground truth across callbacks and restarts.
         self.ledger.reconcile_materialized_samples(self.replay_manager.total_materialized_samples())
-        self._pending_replay_reporting = _PendingReplayReporting()
-        self._collect_pending_ingestion_receipts()
         self.self_play_group = SelfPlayGroup(game)
         self.evaluation_manager = EvaluationManager(self.configuration, self.ledger.state.active_checkpoint)
         self.checkpoint_retention = CheckpointRetention(run_path, training.lifecycle)
@@ -128,6 +103,8 @@ class Coordinator:
         self.final_stop_reason: str | None = None
         self._backpressure_pause_requested = False
         self._credit_wait_started_at = time.perf_counter()
+        self._completed_games_since_last_quantum: list[IngestedCompletedGame] = []
+        self._ingest_seconds_since_last_quantum = 0.0
         self._initialization_guard_pending = self.ledger.progress.completed_optimizer_steps == 0
         self.reporter.record_initial_settings(self.ledger.model_generation)
 
@@ -189,7 +166,8 @@ class Coordinator:
     def _append_staged_games(self) -> None:
         generation = self.ledger.model_generation
         ingestion = self.replay_manager.append_staged_games(generation)
-        self._collect_pending_ingestion_receipts()
+        self._completed_games_since_last_quantum.extend(ingestion.completed_games)
+        self._ingest_seconds_since_last_quantum += ingestion.elapsed_seconds
         if ingestion.games_ingested:
             log(
                 f'Appended {ingestion.games_ingested} staged games and {ingestion.samples_added} samples in '
@@ -285,16 +263,16 @@ class Coordinator:
             credit_wait_seconds,
             self.ledger.state,
             self.replay_manager.description(),
-            tuple(self._pending_replay_reporting.completed_games),
+            tuple(self._completed_games_since_last_quantum),
             ReplayIngestionTelemetry(
-                ingest_seconds=self._pending_replay_reporting.ingest_seconds,
+                ingest_seconds=self._ingest_seconds_since_last_quantum,
                 inbox_depth=self.replay_manager.inbox_depth,
                 staging_depth=self.replay_manager.staging_depth,
                 materialization_failures=self.replay_manager.materialization_failures,
             ),
         )
-        self.replay_manager.acknowledge_ingestion_receipts(tuple(self._pending_replay_reporting.receipt_identities))
-        self._pending_replay_reporting.clear()
+        self._completed_games_since_last_quantum.clear()
+        self._ingest_seconds_since_last_quantum = 0.0
 
     def _training_pause_worker_ids(self) -> tuple[int, ...]:
         if self.training_session.pauses_all_self_play_workers:
@@ -338,10 +316,6 @@ class Coordinator:
         if self.resignation_calibrator is None:
             return
         self.reporter.record_resignation(self.resignation_calibrator.diagnostics(), generation)
-
-    def _collect_pending_ingestion_receipts(self) -> None:
-        for receipt in self.replay_manager.pending_ingestion_receipts():
-            self._pending_replay_reporting.add(receipt)
 
     def _apply_checkpoint_retention(self) -> None:
         self.checkpoint_retention.apply(
