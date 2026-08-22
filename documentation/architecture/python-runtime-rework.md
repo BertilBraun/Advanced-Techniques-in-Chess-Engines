@@ -444,9 +444,9 @@ class ReplayManager:
 
 There is no game-count or time limit. Replay ingestion is required to be materially faster than self-play production. If draining the inbox becomes slow, that is a performance defect to measure and fix rather than a reason to leave the replay stale.
 
-> As-built note (2026-08-20): the shipped coordinator does bound each ingestion call — see "Implementation
-> phases", which specifies bounding by the samples needed to fund the next quantum. The unbounded contract stated
-> above is the design intent that WP2 restores; the two statements are currently inconsistent.
+> As-built note (2026-08-22): WP2 (`1e8e24f9`, merged 2026-08-21) replaced the bounded-ingestion coordinator
+> with file-staged materialization, so the unbounded contract above is now in force. The "Implementation phases"
+> section further down still describes the superseded bounded behaviour and is historical.
 
 There is no explicit freeze operation. Once ingestion returns and the coordinator enters blocking `train_quantum()`, no code can mutate the replay. Completed games produced during training accumulate in the inbox until the next coordinator iteration.
 
