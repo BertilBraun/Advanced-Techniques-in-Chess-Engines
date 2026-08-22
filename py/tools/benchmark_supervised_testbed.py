@@ -182,7 +182,7 @@ def run_cell(
     torch.cuda.synchronize(device)
     started_at = time.perf_counter()
     completed_steps = 0
-    with loader.prefetch(device, uses_cuda=True) as batches:
+    with loader.prefetch(device, uses_cuda=True, depth=4) as batches:
         for batch in batches:
             step = completed_steps + 1
             warmup_scale = min(1.0, step / cell.warmup_optimizer_steps) if cell.warmup_optimizer_steps else 1.0

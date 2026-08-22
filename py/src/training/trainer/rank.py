@@ -219,6 +219,7 @@ def _train_batches(
     base_learning_rate: float,
     warmup_optimizer_steps: int,
     completed_optimizer_steps: int,
+    replay_prefetch_depth: int,
 ) -> _TrainingBatchResult:
     totals = _DeviceLossTotals(
         policy=torch.zeros((), device=device),
@@ -228,7 +229,7 @@ def _train_batches(
         gradient_norm=torch.zeros((), device=device),
     )
     distributions = None
-    with loader.prefetch(device, uses_cuda) as prefetched_batches:
+    with loader.prefetch(device, uses_cuda, replay_prefetch_depth) as prefetched_batches:
         for batch_index, batch in enumerate(prefetched_batches):
             learning_rate = warmup_scaled_learning_rate(
                 base_learning_rate,
@@ -337,6 +338,7 @@ def train_rank_quantum(
         base_learning_rate=command.parameters.learning_rate,
         warmup_optimizer_steps=configuration.training.trainer.warmup_optimizer_steps,
         completed_optimizer_steps=command.source_progress.completed_optimizer_steps,
+        replay_prefetch_depth=configuration.training.trainer.replay_prefetch_depth,
     )
     totals = _resolve_loss_totals(training_result.totals)
     checkpoint = _save_rank_checkpoint(rank, model, optimizer, command, save_path)

@@ -127,6 +127,7 @@ class TrainingCompilation(str, Enum):
 class TrainingParams(FrozenModel):
     global_batch_size: int = Field(gt=0)
     local_batch_size: int = Field(gt=0)
+    replay_prefetch_depth: int = Field(default=4, gt=0)
     optimizer: OptimizerType
     precision: TrainingPrecision
     compilation: TrainingCompilation

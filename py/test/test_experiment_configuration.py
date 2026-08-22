@@ -517,6 +517,14 @@ def test_validated_copy_reruns_field_validation() -> None:
         configuration.training.trainer.validated_copy(update={'global_batch_size': 0})
 
 
+def test_replay_prefetch_depth_defaults_to_four_and_must_be_positive() -> None:
+    configuration = load_chess_experiment_configuration(CHESS_EXPERIMENT_TEMPLATE_PATH)
+
+    assert configuration.training.trainer.replay_prefetch_depth == 4
+    with pytest.raises(ValidationError, match='greater than 0'):
+        configuration.training.trainer.validated_copy(update={'replay_prefetch_depth': 0})
+
+
 @pytest.mark.parametrize(
     ('owner_path', 'field_name', 'value'),
     (

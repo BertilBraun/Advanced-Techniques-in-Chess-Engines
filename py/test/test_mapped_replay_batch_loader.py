@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from threading import Event
+from threading import Event, Thread
 
 import pytest
 import torch
@@ -132,7 +132,8 @@ def test_mapped_loader_builds_canonical_batches_and_disjoint_rank_slices(tmp_pat
     assert set(rank_zero.sample_weights.tolist()).isdisjoint(rank_one.sample_weights.tolist())
 
 
-def test_prefetch_preserves_batch_order_and_exact_row_accounting(tmp_path: Path) -> None:
+@pytest.mark.parametrize('depth', (1, 2, 4, 8))
+def test_prefetch_preserves_batch_order_and_exact_row_accounting(tmp_path: Path, depth: int) -> None:
     path = tmp_path / 'replay.bin'
     store = ReplayStore.create(path, _layout(), maximum_capacity=4, logical_capacity=4)
     for weight in (1.0, 2.0, 3.0, 4.0):
@@ -155,7 +156,7 @@ def test_prefetch_preserves_batch_order_and_exact_row_accounting(tmp_path: Path)
     expected_weights = tuple(tuple(batch.sample_weights.tolist()) for batch in synchronous_loader)
     prefetched_loader = MappedReplayBatchLoader(**common)
 
-    with prefetched_loader.prefetch(torch.device('cpu'), uses_cuda=False) as batches:
+    with prefetched_loader.prefetch(torch.device('cpu'), uses_cuda=False, depth=depth) as batches:
         actual_weights = tuple(tuple(batch.sample_weights.tolist()) for batch in batches)
 
     assert actual_weights == expected_weights
@@ -205,7 +206,7 @@ def test_prefetch_prepares_next_batch_before_consumer_requests_it(
         sampler_seed=91,
         pin_memory=False,
     )
-    batches = loader.prefetch(torch.device('cpu'), uses_cuda=False)
+    batches = loader.prefetch(torch.device('cpu'), uses_cuda=False, depth=1)
 
     try:
         first_batch = next(batches)
@@ -250,10 +251,148 @@ def test_prefetch_propagates_producer_failure_and_closes(
         sampler_seed=91,
         pin_memory=False,
     )
-    batches = loader.prefetch(torch.device('cpu'), uses_cuda=False)
+    batches = loader.prefetch(torch.device('cpu'), uses_cuda=False, depth=4)
 
     with pytest.raises(RuntimeError, match='Replay batch prefetch failed') as raised:
         next(batches)
 
     assert isinstance(raised.value.__cause__, ValueError)
     assert batches.closed
+
+
+@pytest.mark.parametrize('depth', (1, 2, 4, 8))
+def test_prefetch_production_is_bounded_by_depth(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    depth: int,
+) -> None:
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, _layout(), maximum_capacity=2, logical_capacity=2)
+    store.append(_sample(1.0))
+    store.append(_sample(2.0))
+    store.flush()
+    description = _description(path, store)
+    store.close()
+    reached_depth = Event()
+    exceeded_depth = Event()
+    build_count = 0
+
+    def counted_build(
+        replay_store: ReplayStore,
+        state: ChessStateContract,
+        sample_indices: Sequence[int],
+        augmentation_indices: Sequence[int],
+    ) -> TrainingBatch:
+        nonlocal build_count
+        build_count += 1
+        if build_count == depth:
+            reached_depth.set()
+        elif build_count > depth:
+            exceeded_depth.set()
+        return build_training_batch(replay_store, state, sample_indices, augmentation_indices)
+
+    monkeypatch.setattr(batch_loader_module, 'build_training_batch', counted_build)
+    loader = MappedReplayBatchLoader(
+        replay=description,
+        state=IDENTITY_CHESS_STATE_CONTRACT,
+        source_optimizer_step=20,
+        optimizer_steps=depth + 2,
+        global_batch_size=2,
+        world_size=1,
+        rank=0,
+        sampler_seed=91,
+        pin_memory=False,
+    )
+    batches = loader.prefetch(torch.device('cpu'), uses_cuda=False, depth=depth)
+
+    try:
+        assert reached_depth.wait(timeout=5.0)
+        assert not exceeded_depth.wait(timeout=0.1)
+        assert build_count == depth
+    finally:
+        batches.close()
+
+
+def test_prefetch_early_close_cancels_queued_preparation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, _layout(), maximum_capacity=2, logical_capacity=2)
+    store.append(_sample(1.0))
+    store.append(_sample(2.0))
+    store.flush()
+    description = _description(path, store)
+    store.close()
+    first_build_started = Event()
+    allow_first_build = Event()
+    close_finished = Event()
+    build_count = 0
+
+    def blocked_build(
+        replay_store: ReplayStore,
+        state: ChessStateContract,
+        sample_indices: Sequence[int],
+        augmentation_indices: Sequence[int],
+    ) -> TrainingBatch:
+        nonlocal build_count
+        build_count += 1
+        first_build_started.set()
+        if not allow_first_build.wait(timeout=5.0):
+            raise TimeoutError('Test did not release replay batch construction.')
+        return build_training_batch(replay_store, state, sample_indices, augmentation_indices)
+
+    monkeypatch.setattr(batch_loader_module, 'build_training_batch', blocked_build)
+    loader = MappedReplayBatchLoader(
+        replay=description,
+        state=IDENTITY_CHESS_STATE_CONTRACT,
+        source_optimizer_step=20,
+        optimizer_steps=10,
+        global_batch_size=2,
+        world_size=1,
+        rank=0,
+        sampler_seed=91,
+        pin_memory=False,
+    )
+    batches = loader.prefetch(torch.device('cpu'), uses_cuda=False, depth=8)
+
+    def close_batches() -> None:
+        batches.close()
+        close_finished.set()
+
+    assert first_build_started.wait(timeout=5.0)
+    close_thread = Thread(target=close_batches)
+    close_thread.start()
+    try:
+        assert not close_finished.wait(timeout=0.1)
+    finally:
+        allow_first_build.set()
+        close_thread.join(timeout=5.0)
+
+    assert close_finished.is_set()
+    assert build_count == 1
+    assert batches.closed
+
+
+def test_prefetch_rejects_nonpositive_depth(tmp_path: Path) -> None:
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, _layout(), maximum_capacity=2, logical_capacity=2)
+    store.append(_sample(1.0))
+    store.append(_sample(2.0))
+    store.flush()
+    description = _description(path, store)
+    store.close()
+    loader = MappedReplayBatchLoader(
+        replay=description,
+        state=IDENTITY_CHESS_STATE_CONTRACT,
+        source_optimizer_step=20,
+        optimizer_steps=1,
+        global_batch_size=2,
+        world_size=1,
+        rank=0,
+        sampler_seed=91,
+        pin_memory=False,
+    )
+
+    with pytest.raises(ValueError, match='depth must be positive'):
+        loader.prefetch(torch.device('cpu'), uses_cuda=False, depth=0)

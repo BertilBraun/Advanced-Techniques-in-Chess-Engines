@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections import deque
 from collections.abc import Generator, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
@@ -77,10 +78,17 @@ class MappedReplayBatchLoader(Generic[PositionT]):
     def __iter__(self) -> Iterator[TrainingBatch]:
         return self._prepared_batches()
 
-    def prefetch(self, device: torch.device, uses_cuda: bool) -> PrefetchedReplayBatches:
+    def prefetch(
+        self,
+        device: torch.device,
+        uses_cuda: bool,
+        depth: int,
+    ) -> PrefetchedReplayBatches:
         if uses_cuda != (device.type == 'cuda'):
             raise ValueError('CUDA prefetch must agree with the training device type.')
-        return PrefetchedReplayBatches(self, device, uses_cuda)
+        if depth <= 0:
+            raise ValueError('Replay prefetch depth must be positive.')
+        return PrefetchedReplayBatches(self, device, uses_cuda, depth)
 
     def _prepared_batches(self) -> Generator[TrainingBatch, None, None]:
         store = ReplayStore.open(self.replay.path, self.replay.layout, writable=False)
@@ -129,6 +137,7 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
         loader: MappedReplayBatchLoader,
         device: torch.device,
         uses_cuda: bool,
+        depth: int,
     ) -> None:
         self.loader = loader
         self.device = device
@@ -137,7 +146,9 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
         self._prepared_batches = loader._prepared_batches()
         self._transfer_stream = torch.cuda.Stream(device=device) if uses_cuda else None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='replay-batch-prefetch')
-        self._next_batch: Future[_PrefetchedBatch] = self._executor.submit(self._prepare_next)
+        self._pending_batches: deque[Future[_PrefetchedBatch]] = deque(
+            self._executor.submit(self._prepare_next) for _ in range(depth)
+        )
 
     @property
     def closed(self) -> bool:
@@ -149,15 +160,16 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
     def __next__(self) -> TrainingBatch:
         if self._closed:
             raise StopIteration
+        next_batch = self._pending_batches.popleft()
         try:
-            prefetched = self._next_batch.result()
+            prefetched = next_batch.result()
         except StopIteration:
             self.close()
             raise StopIteration from None
         except BaseException as error:
             self.close()
             raise RuntimeError('Replay batch prefetch failed.') from error
-        self._next_batch = self._executor.submit(self._prepare_next)
+        self._pending_batches.append(self._executor.submit(self._prepare_next))
         self._synchronize_transfer(prefetched)
         return prefetched.device_batch
 
@@ -175,11 +187,16 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
     def close(self) -> None:
         if self._closed:
             return
-        self._next_batch.cancel()
+        pending_batches = tuple(self._pending_batches)
+        self._pending_batches.clear()
+        for pending_batch in pending_batches:
+            pending_batch.cancel()
         self._executor.shutdown(wait=True, cancel_futures=True)
-        if not self._next_batch.cancelled():
+        for pending_batch in pending_batches:
+            if pending_batch.cancelled():
+                continue
             try:
-                prefetched = self._next_batch.result()
+                prefetched = pending_batch.result()
             except BaseException:
                 pass
             else:
