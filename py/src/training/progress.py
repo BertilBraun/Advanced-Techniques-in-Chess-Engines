@@ -1,5 +1,6 @@
-from pydantic import Field
+from __future__ import annotations
 
+from pydantic import Field
 from src.util.frozen_model import FrozenModel
 
 

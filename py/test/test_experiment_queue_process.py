@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import json
 import os
-import signal
 import shutil
+import signal
 import sys
 import threading
 import time
 from pathlib import Path
 
 import pytest
-
 from src.experiment_queue.configuration import (
     QueueConfiguration,
     QueuedExperiment,
@@ -18,17 +17,20 @@ from src.experiment_queue.configuration import (
     ResourceSlot,
     RunnerCommand,
 )
-from src.experiment_queue.process import launch_process, terminate_process_group
 from src.experiment_queue.launcher_snapshot import create_launcher_snapshot, experiment_queue_source_directory
+from src.experiment_queue.process import launch_process, terminate_process_group
 from src.experiment_queue.runner import ExperimentQueueRunner
 from src.experiment_queue.scheduler import ResourceAssignment
 from src.experiment_queue.state import CompletedExperimentStatus, FailedExperimentStatus, load_queue_summary
 from src.experiment_queue.validation import validate_queue_for_launch
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(sys.platform != 'linux', reason='Linux process controls are required.'),
+]
 
-pytestmark = pytest.mark.skipif(sys.platform != 'linux', reason='Linux process controls are required.')
-
-EXPERIMENT_TEMPLATE = Path(__file__).parent / 'configs' / 'go-7x7-experiment.yaml'
+EXPERIMENT_TEMPLATE = TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml'
 SOURCE_REVISION = '1' * 40
 
 

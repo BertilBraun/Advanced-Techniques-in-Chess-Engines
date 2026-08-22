@@ -8,7 +8,6 @@ from typing import Literal, TypeVar
 import numpy as np
 from pydantic import Field
 from src.experiment.configuration import load_experiment_configuration_json
-from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.composition import ConfiguredGame, create_game_implementation
 from src.games.contracts import GameStateContract, TerminalOracle, WdlTarget
 from src.replay.layout import ReplayLayout
@@ -22,6 +21,7 @@ from src.self_play.completed_game import (
 )
 from src.util.atomic_file import write_bytes_atomically, write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.generation_schedule import FloatGenerationSchedule
 
 STAGED_ROWS_SUFFIX = '.rows.npy'
 STAGED_METADATA_SUFFIX = '.meta.json'

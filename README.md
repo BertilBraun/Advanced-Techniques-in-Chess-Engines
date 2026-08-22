@@ -7,7 +7,7 @@ telemetry, and artifact management.
 
 The original chess project produced an approximately 2000-2100 Elo model on a modest personal research budget.
 Those models, games, plots, and logs remain available as
-[historical result evidence](documentation/benchmarks/chess-results/); they do not describe the current runtime.
+[historical result evidence](documentation/evidence/chess-legacy-a10-2024/README.md); they do not describe the current runtime.
 
 ## Current architecture
 
@@ -33,8 +33,10 @@ ledger.
 - `cpp/`: native chess/Go state, encoding, inference, search, bindings, benchmarks, and tests;
 - `py/`: experiment configuration, coordinator, replay, training, evaluation, UCI, and optional tools;
 - `deployment/`: fresh-node bootstrap plus web and Lichess deployment assets;
-- `documentation/architecture/`: current authoritative plans and architecture;
+- `documentation/plan/`: the current plan and its evidence — start with `documentation/CURRENT-STATE.md`;
+- `documentation/architecture/`: accepted designs;
 - `documentation/operations/`: current deployment and operations guidance;
+- `documentation/evidence/`: dated per-run and per-node records;
 - `documentation/history/`: explicitly non-normative implementation history;
 - `documentation/benchmarks/`: historical benchmark and result evidence.
 
@@ -44,13 +46,9 @@ ledger.
 It clones the requested revision, installs the hashed training environment, builds the Release extension, exports
 `ENGINE_SOURCE_REVISION`, and executes the supplied command:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/master/deployment/setup_remote.sh \
-  | bash -s -- bash -c 'python py/train.py \
-      --run-config /data/approved-experiment.yaml \
-      --expected-source-revision "$ENGINE_SOURCE_REVISION" \
-      --approval-file /data/run-approval.json'
-```
+After bootstrap, runs are started, stopped, inspected and archived exclusively through
+[`deployment/run_control.sh`](deployment/run_control.sh) — see
+[run-control.md](documentation/operations/run-control.md).
 
 Set `ENGINE_REPOSITORY_REF`, `ENGINE_REPOSITORY_DIRECTORY`, `ENGINE_VIRTUAL_ENVIRONMENT`, or
 `ENGINE_REPOSITORY_URL` to override checkout/environment locations. The script intentionally does not install
@@ -91,5 +89,5 @@ The native interactive chess engine is shared by both deployments and is intenti
 ## Research and references
 
 - [Experiment backlog](THINGS_TO_TRY.md)
-- [Research references](documentation/research/references.md)
+- [Research references](documentation/references.md)
 - [Historical insights](documentation/history/insights-and-recommendations.md)

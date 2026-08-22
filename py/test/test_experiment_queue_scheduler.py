@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-
 from src.experiment_queue.configuration import (
     QueueConfiguration,
     QueuedExperiment,
@@ -11,7 +12,6 @@ from src.experiment_queue.configuration import (
     RunnerCommand,
 )
 from src.experiment_queue.scheduler import create_assignment, schedule_experiments
-
 
 SOURCE_REVISION = '1' * 40
 

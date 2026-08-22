@@ -7,10 +7,6 @@ IndentWidth: 4
 TabWidth: 4
 ColumnLimit: 100
 
-# Configure brace wrapping for functions
-BraceWrapping:
-  AfterFunction: true
-
 # Configure spacing
 SpaceBeforeParens: ControlStatements
 SpaceAfterCStyleCast: true

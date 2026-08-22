@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import argparse
 import os
 import random
+import signal
 from pathlib import Path
 
 os.environ['OMP_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for OpenMP
@@ -40,7 +43,6 @@ if __name__ == '__main__':
     from src.experiment.training_startup import prepare_training_startup
     from src.training.coordinator import Coordinator
     from src.util.log import log
-    from src.util.profiler import start_gpu_usage_logger
     from src.util.tensorboard import (
         TensorboardWriter,
         log_text,
@@ -77,9 +79,8 @@ if __name__ == '__main__':
         started_at=run_started_at,
         hourly_price=training.limits.hourly_price,
         interval_seconds=training.limits.resource_telemetry_interval_seconds,
+        tensorboard_run_id=run_id,
     )
-
-    gpu_usage_logger = start_gpu_usage_logger(run_id)
 
     with TensorboardWriter(run_id, 'training_args', postfix_pid=False):
         import pprint
@@ -91,10 +92,30 @@ if __name__ == '__main__':
     game = create_game_implementation(experiment)
     outcome_path = Path(training.save_path) / 'run-outcome.json'
     commander: Coordinator | None = None
+
+    class TerminationRequested(Exception):
+        pass
+
+    def raise_termination(signal_number: int, frame: object) -> None:
+        raise TerminationRequested(f'terminated by signal {signal_number}')
+
+    # Without this, a queue or run-control SIGTERM kills the interpreter before the outcome write below runs.
+    signal.signal(signal.SIGTERM, raise_termination)
+
     try:
         with TensorboardWriter(run_id, 'coordinator', postfix_pid=False):
             commander = Coordinator(game, run_started_at)
             commander.run()
+    except TerminationRequested as termination:
+        write_run_outcome(
+            outcome_path,
+            RunOutcomeStatus.STOPPED,
+            str(termination),
+            run_started_at,
+            training.limits.hourly_price,
+            0 if commander is None else commander.latest_completed_model_version,
+        )
+        raise SystemExit(143)
     except Exception as error:
         write_run_outcome(
             outcome_path,
@@ -106,7 +127,6 @@ if __name__ == '__main__':
         )
         raise
     finally:
-        gpu_usage_logger.stop()
         resource_telemetry.stop()
 
     assert commander is not None

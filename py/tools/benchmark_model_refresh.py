@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
-import subprocess
 import threading
 import time
 from dataclasses import asdict, dataclass
@@ -23,6 +21,11 @@ from AlphaZeroCpp import (
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )
+from src.self_play.configuration import SdpaBackend
+from src.self_play.native_configuration import native_sdpa_backend
+from src.util.atomic_file import write_text_atomically
+from src.util.hashing import file_sha256
+from src.util.provenance import read_source_revision
 
 INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 BYTES_PER_MIB = 2**20
@@ -41,6 +44,7 @@ class Arguments:
     direct_workers: int
     direct_batch_size: int
     direct_outstanding_batches: int
+    sdpa_backend: SdpaBackend
     maximum_rss_growth_mib: float | None
     maximum_gpu_growth_mib: float | None
     monitor_interval_seconds: float
@@ -79,6 +83,7 @@ class RefreshBenchmarkResult:
     direct_workers: int
     direct_batch_size: int
     direct_outstanding_batches: int
+    sdpa_backend: str
     latency_mean_seconds: float
     latency_p50_seconds: float
     latency_p95_seconds: float
@@ -138,6 +143,12 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--direct-workers', type=int, default=2)
     parser.add_argument('--direct-batch-size', type=int, default=64)
     parser.add_argument('--direct-outstanding-batches', type=int, default=1)
+    parser.add_argument(
+        '--sdpa-backend',
+        type=SdpaBackend,
+        choices=[backend.value for backend in SdpaBackend],
+        default=SdpaBackend.AUTOMATIC,
+    )
     parser.add_argument('--maximum-rss-growth-mib', type=float)
     parser.add_argument('--maximum-gpu-growth-mib', type=float)
     parser.add_argument('--monitor-interval-seconds', type=float, default=0.01)
@@ -154,6 +165,7 @@ def parse_arguments() -> Arguments:
         direct_workers=namespace.direct_workers,
         direct_batch_size=namespace.direct_batch_size,
         direct_outstanding_batches=namespace.direct_outstanding_batches,
+        sdpa_backend=namespace.sdpa_backend,
         maximum_rss_growth_mib=namespace.maximum_rss_growth_mib,
         maximum_gpu_growth_mib=namespace.maximum_gpu_growth_mib,
         monitor_interval_seconds=namespace.monitor_interval_seconds,
@@ -199,18 +211,11 @@ def percentile(values: tuple[float, ...], probability: float) -> float:
     return ordered[lower_index] * (1.0 - fraction) + ordered[upper_index] * fraction
 
 
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        while chunk := source.read(BYTES_PER_MIB):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
     runtime_parameters = InferenceConfiguration(
         device_id=arguments.device_id,
         model_path=str(arguments.model_path),
+        sdpa_backend=native_sdpa_backend(arguments.sdpa_backend),
     )
     search_parameters = SelfPlaySearchParameters(
         parallel_searches=arguments.parallel_searches,
@@ -312,12 +317,7 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
             f'GPU memory grew by {gpu_growth_mib:.3f} MiB; limit is {arguments.maximum_gpu_growth_mib:.3f} MiB.'
         )
     return RefreshBenchmarkResult(
-        source_revision=subprocess.run(
-            ('git', 'rev-parse', 'HEAD'),
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.strip(),
+        source_revision=read_source_revision().commit,
         model_path=str(arguments.model_path.resolve()),
         model_sha256=file_sha256(arguments.model_path),
         device_name=torch.cuda.get_device_name(device),
@@ -329,6 +329,7 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
         direct_workers=arguments.direct_workers,
         direct_batch_size=arguments.direct_batch_size,
         direct_outstanding_batches=arguments.direct_outstanding_batches,
+        sdpa_backend=arguments.sdpa_backend.value,
         latency_mean_seconds=sum(latencies) / len(latencies),
         latency_p50_seconds=percentile(latencies, 0.50),
         latency_p95_seconds=percentile(latencies, 0.95),
@@ -343,8 +344,7 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
 def main() -> None:
     arguments = parse_arguments()
     result = benchmark(arguments)
-    arguments.output_path.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output_path.write_text(json.dumps(asdict(result), indent=2) + '\n', encoding='utf-8')
+    write_text_atomically(arguments.output_path, json.dumps(asdict(result), indent=2) + '\n')
     print(json.dumps(asdict(result), indent=2))
 
 

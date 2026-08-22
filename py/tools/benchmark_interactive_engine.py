@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import argparse
 import gc
-import hashlib
 import os
 import platform
-import subprocess
 import sys
 from enum import Enum
 from pathlib import Path
@@ -14,7 +12,6 @@ from time import time_ns
 import chess
 import torch
 from pydantic import BaseModel, ConfigDict
-
 from src.games.chess.interactive.analysis import (
     AnalysisResult,
     CountedMctsAnalysis,
@@ -23,6 +20,9 @@ from src.games.chess.interactive.analysis import (
 )
 from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
 from src.games.chess.interactive.engine import InferenceMetrics, InteractiveEngine, InteractiveGame
+from src.util.atomic_file import write_text_atomically
+from src.util.hashing import file_sha256
+from src.util.provenance import read_source_revision_if_available
 
 
 class RunStatus(str, Enum):
@@ -215,37 +215,15 @@ def parse_arguments() -> ParsedArguments:
     )
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as model_file:
-        for block in iter(lambda: model_file.read(1024 * 1024), b''):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def _git_output(arguments: tuple[str, ...]) -> str | None:
-    try:
-        completed = subprocess.run(
-            ('git', *arguments),
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
-    return completed.stdout.strip()
-
-
 def collect_provenance(arguments: ParsedArguments) -> Provenance:
     cuda_names = tuple(torch.cuda.get_device_name(index) for index in range(torch.cuda.device_count()))
-    detected_revision = _git_output(('rev-parse', 'HEAD'))
-    status = _git_output(('status', '--porcelain'))
+    detected = read_source_revision_if_available()
     return Provenance(
         command=tuple(sys.argv),
-        git_revision=arguments.source_revision or detected_revision or 'unavailable',
-        git_dirty=None if status is None else bool(status),
+        git_revision=arguments.source_revision or (detected.commit if detected is not None else 'unavailable'),
+        git_dirty=None if detected is None else detected.dirty,
         model_path=str(arguments.model.resolve()),
-        model_sha256=_sha256(arguments.model),
+        model_sha256=file_sha256(arguments.model),
         python_version=sys.version,
         torch_version=torch.__version__,
         platform=platform.platform(),
@@ -477,9 +455,7 @@ def main() -> None:
         reference_searches=arguments.reference_searches,
         provenance=collect_provenance(arguments),
     )
-    (arguments.output_directory / 'manifest.json').write_text(
-        manifest.model_dump_json(indent=2) + '\n', encoding='utf-8'
-    )
+    write_text_atomically(arguments.output_directory / 'manifest.json', manifest.model_dump_json(indent=2) + '\n')
 
     reference_configuration = BenchmarkConfiguration(
         inference_target=arguments.devices[0],
@@ -519,7 +495,7 @@ def main() -> None:
         reference_move_uci=reference.chosen_move_uci,
         reference_value=reference.value,
     )
-    (arguments.output_directory / 'summary.json').write_text(summary.model_dump_json(indent=2) + '\n', encoding='utf-8')
+    write_text_atomically(arguments.output_directory / 'summary.json', summary.model_dump_json(indent=2) + '\n')
 
 
 if __name__ == '__main__':

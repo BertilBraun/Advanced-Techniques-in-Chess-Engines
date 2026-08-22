@@ -9,7 +9,7 @@ ratios are only meaningful with those columns in mind.
 | era / source | hardware | stack | net | mix | searches/s per GPU | node total |
 |---|---|---|---|---|---:|---:|
 | Four-day run r3/r4, in-run (regression analysis §3.2) | 8×3060 | old (pre-rework) | 3.1 M dense-head CNN 12×112, ps=1 | production | ≈20k evals/s | ≈160k evals/s |
-| 12 Aug self-play latency bench (`chess-self-play-latency-rtx3060-20260812.md`) | 8×3060 | new | attention, ps=4 | production, self-play only | ≈25–27k | 201–213k |
+| 12 Aug self-play latency bench (`chess-self-play-latency-rtx3060-20260812/README.md`) | 8×3060 | new | attention, ps=4 | production, self-play only | ≈25–27k | 201–213k |
 | 12 Aug mixed-contention bench (`chess-training-throughput-rtx3060-20260812/`) | 8×3060 (8 active workers) | new | attention | production, trainer active | ≈21k | 169k |
 | Failed runs 18–19 Aug (v11 credit telemetry, 93 quanta, `.codex-diagnostics/v11-credit-training-telemetry.jsonl`) | 8×3090 | new, bounded ingestion | attention | production | ≈18.7k median | 150k median, 178k p90 |
 | 18 Aug node comparison (analysis §3.2) | 3090 | new | 0.47 M attention | **8-visit micro-mix — not comparable** | ≈61k evals/s | — |
@@ -45,5 +45,5 @@ Readings:
 
 Provenance: WP5 raw JSON in `.codex-diagnostics/wp5-throughput-20260821/`; v11 telemetry in
 `.codex-diagnostics/v11-credit-training-telemetry.jsonl`; four-day numbers from
-`documentation/research/chess-post-four-day-regression-analysis-20260820.md` §3.2; WP5/WP4 configs resolved from
+`documentation/plan/chess-post-four-day-regression-analysis-20260820.md` §3.2; WP5/WP4 configs resolved from
 `vast-chess-8gpu-run1.yaml` (stand-in topology, SHA `f52e87ae…`).

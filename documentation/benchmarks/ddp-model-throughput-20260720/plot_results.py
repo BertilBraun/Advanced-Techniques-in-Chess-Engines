@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from pydantic import BaseModel, ConfigDict
 
-
 ARTIFACT_DIRECTORY = Path(__file__).resolve().parent
 RESULTS_PATH = ARTIFACT_DIRECTORY / 'results.json'
 PRODUCTION_RESULTS_PATH = ARTIFACT_DIRECTORY.parent / 'ddp-production-training-20260720' / 'results.json'

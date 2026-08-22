@@ -5,12 +5,6 @@ from math import isfinite
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, JsonValue, model_validator
-from src.experiment.generation_schedule import (
-    FloatGenerationSchedule,
-    IntegerGenerationSchedule,
-    defined_schedule_values,
-    schedule_change_generations,
-)
 from src.self_play.parameters import (
     AdaptiveFullSearchBudget,
     FixedFullSearchBudget,
@@ -22,6 +16,12 @@ from src.self_play.parameters import (
     ZeroFirstPlayUrgencyParameters,
 )
 from src.util.frozen_model import FrozenModel
+from src.util.generation_schedule import (
+    FloatGenerationSchedule,
+    IntegerGenerationSchedule,
+    defined_schedule_values,
+    schedule_change_generations,
+)
 
 
 class SdpaBackend(str, Enum):

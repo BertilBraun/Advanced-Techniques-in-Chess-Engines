@@ -2,30 +2,26 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import multiprocessing
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import psutil
 import torch
-
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
+from src.evaluation.preparation import PreparedEvaluationArtifacts, prepare_evaluation_artifacts
 from src.experiment.base_configuration import (
     CheckpointResumeConfiguration,
     RandomInitializationResumeConfiguration,
     WeightsOnlyResumeConfiguration,
 )
 from src.experiment.configuration import ExperimentConfiguration, experiment_configuration_sha256
-from src.evaluation.preparation import PreparedEvaluationArtifacts, prepare_evaluation_artifacts
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.composition import create_game_implementation
-from src.training.targets import AuxiliaryHeadLayout
-from src.util.atomic_file import write_text_atomically
-from src.util.frozen_model import FrozenModel
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import model_save_path
 from src.training.checkpoint.persistence import (
@@ -35,7 +31,10 @@ from src.training.checkpoint.persistence import (
     load_model,
     save_model_and_optimizer,
 )
-
+from src.training.targets import AuxiliaryHeadLayout
+from src.util.atomic_file import write_text_atomically
+from src.util.frozen_model import FrozenModel
+from src.util.hashing import file_sha256
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
 
@@ -76,14 +75,6 @@ def _git_output(arguments: list[str]) -> str:
         text=True,
     )
     return completed.stdout.strip()
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _resolve_source_path(path: str) -> Path:
@@ -135,23 +126,20 @@ def _validate_approval(
     approval: ApprovalRecord,
     source_revision: str,
 ) -> None:
-    run = experiment.run
-    limits = experiment.training.limits
-    if not run.requires_explicit_approval:
+    if not experiment.run.requires_explicit_approval:
         raise ValueError('Training configurations must require explicit approval.')
-    expected = (
-        approval.run_name == run.run_name
-        and approval.source_revision == source_revision
-        and approval.configuration_sha256 == experiment_configuration_sha256(experiment)
-        and approval.provider_name == run.hardware.provider_name
-        and approval.offer_id == run.hardware.offer_id
-        and approval.hourly_price == limits.hourly_price
-        and approval.maximum_cost == limits.maximum_cost
-        and approval.maximum_wall_time_minutes
-        == (None if limits.maximum_wall_time_seconds is None else int(limits.maximum_wall_time_seconds / 60))
+    compared = (
+        ('source_revision', approval.source_revision, source_revision),
+        ('configuration_sha256', approval.configuration_sha256, experiment_configuration_sha256(experiment)),
+        ('maximum_cost', approval.maximum_cost, experiment.training.limits.maximum_cost),
     )
-    if not expected:
-        raise ValueError('Approval does not match the requested experiment.')
+    mismatches = [
+        f'{name} (approval {approved!r} vs run {expected!r})'
+        for name, approved, expected in compared
+        if approved != expected
+    ]
+    if mismatches:
+        raise ValueError(f'Approval mismatch on: {", ".join(mismatches)}')
 
 
 def _write_manifest(path: Path, manifest: ExperimentRunManifest) -> ExperimentRunManifest:
@@ -194,7 +182,7 @@ def _validate_runtime_configuration(experiment: ExperimentConfiguration) -> None
     if run.hardware.provider_name.casefold() == 'unconfirmed' or run.hardware.offer_id.casefold() == 'unconfirmed':
         raise ValueError('Hardware provider and offer ID must be confirmed before training.')
     dependency_lock_path = _resolve_source_path(run.environment.dependency_lock_path)
-    if _sha256(dependency_lock_path) != run.environment.dependency_lock_sha256:
+    if file_sha256(dependency_lock_path) != run.environment.dependency_lock_sha256:
         raise ValueError('Dependency lock SHA-256 does not match the experiment.')
     actual_python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
     if actual_python_version != run.environment.python_version:
@@ -285,12 +273,12 @@ def _run_manifest(
         source_revision=environment.source_revision,
         source_worktree_clean=True,
         initial_generation=initial_checkpoint.generation,
-        initial_model_sha256=_sha256(initial_checkpoint.model_path),
-        initial_optimizer_sha256=_sha256(initial_checkpoint.optimizer_path),
+        initial_model_sha256=file_sha256(initial_checkpoint.model_path),
+        initial_optimizer_sha256=file_sha256(initial_checkpoint.optimizer_path),
         initial_inference_model_sha256=initial_checkpoint.inference_model_sha256,
-        evaluation_dataset_sha256=_sha256(artifacts.dataset_path),
-        evaluation_dataset_manifest_sha256=_sha256(artifacts.dataset_manifest_path),
-        opening_suite_manifest_sha256=_sha256(artifacts.opening_manifest_path),
+        evaluation_dataset_sha256=file_sha256(artifacts.dataset_path),
+        evaluation_dataset_manifest_sha256=file_sha256(artifacts.dataset_manifest_path),
+        opening_suite_manifest_sha256=file_sha256(artifacts.opening_manifest_path),
         evaluation_engine_artifact_sha256=_evaluation_engine_artifact_sha256(experiment),
         open_file_soft_limit=environment.open_file_soft_limit,
         torch_version=torch.__version__,
@@ -308,7 +296,7 @@ def _evaluation_engine_artifact_sha256(experiment: ExperimentConfiguration) -> t
             analysis_configuration_path=analysis_configuration_path,
         ):
             paths = (executable_path, model_path, analysis_configuration_path)
-    return tuple(_sha256(_resolve_source_path(path)) for path in paths)
+    return tuple(file_sha256(_resolve_source_path(path)) for path in paths)
 
 
 def prepare_experiment_training_run(

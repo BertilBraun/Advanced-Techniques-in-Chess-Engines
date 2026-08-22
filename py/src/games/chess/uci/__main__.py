@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+
 from src.games.chess.interactive.configuration import (
     DEFAULT_EXPLORATION_CONSTANT,
     InferenceTarget,

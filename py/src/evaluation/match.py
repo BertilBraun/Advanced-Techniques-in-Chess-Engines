@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
 import random
 import time
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Generic, Literal, Protocol, TypeVar
 
 from src.evaluation.configuration import (
@@ -17,12 +17,12 @@ from src.evaluation.configuration import (
     StockfishFixedNodesEvaluationDefinition,
 )
 from src.evaluation.contracts import (
+    AnyOpeningSuiteManifest,
     CandidateOutcome,
     EvaluationGameResult,
     EvaluationTerminationReason,
     MatchEvaluationJob,
     MatchEvaluationResult,
-    AnyOpeningSuiteManifest,
 )
 from src.evaluation.inference import PolicyActionSelector
 from src.evaluation.statistics import aggregate_match
@@ -30,7 +30,6 @@ from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.implementation import GameImplementation
 from src.self_play.completed_game import TerminationReason
 from src.self_play.native_search import NativeSelfPlaySearch
-
 
 PositionT = TypeVar('PositionT')
 NativeSearchT = TypeVar('NativeSearchT', bound=NativeSelfPlaySearch)

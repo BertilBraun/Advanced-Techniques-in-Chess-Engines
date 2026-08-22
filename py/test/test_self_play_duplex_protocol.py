@@ -1,6 +1,7 @@
-from dataclasses import dataclass
-import hashlib
+from __future__ import annotations
+
 import multiprocessing
+from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
 from pathlib import Path
@@ -9,9 +10,10 @@ from types import TracebackType
 from typing import cast
 
 import pytest
-
-from src.games.implementation import GameImplementation
+import src.self_play.process_runtime as process_runtime_module
 from src.experiment.configuration import ExperimentConfiguration
+from src.games.implementation import GameImplementation
+from src.self_play.process_runtime import self_play_worker_main
 from src.self_play.protocol import (
     PausedSelfPlayState,
     RunningSelfPlayState,
@@ -23,8 +25,8 @@ from src.self_play.protocol import (
 from src.self_play.resignation import PublishedResignationPolicy
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import SelfPlayTopologyParams
-from src.training.self_play_group import SelfPlayGroup, _self_play_worker_main
-import src.training.self_play_group as self_play_group_module
+from src.training.self_play_group import SelfPlayGroup
+from test_helpers.checkpoints import checkpoint_reference
 
 
 @dataclass(frozen=True)
@@ -131,23 +133,14 @@ class _Process:
 
 
 def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:
-    inference_path = tmp_path / f'model_{generation}.jit.pt'
-    inference_path.write_bytes(f'model {generation}'.encode('ascii'))
-    return CheckpointReference(
-        generation=generation,
-        manifest_path=tmp_path / f'checkpoint_{generation}.json',
-        model_path=tmp_path / f'model_{generation}.pt',
-        optimizer_path=tmp_path / f'optimizer_{generation}.pt',
-        inference_model_path=inference_path,
-        inference_model_sha256=hashlib.sha256(inference_path.read_bytes()).hexdigest(),
-    )
+    return checkpoint_reference(tmp_path, generation, write_inference_model=True)
 
 
 def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(self_play_group_module, 'SelfPlayWorker', _Worker)
+    monkeypatch.setattr(process_runtime_module, 'SelfPlayWorker', _Worker)
     observed_tensorboard_states: list[bool] = []
 
     def create_tensorboard_writer(
@@ -159,23 +152,23 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
         assert suffix == 'self_play'
         return _TensorboardWriter(enabled, observed_tensorboard_states)
 
-    monkeypatch.setattr(self_play_group_module, 'TensorboardWriter', create_tensorboard_writer)
+    monkeypatch.setattr(process_runtime_module, 'TensorboardWriter', create_tensorboard_writer)
     fake_game = _Game(tmp_path)
 
     def create_game(configuration: ExperimentConfiguration) -> GameImplementation:
         del configuration
         return cast(GameImplementation, fake_game)
 
-    monkeypatch.setattr(self_play_group_module, 'create_game_implementation', create_game)
+    monkeypatch.setattr(process_runtime_module, 'create_game_implementation', create_game)
     monkeypatch.setattr(
-        self_play_group_module,
+        process_runtime_module,
         'load_experiment_configuration_json',
         lambda payload: cast(ExperimentConfiguration, fake_game),
     )
     context = multiprocessing.get_context('spawn')
     parent, child = context.Pipe(duplex=True)
     process = Thread(
-        target=_self_play_worker_main,
+        target=self_play_worker_main,
         args=(child, 0, 0, '{}'),
     )
     process.start()

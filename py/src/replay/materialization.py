@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from math import isclose
 from typing import Generic, TypeVar
 
-from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget
 from src.replay.contracts import (
     EligibleLegalMovesTarget,
@@ -33,6 +32,7 @@ from src.training.targets import (
     SearchCorrectionHeadLayout,
     TrainingTargetLayout,
 )
+from src.util.generation_schedule import FloatGenerationSchedule
 
 PositionT = TypeVar('PositionT')
 
@@ -72,7 +72,10 @@ def retain_policy(
     discarded = ordered[maximum_entries:]
     return PolicyRetention(
         policy=SparsePolicyTarget(
-            visits=SearchVisitCounts.from_native(retained),
+            visits=SearchVisitCounts(
+                action_ids=tuple(visit.action_id for visit in retained),
+                visit_counts=tuple(visit.visit_count for visit in retained),
+            ),
             legal_action_ids=legal_action_ids,
         ),
         truncated=bool(discarded),

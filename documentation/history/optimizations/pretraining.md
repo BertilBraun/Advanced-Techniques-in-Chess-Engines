@@ -16,7 +16,7 @@ With parallelization, we can generate the training data for the model in a reaso
 
 ## Approach Implemented
 
-We currently have two scripts eployed in the RL pipeline, one to generate a evaluation set of professional games based on the Grandmaster database from [https://database.nikonoel.fr/](https://database.nikonoel.fr/) (see [ChessDatabase.py](../../py/src/games/chess/ChessDatabase.py)) and a script to train on a set of our Database formats (see [DatasetTrainer.py](../../py/src/eval/DatasetTrainer.py)). These can be used in conjunction to generate a training set from professional games and train on them. This is also useful for debugging and testing the training pipeline as well as to setup a baseline for the training process, which the RL pipeline can be compared to.
+We currently have two scripts eployed in the RL pipeline, one to generate a evaluation set of professional games based on the Grandmaster database from [https://database.nikonoel.fr/](https://database.nikonoel.fr/) and a script to train on a set of our Database formats. These can be used in conjunction to generate a training set from professional games and train on them. This is also useful for debugging and testing the training pipeline as well as to setup a baseline for the training process, which the RL pipeline can be compared to.
 
 ## Results
 

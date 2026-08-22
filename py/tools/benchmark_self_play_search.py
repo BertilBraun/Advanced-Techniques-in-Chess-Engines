@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
-import hashlib
 import json
 import os
-from pathlib import Path
 import resource
 import tempfile
 import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Literal
 
 from src.experiment.configuration import load_experiment_configuration
-from src.games.composition import create_game_implementation
 from src.games.chess.configuration import ChessExperimentConfiguration
+from src.games.composition import create_game_implementation
 from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
+from src.util.hashing import file_sha256
 
 
 @dataclass(frozen=True)
@@ -72,14 +72,6 @@ class BenchmarkResult:
     inference_batch_size_distribution: tuple[BatchSizeCount, ...]
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _checkpoint(arguments: Arguments) -> CheckpointReference:
     return CheckpointReference(
         generation=arguments.generation,
@@ -87,7 +79,7 @@ def _checkpoint(arguments: Arguments) -> CheckpointReference:
         model_path=arguments.model,
         optimizer_path=arguments.model.with_suffix('.benchmark-optimizer.pt'),
         inference_model_path=arguments.model,
-        inference_model_sha256=_sha256(arguments.model),
+        inference_model_sha256=file_sha256(arguments.model),
     )
 
 

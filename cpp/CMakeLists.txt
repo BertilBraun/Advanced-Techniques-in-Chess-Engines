@@ -9,18 +9,19 @@ include(CTest)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # --- Optional: Enable clang-tidy integration ---
-option(ENABLE_CLANG_TIDY "Enable clang-tidy" ON)
+# Off by default: the naming check costs ~1 min per TU, which would dominate node provisioning builds.
+# Enable for lint passes with -DENABLE_CLANG_TIDY=ON (or use cpp/run-clang-tidy.sh).
+option(ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
 if (ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_EXE NAMES clang-tidy)
     if (CLANG_TIDY_EXE)
         message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
-        # TODO set(CMAKE_CXX_CLANG_TIDY
-        # TODO     ${CLANG_TIDY_EXE}
-        # TODO     -checks=readability-identifier-naming
-        # TODO     -fix
-        # TODO     -format-style=file
-        # TODO     -warnings-as-errors=*
-        # TODO )
+        # Diagnostics only: -fix would rewrite sources (including fetched dependencies) during a build.
+        set(CMAKE_CXX_CLANG_TIDY
+                ${CLANG_TIDY_EXE}
+                -checks=readability-identifier-naming
+                -format-style=file
+        )
     else ()
         message(WARNING "clang-tidy not found!")
     endif ()
@@ -226,7 +227,6 @@ if (BUILD_TESTING)
             src/games/chess/encoding/ChessPolicyEncoding.cpp
             src/games/chess/presentation/ChessSearchPresentation.cpp
             src/search/InferencePipeline.cpp
-            src/util/Log.cpp
             "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
             "${stockfish_SOURCE_DIR}/src/memory.cpp"
             "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -283,6 +283,10 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "CompileCheck")
             COMMAND ${CMAKE_COMMAND} -E env
             PYTHONPATH=${PYTHON_MODULE_OUTPUT_DIR}
             ${Python3_EXECUTABLE} -m pybind11_stubgen AlphaZeroCpp -o ${CMAKE_CURRENT_BINARY_DIR}/stubs
+
+            # The committed stub IS the generated stub: hand edits drift from the bindings.
+            COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_CURRENT_BINARY_DIR}/stubs/AlphaZeroCpp.pyi ${PYTHON_MODULE_OUTPUT_DIR}/AlphaZeroCpp.pyi
     )
 endif ()
 

@@ -10,13 +10,15 @@ Leave `validated` unchecked until a four-hour run reaches the difficult part of 
 If a completed experiment does not improve the baseline, replace `validated [ ]` with `validated [✗]` and retain the
 result rather than removing the method from the history.
 
-Current screening policy:
+Current programme (2026-08-22): **chess recovery Phase A/B** per
+`documentation/plan/chess-recovery-plan-20260820.md`; the Go 7x7/9x9 screening described below is **paused**.
+Screening policy, retained for when a screen resumes:
 
 * Compare one method at a time against the same baseline before combining accepted improvements.
-* Use four-hour runs for the current 7x7 Go screen; the earlier two-hour runs are diagnostic evidence only.
+* Use four-hour runs per screen; the earlier two-hour runs are diagnostic evidence only.
 * With four concurrent experiments, 24 hours of continuous work requires 24 four-hour runs.
 * Use spare capacity for new single-variable methods and confirmation seeds of promising results.
-* Defer dynamic per-position budgets, Gumbel search, and progressive model scaling for the current screen.
+* Defer dynamic per-position budgets, Gumbel search, and progressive model scaling for a screen.
 
 ### Highest-priority training-efficiency additions
 
@@ -530,7 +532,43 @@ searches. The remaining six pre-existing single-variable screens should still ru
 configured for reduced-parent FPU, restart states, remaining game length, and forced playout pruning.
 
 Review the first completed results before choosing another variable or allocating confirmation seeds. Adaptive search
-termination is deferred after the chess R3 audit; the broader 24-hour queue decision remains in `TOMORROW.md`.
+termination is deferred after the chess R3 audit (see below).
+
+### Deferred audits and methods (folded from the former TOMORROW.md, 2026-08-13)
+
+**Adaptive search termination — deferred.** The 2026-08-13 chess R3 audit (634 games, 43,572 searches) estimated
+6.38–8.55% of nominal limits avoidable across all searches (~4–8% wall-time inclination, not a measurement).
+Written games hold only final visit distributions, so no safe stopping point can be identified; early termination
+would also alter policy and next-policy targets and interacts with temperature, root-value blending, resignation,
+batching and the staged scheduler. Do not implement or instrument now; revisit only if search becomes a dominant
+bottleneck, and then only with bounded shadow traces plus an equal-wall-time test measuring target divergence. See
+the [R3 audit](documentation/benchmarks/adaptive-search-termination-r3-20260813/README.md).
+
+**Resignation calibration method** (for any new board size/game — do not transfer thresholds): audit late
+completed games by threshold, generation and ply; record first trigger, eventual result, remaining plies and
+remaining search budget; evaluate 1–3 consecutive low-value observations on the player's own turns with a
+minimum-ply gate and per-player persistence counters; report candidate fraction, searches saved, false-nonloss
+count, false-positive rate and a Wilson upper bound, separating natural endings from maximum-ply adjudications.
+Audit-only telemetry first; active resignation needs a conservative threshold plus a permanent 5–10%
+non-resigning holdout.
+
+**Replay-duplication audit method**: hash the complete canonical encoded state including history planes (no
+symmetry canonicalization on the first audit); report raw rows, unique states, duplicate excess, group sizes and
+multiplicity by age/generation; within groups measure policy-target divergence, WDL disagreement and root-value
+spread. Defer deduplication when excess is a few percent; otherwise compare unit-multiplicity deduplication
+against none before testing square-root weighting, and decide first whether replay capacity counts unique rows or
+occurrences.
+
+**Reanalysis decision method**: report replay-age percentiles and window turnover; compare against model
+improvement rate from same-time matches; on a small preserved trajectory sample, re-search positions with source
+and current checkpoints and measure policy divergence, root-value change and cost per refreshed target versus
+fresh self-play. Requires reconstructible trajectory provenance, stable sample identities and atomic
+newest-target overrides; design only after the audit shows a clear opportunity.
+
+**Restart-state and target diagnostics**: recheck restart-eligibility rates under the current filters (|root
+value| ≤ 0.3, two-three candidates ≥ 85% policy mass, ≥ 15 remaining plies); measure insertion/claim/eviction and
+fallback rates and whether restarted branches add diversity; inspect remaining-game-length target/prediction/error
+distributions against the configured 324-ply normalization.
 
 ### Likely final system
 

@@ -1,15 +1,13 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-import sqlite3
 
 from pydantic import TypeAdapter
-
 from src.self_play.completed_game import CompletedSelfPlayGame
 from src.self_play.parameters import RestartStateStartParameters
 from src.self_play.policy import ordered_search_visits
-
 
 ACTION_PREFIX_ADAPTER = TypeAdapter(tuple[int, ...])
 

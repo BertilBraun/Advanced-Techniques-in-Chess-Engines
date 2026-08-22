@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-import hashlib
 from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
-
 from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult
 from src.evaluation.ladder import (
     STOCKFISH_FIXED_NODES_ANCHOR_ELO,
@@ -18,14 +16,21 @@ from src.evaluation.ladder import (
 )
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.hashing import file_sha256
 from tools.run_stockfish_gauntlet import (
     Arguments as GauntletArguments,
-    FixedModelSearchBudget,
-    ModelSearchBudget,
+)
+from tools.run_stockfish_gauntlet import (
     SeededOpeningSelection,
     StockfishGauntletResult,
-    TimedModelSearchBudget,
     run_gauntlet,
+)
+from tools.search_budget import (
+    FixedModelSearchBudget,
+    ModelSearchBudget,
+    TimedModelSearchBudget,
+    add_model_search_budget_arguments,
+    model_search_budget,
 )
 
 
@@ -152,14 +157,6 @@ def _score_bracket(probes: tuple[LadderProbe, ...]) -> LadderBracket | None:
     return None
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def run_ladder(arguments: Arguments) -> StockfishLadderResult:
     arguments.output_directory.mkdir(parents=True, exist_ok=False)
     opening_pairs = arguments.probe_games // 2
@@ -204,7 +201,7 @@ def run_ladder(arguments: Arguments) -> StockfishLadderResult:
     assert first_gauntlet_result is not None
     result = StockfishLadderResult(
         source_revision=first_gauntlet_result.source_revision,
-        tool_sha256=_sha256(Path(__file__)),
+        tool_sha256=file_sha256(Path(__file__)),
         checkpoint_generation=arguments.checkpoint_generation,
         opening_manifest_path=arguments.opening_manifest.resolve(),
         opening_manifest_sha256=first_gauntlet_result.opening_manifest_sha256,
@@ -228,28 +225,6 @@ def run_ladder(arguments: Arguments) -> StockfishLadderResult:
     return result
 
 
-def _model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudget | TimedModelSearchBudget:
-    if namespace.model_searches is not None:
-        return FixedModelSearchBudget(
-            searches_per_move=namespace.model_searches,
-            parallel_searches=1 if namespace.parallel_searches is None else namespace.parallel_searches,
-            inference_workers=1 if namespace.inference_workers is None else namespace.inference_workers,
-            inference_batch_size=namespace.inference_batch_size,
-            outstanding_batches_per_worker=(
-                1 if namespace.outstanding_batches is None else namespace.outstanding_batches
-            ),
-        )
-    if namespace.parallel_searches is None:
-        raise ValueError('Timed ladder probes require an explicit --parallel-searches value.')
-    return TimedModelSearchBudget(
-        seconds_per_move=namespace.model_move_time_seconds,
-        parallel_searches=namespace.parallel_searches,
-        inference_workers=2 if namespace.inference_workers is None else namespace.inference_workers,
-        inference_batch_size=namespace.inference_batch_size,
-        outstanding_batches_per_worker=2 if namespace.outstanding_batches is None else namespace.outstanding_batches,
-    )
-
-
 def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser(description='Probe several Stockfish node rungs with one paired opening sample.')
     parser.add_argument('--experiment', required=True, type=Path)
@@ -262,13 +237,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--opening-selection-seed', default=20260815, type=int)
     parser.add_argument('--match-random-seed', default=20260816, type=int)
     parser.add_argument('--devices', required=True, nargs='+', type=int)
-    budget = parser.add_mutually_exclusive_group(required=True)
-    budget.add_argument('--model-searches', type=int)
-    budget.add_argument('--model-move-time-seconds', type=int)
-    parser.add_argument('--parallel-searches', type=int)
-    parser.add_argument('--inference-workers', type=int)
-    parser.add_argument('--inference-batch-size', default=64, type=int)
-    parser.add_argument('--outstanding-batches', type=int)
+    add_model_search_budget_arguments(parser)
     parser.add_argument('--output-directory', required=True, type=Path)
     namespace = parser.parse_args()
     arguments = Arguments(
@@ -282,7 +251,7 @@ def parse_arguments() -> Arguments:
         opening_selection_seed=namespace.opening_selection_seed,
         match_random_seed=namespace.match_random_seed,
         devices=tuple(namespace.devices),
-        model_search_budget=_model_search_budget(namespace),
+        model_search_budget=model_search_budget(namespace),
         output_directory=namespace.output_directory,
     )
     required_paths = (

@@ -4,7 +4,8 @@ url: "https://lichess.org/"
 engine:
   dir: "/usr/local/bin"
   name: "alphazero-uci"
-  working_dir: "/workspace/py"
+  # Placeholder rewritten by run_vast_bot.sh to <engine checkout>/py; meaningless as committed.
+  working_dir: "/replaced-at-deploy/py"
   protocol: "uci"
   ponder: false
   debug: false

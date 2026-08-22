@@ -40,3 +40,4 @@ cpp/libtorch**/**
 !/py/reference/go-7x7-baseline-v1.bin
 !/py/reference/go-7x7-baseline-v1.bin.manifest.json
 !/py/reference/go-7x7-baseline-openings-v1.json
+/.venv/

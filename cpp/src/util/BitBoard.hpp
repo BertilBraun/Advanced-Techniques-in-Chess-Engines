@@ -17,12 +17,12 @@ public:
 
     static constexpr std::size_t width = BoardSize;
     static constexpr std::size_t height = BoardSize;
-    static constexpr std::size_t bit_count = BoardSize * BoardSize;
-    static constexpr std::size_t word_bits = 64;
-    static constexpr std::size_t word_count = (bit_count + word_bits - 1) / word_bits;
+    static constexpr std::size_t bitCount = BoardSize * BoardSize;
+    static constexpr std::size_t wordBits = 64;
+    static constexpr std::size_t wordCount = (bitCount + wordBits - 1) / wordBits;
 
     using Word = std::uint64_t;
-    using Storage = std::array<Word, word_count>;
+    using Storage = std::array<Word, wordCount>;
 
     struct Point {
         std::uint8_t x;
@@ -33,18 +33,18 @@ public:
 
     constexpr BitBoard() noexcept = default;
 
-    explicit constexpr BitBoard(Storage words) noexcept : words_(words) { clear_unused_bits(); }
+    explicit constexpr BitBoard(Storage words) noexcept : m_words(words) { clearUnusedBits(); }
 
     [[nodiscard]]
     static constexpr BitBoard full() noexcept {
         BitBoard result;
-        result.words_.fill(~Word{0});
-        result.clear_unused_bits();
+        result.m_words.fill(~Word{0});
+        result.clearUnusedBits();
         return result;
     }
 
     [[nodiscard]]
-    static constexpr BitBoard from_point(Point point) noexcept {
+    static constexpr BitBoard fromPoint(Point point) noexcept {
         BitBoard result;
         result.set(point);
         return result;
@@ -59,7 +59,7 @@ public:
 
     [[nodiscard]]
     static constexpr Point point(std::size_t index) noexcept {
-        assert(index < bit_count);
+        assert(index < bitCount);
         return Point{
             .x = static_cast<std::uint8_t>(index % BoardSize),
             .y = static_cast<std::uint8_t>(index / BoardSize),
@@ -69,20 +69,20 @@ public:
     constexpr void set(Point point) noexcept { set(index(point)); }
 
     constexpr void set(std::size_t bit) noexcept {
-        assert(bit < bit_count);
-        words_[word_index(bit)] |= bit_mask(bit);
+        assert(bit < bitCount);
+        m_words[wordIndex(bit)] |= bitMask(bit);
     }
 
     constexpr void reset(Point point) noexcept { reset(index(point)); }
 
     constexpr void reset(std::size_t bit) noexcept {
-        assert(bit < bit_count);
-        words_[word_index(bit)] &= ~bit_mask(bit);
+        assert(bit < bitCount);
+        m_words[wordIndex(bit)] &= ~bitMask(bit);
     }
 
     constexpr void assign(Point point, bool value) noexcept { value ? set(point) : reset(point); }
 
-    constexpr void clear() noexcept { words_.fill(0); }
+    constexpr void clear() noexcept { m_words.fill(0); }
 
     [[nodiscard]]
     constexpr bool test(Point point) const noexcept {
@@ -91,13 +91,13 @@ public:
 
     [[nodiscard]]
     constexpr bool test(std::size_t bit) const noexcept {
-        assert(bit < bit_count);
-        return (words_[word_index(bit)] & bit_mask(bit)) != 0;
+        assert(bit < bitCount);
+        return (m_words[wordIndex(bit)] & bitMask(bit)) != 0;
     }
 
     [[nodiscard]]
     constexpr bool any() const noexcept {
-        for (Word word : words_) {
+        for (Word word : m_words) {
             if (word != 0) {
                 return true;
             }
@@ -113,7 +113,7 @@ public:
     [[nodiscard]]
     constexpr std::size_t count() const noexcept {
         std::size_t result = 0;
-        for (Word word : words_) {
+        for (Word word : m_words) {
             result += static_cast<std::size_t>(std::popcount(word));
         }
         return result;
@@ -121,32 +121,32 @@ public:
 
     [[nodiscard]]
     constexpr const Storage &words() const noexcept {
-        return words_;
+        return m_words;
     }
 
     [[nodiscard]]
     constexpr Word word(std::size_t index) const noexcept {
-        assert(index < word_count);
-        return words_[index];
+        assert(index < wordCount);
+        return m_words[index];
     }
 
     constexpr BitBoard &operator|=(const BitBoard &other) noexcept {
-        for (std::size_t i = 0; i < word_count; ++i) {
-            words_[i] |= other.words_[i];
+        for (std::size_t i = 0; i < wordCount; ++i) {
+            m_words[i] |= other.m_words[i];
         }
         return *this;
     }
 
     constexpr BitBoard &operator&=(const BitBoard &other) noexcept {
-        for (std::size_t i = 0; i < word_count; ++i) {
-            words_[i] &= other.words_[i];
+        for (std::size_t i = 0; i < wordCount; ++i) {
+            m_words[i] &= other.m_words[i];
         }
         return *this;
     }
 
     constexpr BitBoard &operator^=(const BitBoard &other) noexcept {
-        for (std::size_t i = 0; i < word_count; ++i) {
-            words_[i] ^= other.words_[i];
+        for (std::size_t i = 0; i < wordCount; ++i) {
+            m_words[i] ^= other.m_words[i];
         }
         return *this;
     }
@@ -168,18 +168,18 @@ public:
 
     [[nodiscard]]
     friend constexpr BitBoard operator~(BitBoard board) noexcept {
-        for (Word &word : board.words_) {
+        for (Word &word : board.m_words) {
             word = ~word;
         }
-        board.clear_unused_bits();
+        board.clearUnusedBits();
         return board;
     }
 
     [[nodiscard]]
     friend constexpr BitBoard operator-(BitBoard lhs, const BitBoard &rhs) noexcept {
         // Set difference.
-        for (std::size_t i = 0; i < word_count; ++i) {
-            lhs.words_[i] &= ~rhs.words_[i];
+        for (std::size_t i = 0; i < wordCount; ++i) {
+            lhs.m_words[i] &= ~rhs.m_words[i];
         }
         return lhs;
     }
@@ -189,8 +189,8 @@ public:
 
     [[nodiscard]]
     constexpr bool intersects(const BitBoard &other) const noexcept {
-        for (std::size_t i = 0; i < word_count; ++i) {
-            if ((words_[i] & other.words_[i]) != 0) {
+        for (std::size_t i = 0; i < wordCount; ++i) {
+            if ((m_words[i] & other.m_words[i]) != 0) {
                 return true;
             }
         }
@@ -199,8 +199,8 @@ public:
 
     [[nodiscard]]
     constexpr bool contains(const BitBoard &other) const noexcept {
-        for (std::size_t i = 0; i < word_count; ++i) {
-            if ((words_[i] & other.words_[i]) != other.words_[i]) {
+        for (std::size_t i = 0; i < wordCount; ++i) {
+            if ((m_words[i] & other.m_words[i]) != other.m_words[i]) {
                 return false;
             }
         }
@@ -208,25 +208,25 @@ public:
     }
 
     [[nodiscard]]
-    constexpr std::size_t first_set_index() const noexcept {
-        for (std::size_t i = 0; i < word_count; ++i) {
-            if (words_[i] != 0) {
-                return i * word_bits + static_cast<std::size_t>(std::countr_zero(words_[i]));
+    constexpr std::size_t firstSetIndex() const noexcept {
+        for (std::size_t i = 0; i < wordCount; ++i) {
+            if (m_words[i] != 0) {
+                return i * wordBits + static_cast<std::size_t>(std::countr_zero(m_words[i]));
             }
         }
-        return bit_count;
+        return bitCount;
     }
 
-    constexpr bool pop_first(Point &output) noexcept {
-        for (std::size_t i = 0; i < word_count; ++i) {
-            Word &word = words_[i];
+    constexpr bool popFirst(Point &output) noexcept {
+        for (std::size_t i = 0; i < wordCount; ++i) {
+            Word &word = m_words[i];
 
             if (word == 0) {
                 continue;
             }
 
             const unsigned offset = std::countr_zero(word);
-            const std::size_t bit = i * word_bits + offset;
+            const std::size_t bit = i * wordBits + offset;
 
             word &= word - 1;
             output = point(bit);
@@ -242,26 +242,26 @@ public:
         using value_type = Point;
         using difference_type = std::ptrdiff_t;
 
-        constexpr SetBitIterator(const BitBoard *board, std::size_t word_index,
+        constexpr SetBitIterator(const BitBoard *board, std::size_t startWordIndex,
                                  Word remaining) noexcept
-            : board_(board), word_index_(word_index), remaining_(remaining) {
-            advance_to_nonempty_word();
+            : m_board(board), m_wordIndex(startWordIndex), m_remaining(remaining) {
+            advanceToNonemptyWord();
         }
 
         [[nodiscard]]
         constexpr Point operator*() const noexcept {
             const std::size_t bit =
-                word_index_ * word_bits + static_cast<std::size_t>(std::countr_zero(remaining_));
+                m_wordIndex * wordBits + static_cast<std::size_t>(std::countr_zero(m_remaining));
 
             return point(bit);
         }
 
         constexpr SetBitIterator &operator++() noexcept {
-            remaining_ &= remaining_ - 1;
+            m_remaining &= m_remaining - 1;
 
-            if (remaining_ == 0) {
-                ++word_index_;
-                advance_to_nonempty_word();
+            if (m_remaining == 0) {
+                ++m_wordIndex;
+                advanceToNonemptyWord();
             }
 
             return *this;
@@ -275,76 +275,76 @@ public:
 
         friend constexpr bool operator==(const SetBitIterator &lhs,
                                          const SetBitIterator &rhs) noexcept {
-            return lhs.board_ == rhs.board_ && lhs.word_index_ == rhs.word_index_ &&
-                   lhs.remaining_ == rhs.remaining_;
+            return lhs.m_board == rhs.m_board && lhs.m_wordIndex == rhs.m_wordIndex &&
+                   lhs.m_remaining == rhs.m_remaining;
         }
 
     private:
-        constexpr void advance_to_nonempty_word() noexcept {
-            while (word_index_ < word_count) {
-                remaining_ = board_->words_[word_index_];
+        constexpr void advanceToNonemptyWord() noexcept {
+            while (m_wordIndex < wordCount) {
+                m_remaining = m_board->m_words[m_wordIndex];
 
-                if (remaining_ != 0) {
+                if (m_remaining != 0) {
                     return;
                 }
 
-                ++word_index_;
+                ++m_wordIndex;
             }
 
-            remaining_ = 0;
+            m_remaining = 0;
         }
 
-        const BitBoard *board_;
-        std::size_t word_index_;
-        Word remaining_;
+        const BitBoard *m_board;
+        std::size_t m_wordIndex;
+        Word m_remaining;
     };
 
     class SetBitsView {
     public:
-        explicit constexpr SetBitsView(const BitBoard &board) noexcept : board_(board) {}
+        explicit constexpr SetBitsView(const BitBoard &board) noexcept : m_board(board) {}
 
         [[nodiscard]]
         constexpr SetBitIterator begin() const noexcept {
-            return SetBitIterator{&board_, 0, board_.words_[0]};
+            return SetBitIterator{&m_board, 0, m_board.m_words[0]};
         }
 
         [[nodiscard]]
         constexpr SetBitIterator end() const noexcept {
-            return SetBitIterator{&board_, word_count, 0};
+            return SetBitIterator{&m_board, wordCount, 0};
         }
 
     private:
-        const BitBoard &board_;
+        const BitBoard &m_board;
     };
 
     [[nodiscard]]
-    constexpr SetBitsView set_bits() const noexcept {
+    constexpr SetBitsView setBits() const noexcept {
         return SetBitsView{*this};
     }
 
 private:
     [[nodiscard]]
-    static constexpr std::size_t word_index(std::size_t bit) noexcept {
-        return bit / word_bits;
+    static constexpr std::size_t wordIndex(std::size_t bit) noexcept {
+        return bit / wordBits;
     }
 
     [[nodiscard]]
-    static constexpr Word bit_mask(std::size_t bit) noexcept {
-        return Word{1} << (bit % word_bits);
+    static constexpr Word bitMask(std::size_t bit) noexcept {
+        return Word{1} << (bit % wordBits);
     }
 
     [[nodiscard]]
-    static constexpr Word final_word_mask() noexcept {
-        constexpr std::size_t used_bits = bit_count % word_bits;
+    static constexpr Word finalWordMask() noexcept {
+        constexpr std::size_t usedBits = bitCount % wordBits;
 
-        if constexpr (used_bits == 0) {
+        if constexpr (usedBits == 0) {
             return ~Word{0};
         } else {
-            return (Word{1} << used_bits) - 1;
+            return (Word{1} << usedBits) - 1;
         }
     }
 
-    constexpr void clear_unused_bits() noexcept { words_.back() &= final_word_mask(); }
+    constexpr void clearUnusedBits() noexcept { m_words.back() &= finalWordMask(); }
 
-    Storage words_{};
+    Storage m_words{};
 };

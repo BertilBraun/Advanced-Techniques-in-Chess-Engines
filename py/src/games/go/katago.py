@@ -1,20 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import json
 import os
-from pathlib import Path
 import subprocess
-from typing import Literal, TextIO
+from dataclasses import dataclass
+from pathlib import Path
 from types import TracebackType
+from typing import Literal, TextIO
 
 from pydantic import JsonValue, TypeAdapter
-
 from src.evaluation.configuration import KataGoEngineConfiguration
 from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
 from src.games.go.contract import GoStateContract, NativeGoPosition
-
+from src.util.hashing import file_sha256
 
 JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, JsonValue])
 MOVE_INFO_LIST_ADAPTER = TypeAdapter(list[dict[str, JsonValue]])
@@ -38,14 +37,6 @@ class KataGoScoreEstimate:
 class KataGoAnalysis:
     policy: EnginePolicy
     score_estimate: KataGoScoreEstimate | None
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _digest_payload(payload: dict[str, int | str]) -> str:
@@ -273,9 +264,9 @@ class KataGoClient:
     @property
     def engine_artifact_sha256(self) -> tuple[str, ...]:
         return (
-            _file_sha256(self.executable_path),
-            _file_sha256(self.model_path),
-            _file_sha256(self.analysis_configuration_path),
+            file_sha256(self.executable_path),
+            file_sha256(self.model_path),
+            file_sha256(self.analysis_configuration_path),
         )
 
     @property

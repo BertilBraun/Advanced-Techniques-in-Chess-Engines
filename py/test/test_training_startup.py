@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import NoReturn
 
@@ -5,8 +7,9 @@ import pytest
 from src.experiment import training_startup
 from src.experiment.configuration import ExperimentConfiguration
 from src.experiment.run_contract import load_approval_record
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
-CHESS_EXPERIMENT_PATH = Path(__file__).parent / 'configs' / 'chess-experiment.yaml'
+CHESS_EXPERIMENT_PATH = TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml'
 
 
 def test_missing_approval_creates_no_tensorboard_run_directory(

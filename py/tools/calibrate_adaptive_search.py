@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -12,17 +11,19 @@ from AlphaZeroCpp import (
     ChessPosition,
     ChessSelfPlaySearch,
     ChessSelfPlaySearchRequest,
-    InferenceConfiguration,
     SearchCheckpoint,
     SearchCheckpointDetail,
 )
 from pydantic import Field
+from src.evaluation.openings import load_chess_opening_suite
 from src.experiment.configuration import load_chess_experiment_configuration
-from src.experiment.generation_schedule import defined_schedule_values
 from src.games.chess.training import ChessImplementation
 from src.self_play.configuration import AdaptiveFullSearchBudgetConfiguration, FixedFullSearchBudgetConfiguration
-from src.self_play.parameters import AdaptiveFullSearchBudget, FixedFullSearchBudget
+from src.self_play.parameters import AdaptiveFullSearchBudget, FixedFullSearchBudget, ResolvedSelfPlayParameters
+from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.generation_schedule import defined_schedule_values
+from src.util.provenance import read_source_revision
 
 
 @dataclass(frozen=True)
@@ -154,14 +155,22 @@ def _parse_thresholds(value: str) -> tuple[float, ...]:
 
 
 def _load_openings(path: Path, count: int) -> tuple[str, ...]:
-    openings = tuple(
-        line.rsplit('\t', maxsplit=1)[1]
-        for line in path.read_text(encoding='utf-8').splitlines()
-        if line and not line.startswith('#')
-    )
+    openings = tuple(row.final_fen for row in load_chess_opening_suite(path))
     if len(openings) < count:
         raise ValueError(f'Opening suite contains {len(openings)} positions, fewer than requested {count}.')
     return openings[:count]
+
+
+def _create_search(
+    game: ChessImplementation,
+    arguments: Arguments,
+    parameters: ResolvedSelfPlayParameters,
+) -> ChessSelfPlaySearch:
+    return ChessSelfPlaySearch(
+        game.native_inference_configuration(arguments.device, arguments.model),
+        game.native_search_parameters(parameters),
+        BatchedInferenceParameters(workers=1, batch_size=arguments.batch_size, outstanding_batches_per_worker=1),
+    )
 
 
 def _snapshot(checkpoint: SearchCheckpoint, predicted_search_correction: float) -> SearchSnapshot:
@@ -206,11 +215,7 @@ def collect_audits(arguments: Arguments) -> tuple[tuple[PositionAudit, ...], flo
     )
     audit_parameters = replace(parameters, full_search_budget=audit_budget, fast_searches=arguments.reference_visits)
     openings = _load_openings(arguments.openings, arguments.positions)
-    search = ChessSelfPlaySearch(
-        InferenceConfiguration(arguments.device, str(arguments.model)),
-        game.native_search_parameters(audit_parameters),
-        BatchedInferenceParameters(1, arguments.batch_size, 1),
-    )
+    search = _create_search(game, arguments, audit_parameters)
     roots = [search.new_root(ChessPosition(fen)) for fen in openings]
     started = time.perf_counter()
     batch = search.search([ChessSelfPlaySearchRequest(root, True, SearchCheckpointDetail.POLICIES) for root in roots])
@@ -237,11 +242,7 @@ def run_live_canary(arguments: Arguments) -> LiveCanaryMetrics:
     configuration = load_chess_experiment_configuration(arguments.configuration)
     game = ChessImplementation(configuration)
     openings = _load_openings(arguments.openings, arguments.positions)
-    search = ChessSelfPlaySearch(
-        InferenceConfiguration(arguments.device, str(arguments.model)),
-        game.native_search_parameters(game.self_play_parameters_at(arguments.generation)),
-        BatchedInferenceParameters(1, arguments.batch_size, 1),
-    )
+    search = _create_search(game, arguments, game.self_play_parameters_at(arguments.generation))
     roots = [search.new_root(ChessPosition(fen)) for fen in openings]
     started = time.perf_counter()
     batch = search.search([ChessSelfPlaySearchRequest(root, True) for root in roots])
@@ -422,12 +423,7 @@ def main() -> None:
         and (maximum - adaptive.minimum_visits) % (2 * adaptive.observation_interval) == 0
     )
     report = CalibrationReport(
-        source_revision=subprocess.run(
-            ('git', 'rev-parse', 'HEAD'),
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.strip(),
+        source_revision=read_source_revision().commit,
         model=str(arguments.model),
         generation=arguments.generation,
         positions=len(audits),
@@ -443,8 +439,7 @@ def main() -> None:
         ),
         audits=audits,
     )
-    arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output.write_text(report.model_dump_json(indent=2) + '\n', encoding='utf-8')
+    write_text_atomically(arguments.output, report.model_dump_json(indent=2) + '\n')
     print(arguments.output)
 
 

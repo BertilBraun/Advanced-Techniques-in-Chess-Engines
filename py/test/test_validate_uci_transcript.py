@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
-
 from tools.validate_uci_transcript import ValidationRequest, validate_transcript
 
 

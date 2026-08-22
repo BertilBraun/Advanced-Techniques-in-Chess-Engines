@@ -1,34 +1,37 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import cast
 
-import torch
 import pytest
-from AlphaZeroCpp import GameSearchVisit
-from torch import nn
+import torch
 
+pytest.importorskip('AlphaZeroCpp')
+import src.training.trainer.rank as trainer_rank
+from AlphaZeroCpp import GameSearchVisit
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.training import ChessImplementation
 from src.games.contracts import WdlTarget
 from src.replay.contracts import ReplaySample, SparsePolicyTarget
-from src.replay.layout import ReplayLayout
 from src.replay.description import ReplayDescription
+from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.checkpoint import CheckpointReference
-from src.training.progress import TrainingProgress
-from src.training.trainer import TrainerGroup
-from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.configuration import TrainingCompilation, TrainingPrecision
 from src.training.network import Chess76PlaneDirectPolicyHeadConfiguration, Network
-import src.training.trainer.rank as trainer_rank
+from src.training.progress import TrainingProgress
+from src.training.trainer import TrainerGroup
+from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.trainer.rank import DistributedTrainingModel
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
+from torch import nn
 
 
 def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
-    root = Path(__file__).parents[1]
-    configuration = load_experiment_configuration(root / 'test' / 'configs' / 'chess-experiment.yaml')
+    configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     trainer = configuration.training.trainer.validated_copy(
         update={
             'global_batch_size': 2,
@@ -177,9 +180,7 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
 
 
 def test_distributed_training_model_has_only_batch_norm_buffers() -> None:
-    configuration = load_experiment_configuration(
-        Path(__file__).parents[1] / 'test' / 'configs' / 'chess-experiment.yaml'
-    )
+    configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     game = ChessImplementation(configuration)
     model = DistributedTrainingModel(
         Network(configuration.training.initial_model.network, torch.device('cpu'), game.network_dimensions)
@@ -192,9 +193,7 @@ def test_distributed_training_model_has_only_batch_norm_buffers() -> None:
 
 
 def test_distributed_training_disables_per_forward_buffer_broadcast(monkeypatch: pytest.MonkeyPatch) -> None:
-    configuration = load_experiment_configuration(
-        Path(__file__).parents[1] / 'test' / 'configs' / 'chess-experiment.yaml'
-    )
+    configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     game = ChessImplementation(configuration)
     model = Network(configuration.training.initial_model.network, torch.device('cpu'), game.network_dimensions)
 
@@ -224,9 +223,7 @@ def test_distributed_training_disables_per_forward_buffer_broadcast(monkeypatch:
 
 
 def test_distributed_training_compiles_only_the_training_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
-    configuration = load_experiment_configuration(
-        Path(__file__).parents[1] / 'test' / 'configs' / 'chess-experiment.yaml'
-    )
+    configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     game = ChessImplementation(configuration)
     model = Network(configuration.training.initial_model.network, torch.device('cpu'), game.network_dimensions)
     compiled_modules: list[nn.Module] = []

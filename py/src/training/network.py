@@ -19,7 +19,6 @@ from src.training.targets import (
     SearchCorrectionHeadLayout,
 )
 from src.util.frozen_model import FrozenModel
-from src.util.log import log
 from torch import Tensor, nn
 from torch.nn import functional
 
@@ -163,27 +162,27 @@ class Network(nn.Module):
         match args:
             case NetworkParams():
                 hidden_size = args.hidden_size
-                self.startBlock = nn.Sequential(
+                self.start_block = nn.Sequential(
                     nn.Conv2d(encoding_channels, hidden_size, kernel_size=3, padding='same', bias=False),
                     nn.BatchNorm2d(hidden_size),
                     nn.ReLU(inplace=True),
                 )
-                self.backBone = nn.ModuleList(
+                self.backbone = nn.ModuleList(
                     [
                         _build_residual_block(hidden_size, args.residual_context, block_index)
                         for block_index in range(args.num_layers)
                     ]
                 )
-                self.finishBlock = nn.Identity()
+                self.finish_block = nn.Identity()
             case AttentionNetworkParams():
                 hidden_size = args.embedding_size
-                self.startBlock = AttentionInput(
+                self.start_block = AttentionInput(
                     encoding_channels,
                     row_count,
                     column_count,
                     hidden_size,
                 )
-                self.backBone = nn.ModuleList(
+                self.backbone = nn.ModuleList(
                     [
                         AttentionEncoderBlock(
                             hidden_size,
@@ -194,12 +193,12 @@ class Network(nn.Module):
                         for _ in range(args.num_layers)
                     ]
                 )
-                self.finishBlock = nn.Sequential(
+                self.finish_block = nn.Sequential(
                     nn.LayerNorm(hidden_size),
                     AttentionOutput(row_count, column_count),
                 )
 
-        self.policyHead = _build_policy_head(
+        self.policy_head = _build_policy_head(
             hidden_size,
             row_count,
             column_count,
@@ -207,7 +206,7 @@ class Network(nn.Module):
             args.policy_head,
         )
 
-        self.valueHead = nn.Sequential(
+        self.value_head = nn.Sequential(
             nn.Conv2d(hidden_size, args.num_value_channels, kernel_size=1, bias=False),
             nn.BatchNorm2d(args.num_value_channels),
             nn.ReLU(inplace=True),
@@ -216,7 +215,7 @@ class Network(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(args.value_fc_size, dimensions.outcomes),
         )
-        self.auxiliaryHeads = nn.ModuleList(
+        self.auxiliary_head_modules = nn.ModuleList(
             _build_auxiliary_head(
                 hidden_size,
                 row_count,
@@ -242,12 +241,12 @@ class Network(nn.Module):
                         nn.init.zeros_(module.bias)
         match args:
             case AttentionNetworkParams(num_layers=num_layers):
-                _initialize_attention_trunk(self.startBlock, self.backBone, num_layers)
+                _initialize_attention_trunk(self.start_block, self.backbone, num_layers)
             case NetworkParams():
                 pass
-        _initialize_small_policy_output(self.policyHead)
-        _initialize_small_linear_output(self.valueHead[-1])
-        for auxiliary_module, auxiliary_layout in zip(self.auxiliaryHeads, self.auxiliary_heads):
+        _initialize_small_policy_output(self.policy_head)
+        _initialize_small_linear_output(self.value_head[-1])
+        for auxiliary_module, auxiliary_layout in zip(self.auxiliary_head_modules, self.auxiliary_heads):
             match auxiliary_layout:
                 case NextPolicyHeadLayout() | LegalMovesHeadLayout():
                     _initialize_small_policy_output(auxiliary_module)
@@ -263,58 +262,32 @@ class Network(nn.Module):
         )
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
-        x = self._features(x)
-        policy_logits = self.policyHead(x)
-        value_logits = self.valueHead(x)
-
-        value = torch.softmax(value_logits, dim=1)
-        return policy_logits, value
+        policy_logits, value_logits = self.logit_forward(x)
+        return policy_logits, torch.softmax(value_logits, dim=1)
 
     def _features(self, x: Tensor) -> Tensor:
-        x = self.startBlock(x)
-        for block in self.backBone:
+        x = self.start_block(x)
+        for block in self.backbone:
             x = block(x)
-        return self.finishBlock(x)
+        return self.finish_block(x)
 
     def logit_forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         x = self._features(x)
-        policy_logits = self.policyHead(x)
-        value_logits = self.valueHead(x)
+        policy_logits = self.policy_head(x)
+        value_logits = self.value_head(x)
 
         return policy_logits, value_logits
 
     def training_output(self, x: Tensor) -> TrainingModelOutput:
         features = self._features(x)
         return TrainingModelOutput(
-            policy_logits=self.policyHead(features),
-            wdl_logits=self.valueHead(features),
-            auxiliary_logits=tuple(head(features) for head in self.auxiliaryHeads),
+            policy_logits=self.policy_head(features),
+            wdl_logits=self.value_head(features),
+            auxiliary_logits=tuple(head(features) for head in self.auxiliary_head_modules),
         )
 
     def fuse_model(self) -> None:
-        for m in self.modules():
-            if (
-                type(m) is nn.Sequential
-                and len(m) >= 2
-                and isinstance(m[0], nn.Conv2d)
-                and isinstance(m[1], nn.BatchNorm2d)
-            ):
-                modules_to_fuse = [str(i) for i in range(min(3, len(m)))]  # Conv2d, BatchNorm2d, ReLU
-                torch.ao.quantization.fuse_modules(m, modules_to_fuse, inplace=True)
-
-    def disable_auto_grad(self) -> None:
-        for p in self.parameters():
-            p.requires_grad = False
-
-    def print_params(self) -> None:
-        for name, param in self.named_parameters():
-            log(name, list(param.shape))
-        sum_of_params = sum(p.numel() for p in self.parameters())
-        log(f'Total number of parameters: {sum_of_params}')
-        sum_of_trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        log(
-            f'Total number of trainable parameters: {sum_of_trainable_params} ({sum_of_trainable_params / sum_of_params * 100:.2f}%)'
-        )
+        fuse_conv_batchnorm(self)
 
 
 class ZeroSearchCorrectionHead(nn.Module):
@@ -325,11 +298,11 @@ class ZeroSearchCorrectionHead(nn.Module):
 class InferenceNetwork(nn.Module):
     def __init__(self, training_model: Network) -> None:
         super().__init__()
-        self.startBlock = copy.deepcopy(training_model.startBlock)
-        self.backBone = copy.deepcopy(training_model.backBone)
-        self.finishBlock = copy.deepcopy(training_model.finishBlock)
-        self.policyHead = copy.deepcopy(training_model.policyHead)
-        self.valueHead = copy.deepcopy(training_model.valueHead)
+        self.start_block = copy.deepcopy(training_model.start_block)
+        self.backbone = copy.deepcopy(training_model.backbone)
+        self.finish_block = copy.deepcopy(training_model.finish_block)
+        self.policy_head = copy.deepcopy(training_model.policy_head)
+        self.value_head = copy.deepcopy(training_model.value_head)
         self.searchCorrectionHead = copy.deepcopy(_search_correction_head(training_model))
         self.network_definition = NetworkDefinition(
             architecture=training_model.network_args,
@@ -338,13 +311,13 @@ class InferenceNetwork(nn.Module):
         )
 
     def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor, Tensor]:
-        features = self.startBlock(inputs)
-        for block in self.backBone:
+        features = self.start_block(inputs)
+        for block in self.backbone:
             features = block(features)
-        features = self.finishBlock(features)
+        features = self.finish_block(features)
         return (
-            self.policyHead(features),
-            torch.softmax(self.valueHead(features), dim=1),
+            self.policy_head(features),
+            torch.softmax(self.value_head(features), dim=1),
             torch.sigmoid(self.searchCorrectionHead(features)),
         )
 
@@ -353,25 +326,30 @@ class InferenceNetwork(nn.Module):
         return self.network_definition
 
     def fuse_model(self) -> None:
-        for module in self.modules():
-            if (
-                type(module) is nn.Sequential
-                and len(module) >= 2
-                and isinstance(module[0], nn.Conv2d)
-                and isinstance(module[1], nn.BatchNorm2d)
-            ):
-                torch.ao.quantization.fuse_modules(
-                    module,
-                    [str(index) for index in range(min(3, len(module)))],
-                    inplace=True,
-                )
+        fuse_conv_batchnorm(self)
+
+
+def fuse_conv_batchnorm(root: nn.Module) -> None:
+    for module in root.modules():
+        if (
+            type(module) is nn.Sequential
+            and len(module) >= 2
+            and isinstance(module[0], nn.Conv2d)
+            and isinstance(module[1], nn.BatchNorm2d)
+        ):
+            # Fuses Conv2d, BatchNorm2d and the optional trailing ReLU.
+            torch.ao.quantization.fuse_modules(
+                module,
+                [str(index) for index in range(min(3, len(module)))],
+                inplace=True,
+            )
 
 
 def _search_correction_head(training_model: Network) -> nn.Module:
     for index, head in enumerate(training_model.auxiliary_heads):
         match head:
             case SearchCorrectionHeadLayout():
-                return training_model.auxiliaryHeads[index]
+                return training_model.auxiliary_head_modules[index]
     return ZeroSearchCorrectionHead()
 
 
@@ -455,13 +433,7 @@ def _build_auxiliary_head(
                 plane_hidden_channels=POLICY_PLANE_AUXILIARY_HIDDEN_CHANNELS,
             )
         case RemainingGameLengthHeadLayout(output_size=output_size):
-            return nn.Sequential(
-                nn.Conv2d(input_channels, 1, kernel_size=1, bias=False),
-                nn.BatchNorm2d(1),
-                nn.ReLU(inplace=True),
-                nn.Flatten(),
-                nn.Linear(row_count * column_count, output_size),
-            )
+            return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
         case FutureSearchValueHeadLayout(output_size=output_size):
             return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
         case IrreversibleProgressHeadLayout(output_size=output_size):

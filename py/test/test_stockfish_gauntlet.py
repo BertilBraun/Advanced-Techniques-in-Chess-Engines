@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 from pathlib import Path
 
+import pytest
 from src.evaluation.configuration import StockfishEngineConfiguration
 from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult, EvaluationTerminationReason
 from src.experiment.configuration import load_chess_experiment_configuration
+
+pytest.importorskip('AlphaZeroCpp')
 from tools.run_stockfish_gauntlet import (
     FixedModelSearchBudget,
     GauntletShardResult,
@@ -17,7 +22,6 @@ from tools.run_stockfish_gauntlet import (
     _shift_game_indices,
     _stockfish_configuration,
 )
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENT_PATH = PROJECT_ROOT / 'py/configs/production/vast-chess-8gpu-optimal.yaml'

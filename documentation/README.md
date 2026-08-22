@@ -1,46 +1,48 @@
 # Documentation index
 
-The directory name determines a document's authority. Current plans and architecture live under `architecture/`;
-deployment instructions live under `operations/`. Material under `history/` and `benchmarks/` is evidence about a
-particular earlier revision or run and must not be used as current implementation guidance.
+The directory name determines a document's authority. `research/` holds the current plan and its evidence,
+`architecture/` the accepted designs, `operations/` re-executed procedures. Material under `history/` and
+`benchmarks/` is evidence about a particular earlier revision or run and must not be used as current guidance.
+This index is updated in the same commit as any document it lists.
+
+## Start here
+
+- [Current state](CURRENT-STATE.md) — what the system is today, in two pages.
+- [Onboarding](ONBOARDING.md) — read-in-this-order path for a new contributor or agent.
+- [Chess recovery plan](plan/chess-recovery-plan-20260820.md) — **the current plan**; work is referenced by
+  WP number and its per-generation yardstick is the pass/fail reference for new runs.
 
 ## Current authority
 
-- [Platform plan and execution ledger](architecture/platform-rework.md) is the authoritative task/status ledger.
-- [Python runtime architecture](architecture/python-runtime-rework.md) defines the accepted Python ownership and
-  process model plus the remaining authorized cleanup boundary.
-- [Python runtime README](../py/README.md) documents current entry points, setup, and validation.
-- [C++ README](../cpp/README.md) documents the native build and runtime boundary.
+- [Chess recovery plan](plan/chess-recovery-plan-20260820.md), grounded in the
+  [post-four-day regression analysis](plan/chess-post-four-day-regression-analysis-20260820.md).
+- [Python runtime architecture](architecture/python-runtime-rework.md) — accepted Python ownership and process
+  model (read its as-built banner: the ingestion contract is being reworked under WP2).
+- [Progressive model sizing](architecture/progressive-model-sizing.md) — accepted training policy.
+- [Run control](operations/run-control.md) — the only supported way to start, stop, inspect and archive runs.
+- [Python runtime README](../py/README.md) and [C++ README](../cpp/README.md) for entry points and builds.
 
-Only the user accepts a phase or authorizes another. R1 through R9 are accepted. The post-R9 Python Phase 4 cleanup
-slice is awaiting review; R10, remaining R11/hardware validation, and R12 are pending and unauthorized.
+The R1–R12 ledger in [platform-rework.md](architecture/platform-rework.md) is **closed** and authorises nothing;
+it is retained as the historical record of the platform rework.
 
-## Deployment and operations
+## Where a new document goes
 
-- [Public web play](operations/web-play.md)
-- [Lichess/Vast deployment and calibration](operations/lichess-vast-evaluation.md)
-- [Fresh compute-node bootstrap](../deployment/setup_remote.sh)
-- [Lichess deployment runbook](../deployment/lichess/README.md)
+| Kind | Destination |
+| --- | --- |
+| Current plan or its evidence | `research/` |
+| Accepted design | `architecture/` |
+| Procedure that is re-executed | `operations/` |
+| Measurement | `benchmarks/<topic>-<hardware>-<date>/` |
+| Per-run or per-node record | dated file, non-normative (see `operations/` node notes) |
+| Superseded document | stays in place with a supersession banner, never silently deleted |
 
-The fresh-node bootstrap installs the locked project environment and native extension. It does not provision
-Stockfish, KataGo, their models, or their configurations.
+## Evidence, not guidance
+
+- [`benchmarks/`](benchmarks/README.md) — measured artifacts, each scoped to its recorded revision, hardware,
+  configuration and date.
+- [`history/`](history/README.md) — pre-rework designs and optimization notes, non-normative.
 
 ## Research
 
-- [Experiment backlog](../THINGS_TO_TRY.md) is the single current backlog of candidate experiments.
-- [Research references](research/references.md) collects papers and external resources.
-
-Backlog entries are ideas, not authorized implementation tasks or approved experiment runs.
-
-## Historical implementation notes
-
-[`history/`](history/README.md) preserves selected earlier designs, inventories, and optimization notes. They describe
-superseded architectures and are non-normative. The obsolete trainer roadmap, clean-run plan, and duplicate future
-work list were deleted because their replay, evaluation, resignation, and iteration-based assumptions no longer
-match the repository.
-
-## Benchmark and result evidence
-
-[`benchmarks/`](benchmarks/README.md) preserves measured artifacts and reports. Each result applies only to its named
-revision, hardware, configuration, and date. Historical throughput or strength figures are not current acceptance
-criteria unless the platform ledger explicitly adopts them.
+- [Experiment backlog](../THINGS_TO_TRY.md) — candidate experiments; ideas, not authorized runs.
+- [Research references](references.md) — papers and external resources.

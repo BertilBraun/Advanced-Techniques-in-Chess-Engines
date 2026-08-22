@@ -37,6 +37,22 @@ if TYPE_CHECKING:
     from src.training.checkpoint import CheckpointReference
 
 
+def _stop_reason_from_native(native_stop_reason: object) -> SearchStopReason:
+    from AlphaZeroCpp import SearchStopReason as NativeSearchStopReason
+
+    match native_stop_reason:
+        case NativeSearchStopReason.FIXED_LIMIT:
+            return SearchStopReason.FIXED_LIMIT
+        case NativeSearchStopReason.DETERMINISTIC:
+            return SearchStopReason.DETERMINISTIC
+        case NativeSearchStopReason.LEARNED_GATE:
+            return SearchStopReason.LEARNED_GATE
+        case NativeSearchStopReason.MAXIMUM:
+            return SearchStopReason.MAXIMUM
+        case unknown:
+            raise ValueError(f'Unknown native search stop reason: {unknown!r}')
+
+
 @dataclass
 class ActiveSelfPlayGame(Generic[NativeRootT]):
     identity: GameIdentity
@@ -273,7 +289,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             predicted_search_correction=result.predicted_search_correction,
             starting_visits=result.starting_visits,
             final_visits=result.final_visits,
-            stop_reason=SearchStopReason(result.stop_reason.name.lower()),
+            stop_reason=_stop_reason_from_native(result.stop_reason),
             learned_gate_evaluated=result.learned_gate_evaluated,
             checkpoints=tuple(
                 SearchCheckpointObservation(

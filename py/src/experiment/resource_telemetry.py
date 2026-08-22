@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import subprocess
 import time
-from threading import Event, Thread
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Event, Thread
 
 import psutil
-
-from src.util.frozen_model import FrozenModel
-
 from src.training.run_limits import estimated_cost, process_tree_open_file_counts
 from src.util.background_worker import BackgroundWorker
+from src.util.frozen_model import FrozenModel
 
 
 class GpuTelemetry(FrozenModel):
@@ -107,22 +106,33 @@ def record_resource_telemetry(
     hourly_price: float,
     interval_seconds: float,
     stop_event: Event,
+    tensorboard_run_id: int | None,
 ) -> None:
+    from src.util.tensorboard import TensorboardWriter, log_scalar
+
     parent_process = psutil.Process(parent_process_id)
     telemetry_path = output_path / 'resource-telemetry.jsonl'
     telemetry_path.parent.mkdir(parents=True, exist_ok=True)
 
-    while parent_process.is_running() and not stop_event.is_set():
-        sample = collect_resource_telemetry(
-            parent_process=parent_process,
-            output_path=output_path,
-            started_at=started_at,
-            hourly_price=hourly_price,
-        )
-        with telemetry_path.open('a', encoding='utf-8') as telemetry_file:
-            telemetry_file.write(sample.model_dump_json() + '\n')
-            telemetry_file.flush()
-        stop_event.wait(interval_seconds)
+    with ExitStack() as stack:
+        if tensorboard_run_id is not None:
+            stack.enter_context(TensorboardWriter(tensorboard_run_id, 'gpu_usage', postfix_pid=False))
+        while parent_process.is_running() and not stop_event.is_set():
+            sample = collect_resource_telemetry(
+                parent_process=parent_process,
+                output_path=output_path,
+                started_at=started_at,
+                hourly_price=hourly_price,
+            )
+            with telemetry_path.open('a', encoding='utf-8') as telemetry_file:
+                telemetry_file.write(sample.model_dump_json() + '\n')
+                telemetry_file.flush()
+            if tensorboard_run_id is not None:
+                step = int(time.time() / interval_seconds)
+                for gpu in sample.gpus:
+                    log_scalar(f'gpu/{gpu.index}/load', gpu.utilization_percent / 100.0, step)
+                    log_scalar(f'gpu/{gpu.index}/memory_used', gpu.memory_used_mib, step)
+            stop_event.wait(interval_seconds)
 
 
 def start_resource_telemetry(
@@ -130,6 +140,7 @@ def start_resource_telemetry(
     started_at: float,
     hourly_price: float,
     interval_seconds: float,
+    tensorboard_run_id: int | None = None,
 ) -> BackgroundWorker:
     stop_event = Event()
     thread = Thread(
@@ -141,6 +152,7 @@ def start_resource_telemetry(
             hourly_price,
             interval_seconds,
             stop_event,
+            tensorboard_run_id,
         ),
         daemon=True,
         name='resource-telemetry',

@@ -1,15 +1,15 @@
+from __future__ import annotations
+
 import hashlib
 from pathlib import Path
 
 import pytest
-
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint import CheckpointManifest
 from src.training.checkpoint.contracts import load_checkpoint_manifest
 from src.training.checkpoint.paths import inference_model_path
 from src.training.checkpoint.persistence import import_checkpoint
 from src.training.network import GoPointPassPolicyHeadConfiguration, NetworkDefinition, NetworkParams
-
 
 NETWORK_DEFINITION = NetworkDefinition(
     architecture=NetworkParams(num_layers=1, hidden_size=8, policy_head=GoPointPassPolicyHeadConfiguration()),

@@ -220,6 +220,8 @@ struct BatchedInferenceParameters {
                                std::size_t outstandingBatchesPerWorker)
         : workers(inferenceWorkers), batch_size(inferenceBatchSize),
           outstanding_batches_per_worker(outstandingBatchesPerWorker) {
+        // The pipeline implements a general N-slot ring, but more than two outstanding batches has never
+        // measured faster and complicates cancellation, so the cap stays until evidence says otherwise.
         if (workers == 0 || batch_size == 0 || outstanding_batches_per_worker == 0 ||
             outstanding_batches_per_worker > 2) {
             throw std::invalid_argument(

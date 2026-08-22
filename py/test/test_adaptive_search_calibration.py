@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 import pytest
 from src.self_play.parameters import AdaptiveFullSearchBudget
+
+pytest.importorskip('AlphaZeroCpp')
 from tools.calibrate_adaptive_search import PolicyEntry, PositionAudit, SearchSnapshot, candidate_metrics
 
 

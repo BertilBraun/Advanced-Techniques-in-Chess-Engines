@@ -100,7 +100,7 @@ class CreditLedger:
         if sample_count == 0:
             return
         with self._lock:
-            self._state = self._state.model_copy(
+            self._state = self._state.validated_copy(
                 update={
                     'earned_credits': self._state.earned_credits + Decimal(sample_count) * self.parameters.replay_ratio
                 }
@@ -116,7 +116,7 @@ class CreditLedger:
                 raise ValueError('Credit ledger has earned more credits than the replay data can account for.')
             if self._state.earned_credits == expected_earned:
                 return
-            self._state = self._state.model_copy(update={'earned_credits': expected_earned})
+            self._state = self._state.validated_copy(update={'earned_credits': expected_earned})
             self.save()
 
     def commit_quantum(self, result: TrainingQuantumResult) -> None:
@@ -137,7 +137,7 @@ class CreditLedger:
             required = Decimal(self.parameters.presentation_credits_per_quantum(self.global_batch_size))
             if self._state.available_credits < required:
                 raise ValueError('Training result cannot consume unavailable credits.')
-            self._state = self._state.model_copy(
+            self._state = self._state.validated_copy(
                 update={
                     'completed_optimizer_steps': completed_optimizer_steps,
                     'consumed_credits': self._state.consumed_credits + required,
@@ -166,7 +166,7 @@ class CreditLedger:
         if self._state.available_credits < required:
             raise ValueError('Completed checkpoint cannot be adopted without its training credits.')
         checkpoint = CheckpointReference.load(run_path, expected_generation)
-        self._state = self._state.model_copy(
+        self._state = self._state.validated_copy(
             update={
                 'completed_optimizer_steps': (
                     self._state.completed_optimizer_steps + self.parameters.optimizer_steps_per_quantum

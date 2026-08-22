@@ -1,13 +1,17 @@
+from __future__ import annotations
+
 from decimal import Decimal
 from pathlib import Path
 
 import numpy as np
 import pytest
 import src.training.reporting as reporting_module
+
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from src.games.representation import PackedPlaneLayout
-from src.replay.layout import ReplayLayout
 from src.replay.description import ReplayDescription
+from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame
 from src.self_play.completed_game import (
     SearchCheckpointObservation,
@@ -16,7 +20,6 @@ from src.self_play.completed_game import (
     SearchVisitCounts,
     TerminationReason,
 )
-from src.training.checkpoint import CheckpointReference
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedgerState
 from src.training.reporting import TrainingReporter
@@ -26,17 +29,11 @@ from src.training.telemetry import (
     completed_game_length_telemetry,
     training_lifecycle_telemetry,
 )
+from test_helpers.checkpoints import checkpoint_reference
 
 
 def test_training_lifecycle_telemetry_reports_credit_backlog_and_observed_ratio() -> None:
-    checkpoint = CheckpointReference(
-        generation=3,
-        manifest_path=Path('checkpoint_3.json'),
-        model_path=Path('model_3.pt'),
-        optimizer_path=Path('optimizer_3.pt'),
-        inference_model_path=Path('model_3.jit.pt'),
-        inference_model_sha256='0' * 64,
-    )
+    checkpoint = checkpoint_reference(generation=3)
     state = CreditLedgerState(
         completed_optimizer_steps=1500,
         earned_credits=Decimal(600),

@@ -9,9 +9,11 @@
 #include <string>
 #include <vector>
 
-#define private public
 #include "games/chess/implementation/ChessBoard.hpp"
-#undef private
+
+struct BoardTestAccess {
+    [[nodiscard]] static bool hasCachedMoves(const Board &board) { return board.m_validMoves.has_value(); }
+};
 
 namespace {
 void require(const bool condition, const std::string &message) {
@@ -27,10 +29,10 @@ void initializeStockfish() {
 
 void testRepeatedAccessReusesCache() {
     Board board;
-    require(!board.m_validMoves.has_value(), "new board unexpectedly has cached moves");
+    require(!BoardTestAccess::hasCachedMoves(board), "new board unexpectedly has cached moves");
 
     const std::vector<Stockfish::Move> &first = board.validMoves();
-    require(board.m_validMoves.has_value(), "first access did not populate cache");
+    require(BoardTestAccess::hasCachedMoves(board), "first access did not populate cache");
     const std::vector<Stockfish::Move> &second = board.validMoves();
 
     require(&first == &second, "repeated access returned a different vector");
@@ -41,23 +43,23 @@ void testRepeatedAccessReusesCache() {
 void testMutationInvalidatesCache() {
     Board board;
     const Stockfish::Move move = board.validMoves().front();
-    require(board.m_validMoves.has_value(), "move lookup did not populate cache");
+    require(BoardTestAccess::hasCachedMoves(board), "move lookup did not populate cache");
 
     board.makeMove(move);
-    require(!board.m_validMoves.has_value(), "makeMove did not invalidate cache");
+    require(!BoardTestAccess::hasCachedMoves(board), "makeMove did not invalidate cache");
     require(board.validMoves().size() == 20, "position after first move had unexpected move count");
 
     Board resetBoard;
     const std::vector<Stockfish::Move> movesBeforeReset = resetBoard.validMoves();
     resetBoard.setFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
-    require(!resetBoard.m_validMoves.has_value(), "setFen did not invalidate cache");
+    require(!BoardTestAccess::hasCachedMoves(resetBoard), "setFen did not invalidate cache");
     require(resetBoard.validMoves() != movesBeforeReset, "setFen returned stale cached moves");
 
     Board checkmateBoard("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
     require(checkmateBoard.isGameOver(), "checkmate position was not terminal; legal moves: " +
                                              std::to_string(checkmateBoard.validMoves().size()) +
                                              ", FEN: " + checkmateBoard.fen());
-    require(checkmateBoard.m_validMoves.has_value(), "terminal detection did not populate cache");
+    require(BoardTestAccess::hasCachedMoves(checkmateBoard), "terminal detection did not populate cache");
     require(checkmateBoard.validMoves().empty(), "checkmate position had legal moves");
     require(checkmateBoard.checkWinner() == std::optional<int>(1),
             "checkmate position returned the wrong winner");
@@ -66,10 +68,10 @@ void testMutationInvalidatesCache() {
 void testCopiesStartWithoutCache() {
     Board source;
     const std::vector<Stockfish::Move> &sourceMoves = source.validMoves();
-    require(source.m_validMoves.has_value(), "source cache was not populated");
+    require(BoardTestAccess::hasCachedMoves(source), "source cache was not populated");
 
     Board copied(source);
-    require(!copied.m_validMoves.has_value(), "copy constructor copied legal-move cache");
+    require(!BoardTestAccess::hasCachedMoves(copied), "copy constructor copied legal-move cache");
     const std::vector<Stockfish::Move> &copiedMoves = copied.validMoves();
     require(copiedMoves == sourceMoves, "copied board generated different moves");
     require(copiedMoves.data() != sourceMoves.data(), "copied board reused source cache storage");
@@ -77,7 +79,7 @@ void testCopiesStartWithoutCache() {
     Board assigned;
     static_cast<void>(assigned.validMoves());
     assigned = source;
-    require(!assigned.m_validMoves.has_value(), "copy assignment retained legal-move cache");
+    require(!BoardTestAccess::hasCachedMoves(assigned), "copy assignment retained legal-move cache");
     require(assigned.validMoves() == sourceMoves, "assigned board generated different moves");
 }
 

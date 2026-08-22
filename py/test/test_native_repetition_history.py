@@ -4,9 +4,6 @@ import pytest
 
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
 
-if not hasattr(AlphaZeroCpp.ChessSearchRoot, 'repetition_count'):
-    pytest.skip('AlphaZeroCpp must be rebuilt before native history tests run.', allow_module_level=True)
-
 STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 KNIGHT_CYCLE = (
     'g1f3',
@@ -55,3 +52,26 @@ def test_native_history_is_bounded_to_fifty_move_window() -> None:
     root = AlphaZeroCpp.new_root_with_history(STARTING_FEN, reversible_moves, 1)
 
     assert root.is_terminal
+
+
+def test_history_blind_root_misses_repetition_the_aware_root_sees() -> None:
+    import chess
+
+    board = chess.Board()
+    for move in KNIGHT_CYCLE * 2:
+        board.push_uci(move)
+    history_blind = AlphaZeroCpp.new_root(board.fen(), 1)
+    history_aware = AlphaZeroCpp.new_root_with_history(STARTING_FEN, KNIGHT_CYCLE * 2, 1)
+    assert not history_blind.is_terminal
+    assert history_aware.is_terminal
+
+
+def test_history_replay_reproduces_castled_fen() -> None:
+    import chess
+
+    castling_moves = ('e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6', 'e1g1')
+    board = chess.Board()
+    for move in castling_moves:
+        board.push_uci(move)
+    root = AlphaZeroCpp.new_root_with_history(STARTING_FEN, castling_moves, 1)
+    assert root.fen == board.fen()

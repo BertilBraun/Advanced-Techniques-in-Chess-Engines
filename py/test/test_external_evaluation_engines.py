@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from io import StringIO
 import json
+from io import StringIO
 from pathlib import Path
 
 import chess
 import chess.engine
 import pytest
-
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
 from src.games.chess.stockfish import StockfishClient
 from src.games.go.contract import GoStateContract

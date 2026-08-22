@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
-
 from src.evaluation.contracts import ElapsedCheckpointReference, EvaluationReferenceManifest
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.experiment.progress_telemetry import RunOutcome, RunOutcomeStatus
 from src.experiment.run import ExperimentRunManifest
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
-from src.games.representation import NetworkDimensions
 from src.experiment_queue.configuration import (
     QueueConfiguration,
     QueuedExperiment,
@@ -26,14 +24,16 @@ from src.experiment_queue.scheduler import create_assignment
 from src.experiment_queue.state import (
     CompletedExperimentStatus,
     ExecutionIdentity,
+    FailedExperimentStatus,
     QueueSummary,
     RunningExperimentStatus,
     write_queue_summary,
 )
 from src.experiment_queue.validation import queue_configuration_fingerprint
+from src.games.representation import NetworkDimensions
 from src.training.checkpoint import CheckpointManifest, CheckpointReference
 from src.training.network import GoPointPassPolicyHeadConfiguration, NetworkDefinition, NetworkParams
-
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
 NETWORK_DEFINITION = NetworkDefinition(
     architecture=NetworkParams(num_layers=1, hidden_size=8, policy_head=GoPointPassPolicyHeadConfiguration()),
@@ -78,7 +78,7 @@ def _fixture(tmp_path: Path) -> tuple[ExportRequest, Path, Path]:
     tensorboard_path.mkdir(parents=True)
     (tensorboard_path / 'events.out.tfevents.test').write_bytes(b'tensorboard')
 
-    template_path = Path('test/configs/go-7x7-experiment.yaml').resolve()
+    template_path = (TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml').resolve()
     template = load_experiment_configuration(template_path)
     run = template.run.validated_copy(update={'run_name': 'export-test', 'tensorboard_run_directory': 'export-test'})
     training = template.training.validated_copy(update={'save_path': 'training-data/experiment'})
@@ -119,14 +119,9 @@ def _fixture(tmp_path: Path) -> tuple[ExportRequest, Path, Path]:
     approval = ApprovalRecord(
         approved_by='test',
         approved_at_utc=datetime.now(timezone.utc),
-        run_name=experiment.run.run_name,
         source_revision=source_revision,
         configuration_sha256=configuration_sha256,
-        provider_name=experiment.run.hardware.provider_name,
-        offer_id=experiment.run.hardware.offer_id,
-        hourly_price=experiment.training.limits.hourly_price,
         maximum_cost=experiment.training.limits.maximum_cost,
-        maximum_wall_time_minutes=int(experiment.training.limits.maximum_wall_time_seconds / 60),
     )
     run_manifest = ExperimentRunManifest(
         experiment=experiment,
@@ -287,3 +282,32 @@ def test_export_rejects_symlink_escape(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match='Symbolic links'):
         export_experiment_results(request)
+
+
+def test_export_degrades_missing_outcome_for_terminated_experiment(tmp_path: Path) -> None:
+    import shutil
+
+    request, run_path, summary_path = _fixture(tmp_path)
+    (run_path / 'run-outcome.json').unlink()
+    shutil.rmtree(run_path / 'evaluations')
+    summary = QueueSummary.model_validate_json(summary_path.read_text(encoding='utf-8'))
+    completed = summary.experiments[0]
+    assert isinstance(completed, CompletedExperimentStatus)
+    failed = FailedExperimentStatus(
+        experiment_id=completed.experiment_id,
+        execution=completed.execution,
+        finished_at=completed.finished_at,
+        exit_code=None,
+        reason='terminated by SIGKILL',
+    )
+    write_queue_summary(summary_path, summary.validated_copy(update={'experiments': (failed,)}))
+
+    manifest = export_experiment_results(request)
+
+    assert manifest.experiments[0].queue_status == 'failed'
+    assert manifest.experiments[0].latest_generation is None
+    assert manifest.experiments[0].evaluation_checkpoint_generations == ()
+    descriptions = {artifact.description for artifact in manifest.missing_optional_artifacts}
+    assert 'No run outcome was recorded before termination.' in descriptions
+    assert 'No evaluations were recorded before termination.' in descriptions
+    assert request.output_path.exists()

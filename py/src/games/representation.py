@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
-import sys
 
 import numpy as np
 import numpy.typing as npt

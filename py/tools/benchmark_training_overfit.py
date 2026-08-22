@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-import time
 
 import numpy as np
 import torch
@@ -22,9 +22,9 @@ from src.training.network import (
     AttentionNetworkParams,
     Chess76PlaneDirectPolicyHeadConfiguration,
     GlobalPoolingResidualContext,
+    Network,
     NetworkConfiguration,
     NetworkDefinition,
-    Network,
     NetworkParams,
     ResidualContextPlacement,
 )

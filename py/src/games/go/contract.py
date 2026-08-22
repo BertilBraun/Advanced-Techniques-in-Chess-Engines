@@ -157,12 +157,22 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
         return action_id != self.pass_action
 
     def current_player(self, position: NativeGoPosition) -> Player:
-        return Player.FIRST if position.player.name == 'BLACK' else Player.SECOND
+        from AlphaZeroCpp import GoPlayer
+
+        match position.player:
+            case GoPlayer.BLACK:
+                return Player.FIRST
+            case GoPlayer.WHITE:
+                return Player.SECOND
+            case unknown:
+                raise ValueError(f'Unknown native Go player: {unknown!r}')
 
     def natural_terminal_wdl(self, position: NativeGoPosition) -> WdlTarget | None:
         if not position.is_terminal:
             return None
-        if position.termination_reason.name == 'MAXIMUM_MOVES':
+        from AlphaZeroCpp import GoTerminationReason
+
+        if position.termination_reason == GoTerminationReason.MAXIMUM_MOVES:
             return None
         value = position.terminal_value()
         if value > 0.0:
@@ -177,7 +187,7 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
         winner = position.area_score().winner
         if winner is None:
             return WdlTarget(win=0.0, draw=1.0, loss=0.0)
-        if winner.name == position.player.name:
+        if winner == position.player:
             return WdlTarget(win=1.0, draw=0.0, loss=0.0)
         return WdlTarget(win=0.0, draw=0.0, loss=1.0)
 

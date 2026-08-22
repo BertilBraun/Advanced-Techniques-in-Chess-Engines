@@ -125,12 +125,5 @@ KataGo runtime path: ${katago_runtime_relative_path}
 KataGo model: ${katago_model_url}
 EOF
 
-stockfish_protocol_output="$(printf 'uci\nisready\nquit\n' | "${engine_directory}/stockfish")"
-grep -F 'id name Stockfish 18' <<<"${stockfish_protocol_output}"
-grep -F 'uciok' <<<"${stockfish_protocol_output}"
-grep -F 'readyok' <<<"${stockfish_protocol_output}"
-katago_version_output="$("${engine_directory}/katago" version 2>&1)"
-printf '%s\n' "${katago_version_output}"
-grep -F 'Using CUDA backend' <<<"${katago_version_output}"
-
+# Protocol smoke lives in smoke_evaluation_engines.sh, which provisioning runs right after this script.
 echo "Installed evaluation engines in ${engine_directory}"

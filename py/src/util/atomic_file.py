@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import uuid
+from pathlib import Path
 
 
 def write_text_atomically(path: Path, content: str) -> None:

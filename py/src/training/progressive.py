@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, model_validator
-
 from src.replay.description import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.network import NetworkConfiguration
@@ -81,18 +80,18 @@ class ComparableLossEma(FrozenModel):
         )
 
 
+class PromotionLossComparison(FrozenModel):
+    active_model_id: str
+    active_loss_ema: ComparableLossEma
+    candidate_loss_ema: ComparableLossEma
+
+
 class ProgressiveCandidateState(FrozenModel):
     model_id: str
     completed_optimizer_steps: int = Field(default=0, ge=0)
     checkpoint: CheckpointReference | None = None
     training_loss_ema: ComparableLossEma | None = None
     promotion_comparison: PromotionLossComparison | None = None
-
-
-class PromotionLossComparison(FrozenModel):
-    active_model_id: str
-    active_loss_ema: ComparableLossEma
-    candidate_loss_ema: ComparableLossEma
 
 
 class ReplayBatchIdentity(FrozenModel):
@@ -168,7 +167,7 @@ class ProgressiveTrainingStateStore:
             replay_batch=replay_batch,
             required_model_ids=required_model_ids,
         )
-        self.state = self.state.model_copy(update={'pending_quantum': pending})
+        self.state = self.state.validated_copy(update={'pending_quantum': pending})
         self.save()
         return pending
 
@@ -184,7 +183,7 @@ class ProgressiveTrainingStateStore:
                 raise ValueError('Progressive candidate initialization disagrees with persisted state.')
             return
         candidates = tuple(
-            item.model_copy(
+            item.validated_copy(
                 update={
                     'completed_optimizer_steps': completed_optimizer_steps,
                     'checkpoint': checkpoint,
@@ -194,7 +193,7 @@ class ProgressiveTrainingStateStore:
             else item
             for item in self.state.candidates
         )
-        self.state = self.state.model_copy(update={'candidates': candidates})
+        self.state = self.state.validated_copy(update={'candidates': candidates})
         self.save()
 
     def record_candidate(self, result: CompletedCandidateTraining) -> None:
@@ -211,8 +210,8 @@ class ProgressiveTrainingStateStore:
             raise ValueError('Progressive candidate optimizer progress must align with complete quanta.')
         if result.checkpoint.generation != result.completed_optimizer_steps // quantum_steps:
             raise ValueError('Progressive candidate checkpoint generation disagrees with optimizer progress.')
-        pending = pending.model_copy(update={'completed': (*pending.completed, result)})
-        self.state = self.state.model_copy(update={'pending_quantum': pending})
+        pending = pending.validated_copy(update={'completed': (*pending.completed, result)})
+        self.state = self.state.validated_copy(update={'pending_quantum': pending})
         self.save()
 
     def complete_quantum(self) -> str:
@@ -267,7 +266,7 @@ class ProgressiveTrainingStateStore:
                 else ema.update(result.comparable_total_loss, self.configuration.promotion.decay)
             )
             candidates.append(
-                candidate.model_copy(
+                candidate.validated_copy(
                     update={
                         'completed_optimizer_steps': result.completed_optimizer_steps,
                         'checkpoint': result.checkpoint,
@@ -290,7 +289,7 @@ class ProgressiveTrainingStateStore:
                 candidate_loss_ema=ComparableLossEma(value=candidate_loss, observations=1),
             )
         else:
-            comparison = comparison.model_copy(
+            comparison = comparison.validated_copy(
                 update={
                     'active_loss_ema': comparison.active_loss_ema.update(
                         active_loss,
@@ -303,7 +302,7 @@ class ProgressiveTrainingStateStore:
                 }
             )
         return tuple(
-            item.model_copy(update={'promotion_comparison': comparison})
+            item.validated_copy(update={'promotion_comparison': comparison})
             if item.model_id == successor.model_id
             else item
             for item in completed_candidates

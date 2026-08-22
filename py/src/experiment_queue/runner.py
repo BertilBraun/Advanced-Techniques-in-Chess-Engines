@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from pathlib import Path
 import signal
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
+from pathlib import Path
 from types import FrameType
 
 from src.experiment_queue.configuration import QueuedExperiment, ResourceSlot, slot_satisfies_request
-from src.experiment_queue.process import RunningProcess, launch_process, terminate_process_group
 from src.experiment_queue.launcher_snapshot import create_launcher_snapshot, experiment_queue_source_directory
+from src.experiment_queue.process import RunningProcess, launch_process, terminate_process_group
 from src.experiment_queue.scheduler import ResourceAssignment, schedule_experiments
 from src.experiment_queue.state import (
     CompletedExperimentStatus,
     ExecutionIdentity,
-    FailedExperimentStatus,
     ExperimentStatus,
+    FailedExperimentStatus,
     PendingExperimentStatus,
     PreparationFailedExperimentStatus,
     QueueSummary,

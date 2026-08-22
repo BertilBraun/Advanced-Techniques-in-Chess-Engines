@@ -32,9 +32,9 @@ void require(const bool condition, const std::string &message) {
 
 void fillBatch(const InferencePipeline::WritableBatch &batch, const std::int8_t value) {
     std::memset(batch.data, value,
-                batch.capacity * ChessRepresentationDimensions::channel_count *
-                    ChessRepresentationDimensions::board_length *
-                    ChessRepresentationDimensions::board_length);
+                batch.capacity * ChessRepresentationDimensions::channelCount *
+                    ChessRepresentationDimensions::boardLength *
+                    ChessRepresentationDimensions::boardLength);
 }
 
 void testTwoOutstandingBatches(const std::filesystem::path &modelPath, const InferenceDevice device,

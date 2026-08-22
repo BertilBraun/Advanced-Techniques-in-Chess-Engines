@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 from collections import Counter
 from dataclasses import dataclass, field
-import hashlib
-import json
 from pathlib import Path
 from typing import Literal
 
@@ -12,9 +11,9 @@ import chess
 import chess.engine
 import chess.pgn
 from pydantic import Field
-
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.hashing import file_sha256
 
 
 @dataclass
@@ -137,14 +136,6 @@ class Arguments:
     maximum_openings_per_eco: int
     output_selection: Path
     output_report: Path
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _has_equal_material(board: chess.Board) -> bool:
@@ -301,8 +292,8 @@ def build_selection(arguments: Arguments) -> OpeningSelectionReport:
     selected, stockfish_identity, candidates_evaluated = _select_openings(candidates, arguments)
     report = OpeningSelectionReport(
         source_url=arguments.source_url,
-        source_archive_sha256=_sha256(arguments.source_archive),
-        source_pgn_sha256=_sha256(arguments.source_pgn),
+        source_archive_sha256=file_sha256(arguments.source_archive),
+        source_pgn_sha256=file_sha256(arguments.source_pgn),
         source_games_read=games_read,
         eligible_source_games=eligible_games,
         minimum_player_rating=arguments.minimum_player_rating,
@@ -310,7 +301,7 @@ def build_selection(arguments: Arguments) -> OpeningSelectionReport:
         maximum_absolute_centipawns=arguments.maximum_absolute_centipawns,
         maximum_openings_per_eco=arguments.maximum_openings_per_eco,
         stockfish_identity=stockfish_identity,
-        stockfish_executable_sha256=_sha256(arguments.stockfish_executable),
+        stockfish_executable_sha256=file_sha256(arguments.stockfish_executable),
         stockfish_nodes=arguments.stockfish_nodes,
         stockfish_threads=arguments.stockfish_threads,
         stockfish_hash_mib=arguments.stockfish_hash_mib,

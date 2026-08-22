@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import chess
+from src.games.chess.interactive.analysis import AnalysisResult
 
 from deployment.web.backend.contracts import (
     CreateGameResponse,
@@ -14,7 +15,6 @@ from deployment.web.backend.contracts import (
     PlayTurnResponse,
     SideToMove,
 )
-from src.games.chess.interactive.analysis import AnalysisResult
 
 if TYPE_CHECKING:
     from src.games.chess.interactive.engine import InteractiveEngine, InteractiveGame

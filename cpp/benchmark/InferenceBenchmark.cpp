@@ -124,9 +124,9 @@ std::vector<CompressedEncodedBoard> encodeBoards(const std::vector<Board> &board
 void fillInput(torch::Tensor &input, const std::vector<CompressedEncodedBoard> &encodings,
                const size_t firstEncoding, const size_t batchSize) {
     std::int8_t *destination = input.data_ptr<std::int8_t>();
-    constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channel_count *
-                                           ChessRepresentationDimensions::board_length *
-                                           ChessRepresentationDimensions::board_length;
+    constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channelCount *
+                                           ChessRepresentationDimensions::boardLength *
+                                           ChessRepresentationDimensions::boardLength;
     for (const auto index : range(batchSize)) {
         encodings[(firstEncoding + index) % encodings.size()].writeTensorInto(
             std::span(destination + index * ENCODED_BOARD_BYTES, ENCODED_BOARD_BYTES));
@@ -182,7 +182,7 @@ nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<
         const float *correctionData = output.search_corrections.data_ptr<float>();
         for (const auto position : range(arguments.batchSize)) {
             const SearchInferenceResult<ChessGame> result = processInferencePosition<ChessGame>(
-                policyData + position * ChessEncoding::action_count, outcomeData + position * 3,
+                policyData + position * ChessEncoding::actionCount, outcomeData + position * WDL_OUTPUT_SIZE,
                 correctionData[position], boards[position]);
             checksum += result.value() + static_cast<double>(result.actions.size());
         }
@@ -199,9 +199,9 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
                                resolveSdpaBackend(arguments));
     std::vector<std::pair<size_t, size_t>> pendingBatches;
     pendingBatches.reserve(arguments.slots);
-    constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channel_count *
-                                           ChessRepresentationDimensions::board_length *
-                                           ChessRepresentationDimensions::board_length;
+    constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channelCount *
+                                           ChessRepresentationDimensions::boardLength *
+                                           ChessRepresentationDimensions::boardLength;
     for (const auto warmupIteration : range(WARMUP_ITERATIONS)) {
         static_cast<void>(warmupIteration);
         const InferencePipeline::WritableBatch warmup = pipeline.acquireWritableBatch();
@@ -337,8 +337,8 @@ nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vecto
                     const size_t boardIndex = worker * arguments.batchSize + position;
                     const SearchInferenceResult<ChessGame> result =
                         processInferencePosition<ChessGame>(
-                            policyData + position * ChessEncoding::action_count,
-                            outcomeData + position * 3, correctionData[position], boards[boardIndex]);
+                            policyData + position * ChessEncoding::actionCount,
+                            outcomeData + position * WDL_OUTPUT_SIZE, correctionData[position], boards[boardIndex]);
                     checksums[worker] +=
                         result.value() + static_cast<double>(result.actions.size());
                 }
@@ -368,9 +368,9 @@ int main(const int argumentCount, char **argumentValues) {
         double encodeMilliseconds = 0.0;
         const std::vector<CompressedEncodedBoard> encodings =
             encodeBoards(boards, encodeMilliseconds);
-        constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channel_count *
-                                               ChessRepresentationDimensions::board_length *
-                                               ChessRepresentationDimensions::board_length;
+        constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channelCount *
+                                               ChessRepresentationDimensions::boardLength *
+                                               ChessRepresentationDimensions::boardLength;
         std::vector<std::int8_t> packedEncodings(positions * ENCODED_BOARD_BYTES);
         const auto packingStartedAt = std::chrono::steady_clock::now();
         for (const auto index : range(positions)) {

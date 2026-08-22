@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
-
 from src.evaluation.configuration import EvaluationConfiguration
 from src.experiment.run_contract import (
     EnvironmentConfiguration,

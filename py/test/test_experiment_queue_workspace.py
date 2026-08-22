@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
 import json
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
-
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.experiment_queue.configuration import (
     QueueConfiguration,
@@ -18,10 +17,10 @@ from src.experiment_queue.configuration import (
 )
 from src.experiment_queue.validation import ValidatedQueuedExperiment
 from src.experiment_queue.workspace import ExperimentWorkspaceManager
+from test_helpers.configuration_paths import PYTHON_ROOT, TEST_CONFIG_DIRECTORY
 
-
-TEMPLATE = Path(__file__).parent / 'configs' / 'go-7x7-experiment.yaml'
-WORKTREE_CHILD = Path(__file__).parents[1] / 'src' / 'experiment_queue' / 'worktree_child.py'
+TEMPLATE = TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml'
+WORKTREE_CHILD = PYTHON_ROOT / 'src' / 'experiment_queue' / 'worktree_child.py'
 
 
 def _git(repository: Path, *arguments: str) -> str:

@@ -1,9 +1,8 @@
+from __future__ import annotations
+
 import pytest
 import torch
 from pydantic import ValidationError
-
-from torch import Tensor, nn
-
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import (
     ATTENTION_LINEAR_INITIALIZATION_STD,
@@ -28,7 +27,7 @@ from src.training.targets import (
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
 )
-
+from torch import Tensor, nn
 
 CHESS_POLICY_HEAD = Chess76PlaneDirectPolicyHeadConfiguration()
 
@@ -45,13 +44,13 @@ class Multiply(nn.Module):
 def squeeze_excitation_blocks(network: Network) -> tuple[bool, ...]:
     return tuple(
         isinstance(block.squeeze_excitation, SqueezeExcitation)
-        for block in network.backBone
+        for block in network.backbone
         if isinstance(block, ResBlock)
     )
 
 
 def global_pooling_blocks(network: Network) -> tuple[bool, ...]:
-    return tuple(isinstance(block, GlobalPoolingResBlock) for block in network.backBone)
+    return tuple(isinstance(block, GlobalPoolingResBlock) for block in network.backbone)
 
 
 def test_squeeze_excitation_is_inside_residual_branch_before_skip_addition() -> None:
@@ -109,7 +108,7 @@ def test_squeeze_excitation_placement_modes() -> None:
         CHESS_NETWORK_DIMENSIONS,
     )
 
-    assert len(disabled.backBone) == 4
+    assert len(disabled.backbone) == 4
     assert squeeze_excitation_blocks(disabled) == (False, False, False, False)
     assert squeeze_excitation_blocks(every_block) == (True, True, True, True)
     assert squeeze_excitation_blocks(every_second_block) == (False, True, False, True)
@@ -151,7 +150,7 @@ def test_global_pooling_placement_uses_one_quarter_of_channels() -> None:
     )
 
     assert global_pooling_blocks(network) == (False, True, False, True)
-    blocks = tuple(block for block in network.backBone if isinstance(block, GlobalPoolingResBlock))
+    blocks = tuple(block for block in network.backbone if isinstance(block, GlobalPoolingResBlock))
     assert tuple(block.global_channels for block in blocks) == (4, 4)
     assert tuple(block.conv_block2[0].in_channels for block in blocks) == (12, 12)
 
@@ -191,16 +190,16 @@ def test_chess_76_plane_policy_heads_preserve_action_outputs_and_backpropagate()
 
     assert output.policy_logits.shape == (2, 4864)
     assert tuple(logits.shape for logits in output.auxiliary_logits) == ((2, 4864), (2, 1))
-    assert isinstance(network.policyHead, PolicyPlaneHead)
-    assert isinstance(network.auxiliaryHeads[0], PolicyPlaneHead)
+    assert isinstance(network.policy_head, PolicyPlaneHead)
+    assert isinstance(network.auxiliary_head_modules[0], PolicyPlaneHead)
     learned_head_parameters = sum(
         parameter.numel()
         for name, parameter in network.named_parameters()
-        if name.startswith(('policyHead.', 'valueHead.', 'auxiliaryHeads.'))
+        if name.startswith(('policy_head.', 'value_head.', 'auxiliary_head_modules.'))
     )
     assert learned_head_parameters < 100_000
-    assert network.policyHead.input_block[0].weight.grad is not None
-    assert network.auxiliaryHeads[0].input_block[0].weight.grad is not None
+    assert network.policy_head.input_block[0].weight.grad is not None
+    assert network.auxiliary_head_modules[0].input_block[0].weight.grad is not None
 
 
 def test_policy_plane_head_flattens_logits_plane_major() -> None:
@@ -235,13 +234,13 @@ def test_chess_plane_heads_use_hidden_64_primary_and_32_auxiliary() -> None:
         ),
     )
 
-    assert isinstance(network.policyHead, PolicyPlaneHead)
-    assert network.policyHead.input_block[0].out_channels == 64
-    assert network.policyHead.spatial_block[0].kernel_size == (3, 3)
-    assert network.policyHead.output_projection.out_channels == 76
-    primary_parameters = sum(parameter.numel() for parameter in network.policyHead.parameters())
+    assert isinstance(network.policy_head, PolicyPlaneHead)
+    assert network.policy_head.input_block[0].out_channels == 64
+    assert network.policy_head.spatial_block[0].kernel_size == (3, 3)
+    assert network.policy_head.output_projection.out_channels == 76
+    primary_parameters = sum(parameter.numel() for parameter in network.policy_head.parameters())
     assert 45_000 < primary_parameters < 55_000
-    for auxiliary_head in network.auxiliaryHeads:
+    for auxiliary_head in network.auxiliary_head_modules:
         assert isinstance(auxiliary_head, PolicyPlaneHead)
         assert auxiliary_head.input_block[0].out_channels == 32
         auxiliary_parameters = sum(parameter.numel() for parameter in auxiliary_head.parameters())
@@ -265,14 +264,14 @@ def test_head_output_layers_use_small_initialization() -> None:
         ),
     )
 
-    assert float(network.policyHead.output_projection.weight.std()) == pytest.approx(0.01, rel=0.25)
-    assert torch.equal(network.policyHead.output_projection.bias, torch.zeros(76))
-    assert float(network.auxiliaryHeads[0].output_projection.weight.std()) == pytest.approx(0.01, rel=0.25)
-    value_output = network.valueHead[-1]
+    assert float(network.policy_head.output_projection.weight.std()) == pytest.approx(0.01, rel=0.25)
+    assert torch.equal(network.policy_head.output_projection.bias, torch.zeros(76))
+    assert float(network.auxiliary_head_modules[0].output_projection.weight.std()) == pytest.approx(0.01, rel=0.25)
+    value_output = network.value_head[-1]
     assert isinstance(value_output, nn.Linear)
     assert float(value_output.weight.std()) == pytest.approx(0.01, rel=0.5)
     assert torch.equal(value_output.bias, torch.zeros(3))
-    length_output = network.auxiliaryHeads[1][-1]
+    length_output = network.auxiliary_head_modules[1][-1]
     assert isinstance(length_output, nn.Linear)
     assert float(length_output.weight.std()) == pytest.approx(0.01, rel=0.5)
 
@@ -290,9 +289,9 @@ def test_attention_trunk_normalizes_tokens_before_spatial_output() -> None:
         CHESS_NETWORK_DIMENSIONS,
     )
 
-    assert isinstance(network.finishBlock, nn.Sequential)
-    assert isinstance(network.finishBlock[0], nn.LayerNorm)
-    assert network.finishBlock[0].normalized_shape == (16,)
+    assert isinstance(network.finish_block, nn.Sequential)
+    assert isinstance(network.finish_block[0], nn.LayerNorm)
+    assert network.finish_block[0].normalized_shape == (16,)
 
 
 def test_attention_initialization_scales_residual_output_projections() -> None:
@@ -311,14 +310,14 @@ def test_attention_initialization_scales_residual_output_projections() -> None:
     )
     expected_residual_std = ATTENTION_LINEAR_INITIALIZATION_STD / (2 * num_layers) ** 0.5
 
-    for block in network.backBone:
+    for block in network.backbone:
         assert isinstance(block, AttentionEncoderBlock)
         assert float(block.query_key_value_projection.weight.std()) == pytest.approx(0.02, rel=0.1)
         assert float(block.feedforward[0].weight.std()) == pytest.approx(0.02, rel=0.1)
         assert float(block.attention_output_projection.weight.std()) == pytest.approx(expected_residual_std, rel=0.1)
         assert float(block.feedforward[3].weight.std()) == pytest.approx(expected_residual_std, rel=0.1)
-    assert float(network.startBlock.projection.weight.std()) == pytest.approx(0.02, rel=0.1)
-    assert float(network.startBlock.row_embeddings.std()) == pytest.approx(128**-0.5, rel=0.3)
+    assert float(network.start_block.projection.weight.std()) == pytest.approx(0.02, rel=0.1)
+    assert float(network.start_block.row_embeddings.std()) == pytest.approx(128**-0.5, rel=0.3)
 
 
 def test_dense_policy_head_remains_selectable_with_replica_initialization() -> None:
@@ -336,9 +335,9 @@ def test_dense_policy_head_remains_selectable_with_replica_initialization() -> N
     network.eval()
 
     logits, _ = network.logit_forward(torch.randn((2, 29, 8, 8)))
-    dense_output = network.policyHead[-1]
+    dense_output = network.policy_head[-1]
 
     assert logits.shape == (2, 4864)
-    assert isinstance(network.policyHead, nn.Sequential)
+    assert isinstance(network.policy_head, nn.Sequential)
     assert isinstance(dense_output, nn.Linear)
     assert float(dense_output.weight.std()) == pytest.approx((2.0 / 512) ** 0.5, rel=0.1)

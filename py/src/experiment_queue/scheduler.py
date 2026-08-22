@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import Field, field_validator
-
 from src.experiment_queue.configuration import QueuedExperiment, ResourceSlot, slot_satisfies_request
 from src.util.frozen_model import FrozenModel
 

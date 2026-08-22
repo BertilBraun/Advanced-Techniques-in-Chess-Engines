@@ -58,19 +58,10 @@ if [[ ! -x "${virtual_environment_root}/bin/python" ]]; then
     "${bootstrap_python}" -m venv "${virtual_environment_root}"
 fi
 "${virtual_environment_root}/bin/python" -m pip install --no-cache-dir uv==0.11.14
-"${virtual_environment_root}/bin/uv" pip install \
-    --python "${virtual_environment_root}/bin/python" \
-    --require-hashes \
-    --torch-backend cu126 \
-    --requirements "${engine_repository_root}/py/requirements-training.lock"
-"${virtual_environment_root}/bin/uv" pip install \
-    --python "${virtual_environment_root}/bin/python" \
-    backoff==2.2.1 \
-    huggingface-hub==0.34.4 \
-    pytest==8.4.2 \
-    PyYAML==6.0.2 \
-    requests==2.34.2 \
-    rich==15.0.0
+UV_PROJECT_ENVIRONMENT="${virtual_environment_root}" "${virtual_environment_root}/bin/uv" sync \
+    --locked \
+    --extra lichess \
+    --project "${engine_repository_root}"
 
 echo "[5/8] Verifying CUDA from Python"
 "${virtual_environment_root}/bin/python" -c \
@@ -81,10 +72,13 @@ export PATH="${virtual_environment_root}/bin:${PATH}"
 cmake -S "${engine_repository_root}/cpp" -B "${build_root}" \
     -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DENABLE_NATIVE_ARCH=ON \
+    -DENABLE_NATIVE_ARCHITECTURE=ON \
     -DUSE_SYSTEM_NVTX=ON \
-    -DPYTHON_EXECUTABLE="${virtual_environment_root}/bin/python"
+    -DPython3_EXECUTABLE="${virtual_environment_root}/bin/python"
 cmake --build "${build_root}" --parallel "${build_jobs}"
+
+echo "[6b/8] Verifying the extension imports in the locked environment"
+(cd "${engine_repository_root}/py" && "${virtual_environment_root}/bin/python" -c 'import AlphaZeroCpp')
 
 echo "[7/8] Running native and Python tests"
 ctest --test-dir "${build_root}" --output-on-failure

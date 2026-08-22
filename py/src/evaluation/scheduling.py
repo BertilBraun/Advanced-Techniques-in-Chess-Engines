@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
+from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import Field
-
 from src.evaluation.configuration import (
     EvaluationConfiguration,
     EvaluationDefinition,
@@ -21,15 +20,15 @@ from src.evaluation.configuration import (
 from src.evaluation.contracts import (
     CheckpointOpponent,
     ElapsedCheckpointReference,
-    EvaluationReferenceManifest,
-    EvaluationOpponent,
     EvaluationJob,
+    EvaluationOpponent,
+    EvaluationReferenceManifest,
     FixedDatasetEvaluationJob,
     KataGoOpponent,
     MatchEvaluationJob,
     RandomOpponent,
-    StockfishOpponent,
     StockfishFixedNodesOpponent,
+    StockfishOpponent,
 )
 from src.experiment.configuration import ExperimentConfiguration
 from src.training.checkpoint import CheckpointReference

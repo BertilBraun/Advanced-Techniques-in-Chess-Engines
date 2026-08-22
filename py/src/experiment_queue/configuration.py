@@ -7,10 +7,8 @@ from typing import Literal, TypeVar
 
 import yaml
 from pydantic import Field, field_validator, model_validator
-from typing_extensions import Self
-
 from src.util.frozen_model import FrozenModel
-
+from typing_extensions import Self
 
 UniqueValueT = TypeVar('UniqueValueT', bound=Hashable)
 

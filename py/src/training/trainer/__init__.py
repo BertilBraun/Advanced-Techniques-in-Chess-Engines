@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from src.training.trainer.contracts import TrainingQuantumResult, TrainingStatistics
 from src.training.trainer.group import TrainerGroup
 

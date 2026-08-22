@@ -47,7 +47,6 @@ public:
     [[nodiscard]] Stockfish::Move legalMoveFromUci(const std::string &moveUci) const;
 
     /// Returns a 64‐bit Zobrist hash of the current position.
-    [[nodiscard]] std::uint64_t quickHash() const { return m_pos.key(); }
 
     /**
      * Returns a material‐based heuristic score in [-1, +1]:
@@ -83,6 +82,9 @@ public:
      * to match the Python code's iteration over i=0..7 as rank i+1.
      */
     [[nodiscard]] std::string repr() const;
+
+    // Test seam for the legal-move cache; the alternative was a #define private public ODR violation.
+    friend struct BoardTestAccess;
 
 private:
     struct PositionHistory {

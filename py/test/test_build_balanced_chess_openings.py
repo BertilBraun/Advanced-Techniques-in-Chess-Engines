@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 from tools.build_balanced_chess_openings import _extract_candidates

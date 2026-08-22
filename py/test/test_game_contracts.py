@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 from pathlib import Path
 from uuid import UUID
 
 import pytest
 import torch
+
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from pydantic import ValidationError
 from src.experiment.configuration import load_experiment_configuration
@@ -28,7 +32,7 @@ from src.self_play.completed_game import (
     TerminationReason,
     publish_completed_self_play_game,
 )
-from src.training.batch import TrainingBatch, TrainingModelOutput
+from src.training.batch import TrainingModelOutput
 from src.training.objective import (
     ResolvedLegalMovesLoss,
     ResolvedNextPolicyLoss,
@@ -36,6 +40,8 @@ from src.training.objective import (
     ResolvedTrainingObjective,
 )
 from src.training.targets import RemainingGameLengthHeadLayout, build_training_target_layout
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
+from test_helpers.training_batches import training_batch
 
 
 def test_wdl_target_validates_and_reverses_perspective() -> None:
@@ -97,7 +103,7 @@ def test_go_adjudication_area_scores_nonterminal_positions(
 
 @pytest.mark.parametrize(
     ('path', 'expected_action_size', 'expected_augmentations'),
-    ((Path('test/configs/chess-experiment.yaml'), 4_864, 2),),
+    ((TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml', 4_864, 2),),
 )
 def test_root_game_implementation_owns_state_and_fixed_target_layout(
     path: Path,
@@ -179,7 +185,7 @@ def test_canonical_completed_game_publication_needs_no_publisher_state(tmp_path:
 
 
 def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
-    configuration = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     assert configuration.game == 'chess'
     objective = configuration.chess.objective.validated_copy(
         update={
@@ -222,7 +228,7 @@ def test_next_policy_eligibility_is_explicit_and_uses_future_action_space() -> N
 
 
 def test_remaining_game_length_layout_is_a_scalar_target() -> None:
-    configuration = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     assert configuration.game == 'chess'
     objective = configuration.chess.objective.validated_copy(
         update={
@@ -243,7 +249,7 @@ def test_remaining_game_length_layout_is_a_scalar_target() -> None:
     )
 
 
-def test_search_observation_rejects_zero_visit_entries() -> None:
+def test_native_search_visit_rejects_zero_visit_count() -> None:
     with pytest.raises(ValueError, match='positive'):
         GameSearchVisit(action_id=1, visit_count=0)
 
@@ -296,21 +302,13 @@ def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_togeth
 
 
 def test_canonical_batch_and_model_output_are_the_objective_boundary() -> None:
-    configuration = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     assert configuration.game == 'chess'
     objective = ChessImplementation(configuration).training_objective_at(0)
-    batch = TrainingBatch(
-        states=torch.zeros((2, 1)),
+    batch = training_batch(
         policy_targets=torch.tensor(((1.0, 0.0), (0.0, 1.0))),
-        policy_legal_action_ids=torch.tensor(((0, 1), (0, 1))),
         wdl_targets=torch.tensor(((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))),
         root_values=torch.tensor((0.5, -0.5)),
-        auxiliary_targets=(),
-        auxiliary_legal_action_ids=(),
-        auxiliary_eligibility=(),
-        sample_weights=torch.ones(2),
-        source_model_generations=torch.zeros(2, dtype=torch.int64),
-        source_created_at_seconds=torch.zeros(2, dtype=torch.float64),
     )
     output = TrainingModelOutput(
         policy_logits=torch.tensor(((2.0, 0.0), (0.0, 2.0))),
@@ -331,18 +329,9 @@ def test_policy_loss_normalizes_only_over_legal_actions() -> None:
         root_value_blend=0.0,
         auxiliary_losses=(),
     )
-    batch = TrainingBatch(
-        states=torch.zeros((1, 1)),
+    batch = training_batch(
         policy_targets=torch.tensor(((1.0, 0.0, 0.0),)),
-        policy_legal_action_ids=torch.tensor(((0, 1),)),
         wdl_targets=torch.tensor(((0.0, 1.0, 0.0),)),
-        root_values=torch.zeros(1),
-        auxiliary_targets=(),
-        auxiliary_legal_action_ids=(),
-        auxiliary_eligibility=(),
-        sample_weights=torch.ones(1),
-        source_model_generations=torch.zeros(1, dtype=torch.int64),
-        source_created_at_seconds=torch.zeros(1, dtype=torch.float64),
     )
     output = TrainingModelOutput(
         policy_logits=torch.tensor(((0.0, 0.0, 100.0),)),
@@ -362,18 +351,12 @@ def test_remaining_game_length_uses_masked_smooth_l1_loss() -> None:
         root_value_blend=0.0,
         auxiliary_losses=(ResolvedRemainingGameLengthLoss(weight=0.15),),
     )
-    batch = TrainingBatch(
-        states=torch.zeros((2, 1)),
+    batch = training_batch(
         policy_targets=torch.tensor(((1.0, 0.0), (1.0, 0.0))),
-        policy_legal_action_ids=torch.tensor(((0, 1), (0, 1))),
         wdl_targets=torch.tensor(((1.0, 0.0, 0.0), (1.0, 0.0, 0.0))),
-        root_values=torch.zeros(2),
         auxiliary_targets=(torch.tensor(((0.5,), (1.0,))),),
         auxiliary_legal_action_ids=(torch.empty((2, 0), dtype=torch.int64),),
         auxiliary_eligibility=(torch.tensor((True, False)),),
-        sample_weights=torch.ones(2),
-        source_model_generations=torch.zeros(2, dtype=torch.int64),
-        source_created_at_seconds=torch.zeros(2, dtype=torch.float64),
     )
     output = TrainingModelOutput(
         policy_logits=torch.zeros((2, 2)),
@@ -395,18 +378,12 @@ def test_next_policy_auxiliary_still_uses_masked_cross_entropy(prediction_dtype:
         root_value_blend=0.0,
         auxiliary_losses=(ResolvedNextPolicyLoss(weight=0.15),),
     )
-    batch = TrainingBatch(
-        states=torch.zeros((2, 1)),
+    batch = training_batch(
         policy_targets=torch.tensor(((1.0, 0.0), (1.0, 0.0))),
-        policy_legal_action_ids=torch.tensor(((0, 1), (0, 1))),
         wdl_targets=torch.tensor(((1.0, 0.0, 0.0), (1.0, 0.0, 0.0))),
-        root_values=torch.zeros(2),
         auxiliary_targets=(torch.tensor(((1.0, 0.0), (0.0, 1.0))),),
         auxiliary_legal_action_ids=(torch.tensor(((0, 1), (0, 1))),),
         auxiliary_eligibility=(torch.tensor((True, False)),),
-        sample_weights=torch.ones(2),
-        source_model_generations=torch.zeros(2, dtype=torch.int64),
-        source_created_at_seconds=torch.zeros(2, dtype=torch.float64),
     )
     output = TrainingModelOutput(
         policy_logits=torch.zeros((2, 2)),
@@ -431,18 +408,12 @@ def test_legal_move_loss_balances_legal_and_illegal_classes_per_position() -> No
     )
     target = torch.tensor(((1.0, 0.0, 0.0, 0.0),))
     prediction = torch.tensor(((0.0, 0.0, 2.0, -2.0),))
-    batch = TrainingBatch(
-        states=torch.zeros((1, 1)),
+    batch = training_batch(
         policy_targets=torch.tensor(((1.0, 0.0),)),
-        policy_legal_action_ids=torch.tensor(((0, 1),)),
         wdl_targets=torch.tensor(((0.0, 1.0, 0.0),)),
-        root_values=torch.zeros(1),
         auxiliary_targets=(target,),
         auxiliary_legal_action_ids=(torch.empty((1, 0), dtype=torch.int64),),
         auxiliary_eligibility=(torch.tensor((True,)),),
-        sample_weights=torch.ones(1),
-        source_model_generations=torch.zeros(1, dtype=torch.int64),
-        source_created_at_seconds=torch.zeros(1, dtype=torch.float64),
     )
     output = TrainingModelOutput(
         policy_logits=torch.zeros((1, 2)),

@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from src.util.atomic_file import write_text_atomically
+from src.util.frozen_model import FrozenModel
 
 
 class BenchmarkMode(str, Enum):
@@ -46,10 +47,6 @@ class Arguments:
 class GpuSample:
     utilization_percent: int
     memory_used_mib: int
-
-
-class FrozenModel(BaseModel):
-    model_config = ConfigDict(frozen=True)
 
 
 class NativeBenchmarkResult(FrozenModel):
@@ -348,8 +345,7 @@ def main() -> None:
         results=tuple(results),
         failures=tuple(failures),
     )
-    arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output.write_text(report.model_dump_json(indent=2) + '\n', encoding='utf-8')
+    write_text_atomically(arguments.output, report.model_dump_json(indent=2) + '\n')
 
 
 if __name__ == '__main__':

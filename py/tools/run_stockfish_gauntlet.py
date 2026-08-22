@@ -2,29 +2,27 @@ from __future__ import annotations
 
 import argparse
 import csv
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass
-from datetime import datetime, timezone
-import hashlib
-from multiprocessing import get_context
-from pathlib import Path
 import random
 import subprocess
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from multiprocessing import get_context
+from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field
-
 from src.evaluation.configuration import (
     EvaluationSearchConfiguration,
     StockfishEngineConfiguration,
     StockfishFixedNodesEvaluationDefinition,
 )
 from src.evaluation.contracts import (
+    OPENING_SUITE_MANIFEST_ADAPTER,
     EvaluationGameResult,
     MatchAggregate,
     MatchEvaluationJob,
-    OPENING_SUITE_MANIFEST_ADAPTER,
     StockfishFixedNodesOpponent,
 )
 from src.evaluation.match import MatchActionSelector, run_match
@@ -41,30 +39,15 @@ from src.self_play.configuration import BatchedInferenceParams
 from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
-
-
-class FixedModelSearchBudget(FrozenModel):
-    kind: Literal['fixed_searches'] = 'fixed_searches'
-    searches_per_move: int = Field(gt=0)
-    parallel_searches: int = Field(gt=0)
-    inference_workers: int = Field(gt=0)
-    inference_batch_size: int = Field(gt=0)
-    outstanding_batches_per_worker: int = Field(gt=0, le=2)
-
-
-class TimedModelSearchBudget(FrozenModel):
-    kind: Literal['move_time'] = 'move_time'
-    seconds_per_move: int = Field(ge=1, le=30)
-    parallel_searches: int = Field(gt=0)
-    inference_workers: int = Field(gt=0)
-    inference_batch_size: int = Field(gt=0)
-    outstanding_batches_per_worker: int = Field(gt=0, le=2)
-
-
-ModelSearchBudget: TypeAlias = Annotated[
-    FixedModelSearchBudget | TimedModelSearchBudget,
-    Field(discriminator='kind'),
-]
+from src.util.hashing import file_sha256
+from src.util.provenance import read_source_revision
+from tools.search_budget import (
+    FixedModelSearchBudget,
+    ModelSearchBudget,
+    TimedModelSearchBudget,
+    add_model_search_budget_arguments,
+    model_search_budget,
+)
 
 
 class PrefixOpeningSelection(FrozenModel):
@@ -243,23 +226,6 @@ class _TimedSearchActionSelector(MatchActionSelector[ChessPosition]):
         )
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _source_revision() -> str:
-    return subprocess.run(
-        ('git', 'rev-parse', 'HEAD'),
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-
-
 def _run_nvidia_smi(query: str) -> tuple[tuple[str, ...], ...]:
     completed = subprocess.run(
         ('nvidia-smi', f'--query-{query}', '--format=csv,noheader,nounits'),
@@ -309,6 +275,7 @@ def _busy_gpu_processes(gpus: tuple[GpuProvenance, ...]) -> tuple[BusyGpuProcess
 def _search_configuration(
     budget: FixedModelSearchBudget | TimedModelSearchBudget,
 ) -> EvaluationSearchConfiguration:
+    # Timed budgets ignore this count, but EvaluationSearchConfiguration demands it exceed parallel_searches.
     searches_per_move = (
         budget.searches_per_move if isinstance(budget, FixedModelSearchBudget) else budget.parallel_searches + 1
     )
@@ -554,21 +521,21 @@ def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
         arguments.stockfish_nodes,
     )
     result = StockfishGauntletResult(
-        source_revision=_source_revision(),
-        tool_sha256=_sha256(Path(__file__)),
+        source_revision=read_source_revision().commit,
+        tool_sha256=file_sha256(Path(__file__)),
         started_at_utc=started_at_utc,
         experiment_path=arguments.experiment.resolve(),
         run_directory=arguments.run_directory.resolve(),
         evaluated_checkpoint=checkpoint,
         opening_manifest_path=arguments.opening_manifest.resolve(),
-        opening_manifest_sha256=_sha256(arguments.opening_manifest),
+        opening_manifest_sha256=file_sha256(arguments.opening_manifest),
         opening_manifest_pair_count=len(openings.openings),
         opening_pair_count=arguments.opening_pairs,
         opening_selection=arguments.opening_selection,
         selected_opening_indices=selected_opening_indices,
         match_random_seed=match_random_seed,
         stockfish_executable_path=arguments.stockfish_executable.resolve(),
-        stockfish_executable_sha256=_sha256(arguments.stockfish_executable),
+        stockfish_executable_sha256=file_sha256(arguments.stockfish_executable),
         stockfish_identity=next(iter(identities)),
         stockfish_match_nodes=arguments.stockfish_nodes,
         stockfish_threads=engine_configuration.threads,
@@ -584,30 +551,6 @@ def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
     )
     write_text_atomically(arguments.output_directory / 'result.json', result.model_dump_json(indent=2) + '\n')
     return result
-
-
-def _model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudget | TimedModelSearchBudget:
-    if namespace.model_searches is not None:
-        parallel_searches = 1 if namespace.parallel_searches is None else namespace.parallel_searches
-        inference_workers = 1 if namespace.inference_workers is None else namespace.inference_workers
-        outstanding_batches = 1 if namespace.outstanding_batches is None else namespace.outstanding_batches
-        return FixedModelSearchBudget(
-            searches_per_move=namespace.model_searches,
-            parallel_searches=parallel_searches,
-            inference_workers=inference_workers,
-            inference_batch_size=namespace.inference_batch_size,
-            outstanding_batches_per_worker=outstanding_batches,
-        )
-    parallel_searches = 64 if namespace.parallel_searches is None else namespace.parallel_searches
-    inference_workers = 2 if namespace.inference_workers is None else namespace.inference_workers
-    outstanding_batches = 2 if namespace.outstanding_batches is None else namespace.outstanding_batches
-    return TimedModelSearchBudget(
-        seconds_per_move=namespace.model_move_time_seconds,
-        parallel_searches=parallel_searches,
-        inference_workers=inference_workers,
-        inference_batch_size=namespace.inference_batch_size,
-        outstanding_batches_per_worker=outstanding_batches,
-    )
 
 
 def _opening_selection(namespace: argparse.Namespace) -> PrefixOpeningSelection | SeededOpeningSelection:
@@ -635,13 +578,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--opening-selection-seed', type=int)
     parser.add_argument('--match-random-seed', type=int)
     parser.add_argument('--devices', required=True, nargs='+', type=int)
-    budget = parser.add_mutually_exclusive_group(required=True)
-    budget.add_argument('--model-searches', type=int)
-    budget.add_argument('--model-move-time-seconds', type=int)
-    parser.add_argument('--parallel-searches', type=int)
-    parser.add_argument('--inference-workers', type=int)
-    parser.add_argument('--inference-batch-size', default=64, type=int)
-    parser.add_argument('--outstanding-batches', type=int)
+    add_model_search_budget_arguments(parser)
     parser.add_argument('--output-directory', required=True, type=Path)
     namespace = parser.parse_args()
     if namespace.all_opening_pairs:
@@ -662,7 +599,7 @@ def parse_arguments() -> Arguments:
         opening_selection=_opening_selection(namespace),
         match_random_seed=namespace.match_random_seed,
         devices=tuple(namespace.devices),
-        model_search_budget=_model_search_budget(namespace),
+        model_search_budget=model_search_budget(namespace),
         output_directory=namespace.output_directory,
     )
     required_paths = (

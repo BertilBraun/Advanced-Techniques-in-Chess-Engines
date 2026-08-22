@@ -1,11 +1,11 @@
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
 import pytest
-from AlphaZeroCpp import GameSearchVisit
-from src.experiment.generation_schedule import ConstantSchedule
 from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.configuration import ReplayConfiguration
@@ -40,6 +40,7 @@ from src.training.targets import (
     SearchCorrectionHeadLayout,
     TrainingTargetLayout,
 )
+from src.util.generation_schedule import ConstantSchedule
 
 
 @dataclass(frozen=True)
@@ -131,11 +132,8 @@ def _completed_game() -> CompletedSelfPlayGame:
             SearchObservation(
                 ply=ply,
                 model_generation=2,
-                policy_target_visits=SearchVisitCounts.from_native(
-                    (
-                        GameSearchVisit(action_id=other_action, visit_count=3),
-                        GameSearchVisit(action_id=selected_action, visit_count=10),
-                    )
+                policy_target_visits=SearchVisitCounts(
+                    action_ids=(other_action, selected_action), visit_counts=(3, 10)
                 ),
                 root_value=0.25,
                 highest_visited_child_action_id=selected_action,
@@ -239,7 +237,7 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
             SearchObservation(
                 ply=2,
                 model_generation=1,
-                policy_target_visits=SearchVisitCounts.from_native((GameSearchVisit(action_id=2, visit_count=8),)),
+                policy_target_visits=SearchVisitCounts(action_ids=(2,), visit_counts=(8,)),
                 root_value=0.0,
                 highest_visited_child_action_id=2,
                 highest_visited_child_visit_count=8,
@@ -653,6 +651,7 @@ def test_synthetic_flood_appends_every_game_exactly_once_with_bounded_inbox(tmp_
     manager.close()
 
 
+@pytest.mark.integration
 def test_dispatcher_thread_stages_flood_without_inbox_growth(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
     manager = _open_manager(tmp_path, capacity=128, maximum_capacity=128)
@@ -840,3 +839,24 @@ def test_replay_ingestion_updates_central_resignation_state(tmp_path: Path) -> N
     assert restarted.state.completed_continuation_games == 1
     assert restarted.state.broadest_candidate_triggers == 1
     assert restarted.published_policy(50).threshold == pytest.approx(-0.99)
+
+
+def test_leftover_inbox_file_for_ingested_game_is_never_restaged(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    game = _completed_game()
+    publish_completed_self_play_game(inbox, game)
+    manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
+    manager.materialize_available_games(lambda staged: None)
+    # A worker killed between staging and its inbox unlink leaves the inbox original behind.
+    publish_completed_self_play_game(inbox, game)
+
+    ingestion = manager.append_staged_games(2)
+    assert ingestion.games_ingested == 1
+    assert manager.inbox_depth == 0
+
+    manager.materialize_available_games(lambda staged: None)
+    assert manager.staging_depth == 0
+    second = manager.append_staged_games(2)
+    assert second.games_ingested == 0
+    assert manager.store.total_appended_rows == SAMPLES_PER_GAME
+    manager.close()

@@ -1,5 +1,10 @@
 # Experiment platform
 
+> Partly superseded 2026-08-20. Production and test runs are started, stopped and archived through
+> `documentation/operations/run-control.md`, not through the queue commands below. The ingestion and
+> self-play-pause behaviour in "Training and evaluation lifecycle" was replaced by WP2 of
+> `documentation/plan/chess-recovery-plan-20260820.md` (landed 2026-08-21, `1e8e24f9`).
+
 This is the current operational entry point for configuring, provisioning, launching, observing, and collecting
 AlphaZero experiments. The architecture rework ledgers are historical design records; consult them only for an
 architectural change or a concrete design ambiguity.
@@ -36,7 +41,13 @@ groups, and publishes only the active stage after the complete quantum. Candidat
 private restart state and are not production inference artifacts.
 
 Run preparation verifies a clean exact source revision, approval, hardware/runtime contract, output paths, and
-immutable evaluation inputs. The coordinator starts self-play, ingests completed games into replay only until the
+immutable evaluation inputs.
+
+> Historical as of 2026-08-21: the bounded ingestion and self-play pause described in the next paragraph were
+> identified as a throughput and freshness defect by the regression analysis and replaced by WP2's file-staged
+> materialization (`1e8e24f9`). The paragraph is retained as a description of the four-day-era behaviour only.
+
+The coordinator starts self-play, ingests completed games into replay only until the
 next training quantum is funded, grants trainer credits at the configured replay ratio, publishes inference checkpoints after DDP quanta, schedules evaluation,
 and records a durable outcome on clean shutdown. Six of eight self-play workers pause during each training quantum
 in the current two-GPU baseline.
@@ -96,10 +107,15 @@ directory in `LD_LIBRARY_PATH`. Otherwise KataGo children can fail to load CUDA 
 passed.
 
 Every production run needs a new approval JSON outside Git. Create it only after the final revision and resolved
-configuration are fixed. It must bind the approver, exact Git revision, canonical configuration hash, offer, hourly
-price, and wall-time limit. Never reuse an approval from another revision, configuration, node, or campaign.
+configuration are fixed. It binds the approver, approval timestamp, exact Git revision, canonical configuration
+hash, and cost ceiling — the offer, hourly price and wall-time limit are already pinned by the configuration hash.
+The format is in [Run control](run-control.md#approval-file); approval files written before that trim are invalid
+and must be re-issued. Never reuse an approval from another revision, configuration, node, or campaign.
 
 ## Queue ownership and operation
+
+> For production and test runs use `documentation/operations/run-control.md`. `py/queue_experiments.py` remains
+> the screening-campaign supervisor only, and no screening campaign is currently authorised.
 
 The queue owns slot allocation, per-experiment detached Git worktrees, child process groups, sampled process-tree
 RAM limits, logs, and the atomic summary.
@@ -138,7 +154,7 @@ script; agents do not run CMake separately. The fresh-node bootstrap installs `c
 automatically, and changed-C++ revisions reuse compatible compilation units. The bootstrap also seeds the native
 artifact cache from its initial Release build.
 
-The bootstrap virtual environment is reused while `py/requirements-training.lock` is unchanged. A revision that
+The bootstrap virtual environment is reused while the repository `uv.lock` is unchanged. A revision that
 changes the lock requires a new locked environment, but the package manager's download cache still avoids fetching
 unchanged wheels. Do not point a changed-lock experiment at an environment created for a different lock.
 
@@ -258,5 +274,5 @@ After completion, verify terminal outcomes, every due evaluation result or expli
 ZIP integrity, elapsed-time comparisons against the fresh same-time baseline and previous checkpoints, fixed-dataset
 metrics, KataGo-96, replay/credit balance, throughput, and resource contention. Do not promote a feature
 automatically; report the evidence for a user decision. Detailed prior-node validation evidence remains in
-[R11 Vast integrated validation](vast-r11-validation.md), and the historical baseline rationale is in
-[Go 7x7 two-GPU training baseline](../benchmarks/go-7x7-two-gpu-training-baseline.md).
+[R11 Vast integrated validation](../evidence/node-r11-vast-20260810.md), and the historical baseline rationale is in
+[Go 7x7 two-GPU training baseline](../benchmarks/go-7x7-training-baseline-2xrtx3060-20260810/README.md).

@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
-
 from src.evaluation.configuration import EvaluationConfiguration, StockfishFixedNodesEvaluationDefinition
 from src.evaluation.contracts import (
     EvaluationJob,
@@ -13,11 +14,12 @@ from src.evaluation.contracts import (
 )
 from src.evaluation.scheduling import ScheduledEvaluationSuite, jobs_for_suite
 from src.experiment.configuration import load_experiment_configuration
-from src.training.checkpoint import CheckpointReference
+from test_helpers.checkpoints import checkpoint_reference
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
 
 def test_evaluation_definition_ids_must_be_unique() -> None:
-    experiment = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     payload = experiment.evaluation.model_dump(mode='json')
     payload['definitions'][1]['definition_id'] = payload['definitions'][0]['definition_id']
 
@@ -26,7 +28,7 @@ def test_evaluation_definition_ids_must_be_unique() -> None:
 
 
 def test_opening_suite_must_cover_largest_match_definition() -> None:
-    experiment = load_experiment_configuration(Path('test/configs/go-7x7-experiment.yaml'))
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml')
     payload = experiment.evaluation.model_dump(mode='json')
     payload['openings']['opening_count'] = 1
     payload['definitions'][1]['opening_pair_count'] = 2
@@ -49,16 +51,9 @@ def test_opening_line_requires_exactly_four_plies() -> None:
 
 
 def test_resolved_match_opponent_must_match_its_definition() -> None:
-    experiment = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     stockfish_definition = experiment.evaluation.definitions[-1]
-    checkpoint = CheckpointReference(
-        generation=1,
-        manifest_path=Path('checkpoint.json'),
-        model_path=Path('model.pt'),
-        optimizer_path=Path('optimizer.pt'),
-        inference_model_path=Path('inference.pt'),
-        inference_model_sha256='0' * 64,
-    )
+    checkpoint = checkpoint_reference()
 
     with pytest.raises(ValidationError, match='do not match'):
         MatchEvaluationJob(
@@ -76,7 +71,7 @@ def test_resolved_match_opponent_must_match_its_definition() -> None:
 
 
 def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opponent(tmp_path: Path) -> None:
-    experiment = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     skill_definition = next(
         definition for definition in experiment.evaluation.definitions if definition.kind == 'stockfish'
     )
@@ -96,14 +91,7 @@ def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opp
     assert 'skill_level' not in fixed_definition.model_dump()
 
     configured_experiment = experiment.model_copy(update={'evaluation': round_tripped})
-    checkpoint = CheckpointReference(
-        generation=1,
-        manifest_path=tmp_path / 'checkpoint.json',
-        model_path=tmp_path / 'model.pt',
-        optimizer_path=tmp_path / 'optimizer.pt',
-        inference_model_path=tmp_path / 'inference.pt',
-        inference_model_sha256='0' * 64,
-    )
+    checkpoint = checkpoint_reference(tmp_path)
     jobs, _ = jobs_for_suite(
         configured_experiment,
         tmp_path,
@@ -122,7 +110,7 @@ def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opp
 
 
 def test_stockfish_fixed_node_rungs_require_unique_node_counts() -> None:
-    experiment = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     skill_definition = next(
         definition for definition in experiment.evaluation.definitions if definition.kind == 'stockfish'
     )

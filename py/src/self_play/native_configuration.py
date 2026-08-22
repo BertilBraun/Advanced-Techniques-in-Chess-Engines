@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from src.self_play.configuration import SdpaBackend
 
-
 if TYPE_CHECKING:
     from AlphaZeroCpp import SdpaBackend as NativeSdpaBackend
 

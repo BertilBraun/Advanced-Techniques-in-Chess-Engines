@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-
 from src.evaluation.contracts import OpeningLine, OpeningSuiteManifest
 from src.evaluation.go_diagnostic import (
     DiagnosticEngine,

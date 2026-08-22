@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 from tools.run_cutechess_gauntlet import (
@@ -41,7 +43,7 @@ def test_prepare_openings_converts_tsv_and_selects_one_per_game_pair(
 ) -> None:
     opening_suite = tmp_path / 'openings.tsv'
     opening_suite.write_text(
-        '# provenance\nfirst\tfen one\nsecond\tfen two\nthird\tfen three\n',
+        '# provenance\nfirst\te2e4 e7e5\tfen one\nsecond\td2d4 d7d5\tfen two\nthird\tc2c4 c7c5\tfen three\n',
         encoding='utf-8',
     )
     output_directory = tmp_path / 'results'

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
-
 from src.games.chess.interactive.analysis import AnalysisRequest, CountedMctsAnalysis, PolicyAnalysis, TimedMctsAnalysis
 from src.games.chess.interactive.configuration import InteractiveEngineConfiguration
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
-from pathlib import Path
 import shutil
 import time
+from dataclasses import dataclass
+from pathlib import Path
 
 from src.experiment.configuration import load_experiment_configuration
 from src.games.composition import create_game_implementation

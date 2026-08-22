@@ -129,12 +129,12 @@ int ChessEncoding::actionId(const ChessAction action, const Board &state) {
     }
     const int actionId = policyPlane(fromSquare, toSquare, promotionType) * boardSquareCount +
                          static_cast<int>(fromSquare);
-    assert(0 <= actionId && actionId < ChessEncoding::action_count);
+    assert(0 <= actionId && actionId < ChessEncoding::actionCount);
     return actionId;
 }
 
 ChessAction ChessEncoding::decodeAction(const int actionId, const Board &state) {
-    if (actionId < 0 || actionId >= action_count) {
+    if (actionId < 0 || actionId >= actionCount) {
         throw std::invalid_argument("Chess action ID is outside the action space");
     }
     const std::optional<PolicyMove> decoded = decodeCanonicalActionId(actionId);
@@ -163,12 +163,12 @@ ChessAction ChessEncoding::decodeAction(const int actionId, const Board &state) 
 }
 
 int ChessEncoding::mirrorActionId(const int actionId) {
-    assert(0 <= actionId && actionId < action_count);
+    assert(0 <= actionId && actionId < actionCount);
     const int plane = actionId / boardSquareCount;
     const int fromSquare = actionId % boardSquareCount;
     const auto [fromRow, fromColumn] = squareCoordinates(fromSquare);
     const int mirroredFrom = square(boardLength - 1 - fromColumn, fromRow);
     const int mirrored = reflectedPlane(plane) * boardSquareCount + mirroredFrom;
-    assert(0 <= mirrored && mirrored < action_count);
+    assert(0 <= mirrored && mirrored < actionCount);
     return mirrored;
 }

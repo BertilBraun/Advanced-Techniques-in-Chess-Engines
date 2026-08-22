@@ -20,14 +20,14 @@ chess rules and training implementations.
 ## Environment and build
 
 `deployment/setup_remote.sh` is the authoritative fresh-node setup path. It clones the requested revision, installs
-the hashed environment from `requirements-training.lock`, builds the Release extension, installs and smokes the
+the locked environment from the repository's `uv.lock`, builds the Release extension, installs and smokes the
 pinned evaluation engines, exports `ENGINE_SOURCE_REVISION`, and starts the supplied command. External engine paths
 and immutable evaluation artifacts remain explicit configuration inputs.
 
-For local development, install `requirements-training.lock` with `uv` and build the extension with CMake:
+For local development, sync the locked environment with `uv` (from the repository root) and build the extension with CMake:
 
 ```powershell
-uv pip install --require-hashes --requirements .\py\requirements-training.lock
+uv sync --locked
 cmake -S .\cpp -B .\cpp\build -DCMAKE_BUILD_TYPE=Release
 cmake --build .\cpp\build --parallel
 ```

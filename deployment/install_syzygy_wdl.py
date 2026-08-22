@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import hashlib
-from pathlib import Path
 import re
 import subprocess
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 
 import chess
 import chess.syzygy
-
 
 DEFAULT_DESTINATION = Path('/workspace/syzygy/wdl345')
 DEFAULT_SOURCE_BASE_URL = 'https://tablebase.lichess.ovh/tables/standard/3-4-5-wdl'

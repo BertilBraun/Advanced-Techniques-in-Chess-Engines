@@ -6,6 +6,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.evaluation.openings import load_chess_opening_suite
+
 
 @dataclass(frozen=True)
 class GauntletConfiguration:
@@ -82,11 +84,7 @@ def prepare_openings(configuration: GauntletConfiguration) -> None:
         return
 
     required_openings = configuration.games_per_opponent // 2
-    opening_lines = [
-        line.split('\t', maxsplit=1)[1]
-        for line in configuration.openings.read_text(encoding='utf-8').splitlines()
-        if line and not line.startswith('#')
-    ]
+    opening_lines = [row.final_fen for row in load_chess_opening_suite(configuration.openings)]
     if len(opening_lines) < required_openings:
         raise ValueError(f'Opening suite has {len(opening_lines)} positions; {required_openings} are required.')
     configuration.prepared_openings.write_text('\n'.join(opening_lines[:required_openings]) + '\n', encoding='utf-8')

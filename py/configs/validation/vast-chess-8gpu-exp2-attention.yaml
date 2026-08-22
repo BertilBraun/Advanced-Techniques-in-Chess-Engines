@@ -1,0 +1,34 @@
+# Experiment 2 of the 2026-08-22 diagnosis ladder: experiment 1 (r3 recipe + plane head) with the trunk
+# swapped to attention 8x128 — isolates attention-in-the-loop on top of whatever experiment 1 shows.
+# LR keeps the r3 ratio schedule; the 1,000-step warm-up from run1 applies.
+extends: vast-chess-8gpu-exp1-planehead.yaml
+
+run:
+  run_name: vast-chess-8gpu-exp2-attention
+  tensorboard_run_directory: vast-chess-8gpu-exp2-attention
+
+training:
+  save_path: py/training_data/validation/vast-chess-8gpu-exp2-attention
+  progressive_model_sizing:
+    models:
+      - model_id: chess-attention-8x128
+        training_start_days: 0.0
+        network:
+          kind: attention
+          num_layers: 8
+          embedding_size: 128
+          num_heads: 4
+          feedforward_size: 256
+          dropout: 0.0
+          policy_head: {kind: chess_76_plane_direct_v2}
+          num_value_channels: 2
+          value_fc_size: 48
+  limits:
+    hourly_price: 0.0  # PATCH with the rented offer's dph_total
+    maximum_cost: null
+    maximum_wall_time_seconds: 14400
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-exp2-attention.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 20.0
+    resource_telemetry_interval_seconds: 5.0

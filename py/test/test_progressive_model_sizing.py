@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import hashlib
 import json
+from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 from typing import cast
@@ -31,8 +34,11 @@ from src.training.progressive import (
 )
 from src.training.session import ProgressiveTrainingSession
 from src.training.targets import TrainingTargetLayout
+from src.training.trainer import TrainerGroup
 from src.training.trainer.contracts import TrainerStartup
 from src.util.atomic_file import write_text_atomically
+from test_helpers.checkpoints import checkpoint_reference
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
 
 def _network(width: int) -> NetworkParams:
@@ -94,15 +100,7 @@ def _replay(tmp_path: Path, head: int = 3) -> ReplayDescription:
 
 
 def _checkpoint(tmp_path: Path, model_id: str, generation: int) -> CheckpointReference:
-    root = tmp_path / 'models' / model_id
-    return CheckpointReference(
-        generation=generation,
-        manifest_path=root / f'checkpoint_{generation}.json',
-        model_path=root / f'model_{generation}.pt',
-        optimizer_path=root / f'optimizer_{generation}.pt',
-        inference_model_path=root / f'model_{generation}.jit.pt',
-        inference_model_sha256=f'{generation:064x}',
-    )
+    return checkpoint_reference(tmp_path / 'models' / model_id, generation)
 
 
 @pytest.mark.parametrize(
@@ -316,35 +314,39 @@ def test_candidate_retention_keeps_only_exact_restart_state(tmp_path: Path) -> N
     assert not obsolete.inference_model_path.exists()
 
 
-def test_progressive_trainer_groups_remain_alive_across_quanta(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    configuration = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+@dataclass
+class _RecordingTrainerGroup:
+    experiment: ExperimentConfiguration
+    game: GameImplementation
+    startup: TrainerStartup
+    closed: bool = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_progressive_trainer_groups_remain_alive_across_quanta(tmp_path: Path) -> None:
+    loaded = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    configuration = loaded.model_copy(
+        update={'training': loaded.training.model_copy(update={'save_path': str(tmp_path)})}
+    )
     network = configuration.training.progressive_model_sizing.models[0].network
+    created: list[_RecordingTrainerGroup] = []
 
-    class _FakeTrainerGroup:
-        def __init__(
-            self,
-            experiment: ExperimentConfiguration,
-            game: GameImplementation,
-            startup: TrainerStartup,
-        ) -> None:
-            self.experiment = experiment
-            self.game = game
-            self.startup = startup
-            self.closed = False
-            created.append(self)
+    def trainer_group_factory(
+        experiment: ExperimentConfiguration,
+        game: GameImplementation,
+        startup: TrainerStartup,
+    ) -> TrainerGroup:
+        trainer = _RecordingTrainerGroup(experiment, game, startup)
+        created.append(trainer)
+        return cast(TrainerGroup, trainer)
 
-        def close(self) -> None:
-            self.closed = True
-
-    created: list[_FakeTrainerGroup] = []
-    monkeypatch.setattr('src.training.session.TrainerGroup', _FakeTrainerGroup)
-    session = cast(ProgressiveTrainingSession, object.__new__(ProgressiveTrainingSession))
-    session.configuration = configuration
-    session.game = cast(GameImplementation, object())
-    session.trainers = {}
+    session = ProgressiveTrainingSession(
+        configuration,
+        cast(GameImplementation, object()),
+        trainer_group_factory,
+    )
 
     first = session._trainer_group('small', network, tmp_path / 'small', 0)
     repeated = session._trainer_group('small', network, tmp_path / 'small', 1)

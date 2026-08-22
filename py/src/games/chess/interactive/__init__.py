@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from src.games.chess.interactive.analysis import (
     AnalysisRequest,
     AnalysisResult,

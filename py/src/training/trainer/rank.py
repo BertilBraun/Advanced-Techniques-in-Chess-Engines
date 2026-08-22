@@ -1,37 +1,36 @@
 from __future__ import annotations
 
+import time
+import traceback
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
-import time
-import traceback
 
 import torch
 import torch.distributed as distributed
-from torch import nn
-from torch.nn.parallel import DistributedDataParallel
-
 from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration_json
 from src.games.composition import create_game_implementation
 from src.games.implementation import GameImplementation
 from src.replay.batch_loader import MappedReplayBatchLoader
 from src.training.batch import TrainingModelOutput
 from src.training.checkpoint import CheckpointReference
-from src.training.checkpoint.persistence import load_model_and_optimizer, save_model_and_optimizer
 from src.training.checkpoint.paths import checkpoint_manifest_path
+from src.training.checkpoint.persistence import load_model_and_optimizer, save_model_and_optimizer
+from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
+from src.training.distributions import TrainingDistributionSnapshot, capture_training_distributions
 from src.training.network import Network
 from src.training.objective import ResolvedTrainingObjective
-from src.training.distributions import TrainingDistributionSnapshot, capture_training_distributions
-from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
 from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
     StopTrainerCommand,
     TrainerCommand,
-    TrainerStopped,
     TrainerStartup,
+    TrainerStopped,
     TrainQuantumCommand,
 )
+from torch import nn
+from torch.nn.parallel import DistributedDataParallel
 
 
 class DistributedTrainingModel(nn.Module):

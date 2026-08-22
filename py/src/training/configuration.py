@@ -5,10 +5,6 @@ from enum import Enum
 from typing import Literal
 
 from pydantic import Field, model_validator
-from src.experiment.generation_schedule import (
-    FloatGenerationSchedule,
-    defined_schedule_values,
-)
 from src.replay.configuration import ReplayConfiguration
 from src.self_play.configuration import (
     AdaptiveFullSearchBudgetConfiguration,
@@ -23,6 +19,10 @@ from src.training.progressive import (
 from src.training.run_limits import RuntimeLimits
 from src.training.targets import AuxiliaryTargetConfiguration
 from src.util.frozen_model import FrozenModel
+from src.util.generation_schedule import (
+    FloatGenerationSchedule,
+    defined_schedule_values,
+)
 
 
 class TrainerTopologyParams(FrozenModel):

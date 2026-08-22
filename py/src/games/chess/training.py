@@ -4,14 +4,12 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from src.evaluation.configuration import EvaluationSearchConfiguration
-from src.experiment.generation_schedule import FloatGenerationSchedule
 from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.chess.syzygy import SyzygyTerminalOracle
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import BatchedInferenceParams
-from src.self_play.native_configuration import native_sdpa_backend
 from src.self_play.native_search import NativeSelfPlaySearch
 from src.self_play.parameters import (
     FixedFullSearchBudget,
@@ -22,6 +20,7 @@ from src.self_play.resignation import CalibratedResignationConfiguration
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
+from src.util.generation_schedule import FloatGenerationSchedule
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import ChessSelfPlaySearch
@@ -132,18 +131,11 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         from AlphaZeroCpp import (
             BatchedInferenceParameters,
             ChessSelfPlaySearch,
-            InferenceConfiguration,
-            InferenceDevice,
         )
 
-        device = InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA
+        self.validate_native_dimensions(ChessSelfPlaySearch.inference_dimensions())
         return ChessSelfPlaySearch(
-            InferenceConfiguration(
-                device_id,
-                str(checkpoint.inference_model_path),
-                device,
-                native_sdpa_backend(inference.sdpa_backend),
-            ),
+            self.native_inference_configuration(device_id, checkpoint.inference_model_path, inference),
             self.native_search_parameters(parameters),
             BatchedInferenceParameters(
                 inference.inference_workers,

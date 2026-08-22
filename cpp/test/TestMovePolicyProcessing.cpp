@@ -52,10 +52,10 @@ void requireLegalRoundTrips(const Board &board, const std::string &description) 
 }
 
 std::vector<float> finiteLogits() {
-    std::vector<float> policy(ChessEncoding::action_count);
-    for (const int actionId : range(ChessEncoding::action_count)) {
+    std::vector<float> policy(ChessEncoding::actionCount);
+    for (const int actionId : range(ChessEncoding::actionCount)) {
         policy[actionId] = 1000.0F + static_cast<float>(actionId) /
-                                         static_cast<float>(ChessEncoding::action_count);
+                                         static_cast<float>(ChessEncoding::actionCount);
     }
     return policy;
 }
@@ -91,9 +91,9 @@ void testRepresentativePositions() {
 }
 
 void testDirectPolicyLayout() {
-    require(ChessEncoding::action_count == ChessRepresentationDimensions::policy_plane_count * 64,
+    require(ChessEncoding::actionCount == ChessRepresentationDimensions::policyPlaneCount * 64,
             "chess action space is not the direct policy-plane layout");
-    for (const int actionId : range(ChessEncoding::action_count)) {
+    for (const int actionId : range(ChessEncoding::actionCount)) {
         require(ChessEncoding::mirrorActionId(ChessEncoding::mirrorActionId(actionId)) == actionId,
                 "policy-plane mirroring is not an involution");
     }
@@ -195,7 +195,7 @@ void testDecodeRejections() {
         "negative chess action id was accepted");
     requireInvalidArgument(
         [&initial] {
-            static_cast<void>(ChessEncoding::decodeAction(ChessEncoding::action_count, initial));
+            static_cast<void>(ChessEncoding::decodeAction(ChessEncoding::actionCount, initial));
         },
         "out-of-range chess action id was accepted");
     requireInvalidArgument(
@@ -208,7 +208,7 @@ void testDecodeRejections() {
 
 void testStableLegalOnlySoftmax() {
     const Board board;
-    std::vector<float> policy(ChessEncoding::action_count, std::numeric_limits<float>::quiet_NaN());
+    std::vector<float> policy(ChessEncoding::actionCount, std::numeric_limits<float>::quiet_NaN());
     for (const Stockfish::Move move : board.validMoves()) {
         policy[ChessEncoding::actionId(ChessAction(move), board)] = 1'000.0F;
     }
@@ -244,17 +244,17 @@ void testGoPointPassLegalOnlySoftmax() {
     const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
     const Go7Game::State position(rules);
     const Go7Game::State occupied = position.child(GoAction<7>(0));
-    std::vector<float> policy(GoRepresentationDimensions<7>::action_count,
+    std::vector<float> policy(GoRepresentationDimensions<7>::actionCount,
                               std::numeric_limits<float>::quiet_NaN());
     for (const GoAction<7> action : Go7Game::legalActions(occupied)) {
         policy[Go7Game::Encoding::actionId(action, occupied)] = 0.0F;
     }
-    policy[GoAction<7>::pass_id] += std::log(3.0F);
+    policy[GoAction<7>::passId] += std::log(3.0F);
 
     const SearchInferenceResult<Go7Game> result =
         processInferencePosition<Go7Game>(policy.data(), validOutcome.data(), 0.5F, occupied);
     require(result.actions.size() == 49, "Go legal-only softmax returned the wrong action count");
-    require(result.actions.back().first.is_pass(), "Go pass was not the final point-pass action");
+    require(result.actions.back().first.isPass(), "Go pass was not the final point-pass action");
     require(std::abs(result.actions.back().second - 1.0F / 17.0F) <= scoreTolerance,
             "Go legal-only softmax did not preserve the pass-logit ratio");
     float probabilitySum = 0.0F;

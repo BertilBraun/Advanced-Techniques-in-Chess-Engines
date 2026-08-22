@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import random
-from dataclasses import dataclass
 from math import log
 from pathlib import Path
 
@@ -48,15 +47,14 @@ from src.evaluation.katago_book import (
 )
 from src.evaluation.openings import build_katago_book_opening_suite, build_opening_suite
 from src.experiment.configuration import load_experiment_configuration
-from src.games.contracts import GameStateContract, Player, WdlTarget
-from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
-from src.replay.contracts import ReplaySample
-from src.self_play.completed_game import TerminationReason
-from src.training.checkpoint import CheckpointReference
+from src.games.contracts import GameStateContract
+from test_helpers.checkpoints import checkpoint_reference
+from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_CONFIG_DIRECTORY
+from test_helpers.fake_game_state import FakePosition, go_like_fake_game_state
 
 
 def test_checked_in_go_baseline_reference_artifacts_match_configuration() -> None:
-    experiment = load_experiment_configuration(Path('configs/baselines/vast-go-7x7-2gpu-4h.yaml'))
+    experiment = load_experiment_configuration(REPOSITORY_CONFIG_DIRECTORY / 'baselines' / 'vast-go-7x7-2gpu-4h.yaml')
     dataset_path = Path(experiment.evaluation.dataset.path).relative_to('py')
     openings_path = Path(experiment.evaluation.openings.path).relative_to('py')
     dataset_manifest = EvaluationDatasetManifest.model_validate_json(
@@ -75,7 +73,7 @@ def test_checked_in_go_baseline_reference_artifacts_match_configuration() -> Non
 
 
 def test_checked_in_go_9x9_book_export_matches_configuration() -> None:
-    experiment = load_experiment_configuration(Path('test/configs/go-9x9-experiment.yaml'))
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'go-9x9-experiment.yaml')
     opening_source = experiment.evaluation.openings.source
     dataset_source = experiment.evaluation.dataset.source
     assert opening_source.kind == 'katago_book'
@@ -106,7 +104,7 @@ def test_checked_in_go_9x9_book_export_matches_configuration() -> None:
 
 
 def test_checked_in_go_9x9_derived_artifacts_use_book_policy_and_production_rules() -> None:
-    experiment = load_experiment_configuration(Path('configs/baselines/vast-go-9x9-2gpu-4h.yaml'))
+    experiment = load_experiment_configuration(REPOSITORY_CONFIG_DIRECTORY / 'baselines' / 'vast-go-9x9-2gpu-4h.yaml')
     dataset_path = Path(experiment.evaluation.dataset.path).relative_to('py')
     openings_path = Path(experiment.evaluation.openings.path).relative_to('py')
     dataset_manifest = KataGoBookDatasetManifest.model_validate_json(
@@ -217,86 +215,6 @@ def test_katago_book_orientation_transforms_paths_and_labels_evenly() -> None:
     assert oriented[4].position.preferred_action_id == 10
 
 
-@dataclass(frozen=True)
-class FakePosition:
-    actions: tuple[int, ...]
-
-
-class FakeState(GameStateContract[FakePosition]):
-    @property
-    def name(self) -> str:
-        return 'go'
-
-    @property
-    def action_size(self) -> int:
-        return 4
-
-    @property
-    def representation(self) -> RepresentationDimensions:
-        layout = PackedPlaneLayout(8, 1, 0)
-        return RepresentationDimensions(1, 8, 8, (0,), (), layout)
-
-    def initial_position(self) -> FakePosition:
-        return FakePosition(())
-
-    def legal_action_ids(self, position: FakePosition) -> tuple[int, ...]:
-        return () if len(position.actions) == 60 else (0, 1, 2, 3)
-
-    def child_position(self, position: FakePosition, action_id: int) -> FakePosition:
-        if action_id not in self.legal_action_ids(position):
-            raise ValueError('Illegal fake action.')
-        return FakePosition((*position.actions, action_id))
-
-    def is_irreversible_transition(self, position: FakePosition, action_id: int, child: FakePosition) -> bool:
-        del position, action_id, child
-        return False
-
-    def current_player(self, position: FakePosition) -> Player:
-        return Player.FIRST if len(position.actions) % 2 == 0 else Player.SECOND
-
-    def natural_terminal_wdl(self, position: FakePosition) -> WdlTarget | None:
-        return WdlTarget(win=0.0, draw=1.0, loss=0.0) if len(position.actions) == 60 else None
-
-    def adjudicated_wdl(self, position: FakePosition, reason: TerminationReason) -> WdlTarget:
-        return WdlTarget(win=0.0, draw=1.0, loss=0.0)
-
-    def encode_network_input(self, position: FakePosition) -> PackedPlanePayload:
-        digest = hashlib.sha256(bytes(position.actions)).digest()[:8]
-        return self.packed_plane_layout.value(digest)
-
-    @property
-    def augmentation_count(self) -> int:
-        return 1
-
-    def transform_action_id(self, action_id: int, augmentation_index: int) -> int:
-        return action_id
-
-    def transform_encoded_state(
-        self,
-        encoded_state: PackedPlanePayload,
-        augmentation_index: int,
-    ) -> PackedPlanePayload:
-        return encoded_state
-
-    def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
-        return sample
-
-
-class FakeGoBookState(FakeState):
-    @property
-    def action_size(self) -> int:
-        return 82
-
-    def legal_action_ids(self, position: FakePosition) -> tuple[int, ...]:
-        return () if len(position.actions) == 60 else tuple(range(82))
-
-
-class PartiallyLegalFakeState(FakeState):
-    @property
-    def action_size(self) -> int:
-        return 5
-
-
 class FakeEngine:
     game_name = 'go'
     rules_digest = '1' * 64
@@ -323,14 +241,6 @@ class FakeBookMetadata:
 
     def render_game(self, action_ids: tuple[int, ...]) -> str:
         return ' '.join(str(action_id) for action_id in action_ids)
-
-
-class TerminalWithLegalMovesState(FakeState):
-    def legal_action_ids(self, position: FakePosition) -> tuple[int, ...]:
-        return (0, 1, 2, 3)
-
-    def natural_terminal_wdl(self, position: FakePosition) -> WdlTarget | None:
-        return WdlTarget(win=0.0, draw=1.0, loss=0.0) if position.actions else None
 
 
 class TerminalGuardEngine(FakeEngine):
@@ -388,14 +298,7 @@ def _fixed_dataset_job(
         job_id='fixed-dataset',
         definition=FixedDatasetEvaluationDefinition(kind='fixed_dataset', definition_id='fixed-dataset'),
         boundary_seconds=1200,
-        candidate=CheckpointReference(
-            generation=1,
-            manifest_path=tmp_path / 'checkpoint.json',
-            model_path=tmp_path / 'model.pt',
-            optimizer_path=tmp_path / 'optimizer.pt',
-            inference_model_path=inference_path,
-            inference_model_sha256='0' * 64,
-        ),
+        candidate=checkpoint_reference(tmp_path).model_copy(update={'inference_model_path': inference_path}),
         device_id=0,
         deadline_seconds=60,
         random_seed=7,
@@ -467,8 +370,8 @@ def test_opening_builder_expands_four_plies_and_reuses_manifest(tmp_path: Path) 
         ),
     )
 
-    manifest = build_opening_suite(path, configuration, FakeState(), FakeEngine(), 'revision')
-    loaded = build_opening_suite(path, configuration, FakeState(), FakeEngine(), 'revision')
+    manifest = build_opening_suite(path, configuration, go_like_fake_game_state(), FakeEngine(), 'revision')
+    loaded = build_opening_suite(path, configuration, go_like_fake_game_state(), FakeEngine(), 'revision')
 
     assert manifest == loaded
     assert len(manifest.openings) == 50
@@ -492,7 +395,7 @@ def test_book_opening_and_dataset_builders_replay_paths_and_reuse_artifacts(tmp_
         path=str(dataset_path),
         source=KataGoBookDatasetSource(kind='katago_book', position_count=480, selection=selection),
     )
-    book_state = FakeGoBookState()
+    book_state = go_like_fake_game_state(action_size=82, legal_action_ids=tuple(range(82)))
     book_metadata = FakeBookMetadata()
 
     openings = build_katago_book_opening_suite(
@@ -559,7 +462,7 @@ def test_dataset_builder_retains_every_third_position_in_requested_range(tmp_pat
         source=EngineSelfPlayDatasetSource(kind='engine_self_play', random_seed=7, move_sampling_temperature=1.0),
     )
 
-    manifest = build_evaluation_dataset(path, configuration, FakeState(), FakeEngine(), 'revision')
+    manifest = build_evaluation_dataset(path, configuration, go_like_fake_game_state(), FakeEngine(), 'revision')
     data = load_evaluation_dataset(path, manifest)
 
     assert 480 <= manifest.position_count <= 520
@@ -575,7 +478,9 @@ def test_dataset_builder_retains_every_third_position_in_requested_range(tmp_pat
         dataset_manifest_path(path).read_text(encoding='utf-8')
     )
     assert persisted_manifest == manifest
-    assert build_evaluation_dataset(path, configuration, FakeState(), FakeEngine(), 'revision') == manifest
+    assert (
+        build_evaluation_dataset(path, configuration, go_like_fake_game_state(), FakeEngine(), 'revision') == manifest
+    )
 
 
 def test_dataset_builder_stops_at_natural_terminal_with_remaining_legal_actions() -> None:
@@ -586,7 +491,7 @@ def test_dataset_builder_stops_at_natural_terminal_with_remaining_legal_actions(
             path='terminal.bin',
             source=EngineSelfPlayDatasetSource(kind='engine_self_play', random_seed=0, move_sampling_temperature=1.0),
         ),
-        state=TerminalWithLegalMovesState(),
+        state=go_like_fake_game_state(terminal_ply=1, legal_actions_at_terminal=True),
         engine=TerminalGuardEngine(),
         generator=random.Random(0),
     )
@@ -596,7 +501,7 @@ def test_dataset_builder_stops_at_natural_terminal_with_remaining_legal_actions(
 
 
 def test_fixed_dataset_evaluates_raw_policy_metrics(tmp_path: Path) -> None:
-    state = FakeState()
+    state = go_like_fake_game_state()
     dataset_path, manifest = _build_fake_evaluation_dataset(tmp_path, state)
     job = _fixed_dataset_job(tmp_path, FixedPolicyModel())
 
@@ -608,7 +513,7 @@ def test_fixed_dataset_evaluates_raw_policy_metrics(tmp_path: Path) -> None:
 
 
 def test_fixed_dataset_excludes_illegal_logits_from_policy_metrics(tmp_path: Path) -> None:
-    state = PartiallyLegalFakeState()
+    state = go_like_fake_game_state(action_size=5)
     dataset_path, manifest = _build_fake_evaluation_dataset(tmp_path, state)
     job = _fixed_dataset_job(tmp_path, FixedPolicyWithIllegalLogitModel())
 
@@ -620,7 +525,7 @@ def test_fixed_dataset_excludes_illegal_logits_from_policy_metrics(tmp_path: Pat
 
 
 def test_fixed_dataset_rejects_policy_targets_outside_stored_legal_set(tmp_path: Path) -> None:
-    state = PartiallyLegalFakeState()
+    state = go_like_fake_game_state(action_size=5)
     dataset_path, manifest = _build_fake_evaluation_dataset(tmp_path, state)
     data = load_evaluation_dataset(dataset_path, manifest)
     data_dtype = data.dtype

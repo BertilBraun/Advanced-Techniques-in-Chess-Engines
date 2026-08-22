@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
-
 from src.games.chess.contract import (
     CHESS_STATE_CONTRACT,
     OPPONENT_KING_SIDE_CASTLING_PLANE,

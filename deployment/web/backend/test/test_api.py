@@ -4,15 +4,15 @@ from dataclasses import dataclass
 
 import chess
 from fastapi.testclient import TestClient
-
-from deployment.web.backend.api import create_app
-from deployment.web.backend.service import GameService
 from src.games.chess.interactive.analysis import (
     AnalysisRequest,
     AnalysisResult,
     CandidateAnalysis,
     OutcomePrediction,
 )
+
+from deployment.web.backend.api import create_app
+from deployment.web.backend.service import GameService
 
 
 @dataclass

@@ -4,13 +4,12 @@ import hashlib
 from pathlib import Path
 
 import pytest
-
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint import CheckpointManifest, CheckpointReference
 from src.training.checkpoint.retention import CheckpointRetention
 from src.training.network import GoPointPassPolicyHeadConfiguration, NetworkDefinition, NetworkParams
-
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
 NETWORK_DEFINITION = NetworkDefinition(
     architecture=NetworkParams(num_layers=1, hidden_size=8, policy_head=GoPointPassPolicyHeadConfiguration()),
@@ -44,7 +43,7 @@ def _write_checkpoint(run_path: Path, generation: int) -> None:
 
 
 def _retention(run_path: Path) -> CheckpointRetention:
-    experiment = load_chess_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    experiment = load_chess_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     inference_retention = experiment.training.lifecycle.inference_retention.validated_copy(
         update={'recent_checkpoint_count': 3, 'milestone_interval': 5}
     )

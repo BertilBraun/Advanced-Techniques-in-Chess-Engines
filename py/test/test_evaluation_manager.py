@@ -1,18 +1,23 @@
-from collections.abc import Callable
+from __future__ import annotations
+
 import hashlib
-from pathlib import Path
 import pickle
+from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 from pydantic import TypeAdapter
-from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-from tensorboard.plugins.custom_scalar import layout_pb2
-
+from src.evaluation.configuration import (
+    EvaluationConfiguration,
+    ReferenceCheckpointEvaluationDefinition,
+    StockfishFixedNodesEvaluationDefinition,
+)
 from src.evaluation.contracts import (
+    EVALUATION_JOB_ADAPTER,
     CandidateOutcome,
     CheckpointOpponent,
+    ElapsedCheckpointReference,
     EvaluationFailurePhase,
-    EVALUATION_JOB_ADAPTER,
     EvaluationGameResult,
     EvaluationReferenceManifest,
     EvaluationResult,
@@ -23,12 +28,6 @@ from src.evaluation.contracts import (
     MatchAggregate,
     MatchEvaluationJob,
     MatchEvaluationResult,
-    ElapsedCheckpointReference,
-)
-from src.evaluation.configuration import (
-    EvaluationConfiguration,
-    ReferenceCheckpointEvaluationDefinition,
-    StockfishFixedNodesEvaluationDefinition,
 )
 from src.evaluation.ladder import STOCKFISH_FIXED_NODES_ANCHOR_ELO
 from src.evaluation.manager import EvaluationManager
@@ -38,6 +37,10 @@ from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
 from src.util.tensorboard import TensorboardWriter
+from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+from tensorboard.plugins.custom_scalar import layout_pb2
+from test_helpers.checkpoints import checkpoint_reference
+from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_CONFIG_DIRECTORY
 
 
 class FakeClock:
@@ -101,14 +104,7 @@ class FakeProcessContext:
 
 
 def checkpoint(run_path: Path, generation: int) -> CheckpointReference:
-    return CheckpointReference(
-        generation=generation,
-        manifest_path=run_path / f'checkpoint-{generation}.json',
-        model_path=run_path / f'model-{generation}.pt',
-        optimizer_path=run_path / f'optimizer-{generation}.pt',
-        inference_model_path=run_path / f'inference-{generation}.pt',
-        inference_model_sha256='0' * 64,
-    )
+    return checkpoint_reference(run_path, generation)
 
 
 def experiment_configuration(
@@ -116,7 +112,7 @@ def experiment_configuration(
     job_timeout_seconds: float = 10.0,
     shutdown_grace_seconds: float = 0.1,
 ) -> ChessExperimentConfiguration:
-    loaded = load_experiment_configuration(Path('test/configs/chess-experiment.yaml'))
+    loaded = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     assert isinstance(loaded, ChessExperimentConfiguration)
     training = loaded.training.model_copy(
         update={
@@ -295,7 +291,7 @@ def test_manager_limits_active_evaluation_processes(tmp_path: Path) -> None:
 
 
 def test_baseline_schedule_keeps_only_three_recent_checkpoint_offsets(tmp_path: Path) -> None:
-    experiment = load_experiment_configuration(Path('configs/baselines/vast-go-7x7-2gpu-4h.yaml'))
+    experiment = load_experiment_configuration(REPOSITORY_CONFIG_DIRECTORY / 'baselines' / 'vast-go-7x7-2gpu-4h.yaml')
     experiment = experiment.model_copy(
         update={'evaluation': experiment.evaluation.model_copy(update={'cadence_seconds': 20})}
     )

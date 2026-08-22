@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.evaluation.contracts import AnyEvaluationDatasetManifest, AnyOpeningSuiteManifest
 from src.evaluation.dataset import (
     build_evaluation_dataset,
     build_katago_book_evaluation_dataset,
@@ -13,7 +14,6 @@ from src.evaluation.openings import (
     build_katago_book_opening_suite,
     build_opening_suite,
 )
-from src.evaluation.contracts import AnyEvaluationDatasetManifest, AnyOpeningSuiteManifest
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.stockfish import StockfishClient

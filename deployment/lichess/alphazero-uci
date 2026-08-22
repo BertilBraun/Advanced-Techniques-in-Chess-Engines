@@ -3,7 +3,7 @@ set -euo pipefail
 
 : "${MODEL_PATH:?MODEL_PATH must point to the downloaded TorchScript model}"
 
-engine_repository_root="${ENGINE_REPOSITORY_ROOT:-/workspace}"
+engine_repository_root="${ENGINE_REPOSITORY_ROOT:-/workspace/alphazero-engine}"
 engine_python="${ENGINE_PYTHON:-python3.10}"
 
 cd "${engine_repository_root}/py"

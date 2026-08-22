@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from threading import Event
 
 import pytest
-
+from src.games.chess.interactive.analysis import AnalysisRequest, TimedMctsAnalysis
+from src.games.chess.uci.engine import UciConfiguration, UciGame
 from src.games.chess.uci.server import (
     PositionCommand,
     SearchMode,
@@ -14,8 +15,6 @@ from src.games.chess.uci.server import (
     parse_position,
     parse_search_mode,
 )
-from src.games.chess.interactive.analysis import AnalysisRequest, TimedMctsAnalysis
-from src.games.chess.uci.engine import UciConfiguration, UciGame
 
 
 @dataclass(frozen=True)
