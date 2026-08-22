@@ -282,6 +282,10 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "CompileCheck")
             COMMAND ${CMAKE_COMMAND} -E env
             PYTHONPATH=${PYTHON_MODULE_OUTPUT_DIR}
             ${Python3_EXECUTABLE} -m pybind11_stubgen AlphaZeroCpp -o ${CMAKE_CURRENT_BINARY_DIR}/stubs
+
+            # The committed stub IS the generated stub: hand edits drift from the bindings.
+            COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_CURRENT_BINARY_DIR}/stubs/AlphaZeroCpp.pyi ${PYTHON_MODULE_OUTPUT_DIR}/AlphaZeroCpp.pyi
     )
 endif ()
 
