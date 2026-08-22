@@ -13,3 +13,7 @@ This archive retains selected evidence-bearing material:
 
 The former trainer roadmap, clean-training-run plan, and duplicate future-work list were intentionally deleted
 rather than archived because their detailed instructions could be mistaken for current authority.
+
+`media/` holds era plots and raw measurement text referenced by the optimization notes, plus unlinked legacy
+plots kept for the record: `self-play-problem.png`, `inference-server-problem.png`,
+`fuse-compile-inference-speed.png`, `inference-speed-by-gpu-and-dtype.txt`, `mcts-speed-test-results.txt`.

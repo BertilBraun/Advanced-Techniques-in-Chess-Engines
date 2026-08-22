@@ -49,6 +49,14 @@ unstaged `parallel_searches` at low visits (WP3/WP6), and the castling-plane mir
 see [run-control.md](operations/run-control.md). A run that has no fetched archive under `.codex-diagnostics/`
 did not happen. Node facts live in [operations/current-node.md](operations/current-node.md).
 
+## Architecture diagrams
+
+[C++ overview](architecture/diagrams/cpp-overview.png) ·
+[inference pipeline](architecture/diagrams/cpp-inference-pipeline.png) ·
+[chess input representation](architecture/diagrams/chess-input-representation.png) ·
+[network architecture](architecture/diagrams/neural-network-architecture.png)
+(era: pre-rework — structure still broadly accurate, details superseded).
+
 ## Deliberately not happening
 
 No multi-day run until Run 1 and Run 2 of Phase B pass. No Go screening. No checkpoint averaging or model gating.
