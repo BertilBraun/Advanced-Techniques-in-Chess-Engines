@@ -33,7 +33,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
     using Request = SelfPlaySearchRequest<Game>;
     using Result = SelfPlaySearchResult<Game>;
     using Batch = SelfPlaySearchBatch<Game>;
-    constexpr InferenceDimensions dimensions = Game::Encoding::inferenceDimensions();
+    static constexpr InferenceDimensions dimensions = Game::Encoding::inferenceDimensions();
 
     py::class_<Root> root(module, names.root);
     root.def_property_readonly("position", &Root::position)
