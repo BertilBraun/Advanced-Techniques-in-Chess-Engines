@@ -1,7 +1,7 @@
 # Self-play search throughput — 1× RTX 4070, 2026-08-21 (WP5, trimmed)
 
 Node: Vast.ai `cae651504bf0` (Phase A test node; see
-`documentation/operations/node-provisioning-phase-a-test-20260821.md`). Source `phase-a` @ `0fe515c0`;
+`documentation/evidence/node-phase-a-20260821.md`). Source `phase-a` @ `0fe515c0`;
 run configuration: `vast-chess-8gpu-run1.yaml` with the stand-in 3-per-GPU topology,
 `experiment_configuration_sha256 f52e87ae8ee34e22bf60a3453147d4dddb4f49c214ee8b1e84af83bc244563d3`.
 Tool: `py/tools/benchmark_self_play_search.py`, single process, 512 parallel games, 2 inference workers,

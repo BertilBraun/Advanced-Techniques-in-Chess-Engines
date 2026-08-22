@@ -1,6 +1,6 @@
 # Supervised testbed on the converted four-day replay — 1× RTX 4070, 2026-08-21 (WP4, trimmed)
 
-Node and provenance: Phase A test node (`node-provisioning-phase-a-test-20260821.md`), source `master` @
+Node and provenance: Phase A test node (`documentation/evidence/node-phase-a-20260821.md`), source `master` @
 `631d4b53` (run at `phase-a` 0d548d6f-era tree, identical py/ content), tool
 `py/tools/benchmark_supervised_testbed.py`, configuration `vast-chess-8gpu-run1.yaml` with stand-in topology
 (r3 objective: policy + WDL + next_policy 0.1 + remaining_game_length 0.1). Raw report:
