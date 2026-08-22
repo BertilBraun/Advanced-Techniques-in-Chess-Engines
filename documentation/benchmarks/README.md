@@ -26,8 +26,10 @@ records the exact `6x96 -> 10x160 -> 15x192` production-model throughput and par
 - [Naive Python chess MCTS baseline](naive-python-mcts-rtx3060-20260816/README.md) — deliberately unoptimized
   batch-one PUCT reference (~81 sims/s) as an order-of-magnitude comparison for the native search.
 - [Two-GPU Go 7x7 training baseline](go-7x7-training-baseline-2xrtx3060-20260810/README.md) — proposed comparison baseline.
-- `chess-results/` — the original 2024 trained model, games, plots, and logs as historical strength evidence
-  (large binaries; scheduled to move to the `pre-rework` GitHub release).
+- [Stockfish ladder on the four-day checkpoints](chess-stockfish-ladder-8xrtx3060-20260816/README.md) — the
+  generation-445 ladder report and match records. The unrelated 2024 legacy artifacts that shared the old
+  `chess-results/` directory live in [evidence/chess-legacy-a10-2024/](../evidence/chess-legacy-a10-2024/README.md)
+  and the `pre-rework` GitHub release.
 
 ## Reading notes
 

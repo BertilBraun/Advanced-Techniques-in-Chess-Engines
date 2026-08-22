@@ -44,7 +44,7 @@ The complete per-position snapshots and candidate metrics are in
 
 A read-only search covered `/workspace/alphazero-engine` and all other model artifacts under `/workspace`. The only
 plausible trained artifact was
-`/workspace/alphazero-engine/documentation/benchmarks/chess-results/best_model.jit.pt`; its metadata identifies an old
+`documentation/benchmarks/chess-results/best_model.jit.pt` (since moved to the `pre-rework` release; see `documentation/evidence/chess-legacy-a10-2024/README.md`); its metadata identifies an old
 12-hour run and its TorchScript forward method returns two tensors. The discovered
 `current-r3-seed-20260818.jit.pt` and both architecture benchmark models are also benchmark artifacts with the old
 two-output ABI. None contains the learned search-correction output required for representative gate calibration.

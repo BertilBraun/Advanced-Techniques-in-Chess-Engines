@@ -20,7 +20,7 @@ positions from one ECO code.
 The resulting suite contains 200 unique positions across 114 ECO codes. Source frequency ranges from 66 to 6,312
 games. Stockfish evaluations range from -34 to +50 centipawns with a +27.1-centipawn mean. Exact source, engine,
 filter, frequency, evaluation, and WDL evidence is in
-`documentation/benchmarks/chess-results/chess-elite-2025-11-balanced-4moves-200-v1-report.json`.
+`documentation/benchmarks/chess-stockfish-ladder-8xrtx3060-20260816/chess-elite-2025-11-balanced-4moves-200-v1-report.json`.
 
 Build its native opening manifest in a prepared revision:
 

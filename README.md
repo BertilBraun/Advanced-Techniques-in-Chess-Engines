@@ -7,7 +7,7 @@ telemetry, and artifact management.
 
 The original chess project produced an approximately 2000-2100 Elo model on a modest personal research budget.
 Those models, games, plots, and logs remain available as
-[historical result evidence](documentation/benchmarks/chess-results/); they do not describe the current runtime.
+[historical result evidence](documentation/evidence/chess-legacy-a10-2024/README.md); they do not describe the current runtime.
 
 ## Current architecture
 
