@@ -3,6 +3,7 @@ from typing import cast
 
 import torch
 import pytest
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from torch import nn
 

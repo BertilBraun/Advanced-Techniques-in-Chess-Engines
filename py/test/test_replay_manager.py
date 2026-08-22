@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from src.experiment.generation_schedule import ConstantSchedule
 from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget

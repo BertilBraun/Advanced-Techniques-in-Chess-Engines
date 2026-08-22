@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import src.training.reporting as reporting_module
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from src.games.representation import PackedPlaneLayout
 from src.replay.layout import ReplayLayout

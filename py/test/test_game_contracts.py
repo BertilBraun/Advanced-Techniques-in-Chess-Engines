@@ -3,6 +3,7 @@ from uuid import UUID
 
 import pytest
 import torch
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from pydantic import ValidationError
 from src.experiment.configuration import load_experiment_configuration

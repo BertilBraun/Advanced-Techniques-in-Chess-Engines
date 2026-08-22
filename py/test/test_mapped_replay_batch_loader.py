@@ -4,6 +4,7 @@ from threading import Event
 
 import torch
 import pytest
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessStateContract

@@ -3,11 +3,13 @@ from __future__ import annotations
 from enum import Enum
 from math import isclose, isfinite
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from AlphaZeroCpp import GameSearchVisit
 from pydantic import ConfigDict, Field
+
+if TYPE_CHECKING:
+    from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import WdlTarget
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -33,6 +35,9 @@ class SearchVisitCounts(FrozenModel):
         )
 
     def native_visits(self) -> tuple[GameSearchVisit, ...]:
+        # Imported here so the on-disk game schema stays importable without the native extension.
+        from AlphaZeroCpp import GameSearchVisit
+
         return tuple(
             GameSearchVisit(action_id=action_id, visit_count=visit_count)
             for action_id, visit_count in zip(self.action_ids, self.visit_counts, strict=True)

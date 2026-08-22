@@ -6,6 +6,7 @@ from uuid import UUID
 
 import numpy as np
 import pytest
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit, SearchCheckpoint
 from AlphaZeroCpp import SearchStopReason as NativeSearchStopReason
 from src.games.contracts import TerminalOracle, WdlTarget

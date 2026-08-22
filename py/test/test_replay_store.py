@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 
 from src.games.contracts import WdlTarget

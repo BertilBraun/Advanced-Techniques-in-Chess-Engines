@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import WdlTarget
 from src.self_play.completed_game import (

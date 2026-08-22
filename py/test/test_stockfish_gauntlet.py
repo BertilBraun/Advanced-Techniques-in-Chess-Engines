@@ -3,6 +3,9 @@ from pathlib import Path
 from src.evaluation.configuration import StockfishEngineConfiguration
 from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult, EvaluationTerminationReason
 from src.experiment.configuration import load_chess_experiment_configuration
+import pytest
+
+pytest.importorskip('AlphaZeroCpp')
 from tools.run_stockfish_gauntlet import (
     FixedModelSearchBudget,
     GauntletShardResult,

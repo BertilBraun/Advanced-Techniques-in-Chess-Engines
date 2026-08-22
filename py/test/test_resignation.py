@@ -5,6 +5,7 @@ from uuid import UUID
 
 import pytest
 import src.self_play.resignation as resignation_module
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from pydantic import ValidationError
 from src.games.contracts import WdlTarget

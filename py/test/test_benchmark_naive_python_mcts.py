@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import chess
 
+import pytest
+
+pytest.importorskip('AlphaZeroCpp')
 from tools.benchmark_naive_python_mcts import SearchNode, backup, select_child, terminal_value
 
 
