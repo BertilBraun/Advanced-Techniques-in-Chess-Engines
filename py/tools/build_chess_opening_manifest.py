@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-import subprocess
 
 from src.evaluation.configuration import (
     ChessBookOpeningSource,
@@ -15,15 +14,7 @@ from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.stockfish import StockfishClient
 from src.games.chess.training import ChessImplementation
 from src.util.hashing import file_sha256
-
-
-def _source_revision() -> str:
-    return subprocess.run(
-        ('git', 'rev-parse', 'HEAD'),
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+from src.util.provenance import read_source_revision
 
 
 def build_manifest(
@@ -68,7 +59,7 @@ def build_manifest(
             configuration,
             game.state,
             engine,
-            _source_revision(),
+            read_source_revision().commit,
         )
 
 

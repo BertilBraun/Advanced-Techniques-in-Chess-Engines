@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import math
-import subprocess
 import time
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
@@ -24,13 +23,14 @@ from src.training.network import (
     ResidualContextPlacement,
 )
 from src.training.targets import SearchCorrectionHeadLayout, build_training_target_layout
+from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 from src.util.hashing import file_sha256
+from src.util.provenance import SourceRevision, read_source_revision
 
 DEFAULT_CONFIGURATION_PATH = Path(__file__).resolve().parents[1] / 'configs/production/vast-chess-8gpu-optimal.yaml'
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ExecutionMode(str, Enum):
@@ -66,11 +66,6 @@ class BenchmarkArguments:
     duration_seconds: float
     include_diagnostic_controls: bool
     acknowledge_gpu_load: bool
-
-
-class SourceRevision(FrozenModel):
-    commit: str = Field(min_length=40, max_length=40)
-    dirty: bool
 
 
 class ParameterCounts(FrozenModel):
@@ -216,24 +211,6 @@ def _search_correction_parameter_count(network: Network) -> int:
             case SearchCorrectionHeadLayout():
                 return module_parameter_count(module)
     return 0
-
-
-def _source_revision() -> SourceRevision:
-    commit = subprocess.run(
-        ('git', 'rev-parse', 'HEAD'),
-        cwd=REPOSITORY_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    status = subprocess.run(
-        ('git', 'status', '--porcelain'),
-        cwd=REPOSITORY_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-    return SourceRevision(commit=commit, dirty=bool(status.strip()))
 
 
 def _attention_backend_context(backend: AttentionBackend) -> AbstractContextManager[None]:
@@ -427,7 +404,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> ChessInferenceBenchmarkRepor
 
     properties = torch.cuda.get_device_properties(device)
     return ChessInferenceBenchmarkReport(
-        source_revision=_source_revision(),
+        source_revision=read_source_revision(),
         configuration_path=str(arguments.configuration_path),
         configuration_sha256=file_sha256(arguments.configuration_path),
         hardware=HardwareDescription(
@@ -451,8 +428,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> ChessInferenceBenchmarkRepor
 def main() -> None:
     arguments = parse_arguments()
     report = run_benchmark(arguments)
-    arguments.output_path.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output_path.write_text(report.model_dump_json(indent=2) + '\n', encoding='utf-8')
+    write_text_atomically(arguments.output_path, report.model_dump_json(indent=2) + '\n')
     print(arguments.output_path)
 
 

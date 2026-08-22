@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess
 import time
 
 from src.evaluation.configuration import (
@@ -30,6 +29,7 @@ from src.games.go.training import GoImplementation
 from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
+from src.util.provenance import read_source_revision
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -54,15 +54,6 @@ class Arguments:
 def _project_path(path: str) -> Path:
     candidate = Path(path)
     return candidate if candidate.is_absolute() else PROJECT_ROOT / candidate
-
-
-def _source_revision() -> str:
-    return subprocess.run(
-        ('git', 'rev-parse', 'HEAD'),
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
 
 
 def _model_search(configuration: GoExperimentConfiguration) -> EvaluationSearchConfiguration:
@@ -172,7 +163,7 @@ def run_diagnostic(arguments: Arguments) -> GoEvaluationDiagnosticResult:
     write_go_diagnostic_match(visits, arguments.output_directory / '03-katago-16-versus-128.json')
 
     result = GoEvaluationDiagnosticResult(
-        source_revision=_source_revision(),
+        source_revision=read_source_revision().commit,
         experiment_path=arguments.experiment.resolve(),
         opening_manifest_path=arguments.opening_manifest.resolve(),
         opening_manifest_sha256=file_sha256(arguments.opening_manifest),

@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import threading
 import time
 from dataclasses import asdict, dataclass
@@ -22,7 +21,9 @@ from AlphaZeroCpp import (
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )
+from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
+from src.util.provenance import read_source_revision
 
 INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 BYTES_PER_MIB = 2**20
@@ -304,12 +305,7 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
             f'GPU memory grew by {gpu_growth_mib:.3f} MiB; limit is {arguments.maximum_gpu_growth_mib:.3f} MiB.'
         )
     return RefreshBenchmarkResult(
-        source_revision=subprocess.run(
-            ('git', 'rev-parse', 'HEAD'),
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.strip(),
+        source_revision=read_source_revision().commit,
         model_path=str(arguments.model_path.resolve()),
         model_sha256=file_sha256(arguments.model_path),
         device_name=torch.cuda.get_device_name(device),
@@ -335,8 +331,7 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
 def main() -> None:
     arguments = parse_arguments()
     result = benchmark(arguments)
-    arguments.output_path.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output_path.write_text(json.dumps(asdict(result), indent=2) + '\n', encoding='utf-8')
+    write_text_atomically(arguments.output_path, json.dumps(asdict(result), indent=2) + '\n')
     print(json.dumps(asdict(result), indent=2))
 
 

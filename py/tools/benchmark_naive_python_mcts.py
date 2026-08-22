@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import platform
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,7 +16,9 @@ from AlphaZeroCpp import ChessPosition
 from pydantic import BaseModel, ConfigDict
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.representation import decode_packed_planes
+from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
+from src.util.provenance import read_source_revision_if_available
 
 
 class BenchmarkRun(BaseModel):
@@ -192,21 +193,13 @@ def backup(path: list[SearchNode], leaf_value: float) -> None:
         value = -value
 
 
-def _git_output(arguments: tuple[str, ...]) -> str | None:
-    try:
-        completed = subprocess.run(('git', *arguments), check=True, capture_output=True, text=True)
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
-    return completed.stdout.strip()
-
-
 def _provenance(arguments: argparse.Namespace, model_path: Path, device: torch.device) -> BenchmarkProvenance:
-    status = _git_output(('status', '--porcelain'))
+    detected = read_source_revision_if_available()
     return BenchmarkProvenance(
         command=tuple(sys.argv),
         created_unix_nanoseconds=time_ns(),
-        source_revision=arguments.source_revision or _git_output(('rev-parse', 'HEAD')) or 'unavailable',
-        source_dirty=None if status is None else bool(status),
+        source_revision=arguments.source_revision or (detected.commit if detected is not None else 'unavailable'),
+        source_dirty=None if detected is None else detected.dirty,
         model_path=str(model_path.resolve()),
         model_sha256=file_sha256(model_path),
         starting_fen=arguments.fen,
@@ -307,8 +300,7 @@ def main() -> None:
         provenance=_provenance(arguments, arguments.model, device),
         runs=tuple(runs),
     )
-    arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output.write_text(result.model_dump_json(indent=2) + '\n', encoding='utf-8')
+    write_text_atomically(arguments.output, result.model_dump_json(indent=2) + '\n')
     print(json.dumps(result.model_dump(mode='json'), indent=2))
 
 

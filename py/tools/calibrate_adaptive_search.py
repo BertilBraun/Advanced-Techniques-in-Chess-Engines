@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -17,12 +16,15 @@ from AlphaZeroCpp import (
     SearchCheckpointDetail,
 )
 from pydantic import Field
+from src.evaluation.openings import load_chess_opening_suite
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.util.generation_schedule import defined_schedule_values
 from src.games.chess.training import ChessImplementation
 from src.self_play.configuration import AdaptiveFullSearchBudgetConfiguration, FixedFullSearchBudgetConfiguration
 from src.self_play.parameters import AdaptiveFullSearchBudget, FixedFullSearchBudget
+from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.provenance import read_source_revision
 
 
 @dataclass(frozen=True)
@@ -154,11 +156,7 @@ def _parse_thresholds(value: str) -> tuple[float, ...]:
 
 
 def _load_openings(path: Path, count: int) -> tuple[str, ...]:
-    openings = tuple(
-        line.rsplit('\t', maxsplit=1)[1]
-        for line in path.read_text(encoding='utf-8').splitlines()
-        if line and not line.startswith('#')
-    )
+    openings = tuple(row.final_fen for row in load_chess_opening_suite(path))
     if len(openings) < count:
         raise ValueError(f'Opening suite contains {len(openings)} positions, fewer than requested {count}.')
     return openings[:count]
@@ -422,12 +420,7 @@ def main() -> None:
         and (maximum - adaptive.minimum_visits) % (2 * adaptive.observation_interval) == 0
     )
     report = CalibrationReport(
-        source_revision=subprocess.run(
-            ('git', 'rev-parse', 'HEAD'),
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.strip(),
+        source_revision=read_source_revision().commit,
         model=str(arguments.model),
         generation=arguments.generation,
         positions=len(audits),
@@ -443,8 +436,7 @@ def main() -> None:
         ),
         audits=audits,
     )
-    arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output.write_text(report.model_dump_json(indent=2) + '\n', encoding='utf-8')
+    write_text_atomically(arguments.output, report.model_dump_json(indent=2) + '\n')
     print(arguments.output)
 
 

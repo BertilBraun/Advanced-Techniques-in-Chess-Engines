@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from huggingface_hub import HfApi, hf_hub_download
+from src.util.atomic_file import write_text_atomically
 
 COMMIT_PATTERN = re.compile(r'^[0-9a-f]{40}$')
 DEFAULT_REPOSITORY = 'BertilBraun/alphazero-chess'
@@ -81,8 +82,8 @@ def download_model(request: DownloadRequest) -> DownloadedModel:
 def write_provenance(request: DownloadRequest, model: DownloadedModel) -> None:
     assert request.provenance_path is not None
     requested_revision = request.revision or 'latest'
-    request.provenance_path.parent.mkdir(parents=True, exist_ok=True)
-    request.provenance_path.write_text(
+    write_text_atomically(
+        request.provenance_path,
         '\n'.join(
             (
                 f'repository={request.repository}',
@@ -93,7 +94,6 @@ def write_provenance(request: DownloadRequest, model: DownloadedModel) -> None:
                 '',
             )
         ),
-        encoding='utf-8',
     )
 
 
