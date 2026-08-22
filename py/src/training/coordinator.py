@@ -128,11 +128,13 @@ class Coordinator:
                 if self.final_stop_reason is not None:
                     break
                 self._apply_self_play_backpressure()
+                # Appending must not wait for a full quantum of credits: sealed shards occupy
+                # claim slots, and crediting stalls permanently once all slots are sealed.
+                self._append_staged_games()
                 if not self.ledger.has_quantum_credits:
                     self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
                     time.sleep(IDLE_WAIT_SECONDS)
                     continue
-                self._append_staged_games()
                 if not self.ledger.can_train_quantum(self.replay_manager.live_samples):
                     self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
                     time.sleep(IDLE_WAIT_SECONDS)
