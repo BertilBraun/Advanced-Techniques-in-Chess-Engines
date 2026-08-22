@@ -1,21 +1,20 @@
 from __future__ import annotations
 
+import time
 from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-import time
 from typing import Annotated, Literal, Protocol, TypeAlias
 
 from pydantic import Field
-
 from src.evaluation.configuration import EvaluationSearchConfiguration
 from src.evaluation.contracts import (
+    AnyOpeningSuiteManifest,
     CandidateOutcome,
     EvaluationGameResult,
     EvaluationTerminationReason,
     MatchAggregate,
-    AnyOpeningSuiteManifest,
 )
 from src.evaluation.match import SearchActionSelector
 from src.evaluation.statistics import aggregate_match

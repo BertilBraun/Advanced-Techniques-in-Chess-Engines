@@ -7,7 +7,6 @@ from typing import Literal
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from pydantic import Field
-
 from src.evaluation.contracts import EvaluationReferenceManifest
 from src.experiment.configuration import (
     ExperimentConfiguration,
@@ -529,5 +528,3 @@ def _validate_archive_path(path: str) -> str:
     if pure_path.is_absolute() or not pure_path.parts or any(part in {'', '.', '..'} for part in pure_path.parts):
         raise ValueError(f'Unsafe archive path: {path!r}')
     return pure_path.as_posix()
-
-

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 from collections import Counter
 from dataclasses import dataclass, field
-import json
 from pathlib import Path
 from typing import Literal
 
@@ -11,7 +11,6 @@ import chess
 import chess.engine
 import chess.pgn
 from pydantic import Field
-
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256

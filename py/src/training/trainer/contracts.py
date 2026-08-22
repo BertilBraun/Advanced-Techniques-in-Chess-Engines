@@ -1,15 +1,16 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypeAlias
 
 from pydantic import Field
-
 from src.replay.description import ReplayDescription
 from src.training.checkpoint import CheckpointReference
-from src.training.objective import ResolvedTrainingObjective
-from src.training.network import NetworkConfiguration
-from src.training.progress import TrainingProgress
 from src.training.distributions import TrainingDistributionSnapshot
+from src.training.network import NetworkConfiguration
+from src.training.objective import ResolvedTrainingObjective
+from src.training.progress import TrainingProgress
 from src.util.frozen_model import FrozenModel
 
 

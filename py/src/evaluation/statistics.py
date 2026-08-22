@@ -3,7 +3,6 @@ from __future__ import annotations
 import random
 
 import numpy as np
-
 from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult, MatchAggregate
 
 

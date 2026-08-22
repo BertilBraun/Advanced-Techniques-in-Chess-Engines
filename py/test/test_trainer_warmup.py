@@ -1,5 +1,6 @@
-import pytest
+from __future__ import annotations
 
+import pytest
 from src.training.trainer.rank import warmup_scaled_learning_rate
 
 

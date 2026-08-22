@@ -1,5 +1,6 @@
-import pytest
+from __future__ import annotations
 
+import pytest
 from src.experiment.configuration import load_experiment_configuration
 from src.training.tensorboard import scheduled_settings_at
 from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY

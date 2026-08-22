@@ -5,7 +5,6 @@ import re
 from src.evaluation.configuration import EvaluationConfiguration
 from src.util.tensorboard import TensorboardCustomScalarCategory, TensorboardMultilineChart
 
-
 EVALUATION_TAG_PATTERN = re.compile(r'^((?:coordinator/)?evaluation(?:_metadata)?)/([^/]+)/([^/]+)$')
 MATCH_OUTCOME_METRICS = ('wins', 'draws', 'losses')
 MATCH_SCORE_METRICS = ('score',)

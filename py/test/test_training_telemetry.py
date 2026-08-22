@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from decimal import Decimal
 from pathlib import Path
 
@@ -8,8 +10,8 @@ import src.training.reporting as reporting_module
 pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from src.games.representation import PackedPlaneLayout
-from src.replay.layout import ReplayLayout
 from src.replay.description import ReplayDescription
+from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame
 from src.self_play.completed_game import (
     SearchCheckpointObservation,
@@ -22,12 +24,12 @@ from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedgerState
 from src.training.reporting import TrainingReporter
 from src.training.targets import TrainingTargetLayout
-from test_helpers.checkpoints import checkpoint_reference
 from src.training.telemetry import (
     adaptive_search_telemetry,
     completed_game_length_telemetry,
     training_lifecycle_telemetry,
 )
+from test_helpers.checkpoints import checkpoint_reference
 
 
 def test_training_lifecycle_telemetry_reports_credit_backlog_and_observed_ratio() -> None:

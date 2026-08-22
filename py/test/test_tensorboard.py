@@ -1,9 +1,9 @@
+from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-
 from src.util.tensorboard import (
     TensorboardWriter,
     configure_tensorboard_run_directory,
@@ -12,6 +12,7 @@ from src.util.tensorboard import (
     log_scalar,
     log_scalars,
 )
+from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 
 def test_run_id_allocation_is_atomic_between_concurrent_experiments(

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 import multiprocessing as mp
 import os
-from pathlib import Path
 import signal
 import time
+from collections.abc import Callable
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, TypeAdapter
-
+from src.evaluation.configuration import StockfishFixedNodesEvaluationDefinition
 from src.evaluation.contracts import (
     CheckpointOpponent,
     EvaluationFailurePhase,
@@ -22,7 +22,6 @@ from src.evaluation.contracts import (
     MatchEvaluationJob,
     MatchEvaluationResult,
 )
-from src.evaluation.configuration import StockfishFixedNodesEvaluationDefinition
 from src.evaluation.ladder import (
     STOCKFISH_FIXED_NODES_ANCHOR_ELO,
     LadderRungObservation,

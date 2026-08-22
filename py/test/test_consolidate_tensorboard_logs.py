@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import replace
 from pathlib import Path
 
@@ -7,7 +9,6 @@ from tensorboard.compat.proto import event_pb2, summary_pb2
 from tensorboard.plugins.custom_scalar import layout_pb2
 from tensorboard.summary.writer.event_file_writer import EventFileWriter
 from tensorboardX import SummaryWriter
-
 from tools.consolidate_tensorboard_logs import (
     ConsolidationOptions,
     TensorboardLogConsolidator,

@@ -3,16 +3,14 @@ from __future__ import annotations
 import subprocess
 import time
 from contextlib import ExitStack
-from threading import Event, Thread
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Event, Thread
 
 import psutil
-
-from src.util.frozen_model import FrozenModel
-
 from src.training.run_limits import estimated_cost, process_tree_open_file_counts
 from src.util.background_worker import BackgroundWorker
+from src.util.frozen_model import FrozenModel
 
 
 class GpuTelemetry(FrozenModel):

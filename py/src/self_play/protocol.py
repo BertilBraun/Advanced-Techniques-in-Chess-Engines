@@ -4,9 +4,8 @@ from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field
-
-from src.training.checkpoint import CheckpointReference
 from src.self_play.resignation import PublishedResignationPolicy
+from src.training.checkpoint import CheckpointReference
 from src.util.frozen_model import FrozenModel
 
 

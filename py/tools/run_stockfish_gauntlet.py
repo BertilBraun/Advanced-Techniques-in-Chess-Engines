@@ -2,28 +2,27 @@ from __future__ import annotations
 
 import argparse
 import csv
+import random
+import subprocess
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from multiprocessing import get_context
 from pathlib import Path
-import random
-import subprocess
-import time
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field
-
 from src.evaluation.configuration import (
     EvaluationSearchConfiguration,
     StockfishEngineConfiguration,
     StockfishFixedNodesEvaluationDefinition,
 )
 from src.evaluation.contracts import (
+    OPENING_SUITE_MANIFEST_ADAPTER,
     EvaluationGameResult,
     MatchAggregate,
     MatchEvaluationJob,
-    OPENING_SUITE_MANIFEST_ADAPTER,
     StockfishFixedNodesOpponent,
 )
 from src.evaluation.match import MatchActionSelector, run_match

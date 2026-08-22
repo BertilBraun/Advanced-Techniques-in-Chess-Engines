@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
-
 from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult, EvaluationTerminationReason
+
 pytest.importorskip('AlphaZeroCpp')
 from tools.run_stockfish_ladder import LadderProbe, _ladder_elo_fit, _pair_scores, _score_bracket
 

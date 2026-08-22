@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
@@ -94,9 +96,9 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     inference_policy, inference_wdl, inference_search_correction = inference_model(torch.zeros((2, 3, 3, 3)))
     training_policy_logits, training_wdl_logits = loaded_model.logit_forward(torch.zeros((2, 3, 3, 3)))
 
-    assert any(name.startswith('auxiliaryHeads.') for name in training_state)
+    assert any(name.startswith('auxiliary_head_modules.') for name in training_state)
     assert manifest.network == model.checkpoint_definition()
-    assert all(not name.startswith('auxiliaryHeads.') for name, _ in inference_model.named_parameters())
+    assert all(not name.startswith('auxiliary_head_modules.') for name, _ in inference_model.named_parameters())
     assert tuple(output.shape for output in loaded_output.auxiliary_logits) == ((2, 10), (2, 1))
     assert inference_policy.shape == (2, 10)
     assert inference_wdl.shape == (2, 3)
@@ -153,7 +155,7 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
     assert expected_training_output.policy_logits.shape == (2, 4864)
     assert tuple(output.shape for output in expected_training_output.auxiliary_logits) == ((2, 4864), (2, 1))
     assert all('action_plane_indices' not in name for name, _ in loaded.named_buffers())
-    assert all(not name.startswith('auxiliaryHeads.') for name, _ in inference_model.named_buffers())
+    assert all(not name.startswith('auxiliary_head_modules.') for name, _ in inference_model.named_buffers())
     torch.testing.assert_close(loaded_training_output.policy_logits, expected_training_output.policy_logits)
     torch.testing.assert_close(loaded_training_output.auxiliary_logits[0], expected_training_output.auxiliary_logits[0])
     torch.testing.assert_close(inference_policy, expected_policy)

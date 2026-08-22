@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from src.evaluation.ladder import (
     STOCKFISH_FIXED_NODES_ANCHOR_ELO,
     LadderRungObservation,

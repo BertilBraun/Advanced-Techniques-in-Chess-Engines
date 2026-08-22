@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -32,8 +34,8 @@ from src.self_play.resignation import (
 )
 from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.self_play.worker import SelfPlayWorker
-from test_helpers.checkpoints import checkpoint_reference
 from src.training.checkpoint import CheckpointReference
+from test_helpers.checkpoints import checkpoint_reference
 
 
 @dataclass(frozen=True)

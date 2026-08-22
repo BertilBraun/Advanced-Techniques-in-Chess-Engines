@@ -1,32 +1,33 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import cast
 
-import torch
 import pytest
+import torch
 
 pytest.importorskip('AlphaZeroCpp')
+import src.training.trainer.rank as trainer_rank
 from AlphaZeroCpp import GameSearchVisit
-from torch import nn
-
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.training import ChessImplementation
 from src.games.contracts import WdlTarget
 from src.replay.contracts import ReplaySample, SparsePolicyTarget
-from src.replay.layout import ReplayLayout
 from src.replay.description import ReplayDescription
+from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.checkpoint import CheckpointReference
-from src.training.progress import TrainingProgress
-from src.training.trainer import TrainerGroup
-from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.configuration import TrainingCompilation, TrainingPrecision
 from src.training.network import Chess76PlaneDirectPolicyHeadConfiguration, Network
-import src.training.trainer.rank as trainer_rank
+from src.training.progress import TrainingProgress
+from src.training.trainer import TrainerGroup
+from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.trainer.rank import DistributedTrainingModel
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
+from torch import nn
 
 
 def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:

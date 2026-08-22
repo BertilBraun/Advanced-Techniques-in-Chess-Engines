@@ -7,7 +7,6 @@ from threading import Event, Lock, Thread
 from typing import TYPE_CHECKING, TextIO
 
 import chess
-
 from src.games.chess.interactive.analysis import AnalysisRequest, PolicyAnalysis, TimedMctsAnalysis
 
 if TYPE_CHECKING:

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import site
 import subprocess
+from pathlib import Path
 
 from src.evaluation.preparation import prepare_evaluation_artifacts
 from src.experiment.configuration import load_experiment_configuration

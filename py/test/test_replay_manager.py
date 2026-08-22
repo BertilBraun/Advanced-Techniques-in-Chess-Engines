@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
 import pytest
-from src.util.generation_schedule import ConstantSchedule
 from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.configuration import ReplayConfiguration
@@ -39,6 +40,7 @@ from src.training.targets import (
     SearchCorrectionHeadLayout,
     TrainingTargetLayout,
 )
+from src.util.generation_schedule import ConstantSchedule
 
 
 @dataclass(frozen=True)

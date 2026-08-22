@@ -244,17 +244,17 @@ void testGoPointPassLegalOnlySoftmax() {
     const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
     const Go7Game::State position(rules);
     const Go7Game::State occupied = position.child(GoAction<7>(0));
-    std::vector<float> policy(GoRepresentationDimensions<7>::action_count,
+    std::vector<float> policy(GoRepresentationDimensions<7>::actionCount,
                               std::numeric_limits<float>::quiet_NaN());
     for (const GoAction<7> action : Go7Game::legalActions(occupied)) {
         policy[Go7Game::Encoding::actionId(action, occupied)] = 0.0F;
     }
-    policy[GoAction<7>::pass_id] += std::log(3.0F);
+    policy[GoAction<7>::passId] += std::log(3.0F);
 
     const SearchInferenceResult<Go7Game> result =
         processInferencePosition<Go7Game>(policy.data(), validOutcome.data(), 0.5F, occupied);
     require(result.actions.size() == 49, "Go legal-only softmax returned the wrong action count");
-    require(result.actions.back().first.is_pass(), "Go pass was not the final point-pass action");
+    require(result.actions.back().first.isPass(), "Go pass was not the final point-pass action");
     require(std::abs(result.actions.back().second - 1.0F / 17.0F) <= scoreTolerance,
             "Go legal-only softmax did not preserve the pass-logit ratio");
     float probabilitySum = 0.0F;

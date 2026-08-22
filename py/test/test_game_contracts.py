@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 from uuid import UUID
 
@@ -38,8 +40,8 @@ from src.training.objective import (
     ResolvedTrainingObjective,
 )
 from src.training.targets import RemainingGameLengthHeadLayout, build_training_target_layout
-from test_helpers.training_batches import training_batch
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
+from test_helpers.training_batches import training_batch
 
 
 def test_wdl_target_validates_and_reverses_perspective() -> None:

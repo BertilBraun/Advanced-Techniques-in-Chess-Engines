@@ -1,5 +1,6 @@
-import torch
+from __future__ import annotations
 
+import torch
 from src.games.representation import NetworkDimensions
 from src.training.batch import TrainingBatch
 from src.training.objective import ResolvedLegalMovesLoss, ResolvedNextPolicyLoss, ResolvedTrainingObjective

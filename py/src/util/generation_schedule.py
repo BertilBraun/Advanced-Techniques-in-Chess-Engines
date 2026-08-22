@@ -6,9 +6,7 @@ from enum import Enum
 from typing import Annotated, Generic, Literal, TypeAlias, TypeVar
 
 from pydantic import BeforeValidator, Field, model_serializer, model_validator
-
 from src.util.frozen_model import FrozenModel, JsonValue
-
 
 ScheduleValueT = TypeVar('ScheduleValueT')
 NumericScheduleValueT = TypeVar('NumericScheduleValueT', int, float)

@@ -5,7 +5,6 @@ import pytest
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
 
 
-
 def rules(maximum_moves: int = 200) -> AlphaZeroCpp.GoRules:
     return AlphaZeroCpp.GoRules(15, maximum_moves)
 

@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
-
 from tools.fetch_hf_model import (
     DownloadedModel,
     DownloadRequest,

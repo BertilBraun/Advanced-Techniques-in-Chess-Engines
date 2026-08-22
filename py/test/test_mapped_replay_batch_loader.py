@@ -1,15 +1,17 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
 from pathlib import Path
 from threading import Event
 
-import torch
 import pytest
-pytest.importorskip('AlphaZeroCpp')
-from AlphaZeroCpp import GameSearchVisit
+import torch
 
+pytest.importorskip('AlphaZeroCpp')
+import src.replay.batch_loader as batch_loader_module
+from AlphaZeroCpp import GameSearchVisit
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessStateContract
 from src.games.contracts import WdlTarget
-import src.replay.batch_loader as batch_loader_module
 from src.replay.batch_loader import MappedReplayBatchLoader, build_training_batch
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
@@ -17,8 +19,8 @@ from src.replay.contracts import (
     ReplaySample,
     SparsePolicyTarget,
 )
-from src.replay.layout import ReplayLayout
 from src.replay.description import ReplayDescription
+from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.batch import TrainingBatch

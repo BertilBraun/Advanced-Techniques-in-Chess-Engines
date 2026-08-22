@@ -4,7 +4,6 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from src.evaluation.configuration import EvaluationSearchConfiguration
-from src.util.generation_schedule import FloatGenerationSchedule
 from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.chess.syzygy import SyzygyTerminalOracle
@@ -21,6 +20,7 @@ from src.self_play.resignation import CalibratedResignationConfiguration
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
+from src.util.generation_schedule import FloatGenerationSchedule
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import ChessSelfPlaySearch

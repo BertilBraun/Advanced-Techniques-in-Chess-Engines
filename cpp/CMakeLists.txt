@@ -9,18 +9,19 @@ include(CTest)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # --- Optional: Enable clang-tidy integration ---
-option(ENABLE_CLANG_TIDY "Enable clang-tidy" ON)
+# Off by default: the naming check costs ~1 min per TU, which would dominate node provisioning builds.
+# Enable for lint passes with -DENABLE_CLANG_TIDY=ON (or use cpp/run-clang-tidy.sh).
+option(ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
 if (ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_EXE NAMES clang-tidy)
     if (CLANG_TIDY_EXE)
         message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
-        # TODO set(CMAKE_CXX_CLANG_TIDY
-        # TODO     ${CLANG_TIDY_EXE}
-        # TODO     -checks=readability-identifier-naming
-        # TODO     -fix
-        # TODO     -format-style=file
-        # TODO     -warnings-as-errors=*
-        # TODO )
+        # Diagnostics only: -fix would rewrite sources (including fetched dependencies) during a build.
+        set(CMAKE_CXX_CLANG_TIDY
+                ${CLANG_TIDY_EXE}
+                -checks=readability-identifier-naming
+                -format-style=file
+        )
     else ()
         message(WARNING "clang-tidy not found!")
     endif ()

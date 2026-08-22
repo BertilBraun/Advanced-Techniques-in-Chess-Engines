@@ -17,14 +17,12 @@ template <std::size_t BoardSize, std::size_t HistoryLength = 8> struct GoGame {
         return parent.child(action);
     }
     [[nodiscard]] static std::vector<Action> legalActions(const State &state) {
-        return state.legal_actions();
+        return state.legalActions();
     }
-    [[nodiscard]] static bool isTerminal(const State &state) noexcept {
-        return state.is_terminal();
-    }
+    [[nodiscard]] static bool isTerminal(const State &state) noexcept { return state.isTerminal(); }
     [[nodiscard]] static float terminalValue(const State &state) {
         assert(isTerminal(state));
-        const GoTerminalResult result = state.terminal_result();
+        const GoTerminalResult result = state.terminalResult();
         if (!result.winner.has_value()) {
             return 0.0F;
         }

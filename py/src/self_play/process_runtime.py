@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import random
 from multiprocessing.connection import Connection
 from pathlib import Path
-import random
 
 import numpy as np
 import torch
-
 from src.experiment.configuration import load_experiment_configuration_json
 from src.games.composition import create_game_implementation
 from src.self_play.protocol import (

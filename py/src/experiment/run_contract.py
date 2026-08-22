@@ -5,7 +5,6 @@ from enum import Enum
 from pathlib import Path
 
 from pydantic import Field, model_validator
-
 from src.util.frozen_model import FrozenModel
 
 

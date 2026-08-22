@@ -2,14 +2,21 @@
 
 Uses ./harness2 (compiled from /tmp/az/head/cpp sources + Stockfish fork) as an oracle.
 """
-import random, subprocess, sys, collections
+
+from __future__ import annotations
+
+import collections
+import random
+import subprocess
+import sys
+
 import chess
 import numpy as np
 
 sys.path.insert(0, '/tmp/az/work/codeA/stub')  # AlphaZeroCpp stub (only used for mirror id; we compare to C++ anyway)
 sys.path.insert(0, '/tmp/az/head/py')
-from src.games.representation import decode_packed_planes, encode_packed_planes
 from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.games.representation import decode_packed_planes
 
 HARNESS = '/tmp/az/work/flip/harness2'
 rng = random.Random(12345)
@@ -45,11 +52,17 @@ def ep_positions(n):
         b = chess.Board()
         for _ in range(rng.randint(4, 60)):
             moves = list(b.legal_moves)
-            if not moves: break
-            dbl = [m for m in moves if b.piece_type_at(m.from_square) == chess.PAWN and abs(m.to_square - m.from_square) == 16]
+            if not moves:
+                break
+            dbl = [
+                m
+                for m in moves
+                if b.piece_type_at(m.from_square) == chess.PAWN and abs(m.to_square - m.from_square) == 16
+            ]
             m = rng.choice(dbl) if dbl and rng.random() < 0.5 else rng.choice(moves)
             b.push(m)
-            if b.is_game_over(): break
+            if b.is_game_over():
+                break
         if not b.is_game_over() and any(b.is_en_passant(m) for m in b.legal_moves):
             out.append(b.copy())
     return out
@@ -135,8 +148,9 @@ def main():
             diff = np.nonzero(r['planes'] != rm['planes'])[0]
             failures.append(('PLANES', b.fen(), bm.fen(), [(int(i) // 64, int(i) % 64) for i in diff[:10]]))
         # (1b) python decode of packed payload == C++ tensor
-        dec = decode_packed_planes(rep.packed_planes.value(r["packed"]),
-                                   rep.packed_planes, rep.binary_channels, rep.scalar_channels)
+        dec = decode_packed_planes(
+            rep.packed_planes.value(r['packed']), rep.packed_planes, rep.binary_channels, rep.scalar_channels
+        )
         if not np.array_equal(dec.reshape(-1), r['planes']):
             failures.append(('PACKED_DECODE', b.fen()))
         # (2) legal move set from stockfish == python-chess, ids equal under mirror
@@ -176,7 +190,7 @@ def main():
             if aid % 64 != canon_from:
                 failures.append(('FROMSQ', b.fen(), u, aid, canon_from))
             # the piece on the canonical from-square must be an OWN piece in the input planes (planes 0..5 = own pieces)
-            own = r['planes'][:6 * 64].reshape(6, 64)[:, aid % 64].sum()
+            own = r['planes'][: 6 * 64].reshape(6, 64)[:, aid % 64].sum()
             if own != 1:
                 failures.append(('OWN_PIECE_AT_FROM', b.fen(), u, aid, int(own)))
             ids_seen.add(aid)
@@ -194,17 +208,25 @@ def main():
     # ---- mirror augmentation check (file mirror) ----
     # For each position P, build file-mirrored position Pf with python-chess (castling rights dropped -> we compare
     # only positions WITHOUT castling rights exactly; with castling rights we report the castling-plane behaviour).
-    mir_stats = collections.Counter(); mir_fail = []
+    mir_stats = collections.Counter()
+    mir_fail = []
     sub = [b for b, _ in pairs if not b.has_castling_rights(chess.WHITE) and not b.has_castling_rights(chess.BLACK)]
     sub = sub[:800]
+
     def file_mirror(b: chess.Board) -> chess.Board:
         nb = chess.Board(None)
         for sq, pc in b.piece_map().items():
             nb.set_piece_at(chess.square(7 - chess.square_file(sq), chess.square_rank(sq)), pc)
         nb.turn = b.turn
-        nb.ep_square = None if b.ep_square is None else chess.square(7 - chess.square_file(b.ep_square), chess.square_rank(b.ep_square))
-        nb.halfmove_clock = b.halfmove_clock; nb.fullmove_number = b.fullmove_number
+        nb.ep_square = (
+            None
+            if b.ep_square is None
+            else chess.square(7 - chess.square_file(b.ep_square), chess.square_rank(b.ep_square))
+        )
+        nb.halfmove_clock = b.halfmove_clock
+        nb.fullmove_number = b.fullmove_number
         return nb
+
     mirrored = [file_mirror(b) for b in sub]
     resf = run_harness([b.fen() for b in sub] + [m.fen() for m in mirrored])
     for b, bf in zip(sub, mirrored):
@@ -227,6 +249,7 @@ def main():
             mir_fail.append(('MIRROR_IDS', b.fen(), sorted(ids_f ^ ids_mapped)[:10]))
         # stub mirror == C++ mirror
         from AlphaZeroCpp import mirror_chess_action_id
+
         for u, v in r['moves'].items():
             if mirror_chess_action_id(v[0]) != v[4]:
                 mir_fail.append(('STUB_MIRROR_MISMATCH', u, v[0]))
@@ -239,10 +262,22 @@ def main():
     r = run_harness([b.fen()])[b.fen()]
     planes = r['planes'].reshape(29, 8, 8)
     aug = np.flip(planes, axis=2)
-    print('CASTLING PLANES example (own K-side only): orig planes12..15 sums',
-          [int(planes[i].sum()) for i in (12, 13, 14, 15)], 'after file-mirror aug', [int(aug[i].sum()) for i in (12, 13, 14, 15)],
-          'king square after aug', int(np.argmax(aug[5].reshape(-1))), 'e1g1 id', r['moves']['e1g1'][0], '-> mirrored id', r['moves']['e1g1'][4],
-          '= plane', r['moves']['e1g1'][4] // 64, 'from', r['moves']['e1g1'][4] % 64)
+    print(
+        'CASTLING PLANES example (own K-side only): orig planes12..15 sums',
+        [int(planes[i].sum()) for i in (12, 13, 14, 15)],
+        'after file-mirror aug',
+        [int(aug[i].sum()) for i in (12, 13, 14, 15)],
+        'king square after aug',
+        int(np.argmax(aug[5].reshape(-1))),
+        'e1g1 id',
+        r['moves']['e1g1'][0],
+        '-> mirrored id',
+        r['moves']['e1g1'][4],
+        '= plane',
+        r['moves']['e1g1'][4] // 64,
+        'from',
+        r['moves']['e1g1'][4] % 64,
+    )
     return 0 if not failures and not mir_fail else 1
 
 

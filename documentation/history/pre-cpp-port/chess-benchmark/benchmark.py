@@ -1,5 +1,8 @@
-import chess
+from __future__ import annotations
+
 import time
+
+import chess
 
 
 def generate_moves_benchmark(board, depth=3):

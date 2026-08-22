@@ -29,7 +29,7 @@ int main() {
         std::cout << "\n";
         {
             const CompressedEncodedBoard enc = encodeBoard(board);
-            std::string payload(CompressedEncodedBoard::packed_bytes, '\0');
+            std::string payload(CompressedEncodedBoard::packedBytes, '\0');
             enc.writePackedInto(std::span(reinterpret_cast<std::int8_t *>(payload.data()), payload.size()));
             std::cout << "PACKED ";
             static const char *hex = "0123456789abcdef";

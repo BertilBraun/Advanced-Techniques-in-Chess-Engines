@@ -1,13 +1,13 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from time import monotonic
 
-
-from src.util.frozen_model import FrozenModel
-
 from src.training.run_limits import estimated_cost
 from src.util.atomic_file import write_text_atomically
+from src.util.frozen_model import FrozenModel
 
 
 class RunOutcomeStatus(str, Enum):

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
-
 from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult
 from src.evaluation.ladder import (
     STOCKFISH_FIXED_NODES_ANCHOR_ELO,
@@ -17,8 +16,11 @@ from src.evaluation.ladder import (
 )
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.hashing import file_sha256
 from tools.run_stockfish_gauntlet import (
     Arguments as GauntletArguments,
+)
+from tools.run_stockfish_gauntlet import (
     SeededOpeningSelection,
     StockfishGauntletResult,
     run_gauntlet,
@@ -30,7 +32,6 @@ from tools.search_budget import (
     add_model_search_budget_arguments,
     model_search_budget,
 )
-from src.util.hashing import file_sha256
 
 
 class LadderProbe(FrozenModel):

@@ -48,3 +48,9 @@ must be linked into that target once rather than repeated per suite.
 
 Production artifacts still require an explicit Release build; a CompileCheck
 artifact must never be deployed or used for performance measurements.
+
+# Naming
+
+C++ identifiers are `camelBack` with an `m_` prefix on private members (enforced by
+`.clang-tidy`), except struct data members exposed to Python through `def_readonly` /
+`def_readwrite`, which keep the `snake_case` spelling Python sees.

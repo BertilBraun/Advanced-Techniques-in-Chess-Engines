@@ -5,11 +5,10 @@ from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import AwareDatetime, Field, TypeAdapter, model_validator
-from typing_extensions import Self
-
 from src.experiment_queue.scheduler import ResourceAssignment
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from typing_extensions import Self
 
 
 class ExecutionIdentity(FrozenModel):

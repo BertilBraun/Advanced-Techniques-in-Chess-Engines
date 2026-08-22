@@ -10,7 +10,6 @@ from typing import Callable, Generic, Literal, TypeVar
 import numpy as np
 from pydantic import Field
 from src.experiment.configuration import ExperimentConfiguration
-from src.util.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.replay.configuration import ReplayConfiguration
 from src.replay.description import ReplayDescription
@@ -30,6 +29,7 @@ from src.self_play.completed_game import SearchObservation, TerminationReason
 from src.self_play.resignation import ResignationCalibrator
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.generation_schedule import FloatGenerationSchedule
 from src.util.log import log
 
 PositionT = TypeVar('PositionT')

@@ -25,10 +25,10 @@ from src.training.network import (
 from src.training.targets import SearchCorrectionHeadLayout, build_training_target_layout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
-from torch import Tensor, nn
-from torch.nn.attention import SDPBackend, sdpa_kernel
 from src.util.hashing import file_sha256
 from src.util.provenance import SourceRevision, read_source_revision
+from torch import Tensor, nn
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 DEFAULT_CONFIGURATION_PATH = Path(__file__).resolve().parents[1] / 'configs/production/vast-chess-8gpu-optimal.yaml'
 
@@ -184,13 +184,13 @@ def module_parameter_count(module: nn.Module) -> int:
 
 def parameter_counts(network: Network) -> ParameterCounts:
     backbone = (
-        module_parameter_count(network.startBlock)
-        + module_parameter_count(network.backBone)
-        + module_parameter_count(network.finishBlock)
+        module_parameter_count(network.start_block)
+        + module_parameter_count(network.backbone)
+        + module_parameter_count(network.finish_block)
     )
-    primary_policy_head = module_parameter_count(network.policyHead)
-    value_head = module_parameter_count(network.valueHead)
-    auxiliary_heads = module_parameter_count(network.auxiliaryHeads)
+    primary_policy_head = module_parameter_count(network.policy_head)
+    value_head = module_parameter_count(network.value_head)
+    auxiliary_heads = module_parameter_count(network.auxiliary_head_modules)
     primary_total = backbone + primary_policy_head + value_head
     inference_total = primary_total + _search_correction_parameter_count(network)
     training_total = primary_total + auxiliary_heads
@@ -206,7 +206,7 @@ def parameter_counts(network: Network) -> ParameterCounts:
 
 
 def _search_correction_parameter_count(network: Network) -> int:
-    for head, module in zip(network.auxiliary_heads, network.auxiliaryHeads, strict=True):
+    for head, module in zip(network.auxiliary_heads, network.auxiliary_head_modules, strict=True):
         match head:
             case SearchCorrectionHeadLayout():
                 return module_parameter_count(module)
@@ -273,7 +273,7 @@ def _benchmark_models(
 
 
 def _prepare_inference_network(network: Network) -> Network:
-    network.auxiliaryHeads = nn.ModuleList()
+    network.auxiliary_head_modules = nn.ModuleList()
     network.auxiliary_heads = ()
     network.eval()
     network.fuse_model()

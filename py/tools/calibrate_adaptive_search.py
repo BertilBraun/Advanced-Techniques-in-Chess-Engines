@@ -17,12 +17,12 @@ from AlphaZeroCpp import (
 from pydantic import Field
 from src.evaluation.openings import load_chess_opening_suite
 from src.experiment.configuration import load_chess_experiment_configuration
-from src.util.generation_schedule import defined_schedule_values
 from src.games.chess.training import ChessImplementation
 from src.self_play.configuration import AdaptiveFullSearchBudgetConfiguration, FixedFullSearchBudgetConfiguration
 from src.self_play.parameters import AdaptiveFullSearchBudget, FixedFullSearchBudget, ResolvedSelfPlayParameters
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.generation_schedule import defined_schedule_values
 from src.util.provenance import read_source_revision
 
 

@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, model_validator
-
 from src.replay.description import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.network import NetworkConfiguration

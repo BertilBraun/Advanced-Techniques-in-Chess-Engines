@@ -329,7 +329,7 @@ void testFreshRootNoiseUsesRawPriors() {
     }
 }
 
-template <SearchGame Game> void exercise_tree(typename Game::State position) {
+template <SearchGame Game> void exerciseTree(typename Game::State position) {
     GameSearchTree<Game> tree(std::move(position), 1, 16);
     const auto legalActions = Game::legalActions(tree.root().position);
     SearchInferenceResult<Game> inference{{}, {0.5F, 0.0F, 0.5F}, 0.5F};
@@ -436,10 +436,10 @@ int runGameSearchTreeTests() {
         testRecursiveDiscount();
         testImportancePruningAndRematerialization();
         testFreshRootNoiseUsesRawPriors();
-        exercise_tree<ChessGame>(Board{});
-        exercise_tree<Go7Game>(
+        exerciseTree<ChessGame>(Board{});
+        exerciseTree<Go7Game>(
             GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}));
-        exercise_tree<Go9Game>(
+        exerciseTree<Go9Game>(
             GoPosition<9>(GoRules{.komi_half_points = 15, .maximum_moves = 324}));
         for (const float rootValue : {-0.8F, 0.8F}) {
             const std::size_t zeroSelection = selectedRootEdgeAfterOneVisit(

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import chess
@@ -19,7 +21,6 @@ from src.training.network import (
     NetworkParams,
 )
 from src.training.targets import NextPolicyHeadLayout
-
 
 pytestmark = pytest.mark.integration
 

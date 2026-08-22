@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
+
 pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
-
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlaneLayout
 from src.replay.contracts import (

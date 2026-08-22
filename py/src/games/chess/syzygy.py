@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Protocol
 
 import chess
 import chess.syzygy
-
 from src.games.contracts import TerminalOracle, WdlTarget
 
 

@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import signal
 import time
 import traceback
+from pathlib import Path
 from types import FrameType
 from typing import TYPE_CHECKING
 
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
 from src.evaluation.contracts import (
-    EvaluationFailurePhase,
     EVALUATION_JOB_ADAPTER,
+    OPENING_SUITE_MANIFEST_ADAPTER,
+    EvaluationFailurePhase,
     EvaluationResult,
     FailedEvaluationResult,
     FixedDatasetEvaluationJob,
     MatchEvaluationJob,
-    OPENING_SUITE_MANIFEST_ADAPTER,
 )
 from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration_json
 from src.util.atomic_file import write_text_atomically

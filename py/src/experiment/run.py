@@ -2,30 +2,26 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import multiprocessing
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import psutil
 import torch
-
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
+from src.evaluation.preparation import PreparedEvaluationArtifacts, prepare_evaluation_artifacts
 from src.experiment.base_configuration import (
     CheckpointResumeConfiguration,
     RandomInitializationResumeConfiguration,
     WeightsOnlyResumeConfiguration,
 )
 from src.experiment.configuration import ExperimentConfiguration, experiment_configuration_sha256
-from src.evaluation.preparation import PreparedEvaluationArtifacts, prepare_evaluation_artifacts
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.composition import create_game_implementation
-from src.training.targets import AuxiliaryHeadLayout
-from src.util.atomic_file import write_text_atomically
-from src.util.frozen_model import FrozenModel
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import model_save_path
 from src.training.checkpoint.persistence import (
@@ -35,8 +31,10 @@ from src.training.checkpoint.persistence import (
     load_model,
     save_model_and_optimizer,
 )
+from src.training.targets import AuxiliaryHeadLayout
+from src.util.atomic_file import write_text_atomically
+from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
-
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from src.experiment.configuration import load_experiment_configuration
 from src.experiment_queue.configuration import load_queue_configuration
 

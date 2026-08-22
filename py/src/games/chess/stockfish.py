@@ -9,7 +9,6 @@ from types import TracebackType
 import chess
 import chess.engine
 import chess.pgn
-
 from src.evaluation.configuration import StockfishEngineConfiguration
 from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
 from src.games.chess.contract import ChessPosition, ChessStateContract

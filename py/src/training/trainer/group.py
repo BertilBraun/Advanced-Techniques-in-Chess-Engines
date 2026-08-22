@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import multiprocessing
+import socket
 from multiprocessing.connection import Connection, wait
 from multiprocessing.process import BaseProcess
-import socket
 
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
@@ -14,10 +14,10 @@ from src.training.trainer.contracts import (
     RankTrainingResult,
     ResolvedTrainingParameters,
     StopTrainerCommand,
-    TrainerResponse,
-    TrainerStopped,
-    TrainerStartup,
     TrainerQuantum,
+    TrainerResponse,
+    TrainerStartup,
+    TrainerStopped,
     TrainingQuantumResult,
     TrainingStatistics,
     TrainQuantumCommand,

@@ -49,8 +49,8 @@ from src.evaluation.openings import build_katago_book_opening_suite, build_openi
 from src.experiment.configuration import load_experiment_configuration
 from src.games.contracts import GameStateContract
 from test_helpers.checkpoints import checkpoint_reference
-from test_helpers.fake_game_state import FakePosition, go_like_fake_game_state
 from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_CONFIG_DIRECTORY
+from test_helpers.fake_game_state import FakePosition, go_like_fake_game_state
 
 
 def test_checked_in_go_baseline_reference_artifacts_match_configuration() -> None:

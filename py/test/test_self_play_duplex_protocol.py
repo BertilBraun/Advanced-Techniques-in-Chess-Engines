@@ -1,5 +1,7 @@
-from dataclasses import dataclass
+from __future__ import annotations
+
 import multiprocessing
+from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
 from pathlib import Path
@@ -8,9 +10,10 @@ from types import TracebackType
 from typing import cast
 
 import pytest
-
-from src.games.implementation import GameImplementation
+import src.self_play.process_runtime as process_runtime_module
 from src.experiment.configuration import ExperimentConfiguration
+from src.games.implementation import GameImplementation
+from src.self_play.process_runtime import self_play_worker_main
 from src.self_play.protocol import (
     PausedSelfPlayState,
     RunningSelfPlayState,
@@ -19,8 +22,6 @@ from src.self_play.protocol import (
     StoppedSelfPlayState,
     StoppedSelfPlayStateApplied,
 )
-from src.self_play.process_runtime import self_play_worker_main
-import src.self_play.process_runtime as process_runtime_module
 from src.self_play.resignation import PublishedResignationPolicy
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import SelfPlayTopologyParams

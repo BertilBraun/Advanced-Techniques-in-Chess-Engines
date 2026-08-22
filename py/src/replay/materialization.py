@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from math import isclose
 from typing import Generic, TypeVar
 
-from src.util.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget
 from src.replay.contracts import (
     EligibleLegalMovesTarget,
@@ -33,6 +32,7 @@ from src.training.targets import (
     SearchCorrectionHeadLayout,
     TrainingTargetLayout,
 )
+from src.util.generation_schedule import FloatGenerationSchedule
 
 PositionT = TypeVar('PositionT')
 

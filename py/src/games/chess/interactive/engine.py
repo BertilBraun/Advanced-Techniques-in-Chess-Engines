@@ -7,10 +7,14 @@ from AlphaZeroCpp import (
     AnalysisMode,
     AnalysisParameters,
     BatchedInferenceParameters,
-    ChessAnalysis as BoundChessAnalysis,
-    ChessAnalysisSession as BoundChessAnalysisSession,
-    InferenceDevice,
     InferenceConfiguration,
+    InferenceDevice,
+)
+from AlphaZeroCpp import (
+    ChessAnalysis as BoundChessAnalysis,
+)
+from AlphaZeroCpp import (
+    ChessAnalysisSession as BoundChessAnalysisSession,
 )
 from src.games.chess.interactive.analysis import (
     AnalysisRequest,

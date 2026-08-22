@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 from uuid import UUID
 
 import pytest
+
 pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from src.games.contracts import WdlTarget

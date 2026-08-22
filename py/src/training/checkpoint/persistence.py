@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import shutil
 from os import PathLike
 from pathlib import Path
@@ -16,8 +18,8 @@ from src.training.configuration import OptimizerType
 from src.training.network import InferenceNetwork, Network, NetworkConfiguration, NetworkDefinition
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
-from src.util.log import LogLevel, log
 from src.util.hashing import file_sha256
+from src.util.log import LogLevel, log
 
 
 def _temporary_path(path: Path) -> Path:

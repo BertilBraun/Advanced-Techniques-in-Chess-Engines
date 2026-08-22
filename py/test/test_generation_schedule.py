@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import pytest
 from pydantic import TypeAdapter, ValidationError
-
 from src.util.generation_schedule import (
     ConstantSchedule,
     FloatGenerationSchedule,

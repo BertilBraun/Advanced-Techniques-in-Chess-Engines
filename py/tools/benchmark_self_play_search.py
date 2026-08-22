@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
 import json
 import os
-from pathlib import Path
 import resource
 import tempfile
 import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Literal
 
 from src.experiment.configuration import load_experiment_configuration
-from src.games.composition import create_game_implementation
 from src.games.chess.configuration import ChessExperimentConfiguration
+from src.games.composition import create_game_implementation
 from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference

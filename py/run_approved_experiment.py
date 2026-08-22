@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 
 def parse_arguments() -> argparse.Namespace:

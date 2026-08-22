@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import pytest
 import torch
-
 from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.distributions import RemainingGameLengthTrainingDistribution, capture_training_distributions
-from src.training.objective import mask_policy_logits, ResolvedRemainingGameLengthLoss, ResolvedTrainingObjective
+from src.training.objective import ResolvedRemainingGameLengthLoss, ResolvedTrainingObjective, mask_policy_logits
 
 
 def test_training_distributions_capture_targets_predictions_losses_and_replay_age() -> None:

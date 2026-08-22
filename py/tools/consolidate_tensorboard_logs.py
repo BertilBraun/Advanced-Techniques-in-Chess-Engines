@@ -11,11 +11,6 @@ from pathlib import Path
 from types import FrameType
 
 from pydantic import BaseModel, ConfigDict, Field
-from tensorboard.backend.event_processing.event_file_loader import LegacyEventFileLoader
-from tensorboard.compat.proto import event_pb2, summary_pb2, tensor_pb2, tensor_shape_pb2, types_pb2
-from tensorboard.plugins.custom_scalar import layout_pb2
-from tensorboard.summary.writer.event_file_writer import EventFileWriter
-
 from src.evaluation.tensorboard import (
     EVALUATION_TAG_PATTERN,
     MATCH_OUTCOME_METRICS,
@@ -23,7 +18,10 @@ from src.evaluation.tensorboard import (
 )
 from src.util.atomic_file import write_text_atomically
 from src.util.tensorboard import TensorboardCustomScalarCategory, TensorboardMultilineChart
-
+from tensorboard.backend.event_processing.event_file_loader import LegacyEventFileLoader
+from tensorboard.compat.proto import event_pb2, summary_pb2, tensor_pb2, tensor_shape_pb2, types_pb2
+from tensorboard.plugins.custom_scalar import layout_pb2
+from tensorboard.summary.writer.event_file_writer import EventFileWriter
 
 EVENT_FILE_PATTERN = 'events.out.tfevents.*'
 RUN_NAME_PATTERN = re.compile(r'run_(\d+)')

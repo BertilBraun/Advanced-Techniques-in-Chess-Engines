@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+import sqlite3
 from contextlib import contextmanager
 from hashlib import sha256
 from math import exp, isfinite, lgamma, log, log1p
 from pathlib import Path
-import sqlite3
 from typing import Annotated, Iterator, Literal, TypeAlias
 
 from pydantic import Field, model_validator
-
 from src.games.contracts import WdlTarget
 from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, TerminationReason
 from src.util.atomic_file import write_text_atomically

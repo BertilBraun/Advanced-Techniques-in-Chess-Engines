@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import chess
 import chess.syzygy
 import pytest
-
 from src.games.chess.syzygy import SyzygyTerminalOracle
 from src.games.contracts import WdlTarget
 

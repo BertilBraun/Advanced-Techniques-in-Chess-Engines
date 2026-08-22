@@ -12,7 +12,6 @@ from time import time_ns
 import chess
 import torch
 from pydantic import BaseModel, ConfigDict
-
 from src.games.chess.interactive.analysis import (
     AnalysisResult,
     CountedMctsAnalysis,

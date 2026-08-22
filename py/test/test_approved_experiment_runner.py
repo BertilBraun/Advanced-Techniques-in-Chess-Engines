@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 from run_approved_experiment import approval_path

@@ -9,7 +9,6 @@ from typing import Annotated, TypeAlias
 
 import yaml
 from pydantic import Field, JsonValue, TypeAdapter
-
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.go.configuration import GoExperimentConfiguration
 from src.util.atomic_file import write_text_atomically

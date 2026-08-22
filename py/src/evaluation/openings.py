@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
+from dataclasses import dataclass
 from math import exp, log
 from pathlib import Path
 from typing import Generic, TypeVar
@@ -22,11 +22,10 @@ from src.evaluation.katago_book import (
     select_katago_book_positions,
     selection_sha256,
 )
-from src.games.contracts import GameStateContract
 from src.games.chess.contract import ChessPosition, ChessStateContract
+from src.games.contracts import GameStateContract
 from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
-
 
 PositionT = TypeVar('PositionT')
 OPENING_EXPANSION_PLIES = 4

@@ -52,7 +52,7 @@ int runPackedPlaneFixtureTests() {
         for (const nlohmann::json &fixture : fixtures) {
             const Board board(fixture.at("fen").get<std::string>());
             const CompressedEncodedBoard encoded = encodeBoard(board);
-            std::vector<std::int8_t> actualPayload(CompressedEncodedBoard::packed_bytes);
+            std::vector<std::int8_t> actualPayload(CompressedEncodedBoard::packedBytes);
             encoded.writePackedInto(actualPayload);
             const std::vector<std::int8_t> expectedPayload =
                 parseHexPayload(fixture.at("packed_hex").get<std::string>());

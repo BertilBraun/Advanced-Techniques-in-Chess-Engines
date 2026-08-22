@@ -81,7 +81,7 @@ void bind_chess_game(py::module_ &module) {
             "packed_encoding",
             [](const Board &position) {
                 const CompressedEncodedBoard encoded = encodeBoard(position);
-                std::string payload(CompressedEncodedBoard::packed_bytes, '\0');
+                std::string payload(CompressedEncodedBoard::packedBytes, '\0');
                 encoded.writePackedInto(
                     std::span(reinterpret_cast<std::int8_t *>(payload.data()), payload.size()));
                 return py::bytes(payload);
@@ -103,7 +103,7 @@ void bind_chess_game(py::module_ &module) {
         [](const std::string &fen) {
             const Board board(fen);
             const CompressedEncodedBoard encoded = encodeBoard(board);
-            std::string payload(CompressedEncodedBoard::packed_bytes, '\0');
+            std::string payload(CompressedEncodedBoard::packedBytes, '\0');
             encoded.writePackedInto(
                 std::span(reinterpret_cast<std::int8_t *>(payload.data()), payload.size()));
             return py::bytes(payload);

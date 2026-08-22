@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import math
 
 import pytest
 import torch
-
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.initialization_guard import (
     InitializationProbe,

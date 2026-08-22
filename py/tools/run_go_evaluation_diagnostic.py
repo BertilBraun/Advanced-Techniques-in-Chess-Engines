@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import time
 from dataclasses import dataclass
 from pathlib import Path
-import time
 
 from src.evaluation.configuration import (
     EvaluationSearchConfiguration,
@@ -30,7 +30,6 @@ from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
 from src.util.provenance import read_source_revision
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 

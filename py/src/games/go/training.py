@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 
 from src.evaluation.configuration import EvaluationSearchConfiguration
-from src.util.generation_schedule import FloatGenerationSchedule
 from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.contract import GoStateContract, NativeGoPosition
 from src.games.implementation import GameImplementation
@@ -18,6 +17,7 @@ from src.self_play.parameters import (
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
+from src.util.generation_schedule import FloatGenerationSchedule
 
 
 class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch]):

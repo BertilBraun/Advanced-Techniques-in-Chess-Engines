@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import hashlib
 import json
 from dataclasses import dataclass
@@ -31,12 +33,12 @@ from src.training.progressive import (
     retain_progressive_candidate_checkpoints,
 )
 from src.training.session import ProgressiveTrainingSession
-from src.training.trainer import TrainerGroup
 from src.training.targets import TrainingTargetLayout
+from src.training.trainer import TrainerGroup
 from src.training.trainer.contracts import TrainerStartup
 from src.util.atomic_file import write_text_atomically
-from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 from test_helpers.checkpoints import checkpoint_reference
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
 
 def _network(width: int) -> NetworkParams:

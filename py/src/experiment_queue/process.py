@@ -11,9 +11,8 @@ from pathlib import Path
 from typing import BinaryIO
 
 import psutil
-
-from src.experiment_queue.scheduler import ResourceAssignment
 from src.experiment_queue.launcher_snapshot import LauncherSnapshot
+from src.experiment_queue.scheduler import ResourceAssignment
 
 
 @dataclass

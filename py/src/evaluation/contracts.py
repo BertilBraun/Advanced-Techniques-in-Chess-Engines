@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, TypeAdapter, model_validator
-
 from src.evaluation.configuration import (
     FixedDatasetEvaluationDefinition,
     MatchEvaluationDefinition,

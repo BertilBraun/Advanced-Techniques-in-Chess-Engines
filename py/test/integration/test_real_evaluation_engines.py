@@ -1,8 +1,9 @@
-from pathlib import Path
+from __future__ import annotations
+
 import os
+from pathlib import Path
 
 import pytest
-
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.stockfish import StockfishClient

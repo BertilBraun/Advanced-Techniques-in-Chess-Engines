@@ -17,7 +17,7 @@ template <std::size_t BoardSize> bool runBitBoardChecks() {
 
     static_assert(Board::index(firstPoint) == 0);
     static_assert(Board::point(0) == firstPoint);
-    static_assert(Board::point(Board::bit_count - 1) == lastPoint);
+    static_assert(Board::point(Board::bitCount - 1) == lastPoint);
 
     const Board emptyBoard;
     if (emptyBoard.any() || !emptyBoard.none() || emptyBoard.count() != 0) {
@@ -25,11 +25,11 @@ template <std::size_t BoardSize> bool runBitBoardChecks() {
     }
 
     const Board fullBoard = Board::full();
-    if (!fullBoard.any() || fullBoard.count() != Board::bit_count) {
+    if (!fullBoard.any() || fullBoard.count() != Board::bitCount) {
         return false;
     }
-    if constexpr (Board::bit_count % Board::word_bits != 0) {
-        if (fullBoard.word(Board::word_count - 1) >> (Board::bit_count % Board::word_bits)) {
+    if constexpr (Board::bitCount % Board::wordBits != 0) {
+        if (fullBoard.word(Board::wordCount - 1) >> (Board::bitCount % Board::wordBits)) {
             return false;
         }
     }
@@ -41,7 +41,7 @@ template <std::size_t BoardSize> bool runBitBoardChecks() {
         return false;
     }
 
-    Board antiDiagonal = Board::from_point(lastPoint);
+    Board antiDiagonal = Board::fromPoint(lastPoint);
     antiDiagonal.set(Board::point(BoardSize - 1));
     if (!antiDiagonal.intersects(diagonal)) {
         return false;
@@ -58,7 +58,7 @@ template <std::size_t BoardSize> bool runBitBoardChecks() {
     }
 
     std::vector<typename Board::Point> iteratedPoints;
-    for (const typename Board::Point point : unionBoard.set_bits()) {
+    for (const typename Board::Point point : unionBoard.setBits()) {
         iteratedPoints.push_back(point);
     }
     if (iteratedPoints.size() != 3) {
@@ -68,7 +68,7 @@ template <std::size_t BoardSize> bool runBitBoardChecks() {
     Board popped = unionBoard;
     typename Board::Point poppedPoint{};
     std::size_t poppedCount = 0;
-    while (popped.pop_first(poppedPoint)) {
+    while (popped.popFirst(poppedPoint)) {
         ++poppedCount;
     }
     if (poppedCount != 3 || popped.any()) {
@@ -78,10 +78,10 @@ template <std::size_t BoardSize> bool runBitBoardChecks() {
     constexpr std::size_t binaryPlaneCount = 2;
     std::array<Board, binaryPlaneCount> planes{};
     planes[0] = diagonal;
-    planes[1] = ~Board::from_point(firstPoint);
-    std::vector<std::int8_t> payload(packed_binary_plane_bytes<BoardSize, binaryPlaneCount>);
-    serialize_binary_planes<BoardSize, binaryPlaneCount>(planes, payload);
-    const auto decodedPlanes = deserialize_binary_planes<BoardSize, binaryPlaneCount>(payload);
+    planes[1] = ~Board::fromPoint(firstPoint);
+    std::vector<std::int8_t> payload(PACKED_BINARY_PLANE_BYTES<BoardSize, binaryPlaneCount>);
+    serializeBinaryPlanes<BoardSize, binaryPlaneCount>(planes, payload);
+    const auto decodedPlanes = deserializeBinaryPlanes<BoardSize, binaryPlaneCount>(payload);
     if (decodedPlanes != planes) {
         return false;
     }

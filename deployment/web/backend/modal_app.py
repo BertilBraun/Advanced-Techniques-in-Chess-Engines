@@ -72,6 +72,9 @@ class ChessWebPlay:
     def load_engine(self) -> None:
         import torch
         from huggingface_hub import HfApi, hf_hub_download
+        from src.games.chess.interactive.analysis import CountedMctsAnalysis, PolicyAnalysis
+        from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+        from src.games.chess.interactive.engine import InteractiveEngine
 
         from deployment.web.backend.api import create_app
         from deployment.web.backend.artifacts import (
@@ -79,9 +82,6 @@ class ChessWebPlay:
             download_model_artifacts,
         )
         from deployment.web.backend.service import GameService
-        from src.games.chess.interactive.analysis import CountedMctsAnalysis, PolicyAnalysis
-        from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
-        from src.games.chess.interactive.engine import InteractiveEngine
 
         configuration = DeploymentConfiguration.from_environment(os.environ)
         hugging_face_token = os.environ.get('HF_TOKEN')

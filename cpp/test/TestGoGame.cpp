@@ -17,7 +17,7 @@ void require(const bool condition, const std::string &message) {
 }
 
 template <std::size_t BoardSize>
-GoBoard<BoardSize> board_with(const std::vector<int> &black, const std::vector<int> &white) {
+GoBoard<BoardSize> boardWith(const std::vector<int> &black, const std::vector<int> &white) {
     GoBoard<BoardSize> board;
     for (const int point : black) {
         board.black.set(static_cast<std::size_t>(point));
@@ -29,13 +29,13 @@ GoBoard<BoardSize> board_with(const std::vector<int> &black, const std::vector<i
 }
 
 template <std::size_t BoardSize>
-std::array<GoBoard<BoardSize>, 8> history_with_current(const GoBoard<BoardSize> &board) {
+std::array<GoBoard<BoardSize>, 8> historyWithCurrent(const GoBoard<BoardSize> &board) {
     std::array<GoBoard<BoardSize>, 8> history{};
     history[0] = board;
     return history;
 }
 
-template <std::size_t BoardSize> void test_initial_and_actions() {
+template <std::size_t BoardSize> void testInitialAndActions() {
     using Contract = GoGame<BoardSize, 8>;
     const GoRules rules{
         .komi_half_points = 15,
@@ -45,13 +45,13 @@ template <std::size_t BoardSize> void test_initial_and_actions() {
     require(initial.player() == GoPlayer::black, "Black must move first");
     require(initial.board().black.none() && initial.board().white.none(),
             "Initial Go board must be empty");
-    for (const auto &historic_board : initial.history()) {
-        require(historic_board.black.none() && historic_board.white.none(),
+    for (const auto &historicBoard : initial.history()) {
+        require(historicBoard.black.none() && historicBoard.white.none(),
                 "Unavailable Go history must be zero initialized");
     }
     const auto legal = Contract::legalActions(initial);
     require(legal.size() == BoardSize * BoardSize + 1, "Every initial Go action must be legal");
-    require(legal.back().is_pass(), "Pass must be the final Go action");
+    require(legal.back().isPass(), "Pass must be the final Go action");
     require(legal.front().point() == BitBoard<BoardSize>::point(0),
             "Go action point must decode its board coordinate");
     for (const auto action : legal) {
@@ -60,132 +60,131 @@ template <std::size_t BoardSize> void test_initial_and_actions() {
     }
 }
 
-void test_capture_suicide_and_ko() {
+void testCaptureSuicideAndKo() {
     using Contract = Go7Game;
     using Position = Contract::State;
     const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
 
-    const auto capture_board = board_with<7>({1, 7, 9}, {8});
-    const Position capture = Position::restore(history_with_current(capture_board), GoPlayer::black,
+    const auto captureBoard = boardWith<7>({1, 7, 9}, {8});
+    const Position capture = Position::restore(historyWithCurrent(captureBoard), GoPlayer::black,
                                                std::nullopt, 0, 6, rules);
     const Position captured = capture.child(GoAction<7>(15));
     require(!captured.board().white.test(8), "Surrounded Go stone must be captured");
     require(captured.board().black.test(15), "Capturing stone must be placed");
 
-    const auto suicide_board = board_with<7>({1, 7, 9, 15}, {});
-    const Position suicide = Position::restore(history_with_current(suicide_board), GoPlayer::white,
+    const auto suicideBoard = boardWith<7>({1, 7, 9, 15}, {});
+    const Position suicide = Position::restore(historyWithCurrent(suicideBoard), GoPlayer::white,
                                                std::nullopt, 0, 4, rules);
-    require(!suicide.is_legal(GoAction<7>(8)), "Suicide must be illegal");
+    require(!suicide.isLegal(GoAction<7>(8)), "Suicide must be illegal");
 
-    const auto ko_board = board_with<7>({0, 2}, {1, 7, 9, 15});
-    const Position before_ko = Position::restore(history_with_current(ko_board), GoPlayer::black,
-                                                 std::nullopt, 0, 8, rules);
-    const Position after_ko = before_ko.child(GoAction<7>(8));
-    require(after_ko.ko_point() == BitBoard<7>::point(1), "Single-stone ko point must be recorded");
-    require(!after_ko.is_legal(GoAction<7>(1)), "Immediate simple-ko recapture must be illegal");
-    const Position after_pass = after_ko.child(GoAction<7>::pass());
-    require(!after_pass.ko_point().has_value(), "Pass must clear the simple-ko point");
-    require(after_pass.is_legal(GoAction<7>(1)),
+    const auto koBoard = boardWith<7>({0, 2}, {1, 7, 9, 15});
+    const Position beforeKo =
+        Position::restore(historyWithCurrent(koBoard), GoPlayer::black, std::nullopt, 0, 8, rules);
+    const Position afterKo = beforeKo.child(GoAction<7>(8));
+    require(afterKo.koPoint() == BitBoard<7>::point(1), "Single-stone ko point must be recorded");
+    require(!afterKo.isLegal(GoAction<7>(1)), "Immediate simple-ko recapture must be illegal");
+    const Position afterPass = afterKo.child(GoAction<7>::pass());
+    require(!afterPass.koPoint().has_value(), "Pass must clear the simple-ko point");
+    require(afterPass.isLegal(GoAction<7>(1)),
             "Ko recapture must become legal after an intervening move");
 }
 
-void test_history_encoding_and_hash() {
+void testHistoryEncodingAndHash() {
     using Contract = Go7Game;
     const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
     const typename Contract::State initial(rules);
-    const auto black_played = initial.child(GoAction<7>(0));
-    const auto white_played = black_played.child(GoAction<7>(8));
-    const auto white_to_move_encoding = encode_go_position(black_played);
-    require(white_to_move_encoding.binary_planes[0].none() &&
-                white_to_move_encoding.binary_planes[1].test(0) &&
-                white_to_move_encoding.scalar_planes[0] == 0,
+    const auto blackPlayed = initial.child(GoAction<7>(0));
+    const auto whitePlayed = blackPlayed.child(GoAction<7>(8));
+    const auto whiteToMoveEncoding = encodeGoPosition(blackPlayed);
+    require(whiteToMoveEncoding.binaryPlanes[0].none() &&
+                whiteToMoveEncoding.binaryPlanes[1].test(0) &&
+                whiteToMoveEncoding.scalarPlanes[0] == 0,
             "Go encoding must convert absolute history to the current-player perspective");
-    require(white_played.history()[0].black.test(0) && white_played.history()[0].white.test(8),
+    require(whitePlayed.history()[0].black.test(0) && whitePlayed.history()[0].white.test(8),
             "Current Go history board is incorrect");
-    require(white_played.history()[1].black.test(0) && white_played.history()[1].white.none(),
+    require(whitePlayed.history()[1].black.test(0) && whitePlayed.history()[1].white.none(),
             "Go history must shift older boards back one slot");
-    require(white_played.history()[2].black.none() && white_played.history()[2].white.none(),
+    require(whitePlayed.history()[2].black.none() && whitePlayed.history()[2].white.none(),
             "Initial historic board must remain empty");
-    require(white_played.hash() == white_played.hash() &&
-                white_played.hash() != black_played.hash(),
+    require(whitePlayed.hash() == whitePlayed.hash() && whitePlayed.hash() != blackPlayed.hash(),
             "Go hashes must be stable and state-sensitive");
 
-    const auto encoded = encode_go_position(white_played);
-    require(encoded.binary_planes[0].test(0), "Current-player black stone plane is incorrect");
-    require(encoded.binary_planes[1].test(8), "Opponent white stone plane is incorrect");
-    require(encoded.binary_planes[2].test(0), "Older current-player plane is incorrect");
-    require(encoded.scalar_planes[0] == 1, "Black-to-move scalar plane is incorrect");
-    std::array<std::int8_t, decltype(encoded)::packed_bytes> packed{};
+    const auto encoded = encodeGoPosition(whitePlayed);
+    require(encoded.binaryPlanes[0].test(0), "Current-player black stone plane is incorrect");
+    require(encoded.binaryPlanes[1].test(8), "Opponent white stone plane is incorrect");
+    require(encoded.binaryPlanes[2].test(0), "Older current-player plane is incorrect");
+    require(encoded.scalarPlanes[0] == 1, "Black-to-move scalar plane is incorrect");
+    std::array<std::int8_t, decltype(encoded)::packedBytes> packed{};
     encoded.writePackedInto(packed);
     require((static_cast<std::uint8_t>(packed[0]) & 1U) != 0,
             "Packed Go encoding must use canonical point mapping");
-    std::array<std::int8_t, GoRepresentationDimensions<7>::channel_count * 49> tensor{};
-    Contract::Encoding::encodeInputInto(white_played, tensor.data());
+    std::array<std::int8_t, GoRepresentationDimensions<7>::channelCount * 49> tensor{};
+    Contract::Encoding::encodeInputInto(whitePlayed, tensor.data());
     require(tensor[0] == 1 && tensor[49 + 8] == 1,
             "Expanded Go tensor must match packed plane semantics");
 }
 
-void test_termination_and_scoring() {
+void testTerminationAndScoring() {
     using Position = Go7Game::State;
     const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
-    const auto scoring_board = board_with<7>({1, 7}, {});
-    const Position scoring = Position::restore(history_with_current(scoring_board), GoPlayer::black,
+    const auto scoringBoard = boardWith<7>({1, 7}, {});
+    const Position scoring = Position::restore(historyWithCurrent(scoringBoard), GoPlayer::black,
                                                std::nullopt, 0, 2, rules);
-    require(scoring.area_score() == GoAreaScore{.black_half_points = 98, .white_half_points = 15},
+    require(scoring.areaScore() == GoAreaScore{.black_half_points = 98, .white_half_points = 15},
             "Go area scoring must include surrounded territory and komi");
 
     const auto once = scoring.child(GoAction<7>::pass());
     const auto twice = once.child(GoAction<7>::pass());
-    require(twice.termination_reason() == GoTerminationReason::two_passes,
+    require(twice.terminationReason() == GoTerminationReason::two_passes,
             "Two passes must terminate Go");
-    require(twice.terminal_result().score == scoring.area_score(),
+    require(twice.terminalResult().score == scoring.areaScore(),
             "Two-pass result must contain the final area score");
     require(Go7Game::terminalValue(twice) == 1.0F,
             "Terminal value must use the side-to-move perspective");
-    require(twice.legal_actions().empty(), "Terminal Go positions must have no legal actions");
+    require(twice.legalActions().empty(), "Terminal Go positions must have no legal actions");
 
-    const GoRules capped_rules{.komi_half_points = 15, .maximum_moves = 49};
-    const Position capped = Position::restore(history_with_current(GoBoard<7>{}), GoPlayer::white,
-                                              std::nullopt, 0, 49, capped_rules);
-    require(capped.termination_reason() == GoTerminationReason::maximum_moves,
+    const GoRules cappedRules{.komi_half_points = 15, .maximum_moves = 49};
+    const Position capped = Position::restore(historyWithCurrent(GoBoard<7>{}), GoPlayer::white,
+                                              std::nullopt, 0, 49, cappedRules);
+    require(capped.terminationReason() == GoTerminationReason::maximum_moves,
             "Maximum move bound must terminate Go");
-    require(capped.terminal_result().score ==
+    require(capped.terminalResult().score ==
                 GoAreaScore{.black_half_points = 0, .white_half_points = 15},
             "Maximum-move adjudication must use the configured area score");
     require(Go7Game::terminalValue(capped) == 1.0F,
             "Maximum-move adjudication must produce a value from the side-to-move perspective");
 }
 
-void test_invalid_boundaries() {
-    bool rejected_rules = false;
+void testInvalidBoundaries() {
+    bool rejectedRules = false;
     try {
         (void) GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 48});
     } catch (const std::invalid_argument &) {
-        rejected_rules = true;
+        rejectedRules = true;
     }
-    require(rejected_rules, "Maximum move bound below board area must be rejected");
+    require(rejectedRules, "Maximum move bound below board area must be rejected");
 
-    bool rejected_action = false;
+    bool rejectedAction = false;
     try {
         (void) GoAction<7>(50);
     } catch (const std::invalid_argument &) {
-        rejected_action = true;
+        rejectedAction = true;
     }
-    require(rejected_action, "Out-of-range Go action must be rejected");
+    require(rejectedAction, "Out-of-range Go action must be rejected");
 }
 
 } // namespace
 
 int runGoGameTests() {
     try {
-        test_initial_and_actions<7>();
-        test_initial_and_actions<9>();
-        test_initial_and_actions<13>();
-        test_initial_and_actions<19>();
-        test_capture_suicide_and_ko();
-        test_history_encoding_and_hash();
-        test_termination_and_scoring();
-        test_invalid_boundaries();
+        testInitialAndActions<7>();
+        testInitialAndActions<9>();
+        testInitialAndActions<13>();
+        testInitialAndActions<19>();
+        testCaptureSuicideAndKo();
+        testHistoryEncodingAndHash();
+        testTerminationAndScoring();
+        testInvalidBoundaries();
         std::cout << "Go game tests passed\n";
         return 0;
     } catch (const std::exception &exception) {

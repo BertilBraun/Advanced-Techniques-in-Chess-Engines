@@ -41,30 +41,30 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
     for (const Color color : {WHITE, BLACK}) {
         const Color positionColor = flipForBlack ? ~color : color;
         for (const PieceType piece : pieceTypes) {
-            out.binary_planes[ch++] = canonicalBits(position.pieces(positionColor, piece));
+            out.binaryPlanes[ch++] = canonicalBits(position.pieces(positionColor, piece));
         }
     }
 
     constexpr std::uint64_t ALL_SET = 0xFFFF'FFFF'FFFF'FFFFull;
     for (const Color color : {WHITE, BLACK}) {
         const Color positionColor = flipForBlack ? ~color : color;
-        out.binary_planes[ch++] =
+        out.binaryPlanes[ch++] =
             canonicalBits(ALL_SET * position.can_castle(positionColor & KING_SIDE));
-        out.binary_planes[ch++] =
+        out.binaryPlanes[ch++] =
             canonicalBits(ALL_SET * position.can_castle(positionColor & QUEEN_SIDE));
     }
 
     for (const Color color : {WHITE, BLACK}) {
         const Color positionColor = flipForBlack ? ~color : color;
-        out.binary_planes[ch++] = canonicalBits(position.pieces(positionColor));
+        out.binaryPlanes[ch++] = canonicalBits(position.pieces(positionColor));
     }
 
-    out.binary_planes[ch++] = canonicalBits(position.checkers());
+    out.binaryPlanes[ch++] = canonicalBits(position.checkers());
 
     const Square epSquare = position.ep_square();
-    out.binary_planes[ch++] = canonicalBits(epSquare == SQ_NONE ? 0ULL : square_bb(epSquare));
-    out.binary_planes[ch++] = canonicalBits(ALL_SET * (board.repetitionCount() >= 1));
-    out.binary_planes[ch++] = canonicalBits(ALL_SET * (board.repetitionCount() >= 2));
+    out.binaryPlanes[ch++] = canonicalBits(epSquare == SQ_NONE ? 0ULL : square_bb(epSquare));
+    out.binaryPlanes[ch++] = canonicalBits(ALL_SET * (board.repetitionCount() >= 1));
+    out.binaryPlanes[ch++] = canonicalBits(ALL_SET * (board.repetitionCount() >= 2));
 
     assert(ch == ChessRepresentationDimensions::binary_channel_count);
 
@@ -73,9 +73,9 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
         const Color blackSource = flipForBlack ? WHITE : BLACK;
         const Bitboard white = position.pieces(whiteSource, pieceTypes[i]);
         const Bitboard black = position.pieces(blackSource, pieceTypes[i]);
-        out.scalar_planes[i] = static_cast<std::int8_t>(pieceCount(white) - pieceCount(black));
+        out.scalarPlanes[i] = static_cast<std::int8_t>(pieceCount(white) - pieceCount(black));
     }
-    out.scalar_planes[6] = static_cast<std::int8_t>(std::min(position.rule50_count(), 100));
+    out.scalarPlanes[6] = static_cast<std::int8_t>(std::min(position.rule50_count(), 100));
 
     return out;
 }
@@ -87,12 +87,12 @@ torch::Tensor tensorEncoding(const CompressedEncodedBoard &compressed) {
                                torch::TensorOptions().dtype(torch::kInt8));
 
     compressed.writeTensorInto(std::span<std::int8_t>(tensor.data_ptr<std::int8_t>(),
-                                                      CompressedEncodedBoard::tensor_values));
+                                                      CompressedEncodedBoard::tensorValues));
     return tensor;
 }
 
 void ChessEncoding::encodeInputInto(const Board &state, std::int8_t *destination) {
     const CompressedEncodedBoard encoded = encodeBoard(state);
     encoded.writeTensorInto(
-        std::span<std::int8_t>(destination, CompressedEncodedBoard::tensor_values));
+        std::span<std::int8_t>(destination, CompressedEncodedBoard::tensorValues));
 }

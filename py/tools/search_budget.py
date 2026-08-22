@@ -4,7 +4,6 @@ import argparse
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field
-
 from src.util.frozen_model import FrozenModel
 
 

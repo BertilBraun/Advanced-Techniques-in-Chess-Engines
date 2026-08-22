@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
-
 from src.evaluation.contracts import ElapsedCheckpointReference, EvaluationReferenceManifest
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.experiment.progress_telemetry import RunOutcome, RunOutcomeStatus
 from src.experiment.run import ExperimentRunManifest
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
-from src.games.representation import NetworkDimensions
 from src.experiment_queue.configuration import (
     QueueConfiguration,
     QueuedExperiment,
@@ -32,10 +30,10 @@ from src.experiment_queue.state import (
     write_queue_summary,
 )
 from src.experiment_queue.validation import queue_configuration_fingerprint
+from src.games.representation import NetworkDimensions
 from src.training.checkpoint import CheckpointManifest, CheckpointReference
 from src.training.network import GoPointPassPolicyHeadConfiguration, NetworkDefinition, NetworkParams
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
-
 
 NETWORK_DEFINITION = NetworkDefinition(
     architecture=NetworkParams(num_layers=1, hidden_size=8, policy_head=GoPointPassPolicyHeadConfiguration()),

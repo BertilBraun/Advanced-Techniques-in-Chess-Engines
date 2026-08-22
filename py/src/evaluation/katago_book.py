@@ -1,24 +1,22 @@
 from __future__ import annotations
 
+import ast
+import hashlib
+import heapq
+import re
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
-import ast
-import hashlib
-import heapq
 from pathlib import Path
-import re
 from typing import Literal
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from pydantic import Field
-
 from src.evaluation.configuration import KataGoBookSelectionConfiguration
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
-
 
 OFFICIAL_9X9_TT_ROOT_URL = 'https://katagobooks.org/book9x9tt/root/root.html'
 OFFICIAL_9X9_TT_UPDATED_ON = date(2026, 2, 26)

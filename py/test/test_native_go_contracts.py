@@ -1,15 +1,15 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
 
-
 pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
-
 from src.experiment.configuration import load_experiment_configuration
+from src.games.contracts import WdlTarget
 from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.training import GoImplementation
-from src.games.contracts import WdlTarget
 from src.replay.contracts import EligibleRemainingGameLengthTarget, ReplaySample, SparsePolicyTarget
 from src.self_play.completed_game import SearchVisitCounts
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY

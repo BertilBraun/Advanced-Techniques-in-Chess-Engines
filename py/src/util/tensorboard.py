@@ -1,17 +1,19 @@
-import time
-import os
-import torch
-import numpy as np
+from __future__ import annotations
+
 import multiprocessing
+import os
+import time
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
+from typing import SupportsFloat
+
+import numpy as np
+import torch
 from tensorboardX import SummaryWriter
 from tensorboardX.summary import scalar
 from tensorboardX.writer import FileWriter
-from typing import SupportsFloat
-
 
 LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
 
