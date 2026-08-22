@@ -4,8 +4,6 @@ import pytest
 
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
 
-if not hasattr(AlphaZeroCpp, 'GoPosition7'):
-    pytest.skip('AlphaZeroCpp must be rebuilt before native Go tests run.', allow_module_level=True)
 
 
 def rules(maximum_moves: int = 200) -> AlphaZeroCpp.GoRules:

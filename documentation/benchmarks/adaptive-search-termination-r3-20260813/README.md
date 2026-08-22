@@ -152,7 +152,9 @@ otherwise.
 
 ## Reproduction and non-interference audit
 
-Analysis command:
+Analysis command (the tool was retired on the `cleanup` branch after its private schema mirror drifted from the
+schema-6 completed-game format; to reproduce, check out the revision recorded above or restore the tool from git
+history):
 
 ```powershell
 python .\py\tools\analyze_adaptive_search_records.py `
