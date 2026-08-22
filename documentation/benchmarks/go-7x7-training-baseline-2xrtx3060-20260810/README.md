@@ -1,6 +1,6 @@
 # Go 7x7 two-GPU training baseline
 
-Status: four-hour baseline and screening runs are active on the rented four-RTX-3060 node.
+Status (2026-08-10, historical): four-hour baseline and screening runs were active on the then-rented four-RTX-3060 node at the time of writing. The node is released; the Go screen is paused.
 
 The complete revised configuration is
 [`py/configs/baselines/vast-go-7x7-2gpu-4h.yaml`](../../py/configs/baselines/vast-go-7x7-2gpu-4h.yaml). It defines the

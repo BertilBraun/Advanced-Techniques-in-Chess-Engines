@@ -8,9 +8,11 @@ Current acceptance criteria come from the per-generation yardstick in
 [the chess recovery plan](../plan/chess-recovery-plan-20260820.md); deployment commands from the
 [operations guides](../operations/README.md). Historical figures here are not acceptance criteria.
 
+New benchmarks follow [TEMPLATE.md](TEMPLATE.md).
+
 ## Active harnesses
 
-The [Chess progressive-model inference benchmark](chess-progressive-inference.md) is the sole active harness for
+Harness documentation lives under [harnesses/](harnesses/). The [Chess progressive-model inference benchmark](harnesses/chess-progressive-inference.md) is the sole active harness for
 measuring the retained production Chess models. It loads those models directly from the production configuration.
 The [final RTX 4070 SUPER acceptance result](chess-direct-policy-final-progressive-rtx4070s-20260818/README.md)
 records the exact `6x96 -> 10x160 -> 15x192` production-model throughput and parameter counts.
@@ -19,11 +21,11 @@ records the exact `6x96 -> 10x160 -> 15x192` production-model throughput and par
 
 - [Four-node Vast comparison (2026-08-21)](node-comparison-vast-4nodes-20260821/README.md) — the reference for
   node selection; also a model README for new benchmarks.
-- [Four-RTX-3060 self-play throughput baseline](self-play-throughput-rtx3060.md) — chess and Go 7x7 capacity
+- [Four-RTX-3060 self-play throughput baseline](self-play-throughput-4xrtx3060-20260809/README.md) — chess and Go 7x7 capacity
   topologies with the matched pre-rework comparison.
 - [Naive Python chess MCTS baseline](naive-python-mcts-rtx3060-20260816/README.md) — deliberately unoptimized
   batch-one PUCT reference (~81 sims/s) as an order-of-magnitude comparison for the native search.
-- [Two-GPU Go 7x7 training baseline](go-7x7-two-gpu-training-baseline.md) — proposed comparison baseline.
+- [Two-GPU Go 7x7 training baseline](go-7x7-training-baseline-2xrtx3060-20260810/README.md) — proposed comparison baseline.
 - `chess-results/` — the original 2024 trained model, games, plots, and logs as historical strength evidence
   (large binaries; scheduled to move to the `pre-rework` GitHub release).
 

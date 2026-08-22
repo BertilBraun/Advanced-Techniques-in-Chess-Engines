@@ -113,10 +113,10 @@ lifecycle. They are useful scale indicators, not controlled implementation speed
 The integrated figure is documented in the
 [`chess-training-throughput-rtx3060-20260812`](../chess-training-throughput-rtx3060-20260812/README.md) report. The
 selected topology is documented in the
-[`chess-self-play-latency-rtx3060-20260812`](../chess-self-play-latency-rtx3060-20260812.md) report and architecture
+[`chess-self-play-latency-rtx3060-20260812`](../chess-self-play-latency-rtx3060-20260812/README.md) report and architecture
 ledger. An older native, single-root, sequential CUDA measurement reached approximately 194-258 searches/s, but it
 used a synthetic model, a different node/runtime, and different timing windows; see
-[`interactive-engine.md`](../interactive-engine.md).
+[`interactive-engine.md`](../harnesses/interactive-engine.md).
 
 The defensible report-level conclusion is therefore:
 

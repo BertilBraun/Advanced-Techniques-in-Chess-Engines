@@ -273,4 +273,4 @@ ZIP integrity, elapsed-time comparisons against the fresh same-time baseline and
 metrics, KataGo-96, replay/credit balance, throughput, and resource contention. Do not promote a feature
 automatically; report the evidence for a user decision. Detailed prior-node validation evidence remains in
 [R11 Vast integrated validation](../evidence/node-r11-vast-20260810.md), and the historical baseline rationale is in
-[Go 7x7 two-GPU training baseline](../benchmarks/go-7x7-two-gpu-training-baseline.md).
+[Go 7x7 two-GPU training baseline](../benchmarks/go-7x7-training-baseline-2xrtx3060-20260810/README.md).

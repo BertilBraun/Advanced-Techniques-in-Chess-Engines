@@ -79,3 +79,11 @@ script's own step-6 code — measurements untouched.
   3090-class. Per-dollar self-play favours Ada by ~40%+; check PCIe ≥ gen4 x8 per GPU and a CPU quota of ≥2 real
   cores per worker process. Caveat: trainer throughput was never measured, so if the trainer becomes the bottleneck
   on an 8-GPU node the 24 GiB VRAM class could still matter — measure after the script defect is fixed.
+
+## What to look for in these results
+
+The decisive number is self-play searches per second per dollar at the best grid point; per-GPU searches/s tells
+you the class, per-dollar tells you what to rent. Expect the attention model to be more GPU-bound and the CNN more
+PCIe/CPU-bound at batch 64, so a node with fast GPUs and a slow PCIe link (x4, gen 3) will look good on the trainer
+and bad on self-play — that is the failure mode to catch. Also check `cpu.max` versus `nproc`: a host advertising
+16 threads but quota'd to 8 will starve three processes per GPU.
