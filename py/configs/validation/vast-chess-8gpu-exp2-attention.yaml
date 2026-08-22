@@ -17,7 +17,7 @@ training:
           kind: attention
           num_layers: 12
           embedding_size: 176
-          num_heads: 8
+          num_heads: 11
           feedforward_size: 352
           dropout: 0.0
           policy_head: {kind: chess_76_plane_direct_v2}
