@@ -2,7 +2,7 @@
 # Recipe: r3 base + plane heads + the validated Phase A platform. Deliberately excluded pending controlled
 # experiments: the four new auxiliary targets, adaptive search budget, early termination, replay ratio 10.
 # Included beyond r3: Syzygy adjudication (improves adjudicated label quality), compilation, progressive
-# sizing over three attention rungs (promotions time-scheduled at 8 h and 1.5 d, gated by the loss-EMA
+# sizing over three attention rungs (promotions time-scheduled at 12 h and 1.5 d, gated by the loss-EMA
 # criterion). Resignation stays on per the r3 schedule (calibrated, from generation 70).
 extends: vast-chess-8gpu-exp2-attention.yaml
 
@@ -29,7 +29,7 @@ training:
           num_value_channels: 2
           value_fc_size: 48
       - model_id: chess-attention-12x176
-        training_start_days: 0.333
+        training_start_days: 0.5
         network:
           kind: attention
           num_layers: 12
