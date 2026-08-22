@@ -34,7 +34,12 @@ from src.replay.layout import (
     ReplayElementType,
     ReplayLayout,
 )
-from src.replay.store import ReplayStore, encode_replay_rows
+from src.replay.store import (
+    ReplayAppendTransaction,
+    ReplayStore,
+    encode_replay_rows,
+    plan_replay_append_chain,
+)
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.targets import (
     FutureSearchValueHeadLayout,
@@ -508,6 +513,204 @@ def test_append_plan_can_be_reapplied_only_to_its_exact_before_or_after_state(tm
     with pytest.raises(ValueError, match='ambiguous store state'):
         store.reapply_append_plan(columns, plan)
     store.close()
+
+
+def test_append_chain_is_pure_and_includes_zero_row_transactions_after_capacity_change(tmp_path: Path) -> None:
+    layout = _layout()
+    store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=6, logical_capacity=5)
+    store.extend(tuple(_sample(layout, generation, generation) for generation in range(5)))
+    store.set_logical_capacity(2)
+    store.set_logical_capacity(4)
+    starting_state = store.state
+
+    plans = plan_replay_append_chain(
+        starting_state,
+        (
+            ReplayAppendTransaction(row_count=2, transaction_identity='shard-1'),
+            ReplayAppendTransaction(row_count=0, transaction_identity='shard-empty'),
+            ReplayAppendTransaction(row_count=5, transaction_identity='shard-2'),
+        ),
+    )
+
+    assert store.state == starting_state
+    assert tuple(plan.before for plan in plans) == (starting_state, plans[0].after, plans[1].after)
+    assert tuple(plan.after.append_sequence for plan in plans) == tuple(
+        starting_state.append_sequence + offset for offset in (1, 2, 3)
+    )
+    assert plans[1].after.total_appended_rows == plans[1].before.total_appended_rows
+    assert plans[1].after.last_transaction_identity == 'shard-empty'
+    assert plans[2].after.logical_capacity == 4
+    assert plans[2].after.maximum_capacity == 6
+    store.close()
+
+
+def test_append_chain_rejects_duplicate_nonempty_transaction_identities(tmp_path: Path) -> None:
+    layout = _layout()
+    store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=3, logical_capacity=3)
+    store.extend_rows(
+        encode_replay_rows(layout, (_sample(layout, 0, 0),)),
+        transaction_identity='committed',
+    )
+
+    with pytest.raises(ValueError, match='already present'):
+        plan_replay_append_chain(
+            store.state,
+            (ReplayAppendTransaction(row_count=1, transaction_identity='committed'),),
+        )
+    with pytest.raises(ValueError, match='already present'):
+        plan_replay_append_chain(
+            store.state,
+            (
+                ReplayAppendTransaction(row_count=0, transaction_identity='repeated'),
+                ReplayAppendTransaction(row_count=0, transaction_identity='repeated'),
+            ),
+        )
+    store.close()
+
+
+@pytest.mark.parametrize(
+    ('maximum_capacity', 'logical_capacity', 'initial_count', 'slice_sizes'),
+    (
+        (8, 8, 1, (2, 2)),
+        (6, 5, 4, (2, 2)),
+        (5, 3, 2, (2, 5)),
+    ),
+)
+def test_multi_slice_append_matches_single_batch_bytes_and_fifo(
+    tmp_path: Path,
+    maximum_capacity: int,
+    logical_capacity: int,
+    initial_count: int,
+    slice_sizes: tuple[int, ...],
+) -> None:
+    layout = _layout()
+    expected_path = tmp_path / 'expected.bin'
+    actual_path = tmp_path / 'actual.bin'
+    expected = ReplayStore.create(expected_path, layout, maximum_capacity, logical_capacity)
+    actual = ReplayStore.create(actual_path, layout, maximum_capacity, logical_capacity)
+    initial = tuple(_sample(layout, generation % 9, generation) for generation in range(initial_count))
+    expected.extend_rows(encode_replay_rows(layout, initial), transaction_identity='initial')
+    actual.extend_rows(encode_replay_rows(layout, initial), transaction_identity='initial')
+    addition_count = sum(slice_sizes)
+    additions = tuple(
+        _sample(layout, generation % 9, generation)
+        for generation in range(initial_count, initial_count + addition_count)
+    )
+    column_slices = []
+    start = 0
+    for slice_size in slice_sizes:
+        column_slices.append(_column_views(layout, additions[start : start + slice_size]))
+        start += slice_size
+    expected_plan = expected.plan_append(addition_count, 'multi')
+    actual_plan = actual.plan_append(addition_count, 'multi')
+    written_states = []
+    write_state = actual._write_state
+
+    def record_written_state(state: replay_store_module.ReplayStoreState) -> None:
+        written_states.append(state)
+        write_state(state)
+
+    actual._write_state = record_written_state
+
+    expected.apply_append_plan(_column_views(layout, additions), expected_plan)
+    actual.apply_append_plan_slices(tuple(column_slices), actual_plan)
+    actual.apply_append_plan_slices(tuple(column_slices), actual_plan)
+
+    assert actual.state == expected.state
+    assert written_states == [actual_plan.after]
+    assert tuple(actual.sample_at(index) for index in range(actual.state.size)) == tuple(
+        expected.sample_at(index) for index in range(expected.state.size)
+    )
+    actual._write_state = write_state
+    expected.close()
+    actual.close()
+    assert actual_path.read_bytes() == expected_path.read_bytes()
+
+
+def test_multi_slice_zero_row_plan_updates_header_once_without_columns(tmp_path: Path) -> None:
+    layout = _layout()
+    store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=3, logical_capacity=3)
+    before = store.state
+    (plan,) = plan_replay_append_chain(
+        before,
+        (ReplayAppendTransaction(row_count=0, transaction_identity='empty-shard'),),
+    )
+
+    store.apply_append_plan_slices((), plan)
+
+    assert store.state == plan.after
+    assert store.state.size == before.size
+    assert store.state.append_sequence == before.append_sequence + 1
+    store.apply_append_plan_slices((), plan)
+    assert store.state == plan.after
+    store.close()
+
+
+def test_multi_slice_append_requires_total_rows_to_match_plan(tmp_path: Path) -> None:
+    layout = _layout()
+    store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=3, logical_capacity=3)
+    columns = _column_views(layout, (_sample(layout, 0, 0),))
+    plan = store.plan_append(2, 'wrong-total')
+
+    with pytest.raises(ValueError, match='row count'):
+        store.apply_append_plan_slices((columns,), plan)
+
+    assert store.state == plan.before
+    store.close()
+
+
+def test_multi_slice_semantic_validation_rejects_all_slices_before_mutation(tmp_path: Path) -> None:
+    layout = _layout()
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, layout, maximum_capacity=4, logical_capacity=4)
+    first = _column_views(layout, (_sample(layout, 0, 0),))
+    invalid = _column_views(layout, (_sample(layout, 1, 1),))
+    invalid.sample_weight[0] = np.nan
+    plan = store.plan_append(2, 'invalid-second-slice')
+    before_state = store.state
+    before_bytes = path.read_bytes()
+
+    with pytest.raises(ValueError, match='sample weights'):
+        store.apply_append_plan_slices((first, invalid), plan)
+
+    assert store.state == before_state
+    assert path.read_bytes() == before_bytes
+    store.close()
+
+
+def test_multi_slice_reapply_recovers_second_plan_from_first_plan_boundary(tmp_path: Path) -> None:
+    layout = _layout()
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, layout, maximum_capacity=4, logical_capacity=3)
+    plans = plan_replay_append_chain(
+        store.state,
+        (
+            ReplayAppendTransaction(row_count=2, transaction_identity='shard-1'),
+            ReplayAppendTransaction(row_count=3, transaction_identity='shard-2'),
+        ),
+    )
+    first_columns = _column_views(layout, (_sample(layout, 0, 0), _sample(layout, 1, 1)))
+    second_slices = (
+        _column_views(layout, (_sample(layout, 2, 2),)),
+        _column_views(layout, (_sample(layout, 3, 3), _sample(layout, 4, 4))),
+    )
+    store.apply_append_plan_slices((first_columns,), plans[0])
+    store.close()
+    header = np.memmap(path, mode='r+', dtype=replay_store_module._HEADER_DTYPE, shape=(1,))
+    header[0]['head'] = plans[1].after.head
+    header[0]['size'] = plans[1].after.size
+    header[0]['evicted_rows'] = plans[1].after.evicted_rows
+    header.flush()
+    del header
+    recovering = ReplayStore.open_for_recovery(path, layout)
+
+    recovering.reapply_append_plan_slices(second_slices, plans[1])
+
+    assert recovering.state == plans[1].after
+    assert tuple(recovering.sample_at(index).source_model_generation for index in range(3)) == (2, 3, 4)
+    recovering.reapply_append_plan_slices(second_slices, plans[1])
+    assert recovering.state == plans[1].after
+    recovering.close()
 
 
 def test_interrupted_header_can_be_opened_and_reapplied_from_exact_plan(tmp_path: Path) -> None:
