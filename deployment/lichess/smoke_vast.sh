@@ -3,31 +3,7 @@ set -euo pipefail
 
 engine_repository_root="${ENGINE_REPOSITORY_ROOT:-/workspace/alphazero-engine}"
 virtual_environment_root="${ENGINE_VENV_ROOT:-/workspace/alphazero-venv}"
-model_path="${MODEL_PATH:-}"
-
-if [[ -z "${model_path}" ]]; then
-    model_repository="${HF_MODEL_REPO:-BertilBraun/alphazero-chess}"
-    model_file="${HF_MODEL_FILE:-latest.jit.pt}"
-    model_revision="${HF_MODEL_REVISION:-}"
-    download_arguments=(
-        --repository "${model_repository}"
-        --filename "${model_file}"
-        --output-directory /data/models
-        --provenance /data/model-source.txt
-    )
-    if [[ -n "${model_revision}" ]]; then
-        download_arguments+=(--revision "${model_revision}")
-    fi
-    mkdir -p /data/models
-    "${virtual_environment_root}/bin/python" "${engine_repository_root}/py/tools/fetch_hf_model.py" \
-        "${download_arguments[@]}"
-    model_path="/data/models/${model_file}"
-fi
-
-if [[ ! -f "${model_path}" ]]; then
-    echo "Model does not exist: ${model_path}" >&2
-    exit 1
-fi
+source "${engine_repository_root}/deployment/lichess/resolve_model.sh"
 
 export ENGINE_PYTHON="${virtual_environment_root}/bin/python"
 export ENGINE_REPOSITORY_ROOT="${engine_repository_root}"

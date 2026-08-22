@@ -169,7 +169,7 @@ AlphaZeroCpp.so + TorchScript model   native board/MCTS and GPU inference
 
 `lichess-bot.py` is the public-bot supervisor. It authenticates to Lichess, maintains the event streams, accepts or creates challenges according to `config.yml`, and saves PGNs. When a game starts, it reads the `engine` section and launches `/usr/local/bin/alphazero-uci`.
 
-`alphazero-uci` is not another network service. It changes to `/workspace/py` and runs:
+`alphazero-uci` is not another network service. It changes to `${ENGINE_REPOSITORY_ROOT}/py` and runs:
 
 ```text
 python3.10 -m src.games.chess.uci --model "$MODEL_PATH" ...
@@ -280,11 +280,11 @@ Useful checks over SSH:
 ```text
 test -f /data/models/latest.jit.pt
 cat /data/model-source.txt
-ls /workspace/py/AlphaZeroCpp*.so
+ls /workspace/alphazero-engine/py/AlphaZeroCpp*.so
 tail -f /data/logs/lichess-bot.log
 ```
 
-The compiled filename may contain a Python ABI suffix, such as `AlphaZeroCpp.cpython-310-x86_64-linux-gnu.so`; use `ls /workspace/py/AlphaZeroCpp*.so` if the exact name differs.
+The compiled filename may contain a Python ABI suffix, such as `AlphaZeroCpp.cpython-310-x86_64-linux-gnu.so`; use `ls /workspace/alphazero-engine/py/AlphaZeroCpp*.so` if the exact name differs.
 
 ## Understanding `config.yml`
 
@@ -293,7 +293,7 @@ The compiled filename may contain a Python ABI suffix, such as `AlphaZeroCpp.cpy
 | Setting | Meaning |
 |---|---|
 | `dir`, `name` | Resolve `/usr/local/bin/alphazero-uci`. |
-| `working_dir` | Start the child in `/workspace/py`. |
+| `working_dir` | Start the child in `<engine checkout>/py` (rewritten by `run_vast_bot.sh`). |
 | `protocol: uci` | Communicate through standard UCI stdin/stdout. |
 | `ponder: false` | Do not search on the opponent's clock. |
 | `debug: false` | Do not log every UCI message in normal operation. |
