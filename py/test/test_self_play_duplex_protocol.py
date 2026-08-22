@@ -20,11 +20,12 @@ from src.self_play.protocol import (
     StoppedSelfPlayState,
     StoppedSelfPlayStateApplied,
 )
+from src.self_play.process_runtime import self_play_worker_main
+import src.self_play.process_runtime as process_runtime_module
 from src.self_play.resignation import PublishedResignationPolicy
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import SelfPlayTopologyParams
-from src.training.self_play_group import SelfPlayGroup, _self_play_worker_main
-import src.training.self_play_group as self_play_group_module
+from src.training.self_play_group import SelfPlayGroup
 
 
 @dataclass(frozen=True)
@@ -147,7 +148,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(self_play_group_module, 'SelfPlayWorker', _Worker)
+    monkeypatch.setattr(process_runtime_module, 'SelfPlayWorker', _Worker)
     observed_tensorboard_states: list[bool] = []
 
     def create_tensorboard_writer(
@@ -159,23 +160,23 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
         assert suffix == 'self_play'
         return _TensorboardWriter(enabled, observed_tensorboard_states)
 
-    monkeypatch.setattr(self_play_group_module, 'TensorboardWriter', create_tensorboard_writer)
+    monkeypatch.setattr(process_runtime_module, 'TensorboardWriter', create_tensorboard_writer)
     fake_game = _Game(tmp_path)
 
     def create_game(configuration: ExperimentConfiguration) -> GameImplementation:
         del configuration
         return cast(GameImplementation, fake_game)
 
-    monkeypatch.setattr(self_play_group_module, 'create_game_implementation', create_game)
+    monkeypatch.setattr(process_runtime_module, 'create_game_implementation', create_game)
     monkeypatch.setattr(
-        self_play_group_module,
+        process_runtime_module,
         'load_experiment_configuration_json',
         lambda payload: cast(ExperimentConfiguration, fake_game),
     )
     context = multiprocessing.get_context('spawn')
     parent, child = context.Pipe(duplex=True)
     process = Thread(
-        target=_self_play_worker_main,
+        target=self_play_worker_main,
         args=(child, 0, 0, '{}'),
     )
     process.start()
