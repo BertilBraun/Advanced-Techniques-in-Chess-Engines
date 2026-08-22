@@ -12,18 +12,19 @@ import numpy as np
 import numpy.typing as npt
 import torch
 from src.games.contracts import GameStateContract
-from src.games.representation import decode_packed_planes
-from src.replay.contracts import (
-    EligibleLegalMovesTarget,
-    EligibleNextPolicyTarget,
-    EligibleRemainingGameLengthTarget,
-    EligibleScalarAuxiliaryTarget,
+from src.games.representation import decode_packed_plane_bytes_into
+from src.replay.columnar import (
+    ReplayColumnViews,
+    ReplayLegalMovesColumnViews,
+    ReplayNextPolicyColumnViews,
+    ReplayPolicyColumnViews,
+    ReplayScalarColumnViews,
+    ReplaySearchCorrectionColumnViews,
 )
 from src.replay.description import ReplayDescription
+from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
-from src.self_play.completed_game import SearchVisitCounts
 from src.training.batch import TrainingBatch
-from src.training.targets import auxiliary_head_output_size
 
 PositionT = TypeVar('PositionT')
 
@@ -34,6 +35,15 @@ class _PrefetchedBatch:
     host_batch: TrainingBatch
     device_batch: TrainingBatch
     transfer_complete: torch.cuda.Event | None
+
+
+@dataclass(frozen=True)
+class DenseTargetArrays:
+    policy: npt.NDArray[np.float32]
+    policy_legal_action_ids: npt.NDArray[np.int64]
+    auxiliary: tuple[npt.NDArray[np.float32], ...]
+    auxiliary_legal_action_ids: tuple[npt.NDArray[np.int64], ...]
+    auxiliary_eligibility: tuple[npt.NDArray[np.bool_], ...]
 
 
 class MappedReplayBatchLoader(Generic[PositionT]):
@@ -120,8 +130,8 @@ class MappedReplayBatchLoader(Generic[PositionT]):
                 batch = build_training_batch(
                     store,
                     self.state,
-                    tuple(int(index) for index in sample_indices),
-                    tuple(int(index) for index in augmentation_indices),
+                    sample_indices,
+                    augmentation_indices,
                 )
                 prepared = batch.pin_memory() if self.pin_memory else batch
                 self.rows_read += len(sample_indices)
@@ -263,93 +273,173 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
 def build_training_batch(
     store: ReplayStore,
     state: GameStateContract[PositionT],
-    sample_indices: Sequence[int],
-    augmentation_indices: Sequence[int],
+    sample_indices: npt.NDArray[np.int64] | Sequence[int],
+    augmentation_indices: npt.NDArray[np.int64],
 ) -> TrainingBatch:
-    if not sample_indices:
+    if len(sample_indices) == 0:
         raise ValueError('Training batches cannot be empty.')
     if len(sample_indices) != len(augmentation_indices):
         raise ValueError('Every replay sample requires one augmentation index.')
-    samples = tuple(
-        state.transform_replay_targets(store.sample_at(sample_index), augmentation_index)
-        for sample_index, augmentation_index in zip(sample_indices, augmentation_indices)
-    )
-    representation = state.representation
-    states = np.empty(
-        (len(samples), representation.channels, representation.rows, representation.columns),
-        dtype=np.float32,
-    )
-    policies = np.zeros((len(samples), state.action_size), dtype=np.float32)
-    policy_legal_action_ids = np.full(
-        (len(samples), store.layout.maximum_legal_actions),
-        -1,
-        dtype=np.int64,
-    )
-    auxiliary_targets = tuple(
-        np.zeros((len(samples), auxiliary_head_output_size(head)), dtype=np.float32)
-        for head in store.layout.targets.auxiliary_heads
-    )
-    auxiliary_eligibility = tuple(np.zeros(len(samples), dtype=np.bool_) for _ in store.layout.targets.auxiliary_heads)
-    auxiliary_legal_action_ids = tuple(
-        np.full((len(samples), store.layout.maximum_legal_actions), -1, dtype=np.int64)
-        for _ in store.layout.targets.auxiliary_heads
-    )
-    for row, sample in enumerate(samples):
-        states[row] = decode_packed_planes(
-            sample.encoded_state,
-            representation.packed_planes,
-            representation.binary_channels,
-            representation.scalar_channels,
-        )
-        _write_dense_policy(policies[row], sample.policy.visits)
-        policy_legal_action_ids[row, : len(sample.policy.legal_action_ids)] = sample.policy.legal_action_ids
-        for target_index, target in enumerate(sample.auxiliary_targets):
-            match target:
-                case EligibleNextPolicyTarget(policy=policy):
-                    _write_dense_policy(auxiliary_targets[target_index][row], policy.visits)
-                    auxiliary_legal_action_ids[target_index][row, : len(policy.legal_action_ids)] = (
-                        policy.legal_action_ids
-                    )
-                    auxiliary_eligibility[target_index][row] = True
-                case EligibleRemainingGameLengthTarget(normalized_length=normalized_length):
-                    auxiliary_targets[target_index][row, 0] = normalized_length
-                    auxiliary_eligibility[target_index][row] = True
-                case EligibleScalarAuxiliaryTarget(value=value):
-                    auxiliary_targets[target_index][row, 0] = value
-                    auxiliary_eligibility[target_index][row] = True
-                case EligibleLegalMovesTarget():
-                    legal_actions = sample.policy.legal_action_ids
-                    auxiliary_targets[target_index][row, legal_actions] = 1.0
-                    auxiliary_legal_action_ids[target_index][row, : len(legal_actions)] = legal_actions
-                    auxiliary_eligibility[target_index][row] = True
+    logical_indices = np.asarray(sample_indices, dtype=np.int64)
+    _validate_augmentation_indices(augmentation_indices)
+    physical_indices = store.logical_to_physical(logical_indices)
+    columns = store.gather_physical(physical_indices)
+    return build_training_batch_from_columns(columns, store.layout, state, augmentation_indices)
+
+
+def build_training_batch_from_columns(
+    columns: ReplayColumnViews,
+    layout: ReplayLayout,
+    state: GameStateContract[PositionT],
+    augmentation_indices: npt.NDArray[np.int64],
+) -> TrainingBatch:
+    _validate_augmentation_indices(augmentation_indices)
+    if columns.row_count == 0 or len(augmentation_indices) != columns.row_count:
+        raise ValueError('Replay columns and augmentation indices must form a nonempty aligned batch.')
+    states = decode_augmented_states(columns.encoded_state, state, augmentation_indices)
+    targets = build_dense_targets(columns, layout, state, augmentation_indices)
     return TrainingBatch(
         states=torch.from_numpy(states),
-        policy_targets=torch.from_numpy(policies),
-        policy_legal_action_ids=torch.from_numpy(policy_legal_action_ids),
-        wdl_targets=torch.tensor(
-            [(sample.wdl_target.win, sample.wdl_target.draw, sample.wdl_target.loss) for sample in samples],
-            dtype=torch.float32,
-        ),
-        root_values=torch.tensor([sample.root_value for sample in samples], dtype=torch.float32),
-        auxiliary_targets=tuple(torch.from_numpy(target) for target in auxiliary_targets),
-        auxiliary_legal_action_ids=tuple(torch.from_numpy(actions) for actions in auxiliary_legal_action_ids),
-        auxiliary_eligibility=tuple(torch.from_numpy(mask) for mask in auxiliary_eligibility),
-        sample_weights=torch.tensor([sample.sample_weight for sample in samples], dtype=torch.float32),
-        source_model_generations=torch.tensor(
-            [sample.source_model_generation for sample in samples],
-            dtype=torch.int64,
-        ),
-        source_created_at_seconds=torch.tensor(
-            [sample.source_created_at_seconds for sample in samples],
-            dtype=torch.float64,
-        ),
+        policy_targets=torch.from_numpy(targets.policy),
+        policy_legal_action_ids=torch.from_numpy(targets.policy_legal_action_ids),
+        wdl_targets=torch.from_numpy(columns.wdl_target),
+        root_values=torch.from_numpy(columns.root_value),
+        auxiliary_targets=tuple(torch.from_numpy(target) for target in targets.auxiliary),
+        auxiliary_legal_action_ids=tuple(torch.from_numpy(actions) for actions in targets.auxiliary_legal_action_ids),
+        auxiliary_eligibility=tuple(torch.from_numpy(mask) for mask in targets.auxiliary_eligibility),
+        sample_weights=torch.from_numpy(columns.sample_weight),
+        source_model_generations=torch.from_numpy(columns.source_model_generation.astype(np.int64)),
+        source_created_at_seconds=torch.from_numpy(columns.source_timestamp),
     )
 
 
-def _write_dense_policy(
-    destination: npt.NDArray[np.float32],
-    visits: SearchVisitCounts,
-) -> None:
-    action_ids = np.asarray(visits.action_ids, dtype=np.int64)
-    visit_counts = np.asarray(visits.visit_counts, dtype=np.float32)
-    destination[action_ids] = visit_counts / visit_counts.sum()
+def build_dense_targets(
+    columns: ReplayColumnViews,
+    layout: ReplayLayout,
+    state: GameStateContract[PositionT],
+    augmentation_indices: npt.NDArray[np.int64],
+) -> DenseTargetArrays:
+    _validate_augmentation_indices(augmentation_indices)
+    if np.any((augmentation_indices < 0) | (augmentation_indices >= state.augmentation_count)):
+        raise ValueError('Augmentation index is outside the game contract.')
+    permutations = state.action_permutations
+    policies, policy_legal_action_ids = _dense_policy(
+        columns.policy,
+        augmentation_indices,
+        permutations,
+        state.action_size,
+    )
+    auxiliary_targets: list[npt.NDArray[np.float32]] = []
+    auxiliary_legal_action_ids: list[npt.NDArray[np.int64]] = []
+    auxiliary_eligibility: list[npt.NDArray[np.bool_]] = []
+    for target in columns.auxiliary:
+        empty_legal = np.full((columns.row_count, layout.maximum_legal_actions), -1, dtype=np.int64)
+        match target:
+            case ReplayNextPolicyColumnViews(policy=policy, eligible=eligible):
+                eligible_rows = eligible.astype(np.bool_, copy=False)
+                dense, legal = _dense_policy(
+                    policy,
+                    augmentation_indices,
+                    permutations,
+                    state.action_size,
+                    eligible_rows,
+                )
+                auxiliary_targets.append(dense)
+                auxiliary_legal_action_ids.append(legal)
+                auxiliary_eligibility.append(eligible_rows)
+            case ReplayScalarColumnViews(value=value, eligible=eligible):
+                eligible_rows = eligible.astype(np.bool_, copy=False)
+                auxiliary_targets.append(np.where(eligible_rows, value, np.float32(0.0)).reshape(-1, 1))
+                auxiliary_legal_action_ids.append(empty_legal)
+                auxiliary_eligibility.append(eligible_rows)
+            case ReplaySearchCorrectionColumnViews(value=value):
+                auxiliary_targets.append(value.reshape(-1, 1))
+                auxiliary_legal_action_ids.append(empty_legal)
+                auxiliary_eligibility.append(np.ones(columns.row_count, dtype=np.bool_))
+            case ReplayLegalMovesColumnViews():
+                legal_moves = np.zeros((columns.row_count, state.action_size), dtype=np.float32)
+                valid = policy_legal_action_ids >= 0
+                rows = np.broadcast_to(np.arange(columns.row_count)[:, np.newaxis], valid.shape)
+                legal_moves[rows[valid], policy_legal_action_ids[valid]] = 1.0
+                auxiliary_targets.append(legal_moves)
+                auxiliary_legal_action_ids.append(policy_legal_action_ids.copy())
+                auxiliary_eligibility.append(np.ones(columns.row_count, dtype=np.bool_))
+    return DenseTargetArrays(
+        policy=policies,
+        policy_legal_action_ids=policy_legal_action_ids,
+        auxiliary=tuple(auxiliary_targets),
+        auxiliary_legal_action_ids=tuple(auxiliary_legal_action_ids),
+        auxiliary_eligibility=tuple(auxiliary_eligibility),
+    )
+
+
+def _validate_augmentation_indices(augmentation_indices: npt.NDArray[np.int64]) -> None:
+    if (
+        not isinstance(augmentation_indices, np.ndarray)
+        or augmentation_indices.dtype != np.int64
+        or augmentation_indices.ndim != 1
+    ):
+        raise ValueError('Augmentation indices must be a one-dimensional int64 NumPy array.')
+
+
+def decode_augmented_states(
+    encoded_states: npt.NDArray[np.uint8],
+    state: GameStateContract[PositionT],
+    augmentation_indices: npt.NDArray[np.int64],
+) -> npt.NDArray[np.float32]:
+    _validate_augmentation_indices(augmentation_indices)
+    states = decode_states(encoded_states, state)
+    state.transform_decoded_states(states, augmentation_indices)
+    return states
+
+
+def decode_states(
+    encoded_states: npt.NDArray[np.uint8],
+    state: GameStateContract[PositionT],
+) -> npt.NDArray[np.float32]:
+    representation = state.representation
+    states = np.empty(
+        (len(encoded_states), representation.channels, representation.rows, representation.columns),
+        dtype=np.float32,
+    )
+    decode_packed_plane_bytes_into(
+        encoded_states,
+        representation.packed_planes,
+        representation.binary_channels,
+        representation.scalar_channels,
+        states,
+    )
+    return states
+
+
+def _dense_policy(
+    policy: ReplayPolicyColumnViews,
+    augmentation_indices: npt.NDArray[np.int64],
+    action_permutations: npt.NDArray[np.uint16],
+    action_size: int,
+    eligible_rows: npt.NDArray[np.bool_] | None = None,
+) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.int64]]:
+    row_count = len(policy.entry_count)
+    dense = np.zeros((row_count, action_size), dtype=np.float32)
+    entry_positions = np.arange(policy.action_ids.shape[1])[np.newaxis, :]
+    valid_entries = entry_positions < policy.entry_count[:, np.newaxis]
+    if eligible_rows is not None:
+        valid_entries &= eligible_rows[:, np.newaxis]
+    safe_actions = np.where(valid_entries, policy.action_ids, 0)
+    transformed_actions = action_permutations[augmentation_indices[:, np.newaxis], safe_actions]
+    visits = policy.visit_counts.astype(np.float32)
+    visits[~valid_entries] = 0.0
+    totals = visits.sum(axis=1, keepdims=True)
+    probabilities = np.divide(visits, totals, out=np.zeros_like(visits), where=totals > 0.0)
+    rows = np.broadcast_to(np.arange(row_count)[:, np.newaxis], valid_entries.shape)
+    dense[rows[valid_entries], transformed_actions[valid_entries]] = probabilities[valid_entries]
+
+    legal = np.full(policy.legal_action_ids.shape, -1, dtype=np.int64)
+    legal_positions = np.arange(policy.legal_action_ids.shape[1])[np.newaxis, :]
+    valid_legal = legal_positions < policy.legal_count[:, np.newaxis]
+    if eligible_rows is not None:
+        valid_legal &= eligible_rows[:, np.newaxis]
+    safe_legal = np.where(valid_legal, policy.legal_action_ids, 0)
+    transformed_legal = action_permutations[augmentation_indices[:, np.newaxis], safe_legal]
+    legal[valid_legal] = transformed_legal[valid_legal]
+    return dense, legal

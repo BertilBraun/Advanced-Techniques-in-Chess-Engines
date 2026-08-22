@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 from src.evaluation.manager import EvaluationManager
 from src.experiment.base_configuration import initial_generation
@@ -189,7 +190,7 @@ class Coordinator:
                 store,
                 self.game.state,
                 tuple(range(batch_size)),
-                (0,) * batch_size,
+                np.zeros(batch_size, dtype=np.int64),
             )
         finally:
             store.close()

@@ -3,24 +3,15 @@ from __future__ import annotations
 from typing import Protocol
 
 import numpy as np
+import numpy.typing as npt
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import (
     NetworkDimensions,
     PackedPlaneLayout,
     PackedPlanePayload,
     RepresentationDimensions,
-    decode_packed_planes,
-    encode_packed_planes,
 )
-from src.replay.contracts import (
-    EligibleLegalMovesTarget,
-    EligibleNextPolicyTarget,
-    EligibleRemainingGameLengthTarget,
-    EligibleScalarAuxiliaryTarget,
-    ReplaySample,
-    SparsePolicyTarget,
-)
-from src.self_play.completed_game import SearchVisitCounts, TerminationReason
+from src.self_play.completed_game import TerminationReason
 
 OWN_KING_SIDE_CASTLING_PLANE = 12
 OWN_QUEEN_SIDE_CASTLING_PLANE = 13
@@ -128,6 +119,27 @@ class ChessStateContract(GameStateContract[ChessPosition]):
     def augmentation_count(self) -> int:
         return 2
 
+    def transform_decoded_states(
+        self,
+        states: npt.NDArray[np.float32],
+        augmentation_indices: npt.NDArray[np.int64],
+    ) -> None:
+        if states.ndim != 4 or states.shape[1:] != (29, 8, 8) or len(states) != len(augmentation_indices):
+            raise ValueError('Chess decoded states and augmentation indices are not batch-aligned.')
+        if np.any((augmentation_indices < 0) | (augmentation_indices >= self.augmentation_count)):
+            raise ValueError('Chess augmentation index is outside the fixed layout.')
+        mirrored_rows = augmentation_indices == 1
+        if not np.any(mirrored_rows):
+            return
+        mirrored = np.flip(states[mirrored_rows], axis=3)
+        mirrored[:, [OWN_KING_SIDE_CASTLING_PLANE, OWN_QUEEN_SIDE_CASTLING_PLANE]] = mirrored[
+            :, [OWN_QUEEN_SIDE_CASTLING_PLANE, OWN_KING_SIDE_CASTLING_PLANE]
+        ]
+        mirrored[:, [OPPONENT_KING_SIDE_CASTLING_PLANE, OPPONENT_QUEEN_SIDE_CASTLING_PLANE]] = mirrored[
+            :, [OPPONENT_QUEEN_SIDE_CASTLING_PLANE, OPPONENT_KING_SIDE_CASTLING_PLANE]
+        ]
+        states[mirrored_rows] = mirrored
+
     def transform_action_id(self, action_id: int, augmentation_index: int) -> int:
         if not 0 <= augmentation_index < self.augmentation_count:
             raise ValueError('Chess augmentation index is outside the fixed layout.')
@@ -136,81 +148,6 @@ class ChessStateContract(GameStateContract[ChessPosition]):
         from AlphaZeroCpp import mirror_chess_action_id
 
         return mirror_chess_action_id(action_id)
-
-    def transform_encoded_state(
-        self,
-        encoded_state: PackedPlanePayload,
-        augmentation_index: int,
-    ) -> PackedPlanePayload:
-        if not 0 <= augmentation_index < self.augmentation_count:
-            raise ValueError('Chess augmentation index is outside the fixed layout.')
-        if augmentation_index == 0:
-            return encoded_state
-        representation = self.representation
-        state = decode_packed_planes(
-            encoded_state,
-            representation.packed_planes,
-            representation.binary_channels,
-            representation.scalar_channels,
-        )
-        mirrored = np.flip(state, axis=2).copy()
-        # File mirroring exchanges the king-side and queen-side castling rights of both colours.
-        mirrored[
-            [
-                OWN_KING_SIDE_CASTLING_PLANE,
-                OWN_QUEEN_SIDE_CASTLING_PLANE,
-                OPPONENT_KING_SIDE_CASTLING_PLANE,
-                OPPONENT_QUEEN_SIDE_CASTLING_PLANE,
-            ]
-        ] = mirrored[
-            [
-                OWN_QUEEN_SIDE_CASTLING_PLANE,
-                OWN_KING_SIDE_CASTLING_PLANE,
-                OPPONENT_QUEEN_SIDE_CASTLING_PLANE,
-                OPPONENT_KING_SIDE_CASTLING_PLANE,
-            ]
-        ]
-        return encode_packed_planes(
-            mirrored,
-            representation.packed_planes,
-            representation.binary_channels,
-            representation.scalar_channels,
-        )
-
-    def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
-        def transform_policy(policy: SparsePolicyTarget) -> SparsePolicyTarget:
-            return SparsePolicyTarget(
-                visits=SearchVisitCounts(
-                    action_ids=tuple(
-                        self.transform_action_id(action_id, augmentation_index)
-                        for action_id in policy.visits.action_ids
-                    ),
-                    visit_counts=policy.visits.visit_counts,
-                ),
-                legal_action_ids=tuple(
-                    self.transform_action_id(action_id, augmentation_index) for action_id in policy.legal_action_ids
-                ),
-            )
-
-        transformed_auxiliary = []
-        for target in sample.auxiliary_targets:
-            match target:
-                case EligibleNextPolicyTarget(policy=policy):
-                    transformed_auxiliary.append(EligibleNextPolicyTarget(policy=transform_policy(policy)))
-                case EligibleRemainingGameLengthTarget() | EligibleScalarAuxiliaryTarget() | EligibleLegalMovesTarget():
-                    transformed_auxiliary.append(target)
-                case _:
-                    transformed_auxiliary.append(target)
-        return ReplaySample(
-            encoded_state=self.transform_encoded_state(sample.encoded_state, augmentation_index),
-            policy=transform_policy(sample.policy),
-            wdl_target=sample.wdl_target,
-            root_value=sample.root_value,
-            auxiliary_targets=tuple(transformed_auxiliary),
-            sample_weight=sample.sample_weight,
-            source_model_generation=sample.source_model_generation,
-            source_created_at_seconds=sample.source_created_at_seconds,
-        )
 
 
 CHESS_STATE_CONTRACT = ChessStateContract()

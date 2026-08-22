@@ -5,13 +5,9 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip('AlphaZeroCpp')
-from AlphaZeroCpp import GameSearchVisit
 from src.experiment.configuration import load_experiment_configuration
-from src.games.contracts import WdlTarget
 from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.training import GoImplementation
-from src.replay.contracts import EligibleRemainingGameLengthTarget, ReplaySample, SparsePolicyTarget
-from src.self_play.completed_game import SearchVisitCounts
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
 
@@ -37,26 +33,12 @@ def test_go_root_implementation_owns_action_id_state_and_fixed_target_layout(
     assert implementation.target_layout.auxiliary_heads == ()
 
 
-def test_go_symmetry_leaves_remaining_game_length_unchanged() -> None:
+def test_go_action_permutations_are_cached_and_preserve_pass() -> None:
     configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml')
     assert isinstance(configuration, GoExperimentConfiguration)
     state = GoImplementation(configuration).state
-    position = state.initial_position()
-    action_id = state.legal_action_ids(position)[0]
-    sample = ReplaySample(
-        encoded_state=state.encode_network_input(position),
-        policy=SparsePolicyTarget(
-            visits=SearchVisitCounts.from_native((GameSearchVisit(action_id=action_id, visit_count=1),)),
-            legal_action_ids=state.legal_action_ids(position),
-        ),
-        wdl_target=WdlTarget(win=0.0, draw=1.0, loss=0.0),
-        root_value=0.0,
-        auxiliary_targets=(EligibleRemainingGameLengthTarget(normalized_length=0.5),),
-        sample_weight=1.0,
-        source_model_generation=0,
-        source_created_at_seconds=1.0,
-    )
+    permutations = state.action_permutations
 
-    transformed = state.transform_replay_targets(sample, augmentation_index=1)
-
-    assert transformed.auxiliary_targets == (EligibleRemainingGameLengthTarget(normalized_length=0.5),)
+    assert permutations is state.action_permutations
+    assert not permutations.flags.writeable
+    assert tuple(permutations[:, state.pass_action]) == (state.pass_action,) * state.augmentation_count

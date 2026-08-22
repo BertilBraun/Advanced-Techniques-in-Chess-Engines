@@ -202,9 +202,33 @@ def decode_packed_planes_into(
         return
 
     encoded = _normalized_payload_bytes(encoded_states, layout)
+    decode_packed_plane_bytes_into(encoded, layout, binary_channels, scalar_channels, output)
+
+
+def decode_packed_plane_bytes_into(
+    encoded: npt.NDArray[np.uint8],
+    layout: PackedPlaneLayout,
+    binary_channels: tuple[int, ...],
+    scalar_channels: tuple[int, ...],
+    output: npt.NDArray[np.float32],
+) -> None:
+    """Decode a contiguous batch of packed bytes directly into caller-owned float32 storage."""
+    if encoded.dtype != np.uint8 or encoded.shape != (len(encoded), layout.payload_bytes):
+        raise ValueError('Packed-plane byte batches must have shape (rows, payload_bytes) and uint8 dtype.')
+    expected_shape = (
+        len(encoded),
+        layout.binary_plane_count + layout.scalar_count,
+        layout.board_size,
+        layout.board_size,
+    )
+    if output.shape != expected_shape or output.dtype != np.float32:
+        raise ValueError(f'Packed-plane decode output must have shape {expected_shape} and float32 dtype.')
+    output.fill(0.0)
+    if not len(encoded):
+        return
     plane_byte_count = layout.word_count * 8
     binary_bytes = encoded[:, : layout.binary_bytes].reshape(
-        len(encoded_states),
+        len(encoded),
         layout.binary_plane_count,
         plane_byte_count,
     )
@@ -215,7 +239,7 @@ def decode_packed_planes_into(
     trimmed_bits = binary_bits[:, :, : layout.bit_count]
     scalar_values = encoded[:, layout.binary_bytes :].view(np.int8)
     output[:, binary_channels] = trimmed_bits.reshape(
-        len(encoded_states),
+        len(encoded),
         layout.binary_plane_count,
         layout.board_size,
         layout.board_size,

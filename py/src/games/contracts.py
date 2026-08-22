@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import IntEnum
+from functools import cached_property
 from math import isfinite
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+import numpy as np
+import numpy.typing as npt
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.util.frozen_model import FrozenModel
 
 if TYPE_CHECKING:
-    from src.replay.contracts import ReplaySample
     from src.self_play.completed_game import TerminationReason
 
 
@@ -124,22 +126,31 @@ class GameStateContract(ABC, Generic[PositionT]):
     def augmentation_count(self) -> int:
         raise NotImplementedError
 
+    @cached_property
+    def action_permutations(self) -> npt.NDArray[np.uint16]:
+        permutations = np.empty((self.augmentation_count, self.action_size), dtype=np.uint16)
+        for augmentation_index in range(self.augmentation_count):
+            permutations[augmentation_index] = tuple(
+                self.transform_action_id(action_id, augmentation_index) for action_id in range(self.action_size)
+            )
+        if permutations.shape != (self.augmentation_count, self.action_size) or permutations.dtype != np.uint16:
+            raise ValueError('Action permutations must use the fixed augmentation/action shape and uint16 dtype.')
+        expected = np.arange(self.action_size, dtype=np.uint16)
+        if not np.array_equal(permutations[0], expected):
+            raise ValueError('Identity augmentation must preserve every action ID.')
+        if any(not np.array_equal(np.sort(permutation), expected) for permutation in permutations):
+            raise ValueError('Every augmentation action mapping must be a bijection.')
+        permutations.flags.writeable = False
+        return permutations
+
+    @abstractmethod
+    def transform_decoded_states(
+        self,
+        states: npt.NDArray[np.float32],
+        augmentation_indices: npt.NDArray[np.int64],
+    ) -> None:
+        raise NotImplementedError
+
     @abstractmethod
     def transform_action_id(self, action_id: int, augmentation_index: int) -> int:
-        raise NotImplementedError
-
-    @abstractmethod
-    def transform_encoded_state(
-        self,
-        encoded_state: PackedPlanePayload,
-        augmentation_index: int,
-    ) -> PackedPlanePayload:
-        raise NotImplementedError
-
-    @abstractmethod
-    def transform_replay_targets(
-        self,
-        sample: ReplaySample,
-        augmentation_index: int,
-    ) -> ReplaySample:
         raise NotImplementedError

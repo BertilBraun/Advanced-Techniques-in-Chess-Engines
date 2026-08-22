@@ -15,12 +15,8 @@ from src.games.chess.training import ChessImplementation
 from src.games.contracts import Player, WdlTarget
 from src.games.go.contract import GoStateContract
 from src.replay.contracts import (
-    EligibleLegalMovesTarget,
     EligibleNextPolicyTarget,
-    EligibleRemainingGameLengthTarget,
-    EligibleScalarAuxiliaryTarget,
     IneligibleNextPolicyTarget,
-    ReplaySample,
     SparsePolicyTarget,
 )
 from src.self_play.completed_game import (
@@ -261,44 +257,15 @@ def test_native_search_visit_has_readable_value_semantics() -> None:
     assert repr(visit) == 'GameSearchVisit(action_id=7, visit_count=12)'
 
 
-def test_chess_augmentation_transforms_state_primary_and_auxiliary_policy_together() -> None:
+def test_chess_action_permutations_are_cached_read_only_bijections() -> None:
     pytest.importorskip('AlphaZeroCpp')
     position = CHESS_STATE_CONTRACT.initial_position()
     action_id = CHESS_STATE_CONTRACT.legal_action_ids(position)[0]
-    policy = SparsePolicyTarget(
-        visits=SearchVisitCounts.from_native((GameSearchVisit(action_id=action_id, visit_count=3),)),
-        legal_action_ids=CHESS_STATE_CONTRACT.legal_action_ids(position),
-    )
-    sample = ReplaySample(
-        encoded_state=CHESS_STATE_CONTRACT.encode_network_input(position),
-        policy=policy,
-        wdl_target=WdlTarget(win=0.0, draw=1.0, loss=0.0),
-        root_value=0.0,
-        auxiliary_targets=(
-            EligibleNextPolicyTarget(policy=policy),
-            IneligibleNextPolicyTarget(),
-            EligibleRemainingGameLengthTarget(normalized_length=0.5),
-            EligibleScalarAuxiliaryTarget(kind='future_search_value', value=-0.25),
-            EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=0.5),
-            EligibleLegalMovesTarget(),
-            EligibleScalarAuxiliaryTarget(kind='search_correction', value=0.2),
-        ),
-        sample_weight=1.0,
-        source_model_generation=0,
-        source_created_at_seconds=1.0,
-    )
+    permutations = CHESS_STATE_CONTRACT.action_permutations
 
-    transformed = CHESS_STATE_CONTRACT.transform_replay_targets(sample, augmentation_index=1)
-    transformed_action = CHESS_STATE_CONTRACT.transform_action_id(action_id, augmentation_index=1)
-
-    assert transformed.policy.visits.action_ids[0] == transformed_action
-    auxiliary = transformed.auxiliary_targets[0]
-    assert isinstance(auxiliary, EligibleNextPolicyTarget)
-    assert auxiliary.policy.visits.action_ids[0] == transformed_action
-    assert transformed.auxiliary_targets[1] == IneligibleNextPolicyTarget()
-    assert transformed.auxiliary_targets[2] == EligibleRemainingGameLengthTarget(normalized_length=0.5)
-    assert transformed.auxiliary_targets[3:] == sample.auxiliary_targets[3:]
-    assert transformed.encoded_state == CHESS_STATE_CONTRACT.transform_encoded_state(sample.encoded_state, 1)
+    assert permutations is CHESS_STATE_CONTRACT.action_permutations
+    assert not permutations.flags.writeable
+    assert permutations[1, action_id] == CHESS_STATE_CONTRACT.transform_action_id(action_id, 1)
 
 
 def test_canonical_batch_and_model_output_are_the_objective_boundary() -> None:

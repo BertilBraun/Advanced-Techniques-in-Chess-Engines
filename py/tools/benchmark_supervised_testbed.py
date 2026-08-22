@@ -290,7 +290,7 @@ def run_testbed(arguments: Arguments) -> TestbedReport:
                 holdout_store,
                 game.state,
                 tuple(int(index) for index in holdout_indices[start : start + chunk_size]),
-                (0,) * len(holdout_indices[start : start + chunk_size]),
+                np.zeros(len(holdout_indices[start : start + chunk_size]), dtype=np.int64),
             )
             for start in range(0, arguments.holdout_rows, chunk_size)
         )

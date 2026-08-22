@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from threading import Event, Thread
 
+import numpy as np
 import pytest
 import torch
 
@@ -12,6 +13,7 @@ import src.replay.batch_loader as batch_loader_module
 from AlphaZeroCpp import GameSearchVisit
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessStateContract
 from src.games.contracts import WdlTarget
+from src.games.representation import decode_packed_planes
 from src.replay.batch_loader import MappedReplayBatchLoader, build_training_batch
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
@@ -23,7 +25,8 @@ from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import SearchVisitCounts
-from src.training.batch import TrainingBatch
+from src.training.batch import TrainingBatch, TrainingModelOutput
+from src.training.objective import ResolvedNextPolicyLoss, ResolvedRemainingGameLengthLoss, ResolvedTrainingObjective
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout, TrainingTargetLayout
 
 
@@ -130,6 +133,162 @@ def test_mapped_loader_builds_canonical_batches_and_disjoint_rank_slices(tmp_pat
     assert torch.allclose(rank_zero.auxiliary_targets[1], torch.full((2, 1), 0.25))
     assert torch.all(rank_zero.auxiliary_eligibility[1])
     assert set(rank_zero.sample_weights.tolist()).isdisjoint(rank_one.sample_weights.tolist())
+
+
+def test_build_training_batch_accepts_numpy_index_arrays(tmp_path: Path) -> None:
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, _layout(), maximum_capacity=2, logical_capacity=2)
+    store.append(_sample(1.0))
+    store.append(_sample(2.0))
+
+    batch = build_training_batch(
+        store,
+        IDENTITY_CHESS_STATE_CONTRACT,
+        np.asarray((1, 0), dtype=np.int64),
+        np.asarray((0, 0), dtype=np.int64),
+    )
+
+    assert batch.sample_weights.tolist() == [2.0, 1.0]
+    store.close()
+
+
+def _reference_object_batch(
+    store: ReplayStore,
+    sample_indices: np.ndarray,
+    augmentation_indices: np.ndarray,
+) -> TrainingBatch:
+    samples = tuple(store.sample_at(int(index)) for index in sample_indices)
+    row_count = len(samples)
+    states = np.empty((row_count, 29, 8, 8), dtype=np.float32)
+    policies = np.zeros((row_count, CHESS_STATE_CONTRACT.action_size), dtype=np.float32)
+    legal = np.full((row_count, store.layout.maximum_legal_actions), -1, dtype=np.int64)
+    next_policies = np.zeros_like(policies)
+    next_legal = np.full_like(legal, -1)
+    remaining = np.zeros((row_count, 1), dtype=np.float32)
+    for row, (sample, augmentation) in enumerate(zip(samples, augmentation_indices, strict=True)):
+        decoded = decode_packed_planes(
+            sample.encoded_state,
+            CHESS_STATE_CONTRACT.packed_plane_layout,
+            CHESS_STATE_CONTRACT.representation.binary_channels,
+            CHESS_STATE_CONTRACT.representation.scalar_channels,
+        ).astype(np.float32)[np.newaxis, ...]
+        CHESS_STATE_CONTRACT.transform_decoded_states(decoded, np.asarray((augmentation,), dtype=np.int64))
+        states[row] = decoded[0]
+        permutation = CHESS_STATE_CONTRACT.action_permutations[int(augmentation)]
+        visits = np.asarray(sample.policy.visits.visit_counts, dtype=np.float32)
+        actions = permutation[np.asarray(sample.policy.visits.action_ids, dtype=np.uint16)]
+        policies[row, actions] = visits / visits.sum()
+        transformed_legal = permutation[np.asarray(sample.policy.legal_action_ids, dtype=np.uint16)]
+        legal[row, : len(transformed_legal)] = transformed_legal
+        next_target = sample.auxiliary_targets[0]
+        assert isinstance(next_target, EligibleNextPolicyTarget)
+        next_visits = np.asarray(next_target.policy.visits.visit_counts, dtype=np.float32)
+        next_actions = permutation[np.asarray(next_target.policy.visits.action_ids, dtype=np.uint16)]
+        next_policies[row, next_actions] = next_visits / next_visits.sum()
+        next_transformed_legal = permutation[np.asarray(next_target.policy.legal_action_ids, dtype=np.uint16)]
+        next_legal[row, : len(next_transformed_legal)] = next_transformed_legal
+        remaining_target = sample.auxiliary_targets[1]
+        assert isinstance(remaining_target, EligibleRemainingGameLengthTarget)
+        remaining[row, 0] = remaining_target.normalized_length
+    return TrainingBatch(
+        states=torch.from_numpy(states),
+        policy_targets=torch.from_numpy(policies),
+        policy_legal_action_ids=torch.from_numpy(legal),
+        wdl_targets=torch.tensor(
+            tuple((sample.wdl_target.win, sample.wdl_target.draw, sample.wdl_target.loss) for sample in samples),
+            dtype=torch.float32,
+        ),
+        root_values=torch.tensor(tuple(sample.root_value for sample in samples), dtype=torch.float32),
+        auxiliary_targets=(torch.from_numpy(next_policies), torch.from_numpy(remaining)),
+        auxiliary_legal_action_ids=(
+            torch.from_numpy(next_legal),
+            torch.full(legal.shape, -1, dtype=torch.int64),
+        ),
+        auxiliary_eligibility=(torch.ones(row_count, dtype=torch.bool), torch.ones(row_count, dtype=torch.bool)),
+        sample_weights=torch.tensor(tuple(sample.sample_weight for sample in samples), dtype=torch.float32),
+        source_model_generations=torch.tensor(
+            tuple(sample.source_model_generation for sample in samples), dtype=torch.int64
+        ),
+        source_created_at_seconds=torch.tensor(
+            tuple(sample.source_created_at_seconds for sample in samples), dtype=torch.float64
+        ),
+    )
+
+
+def test_vectorized_batch_exactly_matches_object_reference_across_wrap_and_duplicates(tmp_path: Path) -> None:
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, _layout(), maximum_capacity=4, logical_capacity=4)
+    for weight in range(1, 7):
+        store.append(_sample(float(weight)))
+    sample_indices = np.asarray((2, 0, 2, 1), dtype=np.int64)
+    augmentations = np.asarray((1, 0, 0, 1), dtype=np.int64)
+
+    actual = build_training_batch(store, CHESS_STATE_CONTRACT, sample_indices, augmentations)
+    expected = _reference_object_batch(store, sample_indices, augmentations)
+
+    for actual_tensor, expected_tensor in zip(
+        (
+            actual.states,
+            actual.policy_targets,
+            actual.policy_legal_action_ids,
+            actual.wdl_targets,
+            actual.root_values,
+            *actual.auxiliary_targets,
+            *actual.auxiliary_legal_action_ids,
+            *actual.auxiliary_eligibility,
+            actual.sample_weights,
+            actual.source_model_generations,
+            actual.source_created_at_seconds,
+        ),
+        (
+            expected.states,
+            expected.policy_targets,
+            expected.policy_legal_action_ids,
+            expected.wdl_targets,
+            expected.root_values,
+            *expected.auxiliary_targets,
+            *expected.auxiliary_legal_action_ids,
+            *expected.auxiliary_eligibility,
+            expected.sample_weights,
+            expected.source_model_generations,
+            expected.source_created_at_seconds,
+        ),
+        strict=True,
+    ):
+        torch.testing.assert_close(actual_tensor, expected_tensor, rtol=0.0, atol=0.0)
+
+    objective = ResolvedTrainingObjective(
+        policy_loss_weight=1.0,
+        value_loss_weight=1.0,
+        root_value_blend=0.25,
+        auxiliary_losses=(
+            ResolvedNextPolicyLoss(weight=0.2),
+            ResolvedRemainingGameLengthLoss(weight=0.1),
+        ),
+    )
+    generator = torch.Generator().manual_seed(17)
+    initial_logits = (
+        torch.randn((4, CHESS_STATE_CONTRACT.action_size), generator=generator),
+        torch.randn((4, 3), generator=generator),
+        torch.randn((4, CHESS_STATE_CONTRACT.action_size), generator=generator),
+        torch.randn((4, 1), generator=generator),
+    )
+
+    def loss_and_gradients(batch: TrainingBatch) -> tuple[torch.Tensor, tuple[torch.Tensor, ...]]:
+        parameters = tuple(torch.nn.Parameter(values.clone()) for values in initial_logits)
+        output = TrainingModelOutput(parameters[0], parameters[1], (parameters[2], parameters[3]))
+        loss = objective.calculate_loss(output, batch).total
+        loss.backward()
+        return loss.detach(), tuple(
+            parameter.grad.detach().clone() for parameter in parameters if parameter.grad is not None
+        )
+
+    actual_loss, actual_gradients = loss_and_gradients(actual)
+    expected_loss, expected_gradients = loss_and_gradients(expected)
+    torch.testing.assert_close(actual_loss, expected_loss, rtol=0.0, atol=0.0)
+    for actual_gradient, expected_gradient in zip(actual_gradients, expected_gradients, strict=True):
+        torch.testing.assert_close(actual_gradient, expected_gradient, rtol=0.0, atol=0.0)
+    store.close()
 
 
 @pytest.mark.parametrize('depth', (1, 2, 4, 8))

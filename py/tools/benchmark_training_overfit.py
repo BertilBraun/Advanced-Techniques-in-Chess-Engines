@@ -401,13 +401,13 @@ def _load_fixed_batches(
             replay_store,
             game.state,
             tuple(int(index) for index in sample_indices[: arguments.batch_size]),
-            tuple(int(index) for index in augmentation_indices[: arguments.batch_size]),
+            augmentation_indices[: arguments.batch_size].astype(np.int64, copy=False),
         )
         holdout_batch = build_training_batch(
             replay_store,
             game.state,
             tuple(int(index) for index in sample_indices[arguments.batch_size :]),
-            tuple(int(index) for index in augmentation_indices[arguments.batch_size :]),
+            augmentation_indices[arguments.batch_size :].astype(np.int64, copy=False),
         )
     finally:
         replay_store.close()

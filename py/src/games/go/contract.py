@@ -12,19 +12,8 @@ from src.games.representation import (
     PackedPlaneLayout,
     PackedPlanePayload,
     RepresentationDimensions,
-    decode_packed_planes,
-    decode_packed_planes_into,
-    encode_packed_planes,
 )
-from src.replay.contracts import (
-    EligibleLegalMovesTarget,
-    EligibleNextPolicyTarget,
-    EligibleRemainingGameLengthTarget,
-    EligibleScalarAuxiliaryTarget,
-    ReplaySample,
-    SparsePolicyTarget,
-)
-from src.self_play.completed_game import SearchVisitCounts, TerminationReason
+from src.self_play.completed_game import TerminationReason
 
 
 class NativeEnumValue(Protocol):
@@ -198,6 +187,29 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
     def augmentation_count(self) -> int:
         return 8
 
+    def transform_decoded_states(
+        self,
+        states: npt.NDArray[np.float32],
+        augmentation_indices: npt.NDArray[np.int64],
+    ) -> None:
+        expected = (self.channels, self.board_size, self.board_size)
+        if states.ndim != 4 or states.shape[1:] != expected or len(states) != len(augmentation_indices):
+            raise ValueError('Go decoded states and augmentation indices are not batch-aligned.')
+        if np.any((augmentation_indices < 0) | (augmentation_indices >= self.augmentation_count)):
+            raise ValueError('Go augmentation index is outside the fixed layout.')
+        binary_count = len(self.binary_channels)
+        for symmetry in GoSymmetryIndex:
+            selected = augmentation_indices == int(symmetry)
+            if not np.any(selected) or symmetry is GoSymmetryIndex.IDENTITY:
+                continue
+            binary = states[selected, :binary_count]
+            if int(symmetry) >= int(GoSymmetryIndex.REFLECT):
+                binary = np.flip(binary, axis=3)
+            rotation = int(symmetry) % 4
+            if rotation:
+                binary = np.rot90(binary, k=-rotation, axes=(2, 3))
+            states[selected, :binary_count] = binary
+
     def packed_position(self, position: NativeGoPosition) -> PackedPlanePayload:
         if position.board_size != self.board_size:
             raise ValueError('Native Go position board size disagrees with its Python contract.')
@@ -233,81 +245,3 @@ class GoStateContract(GameStateContract[NativeGoPosition]):
             case GoSymmetryIndex.REFLECT_ROTATE_270:
                 transformed_x, transformed_y = y, x
         return transformed_y * self.board_size + transformed_x
-
-    def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
-        def transform_policy(policy: SparsePolicyTarget) -> SparsePolicyTarget:
-            return SparsePolicyTarget(
-                visits=SearchVisitCounts(
-                    action_ids=tuple(
-                        self.transform_action_id(action_id, augmentation_index)
-                        for action_id in policy.visits.action_ids
-                    ),
-                    visit_counts=policy.visits.visit_counts,
-                ),
-                legal_action_ids=tuple(
-                    self.transform_action_id(action_id, augmentation_index) for action_id in policy.legal_action_ids
-                ),
-            )
-
-        transformed_auxiliary = []
-        for target in sample.auxiliary_targets:
-            match target:
-                case EligibleNextPolicyTarget(policy=policy):
-                    transformed_auxiliary.append(EligibleNextPolicyTarget(policy=transform_policy(policy)))
-                case EligibleRemainingGameLengthTarget() | EligibleScalarAuxiliaryTarget() | EligibleLegalMovesTarget():
-                    transformed_auxiliary.append(target)
-                case _:
-                    transformed_auxiliary.append(target)
-        return ReplaySample(
-            encoded_state=self.transform_encoded_state(sample.encoded_state, augmentation_index),
-            policy=transform_policy(sample.policy),
-            wdl_target=sample.wdl_target,
-            root_value=sample.root_value,
-            auxiliary_targets=tuple(transformed_auxiliary),
-            sample_weight=sample.sample_weight,
-            source_model_generation=sample.source_model_generation,
-            source_created_at_seconds=sample.source_created_at_seconds,
-        )
-
-    def transform_encoded_state(
-        self,
-        encoded_state: PackedPlanePayload,
-        augmentation_index: int,
-    ) -> PackedPlanePayload:
-        try:
-            symmetry = GoSymmetryIndex(augmentation_index)
-        except ValueError as error:
-            raise ValueError('Go augmentation index is outside the fixed layout.') from error
-        state = decode_packed_planes(
-            encoded_state,
-            self.packed_planes,
-            self.binary_channels,
-            self.scalar_channels,
-        )
-        binary = state[: len(self.binary_channels)]
-        rotation = int(symmetry) % 4
-        if int(symmetry) >= int(GoSymmetryIndex.REFLECT):
-            binary = np.flip(binary, axis=2)
-        if rotation:
-            binary = np.rot90(binary, k=-rotation, axes=(1, 2))
-        transformed = state.copy()
-        transformed[: len(self.binary_channels)] = binary
-        return encode_packed_planes(
-            transformed,
-            self.packed_planes,
-            self.binary_channels,
-            self.scalar_channels,
-        )
-
-    def decode_batch_into(
-        self,
-        states: tuple[PackedPlanePayload, ...],
-        output: npt.NDArray[np.float32],
-    ) -> None:
-        decode_packed_planes_into(
-            states,
-            self.packed_planes,
-            self.binary_channels,
-            self.scalar_channels,
-            output,
-        )

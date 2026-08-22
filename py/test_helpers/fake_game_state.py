@@ -4,9 +4,10 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
+import numpy as np
+import numpy.typing as npt
 from src.games.contracts import GameStateContract, Player, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
-from src.replay.contracts import ReplaySample
 from src.self_play.completed_game import TerminationReason
 
 
@@ -83,17 +84,13 @@ class FakeGameState(GameStateContract[FakePosition]):
         del augmentation_index
         return action_id
 
-    def transform_encoded_state(
+    def transform_decoded_states(
         self,
-        encoded_state: PackedPlanePayload,
-        augmentation_index: int,
-    ) -> PackedPlanePayload:
-        del augmentation_index
-        return encoded_state
-
-    def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
-        del augmentation_index
-        return sample
+        states: npt.NDArray[np.float32],
+        augmentation_indices: npt.NDArray[np.int64],
+    ) -> None:
+        if states.ndim != 4 or len(states) != len(augmentation_indices) or np.any(augmentation_indices != 0):
+            raise ValueError('Fake decoded states require aligned identity augmentations.')
 
 
 def binary_choice_fake_game_state(terminal_ply: int = 6) -> FakeGameState:

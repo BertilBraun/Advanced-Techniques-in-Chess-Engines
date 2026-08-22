@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
+import numpy as np
+import numpy.typing as npt
 import pytest
 from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
@@ -16,7 +18,6 @@ from src.replay.contracts import (
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
-    ReplaySample,
 )
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayManager
@@ -103,18 +104,16 @@ class LinearStateContract(GameStateContract[LinearPosition]):
     def augmentation_count(self) -> int:
         return 1
 
+    def transform_decoded_states(
+        self,
+        states: npt.NDArray[np.float32],
+        augmentation_indices: npt.NDArray[np.int64],
+    ) -> None:
+        if len(states) != len(augmentation_indices) or np.any(augmentation_indices != 0):
+            raise ValueError('Linear test augmentation indices are not batch-aligned identities.')
+
     def transform_action_id(self, action_id: int, augmentation_index: int) -> int:
         return action_id
-
-    def transform_encoded_state(
-        self,
-        encoded_state: PackedPlanePayload,
-        augmentation_index: int,
-    ) -> PackedPlanePayload:
-        return encoded_state
-
-    def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
-        return sample
 
 
 LINEAR_STATE_CONTRACT = LinearStateContract()

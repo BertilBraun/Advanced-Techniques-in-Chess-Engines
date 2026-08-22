@@ -29,6 +29,12 @@ def _decode(payload: PackedPlanePayload) -> np.ndarray:
     )
 
 
+def _transform(payload: PackedPlanePayload, augmentation_index: int) -> np.ndarray:
+    states = _decode(payload).astype(np.float32)[np.newaxis, ...]
+    CHESS_STATE_CONTRACT.transform_decoded_states(states, np.asarray((augmentation_index,), dtype=np.int64))
+    return states[0].astype(np.int8)
+
+
 def _synthetic_state() -> np.ndarray:
     generator = np.random.default_rng(3)
     state = np.zeros((29, 8, 8), dtype=np.int8)
@@ -52,7 +58,7 @@ def test_file_mirror_flips_files_and_swaps_castling_planes() -> None:
         REPRESENTATION.scalar_channels,
     )
 
-    mirrored = _decode(CHESS_STATE_CONTRACT.transform_encoded_state(payload, 1))
+    mirrored = _transform(payload, 1)
 
     expected = np.flip(state, axis=2).copy()
     expected[list(CASTLING_PLANES)] = expected[
@@ -79,7 +85,7 @@ def test_identity_augmentation_returns_the_original_payload() -> None:
         REPRESENTATION.scalar_channels,
     )
 
-    assert CHESS_STATE_CONTRACT.transform_encoded_state(payload, 0) == payload
+    assert np.array_equal(_transform(payload, 0), state)
 
 
 def _file_mirrored_board(board: str) -> str:
@@ -118,7 +124,7 @@ def test_mirrored_tensor_matches_native_encoding_for_positions_with_castling_rig
     native = pytest.importorskip('AlphaZeroCpp')
 
     payload = CHESS_STATE_CONTRACT.encode_network_input(native.ChessPosition(fen))
-    mirrored = _decode(CHESS_STATE_CONTRACT.transform_encoded_state(payload, 1))
+    mirrored = _transform(payload, 1)
 
     # Standard FEN cannot express the mirrored castling rights, so the expected tensor combines the
     # native encoding of the mirrored board with the constant castling planes of the swapped-rights position.
