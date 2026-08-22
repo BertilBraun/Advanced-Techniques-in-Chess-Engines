@@ -419,6 +419,39 @@ class ReplayStore:
             raise ValueError('Replay append recovery found an ambiguous store state.')
         self._apply_column_slices_for_plan(flattened_slices, plan)
 
+    def reapply_append_plan_chain(
+        self,
+        column_slices_by_plan: tuple[tuple[ReplayColumnViews, ...], ...],
+        plans: tuple[ReplayAppendPlan, ...],
+    ) -> None:
+        self._ensure_writable()
+        if len(column_slices_by_plan) != len(plans):
+            raise ValueError('Replay append recovery plan count does not match its column-slice groups.')
+        flattened_by_plan: list[tuple[tuple[ReplayColumnArray, ...], ...]] = []
+        transaction_identities: set[str] = (
+            {plans[0].before.last_transaction_identity}
+            if plans and plans[0].before.last_transaction_identity
+            else set()
+        )
+        for plan_index, (column_slices, plan) in enumerate(zip(column_slices_by_plan, plans, strict=True)):
+            if plan_index and plans[plan_index - 1].after != plan.before:
+                raise ValueError('Replay append recovery plans do not form one linked chain.')
+            if plan.transaction_identity and plan.transaction_identity in transaction_identities:
+                raise ValueError('Replay append recovery transaction identities must be unique.')
+            if plan.transaction_identity:
+                transaction_identities.add(plan.transaction_identity)
+            flattened_by_plan.append(self._validate_append_plan_slices(column_slices, plan))
+        if not plans:
+            return
+        current = self.state
+        boundaries = (plans[0].before, *(plan.after for plan in plans))
+        if current not in boundaries:
+            interrupted_plan_count = sum(_is_interrupted_append_state(current, plan) for plan in plans)
+            if interrupted_plan_count != 1:
+                raise ValueError('Replay append chain recovery found an ambiguous store state.')
+        for flattened_slices, plan in zip(flattened_by_plan, plans, strict=True):
+            self._apply_column_slices_for_plan(flattened_slices, plan)
+
     def _validate_append_plan_slices(
         self,
         column_slices: tuple[ReplayColumnViews, ...],

@@ -843,6 +843,162 @@ def test_reapply_overwrites_corrupt_wrapped_data_when_final_header_already_persi
     assert path.read_bytes() == expected_bytes
 
 
+def _multi_plan_recovery_chain(
+    layout: ReplayLayout,
+    store: ReplayStore,
+) -> tuple[
+    tuple[replay_store_module.ReplayAppendPlan, ...],
+    tuple[tuple[ReplayColumnViews, ...], ...],
+]:
+    plans = plan_replay_append_chain(
+        store.state,
+        (
+            ReplayAppendTransaction(row_count=2, transaction_identity='chain-1'),
+            ReplayAppendTransaction(row_count=0, transaction_identity='chain-empty'),
+            ReplayAppendTransaction(row_count=2, transaction_identity='chain-2'),
+            ReplayAppendTransaction(row_count=2, transaction_identity='chain-3'),
+        ),
+    )
+    column_slices_by_plan = (
+        (
+            _column_views(layout, (_sample(layout, 5, 5),)),
+            _column_views(layout, (_sample(layout, 6, 6),)),
+        ),
+        (),
+        (
+            _column_views(layout, (_sample(layout, 7, 7),)),
+            _column_views(layout, (_sample(layout, 8, 8),)),
+        ),
+        (
+            _column_views(layout, (_sample(layout, 0, 9),)),
+            _column_views(layout, (_sample(layout, 1, 10),)),
+        ),
+    )
+    return plans, column_slices_by_plan
+
+
+def test_chain_reapply_restores_early_and_middle_wrapped_data_from_final_header(tmp_path: Path) -> None:
+    layout = _layout()
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, layout, maximum_capacity=8, logical_capacity=7)
+    store.extend(tuple(_sample(layout, generation, generation) for generation in range(5)))
+    plans, column_slices_by_plan = _multi_plan_recovery_chain(layout, store)
+    for column_slices, plan in zip(column_slices_by_plan, plans, strict=True):
+        store.apply_append_plan_slices(column_slices, plan)
+    physical_indices = store.logical_to_physical(np.asarray([1, 3], dtype=np.int64))
+    generation_column = next(
+        column
+        for column in store.physical_columns
+        if column.descriptor.key.kind is ReplayColumnKind.SOURCE_MODEL_GENERATION
+    )
+    store.close()
+    expected_bytes = path.read_bytes()
+    generations = np.memmap(
+        path,
+        mode='r+',
+        dtype=np.uint32,
+        offset=generation_column.offset,
+        shape=(plans[-1].after.maximum_capacity,),
+    )
+    generations[physical_indices] = 999
+    generations.flush()
+    del generations
+    recovering = ReplayStore.open(path, layout)
+
+    recovering.reapply_append_plan_chain(column_slices_by_plan, plans)
+
+    assert recovering.state == plans[-1].after
+    assert tuple(recovering.sample_at(index).source_model_generation for index in range(7)) == tuple(range(4, 11))
+    recovering.close()
+    assert path.read_bytes() == expected_bytes
+
+
+def test_chain_reapply_accepts_current_middle_boundary(tmp_path: Path) -> None:
+    layout = _layout()
+    store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=8, logical_capacity=7)
+    store.extend(tuple(_sample(layout, generation, generation) for generation in range(5)))
+    plans, column_slices_by_plan = _multi_plan_recovery_chain(layout, store)
+    for column_slices, plan in zip(column_slices_by_plan[:3], plans[:3], strict=True):
+        store.apply_append_plan_slices(column_slices, plan)
+    assert store.state == plans[2].after
+
+    store.reapply_append_plan_chain(column_slices_by_plan, plans)
+
+    assert store.state == plans[-1].after
+    assert tuple(store.sample_at(index).source_model_generation for index in range(7)) == tuple(range(4, 11))
+    store.close()
+
+
+def test_chain_reapply_accepts_one_mid_plan_interrupted_header(tmp_path: Path) -> None:
+    layout = _layout()
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, layout, maximum_capacity=8, logical_capacity=7)
+    store.extend(tuple(_sample(layout, generation, generation) for generation in range(5)))
+    plans, column_slices_by_plan = _multi_plan_recovery_chain(layout, store)
+    for column_slices, plan in zip(column_slices_by_plan[:2], plans[:2], strict=True):
+        store.apply_append_plan_slices(column_slices, plan)
+    store.close()
+    header = np.memmap(path, mode='r+', dtype=replay_store_module._HEADER_DTYPE, shape=(1,))
+    header[0]['head'] = plans[2].after.head
+    header[0]['size'] = plans[2].after.size
+    header[0]['evicted_rows'] = plans[2].after.evicted_rows
+    header[0]['total_appended_rows'] = plans[2].after.total_appended_rows
+    header.flush()
+    del header
+    recovering = ReplayStore.open_for_recovery(path, layout)
+
+    recovering.reapply_append_plan_chain(column_slices_by_plan, plans)
+
+    assert recovering.state == plans[-1].after
+    assert tuple(recovering.sample_at(index).source_model_generation for index in range(7)) == tuple(range(4, 11))
+    recovering.close()
+
+
+def test_chain_reapply_invalid_later_columns_mutates_nothing(tmp_path: Path) -> None:
+    layout = _layout()
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, layout, maximum_capacity=8, logical_capacity=7)
+    store.extend(tuple(_sample(layout, generation, generation) for generation in range(5)))
+    plans, column_slices_by_plan = _multi_plan_recovery_chain(layout, store)
+    invalid = _column_views(layout, (_sample(layout, 1, 10),))
+    invalid.sample_weight[0] = np.nan
+    invalid_groups = (*column_slices_by_plan[:-1], (column_slices_by_plan[-1][0], invalid))
+    store.flush()
+    before_state = store.state
+    before_bytes = path.read_bytes()
+
+    wrong_shape_groups = (*column_slices_by_plan[:-1], (column_slices_by_plan[-1][0], _column_views(layout, ())))
+    with pytest.raises(ValueError, match='row count'):
+        store.reapply_append_plan_chain(wrong_shape_groups, plans)
+    assert store.state == before_state
+    assert path.read_bytes() == before_bytes
+    with pytest.raises(ValueError, match='sample weights'):
+        store.reapply_append_plan_chain(invalid_groups, plans)
+
+    assert store.state == before_state
+    assert path.read_bytes() == before_bytes
+    store.close()
+
+
+def test_chain_reapply_rejects_unrecorded_store_state_before_mutation(tmp_path: Path) -> None:
+    layout = _layout()
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, layout, maximum_capacity=8, logical_capacity=7)
+    store.extend(tuple(_sample(layout, generation, generation) for generation in range(5)))
+    plans, column_slices_by_plan = _multi_plan_recovery_chain(layout, store)
+    store.append(_sample(layout, 5, 5))
+    store.flush()
+    before_state = store.state
+    before_bytes = path.read_bytes()
+
+    with pytest.raises(ValueError, match='ambiguous'):
+        store.reapply_append_plan_chain(column_slices_by_plan, plans)
+
+    assert store.state == before_state
+    assert path.read_bytes() == before_bytes
+    store.close()
+
+
 def test_interrupted_header_can_be_opened_and_reapplied_from_exact_plan(tmp_path: Path) -> None:
     layout = _layout()
     path = tmp_path / 'replay.bin'
