@@ -83,6 +83,8 @@ class _MaterializationDispatcher:
         self._pending: dict[Future[StagedGame], str] = {}
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        # Guards _claimed/_pending against the dispatcher thread racing main-thread drain() calls.
+        self._lock = threading.RLock()
         self.failed_game_count = 0
 
     def start(self) -> None:
@@ -100,25 +102,30 @@ class _MaterializationDispatcher:
             self._collect_finished()
 
     def dispatch_once(self) -> None:
-        self._collect_finished()
-        inbox_files = self._manager.inbox_files_by_modification_time()
-        self._claimed &= {inbox_file.stem for inbox_file in inbox_files} | set(self._pending.values())
-        for inbox_file in inbox_files:
-            game_id = inbox_file.stem
-            if game_id in self._claimed:
-                continue
-            if self._manager.is_staged(game_id):
-                # Left over from a crash between staging and the worker's inbox unlink.
-                inbox_file.unlink(missing_ok=True)
-                continue
-            self._claimed.add(game_id)
-            executor = self._manager.materialization_executor
-            if executor is not None:
-                future = executor.submit(stage_completed_game_path, inbox_file, self._manager.staging_path)
-                self._pending[future] = game_id
-            else:
-                self._stage_inline(inbox_file, game_id)
-        self._collect_finished()
+        with self._lock:
+            self._collect_finished()
+            inbox_files = self._manager.inbox_files_by_modification_time()
+            self._claimed &= {inbox_file.stem for inbox_file in inbox_files} | set(self._pending.values())
+            for inbox_file in inbox_files:
+                game_id = inbox_file.stem
+                if game_id in self._claimed:
+                    continue
+                if game_id in self._manager.recently_ingested_game_ids:
+                    # The append consumed this game between staging and the leftover inbox unlink.
+                    inbox_file.unlink(missing_ok=True)
+                    continue
+                if self._manager.is_staged(game_id):
+                    # Left over from a crash between staging and the worker's inbox unlink.
+                    inbox_file.unlink(missing_ok=True)
+                    continue
+                self._claimed.add(game_id)
+                executor = self._manager.materialization_executor
+                if executor is not None:
+                    future = executor.submit(stage_completed_game_path, inbox_file, self._manager.staging_path)
+                    self._pending[future] = game_id
+                else:
+                    self._stage_inline(inbox_file, game_id)
+            self._collect_finished()
 
     def drain(self) -> None:
         while True:
@@ -142,14 +149,15 @@ class _MaterializationDispatcher:
         self.on_staged(staged)
 
     def _collect_finished(self) -> None:
-        for future in [pending for pending in self._pending if pending.done()]:
-            game_id = self._pending.pop(future)
-            error = future.exception()
-            if error is not None:
-                self.failed_game_count += 1
-                log(f'Failed to materialize completed game {game_id}: {error}')
-                continue
-            self.on_staged(future.result())
+        with self._lock:
+            for future in [pending for pending in self._pending if pending.done()]:
+                game_id = self._pending.pop(future)
+                error = future.exception()
+                if error is not None:
+                    self.failed_game_count += 1
+                    log(f'Failed to materialize completed game {game_id}: {error}')
+                    continue
+                self.on_staged(future.result())
 
     def _run(self) -> None:
         while not self._stop_event.wait(self.poll_interval_seconds):
@@ -180,6 +188,8 @@ class ReplayManager(Generic[PositionT]):
         self.inbox_path = completed_games_path / 'inbox'
         self.staging_path = completed_games_path / 'staging'
         self.append_manifest_path = completed_games_path / 'last-append.json'
+        # Only the latest batch is needed: appends unlink leftover inbox files, so older IDs cannot recur.
+        self.recently_ingested_game_ids: frozenset[str] = frozenset()
         self.inbox_path.mkdir(parents=True, exist_ok=True)
         self.staging_path.mkdir(parents=True, exist_ok=True)
         self.store = store
@@ -313,6 +323,7 @@ class ReplayManager(Generic[PositionT]):
         self.store.extend_rows(block)
         self.store.flush()
         self._observe_resignation_games(metadata_by_game)
+        self.recently_ingested_game_ids = frozenset(staged.game_id for staged in staged_games)
         self._unlink_staged_games(staged_games)
         self.append_manifest_path.unlink(missing_ok=True)
         after = self.store.state
@@ -399,6 +410,8 @@ class ReplayManager(Generic[PositionT]):
         for staged in staged_games:
             staged.rows_path.unlink(missing_ok=True)
             staged.metadata_path.unlink(missing_ok=True)
+            # A leftover inbox file for an ingested game must not survive, or a restart would re-stage it.
+            (self.inbox_path / f'{staged.game_id}.json').unlink(missing_ok=True)
 
     def _recover_directories(self) -> None:
         for directory in (self.inbox_path, self.staging_path):

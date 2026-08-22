@@ -72,7 +72,10 @@ def retain_policy(
     discarded = ordered[maximum_entries:]
     return PolicyRetention(
         policy=SparsePolicyTarget(
-            visits=SearchVisitCounts.from_native(retained),
+            visits=SearchVisitCounts(
+                action_ids=tuple(visit.action_id for visit in retained),
+                visit_counts=tuple(visit.visit_count for visit in retained),
+            ),
             legal_action_ids=legal_action_ids,
         ),
         truncated=bool(discarded),
