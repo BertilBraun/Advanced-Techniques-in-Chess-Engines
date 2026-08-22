@@ -1,4 +1,3 @@
-import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -6,6 +5,7 @@ from uuid import UUID
 
 import numpy as np
 import pytest
+
 pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit, SearchCheckpoint
 from AlphaZeroCpp import SearchStopReason as NativeSearchStopReason
@@ -32,6 +32,7 @@ from src.self_play.resignation import (
 )
 from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.self_play.worker import SelfPlayWorker
+from test_helpers.checkpoints import checkpoint_reference
 from src.training.checkpoint import CheckpointReference
 
 
@@ -254,16 +255,7 @@ class RecordingTerminalOracle(TerminalOracle[FakePosition]):
 
 
 def checkpoint(path: Path, generation: int) -> CheckpointReference:
-    inference_path = path / f'model_{generation}.jit.pt'
-    inference_path.write_bytes(f'model {generation}'.encode('ascii'))
-    return CheckpointReference(
-        generation=generation,
-        manifest_path=path / f'checkpoint_{generation}.json',
-        model_path=path / f'model_{generation}.pt',
-        optimizer_path=path / f'optimizer_{generation}.pt',
-        inference_model_path=inference_path,
-        inference_model_sha256=hashlib.sha256(inference_path.read_bytes()).hexdigest(),
-    )
+    return checkpoint_reference(path, generation, write_inference_model=True)
 
 
 def resignation_configuration(continuation_probability: float) -> CalibratedResignationConfiguration:

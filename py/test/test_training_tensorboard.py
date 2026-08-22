@@ -1,13 +1,14 @@
-from pathlib import Path
-
 import pytest
 
 from src.experiment.configuration import load_experiment_configuration
 from src.training.tensorboard import scheduled_settings_at
+from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY
 
 
 def test_scheduled_settings_include_every_generation_schedule() -> None:
-    configuration = load_experiment_configuration(Path('configs/baselines/vast-go-9x9-2gpu-4h.yaml'))
+    configuration = load_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'baselines' / 'vast-go-9x9-2gpu-4h.yaml'
+    )
 
     settings = {setting.tag: setting.value for setting in scheduled_settings_at(configuration, 25)}
 

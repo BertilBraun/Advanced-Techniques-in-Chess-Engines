@@ -31,14 +31,18 @@ from src.self_play.parameters import (
 from src.training.configuration import TrainingCompilation, TrainingPrecision
 from src.training.targets import RemainingGameLengthTargetConfiguration
 from src.util.frozen_model import JsonValue
-from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
+from test_helpers.chess_configuration import (
+    CHESS_EXPERIMENT,
+    CHESS_EXPERIMENT_TEMPLATE_PATH,
+    CHESS_TRAINING,
+)
+from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_CONFIG_DIRECTORY
 
-CHESS_EXPERIMENT_TEMPLATE_PATH = Path('test/configs/chess-experiment.yaml')
-OPTIMAL_CHESS_EXPERIMENT_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
+OPTIMAL_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-optimal.yaml'
 
 
-def test_test_experiment_fixtures_use_the_current_contract_and_dependency_lock() -> None:
-    paths = tuple(sorted(Path('test/configs').glob('*-experiment.yaml')))
+def test_experiment_fixtures_use_the_current_contract_and_dependency_lock() -> None:
+    paths = tuple(sorted(TEST_CONFIG_DIRECTORY.glob('*-experiment.yaml')))
     configurations = validate_experiment_queue(paths)
     dependency_lock_sha256 = hashlib.sha256(Path('requirements-training.lock').read_bytes()).hexdigest()
 
@@ -50,7 +54,7 @@ def test_test_experiment_fixtures_use_the_current_contract_and_dependency_lock()
 
 
 def test_every_screening_configuration_parses() -> None:
-    paths = tuple(sorted(Path('configs/screening').rglob('*.yaml')))
+    paths = tuple(sorted((REPOSITORY_CONFIG_DIRECTORY / 'screening').rglob('*.yaml')))
 
     assert all(load_experiment_configuration(path) for path in paths)
 
@@ -211,7 +215,7 @@ def test_game_experiments_extend_the_shared_run_and_training_configuration() -> 
     ('configuration_type', 'path'),
     (
         (ChessExperimentConfiguration, CHESS_EXPERIMENT_TEMPLATE_PATH),
-        (GoExperimentConfiguration, Path('test/configs/go-7x7-experiment.yaml')),
+        (GoExperimentConfiguration, TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml'),
     ),
 )
 def test_base_configuration_validates_shared_training_arguments(
@@ -239,8 +243,8 @@ def test_experiment_queue_validation_loads_multiple_experiments() -> None:
 @pytest.mark.parametrize(
     ('path', 'board_size', 'action_count'),
     (
-        (Path('test/configs/go-7x7-experiment.yaml'), 7, 50),
-        (Path('test/configs/go-9x9-experiment.yaml'), 9, 82),
+        (TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml', 7, 50),
+        (TEST_CONFIG_DIRECTORY / 'go-9x9-experiment.yaml', 9, 82),
     ),
 )
 def test_go_experiments_resolve_deterministically(path: Path, board_size: int, action_count: int) -> None:
@@ -267,7 +271,7 @@ def test_first_play_urgency_modes_resolve_explicitly(
     authored: JsonValue,
     expected: FirstPlayUrgencyParameters,
 ) -> None:
-    candidate = yaml.safe_load(Path('test/configs/go-9x9-experiment.yaml').read_text(encoding='utf-8'))
+    candidate = yaml.safe_load((TEST_CONFIG_DIRECTORY / 'go-9x9-experiment.yaml').read_text(encoding='utf-8'))
     candidate['go']['self_play']['search']['first_play_urgency'] = authored
     configuration = GoExperimentConfiguration.model_validate(candidate)
 
@@ -280,8 +284,8 @@ def test_queue_validation_supports_both_games() -> None:
     configurations = validate_experiment_queue(
         (
             CHESS_EXPERIMENT_TEMPLATE_PATH,
-            Path('test/configs/go-7x7-experiment.yaml'),
-            Path('test/configs/go-9x9-experiment.yaml'),
+            TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml',
+            TEST_CONFIG_DIRECTORY / 'go-9x9-experiment.yaml',
         )
     )
 
@@ -312,7 +316,7 @@ def test_queue_validation_supports_both_games() -> None:
     ),
 )
 def test_invalid_go_combinations_fail_precisely(field_path: tuple[str, ...], value: JsonValue, message: str) -> None:
-    candidate = yaml.safe_load(Path('test/configs/go-7x7-experiment.yaml').read_text(encoding='utf-8'))
+    candidate = yaml.safe_load((TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml').read_text(encoding='utf-8'))
     owner = candidate
     for segment in field_path[:-1]:
         owner = owner[segment]
@@ -381,7 +385,9 @@ def test_resolved_experiment_round_trips_as_canonical_json(tmp_path: Path) -> No
 
 def test_experiment_configuration_extends_and_deeply_overrides_a_base(tmp_path: Path) -> None:
     base_path = tmp_path / 'base.yaml'
-    base_path.write_text(Path('test/configs/go-7x7-experiment.yaml').read_text(encoding='utf-8'), encoding='utf-8')
+    base_path.write_text(
+        (TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml').read_text(encoding='utf-8'), encoding='utf-8'
+    )
     override_path = tmp_path / 'override.yaml'
     override_path.write_text(
         '\n'.join(
@@ -414,7 +420,7 @@ def test_experiment_configuration_extends_and_deeply_overrides_a_base(tmp_path: 
 
 def test_experiment_configuration_hash_includes_resolved_base_content(tmp_path: Path) -> None:
     base_path = tmp_path / 'base.yaml'
-    source = Path('test/configs/go-7x7-experiment.yaml').read_text(encoding='utf-8')
+    source = (TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml').read_text(encoding='utf-8')
     base_path.write_text(source, encoding='utf-8')
     override_path = tmp_path / 'override.yaml'
     override_path.write_text('extends: base.yaml\n', encoding='utf-8')

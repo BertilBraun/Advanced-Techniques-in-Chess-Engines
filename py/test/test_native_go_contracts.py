@@ -12,13 +12,14 @@ from src.games.go.training import GoImplementation
 from src.games.contracts import WdlTarget
 from src.replay.contracts import EligibleRemainingGameLengthTarget, ReplaySample, SparsePolicyTarget
 from src.self_play.completed_game import SearchVisitCounts
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
 
 @pytest.mark.parametrize(
     ('path', 'expected_action_size'),
     (
-        (Path('test/configs/go-7x7-experiment.yaml'), 50),
-        (Path('test/configs/go-9x9-experiment.yaml'), 82),
+        (TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml', 50),
+        (TEST_CONFIG_DIRECTORY / 'go-9x9-experiment.yaml', 82),
     ),
 )
 def test_go_root_implementation_owns_action_id_state_and_fixed_target_layout(
@@ -37,7 +38,7 @@ def test_go_root_implementation_owns_action_id_state_and_fixed_target_layout(
 
 
 def test_go_symmetry_leaves_remaining_game_length_unchanged() -> None:
-    configuration = load_experiment_configuration(Path('test/configs/go-7x7-experiment.yaml'))
+    configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml')
     assert isinstance(configuration, GoExperimentConfiguration)
     state = GoImplementation(configuration).state
     position = state.initial_position()

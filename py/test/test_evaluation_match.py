@@ -17,73 +17,10 @@ from src.evaluation.contracts import (
     RandomOpponent,
 )
 from src.evaluation.match import run_match
-from src.games.contracts import GameStateContract, Player, WdlTarget
-from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
-from src.replay.contracts import ReplaySample
-from src.self_play.completed_game import TerminationReason
 from src.self_play.configuration import BatchedInferenceParams
 from src.training.checkpoint import CheckpointReference
-
-
-@dataclass(frozen=True)
-class FakePosition:
-    actions: tuple[int, ...]
-
-
-class FakeState(GameStateContract[FakePosition]):
-    @property
-    def name(self) -> str:
-        return 'chess'
-
-    @property
-    def action_size(self) -> int:
-        return 2
-
-    @property
-    def representation(self) -> RepresentationDimensions:
-        return RepresentationDimensions(1, 1, 1, (), (0,), PackedPlaneLayout(1, 0, 1))
-
-    def initial_position(self) -> FakePosition:
-        return FakePosition(())
-
-    def legal_action_ids(self, position: FakePosition) -> tuple[int, ...]:
-        return () if len(position.actions) == 6 else (0, 1)
-
-    def child_position(self, position: FakePosition, action_id: int) -> FakePosition:
-        return FakePosition((*position.actions, action_id))
-
-    def is_irreversible_transition(self, position: FakePosition, action_id: int, child: FakePosition) -> bool:
-        del position, action_id, child
-        return False
-
-    def current_player(self, position: FakePosition) -> Player:
-        return Player.FIRST if len(position.actions) % 2 == 0 else Player.SECOND
-
-    def natural_terminal_wdl(self, position: FakePosition) -> WdlTarget | None:
-        return WdlTarget(win=0.0, draw=1.0, loss=0.0) if len(position.actions) == 6 else None
-
-    def adjudicated_wdl(self, position: FakePosition, reason: TerminationReason) -> WdlTarget:
-        return WdlTarget(win=0.0, draw=1.0, loss=0.0)
-
-    def encode_network_input(self, position: FakePosition) -> PackedPlanePayload:
-        return self.packed_plane_layout.value(bytes((len(position.actions),)))
-
-    @property
-    def augmentation_count(self) -> int:
-        return 1
-
-    def transform_action_id(self, action_id: int, augmentation_index: int) -> int:
-        return action_id
-
-    def transform_encoded_state(
-        self,
-        encoded_state: PackedPlanePayload,
-        augmentation_index: int,
-    ) -> PackedPlanePayload:
-        return encoded_state
-
-    def transform_replay_targets(self, sample: ReplaySample, augmentation_index: int) -> ReplaySample:
-        return sample
+from test_helpers.checkpoints import checkpoint_reference
+from test_helpers.fake_game_state import FakePosition, binary_choice_fake_game_state
 
 
 @dataclass
@@ -125,7 +62,7 @@ class OverrideSelector:
 
 
 class FakeGame:
-    state = FakeState()
+    state = binary_choice_fake_game_state()
 
     def create_evaluation_search(
         self,
@@ -145,14 +82,7 @@ class FixedPolicyModel(torch.nn.Module):
 
 
 def _checkpoint() -> CheckpointReference:
-    return CheckpointReference(
-        generation=1,
-        manifest_path=Path('checkpoint.json'),
-        model_path=Path('model.pt'),
-        optimizer_path=Path('optimizer.pt'),
-        inference_model_path=Path('inference.pt'),
-        inference_model_sha256='0' * 64,
-    )
+    return checkpoint_reference()
 
 
 def test_shared_match_swaps_players_and_aggregates_pairs() -> None:

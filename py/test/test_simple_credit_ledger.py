@@ -7,6 +7,7 @@ from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedger
 from src.training.distributions import PolicyTrainingDistribution, TrainingDistributionSnapshot
 from src.training.trainer import TrainingQuantumResult, TrainingStatistics
+from test_helpers.checkpoints import checkpoint_reference, materialized_checkpoint
 
 
 def _empty_distributions() -> TrainingDistributionSnapshot:
@@ -33,14 +34,7 @@ def _empty_distributions() -> TrainingDistributionSnapshot:
 
 
 def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:
-    return CheckpointReference(
-        generation=generation,
-        manifest_path=tmp_path / f'checkpoint_{generation}.json',
-        model_path=tmp_path / f'model_{generation}.pt',
-        optimizer_path=tmp_path / f'optimizer_{generation}.pt',
-        inference_model_path=tmp_path / f'model_{generation}.jit.pt',
-        inference_model_sha256=f'{generation:064x}',
-    )
+    return checkpoint_reference(tmp_path, generation)
 
 
 def _parameters() -> CreditTrainingParams:
@@ -145,26 +139,10 @@ def test_credit_ledger_initializes_progress_from_checkpoint_generation(tmp_path:
     assert ledger.state.available_credits == 0
 
 
-def test_credit_ledger_adopts_one_complete_checkpoint_after_interrupted_commit(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_credit_ledger_adopts_one_complete_checkpoint_after_interrupted_commit(tmp_path: Path) -> None:
     ledger = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
     ledger.add_materialized_samples(16)
-    completed = _checkpoint(tmp_path, 1)
-    completed.manifest_path.write_text('{}', encoding='utf-8')
-
-    def load_checkpoint(
-        cls: type[CheckpointReference],
-        run_path: Path,
-        generation: int,
-    ) -> CheckpointReference:
-        del cls
-        assert run_path == tmp_path
-        assert generation == 1
-        return completed
-
-    monkeypatch.setattr(CheckpointReference, 'load', classmethod(load_checkpoint))
+    completed = materialized_checkpoint(tmp_path, 1)
 
     restarted = CreditLedger(tmp_path, _parameters(), global_batch_size=8, starting_checkpoint=_checkpoint(tmp_path, 0))
 

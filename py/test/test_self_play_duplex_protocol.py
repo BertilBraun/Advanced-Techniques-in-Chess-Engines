@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import hashlib
 import multiprocessing
 from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
@@ -26,6 +25,7 @@ from src.self_play.resignation import PublishedResignationPolicy
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import SelfPlayTopologyParams
 from src.training.self_play_group import SelfPlayGroup
+from test_helpers.checkpoints import checkpoint_reference
 
 
 @dataclass(frozen=True)
@@ -132,16 +132,7 @@ class _Process:
 
 
 def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:
-    inference_path = tmp_path / f'model_{generation}.jit.pt'
-    inference_path.write_bytes(f'model {generation}'.encode('ascii'))
-    return CheckpointReference(
-        generation=generation,
-        manifest_path=tmp_path / f'checkpoint_{generation}.json',
-        model_path=tmp_path / f'model_{generation}.pt',
-        optimizer_path=tmp_path / f'optimizer_{generation}.pt',
-        inference_model_path=inference_path,
-        inference_model_sha256=hashlib.sha256(inference_path.read_bytes()).hexdigest(),
-    )
+    return checkpoint_reference(tmp_path, generation, write_inference_model=True)
 
 
 def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(

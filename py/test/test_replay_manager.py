@@ -130,7 +130,9 @@ def _completed_game() -> CompletedSelfPlayGame:
             SearchObservation(
                 ply=ply,
                 model_generation=2,
-                policy_target_visits=SearchVisitCounts(action_ids=(other_action, selected_action), visit_counts=(3, 10)),
+                policy_target_visits=SearchVisitCounts(
+                    action_ids=(other_action, selected_action), visit_counts=(3, 10)
+                ),
                 root_value=0.25,
                 highest_visited_child_action_id=selected_action,
                 highest_visited_child_visit_count=10,
@@ -647,6 +649,7 @@ def test_synthetic_flood_appends_every_game_exactly_once_with_bounded_inbox(tmp_
     manager.close()
 
 
+@pytest.mark.integration
 def test_dispatcher_thread_stages_flood_without_inbox_growth(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
     manager = _open_manager(tmp_path, capacity=128, maximum_capacity=128)

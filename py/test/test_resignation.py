@@ -1,10 +1,10 @@
 import sqlite3
 from pathlib import Path
-from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
 import src.self_play.resignation as resignation_module
+
 pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import GameSearchVisit
 from pydantic import ValidationError
@@ -19,6 +19,7 @@ from src.self_play.completed_game import (
 )
 from src.self_play.resignation import (
     CalibratedResignationConfiguration,
+    ResignationCalibrationState,
     ResignationCalibrator,
     one_sided_binomial_upper_bound,
 )
@@ -189,7 +190,7 @@ def test_central_state_persists_across_restart(tmp_path: Path) -> None:
     assert restarted.state.broadest_candidate_triggers == 1
 
 
-def test_calibration_batch_uses_one_transaction_and_state_publication(
+def test_calibration_batch_uses_one_transaction_and_publishes_the_batch_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -203,9 +204,7 @@ def test_calibration_batch_uses_one_transaction_and_state_publication(
         journal.set_trace_callback(statements.append)
         return journal
 
-    state_writer = MagicMock(wraps=resignation_module.write_text_atomically)
     monkeypatch.setattr(resignation_module.sqlite3, 'connect', traced_connect)
-    monkeypatch.setattr(resignation_module, 'write_text_atomically', state_writer)
 
     observe_completed_games(
         calibrator,
@@ -214,8 +213,9 @@ def test_calibration_batch_uses_one_transaction_and_state_publication(
         completed_continuation(0),
     )
 
+    published = ResignationCalibrationState.model_validate_json(path.read_text(encoding='utf-8'))
     transaction_statements = tuple(statement for statement in statements if statement in {'BEGIN ', 'COMMIT'})
     assert transaction_statements == ('BEGIN ', 'COMMIT')
-    assert state_writer.call_count == 1
-    assert calibrator.state.completed_continuation_games == 2
-    assert calibrator.state.broadest_candidate_triggers == 2
+    assert published == calibrator.state
+    assert published.completed_continuation_games == 2
+    assert published.broadest_candidate_triggers == 2

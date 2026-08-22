@@ -21,6 +21,9 @@ from src.training.network import (
 from src.training.targets import NextPolicyHeadLayout
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.mark.parametrize(
     'parameters',
     (

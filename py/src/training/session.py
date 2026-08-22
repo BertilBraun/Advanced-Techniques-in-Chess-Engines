@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -114,11 +115,20 @@ class FixedTrainingSession(TrainingSession):
         self.trainer.close()
 
 
+TrainerGroupFactory = Callable[[ExperimentConfiguration, GameImplementation, TrainerStartup], TrainerGroup]
+
+
 class ProgressiveTrainingSession(TrainingSession):
-    def __init__(self, configuration: ExperimentConfiguration, game: GameImplementation) -> None:
+    def __init__(
+        self,
+        configuration: ExperimentConfiguration,
+        game: GameImplementation,
+        trainer_group_factory: TrainerGroupFactory = TrainerGroup,
+    ) -> None:
         progressive_configuration = configuration.training.progressive_model_sizing
         self.configuration = configuration
         self.game = game
+        self.trainer_group_factory = trainer_group_factory
         self.progressive_configuration = progressive_configuration
         self.run_path = Path(configuration.training.save_path)
         self.optimizer_steps_per_quantum = configuration.training.lifecycle.credit.optimizer_steps_per_quantum
@@ -236,7 +246,7 @@ class ProgressiveTrainingSession(TrainingSession):
     ) -> TrainerGroup:
         trainer = self.trainers.get(model_id)
         if trainer is None:
-            trainer = TrainerGroup(
+            trainer = self.trainer_group_factory(
                 self.configuration,
                 self.game,
                 TrainerStartup(
