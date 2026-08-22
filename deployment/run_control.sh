@@ -165,7 +165,7 @@ REGISTRY
 command=/bin/bash ${script_path} supervised-runner ${run_name}
 directory=${repository_directory}
 autostart=false
-autorestart=unexpected
+autorestart=false
 exitcodes=0
 startsecs=30
 stopsignal=TERM
