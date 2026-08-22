@@ -1,6 +1,6 @@
-# Experiment 2 of the 2026-08-22 diagnosis ladder: experiment 1 (r3 recipe + plane head) with the trunk
-# swapped to attention 8x128 — isolates attention-in-the-loop on top of whatever experiment 1 shows.
-# LR keeps the r3 ratio schedule; the 1,000-step warm-up from run1 applies.
+# Experiment 2 of the 2026-08-22 ladder: r3 recipe + plane head with an attention trunk sized to the
+# four-day model's inference capacity (3.07M vs r3's 3.09M) — the comparison target is the four-day
+# per-generation yardstick, not exp1. LR keeps the r3 schedule; the 1,000-step warm-up applies.
 extends: vast-chess-8gpu-exp1-planehead.yaml
 
 run:
@@ -11,14 +11,14 @@ training:
   save_path: py/training_data/validation/vast-chess-8gpu-exp2-attention
   progressive_model_sizing:
     models:
-      - model_id: chess-attention-8x128
+      - model_id: chess-attention-12x176
         training_start_days: 0.0
         network:
           kind: attention
-          num_layers: 8
-          embedding_size: 128
-          num_heads: 4
-          feedforward_size: 256
+          num_layers: 12
+          embedding_size: 176
+          num_heads: 8
+          feedforward_size: 352
           dropout: 0.0
           policy_head: {kind: chess_76_plane_direct_v2}
           num_value_channels: 2
