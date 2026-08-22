@@ -64,11 +64,9 @@ virtual_environment_python="${virtual_environment}/bin/python"
 virtual_environment_uv="${virtual_environment}/bin/uv"
 
 "${virtual_environment_python}" -m pip install --disable-pip-version-check "uv==${uv_version}"
-"${virtual_environment_uv}" pip install \
-    --python "${virtual_environment_python}" \
-    --require-hashes \
-    --torch-backend cu126 \
-    --requirements "${repository_directory}/py/requirements-training.lock"
+UV_PROJECT_ENVIRONMENT="${virtual_environment}" "${virtual_environment_uv}" sync \
+    --locked \
+    --project "${repository_directory}"
 
 python_nvidia_library_path="$(
     "${virtual_environment_python}" -c \

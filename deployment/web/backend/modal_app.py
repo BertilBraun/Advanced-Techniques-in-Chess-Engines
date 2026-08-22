@@ -19,7 +19,7 @@ image = (
     )
     .entrypoint([])
     .apt_install('build-essential', 'cmake', 'git')
-    .pip_install_from_requirements(str(_REPOSITORY_ROOT / 'deployment' / 'web' / 'backend' / 'requirements-modal.txt'))
+    .pip_install_from_pyproject(str(_REPOSITORY_ROOT / 'pyproject.toml'), optional_dependencies=['web'])
     .pip_install(
         'torch==2.12.1',
         index_url='https://download.pytorch.org/whl/cu126',

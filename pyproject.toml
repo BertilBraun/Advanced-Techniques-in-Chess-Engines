@@ -1,0 +1,48 @@
+[project]
+name = "alphazero-engine"
+version = "0.1.0"
+description = "AlphaZero-style chess and Go engine: Python supervision over a C++20 native runtime"
+requires-python = ">=3.12"
+dependencies = [
+    "torch==2.12.1",
+    "numpy",
+    "chess",
+    "huggingface-hub",
+    "psutil",
+    "pydantic==2.13.2",
+    "pyyaml",
+    "tensorboard",
+    "tensorboardX",
+    "pybind11-stubgen",
+]
+
+[project.optional-dependencies]
+web = [
+    "fastapi==0.136.1",
+    "uvicorn==0.38.0",
+    "modal==1.5.2",
+]
+lichess = [
+    "backoff==2.2.1",
+    "requests",
+    "rich",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.uv]
+package = false
+environments = ["sys_platform == 'linux'", "sys_platform == 'win32'"]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+# Linux nodes get the CUDA build the extension links against; Windows dev boxes fall back to PyPI.
+torch = { index = "pytorch-cu126", marker = "sys_platform == 'linux'" }

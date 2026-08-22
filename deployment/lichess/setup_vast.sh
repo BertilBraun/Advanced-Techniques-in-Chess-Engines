@@ -58,19 +58,10 @@ if [[ ! -x "${virtual_environment_root}/bin/python" ]]; then
     "${bootstrap_python}" -m venv "${virtual_environment_root}"
 fi
 "${virtual_environment_root}/bin/python" -m pip install --no-cache-dir uv==0.11.14
-"${virtual_environment_root}/bin/uv" pip install \
-    --python "${virtual_environment_root}/bin/python" \
-    --require-hashes \
-    --torch-backend cu126 \
-    --requirements "${engine_repository_root}/py/requirements-training.lock"
-"${virtual_environment_root}/bin/uv" pip install \
-    --python "${virtual_environment_root}/bin/python" \
-    backoff==2.2.1 \
-    huggingface-hub==0.34.4 \
-    pytest==8.4.2 \
-    PyYAML==6.0.2 \
-    requests==2.34.2 \
-    rich==15.0.0
+UV_PROJECT_ENVIRONMENT="${virtual_environment_root}" "${virtual_environment_root}/bin/uv" sync \
+    --locked \
+    --extra lichess \
+    --project "${engine_repository_root}"
 
 echo "[5/8] Verifying CUDA from Python"
 "${virtual_environment_root}/bin/python" -c \

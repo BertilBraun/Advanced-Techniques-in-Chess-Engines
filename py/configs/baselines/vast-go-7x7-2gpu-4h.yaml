@@ -19,8 +19,8 @@ run:
     python_version: '3.12'
     torch_version: 2.12.1+cu126
     cuda_version: '12.6'
-    dependency_lock_path: py/requirements-training.lock
-    dependency_lock_sha256: f027ad99a12742660107a2857b18cbc6b821a95971c2ecf2c4ad814c38116171
+    dependency_lock_path: uv.lock
+    dependency_lock_sha256: 11074667d5b9e5075faee3d75817f2fbe1af8b863299ed27acd14809f939c484
     minimum_open_file_soft_limit: 32768
 training:
   save_path: py/training_data/baselines/vast-go-7x7-2gpu-4h

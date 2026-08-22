@@ -44,7 +44,7 @@ OPTIMAL_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'production' / 'va
 def test_experiment_fixtures_use_the_current_contract_and_dependency_lock() -> None:
     paths = tuple(sorted(TEST_CONFIG_DIRECTORY.glob('*-experiment.yaml')))
     configurations = validate_experiment_queue(paths)
-    dependency_lock_sha256 = hashlib.sha256(Path('requirements-training.lock').read_bytes()).hexdigest()
+    dependency_lock_sha256 = hashlib.sha256((Path(__file__).resolve().parents[2] / 'uv.lock').read_bytes()).hexdigest()
 
     assert configurations
     assert all(
