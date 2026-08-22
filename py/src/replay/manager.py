@@ -30,7 +30,7 @@ from src.replay.shard import (
     replay_shard_data_path,
     replay_shard_manifest_path,
 )
-from src.replay.store import ReplayAppendPlan, ReplayAppendTransaction, ReplayStore, plan_replay_append_chain
+from src.replay.store import ReplayStore
 from src.self_play.completed_game import GameIdentity, SearchObservation, TerminationReason
 from src.self_play.resignation import ResignationCalibrator
 from src.util.atomic_file import write_text_atomically
@@ -41,8 +41,6 @@ from src.util.log import log
 PositionT = TypeVar('PositionT')
 DISPATCH_INTERVAL_SECONDS = 1.0
 _QUEUE_FILE = 'shard-queue.json'
-_APPEND_FILE = 'last-append.json'
-_RECEIPT_SUFFIX = '.ingestion-receipt.json'
 _LEGACY_STAGED_ROWS_SUFFIX = '.rows.npy'
 _LEGACY_STAGED_METADATA_SUFFIX = '.meta.json'
 _MINIMUM_PENDING_SHARD_LIMIT = 32
@@ -66,34 +64,10 @@ class ReplayIngestion:
     discarded_visit_mass: int
     elapsed_seconds: float
     completed_games: tuple[IngestedCompletedGame, ...]
-    receipt_identities: tuple[str, ...] = ()
 
     @property
     def samples_per_second(self) -> float:
         return self.samples_added / self.elapsed_seconds if self.elapsed_seconds > 0.0 else 0.0
-
-
-class ReplayIngestionReceipt(FrozenModel):
-    schema_version: Literal[1] = 1
-    receipt_identity: str = Field(pattern=r'^[0-9a-f]{64}$')
-    model_generation: int = Field(ge=0)
-    shard_identities: tuple[str, ...]
-    append_sequence_after: int = Field(ge=0)
-    games_ingested: int = Field(ge=0)
-    samples_added: int = Field(ge=0)
-    live_samples: int = Field(ge=0)
-    evicted_samples: int = Field(ge=0)
-    policies_truncated: int = Field(ge=0)
-    retained_visit_mass: int = Field(ge=0)
-    discarded_visit_mass: int = Field(ge=0)
-    elapsed_seconds: float = Field(ge=0.0)
-    completed_games: tuple[IngestedCompletedGame, ...]
-
-
-class PendingReplayResize(FrozenModel):
-    logical_capacity: int = Field(gt=0)
-    evicted_rows_before: int = Field(ge=0)
-    model_generation: int = Field(ge=0)
 
 
 class ReplayShardQueue(FrozenModel):
@@ -101,7 +75,6 @@ class ReplayShardQueue(FrozenModel):
     layout_digest: str = Field(pattern=r'^[0-9a-f]{64}$')
     next_sequence: int = Field(ge=0)
     pending: tuple[PendingReplayShardManifest, ...] = ()
-    pending_resize: PendingReplayResize | None = None
 
     @model_validator(mode='after')
     def validate_pending(self) -> ReplayShardQueue:
@@ -112,37 +85,14 @@ class ReplayShardQueue(FrozenModel):
             raise ValueError('Replay shard queue claims must form one contiguous sequence.')
         if sequences and self.next_sequence != sequences[-1] + 1:
             raise ValueError('Replay shard queue next sequence must follow its final claim.')
-        return self
-
-
-class ReplayAppendRecovery(FrozenModel):
-    schema_version: Literal[1] = 1
-    layout_digest: str = Field(pattern=r'^[0-9a-f]{64}$')
-    model_generation: int = Field(ge=0)
-    shard_manifest_files: tuple[str, ...] = Field(min_length=1)
-    plans: tuple[ReplayAppendPlan, ...] = Field(min_length=1)
-    receipt_identity: str = Field(pattern=r'^[0-9a-f]{64}$')
-    evicted_rows_before: int = Field(ge=0)
-
-    @model_validator(mode='after')
-    def validate_chain(self) -> ReplayAppendRecovery:
-        if len(self.shard_manifest_files) != len(self.plans):
-            raise ValueError('Replay append recovery requires one plan per shard manifest.')
-        if any(Path(file_name).name != file_name for file_name in self.shard_manifest_files):
-            raise ValueError('Replay append recovery shard files must be basenames.')
-        expected_files = tuple(
-            replay_shard_manifest_path(Path(), plan.transaction_identity).name for plan in self.plans
-        )
-        if self.shard_manifest_files != expected_files:
-            raise ValueError('Replay append recovery shard files do not match its transactions.')
-        if any(left.after != right.before for left, right in zip(self.plans, self.plans[1:])):
-            raise ValueError('Replay append recovery plans must form one state chain.')
-        expected_receipt = _receipt_identity(
-            self.model_generation,
-            tuple(plan.transaction_identity for plan in self.plans),
-        )
-        if self.receipt_identity != expected_receipt:
-            raise ValueError('Replay append recovery receipt identity is invalid.')
+        sources = tuple(source for claim in self.pending for source in claim.games)
+        identities = tuple(source.identity.archive_key for source in sources)
+        file_names = tuple(source.order.file_name for source in sources)
+        orders = tuple(source.order.key for source in sources)
+        if len(set(identities)) != len(identities) or len(set(file_names)) != len(file_names):
+            raise ValueError('Replay shard queue source games must be globally unique.')
+        if orders != tuple(sorted(orders)) or len(set(orders)) != len(orders):
+            raise ValueError('Replay shard queue source games must preserve global FIFO order.')
         return self
 
 
@@ -272,7 +222,7 @@ class _MaterializationDispatcher:
 
     def _record_failure(self, claim: PendingReplayShardManifest, error: BaseException) -> None:
         self.failed_game_count += len(claim.games)
-        if isinstance(error, ValueError):
+        if isinstance(error, ValueError | FileNotFoundError):
             self._manager._set_fatal_materialization_error(
                 RuntimeError(f'Replay shard {claim.sequence} is not materializable: {error}')
             )
@@ -310,10 +260,8 @@ class ReplayManager(Generic[PositionT]):
             raise ValueError('Replay file does not match replay maximum capacity configuration.')
         self.inbox_path = completed_games_path / 'inbox'
         self.staging_path = completed_games_path / 'staging'
-        self.receipts_path = completed_games_path / 'reporting-receipts'
         self.queue_path = completed_games_path / _QUEUE_FILE
-        self.append_manifest_path = completed_games_path / _APPEND_FILE
-        for directory in (self.inbox_path, self.staging_path, self.receipts_path):
+        for directory in (self.inbox_path, self.staging_path):
             directory.mkdir(parents=True, exist_ok=True)
         self.store = store
         self.state = state
@@ -355,19 +303,8 @@ class ReplayManager(Generic[PositionT]):
         censor_remaining_game_length_on_cut_games: bool = False,
     ) -> ReplayManager[PositionT]:
         replay_path = run_path / 'replay.bin'
-        append_path = run_path / 'completed-games' / _APPEND_FILE
-        queue_path = run_path / 'completed-games' / _QUEUE_FILE
-        pending_resize = False
-        if queue_path.exists():
-            pending_resize = (
-                ReplayShardQueue.model_validate_json(queue_path.read_text(encoding='utf-8')).pending_resize is not None
-            )
         if replay_path.exists():
-            store = (
-                ReplayStore.open_for_recovery(replay_path, layout)
-                if append_path.exists() or pending_resize
-                else ReplayStore.open(replay_path, layout)
-            )
+            store = ReplayStore.open(replay_path, layout)
         else:
             store = ReplayStore.create(
                 replay_path, layout, configuration.maximum_capacity, configuration.capacity_at(model_generation)
@@ -433,81 +370,50 @@ class ReplayManager(Generic[PositionT]):
         started_at = time.perf_counter()
         with self._lock:
             before = self.store.state
-            logical_capacity = self.configuration.capacity_at(model_generation)
-            if self.store.state.logical_capacity != logical_capacity:
-                pending_resize = self._queue.pending_resize or PendingReplayResize(
-                    logical_capacity=logical_capacity,
-                    evicted_rows_before=before.evicted_rows,
-                    model_generation=model_generation,
-                )
-                pending_resize = PendingReplayResize(
-                    logical_capacity=logical_capacity,
-                    evicted_rows_before=pending_resize.evicted_rows_before,
-                    model_generation=model_generation,
-                )
-                queue = ReplayShardQueue(
-                    layout_digest=self._queue.layout_digest,
-                    next_sequence=self._queue.next_sequence,
-                    pending=self._queue.pending,
-                    pending_resize=pending_resize,
-                )
-                self._save_queue(queue)
-                self._queue = queue
-            self.store.set_logical_capacity(logical_capacity)
-            if self.store.state != before:
-                self.store.flush()
+            self.store.set_logical_capacity(self.configuration.capacity_at(model_generation))
             claims = self._contiguous_sealed_claims()
             if not claims:
+                self.store.flush()
                 after = self.store.state
                 return ReplayIngestion(
                     0,
                     0,
                     after.size,
-                    0 if self._queue.pending_resize is not None else after.evicted_rows - before.evicted_rows,
+                    after.evicted_rows - before.evicted_rows,
                     0,
                     0,
                     0,
                     time.perf_counter() - started_at,
                     (),
                 )
-            readers = tuple(self._open_claim(claim) for claim in claims)
+            readers: list[ReplayShardReader] = []
             try:
-                plans = plan_replay_append_chain(
-                    self.store.state,
-                    tuple(
-                        ReplayAppendTransaction(reader.manifest.row_count, reader.manifest.shard_identity)
-                        for reader in readers
-                    ),
-                )
-                receipt_identity = _receipt_identity(model_generation, tuple(claim.shard_identity for claim in claims))
-                recovery = ReplayAppendRecovery(
-                    layout_digest=self.store.layout.digest,
-                    model_generation=model_generation,
-                    shard_manifest_files=tuple(reader.manifest_path.name for reader in readers),
-                    plans=plans,
-                    receipt_identity=receipt_identity,
-                    evicted_rows_before=(
-                        self._queue.pending_resize.evicted_rows_before
-                        if self._queue.pending_resize is not None
-                        else before.evicted_rows
-                    ),
-                )
-                write_text_atomically(self.append_manifest_path, recovery.model_dump_json() + '\n')
-                return self._complete_append_recovery(recovery, started_at, readers)
-            except BaseException:
+                for claim in claims:
+                    readers.append(self._open_claim(claim))
+                metadata = tuple(game for reader in readers for game in reader.manifest.games)
+                for reader in readers:
+                    self.store.append_columns(reader.columns, reader.manifest.shard_identity)
+                self.store.flush()
+            finally:
                 for reader in readers:
                     reader.close()
-                raise
-
-    def pending_ingestion_receipts(self) -> tuple[ReplayIngestionReceipt, ...]:
-        receipts = tuple(self._load_receipt(path) for path in self.receipts_path.glob(f'*{_RECEIPT_SUFFIX}'))
-        return tuple(sorted(receipts, key=lambda receipt: receipt.append_sequence_after))
-
-    def acknowledge_ingestion_receipts(self, receipt_identities: tuple[str, ...]) -> None:
-        for identity in receipt_identities:
-            if len(identity) != 64 or any(character not in '0123456789abcdef' for character in identity):
-                raise ValueError('Replay ingestion receipt identity must be a lowercase SHA-256 digest.')
-            self._receipt_path(identity).unlink(missing_ok=True)
+            self._observe_resignation_games(metadata)
+            self._finalize_committed_claims(claims)
+            after = self.store.state
+            return ReplayIngestion(
+                len(metadata),
+                sum(game.row_count for game in metadata),
+                after.size,
+                after.evicted_rows - before.evicted_rows,
+                sum(game.policies_truncated for game in metadata),
+                sum(game.retained_visit_mass for game in metadata),
+                sum(game.discarded_visit_mass for game in metadata),
+                time.perf_counter() - started_at,
+                tuple(
+                    IngestedCompletedGame(game.length_plies, game.termination_reason, game.observations)
+                    for game in metadata
+                ),
+            )
 
     def raise_if_materialization_failed(self) -> None:
         with self._lock:
@@ -547,10 +453,9 @@ class ReplayManager(Generic[PositionT]):
             raise ValueError('Replay shard queue layout does not match the replay store.')
         if queue.next_sequence < self.store.state.append_sequence:
             raise ValueError('Replay shard queue sequence precedes the replay store.')
-        if not self.append_manifest_path.exists():
-            first_uncommitted = queue.pending[0].sequence if queue.pending else queue.next_sequence
-            if first_uncommitted != self.store.state.append_sequence:
-                raise ValueError('Replay shard queue does not begin at the replay store append sequence.')
+        first_sequence = queue.pending[0].sequence if queue.pending else queue.next_sequence
+        if first_sequence > self.store.state.append_sequence:
+            raise ValueError('Replay shard queue begins after the replay store append sequence.')
         return queue
 
     def _save_queue(self, queue: ReplayShardQueue) -> None:
@@ -629,7 +534,6 @@ class ReplayManager(Generic[PositionT]):
                 layout_digest=self.store.layout.digest,
                 next_sequence=next_sequence,
                 pending=tuple(pending),
-                pending_resize=queue_snapshot.pending_resize,
             )
             if queue != self._queue:
                 self._save_queue(queue)
@@ -722,98 +626,6 @@ class ReplayManager(Generic[PositionT]):
             sequence += 1
         return tuple(claims)
 
-    def _complete_append_recovery(
-        self,
-        recovery: ReplayAppendRecovery,
-        started_at: float,
-        opened_readers: tuple[ReplayShardReader, ...] | None = None,
-    ) -> ReplayIngestion:
-        receipt_path = self._receipt_path(recovery.receipt_identity)
-        final_state = recovery.plans[-1].after
-        if receipt_path.exists() and self.store.state == final_state:
-            receipt = self._load_receipt(receipt_path)
-            expected_shards = tuple(plan.transaction_identity for plan in recovery.plans)
-            if (
-                receipt.receipt_identity != recovery.receipt_identity
-                or receipt.shard_identities != expected_shards
-                or receipt.append_sequence_after != final_state.append_sequence
-                or receipt.model_generation != recovery.model_generation
-                or receipt.samples_added != sum(plan.row_count for plan in recovery.plans)
-                or receipt.live_samples != final_state.size
-                or receipt.evicted_samples != final_state.evicted_rows - recovery.evicted_rows_before
-                or receipt.games_ingested != len(receipt.completed_games)
-            ):
-                raise ValueError('Replay ingestion receipt does not match append recovery.')
-            self._cleanup_committed_recovery(recovery)
-            return self._ingestion_from_receipt(receipt)
-        readers = opened_readers or tuple(
-            ReplayShardReader.open(self.staging_path / file_name, self.store.layout)
-            for file_name in recovery.shard_manifest_files
-        )
-        try:
-            if len(readers) != len(recovery.plans):
-                raise ValueError('Replay append recovery shard and plan counts differ.')
-            for reader, plan in zip(readers, recovery.plans, strict=True):
-                if reader.manifest.shard_identity != plan.transaction_identity:
-                    raise ValueError('Replay append recovery transaction does not match its shard.')
-            self.store.reapply_append_plan_chain(
-                tuple((reader.columns,) for reader in readers),
-                recovery.plans,
-            )
-            if self.store.state != final_state:
-                raise ValueError('Replay append recovery did not reach its expected final state.')
-            self.store.flush()
-            metadata = tuple(game for reader in readers for game in reader.manifest.games)
-            self._observe_resignation_games(metadata)
-            receipt = self._receipt(recovery, metadata, started_at)
-            write_text_atomically(receipt_path, receipt.model_dump_json() + '\n')
-        finally:
-            for reader in readers:
-                reader.close()
-        self._cleanup_committed_recovery(recovery)
-        return self._ingestion_from_receipt(receipt)
-
-    def _receipt(
-        self,
-        recovery: ReplayAppendRecovery,
-        metadata: tuple[ReplayShardGameMetadata, ...],
-        started_at: float,
-    ) -> ReplayIngestionReceipt:
-        state = self.store.state
-        return ReplayIngestionReceipt(
-            receipt_identity=recovery.receipt_identity,
-            model_generation=recovery.model_generation,
-            shard_identities=tuple(plan.transaction_identity for plan in recovery.plans),
-            append_sequence_after=state.append_sequence,
-            games_ingested=len(metadata),
-            samples_added=sum(plan.row_count for plan in recovery.plans),
-            live_samples=state.size,
-            evicted_samples=state.evicted_rows - recovery.evicted_rows_before,
-            policies_truncated=sum(game.policies_truncated for game in metadata),
-            retained_visit_mass=sum(game.retained_visit_mass for game in metadata),
-            discarded_visit_mass=sum(game.discarded_visit_mass for game in metadata),
-            elapsed_seconds=time.perf_counter() - started_at,
-            completed_games=tuple(
-                IngestedCompletedGame(game.length_plies, game.termination_reason, game.observations)
-                for game in metadata
-            ),
-        )
-
-    @staticmethod
-    def _ingestion_from_receipt(receipt: ReplayIngestionReceipt) -> ReplayIngestion:
-        return ReplayIngestion(
-            receipt.games_ingested,
-            receipt.samples_added,
-            receipt.live_samples,
-            receipt.evicted_samples,
-            receipt.policies_truncated,
-            receipt.retained_visit_mass,
-            receipt.discarded_visit_mass,
-            receipt.elapsed_seconds,
-            receipt.completed_games,
-            (receipt.receipt_identity,),
-        )
-
     def _observe_resignation_games(self, metadata: tuple[ReplayShardGameMetadata, ...]) -> None:
         if self.resignation_calibrator is None:
             return
@@ -828,40 +640,34 @@ class ReplayManager(Generic[PositionT]):
                     observations=game.observations,
                 )
 
-    def _cleanup_committed_recovery(self, recovery: ReplayAppendRecovery) -> None:
-        committed = {plan.transaction_identity for plan in recovery.plans}
-        for claim in self._queue.pending:
-            if claim.shard_identity not in committed:
-                continue
-            for source in claim.games:
-                inbox_file = self.inbox_path / source.order.file_name
-                if not inbox_file.exists():
-                    continue
-                if inbox_file.stat().st_size != source.source_size or _file_sha256(inbox_file) != source.source_sha256:
-                    raise ValueError('Leftover completed-game source does not match its committed replay shard.')
-                inbox_file.unlink()
-        for identity in committed:
-            self._sealed_manifest_cache.pop(identity, None)
-            replay_shard_manifest_path(self.staging_path, identity).unlink(missing_ok=True)
-            replay_shard_data_path(self.staging_path, identity).unlink(missing_ok=True)
+    def _finalize_committed_claims(self, claims: tuple[PendingReplayShardManifest, ...]) -> None:
+        committed = {claim.shard_identity for claim in claims}
+        for claim in claims:
+            self._validate_leftover_sources(claim.games)
         queue = ReplayShardQueue(
             layout_digest=self._queue.layout_digest,
             next_sequence=self._queue.next_sequence,
             pending=tuple(claim for claim in self._queue.pending if claim.shard_identity not in committed),
-            pending_resize=None,
         )
         self._save_queue(queue)
         self._queue = queue
-        self.append_manifest_path.unlink(missing_ok=True)
+        for claim in claims:
+            self._delete_shard_artifacts(claim.shard_identity, claim.games)
 
-    def _receipt_path(self, identity: str) -> Path:
-        return self.receipts_path / f'{identity}{_RECEIPT_SUFFIX}'
+    def _validate_leftover_sources(self, sources: tuple[ReplayShardSourceGame, ...]) -> None:
+        for source in sources:
+            inbox_file = self.inbox_path / source.order.file_name
+            if not inbox_file.exists():
+                continue
+            if inbox_file.stat().st_size != source.source_size or _file_sha256(inbox_file) != source.source_sha256:
+                raise ValueError('Leftover completed-game source does not match its committed replay shard.')
 
-    def _load_receipt(self, path: Path) -> ReplayIngestionReceipt:
-        receipt = ReplayIngestionReceipt.model_validate_json(path.read_text(encoding='utf-8'))
-        if path.name != self._receipt_path(receipt.receipt_identity).name:
-            raise ValueError('Replay ingestion receipt file name does not match its identity.')
-        return receipt
+    def _delete_shard_artifacts(self, identity: str, sources: tuple[ReplayShardSourceGame, ...]) -> None:
+        for source in sources:
+            (self.inbox_path / source.order.file_name).unlink(missing_ok=True)
+        self._sealed_manifest_cache.pop(identity, None)
+        replay_shard_manifest_path(self.staging_path, identity).unlink(missing_ok=True)
+        replay_shard_data_path(self.staging_path, identity).unlink(missing_ok=True)
 
     def _recover_directories(self) -> None:
         legacy = tuple(self.staging_path.glob(f'*{_LEGACY_STAGED_ROWS_SUFFIX}')) + tuple(
@@ -869,38 +675,40 @@ class ReplayManager(Generic[PositionT]):
         )
         if legacy:
             raise ValueError('Legacy per-game replay staging exists; an explicit replay migration is required.')
-        for directory in (self.inbox_path, self.staging_path, self.receipts_path):
+        for directory in (self.inbox_path, self.staging_path):
             for temporary in directory.glob('.*.tmp'):
                 temporary.unlink(missing_ok=True)
-        if self._queue.pending_resize is not None:
-            self.store.set_logical_capacity(self._queue.pending_resize.logical_capacity)
-            self.store.flush()
+        committed_claims = tuple(
+            claim for claim in self._queue.pending if claim.sequence < self.store.state.append_sequence
+        )
+        committed_metadata = tuple(
+            game for claim in committed_claims if self._is_sealed(claim) for game in self._sealed_manifest(claim).games
+        )
+        self._observe_resignation_games(committed_metadata)
+        if committed_claims:
+            self._finalize_committed_claims(committed_claims)
         claimed = {claim.shard_identity for claim in self._queue.pending}
         for manifest_path in self.staging_path.glob('*.replay-shard.json'):
             identity = manifest_path.name.removesuffix('.replay-shard.json')
             if identity not in claimed:
-                raise ValueError('Sealed replay shard is not owned by the durable shard queue.')
+                manifest = SealedReplayShardManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
+                if (
+                    manifest.layout_digest != self.store.layout.digest
+                    or manifest.shard_identity != identity
+                    or manifest.sequence >= self.store.state.append_sequence
+                ):
+                    raise ValueError('Sealed replay shard is not owned by the durable shard queue.')
+                self._observe_resignation_games(manifest.games)
+                sources = tuple(game.source for game in manifest.games)
+                self._validate_leftover_sources(sources)
+                self._delete_shard_artifacts(identity, sources)
         for data_path in self.staging_path.glob('*.replay-shard.bin'):
             identity = data_path.name.removesuffix('.replay-shard.bin')
-            if identity in claimed and not replay_shard_manifest_path(self.staging_path, identity).exists():
+            if not replay_shard_manifest_path(self.staging_path, identity).exists():
                 data_path.unlink(missing_ok=True)
         for claim in self._queue.pending:
             if self._is_sealed(claim):
                 self._stage_shard_inline(claim)
-        if self.append_manifest_path.exists():
-            recovery = ReplayAppendRecovery.model_validate_json(self.append_manifest_path.read_text(encoding='utf-8'))
-            if recovery.layout_digest != self.store.layout.digest:
-                raise ValueError('Replay append recovery layout does not match the store.')
-            self._complete_append_recovery(recovery, time.perf_counter())
-
-
-def _receipt_identity(model_generation: int, shard_identities: tuple[str, ...]) -> str:
-    digest = hashlib.sha256()
-    for value in (str(model_generation), *shard_identities):
-        encoded = value.encode('ascii')
-        digest.update(len(encoded).to_bytes(8, byteorder='little'))
-        digest.update(encoded)
-    return digest.hexdigest()
 
 
 def _file_sha256(path: Path) -> str:
