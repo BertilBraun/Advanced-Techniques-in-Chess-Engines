@@ -41,7 +41,6 @@ if __name__ == '__main__':
     from src.experiment.training_startup import prepare_training_startup
     from src.training.coordinator import Coordinator
     from src.util.log import log
-    from src.util.profiler import start_gpu_usage_logger
     from src.util.tensorboard import (
         TensorboardWriter,
         log_text,
@@ -78,9 +77,8 @@ if __name__ == '__main__':
         started_at=run_started_at,
         hourly_price=training.limits.hourly_price,
         interval_seconds=training.limits.resource_telemetry_interval_seconds,
+        tensorboard_run_id=run_id,
     )
-
-    gpu_usage_logger = start_gpu_usage_logger(run_id)
 
     with TensorboardWriter(run_id, 'training_args', postfix_pid=False):
         import pprint
@@ -127,7 +125,6 @@ if __name__ == '__main__':
         )
         raise
     finally:
-        gpu_usage_logger.stop()
         resource_telemetry.stop()
 
     assert commander is not None

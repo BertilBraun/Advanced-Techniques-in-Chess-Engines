@@ -16,7 +16,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install ruff pytest pydantic numpy pyyaml typing-extensions tensorboardX tensorboard \
-            psutil chess GPUtil huggingface_hub fastapi httpx
+            psutil chess huggingface_hub fastapi httpx
       - name: Ruff format
         run: ruff format --check .
       - name: Ruff check
