@@ -3,11 +3,10 @@
 ## Rework authority
 
 Read `documentation/operations/experiment-platform.md` completely before ordinary experiment configuration, fresh
-node provisioning, queue operation, monitoring, or result export. Read
-`documentation/architecture/platform-rework.md` before architectural changes or when investigating historical
-platform decisions. For architectural Python runtime work, also read
-`documentation/architecture/python-runtime-rework.md`. Preserve unrelated changes and make feature-sized commits
-after relevant validation.
+node provisioning, queue operation, monitoring, or result export. For architectural work read
+`documentation/architecture/python-runtime-rework.md`; `documentation/architecture/platform-rework.md` is the
+closed historical ledger, useful only when investigating past platform decisions. Preserve unrelated changes and
+make feature-sized commits after relevant validation.
 
 At every handoff, report completed work, outstanding phase work, commits,
 validation results, changes needing special review, and unresolved decisions.
