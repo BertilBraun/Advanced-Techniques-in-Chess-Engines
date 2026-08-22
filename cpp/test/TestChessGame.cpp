@@ -23,15 +23,15 @@ int runChessGameTests() {
 
     const CompressedEncodedBoard encoded = encodeBoard(initial);
     require(encoded.binaryPlanes.size() ==
-                static_cast<std::size_t>(ChessRepresentationDimensions::binary_channel_count),
+                static_cast<std::size_t>(ChessRepresentationDimensions::binaryChannelCount),
             "Chess contract binary channel count disagrees with the encoded position");
     require(encoded.scalarPlanes.size() ==
-                static_cast<std::size_t>(ChessRepresentationDimensions::scalar_channel_count),
+                static_cast<std::size_t>(ChessRepresentationDimensions::scalarChannelCount),
             "Chess contract scalar channel count disagrees with the encoded position");
 
     const ChessAction firstAction = ChessGame::legalActions(initial).front();
     const int actionId = ChessGame::Encoding::actionId(firstAction, initial);
-    require(0 <= actionId && actionId < ChessRepresentationDimensions::action_count,
+    require(0 <= actionId && actionId < ChessRepresentationDimensions::actionCount,
             "Chess contract action id is outside the configured action space");
     require(ChessEncoding::decodeAction(actionId, initial) == firstAction,
             "Chess action decode did not invert encoding");

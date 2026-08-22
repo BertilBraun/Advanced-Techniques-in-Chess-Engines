@@ -55,7 +55,7 @@ void bind_chess_game(py::module_ &module) {
         .def(
             "child",
             [](const Board &position, const int actionId) {
-                if (actionId < 0 || actionId >= ChessEncoding::action_count) {
+                if (actionId < 0 || actionId >= ChessEncoding::actionCount) {
                     throw std::invalid_argument("Chess action ID is outside the action space");
                 }
                 for (const Stockfish::Move move : position.validMoves()) {
@@ -91,7 +91,7 @@ void bind_chess_game(py::module_ &module) {
     module.def(
         "mirror_chess_action_id",
         [](const int actionId) {
-            if (actionId < 0 || actionId >= ChessEncoding::action_count) {
+            if (actionId < 0 || actionId >= ChessEncoding::actionCount) {
                 throw std::invalid_argument("Chess action ID is outside the action space");
             }
             return ChessEncoding::mirrorActionId(actionId);

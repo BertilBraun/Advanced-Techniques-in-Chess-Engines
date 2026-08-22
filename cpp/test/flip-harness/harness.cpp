@@ -17,7 +17,7 @@ int main() {
     Stockfish::Bitboards::init();
     Stockfish::Position::init();
     std::string fen;
-    constexpr int values = ChessRepresentationDimensions::channel_count * 64;
+    constexpr int values = ChessRepresentationDimensions::channelCount * 64;
     std::vector<std::int8_t> buf(values);
     while (std::getline(std::cin, fen)) {
         if (fen.empty()) continue;

@@ -32,7 +32,7 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
     const Position &position = board.position();
     const bool flipForBlack = position.side_to_move() == BLACK;
     const auto canonicalBits = [flipForBlack](const Bitboard bits) {
-        return BitBoard<ChessRepresentationDimensions::board_length>(
+        return BitBoard<ChessRepresentationDimensions::boardLength>(
             {flipForBlack ? flipRanks(bits) : bits});
     };
 
@@ -66,7 +66,7 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
     out.binaryPlanes[ch++] = canonicalBits(ALL_SET * (board.repetitionCount() >= 1));
     out.binaryPlanes[ch++] = canonicalBits(ALL_SET * (board.repetitionCount() >= 2));
 
-    assert(ch == ChessRepresentationDimensions::binary_channel_count);
+    assert(ch == ChessRepresentationDimensions::binaryChannelCount);
 
     for (const int i : range(6)) {
         const Color whiteSource = flipForBlack ? BLACK : WHITE;
@@ -81,9 +81,9 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
 }
 
 torch::Tensor tensorEncoding(const CompressedEncodedBoard &compressed) {
-    auto tensor = torch::empty({ChessRepresentationDimensions::channel_count,
-                                ChessRepresentationDimensions::board_length,
-                                ChessRepresentationDimensions::board_length},
+    auto tensor = torch::empty({ChessRepresentationDimensions::channelCount,
+                                ChessRepresentationDimensions::boardLength,
+                                ChessRepresentationDimensions::boardLength},
                                torch::TensorOptions().dtype(torch::kInt8));
 
     compressed.writeTensorInto(std::span<std::int8_t>(tensor.data_ptr<std::int8_t>(),

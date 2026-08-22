@@ -52,10 +52,10 @@ void requireLegalRoundTrips(const Board &board, const std::string &description) 
 }
 
 std::vector<float> finiteLogits() {
-    std::vector<float> policy(ChessEncoding::action_count);
-    for (const int actionId : range(ChessEncoding::action_count)) {
+    std::vector<float> policy(ChessEncoding::actionCount);
+    for (const int actionId : range(ChessEncoding::actionCount)) {
         policy[actionId] = 1000.0F + static_cast<float>(actionId) /
-                                         static_cast<float>(ChessEncoding::action_count);
+                                         static_cast<float>(ChessEncoding::actionCount);
     }
     return policy;
 }
@@ -91,9 +91,9 @@ void testRepresentativePositions() {
 }
 
 void testDirectPolicyLayout() {
-    require(ChessEncoding::action_count == ChessRepresentationDimensions::policy_plane_count * 64,
+    require(ChessEncoding::actionCount == ChessRepresentationDimensions::policyPlaneCount * 64,
             "chess action space is not the direct policy-plane layout");
-    for (const int actionId : range(ChessEncoding::action_count)) {
+    for (const int actionId : range(ChessEncoding::actionCount)) {
         require(ChessEncoding::mirrorActionId(ChessEncoding::mirrorActionId(actionId)) == actionId,
                 "policy-plane mirroring is not an involution");
     }
@@ -195,7 +195,7 @@ void testDecodeRejections() {
         "negative chess action id was accepted");
     requireInvalidArgument(
         [&initial] {
-            static_cast<void>(ChessEncoding::decodeAction(ChessEncoding::action_count, initial));
+            static_cast<void>(ChessEncoding::decodeAction(ChessEncoding::actionCount, initial));
         },
         "out-of-range chess action id was accepted");
     requireInvalidArgument(
@@ -208,7 +208,7 @@ void testDecodeRejections() {
 
 void testStableLegalOnlySoftmax() {
     const Board board;
-    std::vector<float> policy(ChessEncoding::action_count, std::numeric_limits<float>::quiet_NaN());
+    std::vector<float> policy(ChessEncoding::actionCount, std::numeric_limits<float>::quiet_NaN());
     for (const Stockfish::Move move : board.validMoves()) {
         policy[ChessEncoding::actionId(ChessAction(move), board)] = 1'000.0F;
     }
