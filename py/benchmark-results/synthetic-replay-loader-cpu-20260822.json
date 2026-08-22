@@ -1,0 +1,105 @@
+{
+  "evidence_scope": "Synthetic CPU-only chess-shaped schema-4 replay; not CUDA, DDP, or live-run acceptance evidence.",
+  "python_version": "3.14.5",
+  "torch_version": "2.12.1+cpu",
+  "cpu": "Intel64 Family 6 Model 140 Stepping 1, GenuineIntel",
+  "store_rows": 1280,
+  "logical_rows": 768,
+  "batch_size": 128,
+  "iterations_per_trial": 6,
+  "repeats": 5,
+  "measured_rows_per_trial": 768,
+  "wrapped_store": true,
+  "duplicate_indices_per_batch": true,
+  "exact_equivalence": true,
+  "semantic_checksum": "15a6756d32cec963ad04d0e5624185410fab18e2b57bd22e9b52b47fcc34b6a3",
+  "index_generation": {
+    "median_seconds": 0.00047560001257807016,
+    "median_rows_per_second": 1614802.3122138418,
+    "trial_seconds": [
+      0.0002948999754153192,
+      0.00047560001257807016,
+      0.0004855000297538936,
+      0.0004406999796628952,
+      0.0009932999964803457
+    ]
+  },
+  "logical_to_physical": {
+    "median_seconds": 0.00019560003420338035,
+    "median_rows_per_second": 3926379.6815160653,
+    "trial_seconds": [
+      0.00010830000974237919,
+      0.0001925000105984509,
+      0.00019560003420338035,
+      0.00019869999960064888,
+      0.00027000001864507794
+    ]
+  },
+  "column_gather": {
+    "median_seconds": 0.0024747999850660563,
+    "median_rows_per_second": 310328.10919444903,
+    "trial_seconds": [
+      0.0013324999599717557,
+      0.0024470000062137842,
+      0.0026855000178329647,
+      0.0024747999850660563,
+      0.004045699955895543
+    ]
+  },
+  "packed_decode": {
+    "median_seconds": 0.004196399997454137,
+    "median_rows_per_second": 183014.0121213251,
+    "trial_seconds": [
+      0.0029356000013649464,
+      0.004196399997454137,
+      0.004419000004418194,
+      0.0032618000404909253,
+      0.004498799971770495
+    ]
+  },
+  "decoded_augmentation": {
+    "median_seconds": 0.002202599949669093,
+    "median_rows_per_second": 348678.842072697,
+    "trial_seconds": [
+      0.002202599949669093,
+      0.0017847000272013247,
+      0.0019641999970190227,
+      0.0028554999735206366,
+      0.0036337999626994133
+    ]
+  },
+  "dense_target_build": {
+    "median_seconds": 0.02005939994705841,
+    "median_rows_per_second": 38286.28982057973,
+    "trial_seconds": [
+      0.02139559999341145,
+      0.023530200007371604,
+      0.02005939994705841,
+      0.017304499982856214,
+      0.017072099959477782
+    ]
+  },
+  "full_object_reference": {
+    "median_seconds": 0.5382793000317179,
+    "median_rows_per_second": 1426.7685938410523,
+    "trial_seconds": [
+      0.5382793000317179,
+      0.5073239000048488,
+      0.4985547999967821,
+      0.580051299999468,
+      0.5763512999983504
+    ]
+  },
+  "full_vectorized": {
+    "median_seconds": 0.036599400045815855,
+    "median_rows_per_second": 20983.950530298374,
+    "trial_seconds": [
+      0.042662099993322045,
+      0.036599400045815855,
+      0.03327219997299835,
+      0.03166139998938888,
+      0.050381400040350854
+    ]
+  },
+  "full_build_speedup": 14.707325785610943
+}
