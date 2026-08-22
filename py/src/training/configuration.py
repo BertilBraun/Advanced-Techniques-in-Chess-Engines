@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Literal
 
 from pydantic import Field, model_validator
-from src.experiment.generation_schedule import (
+from src.util.generation_schedule import (
     FloatGenerationSchedule,
     defined_schedule_values,
 )

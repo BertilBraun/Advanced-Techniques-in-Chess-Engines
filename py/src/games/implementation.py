@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from src.experiment.configuration import ExperimentConfiguration
-from src.experiment.generation_schedule import FloatGenerationSchedule
+from src.util.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from src.evaluation.configuration import EvaluationSearchConfiguration
-from src.experiment.generation_schedule import FloatGenerationSchedule
+from src.util.generation_schedule import FloatGenerationSchedule
 from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.contract import GoStateContract, NativeGoPosition
 from src.games.implementation import GameImplementation

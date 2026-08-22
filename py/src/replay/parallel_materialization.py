@@ -8,7 +8,7 @@ from typing import Literal, TypeVar
 import numpy as np
 from pydantic import Field
 from src.experiment.configuration import load_experiment_configuration_json
-from src.experiment.generation_schedule import FloatGenerationSchedule
+from src.util.generation_schedule import FloatGenerationSchedule
 from src.games.composition import ConfiguredGame, create_game_implementation
 from src.games.contracts import GameStateContract, TerminalOracle, WdlTarget
 from src.replay.layout import ReplayLayout

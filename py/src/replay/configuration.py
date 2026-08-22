@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import Field, model_validator
 
-from src.experiment.generation_schedule import IntegerGenerationSchedule, defined_schedule_values
+from src.util.generation_schedule import IntegerGenerationSchedule, defined_schedule_values
 from src.util.frozen_model import FrozenModel
 
 

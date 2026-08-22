@@ -1,7 +1,7 @@
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from src.experiment.generation_schedule import (
+from src.util.generation_schedule import (
     ConstantSchedule,
     FloatGenerationSchedule,
     GenerationStage,

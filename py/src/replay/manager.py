@@ -10,7 +10,7 @@ from typing import Callable, Generic, Literal, TypeVar
 import numpy as np
 from pydantic import Field
 from src.experiment.configuration import ExperimentConfiguration
-from src.experiment.generation_schedule import FloatGenerationSchedule
+from src.util.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.replay.configuration import ReplayConfiguration
 from src.replay.description import ReplayDescription

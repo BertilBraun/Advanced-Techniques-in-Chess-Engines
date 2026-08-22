@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from src.experiment.generation_schedule import ConstantSchedule
+from src.util.generation_schedule import ConstantSchedule
 from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
 from src.replay.configuration import ReplayConfiguration

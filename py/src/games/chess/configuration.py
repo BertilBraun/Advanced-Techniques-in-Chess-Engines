@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import model_validator
 from src.experiment.base_configuration import BaseExperimentConfiguration
-from src.experiment.generation_schedule import IntegerGenerationSchedule, defined_schedule_values
+from src.util.generation_schedule import IntegerGenerationSchedule, defined_schedule_values
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import SelfPlayConfiguration

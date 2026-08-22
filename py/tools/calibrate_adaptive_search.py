@@ -18,7 +18,7 @@ from AlphaZeroCpp import (
 )
 from pydantic import Field
 from src.experiment.configuration import load_chess_experiment_configuration
-from src.experiment.generation_schedule import defined_schedule_values
+from src.util.generation_schedule import defined_schedule_values
 from src.games.chess.training import ChessImplementation
 from src.self_play.configuration import AdaptiveFullSearchBudgetConfiguration, FixedFullSearchBudgetConfiguration
 from src.self_play.parameters import AdaptiveFullSearchBudget, FixedFullSearchBudget

@@ -5,7 +5,7 @@ from math import isfinite
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, JsonValue, model_validator
-from src.experiment.generation_schedule import (
+from src.util.generation_schedule import (
     FloatGenerationSchedule,
     IntegerGenerationSchedule,
     defined_schedule_values,

@@ -4,7 +4,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from src.evaluation.configuration import EvaluationSearchConfiguration
-from src.experiment.generation_schedule import FloatGenerationSchedule
+from src.util.generation_schedule import FloatGenerationSchedule
 from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.chess.syzygy import SyzygyTerminalOracle
