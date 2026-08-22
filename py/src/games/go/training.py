@@ -108,16 +108,7 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
         )
 
         search_type = GoSelfPlaySearch7 if self.state.board_size == 7 else GoSelfPlaySearch9
-        dimensions = search_type.inference_dimensions()
-        expected = self.network_dimensions
-        if (dimensions.channels, dimensions.rows, dimensions.columns, dimensions.actions, dimensions.outcomes) != (
-            expected.channels,
-            expected.rows,
-            expected.columns,
-            expected.actions,
-            expected.outcomes,
-        ):
-            raise ValueError('Resolved Go representation disagrees with the native template dimensions.')
+        self.validate_native_dimensions(search_type.inference_dimensions())
         device = InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA
         return search_type(
             InferenceConfiguration(

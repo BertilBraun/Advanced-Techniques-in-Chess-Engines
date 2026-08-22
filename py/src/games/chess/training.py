@@ -136,6 +136,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             InferenceDevice,
         )
 
+        self.validate_native_dimensions(ChessSelfPlaySearch.inference_dimensions())
         device = InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA
         return ChessSelfPlaySearch(
             InferenceConfiguration(

@@ -56,6 +56,20 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
     def terminal_oracle(self) -> TerminalOracle[PositionT] | None:
         return None
 
+    def validate_native_dimensions(self, native_dimensions: object) -> None:
+        expected = self.network_dimensions
+        actual = (
+            native_dimensions.channels,  # type: ignore[attr-defined]
+            native_dimensions.rows,  # type: ignore[attr-defined]
+            native_dimensions.columns,  # type: ignore[attr-defined]
+            native_dimensions.actions,  # type: ignore[attr-defined]
+            native_dimensions.outcomes,  # type: ignore[attr-defined]
+        )
+        if actual != (expected.channels, expected.rows, expected.columns, expected.actions, expected.outcomes):
+            raise ValueError(
+                f'Resolved {self.state.name} representation {expected} disagrees with the native template {actual}.'
+            )
+
     def close(self) -> None:
         pass
 
