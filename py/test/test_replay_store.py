@@ -6,7 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 import src.replay.store as replay_store_module
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.contracts import WdlTarget
+from src.games.go.contract import GoStateContract
 from src.games.representation import PackedPlaneLayout
 from src.replay.columnar import (
     ReplayColumnArray,
@@ -27,6 +29,7 @@ from src.replay.contracts import (
     ReplaySample,
     SparsePolicyTarget,
 )
+from src.replay.encoding import encode_replay_columns
 from src.replay.layout import (
     ReplayColumnDescriptor,
     ReplayColumnKey,
@@ -274,6 +277,90 @@ def test_old_row_encoding_matches_new_typed_columns_for_every_auxiliary_variant(
     assert store.state.append_sequence == 1
     assert store.state.last_transaction_identity == 'equivalence'
     store.close()
+
+
+def test_direct_column_encoding_matches_transitional_rows_and_zeroes_inactive_padding() -> None:
+    layout = _all_auxiliary_layout()
+    samples = (
+        _all_auxiliary_sample(layout, generation=0, eligible=True),
+        _all_auxiliary_sample(layout, generation=1, eligible=False),
+    )
+
+    columns = encode_replay_columns(layout, samples)
+    encoded_rows = encode_replay_rows(layout, samples)
+
+    assert hashlib.sha256(encoded_rows.tobytes()).hexdigest() == (
+        '241dd39eb9a985add6a52282c37e73056c2fd3e53665047b2fe9ffc70c326b58'
+    )
+    for column in flatten_column_views(layout, columns):
+        np.testing.assert_array_equal(column.values, encoded_rows[column.descriptor.key.name])
+        assert column.values.dtype == column.descriptor.element_type.numpy_dtype
+        assert column.values.shape == (len(samples), *column.descriptor.trailing_shape)
+    assert np.all(columns.policy.action_ids[:, 2:] == 0)
+    assert np.all(columns.policy.visit_counts[:, 2:] == 0)
+    assert np.all(columns.policy.legal_action_ids[:, 4:] == 0)
+    next_policy = columns.auxiliary[0]
+    remaining_length = columns.auxiliary[1]
+    future_value = columns.auxiliary[2]
+    irreversible_progress = columns.auxiliary[3]
+    assert isinstance(next_policy, ReplayNextPolicyColumnViews)
+    assert isinstance(remaining_length, ReplayScalarColumnViews)
+    assert isinstance(future_value, ReplayScalarColumnViews)
+    assert isinstance(irreversible_progress, ReplayScalarColumnViews)
+    assert np.all(next_policy.policy.entry_count[1:] == 0)
+    assert np.all(next_policy.policy.action_ids[1:] == 0)
+    assert np.all(next_policy.policy.visit_counts[1:] == 0)
+    assert np.all(next_policy.policy.legal_count[1:] == 0)
+    assert np.all(next_policy.policy.legal_action_ids[1:] == 0)
+    assert remaining_length.value[1] == 0.0
+    assert future_value.value[1] == 0.0
+    assert irreversible_progress.value[1] == 0.0
+
+
+def test_direct_column_encoding_empty_samples_has_exact_canonical_arrays() -> None:
+    layout = _all_auxiliary_layout()
+
+    columns = encode_replay_columns(layout, ())
+    encoded_rows = encode_replay_rows(layout, ())
+
+    assert columns.row_count == 0
+    assert encoded_rows.shape == (0,)
+    assert encoded_rows.dtype == layout.row_dtype
+    for column in flatten_column_views(layout, columns):
+        assert column.values.shape == (0, *column.descriptor.trailing_shape)
+        assert column.values.dtype == column.descriptor.element_type.numpy_dtype
+
+
+@pytest.mark.parametrize('game', ('chess', 'go'))
+def test_direct_column_encoding_supports_game_specific_chess_and_go_layouts(game: str) -> None:
+    state = CHESS_STATE_CONTRACT if game == 'chess' else GoStateContract(board_size=7)
+    layout = ReplayLayout(
+        packed_planes=state.packed_plane_layout,
+        targets=TrainingTargetLayout(action_size=state.action_size, wdl_size=3, auxiliary_heads=()),
+        maximum_policy_entries=4,
+        maximum_legal_actions=state.maximum_legal_action_count,
+    )
+    policy = SparsePolicyTarget(
+        visits=SearchVisitCounts(action_ids=(1, 2), visit_counts=(7, 3)),
+        legal_action_ids=(0, 1, 2, 3),
+    )
+    sample = ReplaySample(
+        encoded_state=layout.packed_planes.value(bytes([5]) * layout.packed_planes.payload_bytes),
+        policy=policy,
+        wdl_target=WdlTarget(win=0.5, draw=0.25, loss=0.25),
+        root_value=-0.125,
+        auxiliary_targets=(),
+        sample_weight=1.25,
+        source_model_generation=9,
+        source_created_at_seconds=123.5,
+    )
+
+    columns = encode_replay_columns(layout, (sample,))
+    encoded_rows = encode_replay_rows(layout, (sample,))
+
+    for column in flatten_column_views(layout, columns):
+        np.testing.assert_array_equal(column.values, encoded_rows[column.descriptor.key.name])
+    assert columns.encoded_state[0].tobytes() == bytes(sample.encoded_state)
 
 
 def test_vectorized_gather_handles_wrap_duplicates_and_append_larger_than_capacity(tmp_path: Path) -> None:

@@ -31,6 +31,8 @@ from src.replay.contracts import (
     ReplaySample,
     SparsePolicyTarget,
 )
+from src.replay.encoding import encode_replay_columns
+from src.replay.encoding import encode_replay_rows as encode_replay_rows
 from src.replay.layout import ReplayColumnDescriptor, ReplayLayout
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.targets import (
@@ -345,7 +347,7 @@ class ReplayStore:
         self.extend((sample,))
 
     def extend(self, samples: tuple[ReplaySample, ...]) -> None:
-        self.extend_rows(encode_replay_rows(self.layout, samples))
+        self.append_columns(encode_replay_columns(self.layout, samples))
 
     def extend_rows(
         self,
@@ -724,75 +726,6 @@ def columns_with_eligibility(columns: ReplayColumnViews) -> tuple[npt.NDArray[np
         for target in columns.auxiliary
         if isinstance(target, ReplayNextPolicyColumnViews | ReplayScalarColumnViews)
     )
-
-
-def encode_replay_rows(layout: ReplayLayout, samples: tuple[ReplaySample, ...]) -> npt.NDArray[np.void]:
-    encoded_rows = np.zeros((len(samples),), dtype=layout.row_dtype)
-    for row, sample in zip(encoded_rows, samples, strict=True):
-        _encode_sample(layout, row, sample)
-    return encoded_rows
-
-
-def _encode_sample(layout: ReplayLayout, row: np.void, sample: ReplaySample) -> None:
-    if len(sample.encoded_state) != layout.packed_planes.payload_bytes:
-        raise ValueError('Replay sample packed state has the wrong width.')
-    if len(sample.auxiliary_targets) != len(layout.targets.auxiliary_heads):
-        raise ValueError('Replay sample auxiliary targets do not match the fixed layout.')
-    row['encoded_state'] = np.frombuffer(bytes(sample.encoded_state), dtype=np.uint8)
-    _encode_policy(layout, row, 'policy', sample.policy)
-    row['wdl_target'] = (sample.wdl_target.win, sample.wdl_target.draw, sample.wdl_target.loss)
-    row['root_value'] = sample.root_value
-    for index, (head, target) in enumerate(zip(layout.targets.auxiliary_heads, sample.auxiliary_targets, strict=True)):
-        match head, target:
-            case NextPolicyHeadLayout(), EligibleNextPolicyTarget(policy=policy):
-                _encode_policy(layout, row, f'auxiliary_{index}', policy)
-                row[f'auxiliary_{index}_eligible'] = 1
-            case NextPolicyHeadLayout(), IneligibleNextPolicyTarget():
-                row[f'auxiliary_{index}_eligible'] = 0
-            case RemainingGameLengthHeadLayout(), EligibleRemainingGameLengthTarget(normalized_length=value):
-                row[f'auxiliary_{index}_value'] = value
-                row[f'auxiliary_{index}_eligible'] = 1
-            case RemainingGameLengthHeadLayout(), IneligibleRemainingGameLengthTarget():
-                row[f'auxiliary_{index}_eligible'] = 0
-            case (
-                (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
-                EligibleScalarAuxiliaryTarget(value=value),
-            ):
-                row[f'auxiliary_{index}_value'] = value
-                row[f'auxiliary_{index}_eligible'] = 1
-            case (
-                (FutureSearchValueHeadLayout() | IrreversibleProgressHeadLayout()),
-                IneligibleScalarAuxiliaryTarget(),
-            ):
-                row[f'auxiliary_{index}_eligible'] = 0
-            case SearchCorrectionHeadLayout(), EligibleScalarAuxiliaryTarget(value=value):
-                row[f'auxiliary_{index}_value'] = value
-            case LegalMovesHeadLayout(), EligibleLegalMovesTarget():
-                pass
-            case _:
-                raise ValueError('Replay auxiliary target does not match its fixed layout.')
-    row['sample_weight'] = sample.sample_weight
-    row['source_model_generation'] = sample.source_model_generation
-    row['source_timestamp'] = sample.source_created_at_seconds
-
-
-def _encode_policy(layout: ReplayLayout, row: np.void, prefix: str, policy: SparsePolicyTarget) -> None:
-    if len(policy.visits.action_ids) > layout.maximum_policy_entries:
-        raise ValueError('Sparse policy exceeds the configured retained-entry count.')
-    if any(action_id >= layout.targets.action_size for action_id in policy.visits.action_ids):
-        raise ValueError('Sparse policy contains an action outside the action space.')
-    if any(visit_count > 65_535 for visit_count in policy.visits.visit_counts):
-        raise ValueError('Sparse policy visit count does not fit uint16.')
-    if len(policy.legal_action_ids) > layout.maximum_legal_actions:
-        raise ValueError('Sparse policy exceeds the game maximum legal-action count.')
-    if any(action_id >= layout.targets.action_size for action_id in policy.legal_action_ids):
-        raise ValueError('Sparse policy contains a legal action outside the action space.')
-    entry_count = len(policy.visits.action_ids)
-    row[f'{prefix}_entry_count'] = entry_count
-    row[f'{prefix}_action_ids'][:entry_count] = policy.visits.action_ids
-    row[f'{prefix}_visit_counts'][:entry_count] = policy.visits.visit_counts
-    row[f'{prefix}_legal_count'] = len(policy.legal_action_ids)
-    row[f'{prefix}_legal_action_ids'][: len(policy.legal_action_ids)] = policy.legal_action_ids
 
 
 def _column_views_from_rows(layout: ReplayLayout, rows: npt.NDArray[np.void]) -> ReplayColumnViews:
