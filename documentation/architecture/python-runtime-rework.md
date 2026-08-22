@@ -1,5 +1,10 @@
 # Python runtime architecture and rework record
 
+> **Superseding replay decision (2026-08-22):**
+> [Columnar replay and exact shard ingestion](replay-pipeline-rework.md) replaces this document's fixed-row replay,
+> per-game boundary ingestion, and approximate replay/credit recovery decisions. The rest of this document remains the
+> runtime architecture baseline and historical rationale.
+
 ## Status and purpose
 
 This document defines the authoritative Python architecture implemented by Phases 1 through 3 and records the
