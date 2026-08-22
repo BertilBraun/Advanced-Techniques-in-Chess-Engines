@@ -1,0 +1,72 @@
+# Four-day-replica baseline on the Phase A test node (1x RTX 4070, instance 48316653), started after the
+# everything-on overnight run (vast-chess-1x4070-overnight) flatlined from generation ~20. Run1's r3 recipe
+# with the head reverted to the old dense kind and no warm-up: CNN 12x112, dense policy head with its
+# historical init, two old auxiliary targets, fixed budget, ratio 8, parallel_searches 1. Gated by time / 8.
+# Only deviations from r3: the WP2 file-staged ingestion, the castling mirror fix, the fixed-node evaluation
+# rungs, and the two node-RAM operational caps (2 materialisation processes, 2 concurrent evaluation jobs).
+extends: vast-chess-8gpu-run1.yaml
+
+run:
+  run_name: vast-chess-1x4070-baseline
+  tensorboard_run_directory: vast-chess-1x4070-baseline
+  hardware:
+    provider_name: vast.ai
+    offer_id: '48316653'
+    gpu_model: NVIDIA GeForce RTX 4070
+    gpu_count: 1
+    logical_cpu_count: 16
+    minimum_ram_gib: 28
+    minimum_disk_gib: 100
+
+training:
+  save_path: py/training_data/validation/vast-chess-1x4070-baseline
+  progressive_model_sizing:
+    models:
+      - model_id: chess-cnn-12x112-dense
+        training_start_days: 0.0
+        network:
+          kind: convolutional
+          num_layers: 12
+          hidden_size: 112
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: dense, channels: 4}
+          num_value_channels: 2
+          value_fc_size: 48
+  trainer:
+    local_batch_size: 2048
+    warmup_optimizer_steps: 0
+  lifecycle:
+    replay:
+      materialization_processes: 2
+  topology:
+    trainer:
+      device_type: cuda
+      process_group_backend: nccl
+      rank_zero_device_id: 0
+      ddp_device_ids: [0]
+      cpu_threads: 4
+      interop_threads: 1
+    self_play:
+      device_ids: [0, 0, 0]
+      parallel_games_per_process: 512
+      tensorboard_processes: 1
+      node_ids_to_pause_during_training: [1, 2]
+    evaluation:
+      device_cycle: [0]
+  limits:
+    hourly_price: 0.135
+    maximum_cost: null
+    maximum_wall_time_seconds: 57600
+    manual_stop_file: /workspace/run-control/stop/vast-chess-1x4070-baseline.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 20.0
+    resource_telemetry_interval_seconds: 5.0
+
+chess:
+  self_play:
+    search:
+      parallel_searches: 1
+
+evaluation:
+  maximum_concurrent_jobs: 2
