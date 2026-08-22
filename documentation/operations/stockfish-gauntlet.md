@@ -143,9 +143,10 @@ python -m tools.run_stockfish_gauntlet \
   --output-directory /workspace/chess-evaluation-gauntlets/final-sf13-n1000-model-t1
 ```
 
-Change the budget to `--model-move-time-seconds 5` for the five-second run. Timed gauntlets currently default to 64
-parallel searches, two inference workers, batch size 64, and two outstanding batches per worker. For final reporting,
-pass the parallel width explicitly after the 64/128/256 empty-GPU benchmark and keep every inference setting fixed
+Change the budget to `--model-move-time-seconds 5` for the five-second run. Timed gauntlets require an explicit
+`--parallel-searches` (there is no silent default); inference uses two workers, batch size 64, and two outstanding
+batches per worker. Choose the parallel width after the 64/128/256 empty-GPU benchmark and keep every inference
+setting fixed
 across ladder and confirmatory runs on the same hardware.
 
 ## Output and operation
