@@ -91,7 +91,7 @@ PYTHON
 validate_approval() {
     local approval_file="$1" run_name="$2" configuration_sha256="$3" source_revision="$4"
     [[ -f "${approval_file}" ]] || fail "approval file does not exist: ${approval_file}"
-    python3 - "${approval_file}" "${run_name}" "${configuration_sha256}" "${source_revision}" <<'PYTHON'
+    "$(venv_python)" - "${approval_file}" "${run_name}" "${configuration_sha256}" "${source_revision}" <<'PYTHON'
 import json
 import sys
 
@@ -109,6 +109,9 @@ command_start() {
     config_path="$(cd "$(dirname "${config_argument}")" && pwd)/$(basename "${config_argument}")"
     [[ -f "${config_path}" ]] || fail "run configuration does not exist: ${config_path}"
 
+    command -v supervisorctl >/dev/null || fail "supervisorctl is not installed on this node"
+    [[ -d "${supervisor_conf_dir}" ]] || fail "supervisor configuration directory does not exist: ${supervisor_conf_dir}"
+
     [[ -z "$(git -C "${repository_directory}" status --porcelain)" ]] \
         || fail "refusing to start from a dirty source working tree: $(git -C "${repository_directory}" status --short | head -5)"
     local source_revision
@@ -125,6 +128,9 @@ command_start() {
     open_file_soft_limit="$(echo "${description}" | sed -n 's/^OPEN_FILE_SOFT_LIMIT=//p')"
     configuration_sha256="$(echo "${description}" | sed -n 's/^CONFIGURATION_SHA256=//p')"
     [[ -n "${run_name}" && -n "${configuration_sha256}" ]] || fail "could not resolve the run configuration"
+    # The registry below single-quotes these values for later `source`; a quote would corrupt it.
+    [[ "${run_name}${config_path}${save_path}${runtime_image}" != *"'"* ]] \
+        || fail "run names and paths must not contain single quotes"
     [[ "${save_path}" == /* ]] || save_path="${repository_directory}/${save_path}"
 
     local approval_file
@@ -270,7 +276,7 @@ command_status() {
     supervisorctl status "${run_name}" || true
 
     echo "== progress =="
-    python3 - "${SAVE_PATH}" <<'PYTHON'
+    "$(venv_python)" - "${SAVE_PATH}" <<'PYTHON'
 import json
 import sys
 from pathlib import Path

@@ -92,26 +92,32 @@ for m in cnn att; do
         >"${out}/selfplay-${m}-ppg${ppg}-ps${ps}.log" 2>&1 || log "self-play benchmark failed (see log)"
       # tag the newest summary with the grid point
       latest=$(ls -td "${out}"/selfplay/self-play-search-* 2>/dev/null | head -1)
-      [[ -n "${latest}" ]] && cp "${latest}/self-play-summary.json" "${out}/selfplay-${m}-ppg${ppg}-ps${ps}.json" 2>/dev/null || true
+      [[ -n "${latest}" ]] && cp "${latest}/summary.json" "${out}/selfplay-${m}-ppg${ppg}-ps${ps}.json"
     done
   done
 done
 
 # 5. Trainer throughput (fixed batch, production objective, bf16, compiled as configured) --------------------
-cd "${root}/py"
-for m in cnn att; do
-  log "trainer throughput ${m}"
-  "${python}" -c "
-import json,sys; from pathlib import Path
+# benchmark_training_overfit needs an existing run directory with a replay.bin; without one the stage cannot
+# produce a number and must say so instead of silently emitting nothing.
+if [[ -z "${TRAINER_RUN_DIRECTORY:-}" ]]; then
+  log "TRAINER_RUN_DIRECTORY is not set; skipping the trainer stage (needs a run directory with replay.bin)"
+else
+  [[ -f "${TRAINER_RUN_DIRECTORY}/replay.bin" ]] || { log "ERROR: ${TRAINER_RUN_DIRECTORY}/replay.bin does not exist"; exit 1; }
+  cd "${root}/py"
+  for m in cnn att; do
+    log "trainer throughput ${m}"
+    "${python}" -c "
+from pathlib import Path
 from src.experiment.configuration import load_experiment_configuration, write_resolved_experiment
 write_resolved_experiment(Path('${out}/resolved-${m}.json'), load_experiment_configuration(Path('${cfg[$m]}')))
-" >"${out}/resolve-${m}.log" 2>&1 || log "could not resolve ${m} (see log); trainer benchmark skipped"
-  [[ -f "${out}/resolved-${m}.json" ]] || continue
-  "${python}" tools/benchmark_training_overfit.py --resolved-configuration "${out}/resolved-${m}.json" \
-    --run-directory "${out}/overfit-${m}" --device-id 0 --batch-size 256 --maximum-optimizer-steps 300 \
-    --report-interval 25 --model-generation 0 --output-path "${out}/trainer-${m}.json" >"${out}/trainer-${m}.log" 2>&1 || \
-    log "trainer benchmark failed for ${m} (see log)"
-done
+" >"${out}/resolve-${m}.log" 2>&1 || { log "ERROR: could not resolve ${m} (see log)"; exit 1; }
+    "${python}" tools/benchmark_training_overfit.py --resolved-configuration "${out}/resolved-${m}.json" \
+      --run-directory "${TRAINER_RUN_DIRECTORY}" --device-id 0 --batch-size 256 --maximum-optimizer-steps 300 \
+      --report-interval 25 --model-generation 0 --output-path "${out}/trainer-${m}.json" >"${out}/trainer-${m}.log" 2>&1 || \
+      { log "ERROR: trainer benchmark failed for ${m} (see log)"; exit 1; }
+  done
+fi
 
 # 6. Summary -------------------------------------------------------------------------------------------------
 "${python}" - "${out}" "${label}" "${price}" "${gpu_count}" <<'EOF' | tee "${out}/SUMMARY.md"

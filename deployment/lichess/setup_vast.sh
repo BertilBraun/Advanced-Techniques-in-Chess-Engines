@@ -81,10 +81,13 @@ export PATH="${virtual_environment_root}/bin:${PATH}"
 cmake -S "${engine_repository_root}/cpp" -B "${build_root}" \
     -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DENABLE_NATIVE_ARCH=ON \
+    -DENABLE_NATIVE_ARCHITECTURE=ON \
     -DUSE_SYSTEM_NVTX=ON \
-    -DPYTHON_EXECUTABLE="${virtual_environment_root}/bin/python"
+    -DPython3_EXECUTABLE="${virtual_environment_root}/bin/python"
 cmake --build "${build_root}" --parallel "${build_jobs}"
+
+echo "[6b/8] Verifying the extension imports in the locked environment"
+(cd "${engine_repository_root}/py" && "${virtual_environment_root}/bin/python" -c 'import AlphaZeroCpp')
 
 echo "[7/8] Running native and Python tests"
 ctest --test-dir "${build_root}" --output-on-failure
