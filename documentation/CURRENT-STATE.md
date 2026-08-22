@@ -29,7 +29,7 @@ The four-day run (r3/r4, source `d39d5c85..d9888436`, tagged
 [`four-day-baseline`](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/releases/tag/four-day-baseline)):
 ≈2,800 ladder Elo at 10k visits; generation 445 scored 66.0% vs Stockfish 13 at 6,500 nodes (CI 58.5–73.5%).
 Frozen evidence: `.codex-diagnostics/chess-baseline-four-day-freeze-20260817` and
-`documentation/images/four-day-analysis/`. The pre-rework era is tagged `pre-rework`.
+`documentation/evidence/chess-four-day-freeze-20260817/` and the flip harness (see WP status). The pre-rework era is tagged `pre-rework`.
 
 ## Pass/fail reference
 

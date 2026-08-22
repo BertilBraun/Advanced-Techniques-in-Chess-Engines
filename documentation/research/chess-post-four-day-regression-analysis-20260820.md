@@ -2,7 +2,7 @@
 
 Date: 2026-08-20. Scope: the successful four-day run (`vast-chess-8gpu-1d-r3/r4`, source d39d5c85…d9888436, frozen under `.codex-diagnostics/chess-baseline-four-day-freeze-20260817`) versus the current `master` (994a8cfa) and the 2–4 h runs launched from it on 18–19 August. Evidence used: the frozen TensorBoard event files, run log, configs and Stockfish ladders of the four-day run; the complete `git diff d9888436..HEAD` for `py/`, `cpp/`, `deployment/`; the new production/validation configs; the 18 August pilot, node-comparison and production-launch artifacts; the 19 August overfit benchmark; and the literature. The TensorBoard logs of the failed short runs were not preserved, so statements about those runs rest on the code, the configs and the few numbers recorded in `logs/` and `documentation/benchmarks/`.
 
-Plots referenced below are in `documentation/images/four-day-analysis/`.
+Plots referenced below are in `documentation/evidence/chess-four-day-freeze-20260817/`.
 
 ## 1. Summary
 
@@ -217,7 +217,7 @@ On publication: use the generation-546 checkpoint if you prefer, with the caveat
 
 ## 7. Artefacts
 
-In `documentation/images/four-day-analysis/`: `plot_first8h.png`, `plot_stockfish_scores_full.png`,
+In `documentation/evidence/chess-four-day-freeze-20260817/`: `plot_first8h.png`, `plot_stockfish_scores_full.png`,
 `yardstick_wall_h.csv` (the per-wall-hour table of §2.2 with training-side columns), `threeday_vs_fourday.csv`
 (§2.4), `init_probe.py` (initial logit scale; run from `py/` with a stub for `AlphaZeroCpp`), and
 `flip-harness/` (`harness.cpp`, `run_checks.py`, `head_check.py` — the compiled colour-symmetry verification of the

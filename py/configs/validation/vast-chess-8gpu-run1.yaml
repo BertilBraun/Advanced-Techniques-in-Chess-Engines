@@ -2,8 +2,8 @@
 #
 # r3's values (CNN 12x112 global pooling, optimizer, replay capacity/ratio 8, visit/fast/ply/greedy schedules,
 # the two old auxiliary targets at the old weights, compilation disabled, no Syzygy, no adaptive budget) derived
-# from documentation/images/four-day-analysis/training_args.txt and
-# documentation/experiments/vast-chess-8-gpu-config.yaml (generations 0-149 slice); PLUS the new plane head,
+# from documentation/evidence/chess-four-day-freeze-20260817/training_args.txt and
+# documentation/evidence/chess-four-day-freeze-20260817/r3-resolved-config.yaml (generations 0-149 slice); PLUS the new plane head,
 # LR warm-up 1000 steps, fixed ingestion (WP2, code-side), mirror fix (WP1, code-side), the v1 evaluation
 # dataset, the old evaluation definitions and the new fixed-node rungs 30/100/300/1000.
 #

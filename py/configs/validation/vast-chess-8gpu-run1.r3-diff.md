@@ -1,9 +1,9 @@
 # vast-chess-8gpu-run1 — resolved diff against the r3 snapshot
 
 Reference: the r3 `TrainingArgs` repr in the frozen TensorBoard export
-(`documentation/images/four-day-analysis/training_args.txt`, `training_args::TrainingArgs/text_summary`, first
+(`documentation/evidence/chess-four-day-freeze-20260817/training_args.txt`, `training_args::TrainingArgs/text_summary`, first
 entry, run `vast-chess-8gpu-1d-r3`) plus, for the self-play/objective/evaluation sections the snapshot does not
-contain, the generations-0–149 slice of `documentation/experiments/vast-chess-8-gpu-config.yaml`.
+contain, the generations-0–149 slice of `documentation/evidence/chess-four-day-freeze-20260817/r3-resolved-config.yaml`.
 
 ## Resolution status (2026-08-21, phase-a @ 7c146d79, locked venv on the Phase A test node)
 
