@@ -23,6 +23,11 @@ from src.replay.columnar import (
 )
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
+from src.replay.pinned_batch_pool import (
+    PinnedBatchSlot,
+    PinnedBatchSlotPool,
+    record_training_batch_stream,
+)
 from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
 
@@ -31,10 +36,10 @@ PositionT = TypeVar('PositionT')
 
 @dataclass(frozen=True)
 class _PrefetchedBatch:
-    # Retain pinned source tensors until the asynchronous transfer completes.
     host_batch: TrainingBatch
     device_batch: TrainingBatch
     transfer_complete: torch.cuda.Event | None
+    pinned_slot: PinnedBatchSlot | None
 
 
 @dataclass(frozen=True)
@@ -133,10 +138,9 @@ class MappedReplayBatchLoader(Generic[PositionT]):
                     sample_indices,
                     augmentation_indices,
                 )
-                prepared = batch.pin_memory() if self.pin_memory else batch
                 self.rows_read += len(sample_indices)
                 self.read_seconds += time.perf_counter() - started_at
-                yield prepared
+                yield batch
         finally:
             store.close()
 
@@ -155,6 +159,7 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
         self._closed = False
         self._prepared_batches = loader._prepared_batches()
         self._transfer_stream = torch.cuda.Stream(device=device) if uses_cuda else None
+        self._pinned_slots = PinnedBatchSlotPool(depth) if uses_cuda and loader.pin_memory else None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='replay-batch-prefetch')
         self._pending_batches: deque[Future[_PrefetchedBatch]] = deque(
             self._executor.submit(self._prepare_next) for _ in range(depth)
@@ -186,7 +191,7 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
         self._active_batch = prefetched
         try:
             self._pending_batches.append(self._executor.submit(self._prepare_next))
-            self._synchronize_transfer(prefetched)
+            self._make_transfer_visible(prefetched)
         except BaseException as error:
             self._close_ignoring_errors()
             raise RuntimeError('Replay batch prefetch failed.') from error
@@ -222,11 +227,9 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
             self._executor.shutdown(wait=True, cancel_futures=True)
         except BaseException as error:
             cleanup_errors.append(error)
+        completed_batches: list[_PrefetchedBatch] = []
         if active_batch is not None:
-            try:
-                self._synchronize_transfer(active_batch)
-            except BaseException as error:
-                cleanup_errors.append(error)
+            completed_batches.append(active_batch)
         for pending_batch in pending_batches:
             if pending_batch.cancelled():
                 continue
@@ -235,10 +238,20 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
             except BaseException:
                 pass
             else:
-                try:
-                    self._synchronize_transfer(prefetched)
-                except BaseException as error:
-                    cleanup_errors.append(error)
+                completed_batches.append(prefetched)
+        pinned_slots = self._pinned_slots
+        if pinned_slots is not None:
+            try:
+                pinned_slots.close()
+            except BaseException as error:
+                cleanup_errors.append(error)
+        for prefetched in completed_batches:
+            if prefetched.pinned_slot is not None or prefetched.transfer_complete is None:
+                continue
+            try:
+                prefetched.transfer_complete.synchronize()
+            except BaseException as error:
+                cleanup_errors.append(error)
         try:
             self._prepared_batches.close()
         except BaseException as error:
@@ -253,21 +266,62 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
             pass
 
     def _prepare_next(self) -> _PrefetchedBatch:
-        host_batch = next(self._prepared_batches)
+        prepared_batch = next(self._prepared_batches)
         if not self.uses_cuda:
-            return _PrefetchedBatch(host_batch, host_batch, None)
+            host_batch = prepared_batch.pin_memory() if self.loader.pin_memory else prepared_batch
+            return _PrefetchedBatch(host_batch, host_batch, None, None)
         transfer_stream = self._transfer_stream
         assert transfer_stream is not None
-        with torch.cuda.device(self.device), torch.cuda.stream(transfer_stream):
-            device_batch = host_batch.to_device(self.device, non_blocking=True)
-            transfer_complete = torch.cuda.Event()
-            transfer_complete.record(transfer_stream)
-        return _PrefetchedBatch(host_batch, device_batch, transfer_complete)
+        pinned_slots = self._pinned_slots
+        pinned_slot = pinned_slots.fill(prepared_batch) if pinned_slots is not None else None
+        host_batch = pinned_slot.batch if pinned_slot is not None else prepared_batch
+        assert host_batch is not None
+        transfer_complete: torch.cuda.Event | None = None
+        slot_released_or_tracked = False
+        try:
+            with torch.cuda.device(self.device):
+                transfer_complete = torch.cuda.Event()
+                with torch.cuda.stream(transfer_stream):
+                    try:
+                        device_batch = host_batch.to_device(self.device, non_blocking=True)
+                        transfer_complete.record(transfer_stream)
+                    except BaseException as transfer_error:
+                        try:
+                            transfer_complete.record(transfer_stream)
+                        except BaseException:
+                            try:
+                                transfer_stream.synchronize()
+                            except BaseException as synchronization_error:
+                                if pinned_slot is not None:
+                                    pinned_slots.mark_unrecoverable(pinned_slot)
+                                    slot_released_or_tracked = True
+                                raise transfer_error from synchronization_error
+                        else:
+                            if pinned_slot is not None:
+                                pinned_slots.mark_transfer_in_flight(pinned_slot, transfer_complete)
+                                slot_released_or_tracked = True
+                            raise transfer_error
+                        if pinned_slot is not None:
+                            pinned_slots.release_untransferred(pinned_slot)
+                            slot_released_or_tracked = True
+                        raise transfer_error
+        except BaseException:
+            if pinned_slot is not None and not slot_released_or_tracked:
+                pinned_slots.release_untransferred(pinned_slot)
+            raise
+        assert transfer_complete is not None
+        if pinned_slot is not None:
+            pinned_slots.mark_transfer_in_flight(pinned_slot, transfer_complete)
+            slot_released_or_tracked = True
+        return _PrefetchedBatch(host_batch, device_batch, transfer_complete, pinned_slot)
 
-    @staticmethod
-    def _synchronize_transfer(prefetched: _PrefetchedBatch) -> None:
-        if prefetched.transfer_complete is not None:
-            prefetched.transfer_complete.synchronize()
+    def _make_transfer_visible(self, prefetched: _PrefetchedBatch) -> None:
+        transfer_complete = prefetched.transfer_complete
+        if transfer_complete is None:
+            return
+        current_stream = torch.cuda.current_stream(self.device)
+        current_stream.wait_event(transfer_complete)
+        record_training_batch_stream(prefetched.device_batch, current_stream)
 
 
 def build_training_batch(

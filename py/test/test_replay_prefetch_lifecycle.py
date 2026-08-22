@@ -28,18 +28,24 @@ def _batch(value: float) -> TrainingBatch:
 
 
 class _FakeReplayBatchLoader(MappedReplayBatchLoader[object]):
-    def __init__(self, batch_count: int) -> None:
+    def __init__(self, batch_count: int, failure_at: int | None = None) -> None:
+        self.pin_memory = False
         self.batch_count = batch_count
+        self.failure_at = failure_at
         self.started_count = 0
         self.preparation_started = Event()
         self.all_batches_started = Event()
+        self.batch_started = tuple(Event() for _ in range(batch_count))
         self.generator_closed = Event()
 
     def _prepared_batches(self) -> Generator[TrainingBatch, None, None]:
         try:
             for index in range(self.batch_count):
+                if index == self.failure_at:
+                    raise ValueError('forced producer failure')
                 self.started_count += 1
                 self.preparation_started.set()
+                self.batch_started[index].set()
                 if self.started_count == self.batch_count:
                     self.all_batches_started.set()
                 yield _batch(float(index))
@@ -47,7 +53,36 @@ class _FakeReplayBatchLoader(MappedReplayBatchLoader[object]):
             self.generator_closed.set()
 
 
-def test_next_closes_everything_and_preserves_transfer_sync_failure(
+@pytest.mark.parametrize('depth', (1, 2, 4, 8))
+def test_cpu_prefetch_is_ordered_bounded_and_closes_after_natural_exhaustion(depth: int) -> None:
+    loader = _FakeReplayBatchLoader(batch_count=depth + 2)
+    batches = PrefetchedReplayBatches(loader, torch.device('cpu'), uses_cuda=False, depth=depth)
+    assert loader.batch_started[depth - 1].wait(timeout=5.0)
+    assert not loader.batch_started[depth].is_set()
+
+    values = [float(batch.states[0, 0].item()) for batch in batches]
+
+    assert values == [float(index) for index in range(depth + 2)]
+    assert batches.closed
+    assert loader.generator_closed.is_set()
+    batches.close()
+
+
+def test_cpu_prefetch_preserves_producer_failure_and_closes() -> None:
+    loader = _FakeReplayBatchLoader(batch_count=3, failure_at=1)
+    batches = PrefetchedReplayBatches(loader, torch.device('cpu'), uses_cuda=False, depth=2)
+    assert float(next(batches).states[0, 0].item()) == 0.0
+
+    with pytest.raises(RuntimeError, match='Replay batch prefetch failed') as raised:
+        next(batches)
+
+    assert isinstance(raised.value.__cause__, ValueError)
+    assert str(raised.value.__cause__) == 'forced producer failure'
+    assert batches.closed
+    assert loader.generator_closed.is_set()
+
+
+def test_next_closes_everything_and_preserves_transfer_visibility_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     loader = _FakeReplayBatchLoader(batch_count=2)
@@ -58,7 +93,7 @@ def test_next_closes_everything_and_preserves_transfer_sync_failure(
         del prefetched
         raise synchronization_error
 
-    monkeypatch.setattr(PrefetchedReplayBatches, '_synchronize_transfer', staticmethod(fail_synchronization))
+    monkeypatch.setattr(PrefetchedReplayBatches, '_make_transfer_visible', staticmethod(fail_synchronization))
 
     with pytest.raises(RuntimeError, match='Replay batch prefetch failed') as raised:
         next(batches)
@@ -68,44 +103,36 @@ def test_next_closes_everything_and_preserves_transfer_sync_failure(
     assert loader.generator_closed.is_set()
 
 
-def test_close_finishes_cleanup_after_transfer_sync_failures(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_close_finishes_cleanup_after_slot_transfer_sync_failure() -> None:
     loader = _FakeReplayBatchLoader(batch_count=2)
     batches = PrefetchedReplayBatches(loader, torch.device('cpu'), uses_cuda=False, depth=2)
     synchronization_error = ValueError('forced transfer synchronization failure')
-    synchronized_count = 0
 
-    def fail_synchronization(prefetched: _PrefetchedBatch) -> None:
-        nonlocal synchronized_count
-        del prefetched
-        synchronized_count += 1
-        raise synchronization_error
+    class _FailingPool:
+        def close(self) -> None:
+            raise synchronization_error
 
-    monkeypatch.setattr(PrefetchedReplayBatches, '_synchronize_transfer', staticmethod(fail_synchronization))
+    batches._pinned_slots = _FailingPool()  # type: ignore[assignment]
     assert loader.all_batches_started.wait(timeout=5.0)
 
     with pytest.raises(RuntimeError, match='cleanup failed') as raised:
         batches.close()
 
     assert raised.value.__cause__ is synchronization_error
-    assert synchronized_count == 2
     assert batches.closed
     assert loader.generator_closed.is_set()
 
 
-def test_context_exit_preserves_body_failure_when_transfer_cleanup_also_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_context_exit_preserves_body_failure_when_slot_cleanup_also_fails() -> None:
     loader = _FakeReplayBatchLoader(batch_count=1)
     batches = PrefetchedReplayBatches(loader, torch.device('cpu'), uses_cuda=False, depth=1)
     body_error = ValueError('body failure')
 
-    def fail_synchronization(prefetched: _PrefetchedBatch) -> None:
-        del prefetched
-        raise RuntimeError('forced transfer synchronization failure')
+    class _FailingPool:
+        def close(self) -> None:
+            raise RuntimeError('forced transfer synchronization failure')
 
-    monkeypatch.setattr(PrefetchedReplayBatches, '_synchronize_transfer', staticmethod(fail_synchronization))
+    batches._pinned_slots = _FailingPool()  # type: ignore[assignment]
 
     with pytest.raises(ValueError, match='body failure') as raised:
         with batches:
