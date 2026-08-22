@@ -1,0 +1,108 @@
+{
+  "evidence_scope": "Synthetic CPU-only chess-shaped shard/store boundary; not a CUDA, DDP, live-run, quantum-duration, or <3% ingestion acceptance measurement.",
+  "comparator_scope": "AoS reference times preloaded per-game row-block concatenate plus structured memmap copy/flush; it excludes historical per-file JSON/NPY parsing. Columnar total includes manifest validation/map, plan-chain construction, copy, and one store flush; it excludes shard deletion.",
+  "python_version": "3.10.0",
+  "cpu": "Intel64 Family 6 Model 140 Stepping 1, GenuineIntel",
+  "games": 256,
+  "rows_per_game": 8,
+  "total_rows": 2048,
+  "games_per_shard": 32,
+  "shard_count": 8,
+  "old_per_game_file_count": 512,
+  "columnar_shard_file_count": 16,
+  "file_count_reduction": 496,
+  "file_count_reduction_factor": 32.0,
+  "repeats": 5,
+  "hash_verification_during_boundary": false,
+  "wrapped_ring": true,
+  "exact_final_semantics": true,
+  "semantic_checksum": "9a45e2e2231d6e68e7d58da7cffda1bb75a217950c970a12b2ef511f5fe5bda4",
+  "shard_build_and_write": {
+    "median_seconds": 0.20632899994961917,
+    "median_rows_per_second": 9925.895053531374,
+    "trial_seconds": [
+      0.22017929999856278,
+      0.19555980002041906,
+      0.23333050002111122,
+      0.2051237000268884,
+      0.20632899994961917
+    ]
+  },
+  "old_aos_concatenate": {
+    "median_seconds": 0.0037077999440953135,
+    "median_rows_per_second": 552349.1102213991,
+    "trial_seconds": [
+      0.0031583000090904534,
+      0.0037077999440953135,
+      0.005363999982364476,
+      0.004946000000927597,
+      0.0031917999731376767
+    ]
+  },
+  "old_aos_copy_and_flush": {
+    "median_seconds": 0.0032846000394783914,
+    "median_rows_per_second": 623515.7935165925,
+    "trial_seconds": [
+      0.0040960999904200435,
+      0.004466200014576316,
+      0.002417100011371076,
+      0.0022841000463813543,
+      0.0032846000394783914
+    ]
+  },
+  "old_aos_boundary_total": {
+    "median_seconds": 0.007258799974806607,
+    "median_rows_per_second": 282140.29965119186,
+    "trial_seconds": [
+      0.007258799974806607,
+      0.008176099974662066,
+      0.007782600005157292,
+      0.007231900002807379,
+      0.0064780000247992575
+    ]
+  },
+  "columnar_validation_and_map": {
+    "median_seconds": 0.1445642000180669,
+    "median_rows_per_second": 14166.716239179901,
+    "trial_seconds": [
+      0.11749299999792129,
+      0.13763770001241937,
+      0.16377749998355284,
+      0.16249020001851022,
+      0.1445642000180669
+    ]
+  },
+  "columnar_plan_chain": {
+    "median_seconds": 0.00008020002860575914,
+    "median_rows_per_second": 25536150.49275598,
+    "trial_seconds": [
+      0.00006170000415295362,
+      0.00006410002242773771,
+      0.00008020002860575914,
+      0.00012779998360201716,
+      0.00008769996929913759
+    ]
+  },
+  "columnar_copy_and_flush": {
+    "median_seconds": 0.017407000006642193,
+    "median_rows_per_second": 117653.81738487509,
+    "trial_seconds": [
+      0.014652399986516684,
+      0.017407000006642193,
+      0.020310299994889647,
+      0.014932700025383383,
+      0.017950700013898313
+    ]
+  },
+  "columnar_boundary_total": {
+    "median_seconds": 0.16260520002106205,
+    "median_rows_per_second": 12594.92316195746,
+    "trial_seconds": [
+      0.13220849999925122,
+      0.15511100000003353,
+      0.18416940001770854,
+      0.17755200003739446,
+      0.16260520002106205
+    ]
+  }
+}
