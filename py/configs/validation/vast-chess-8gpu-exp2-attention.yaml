@@ -6,6 +6,8 @@ extends: vast-chess-8gpu-exp1-planehead.yaml
 run:
   run_name: vast-chess-8gpu-exp2-attention
   tensorboard_run_directory: vast-chess-8gpu-exp2-attention
+  hardware:
+    minimum_disk_gib: 80
 
 training:
   save_path: py/training_data/validation/vast-chess-8gpu-exp2-attention
