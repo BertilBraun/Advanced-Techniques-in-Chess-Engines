@@ -103,7 +103,7 @@ root.innerHTML = `
               <span class="game-over-label">Game over</span>
               <h2 id="game-over-title">Game over</h2>
               <p id="game-over-detail">The game has ended.</p>
-              <button id="play-again" class="overlay-button" type="button">Play again <span aria-hidden="true">â†’</span></button>
+              <button id="play-again" class="overlay-button" type="button">Play again <span aria-hidden="true">→</span></button>
             </div>
           </section>
         </div>
