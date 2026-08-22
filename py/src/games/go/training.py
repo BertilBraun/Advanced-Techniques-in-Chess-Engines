@@ -9,7 +9,6 @@ from src.games.go.contract import GoStateContract, NativeGoPosition
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
-from src.self_play.native_configuration import native_sdpa_backend
 from src.self_play.native_search import NativeSelfPlaySearch
 from src.self_play.parameters import (
     FixedFullSearchBudget,
@@ -103,20 +102,12 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
             BatchedInferenceParameters,
             GoSelfPlaySearch7,
             GoSelfPlaySearch9,
-            InferenceConfiguration,
-            InferenceDevice,
         )
 
         search_type = GoSelfPlaySearch7 if self.state.board_size == 7 else GoSelfPlaySearch9
         self.validate_native_dimensions(search_type.inference_dimensions())
-        device = InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA
         return search_type(
-            InferenceConfiguration(
-                device_id,
-                str(checkpoint.inference_model_path),
-                device,
-                native_sdpa_backend(inference.sdpa_backend),
-            ),
+            self.native_inference_configuration(device_id, checkpoint.inference_model_path, inference),
             self.native_search_parameters(parameters),
             BatchedInferenceParameters(
                 inference.inference_workers,

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from src.experiment.configuration import ExperimentConfiguration
 from src.util.generation_schedule import FloatGenerationSchedule
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
-from src.self_play.configuration import SelfPlayConfiguration
+from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
+from src.self_play.native_configuration import native_sdpa_backend
 from src.self_play.parameters import (
     AdaptiveFullSearchBudget,
     FixedFullSearchBudget,
@@ -21,7 +23,7 @@ from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import TrainingTargetLayout
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import SelfPlaySearchParameters
+    from AlphaZeroCpp import InferenceConfiguration, SelfPlaySearchParameters
     from src.evaluation.configuration import EvaluationSearchConfiguration
     from src.self_play.native_search import NativeSelfPlaySearch
     from src.self_play.resignation import CalibratedResignationConfiguration
@@ -99,6 +101,23 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
     @property
     def censor_remaining_game_length_on_cut_games(self) -> bool:
         return False
+
+    def native_inference_configuration(
+        self,
+        device_id: int,
+        model_path: Path,
+        inference: BatchedInferenceParams | None = None,
+    ) -> InferenceConfiguration:
+        from AlphaZeroCpp import InferenceConfiguration, InferenceDevice
+
+        # Defaults to the self-play inference parameters; evaluation passes its own so backends can differ.
+        effective = self.self_play_configuration.inference if inference is None else inference
+        return InferenceConfiguration(
+            device_id=device_id,
+            model_path=str(model_path),
+            device=InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA,
+            sdpa_backend=native_sdpa_backend(effective.sdpa_backend),
+        )
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:
         from AlphaZeroCpp import (

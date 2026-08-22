@@ -21,6 +21,8 @@ from AlphaZeroCpp import (
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )
+from src.self_play.configuration import SdpaBackend
+from src.self_play.native_configuration import native_sdpa_backend
 from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
 from src.util.provenance import read_source_revision
@@ -42,6 +44,7 @@ class Arguments:
     direct_workers: int
     direct_batch_size: int
     direct_outstanding_batches: int
+    sdpa_backend: SdpaBackend
     maximum_rss_growth_mib: float | None
     maximum_gpu_growth_mib: float | None
     monitor_interval_seconds: float
@@ -80,6 +83,7 @@ class RefreshBenchmarkResult:
     direct_workers: int
     direct_batch_size: int
     direct_outstanding_batches: int
+    sdpa_backend: str
     latency_mean_seconds: float
     latency_p50_seconds: float
     latency_p95_seconds: float
@@ -139,6 +143,12 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--direct-workers', type=int, default=2)
     parser.add_argument('--direct-batch-size', type=int, default=64)
     parser.add_argument('--direct-outstanding-batches', type=int, default=1)
+    parser.add_argument(
+        '--sdpa-backend',
+        type=SdpaBackend,
+        choices=[backend.value for backend in SdpaBackend],
+        default=SdpaBackend.AUTOMATIC,
+    )
     parser.add_argument('--maximum-rss-growth-mib', type=float)
     parser.add_argument('--maximum-gpu-growth-mib', type=float)
     parser.add_argument('--monitor-interval-seconds', type=float, default=0.01)
@@ -155,6 +165,7 @@ def parse_arguments() -> Arguments:
         direct_workers=namespace.direct_workers,
         direct_batch_size=namespace.direct_batch_size,
         direct_outstanding_batches=namespace.direct_outstanding_batches,
+        sdpa_backend=namespace.sdpa_backend,
         maximum_rss_growth_mib=namespace.maximum_rss_growth_mib,
         maximum_gpu_growth_mib=namespace.maximum_gpu_growth_mib,
         monitor_interval_seconds=namespace.monitor_interval_seconds,
@@ -204,6 +215,7 @@ def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
     runtime_parameters = InferenceConfiguration(
         device_id=arguments.device_id,
         model_path=str(arguments.model_path),
+        sdpa_backend=native_sdpa_backend(arguments.sdpa_backend),
     )
     search_parameters = SelfPlaySearchParameters(
         parallel_searches=arguments.parallel_searches,
@@ -317,6 +329,7 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
         direct_workers=arguments.direct_workers,
         direct_batch_size=arguments.direct_batch_size,
         direct_outstanding_batches=arguments.direct_outstanding_batches,
+        sdpa_backend=arguments.sdpa_backend.value,
         latency_mean_seconds=sum(latencies) / len(latencies),
         latency_p50_seconds=percentile(latencies, 0.50),
         latency_p95_seconds=percentile(latencies, 0.95),

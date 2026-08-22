@@ -11,7 +11,6 @@ from AlphaZeroCpp import (
     ChessPosition,
     ChessSelfPlaySearch,
     ChessSelfPlaySearchRequest,
-    InferenceConfiguration,
     SearchCheckpoint,
     SearchCheckpointDetail,
 )
@@ -21,7 +20,7 @@ from src.experiment.configuration import load_chess_experiment_configuration
 from src.util.generation_schedule import defined_schedule_values
 from src.games.chess.training import ChessImplementation
 from src.self_play.configuration import AdaptiveFullSearchBudgetConfiguration, FixedFullSearchBudgetConfiguration
-from src.self_play.parameters import AdaptiveFullSearchBudget, FixedFullSearchBudget
+from src.self_play.parameters import AdaptiveFullSearchBudget, FixedFullSearchBudget, ResolvedSelfPlayParameters
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.provenance import read_source_revision
@@ -162,6 +161,18 @@ def _load_openings(path: Path, count: int) -> tuple[str, ...]:
     return openings[:count]
 
 
+def _create_search(
+    game: ChessImplementation,
+    arguments: Arguments,
+    parameters: ResolvedSelfPlayParameters,
+) -> ChessSelfPlaySearch:
+    return ChessSelfPlaySearch(
+        game.native_inference_configuration(arguments.device, arguments.model),
+        game.native_search_parameters(parameters),
+        BatchedInferenceParameters(workers=1, batch_size=arguments.batch_size, outstanding_batches_per_worker=1),
+    )
+
+
 def _snapshot(checkpoint: SearchCheckpoint, predicted_search_correction: float) -> SearchSnapshot:
     policy_visits = checkpoint.policy_target_visits
     total = sum(visit.visit_count for visit in policy_visits)
@@ -204,11 +215,7 @@ def collect_audits(arguments: Arguments) -> tuple[tuple[PositionAudit, ...], flo
     )
     audit_parameters = replace(parameters, full_search_budget=audit_budget, fast_searches=arguments.reference_visits)
     openings = _load_openings(arguments.openings, arguments.positions)
-    search = ChessSelfPlaySearch(
-        InferenceConfiguration(arguments.device, str(arguments.model)),
-        game.native_search_parameters(audit_parameters),
-        BatchedInferenceParameters(1, arguments.batch_size, 1),
-    )
+    search = _create_search(game, arguments, audit_parameters)
     roots = [search.new_root(ChessPosition(fen)) for fen in openings]
     started = time.perf_counter()
     batch = search.search([ChessSelfPlaySearchRequest(root, True, SearchCheckpointDetail.POLICIES) for root in roots])
@@ -235,11 +242,7 @@ def run_live_canary(arguments: Arguments) -> LiveCanaryMetrics:
     configuration = load_chess_experiment_configuration(arguments.configuration)
     game = ChessImplementation(configuration)
     openings = _load_openings(arguments.openings, arguments.positions)
-    search = ChessSelfPlaySearch(
-        InferenceConfiguration(arguments.device, str(arguments.model)),
-        game.native_search_parameters(game.self_play_parameters_at(arguments.generation)),
-        BatchedInferenceParameters(1, arguments.batch_size, 1),
-    )
+    search = _create_search(game, arguments, game.self_play_parameters_at(arguments.generation))
     roots = [search.new_root(ChessPosition(fen)) for fen in openings]
     started = time.perf_counter()
     batch = search.search([ChessSelfPlaySearchRequest(root, True) for root in roots])

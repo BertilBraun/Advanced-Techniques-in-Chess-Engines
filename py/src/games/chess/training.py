@@ -11,7 +11,6 @@ from src.games.chess.syzygy import SyzygyTerminalOracle
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import BatchedInferenceParams
-from src.self_play.native_configuration import native_sdpa_backend
 from src.self_play.native_search import NativeSelfPlaySearch
 from src.self_play.parameters import (
     FixedFullSearchBudget,
@@ -132,19 +131,11 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         from AlphaZeroCpp import (
             BatchedInferenceParameters,
             ChessSelfPlaySearch,
-            InferenceConfiguration,
-            InferenceDevice,
         )
 
         self.validate_native_dimensions(ChessSelfPlaySearch.inference_dimensions())
-        device = InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA
         return ChessSelfPlaySearch(
-            InferenceConfiguration(
-                device_id,
-                str(checkpoint.inference_model_path),
-                device,
-                native_sdpa_backend(inference.sdpa_backend),
-            ),
+            self.native_inference_configuration(device_id, checkpoint.inference_model_path, inference),
             self.native_search_parameters(parameters),
             BatchedInferenceParameters(
                 inference.inference_workers,
