@@ -19,7 +19,6 @@ from src.training.targets import (
     SearchCorrectionHeadLayout,
 )
 from src.util.frozen_model import FrozenModel
-from src.util.log import log
 from torch import Tensor, nn
 from torch.nn import functional
 
@@ -263,12 +262,8 @@ class Network(nn.Module):
         )
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
-        x = self._features(x)
-        policy_logits = self.policyHead(x)
-        value_logits = self.valueHead(x)
-
-        value = torch.softmax(value_logits, dim=1)
-        return policy_logits, value
+        policy_logits, value_logits = self.logit_forward(x)
+        return policy_logits, torch.softmax(value_logits, dim=1)
 
     def _features(self, x: Tensor) -> Tensor:
         x = self.startBlock(x)
@@ -292,29 +287,7 @@ class Network(nn.Module):
         )
 
     def fuse_model(self) -> None:
-        for m in self.modules():
-            if (
-                type(m) is nn.Sequential
-                and len(m) >= 2
-                and isinstance(m[0], nn.Conv2d)
-                and isinstance(m[1], nn.BatchNorm2d)
-            ):
-                modules_to_fuse = [str(i) for i in range(min(3, len(m)))]  # Conv2d, BatchNorm2d, ReLU
-                torch.ao.quantization.fuse_modules(m, modules_to_fuse, inplace=True)
-
-    def disable_auto_grad(self) -> None:
-        for p in self.parameters():
-            p.requires_grad = False
-
-    def print_params(self) -> None:
-        for name, param in self.named_parameters():
-            log(name, list(param.shape))
-        sum_of_params = sum(p.numel() for p in self.parameters())
-        log(f'Total number of parameters: {sum_of_params}')
-        sum_of_trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        log(
-            f'Total number of trainable parameters: {sum_of_trainable_params} ({sum_of_trainable_params / sum_of_params * 100:.2f}%)'
-        )
+        fuse_conv_batchnorm(self)
 
 
 class ZeroSearchCorrectionHead(nn.Module):
@@ -353,18 +326,23 @@ class InferenceNetwork(nn.Module):
         return self.network_definition
 
     def fuse_model(self) -> None:
-        for module in self.modules():
-            if (
-                type(module) is nn.Sequential
-                and len(module) >= 2
-                and isinstance(module[0], nn.Conv2d)
-                and isinstance(module[1], nn.BatchNorm2d)
-            ):
-                torch.ao.quantization.fuse_modules(
-                    module,
-                    [str(index) for index in range(min(3, len(module)))],
-                    inplace=True,
-                )
+        fuse_conv_batchnorm(self)
+
+
+def fuse_conv_batchnorm(root: nn.Module) -> None:
+    for module in root.modules():
+        if (
+            type(module) is nn.Sequential
+            and len(module) >= 2
+            and isinstance(module[0], nn.Conv2d)
+            and isinstance(module[1], nn.BatchNorm2d)
+        ):
+            # Fuses Conv2d, BatchNorm2d and the optional trailing ReLU.
+            torch.ao.quantization.fuse_modules(
+                module,
+                [str(index) for index in range(min(3, len(module)))],
+                inplace=True,
+            )
 
 
 def _search_correction_head(training_model: Network) -> nn.Module:
@@ -455,13 +433,7 @@ def _build_auxiliary_head(
                 plane_hidden_channels=POLICY_PLANE_AUXILIARY_HIDDEN_CHANNELS,
             )
         case RemainingGameLengthHeadLayout(output_size=output_size):
-            return nn.Sequential(
-                nn.Conv2d(input_channels, 1, kernel_size=1, bias=False),
-                nn.BatchNorm2d(1),
-                nn.ReLU(inplace=True),
-                nn.Flatten(),
-                nn.Linear(row_count * column_count, output_size),
-            )
+            return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
         case FutureSearchValueHeadLayout(output_size=output_size):
             return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
         case IrreversibleProgressHeadLayout(output_size=output_size):
