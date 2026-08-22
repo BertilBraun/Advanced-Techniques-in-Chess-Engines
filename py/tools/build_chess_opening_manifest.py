@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 from pathlib import Path
 import subprocess
 
@@ -15,14 +14,7 @@ from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.stockfish import StockfishClient
 from src.games.chess.training import ChessImplementation
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
+from src.util.hashing import file_sha256
 
 
 def _source_revision() -> str:
@@ -55,7 +47,7 @@ def build_manifest(
         source=ChessBookOpeningSource(
             kind='chess_book',
             selection_path=str(selection_path),
-            selection_sha256=_sha256(selection_path),
+            selection_sha256=file_sha256(selection_path),
         ),
     )
     engine_configuration = StockfishEngineConfiguration(

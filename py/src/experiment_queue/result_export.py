@@ -28,6 +28,7 @@ from src.experiment_queue.validation import queue_configuration_fingerprint
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.contracts import read_checkpoint_manifest
 from src.util.frozen_model import FrozenModel
+from src.util.hashing import file_sha256
 
 
 class ExplicitExperimentConfiguration(FrozenModel):
@@ -409,7 +410,7 @@ def _checkpoint_artifact_path(run_path: Path, relative_path: str) -> Path:
 
 
 def _require_hash(path: Path, expected_sha256: str) -> None:
-    actual = _sha256(path)
+    actual = file_sha256(path)
     if actual != expected_sha256:
         raise ValueError(f'Artifact hash does not match its checkpoint manifest: {path}')
 
@@ -530,9 +531,3 @@ def _validate_archive_path(path: str) -> str:
     return pure_path.as_posix()
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()

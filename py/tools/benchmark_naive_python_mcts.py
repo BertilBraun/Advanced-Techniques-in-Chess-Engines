@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import platform
@@ -18,6 +17,7 @@ from AlphaZeroCpp import ChessPosition
 from pydantic import BaseModel, ConfigDict
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.representation import decode_packed_planes
+from src.util.hashing import file_sha256
 
 
 class BenchmarkRun(BaseModel):
@@ -192,14 +192,6 @@ def backup(path: list[SearchNode], leaf_value: float) -> None:
         value = -value
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for block in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def _git_output(arguments: tuple[str, ...]) -> str | None:
     try:
         completed = subprocess.run(('git', *arguments), check=True, capture_output=True, text=True)
@@ -216,7 +208,7 @@ def _provenance(arguments: argparse.Namespace, model_path: Path, device: torch.d
         source_revision=arguments.source_revision or _git_output(('rev-parse', 'HEAD')) or 'unavailable',
         source_dirty=None if status is None else bool(status),
         model_path=str(model_path.resolve()),
-        model_sha256=_sha256(model_path),
+        model_sha256=file_sha256(model_path),
         starting_fen=arguments.fen,
         device=str(device),
         cuda_visible_devices=os.environ.get('CUDA_VISIBLE_DEVICES'),

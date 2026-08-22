@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import subprocess
@@ -23,6 +22,7 @@ from AlphaZeroCpp import (
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )
+from src.util.hashing import file_sha256
 
 INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 BYTES_PER_MIB = 2**20
@@ -197,14 +197,6 @@ def percentile(values: tuple[float, ...], probability: float) -> float:
     upper_index = min(lower_index + 1, len(ordered) - 1)
     fraction = position - lower_index
     return ordered[lower_index] * (1.0 - fraction) + ordered[upper_index] * fraction
-
-
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        while chunk := source.read(BYTES_PER_MIB):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def create_search(arguments: Arguments) -> ChessSelfPlaySearch:

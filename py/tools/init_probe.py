@@ -1,7 +1,9 @@
-import sys, torch, types
+import sys
+import torch
+import types
 sys.path.insert(0,'.')
 # stub the C++ module so network.py imports
-m = types.ModuleType('AlphaZeroCpp'); 
+m = types.ModuleType('AlphaZeroCpp') 
 class _S: pass
 for n in ['GameSearchVisit']: setattr(m,n,_S)
 sys.modules['AlphaZeroCpp']=m

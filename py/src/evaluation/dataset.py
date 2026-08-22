@@ -38,6 +38,7 @@ from src.evaluation.katago_book import (
 )
 from src.games.contracts import GameStateContract
 from src.util.atomic_file import write_text_atomically
+from src.util.hashing import file_sha256
 
 PositionT = TypeVar('PositionT')
 RETAINED_PLY_INTERVAL = 3
@@ -67,14 +68,6 @@ class _RetainedDatasetPosition:
 class _GeneratedSourceGame:
     source_game: EvaluationSourceGame
     retained_positions: tuple[_RetainedDatasetPosition, ...]
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _position_digest(state: GameStateContract[PositionT], position: PositionT) -> str:
@@ -154,7 +147,7 @@ def _load_existing_dataset(
     if not path.exists() or not manifest_path.exists():
         raise ValueError('Evaluation dataset data and manifest must either both exist or both be absent.')
     manifest = EvaluationDatasetManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
-    if _file_sha256(path) != manifest.data_sha256:
+    if file_sha256(path) != manifest.data_sha256:
         raise ValueError('Evaluation dataset hash does not match its manifest.')
     expected = (
         manifest.game == engine.game_name
@@ -294,7 +287,7 @@ def build_evaluation_dataset(
         maximum_legal_actions=maximum_legal_actions,
         packed_payload_bytes=state.packed_plane_layout.payload_bytes,
         row_layout_digest=_layout_digest(dtype),
-        data_sha256=_file_sha256(path),
+        data_sha256=file_sha256(path),
         builder_source_revision=builder_source_revision,
     )
     write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')
@@ -318,7 +311,7 @@ def build_katago_book_evaluation_dataset(
             raise ValueError('Evaluation dataset data and manifest must either both exist or both be absent.')
         manifest = KataGoBookDatasetManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
         expected = (
-            _file_sha256(path) == manifest.data_sha256
+            file_sha256(path) == manifest.data_sha256
             and manifest.rules_digest == engine.rules_digest
             and manifest.representation_digest == engine.representation_digest
             and manifest.book_export_sha256 == configuration.source.selection.export_sha256
@@ -414,7 +407,7 @@ def build_katago_book_evaluation_dataset(
         maximum_legal_actions=maximum_legal_actions,
         packed_payload_bytes=state.packed_plane_layout.payload_bytes,
         row_layout_digest=_layout_digest(dtype),
-        data_sha256=_file_sha256(path),
+        data_sha256=file_sha256(path),
         book_export_sha256=configuration.source.selection.export_sha256,
         book_selection_sha256=selection_digest,
         book_source_root_url=export.source_root_url,

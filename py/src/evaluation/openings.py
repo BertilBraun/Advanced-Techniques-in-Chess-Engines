@@ -25,6 +25,7 @@ from src.evaluation.katago_book import (
 from src.games.contracts import GameStateContract
 from src.games.chess.contract import ChessPosition, ChessStateContract
 from src.util.atomic_file import write_text_atomically
+from src.util.hashing import file_sha256
 
 
 PositionT = TypeVar('PositionT')
@@ -162,14 +163,6 @@ def build_opening_suite(
     return manifest
 
 
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _parse_chess_book_selection(path: Path) -> tuple[tuple[str, tuple[str, ...], str], ...]:
     rows: list[tuple[str, tuple[str, ...], str]] = []
     for line_number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), start=1):
@@ -225,7 +218,7 @@ def build_chess_book_opening_suite(
     source = configuration.source
     if not isinstance(source, ChessBookOpeningSource):
         raise ValueError('Chess book opening builder requires a chess-book source.')
-    if not selection_path.is_file() or _file_sha256(selection_path) != source.selection_sha256:
+    if not selection_path.is_file() or file_sha256(selection_path) != source.selection_sha256:
         raise ValueError('Chess book selection is missing or does not match its configured SHA-256.')
     if path.exists():
         manifest = ChessBookOpeningSuiteManifest.model_validate_json(path.read_text(encoding='utf-8'))

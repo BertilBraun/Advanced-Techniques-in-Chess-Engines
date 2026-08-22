@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import math
 import subprocess
 import time
@@ -28,6 +27,7 @@ from src.training.targets import SearchCorrectionHeadLayout, build_training_targ
 from src.util.frozen_model import FrozenModel
 from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
+from src.util.hashing import file_sha256
 
 DEFAULT_CONFIGURATION_PATH = Path(__file__).resolve().parents[1] / 'configs/production/vast-chess-8gpu-optimal.yaml'
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -236,14 +236,6 @@ def _source_revision() -> SourceRevision:
     return SourceRevision(commit=commit, dirty=bool(status.strip()))
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _attention_backend_context(backend: AttentionBackend) -> AbstractContextManager[None]:
     match backend:
         case AttentionBackend.AUTOMATIC:
@@ -437,7 +429,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> ChessInferenceBenchmarkRepor
     return ChessInferenceBenchmarkReport(
         source_revision=_source_revision(),
         configuration_path=str(arguments.configuration_path),
-        configuration_sha256=_sha256(arguments.configuration_path),
+        configuration_sha256=file_sha256(arguments.configuration_path),
         hardware=HardwareDescription(
             gpu_id=arguments.gpu_id,
             device_name=properties.name,

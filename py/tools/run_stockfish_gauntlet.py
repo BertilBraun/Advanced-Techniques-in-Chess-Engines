@@ -5,7 +5,6 @@ import csv
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import hashlib
 from multiprocessing import get_context
 from pathlib import Path
 import random
@@ -41,6 +40,7 @@ from src.self_play.configuration import BatchedInferenceParams
 from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.hashing import file_sha256
 
 
 class FixedModelSearchBudget(FrozenModel):
@@ -241,14 +241,6 @@ class _TimedSearchActionSelector(MatchActionSelector[ChessPosition]):
             maximum_elapsed_milliseconds=max(self._elapsed_milliseconds),
             mean_elapsed_milliseconds=sum(self._elapsed_milliseconds) / len(self._elapsed_milliseconds),
         )
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _source_revision() -> str:
@@ -555,20 +547,20 @@ def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
     )
     result = StockfishGauntletResult(
         source_revision=_source_revision(),
-        tool_sha256=_sha256(Path(__file__)),
+        tool_sha256=file_sha256(Path(__file__)),
         started_at_utc=started_at_utc,
         experiment_path=arguments.experiment.resolve(),
         run_directory=arguments.run_directory.resolve(),
         evaluated_checkpoint=checkpoint,
         opening_manifest_path=arguments.opening_manifest.resolve(),
-        opening_manifest_sha256=_sha256(arguments.opening_manifest),
+        opening_manifest_sha256=file_sha256(arguments.opening_manifest),
         opening_manifest_pair_count=len(openings.openings),
         opening_pair_count=arguments.opening_pairs,
         opening_selection=arguments.opening_selection,
         selected_opening_indices=selected_opening_indices,
         match_random_seed=match_random_seed,
         stockfish_executable_path=arguments.stockfish_executable.resolve(),
-        stockfish_executable_sha256=_sha256(arguments.stockfish_executable),
+        stockfish_executable_sha256=file_sha256(arguments.stockfish_executable),
         stockfish_identity=next(iter(identities)),
         stockfish_match_nodes=arguments.stockfish_nodes,
         stockfish_threads=engine_configuration.threads,

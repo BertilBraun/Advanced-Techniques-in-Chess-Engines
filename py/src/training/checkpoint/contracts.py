@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import hashlib
 from os import PathLike
 from pathlib import Path
 
 from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.network import NetworkDefinition
 from src.util.frozen_model import FrozenModel
+from src.util.hashing import file_sha256
 
 
 class CheckpointManifest(FrozenModel):
@@ -20,18 +20,10 @@ class CheckpointManifest(FrozenModel):
     inference_model_sha256: str
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _validate_checkpoint_artifact(path: Path, expected_sha256: str) -> None:
     if not path.is_file():
         raise ValueError(f'Checkpoint artifact does not exist: {path}')
-    if _sha256(path) != expected_sha256:
+    if file_sha256(path) != expected_sha256:
         raise ValueError(f'Checkpoint artifact hash does not match: {path}')
 
 
@@ -103,11 +95,7 @@ class CheckpointReference(FrozenModel):
     def validate_inference_model(self) -> None:
         if not self.inference_model_path.is_file():
             raise ValueError(f'Inference model does not exist: {self.inference_model_path}')
-        digest = hashlib.sha256()
-        with self.inference_model_path.open('rb') as model_file:
-            while chunk := model_file.read(1024 * 1024):
-                digest.update(chunk)
-        if digest.hexdigest() != self.inference_model_sha256:
+        if file_sha256(self.inference_model_path) != self.inference_model_sha256:
             raise ValueError(f'Inference model hash does not match: {self.inference_model_path}')
 
     @classmethod

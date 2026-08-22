@@ -27,6 +27,7 @@ from tools.run_stockfish_gauntlet import (
     TimedModelSearchBudget,
     run_gauntlet,
 )
+from src.util.hashing import file_sha256
 
 
 class LadderProbe(FrozenModel):
@@ -152,14 +153,6 @@ def _score_bracket(probes: tuple[LadderProbe, ...]) -> LadderBracket | None:
     return None
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def run_ladder(arguments: Arguments) -> StockfishLadderResult:
     arguments.output_directory.mkdir(parents=True, exist_ok=False)
     opening_pairs = arguments.probe_games // 2
@@ -204,7 +197,7 @@ def run_ladder(arguments: Arguments) -> StockfishLadderResult:
     assert first_gauntlet_result is not None
     result = StockfishLadderResult(
         source_revision=first_gauntlet_result.source_revision,
-        tool_sha256=_sha256(Path(__file__)),
+        tool_sha256=file_sha256(Path(__file__)),
         checkpoint_generation=arguments.checkpoint_generation,
         opening_manifest_path=arguments.opening_manifest.resolve(),
         opening_manifest_sha256=first_gauntlet_result.opening_manifest_sha256,

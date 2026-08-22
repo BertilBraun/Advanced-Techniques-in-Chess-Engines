@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-import hashlib
 from pathlib import Path
 import subprocess
 import time
@@ -30,6 +29,7 @@ from src.games.go.katago import KataGoClient
 from src.games.go.training import GoImplementation
 from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
+from src.util.hashing import file_sha256
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -49,14 +49,6 @@ class Arguments:
     katago_equal_device: int
     katago_16_device: int
     katago_128_device: int
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _project_path(path: str) -> Path:
@@ -183,7 +175,7 @@ def run_diagnostic(arguments: Arguments) -> GoEvaluationDiagnosticResult:
         source_revision=_source_revision(),
         experiment_path=arguments.experiment.resolve(),
         opening_manifest_path=arguments.opening_manifest.resolve(),
-        opening_manifest_sha256=_sha256(arguments.opening_manifest),
+        opening_manifest_sha256=file_sha256(arguments.opening_manifest),
         baseline_run_path=arguments.baseline_run.resolve(),
         evaluated_checkpoint=checkpoint,
         matches=(identity, equal, visits),

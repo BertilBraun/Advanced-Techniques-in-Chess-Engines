@@ -13,14 +13,7 @@ import chess.pgn
 from src.evaluation.configuration import StockfishEngineConfiguration
 from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
 from src.games.chess.contract import ChessPosition, ChessStateContract
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
+from src.util.hashing import file_sha256
 
 
 def _digest_payload(payload: dict[str, int | str]) -> str:
@@ -74,7 +67,7 @@ class StockfishClient:
 
     @property
     def engine_artifact_sha256(self) -> tuple[str, ...]:
-        return (_file_sha256(self.executable_path),)
+        return (file_sha256(self.executable_path),)
 
     @property
     def label_search_limit(self) -> int:

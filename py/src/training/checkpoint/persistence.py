@@ -1,4 +1,3 @@
-import hashlib
 import shutil
 from os import PathLike
 from pathlib import Path
@@ -18,14 +17,7 @@ from src.training.network import InferenceNetwork, Network, NetworkConfiguration
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.log import LogLevel, log
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
+from src.util.hashing import file_sha256
 
 
 def _temporary_path(path: Path) -> Path:
@@ -199,11 +191,11 @@ def save_model_and_optimizer(
         generation=generation,
         network=model.checkpoint_definition(),
         model_path=raw_model_path.name,
-        model_sha256=_sha256(raw_model_path),
+        model_sha256=file_sha256(raw_model_path),
         optimizer_path=raw_optimizer_path.name,
-        optimizer_sha256=_sha256(raw_optimizer_path),
+        optimizer_sha256=file_sha256(raw_optimizer_path),
         inference_model_path=jit_model_path.name,
-        inference_model_sha256=_sha256(jit_model_path),
+        inference_model_sha256=file_sha256(jit_model_path),
     )
     manifest_path = checkpoint_manifest_path(generation, save_folder)
     write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')

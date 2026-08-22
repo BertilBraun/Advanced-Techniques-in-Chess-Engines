@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import gc
-import hashlib
 import os
 import platform
 import subprocess
@@ -23,6 +22,7 @@ from src.games.chess.interactive.analysis import (
 )
 from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
 from src.games.chess.interactive.engine import InferenceMetrics, InteractiveEngine, InteractiveGame
+from src.util.hashing import file_sha256
 
 
 class RunStatus(str, Enum):
@@ -215,14 +215,6 @@ def parse_arguments() -> ParsedArguments:
     )
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as model_file:
-        for block in iter(lambda: model_file.read(1024 * 1024), b''):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def _git_output(arguments: tuple[str, ...]) -> str | None:
     try:
         completed = subprocess.run(
@@ -245,7 +237,7 @@ def collect_provenance(arguments: ParsedArguments) -> Provenance:
         git_revision=arguments.source_revision or detected_revision or 'unavailable',
         git_dirty=None if status is None else bool(status),
         model_path=str(arguments.model.resolve()),
-        model_sha256=_sha256(arguments.model),
+        model_sha256=file_sha256(arguments.model),
         python_version=sys.version,
         torch_version=torch.__version__,
         platform=platform.platform(),

@@ -35,6 +35,7 @@ from src.training.checkpoint.persistence import (
     load_model,
     save_model_and_optimizer,
 )
+from src.util.hashing import file_sha256
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
@@ -76,14 +77,6 @@ def _git_output(arguments: list[str]) -> str:
         text=True,
     )
     return completed.stdout.strip()
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _resolve_source_path(path: str) -> Path:
@@ -194,7 +187,7 @@ def _validate_runtime_configuration(experiment: ExperimentConfiguration) -> None
     if run.hardware.provider_name.casefold() == 'unconfirmed' or run.hardware.offer_id.casefold() == 'unconfirmed':
         raise ValueError('Hardware provider and offer ID must be confirmed before training.')
     dependency_lock_path = _resolve_source_path(run.environment.dependency_lock_path)
-    if _sha256(dependency_lock_path) != run.environment.dependency_lock_sha256:
+    if file_sha256(dependency_lock_path) != run.environment.dependency_lock_sha256:
         raise ValueError('Dependency lock SHA-256 does not match the experiment.')
     actual_python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
     if actual_python_version != run.environment.python_version:
@@ -285,12 +278,12 @@ def _run_manifest(
         source_revision=environment.source_revision,
         source_worktree_clean=True,
         initial_generation=initial_checkpoint.generation,
-        initial_model_sha256=_sha256(initial_checkpoint.model_path),
-        initial_optimizer_sha256=_sha256(initial_checkpoint.optimizer_path),
+        initial_model_sha256=file_sha256(initial_checkpoint.model_path),
+        initial_optimizer_sha256=file_sha256(initial_checkpoint.optimizer_path),
         initial_inference_model_sha256=initial_checkpoint.inference_model_sha256,
-        evaluation_dataset_sha256=_sha256(artifacts.dataset_path),
-        evaluation_dataset_manifest_sha256=_sha256(artifacts.dataset_manifest_path),
-        opening_suite_manifest_sha256=_sha256(artifacts.opening_manifest_path),
+        evaluation_dataset_sha256=file_sha256(artifacts.dataset_path),
+        evaluation_dataset_manifest_sha256=file_sha256(artifacts.dataset_manifest_path),
+        opening_suite_manifest_sha256=file_sha256(artifacts.opening_manifest_path),
         evaluation_engine_artifact_sha256=_evaluation_engine_artifact_sha256(experiment),
         open_file_soft_limit=environment.open_file_soft_limit,
         torch_version=torch.__version__,
@@ -308,7 +301,7 @@ def _evaluation_engine_artifact_sha256(experiment: ExperimentConfiguration) -> t
             analysis_configuration_path=analysis_configuration_path,
         ):
             paths = (executable_path, model_path, analysis_configuration_path)
-    return tuple(_sha256(_resolve_source_path(path)) for path in paths)
+    return tuple(file_sha256(_resolve_source_path(path)) for path in paths)
 
 
 def prepare_experiment_training_run(
