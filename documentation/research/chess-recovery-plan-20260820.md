@@ -13,7 +13,7 @@ each work package has a scope, an owner slot, and an acceptance criterion that c
   self-play. Everything else that changed (auxiliary targets, adaptive budget, Syzygy, progressive sizing, attention)
   is kept and re-validated, not discarded.
 - The policy-plane representation, including the black-side rank flip, is verified end to end by a compiled harness
-  (2,834 positions, 83,651 moves, zero discrepancies; `documentation/images/four-day-analysis/flip-harness/`).
+  (2,834 positions, 83,651 moves, zero discrepancies; `cpp/test/flip-harness/`).
 - File-mirror augmentation stays, but castling-right planes must be swapped under mirroring (pre-existing oversight).
 - Replay ratio 10 is acceptable. `parallel_searches` stays as a throughput lever but is staged by visit count.
 - The in-run yardstick moves to Stockfish 13 fixed-node rungs 30 / 100 / 300 / 1,000 (≈1,100 / 1,200 / 1,400 / 1,700
@@ -74,7 +74,7 @@ Scope: `py/src/training/network.py`, `py/src/training/checkpoint/persistence.py`
    `init/policy_logit_std`, `init/policy_entropy_ratio`.
 6. Keep the old dense head kind selectable (`policy_head: {kind: dense}`) for the replica run.
 
-Acceptance: `init_probe.py` (in `documentation/images/four-day-analysis/`) reports logit std ≤ 1.0 for all production
+Acceptance: `py/tools/init_probe.py` reports logit std ≤ 1.0 for all production
 models; JIT export matches training forward to 1e-5 for CNN and attention (existing export tests extended to the new
 head); all `py/test` pass; the C++ inference smoke (`TestMovePolicyProcessing`) passes against an exported new-head
 model.

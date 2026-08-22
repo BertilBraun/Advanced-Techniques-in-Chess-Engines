@@ -54,7 +54,7 @@ validated.
 - All native tests belong to the single `NativeTests` executable (`test/TestRunner.hpp`, `test/TestMain.cpp`);
   no per-suite executables. Binding contract changes need a Python-side test too.
 - Encoding and action-id changes require the colour-symmetry harness
-  (`documentation/images/four-day-analysis/flip-harness/`) to pass again.
+  (`cpp/test/flip-harness/`) to pass again.
 
 ## Commits and branches
 
