@@ -24,7 +24,7 @@ training:
           num_value_channels: 2
           value_fc_size: 48
   limits:
-    hourly_price: 0.0  # PATCH with the rented offer's dph_total
+    hourly_price: 0.755
     maximum_cost: null
     maximum_wall_time_seconds: 14400
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-exp2-attention.stop
