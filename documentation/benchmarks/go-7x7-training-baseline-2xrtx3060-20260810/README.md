@@ -3,7 +3,7 @@
 Status (2026-08-10, historical): four-hour baseline and screening runs were active on the then-rented four-RTX-3060 node at the time of writing. The node is released; the Go screen is paused.
 
 The complete revised configuration is
-[`py/configs/baselines/vast-go-7x7-2gpu-4h.yaml`](../../py/configs/baselines/vast-go-7x7-2gpu-4h.yaml). It defines the
+[`py/configs/baselines/vast-go-7x7-2gpu-4h.yaml`](../../../py/configs/baselines/vast-go-7x7-2gpu-4h.yaml). It defines the
 four-hour Go 7x7 learning baseline plus five minutes for the final scheduled evaluation to launch. Subsequent
 self-play optimizations should retain every other setting unless
 the comparison explicitly declares another variable.
@@ -151,7 +151,7 @@ The fixed ladder contains:
 ## Overnight screening matrix
 
 The baseline and nine one-variable challengers live under
-[`py/configs/screening/go-7x7-overnight`](../../py/configs/screening/go-7x7-overnight). `00-baseline.yaml` inherits
+[`py/configs/screening/go-7x7-overnight`](../../../py/configs/screening/go-7x7-overnight). `00-baseline.yaml` inherits
 the complete baseline and changes only run identity and output path. Every later YAML inherits `00-baseline.yaml`
 and declares only its experimental difference: learning-rate decay through generation 120, constant learning rate
 0.004, 75% fast search, a 64-to-512 search-budget progression through generation 120, root-value blending, replay

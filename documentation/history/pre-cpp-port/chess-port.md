@@ -30,6 +30,6 @@ The chess framework ported to C++ was based on the Python chess package, essenti
 
 ## GPU Utilization and Parallelization
 
-A notable advantage of the C++ implementation is the efficient utilization of GPU resources. We achieved consistent 100% GPU usage, a significant improvement from the Python version, while only requiring 5 threads per GPU, ensuring nearly 100% utilization of all resources. This parallelization strategy is detailed in our asyncio parallelization notes ([README](../asyncio/README.md)), offering insights into achieving optimal performance.
+A notable advantage of the C++ implementation is the efficient utilization of GPU resources. We achieved consistent 100% GPU usage, a significant improvement from the Python version, while only requiring 5 threads per GPU, ensuring nearly 100% utilization of all resources. This parallelization strategy is detailed in our asyncio parallelization notes ([README](asyncio/README.md)), offering insights into achieving optimal performance.
 
 ## **WARNING: This is an old version of the chess framework. A Bug exists somewhere in the C++ translation that fails perft tests. The Chess Framework has been replaced by a new version of the Stockfish chess engine [see here](https://github.com/BertilBraun/Stockfish)**
