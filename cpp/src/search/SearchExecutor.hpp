@@ -529,8 +529,8 @@ private:
         for (RootTask &completedTask : tasks) {
             if (!completedTask.staged_fast_search || !completedTask.admitted ||
                 completedTask.completion_recorded || completedTask.in_flight != 0 ||
-                !completedTask.stopped &&
-                completedTask.root.visits() < completedTask.maximum_visits) {
+                (!completedTask.stopped &&
+                 completedTask.root.visits() < completedTask.maximum_visits)) {
                 continue;
             }
             completedTask.completion_recorded = true;

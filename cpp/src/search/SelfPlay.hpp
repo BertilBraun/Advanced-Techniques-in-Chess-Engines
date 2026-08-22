@@ -191,6 +191,8 @@ public:
                 .root = requests[index].root,
             });
         }
+        // Deliberately sampled from one root per batch: aggregating all roots costs tree walks per search,
+        // and across many workers the sampled series converges to the batch average anyway.
         const SelfPlaySearchStatistics collected =
             collectStatistics ? treeStatistics(results.front().root) : SelfPlaySearchStatistics{};
         return {
