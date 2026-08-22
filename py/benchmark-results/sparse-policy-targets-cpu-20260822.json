@@ -17,7 +17,7 @@
     "sparse_loss": 9.977210623527203,
     "loss_absolute_error": 0.0,
     "logits_gradient_max_absolute_error": 8.673617379884035e-19,
-    "parameter_gradient_max_absolute_error": 1.3010426069826053e-18,
+    "parameter_gradient_max_absolute_error": 1.734723475976807e-18,
     "tolerance": 1e-12,
     "passed": true
   },
@@ -27,74 +27,74 @@
     "sparse_loss": 9.985488891601562,
     "loss_absolute_error": 0.0,
     "logits_gradient_max_absolute_error": 4.656612873077393e-10,
-    "parameter_gradient_max_absolute_error": 9.313225746154785e-10,
+    "parameter_gradient_max_absolute_error": 4.656612873077393e-10,
     "tolerance": 2e-6,
     "passed": true
   },
   "dense_cpu_target_construction": {
-    "median_seconds": 0.014468100038357079,
-    "median_iterations_per_second": 345.58787862568397,
+    "median_seconds": 0.025213600019924343,
+    "median_iterations_per_second": 198.30567614497295,
     "trial_seconds": [
-      0.01269730000058189,
-      0.014798099990002811,
-      0.014468100038357079,
-      0.012015199987217784,
-      0.01449309999588877
+      0.012139300000853837,
+      0.026358500006608665,
+      0.022847299987915903,
+      0.029265100019983947,
+      0.025213600019924343
     ]
   },
   "sparse_cpu_target_construction": {
-    "median_seconds": 0.001623299962375313,
-    "median_iterations_per_second": 3080.145454253378,
+    "median_seconds": 0.001973100006580353,
+    "median_iterations_per_second": 2534.0834135750024,
     "trial_seconds": [
-      0.0021573000121861696,
-      0.0016583999968133867,
-      0.0015952999820001423,
-      0.0012431999784894288,
-      0.001623299962375313
+      0.001624500029720366,
+      0.00135570002021268,
+      0.001973100006580353,
+      0.00391139998100698,
+      0.002280700020492077
     ]
   },
   "dense_loss_forward_backward": {
-    "median_seconds": 0.04945150000276044,
-    "median_iterations_per_second": 101.10916756257937,
+    "median_seconds": 0.1403954999987036,
+    "median_iterations_per_second": 35.61367707687333,
     "trial_seconds": [
-      0.06204769999021664,
-      0.045580799982417375,
-      0.06709419999970123,
-      0.04651319998083636,
-      0.04945150000276044
+      0.07018360000802204,
+      0.06639459996949881,
+      0.1491684999782592,
+      0.1403954999987036,
+      0.1438328999793157
     ]
   },
   "sparse_loss_forward_backward": {
-    "median_seconds": 0.0332289999932982,
-    "median_iterations_per_second": 150.47097417943442,
+    "median_seconds": 0.08100549998925999,
+    "median_iterations_per_second": 61.72420392026367,
     "trial_seconds": [
-      0.0332289999932982,
-      0.03000989998690784,
-      0.03592919994844124,
-      0.02904679998755455,
-      0.0385157999699004
+      0.03887599997688085,
+      0.04217059997608885,
+      0.08725049998611212,
+      0.08100549998925999,
+      0.09219769999617711
     ]
   },
   "dense_total_iteration": {
-    "median_seconds": 0.07498999999370426,
-    "median_iterations_per_second": 66.6755567464965,
+    "median_seconds": 0.16268990002572536,
+    "median_iterations_per_second": 30.73331533923971,
     "trial_seconds": [
-      0.10344790003728122,
-      0.056328199978452176,
-      0.07516780000878498,
-      0.056987499992828816,
-      0.07498999999370426
+      0.06569479999598116,
+      0.07673810003325343,
+      0.18762599996989593,
+      0.16268990002572536,
+      0.21443490003002807
     ]
   },
   "sparse_total_iteration": {
-    "median_seconds": 0.03521939995698631,
-    "median_iterations_per_second": 141.96721142627456,
+    "median_seconds": 0.09324919997015968,
+    "median_iterations_per_second": 53.61976297491057,
     "trial_seconds": [
-      0.039180400024633855,
-      0.027281899994704872,
-      0.03521939995698631,
-      0.03330070001538843,
-      0.03823910001665354
+      0.037458800012245774,
+      0.035963499976787716,
+      0.12281299999449402,
+      0.09324919997015968,
+      0.10642240004381165
     ]
   },
   "dense_host_target_bytes": 5427840,

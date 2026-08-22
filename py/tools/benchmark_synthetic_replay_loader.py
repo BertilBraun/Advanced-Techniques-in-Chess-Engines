@@ -20,6 +20,7 @@ from src.games.representation import (
     decode_packed_planes,
 )
 from src.replay.batch_loader import build_dense_targets, build_training_batch, decode_states
+from src.replay.columnar import ReplayColumnViews
 from src.replay.contracts import (
     EligibleLegalMovesTarget,
     EligibleNextPolicyTarget,
@@ -64,8 +65,10 @@ class SyntheticReplayBenchmarkReport(FrozenModel):
     python_version: str
     torch_version: str
     cpu: str
-    store_rows: int
-    logical_rows: int
+    appended_rows: int
+    maximum_capacity: int
+    logical_capacity: int
+    live_rows: int
     batch_size: int
     iterations_per_trial: int
     repeats: int
@@ -415,6 +418,67 @@ def _timing(trials: list[float], rows: int) -> BenchmarkTiming:
     )
 
 
+def _consume_physical_maps(
+    store: ReplayStore,
+    plans: tuple[tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]], ...],
+) -> None:
+    for indices, _ in plans:
+        store.logical_to_physical(indices)
+
+
+def _consume_gathers(
+    store: ReplayStore,
+    physical: tuple[npt.NDArray[np.int64], ...],
+) -> None:
+    for indices in physical:
+        store.gather_physical(indices)
+
+
+def _consume_decodes(
+    gathered: tuple[ReplayColumnViews, ...],
+    state: _SyntheticChessState,
+) -> None:
+    for columns in gathered:
+        decode_states(columns.encoded_state, state)
+
+
+def _consume_augmentations(
+    decoded: tuple[npt.NDArray[np.float32], ...],
+    plans: tuple[tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]], ...],
+    state: _SyntheticChessState,
+) -> None:
+    for values, (_, augmentations) in zip(decoded, plans, strict=True):
+        state.transform_decoded_states(values, augmentations)
+
+
+def _consume_dense_targets(
+    gathered: tuple[ReplayColumnViews, ...],
+    plans: tuple[tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]], ...],
+    store: ReplayStore,
+    state: _SyntheticChessState,
+) -> None:
+    for columns, (_, augmentations) in zip(gathered, plans, strict=True):
+        build_dense_targets(columns, store.layout, state, augmentations)
+
+
+def _consume_reference_batches(
+    store: ReplayStore,
+    state: _SyntheticChessState,
+    plans: tuple[tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]], ...],
+) -> None:
+    for plan in plans:
+        _object_reference_batch(store, state, *plan)
+
+
+def _consume_vectorized_batches(
+    store: ReplayStore,
+    state: _SyntheticChessState,
+    plans: tuple[tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]], ...],
+) -> None:
+    for plan in plans:
+        build_training_batch(store, state, *plan)
+
+
 def run_benchmark(
     output: Path,
     maximum_rows: int = 1_024,
@@ -452,35 +516,14 @@ def run_benchmark(
             }
             for trial in range(repeats):
                 trial_values['index'].append(_elapsed(lambda: _plans(seed, iterations, store.state.size, batch_size)))
-                trial_values['physical'].append(
-                    _elapsed(lambda: tuple(store.logical_to_physical(indices) for indices, _ in plans))
-                )
-                trial_values['gather'].append(
-                    _elapsed(lambda: tuple(store.gather_physical(indices) for indices in physical))
-                )
-                trial_values['decode'].append(
-                    _elapsed(lambda: tuple(decode_states(columns.encoded_state, state) for columns in gathered))
-                )
-                augmented = tuple(values.copy() for values in decoded)
-                trial_values['augmentation'].append(
-                    _elapsed(
-                        lambda: tuple(
-                            state.transform_decoded_states(values, augmentations)
-                            for values, (_, augmentations) in zip(augmented, plans, strict=True)
-                        )
-                    )
-                )
-                trial_values['dense'].append(
-                    _elapsed(
-                        lambda: tuple(
-                            build_dense_targets(columns, store.layout, state, augmentations)
-                            for columns, (_, augmentations) in zip(gathered, plans, strict=True)
-                        )
-                    )
-                )
+                trial_values['physical'].append(_elapsed(lambda: _consume_physical_maps(store, plans)))
+                trial_values['gather'].append(_elapsed(lambda: _consume_gathers(store, physical)))
+                trial_values['decode'].append(_elapsed(lambda: _consume_decodes(gathered, state)))
+                trial_values['augmentation'].append(_elapsed(lambda: _consume_augmentations(decoded, plans, state)))
+                trial_values['dense'].append(_elapsed(lambda: _consume_dense_targets(gathered, plans, store, state)))
                 builders = (
-                    ('reference', lambda: tuple(_object_reference_batch(store, state, *plan) for plan in plans)),
-                    ('vectorized', lambda: tuple(build_training_batch(store, state, *plan) for plan in plans)),
+                    ('reference', lambda: _consume_reference_batches(store, state, plans)),
+                    ('vectorized', lambda: _consume_vectorized_batches(store, state, plans)),
                 )
                 if trial % 2:
                     builders = tuple(reversed(builders))
@@ -496,8 +539,10 @@ def run_benchmark(
         python_version=platform.python_version(),
         torch_version=str(torch.__version__),
         cpu=platform.processor() or platform.machine(),
-        store_rows=maximum_rows + maximum_rows // 4,
-        logical_rows=logical_rows,
+        appended_rows=maximum_rows + maximum_rows // 4,
+        maximum_capacity=maximum_rows,
+        logical_capacity=logical_rows,
+        live_rows=logical_rows,
         batch_size=batch_size,
         iterations_per_trial=iterations,
         repeats=repeats,

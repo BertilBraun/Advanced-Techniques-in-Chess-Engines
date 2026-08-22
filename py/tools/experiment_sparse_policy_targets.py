@@ -379,7 +379,9 @@ def _gradient_equivalence(raw: RawPolicyBatch, dtype: torch.dtype, tolerance: fl
 
     feature_count = 11
     features = torch.randn((len(raw.primary_entry_count), feature_count), generator=generator, dtype=dtype)
-    dense_model = _TwoPolicyHeads(feature_count, dtype)
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(901)
+        dense_model = _TwoPolicyHeads(feature_count, dtype)
     sparse_model = copy.deepcopy(dense_model)
     dense_output = dense_model(features)
     sparse_output = sparse_model(features)
@@ -457,6 +459,11 @@ def _timing(trials: list[float], iterations: int) -> Timing:
     )
 
 
+def _repeat(operation: Callable[[], object], iterations: int) -> None:
+    for _ in range(iterations):
+        operation()
+
+
 def _dense_backward(logits: tuple[torch.Tensor, torch.Tensor], batch: TorchDensePolicyBatch) -> float:
     primary = logits[0].clone().requires_grad_(True)
     next_policy = logits[1].clone().requires_grad_(True)
@@ -511,12 +518,12 @@ def run_experiment(
     _sparse_backward(logits, sparse_torch)
     for trial in range(repeats):
         operations: tuple[tuple[str, Callable[[], object]], ...] = (
-            ('dense_build', lambda: tuple(build_dense_policy_batch(raw) for _ in range(iterations))),
-            ('sparse_build', lambda: tuple(build_sparse_policy_batch(raw) for _ in range(iterations))),
-            ('dense_loss', lambda: tuple(_dense_backward(logits, dense_torch) for _ in range(iterations))),
-            ('sparse_loss', lambda: tuple(_sparse_backward(logits, sparse_torch) for _ in range(iterations))),
-            ('dense_total', lambda: tuple(_dense_total(raw, logits) for _ in range(iterations))),
-            ('sparse_total', lambda: tuple(_sparse_total(raw, logits) for _ in range(iterations))),
+            ('dense_build', lambda: _repeat(lambda: build_dense_policy_batch(raw), iterations)),
+            ('sparse_build', lambda: _repeat(lambda: build_sparse_policy_batch(raw), iterations)),
+            ('dense_loss', lambda: _repeat(lambda: _dense_backward(logits, dense_torch), iterations)),
+            ('sparse_loss', lambda: _repeat(lambda: _sparse_backward(logits, sparse_torch), iterations)),
+            ('dense_total', lambda: _repeat(lambda: _dense_total(raw, logits), iterations)),
+            ('sparse_total', lambda: _repeat(lambda: _sparse_total(raw, logits), iterations)),
         )
         if trial % 2:
             operations = tuple(reversed(operations))

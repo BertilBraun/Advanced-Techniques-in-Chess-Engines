@@ -23,6 +23,10 @@ def test_synthetic_replay_benchmark_is_bounded_exact_and_writes_report(tmp_path:
     assert report.exact_equivalence
     assert report.wrapped_store
     assert report.duplicate_indices_per_batch
+    assert report.appended_rows == 40
+    assert report.maximum_capacity == 32
+    assert report.logical_capacity == 24
+    assert report.live_rows == 24
     assert report.measured_rows_per_trial == 16
     assert report.semantic_checksum
     assert report.full_object_reference.median_seconds > 0.0
