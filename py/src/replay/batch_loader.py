@@ -149,6 +149,7 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
         self._pending_batches: deque[Future[_PrefetchedBatch]] = deque(
             self._executor.submit(self._prepare_next) for _ in range(depth)
         )
+        self._active_batch: _PrefetchedBatch | None = None
 
     @property
     def closed(self) -> bool:
@@ -164,13 +165,22 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
         try:
             prefetched = next_batch.result()
         except StopIteration:
-            self.close()
+            try:
+                self.close()
+            except BaseException as error:
+                raise RuntimeError('Replay batch prefetch failed during cleanup.') from error
             raise StopIteration from None
         except BaseException as error:
-            self.close()
+            self._close_ignoring_errors()
             raise RuntimeError('Replay batch prefetch failed.') from error
-        self._pending_batches.append(self._executor.submit(self._prepare_next))
-        self._synchronize_transfer(prefetched)
+        self._active_batch = prefetched
+        try:
+            self._pending_batches.append(self._executor.submit(self._prepare_next))
+            self._synchronize_transfer(prefetched)
+        except BaseException as error:
+            self._close_ignoring_errors()
+            raise RuntimeError('Replay batch prefetch failed.') from error
+        self._active_batch = None
         return prefetched.device_batch
 
     def __enter__(self) -> PrefetchedReplayBatches:
@@ -182,16 +192,31 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
         exception: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        self.close()
+        if exception is None:
+            self.close()
+        else:
+            self._close_ignoring_errors()
 
     def close(self) -> None:
         if self._closed:
             return
+        self._closed = True
+        cleanup_errors: list[BaseException] = []
+        active_batch = self._active_batch
+        self._active_batch = None
         pending_batches = tuple(self._pending_batches)
         self._pending_batches.clear()
         for pending_batch in pending_batches:
             pending_batch.cancel()
-        self._executor.shutdown(wait=True, cancel_futures=True)
+        try:
+            self._executor.shutdown(wait=True, cancel_futures=True)
+        except BaseException as error:
+            cleanup_errors.append(error)
+        if active_batch is not None:
+            try:
+                self._synchronize_transfer(active_batch)
+            except BaseException as error:
+                cleanup_errors.append(error)
         for pending_batch in pending_batches:
             if pending_batch.cancelled():
                 continue
@@ -200,9 +225,22 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
             except BaseException:
                 pass
             else:
-                self._synchronize_transfer(prefetched)
-        self._prepared_batches.close()
-        self._closed = True
+                try:
+                    self._synchronize_transfer(prefetched)
+                except BaseException as error:
+                    cleanup_errors.append(error)
+        try:
+            self._prepared_batches.close()
+        except BaseException as error:
+            cleanup_errors.append(error)
+        if cleanup_errors:
+            raise RuntimeError('Replay batch prefetch cleanup failed.') from cleanup_errors[0]
+
+    def _close_ignoring_errors(self) -> None:
+        try:
+            self.close()
+        except BaseException:
+            pass
 
     def _prepare_next(self) -> _PrefetchedBatch:
         host_batch = next(self._prepared_batches)

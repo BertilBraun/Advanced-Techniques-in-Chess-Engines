@@ -62,6 +62,7 @@ class TestbedReport(FrozenModel):
     holdout_store: Path
     holdout_rows: int
     batch_size: int
+    replay_prefetch_depth: int
     maximum_optimizer_steps: int
     time_budget_seconds: float
     random_seed: int
@@ -84,6 +85,7 @@ class Arguments:
     cells: tuple[str, ...]
     device_id: int
     batch_size: int
+    replay_prefetch_depth: int
     holdout_rows: int
     report_interval: int
     maximum_optimizer_steps: int
@@ -182,7 +184,7 @@ def run_cell(
     torch.cuda.synchronize(device)
     started_at = time.perf_counter()
     completed_steps = 0
-    with loader.prefetch(device, uses_cuda=True, depth=4) as batches:
+    with loader.prefetch(device, uses_cuda=True, depth=arguments.replay_prefetch_depth) as batches:
         for batch in batches:
             step = completed_steps + 1
             warmup_scale = min(1.0, step / cell.warmup_optimizer_steps) if cell.warmup_optimizer_steps else 1.0
@@ -317,6 +319,7 @@ def run_testbed(arguments: Arguments) -> TestbedReport:
         holdout_store=arguments.holdout_store,
         holdout_rows=holdout_rows,
         batch_size=arguments.batch_size,
+        replay_prefetch_depth=arguments.replay_prefetch_depth,
         maximum_optimizer_steps=arguments.maximum_optimizer_steps,
         time_budget_seconds=arguments.time_budget_seconds,
         random_seed=arguments.random_seed,
@@ -335,6 +338,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--cells', required=True, nargs='+')
     parser.add_argument('--device-id', default=0, type=int)
     parser.add_argument('--batch-size', default=2048, type=int)
+    parser.add_argument('--replay-prefetch-depth', choices=(1, 2, 4, 8), default=4, type=int)
     parser.add_argument('--holdout-rows', default=4096, type=int)
     parser.add_argument('--report-interval', default=250, type=int)
     parser.add_argument('--maximum-optimizer-steps', default=4000, type=int)
@@ -349,6 +353,7 @@ def parse_arguments() -> Arguments:
         cells=tuple(namespace.cells),
         device_id=namespace.device_id,
         batch_size=namespace.batch_size,
+        replay_prefetch_depth=namespace.replay_prefetch_depth,
         holdout_rows=namespace.holdout_rows,
         report_interval=namespace.report_interval,
         maximum_optimizer_steps=namespace.maximum_optimizer_steps,
