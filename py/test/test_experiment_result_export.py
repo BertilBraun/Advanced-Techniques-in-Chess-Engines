@@ -26,6 +26,7 @@ from src.experiment_queue.scheduler import create_assignment
 from src.experiment_queue.state import (
     CompletedExperimentStatus,
     ExecutionIdentity,
+    FailedExperimentStatus,
     QueueSummary,
     RunningExperimentStatus,
     write_queue_summary,
@@ -287,3 +288,32 @@ def test_export_rejects_symlink_escape(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match='Symbolic links'):
         export_experiment_results(request)
+
+
+def test_export_degrades_missing_outcome_for_terminated_experiment(tmp_path: Path) -> None:
+    import shutil
+
+    request, run_path, summary_path = _fixture(tmp_path)
+    (run_path / 'run-outcome.json').unlink()
+    shutil.rmtree(run_path / 'evaluations')
+    summary = QueueSummary.model_validate_json(summary_path.read_text(encoding='utf-8'))
+    completed = summary.experiments[0]
+    assert isinstance(completed, CompletedExperimentStatus)
+    failed = FailedExperimentStatus(
+        experiment_id=completed.experiment_id,
+        execution=completed.execution,
+        finished_at=completed.finished_at,
+        exit_code=None,
+        reason='terminated by SIGKILL',
+    )
+    write_queue_summary(summary_path, summary.validated_copy(update={'experiments': (failed,)}))
+
+    manifest = export_experiment_results(request)
+
+    assert manifest.experiments[0].queue_status == 'failed'
+    assert manifest.experiments[0].latest_generation is None
+    assert manifest.experiments[0].evaluation_checkpoint_generations == ()
+    descriptions = {artifact.description for artifact in manifest.missing_optional_artifacts}
+    assert 'No run outcome was recorded before termination.' in descriptions
+    assert 'No evaluations were recorded before termination.' in descriptions
+    assert request.output_path.exists()

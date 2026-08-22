@@ -15,7 +15,7 @@ from src.experiment.configuration import (
     experiment_configuration_source_paths,
     load_experiment_configuration,
 )
-from src.experiment.progress_telemetry import RunOutcome, RunOutcomeStatus
+from src.experiment.progress_telemetry import RunOutcome
 from src.experiment.run import ExperimentRunManifest
 from src.experiment_queue.configuration import QueueConfiguration, load_queue_configuration
 from src.experiment_queue.state import (
@@ -66,7 +66,7 @@ class ExportedExperiment(FrozenModel):
     run_name: str
     queue_status: Literal['completed', 'failed']
     source_revision: str
-    latest_generation: int = Field(ge=0)
+    latest_generation: int | None = Field(ge=0)
     evaluation_checkpoint_generations: tuple[int, ...]
 
 
@@ -255,14 +255,24 @@ def _select_experiment(
         _require_regular_file(manifest_path).read_text(encoding='utf-8')
     )
     resolved_experiment = load_experiment_configuration(_require_regular_file(resolved_path))
-    outcome = RunOutcome.model_validate_json(_require_regular_file(outcome_path).read_text(encoding='utf-8'))
+    outcome: RunOutcome | None
+    if outcome_path.is_file():
+        outcome = RunOutcome.model_validate_json(outcome_path.read_text(encoding='utf-8'))
+    elif status.status == 'failed':
+        # A hard-killed run never reaches its outcome write; export the rest of its evidence anyway.
+        selection.optional_missing(experiment_id, 'No run outcome was recorded before termination.', outcome_path)
+        outcome = None
+    else:
+        raise ValueError(f'Completed experiment {experiment_id!r} is missing its run outcome.')
     _validate_run_identity(experiment_id, experiment, resolved_experiment, run_manifest, outcome)
-    for path, reason in (
+    required_files = [
         (manifest_path, 'run_manifest'),
         (resolved_path, 'resolved_experiment_configuration'),
-        (outcome_path, 'run_outcome'),
         (telemetry_path, 'resource_telemetry'),
-    ):
+    ]
+    if outcome is not None:
+        required_files.append((outcome_path, 'run_outcome'))
+    for path, reason in required_files:
         _require_contained_path(path, run_path)
         selection.add(path, f'{archive_prefix}/run/{path.name}', experiment_id, reason)
 
@@ -278,19 +288,26 @@ def _select_experiment(
         selection.optional_missing(experiment_id, 'No historical run manifests were present.', historical_manifests)
 
     evaluation_path = run_path / 'evaluations'
-    selection.add_tree(evaluation_path, f'{archive_prefix}/run/evaluations', experiment_id, 'evaluation_artifacts')
     reference_path = evaluation_path / 'reference-checkpoints.json'
-    reference_manifest = EvaluationReferenceManifest.model_validate_json(
-        _require_regular_file(reference_path).read_text(encoding='utf-8')
-    )
-    evaluation_generations = tuple(
-        dict.fromkeys(entry.checkpoint.generation for entry in reference_manifest.checkpoints)
-    )
-    if any(generation > outcome.latest_checkpoint_model_version for generation in evaluation_generations):
+    if outcome is None and not reference_path.is_file():
+        selection.optional_missing(experiment_id, 'No evaluations were recorded before termination.', evaluation_path)
+        evaluation_generations: tuple[int, ...] = ()
+        reference_manifest = None
+    else:
+        selection.add_tree(evaluation_path, f'{archive_prefix}/run/evaluations', experiment_id, 'evaluation_artifacts')
+        reference_manifest = EvaluationReferenceManifest.model_validate_json(
+            _require_regular_file(reference_path).read_text(encoding='utf-8')
+        )
+        evaluation_generations = tuple(
+            dict.fromkeys(entry.checkpoint.generation for entry in reference_manifest.checkpoints)
+        )
+    if outcome is not None and any(
+        generation > outcome.latest_checkpoint_model_version for generation in evaluation_generations
+    ):
         raise ValueError(
             f'Evaluation manifest references a checkpoint newer than the run outcome for {experiment_id!r}.'
         )
-    for entry in reference_manifest.checkpoints:
+    for entry in reference_manifest.checkpoints if reference_manifest is not None else ():
         checkpoint_manifest = read_checkpoint_manifest(entry.checkpoint.generation, run_path)
         expected_reference = CheckpointReference.from_manifest(run_path, checkpoint_manifest)
         reference = entry.checkpoint
@@ -308,7 +325,10 @@ def _select_experiment(
             raise ValueError(f'Evaluation checkpoint reference is inconsistent for experiment {experiment_id!r}.')
     for generation in evaluation_generations:
         _add_checkpoint(selection, run_path, experiment_id, generation, include_optimizer=False)
-    _add_checkpoint(selection, run_path, experiment_id, outcome.latest_checkpoint_model_version, include_optimizer=True)
+    if outcome is not None:
+        _add_checkpoint(
+            selection, run_path, experiment_id, outcome.latest_checkpoint_model_version, include_optimizer=True
+        )
 
     resolved_tensorboard_root = _runtime_path(tensorboard_log_root, working_directory)
     tensorboard_path = resolved_tensorboard_root / experiment.run.tensorboard_run_directory
@@ -325,7 +345,7 @@ def _select_experiment(
         run_name=experiment.run.run_name,
         queue_status=status.status,
         source_revision=run_manifest.source_revision,
-        latest_generation=outcome.latest_checkpoint_model_version,
+        latest_generation=None if outcome is None else outcome.latest_checkpoint_model_version,
         evaluation_checkpoint_generations=evaluation_generations,
     )
 
@@ -335,7 +355,7 @@ def _validate_run_identity(
     authored: ExperimentConfiguration,
     resolved: ExperimentConfiguration,
     manifest: ExperimentRunManifest,
-    outcome: RunOutcome,
+    outcome: RunOutcome | None,
 ) -> None:
     if authored != resolved or authored != manifest.experiment:
         raise ValueError(f'Authored, resolved, and manifested configurations disagree for {experiment_id!r}.')
@@ -343,8 +363,6 @@ def _validate_run_identity(
         raise ValueError(f'Run approval configuration hash does not match experiment {experiment_id!r}.')
     if manifest.approval.source_revision != manifest.source_revision:
         raise ValueError(f'Run approval source revision does not match experiment {experiment_id!r}.')
-    if outcome.status not in {RunOutcomeStatus.COMPLETED, RunOutcomeStatus.STOPPED, RunOutcomeStatus.FAILED}:
-        raise ValueError(f'Run outcome is not terminal for experiment {experiment_id!r}.')
 
 
 def _add_checkpoint(
