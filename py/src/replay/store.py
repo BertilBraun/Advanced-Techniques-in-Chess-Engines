@@ -107,20 +107,6 @@ class ReplayStoreState:
 
 
 @dataclass(frozen=True)
-class ReplayAppendPlan:
-    row_count: int
-    transaction_identity: str
-    before: ReplayStoreState
-    after: ReplayStoreState
-
-
-@dataclass(frozen=True)
-class ReplayAppendTransaction:
-    row_count: int
-    transaction_identity: str
-
-
-@dataclass(frozen=True)
 class ReplayPhysicalColumn:
     descriptor: ReplayColumnDescriptor
     offset: int
@@ -185,11 +171,7 @@ class ReplayStore:
 
     @classmethod
     def open(cls, path: Path, layout: ReplayLayout, writable: bool = True) -> ReplayStore:
-        return cls._open(path, layout, writable, validate_fifo=True)
-
-    @classmethod
-    def open_for_recovery(cls, path: Path, layout: ReplayLayout) -> ReplayStore:
-        return cls._open(path, layout, writable=True, validate_fifo=False)
+        return cls._open(path, layout, writable)
 
     @classmethod
     def _open(
@@ -197,7 +179,6 @@ class ReplayStore:
         path: Path,
         layout: ReplayLayout,
         writable: bool,
-        validate_fifo: bool,
     ) -> ReplayStore:
         if not path.is_file():
             raise ValueError(f'Replay store does not exist: {path}')
@@ -224,7 +205,7 @@ class ReplayStore:
             file.close()
             store = cls._map(path, layout, writable=writable, maximum_capacity=maximum_capacity)
             try:
-                store._validate_header(validate_fifo)
+                store._validate_header()
             except BaseException:
                 store._release_mapping()
                 raise
@@ -365,143 +346,28 @@ class ReplayStore:
     ) -> None:
         self._ensure_writable()
         _transaction_bytes(transaction_identity)
-        if transaction_identity and self.state.last_transaction_identity == transaction_identity:
-            if self.state.last_transaction_row_count != columns.row_count:
+        source_arrays = flatten_column_views(self.layout, columns)
+        self._validate_column_arrays(source_arrays, columns.row_count)
+        self._validate_column_semantics(columns)
+        state = self.state
+        if transaction_identity and state.last_transaction_identity == transaction_identity:
+            if state.last_transaction_row_count != columns.row_count:
                 raise ValueError('Committed replay transaction identity has a different row count.')
             return
-        plan = self.plan_append(columns.row_count, transaction_identity)
-        self.apply_append_plan(columns, plan)
-
-    def plan_append(self, row_count: int, transaction_identity: str) -> ReplayAppendPlan:
-        self._ensure_writable()
-        return plan_replay_append_chain(
-            self.state,
-            (ReplayAppendTransaction(row_count=row_count, transaction_identity=transaction_identity),),
-        )[0]
-
-    def apply_append_plan(
-        self,
-        columns: ReplayColumnViews,
-        plan: ReplayAppendPlan,
-    ) -> None:
-        self.apply_append_plan_slices((columns,), plan)
-
-    def apply_append_plan_slices(
-        self,
-        column_slices: tuple[ReplayColumnViews, ...],
-        plan: ReplayAppendPlan,
-    ) -> None:
-        self._ensure_writable()
-        flattened_slices = self._validate_append_plan_slices(column_slices, plan)
-        current = self.state
-        if current == plan.after:
-            return
-        if current != plan.before:
-            raise ValueError('Replay append plan cannot be applied to the current store state.')
-        self._apply_column_slices_for_plan(flattened_slices, plan)
-
-    def reapply_append_plan(
-        self,
-        columns: ReplayColumnViews,
-        plan: ReplayAppendPlan,
-    ) -> None:
-        self.reapply_append_plan_slices((columns,), plan)
-
-    def reapply_append_plan_slices(
-        self,
-        column_slices: tuple[ReplayColumnViews, ...],
-        plan: ReplayAppendPlan,
-    ) -> None:
-        self._ensure_writable()
-        flattened_slices = self._validate_append_plan_slices(column_slices, plan)
-        current = self.state
-        if current != plan.after and not _is_interrupted_append_state(current, plan):
-            raise ValueError('Replay append recovery found an ambiguous store state.')
-        self._apply_column_slices_for_plan(flattened_slices, plan)
-
-    def reapply_append_plan_chain(
-        self,
-        column_slices_by_plan: tuple[tuple[ReplayColumnViews, ...], ...],
-        plans: tuple[ReplayAppendPlan, ...],
-    ) -> None:
-        self._ensure_writable()
-        if len(column_slices_by_plan) != len(plans):
-            raise ValueError('Replay append recovery plan count does not match its column-slice groups.')
-        flattened_by_plan: list[tuple[tuple[ReplayColumnArray, ...], ...]] = []
-        transaction_identities: set[str] = (
-            {plans[0].before.last_transaction_identity}
-            if plans and plans[0].before.last_transaction_identity
-            else set()
-        )
-        for plan_index, (column_slices, plan) in enumerate(zip(column_slices_by_plan, plans, strict=True)):
-            if plan_index and plans[plan_index - 1].after != plan.before:
-                raise ValueError('Replay append recovery plans do not form one linked chain.')
-            if plan.transaction_identity and plan.transaction_identity in transaction_identities:
-                raise ValueError('Replay append recovery transaction identities must be unique.')
-            if plan.transaction_identity:
-                transaction_identities.add(plan.transaction_identity)
-            flattened_by_plan.append(self._validate_append_plan_slices(column_slices, plan))
-        if not plans:
-            return
-        current = self.state
-        boundaries = (plans[0].before, *(plan.after for plan in plans))
-        if current not in boundaries:
-            interrupted_plan_count = sum(_is_interrupted_append_state(current, plan) for plan in plans)
-            if interrupted_plan_count != 1:
-                raise ValueError('Replay append chain recovery found an ambiguous store state.')
-        for flattened_slices, plan in zip(flattened_by_plan, plans, strict=True):
-            self._apply_column_slices_for_plan(flattened_slices, plan)
-
-    def _validate_append_plan_slices(
-        self,
-        column_slices: tuple[ReplayColumnViews, ...],
-        plan: ReplayAppendPlan,
-    ) -> tuple[tuple[ReplayColumnArray, ...], ...]:
-        _validate_planning_state(plan.before)
-        _transaction_bytes(plan.transaction_identity)
-        if plan.row_count != sum(columns.row_count for columns in column_slices):
-            raise ValueError('Replay append plan row count does not match its column slices.')
-        if plan.after != _append_state(plan.before, plan.row_count, plan.transaction_identity):
-            raise ValueError('Replay append plan has an invalid final state.')
-        flattened_slices = []
-        for columns in column_slices:
-            source_arrays = flatten_column_views(self.layout, columns)
-            self._validate_column_arrays(source_arrays, columns.row_count)
-            self._validate_column_semantics(columns)
-            flattened_slices.append(source_arrays)
-        return tuple(flattened_slices)
-
-    def _apply_column_slices_for_plan(
-        self,
-        flattened_slices: tuple[tuple[ReplayColumnArray, ...], ...],
-        plan: ReplayAppendPlan,
-    ) -> None:
-        row_count = plan.row_count
-        state = plan.before
+        row_count = columns.row_count
         write_count = min(row_count, state.logical_capacity)
-        retained_start = row_count - write_count
+        source_start = row_count - write_count
         old_tail = (state.head + state.size) % state.maximum_capacity
-        slice_start = 0
-        for source_arrays in flattened_slices:
-            slice_row_count = len(source_arrays[0].values) if source_arrays else 0
-            slice_end = slice_start + slice_row_count
-            retained_slice_start = max(slice_start, retained_start)
-            if retained_slice_start < slice_end:
-                source_start = retained_slice_start - slice_start
-                copy_count = slice_end - retained_slice_start
-                destination_start = (old_tail + retained_slice_start) % state.maximum_capacity
-                first_count = min(copy_count, state.maximum_capacity - destination_start)
-                for destination, source in zip(self._column_arrays, source_arrays, strict=True):
-                    destination.values[destination_start : destination_start + first_count] = source.values[
-                        source_start : source_start + first_count
-                    ]
-                    second_count = copy_count - first_count
-                    if second_count:
-                        destination.values[:second_count] = source.values[
-                            source_start + first_count : source_start + copy_count
-                        ]
-            slice_start = slice_end
-        self._write_state(plan.after)
+        destination_start = (old_tail + source_start) % state.maximum_capacity
+        first_count = min(write_count, state.maximum_capacity - destination_start)
+        second_count = write_count - first_count
+        for destination, source in zip(self._column_arrays, source_arrays, strict=True):
+            destination.values[destination_start : destination_start + first_count] = source.values[
+                source_start : source_start + first_count
+            ]
+            if second_count:
+                destination.values[:second_count] = source.values[source_start + first_count :]
+        self._write_state(_append_state(state, row_count, transaction_identity))
 
     def logical_to_physical(
         self,
@@ -551,7 +417,7 @@ class ReplayStore:
         self._file.close()
         self._closed = True
 
-    def _validate_header(self, validate_fifo: bool) -> None:
+    def _validate_header(self) -> None:
         header = self._header[0]
         if bytes(header['magic']) != _REPLAY_MAGIC:
             raise ValueError('Replay store magic is invalid.')
@@ -574,20 +440,19 @@ class ReplayStore:
         state = self.state
         self._validate_capacities(state.maximum_capacity, state.logical_capacity)
         self._validate_descriptor_table(state.maximum_capacity)
-        if validate_fifo:
-            if not 0 <= state.head < state.maximum_capacity or not 0 <= state.size <= state.logical_capacity:
-                raise ValueError('Replay store FIFO header is invalid.')
-            if state.evicted_rows + state.size != state.total_appended_rows:
-                raise ValueError('Replay store append counters are invalid.')
-            if state.last_transaction_row_count > state.total_appended_rows or (
-                state.append_sequence == 0
-                and (
-                    state.total_appended_rows != 0
-                    or state.last_transaction_identity
-                    or state.last_transaction_row_count != 0
-                )
-            ):
-                raise ValueError('Replay store transaction counters are invalid.')
+        if not 0 <= state.head < state.maximum_capacity or not 0 <= state.size <= state.logical_capacity:
+            raise ValueError('Replay store FIFO header is invalid.')
+        if state.evicted_rows + state.size != state.total_appended_rows:
+            raise ValueError('Replay store append counters are invalid.')
+        if state.last_transaction_row_count > state.total_appended_rows or (
+            state.append_sequence == 0
+            and (
+                state.total_appended_rows != 0
+                or state.last_transaction_identity
+                or state.last_transaction_row_count != 0
+            )
+        ):
+            raise ValueError('Replay store transaction counters are invalid.')
         expected_size = self.projected_file_size(self.layout, state.maximum_capacity)
         if self.path.stat().st_size != expected_size:
             raise ValueError('Replay store file size does not match its header and layout.')
@@ -766,55 +631,6 @@ def _column_views_from_rows(layout: ReplayLayout, rows: npt.NDArray[np.void]) ->
     return build_column_views(layout, arrays)
 
 
-def plan_replay_append_chain(
-    starting_state: ReplayStoreState,
-    transactions: tuple[ReplayAppendTransaction, ...],
-) -> tuple[ReplayAppendPlan, ...]:
-    _validate_planning_state(starting_state)
-    identities = {starting_state.last_transaction_identity} if starting_state.last_transaction_identity else set()
-    plans = []
-    before = starting_state
-    for transaction in transactions:
-        if transaction.row_count < 0:
-            raise ValueError('Replay append row count must be nonnegative.')
-        _transaction_bytes(transaction.transaction_identity)
-        if transaction.transaction_identity and transaction.transaction_identity in identities:
-            raise ValueError('Replay append transaction identity is already present in the chain.')
-        after = _append_state(before, transaction.row_count, transaction.transaction_identity)
-        plans.append(
-            ReplayAppendPlan(
-                row_count=transaction.row_count,
-                transaction_identity=transaction.transaction_identity,
-                before=before,
-                after=after,
-            )
-        )
-        if transaction.transaction_identity:
-            identities.add(transaction.transaction_identity)
-        before = after
-    return tuple(plans)
-
-
-def _validate_planning_state(state: ReplayStoreState) -> None:
-    if state.maximum_capacity <= 0:
-        raise ValueError('Replay maximum capacity must be positive.')
-    if not 1 <= state.logical_capacity <= state.maximum_capacity:
-        raise ValueError('Replay logical capacity must lie within its maximum capacity.')
-    if not 0 <= state.head < state.maximum_capacity or not 0 <= state.size <= state.logical_capacity:
-        raise ValueError('Replay starting FIFO state is invalid.')
-    if state.evicted_rows < 0 or state.total_appended_rows < 0 or state.append_sequence < 0:
-        raise ValueError('Replay starting counters must be nonnegative.')
-    if state.evicted_rows + state.size != state.total_appended_rows:
-        raise ValueError('Replay starting append counters are invalid.')
-    _transaction_bytes(state.last_transaction_identity)
-    if state.last_transaction_row_count < 0 or state.last_transaction_row_count > state.total_appended_rows:
-        raise ValueError('Replay starting transaction counters are invalid.')
-    if state.append_sequence == 0 and (
-        state.total_appended_rows != 0 or state.last_transaction_identity or state.last_transaction_row_count != 0
-    ):
-        raise ValueError('Replay starting transaction counters are invalid.')
-
-
 def _append_state(
     before: ReplayStoreState,
     row_count: int,
@@ -831,22 +647,6 @@ def _append_state(
         append_sequence=before.append_sequence + 1,
         last_transaction_identity=transaction_identity,
         last_transaction_row_count=row_count,
-    )
-
-
-def _is_interrupted_append_state(current: ReplayStoreState, plan: ReplayAppendPlan) -> bool:
-    before = plan.before
-    after = plan.after
-    return (
-        current.maximum_capacity == before.maximum_capacity
-        and current.logical_capacity == before.logical_capacity
-        and current.head in {before.head, after.head}
-        and current.size in {before.size, after.size}
-        and current.evicted_rows in {before.evicted_rows, after.evicted_rows}
-        and current.total_appended_rows in {before.total_appended_rows, after.total_appended_rows}
-        and current.append_sequence in {before.append_sequence, after.append_sequence}
-        and current.last_transaction_identity in {before.last_transaction_identity, after.last_transaction_identity}
-        and current.last_transaction_row_count in {before.last_transaction_row_count, after.last_transaction_row_count}
     )
 
 
