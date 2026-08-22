@@ -53,6 +53,10 @@ durable ingestion receipt is written. Only then are shard files, leftover matchi
 append manifest removed. Startup repeats any incomplete suffix safely. Capacity changes persist a queue-owned resize
 record so evictions remain attributable across a crash between resize and append.
 
+Schema 4 is intentionally incompatible with earlier replay files. Resuming an older run requires the blocked,
+offline-only [schema-4 migration procedure](../operations/replay-schema4-migration.md); it must never be attempted
+against a running experiment.
+
 Credits are reconciled from the absolute durable total: committed store rows plus unique sealed uncommitted shard
 rows. Completion callbacks never add row deltas. Reporting receipts are deduplicated by identity, replayed after
 restart, and acknowledged only after training reporting succeeds.
@@ -83,4 +87,3 @@ end-to-end performance evidence.
 - Rows, append sequences, credits, resignation evidence, and reporting receipts cannot be duplicated or lost.
 - Chess and Go share the representation and lifecycle; game contracts own only representation-specific transforms.
 - The eight-rank DDP topology, self-play worker count, and training pause topology are unchanged.
-
