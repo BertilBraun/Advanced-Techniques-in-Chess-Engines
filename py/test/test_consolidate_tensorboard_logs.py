@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -8,10 +9,18 @@ from tensorboard.summary.writer.event_file_writer import EventFileWriter
 from tensorboardX import SummaryWriter
 
 from tools.consolidate_tensorboard_logs import (
+    ConsolidationOptions,
     TensorboardLogConsolidator,
     TensorboardSourceSegment,
     consolidate_once,
 )
+
+
+def single_source_options(source_root: Path, output_root: Path) -> ConsolidationOptions:
+    return ConsolidationOptions(
+        source_segments=(TensorboardSourceSegment(source_root=source_root),),
+        output_root=output_root,
+    )
 
 
 def write_scalar(log_directory: Path, tag: str, step: int, value: float, wall_time: float) -> None:
@@ -48,7 +57,7 @@ def test_consolidation_merges_run_fragments_and_keeps_newest_duplicate(tmp_path:
     write_scalar(source_root / 'run_1' / 'trainer', 'training/loss', 4, 1.5, wall_time=20.0)
     write_scalar(source_root / 'run_1' / 'trainer', 'training/loss', 5, 1.0, wall_time=21.0)
 
-    manifest = consolidate_once(source_root, output_root)
+    manifest = consolidate_once(single_source_options(source_root, output_root))
 
     assert scalar_values(output_root, 'training/loss') == (1.5, 1.0)
     assert manifest.unique_summary_count == 2
@@ -77,10 +86,11 @@ def test_consolidation_accepts_one_run_directory_as_source(tmp_path: Path) -> No
     )
 
     manifest = consolidate_once(
-        source_run_directory,
-        output_root,
-        time_series_view=True,
-        single_run_source=True,
+        replace(
+            single_source_options(source_run_directory, output_root),
+            time_series_view=True,
+            single_run_source=True,
+        )
     )
 
     for series_name, expected_value in (('wins', 20.0), ('draws', 70.0), ('losses', 10.0)):
@@ -114,14 +124,15 @@ def test_consolidation_stitches_run_segments_at_wall_time_boundary(tmp_path: Pat
     )
 
     manifest = consolidate_once(
-        None,
-        output_root,
-        single_run_source=True,
-        preserve_source_layout=True,
-        source_segments=(
-            TensorboardSourceSegment(first_source, maximum_wall_time=20.0),
-            TensorboardSourceSegment(second_source, minimum_wall_time=20.0, evaluation_step_offset=55_200),
-        ),
+        ConsolidationOptions(
+            source_segments=(
+                TensorboardSourceSegment(first_source, maximum_wall_time=20.0),
+                TensorboardSourceSegment(second_source, minimum_wall_time=20.0, evaluation_step_offset=55_200),
+            ),
+            output_root=output_root,
+            single_run_source=True,
+            preserve_source_layout=True,
+        )
     )
 
     assert scalar_values(output_root / 'coordinator', 'training/loss') == pytest.approx((1.5, 1.4, 1.3))
@@ -159,10 +170,11 @@ def test_evaluation_outcome_overlays_preserve_other_summaries_in_root_run(tmp_pa
     )
 
     consolidate_once(
-        source_run_directory,
-        output_root,
-        single_run_source=True,
-        evaluation_outcome_overlays=True,
+        replace(
+            single_source_options(source_run_directory, output_root),
+            single_run_source=True,
+            evaluation_outcome_overlays=True,
+        )
     )
 
     assert scalar_values(output_root, 'coordinator/training/total_loss') == (2.0,)
@@ -193,11 +205,12 @@ def test_preserved_source_layout_keeps_original_groups_and_colored_runs(tmp_path
         )
 
     consolidate_once(
-        source_run_directory,
-        output_root,
-        single_run_source=True,
-        evaluation_outcome_overlays=True,
-        preserve_source_layout=True,
+        replace(
+            single_source_options(source_run_directory, output_root),
+            single_run_source=True,
+            evaluation_outcome_overlays=True,
+            preserve_source_layout=True,
+        )
     )
 
     assert scalar_values(output_root / 'coordinator', 'credit/available_presentations') == (10.0,)
@@ -233,7 +246,7 @@ def test_consolidation_selects_one_self_play_process_per_fragment(tmp_path: Path
         wall_time=20.0,
     )
 
-    manifest = consolidate_once(source_root, output_root)
+    manifest = consolidate_once(single_source_options(source_root, output_root))
 
     assert scalar_values(output_root, 'self_play/mcts/average_search_depth') == (4.0, 5.0)
     assert manifest.skipped_self_play_event_file_count == 1
@@ -258,7 +271,7 @@ def test_consolidation_namespaces_usage_metrics(tmp_path: Path) -> None:
         wall_time=10.0,
     )
 
-    consolidate_once(source_root, output_root)
+    consolidate_once(single_source_options(source_root, output_root))
 
     assert scalar_values(output_root, 'system/cpu_trainer/usage/cpu_percent') == (50.0,)
     assert scalar_values(output_root, 'system/cpu_self_play/usage/cpu_percent') == (30.0,)
@@ -282,7 +295,7 @@ def test_consolidation_preserves_add_scalars_child_series(tmp_path: Path) -> Non
         wall_time=10.0,
     )
 
-    consolidate_once(source_root, output_root)
+    consolidate_once(single_source_options(source_root, output_root))
 
     assert scalar_values(output_root, 'evaluation/policy_accuracy/1') == pytest.approx((0.2,))
     assert scalar_values(output_root, 'evaluation/policy_accuracy/5') == pytest.approx((0.6,))
@@ -295,7 +308,7 @@ def test_consolidation_preserves_evaluation_boundary_summary(tmp_path: Path) -> 
     writer.add_text('evaluation/summaries', '| Evaluation | Score |', global_step=1_200)
     writer.close()
 
-    manifest = consolidate_once(source_root, output_root)
+    manifest = consolidate_once(single_source_options(source_root, output_root))
 
     accumulator = EventAccumulator(str(output_root))
     accumulator.Reload()
@@ -335,7 +348,7 @@ def test_custom_scalar_layout_groups_discovered_evaluation_definitions(tmp_path:
         wall_time=10.0,
     )
 
-    consolidate_once(source_root, output_root)
+    consolidate_once(single_source_options(source_root, output_root))
 
     layout = custom_scalar_layout(output_root)
     match_category = next(category for category in layout.category if category.title == 'Evaluation matches')
@@ -383,7 +396,7 @@ def test_custom_scalar_layout_compacts_discovered_fixed_dataset_metrics(tmp_path
         wall_time=10.0,
     )
 
-    consolidate_once(source_root, output_root)
+    consolidate_once(single_source_options(source_root, output_root))
 
     layout = custom_scalar_layout(output_root)
     dataset_category = next(category for category in layout.category if category.title == 'Evaluation datasets')
@@ -405,7 +418,7 @@ def test_watched_consolidation_updates_layout_for_new_definition(tmp_path: Path)
         80.0,
         wall_time=10.0,
     )
-    consolidator = TensorboardLogConsolidator(source_root, output_root)
+    consolidator = TensorboardLogConsolidator(single_source_options(source_root, output_root))
     try:
         consolidator.scan()
         write_scalar(
@@ -444,7 +457,7 @@ def test_time_series_view_overlays_evaluation_series_as_colored_runs(tmp_path: P
             wall_time=10.0,
         )
 
-    consolidate_once(source_root, output_root, time_series_view=True)
+    consolidate_once(replace(single_source_options(source_root, output_root), time_series_view=True))
 
     for series_name, expected_value in (('wins', 20.0), ('draws', 70.0), ('losses', 10.0), ('score', 55.0)):
         run_directory = output_root / 'evaluation' / 'vs_stockfish_level_0' / series_name
@@ -462,7 +475,7 @@ def test_time_series_view_gives_standalone_metrics_semantic_colored_runs(tmp_pat
         wall_time=10.0,
     )
 
-    consolidate_once(source_root, output_root, time_series_view=True)
+    consolidate_once(replace(single_source_options(source_root, output_root), time_series_view=True))
 
     run_directory = output_root / 'system' / 'gpu' / 'gpu' / '0' / 'load'
     assert scalar_values(run_directory, 'system/gpu/gpu/0/load') == (75.0,)
