@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from math import isfinite
 from types import MappingProxyType
 
+from src.evaluation.contracts import CandidateOutcome, EvaluationGameResult, EvaluationTerminationReason
+
 # Agreed Melonimarco SSDF-scale anchors for the Stockfish 13 fixed-node rungs
 # (chess-recovery-plan-20260820.md, section 0). Extend only with calibrated rungs.
 STOCKFISH_FIXED_NODES_ANCHOR_ELO = MappingProxyType(
@@ -13,6 +15,14 @@ STOCKFISH_FIXED_NODES_ANCHOR_ELO = MappingProxyType(
         100: 1200.0,
         300: 1400.0,
         1000: 1700.0,
+    }
+)
+
+_OUTCOME_SCORE = MappingProxyType(
+    {
+        CandidateOutcome.WIN: 1.0,
+        CandidateOutcome.DRAW: 0.5,
+        CandidateOutcome.LOSS: 0.0,
     }
 )
 
@@ -48,6 +58,24 @@ class LadderRungPairScores:
             raise ValueError('Ladder rung pair scores must be nonempty.')
         if any(not 0.0 <= score <= 1.0 for score in self.pair_scores):
             raise ValueError('Ladder pair scores must lie in [0, 1].')
+
+
+def ladder_rung_observation(
+    anchor_elo: float,
+    games: tuple[EvaluationGameResult, ...],
+) -> LadderRungObservation | None:
+    # Ply-cap adjudications are draw artifacts, not strength evidence; a rung
+    # without any naturally finished game carries no ladder signal.
+    rated_games = tuple(
+        game for game in games if game.termination_reason is not EvaluationTerminationReason.MAXIMUM_PLIES
+    )
+    if not rated_games:
+        return None
+    return LadderRungObservation(
+        anchor_elo=anchor_elo,
+        score=sum(_OUTCOME_SCORE[game.outcome] for game in rated_games) / len(rated_games),
+        game_count=len(rated_games),
+    )
 
 
 def fit_ladder_elo(observations: tuple[LadderRungObservation, ...]) -> float:

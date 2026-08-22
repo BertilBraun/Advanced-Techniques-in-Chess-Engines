@@ -11,6 +11,13 @@ stockfish_archive_name="stockfish-ubuntu-x86-64.tar"
 stockfish_archive_url="${ENGINE_STOCKFISH_ARCHIVE_URL:-https://github.com/official-stockfish/Stockfish/releases/download/sf_18/${stockfish_archive_name}}"
 stockfish_archive_sha256="${ENGINE_STOCKFISH_ARCHIVE_SHA256:-5c6f38b02a4da5f3ffe763f27da6c3e743eebefd92b50cb3661623b96696adff}"
 
+# The sf_13 GitHub release ships no binary assets; the official stockfishchess.org download of that era
+# survives only in the Web Archive. The pinned sha256 is the integrity anchor, not the host.
+stockfish13_version="13"
+stockfish13_archive_name="stockfish_13_linux_x64_bmi2.zip"
+stockfish13_archive_url="${ENGINE_STOCKFISH13_ARCHIVE_URL:-https://web.archive.org/web/20210422110408id_/https://stockfishchess.org/files/${stockfish13_archive_name}}"
+stockfish13_archive_sha256="${ENGINE_STOCKFISH13_ARCHIVE_SHA256:-7b6a46564c71745ac64b546fa9b8ce8c726d8b6f754f3bc8a1eebe2f1ce7e5a8}"
+
 katago_version="1.17.1"
 default_katago_backend="cuda12.8-cudnn9.8.0"
 default_katago_archive_name="katago-v${katago_version}-${default_katago_backend}-linux-x64.zip"
@@ -67,21 +74,29 @@ download_verified() {
 }
 
 stockfish_archive="${temporary_directory}/${stockfish_archive_name}"
+stockfish13_archive="${temporary_directory}/${stockfish13_archive_name}"
 katago_archive="${temporary_directory}/katago.zip"
 katago_model="${temporary_directory}/${katago_model_name}"
 
 download_verified "${stockfish_archive_url}" "${stockfish_archive_sha256}" "${stockfish_archive}"
+download_verified "${stockfish13_archive_url}" "${stockfish13_archive_sha256}" "${stockfish13_archive}"
 download_verified "${katago_archive_url}" "${katago_archive_sha256}" "${katago_archive}"
 download_verified "${katago_model_url}" "${katago_model_sha256}" "${katago_model}"
 
-mkdir -p "${temporary_directory}/stockfish" "${temporary_directory}/katago"
+mkdir -p "${temporary_directory}/stockfish" "${temporary_directory}/stockfish13" "${temporary_directory}/katago"
 tar -xf "${stockfish_archive}" -C "${temporary_directory}/stockfish"
+unzip -q "${stockfish13_archive}" -d "${temporary_directory}/stockfish13"
 unzip -q "${katago_archive}" -d "${temporary_directory}/katago"
 
 stockfish_executable="${temporary_directory}/stockfish/stockfish/stockfish-ubuntu-x86-64"
+stockfish13_executable="${temporary_directory}/stockfish13/stockfish_13_linux_x64_bmi2/stockfish_13_linux_x64_bmi2"
 katago_executable="${temporary_directory}/katago/katago"
 if [[ ! -f "${stockfish_executable}" ]]; then
     echo "Pinned Stockfish archive did not contain the expected executable." >&2
+    exit 1
+fi
+if [[ ! -f "${stockfish13_executable}" ]]; then
+    echo "Pinned Stockfish 13 archive did not contain the expected executable." >&2
     exit 1
 fi
 if [[ ! -f "${katago_executable}" ]]; then
@@ -100,17 +115,20 @@ fi
 
 mkdir -p "${engine_directory}/upstream"
 mv "${temporary_directory}/stockfish/stockfish" "${engine_directory}/upstream/stockfish-${stockfish_version}"
+mv "${temporary_directory}/stockfish13/stockfish_13_linux_x64_bmi2" "${engine_directory}/upstream/stockfish-${stockfish13_version}"
 mv "${temporary_directory}/katago" "${engine_directory}/upstream/katago-${katago_version}-${katago_backend}"
 mv "${katago_model}" "${engine_directory}/${katago_model_name}"
 cp "${script_directory}/katago-analysis.cfg" "${engine_directory}/katago-analysis.cfg"
 
 ln -s "upstream/stockfish-${stockfish_version}/stockfish-ubuntu-x86-64" "${engine_directory}/stockfish"
+ln -s "upstream/stockfish-${stockfish13_version}/stockfish_13_linux_x64_bmi2" "${engine_directory}/stockfish-13"
 ln -s "upstream/katago-${katago_version}-${katago_backend}/${katago_runtime_relative_path}" "${engine_directory}/katago"
 ln -s "${katago_model_name}" "${engine_directory}/katago.bin.gz"
-chmod +x "${engine_directory}/stockfish" "${engine_directory}/katago"
+chmod +x "${engine_directory}/stockfish" "${engine_directory}/stockfish-13" "${engine_directory}/katago"
 
 cat >"${engine_directory}/ARTIFACTS.sha256" <<EOF
 ${stockfish_archive_sha256}  ${stockfish_archive_name}
+${stockfish13_archive_sha256}  ${stockfish13_archive_name}
 ${katago_archive_sha256}  katago-v${katago_version}-${katago_backend}-linux-x64.zip
 ${katago_model_sha256}  ${katago_model_name}
 EOF
@@ -118,6 +136,8 @@ EOF
 cat >"${engine_directory}/INSTALLATION.txt" <<EOF
 Stockfish version: ${stockfish_version}
 Stockfish archive: ${stockfish_archive_url}
+Stockfish 13 version: ${stockfish13_version}
+Stockfish 13 archive: ${stockfish13_archive_url}
 KataGo version: ${katago_version}
 KataGo backend: ${katago_backend}
 KataGo archive: ${katago_archive_url}

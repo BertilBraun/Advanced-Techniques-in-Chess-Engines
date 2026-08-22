@@ -17,6 +17,7 @@ from src.evaluation.contracts import (
     FailedEvaluationResult,
     FixedDatasetEvaluationJob,
     MatchEvaluationJob,
+    StockfishFixedNodesOpponent,
 )
 from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration_json
 from src.util.atomic_file import write_text_atomically
@@ -45,6 +46,13 @@ def resolve_project_path(path: str) -> Path:
 
 def write_evaluation_result(result: EvaluationResult, path: Path) -> None:
     write_text_atomically(path, result.model_dump_json(indent=2) + '\n')
+
+
+def stockfish_fixed_nodes_executable_path(
+    engine_configuration: StockfishEngineConfiguration,
+    opponent: StockfishFixedNodesOpponent,
+) -> Path:
+    return resolve_project_path(opponent.engine_executable_path or engine_configuration.executable_path)
 
 
 def run_evaluation_job(experiment_json: str, job_json: str) -> None:
@@ -131,7 +139,6 @@ def _create_external_match_engine(
             )
             return StockfishMatchEngine(client, job.opponent.skill_level)
         case 'stockfish_fixed_nodes':
-            from src.evaluation.contracts import StockfishFixedNodesOpponent
             from src.games.chess.stockfish import StockfishClient
 
             engine_configuration = experiment.evaluation.engine
@@ -142,7 +149,7 @@ def _create_external_match_engine(
             client = StockfishClient(
                 engine_configuration,
                 game.state,
-                resolve_project_path(engine_configuration.executable_path),
+                stockfish_fixed_nodes_executable_path(engine_configuration, job.opponent),
             )
             return StockfishFixedNodesMatchEngine(client, job.opponent.nodes)
         case 'katago':

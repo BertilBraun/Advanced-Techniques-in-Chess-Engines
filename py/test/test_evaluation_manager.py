@@ -29,7 +29,7 @@ from src.evaluation.contracts import (
     MatchEvaluationJob,
     MatchEvaluationResult,
 )
-from src.evaluation.ladder import STOCKFISH_FIXED_NODES_ANCHOR_ELO
+from src.evaluation.ladder import STOCKFISH_FIXED_NODES_ANCHOR_ELO, LadderRungObservation, fit_ladder_elo
 from src.evaluation.manager import EvaluationManager
 from src.evaluation.process import write_evaluation_result
 from src.evaluation.scheduling import ScheduledEvaluationSuite, jobs_for_suite
@@ -361,34 +361,8 @@ def test_same_time_reference_checkpoint_is_resolved_from_manifest(tmp_path: Path
     assert reference_job.opponent.checkpoint == reference
 
 
-def _expected_rung_score(anchor_elo: float, rating: float) -> float:
-    return 1.0 / (1.0 + 10.0 ** ((anchor_elo - rating) / 400.0))
-
-
-def _rung_pair_games(job: MatchEvaluationJob) -> tuple[EvaluationGameResult, ...]:
-    return tuple(
-        EvaluationGameResult(
-            game_index=game_index,
-            pair_index=0,
-            opening_id='opening-0',
-            candidate_player=candidate_player,
-            pair_seed=0,
-            initial_action_ids=(),
-            played_action_ids=(),
-            outcome=CandidateOutcome.DRAW,
-            termination_reason=EvaluationTerminationReason.NATURAL,
-            plies=0,
-            duration_seconds=1.0,
-        )
-        for game_index, candidate_player in ((0, 'first'), (1, 'second'))
-    )
-
-
-def test_manager_publishes_ladder_elo_once_every_fixed_node_rung_reports(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    experiment = experiment_configuration(tmp_path)
+def _experiment_with_fixed_node_rungs(run_path: Path) -> ChessExperimentConfiguration:
+    experiment = experiment_configuration(run_path)
     skill_definition = next(
         definition for definition in experiment.evaluation.definitions if definition.kind == 'stockfish'
     )
@@ -401,48 +375,122 @@ def test_manager_publishes_ladder_elo_once_every_fixed_node_rung_reports(
         rung_payload['nodes'] = nodes
         del rung_payload['skill_level']
         evaluation_payload['definitions'].append(rung_payload)
-    experiment = experiment.model_copy(
-        update={'evaluation': EvaluationConfiguration.model_validate(evaluation_payload)}
+    return experiment.model_copy(update={'evaluation': EvaluationConfiguration.model_validate(evaluation_payload)})
+
+
+def _rung_games(
+    natural_outcomes: tuple[CandidateOutcome, ...],
+    capped_draw_count: int = 0,
+) -> tuple[EvaluationGameResult, ...]:
+    labelled_outcomes = tuple((outcome, EvaluationTerminationReason.NATURAL) for outcome in natural_outcomes) + tuple(
+        (CandidateOutcome.DRAW, EvaluationTerminationReason.MAXIMUM_PLIES) for _ in range(capped_draw_count)
     )
-    clock = FakeClock()
-    context = FakeProcessContext()
-    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
+    return tuple(
+        EvaluationGameResult(
+            game_index=game_index,
+            pair_index=game_index // 2,
+            opening_id=f'opening-{game_index // 2}',
+            candidate_player='first' if game_index % 2 == 0 else 'second',
+            pair_seed=0,
+            initial_action_ids=(),
+            played_action_ids=(),
+            outcome=outcome,
+            termination_reason=termination_reason,
+            plies=0,
+            duration_seconds=1.0,
+        )
+        for game_index, (outcome, termination_reason) in enumerate(labelled_outcomes)
+    )
+
+
+def _write_rung_result(job: MatchEvaluationJob, games: tuple[EvaluationGameResult, ...]) -> None:
+    wins = sum(game.outcome is CandidateOutcome.WIN for game in games)
+    draws = sum(game.outcome is CandidateOutcome.DRAW for game in games)
+    losses = sum(game.outcome is CandidateOutcome.LOSS for game in games)
+    score = (wins + 0.5 * draws) / len(games)
+    write_evaluation_result(
+        MatchEvaluationResult(
+            kind='match',
+            job=job,
+            games=games,
+            aggregate=MatchAggregate(
+                wins=wins,
+                draws=draws,
+                losses=losses,
+                score=score,
+                first_player_score=score,
+                second_player_score=score,
+                pair_count=len(games) // 2,
+                score_confidence_low=max(0.0, score - 0.1),
+                score_confidence_high=min(1.0, score + 0.1),
+            ),
+            duration_seconds=1.0,
+        ),
+        job.result_path,
+    )
+
+
+def _scheduled_rung_jobs(
+    manager: EvaluationManager,
+    clock: FakeClock,
+    run_path: Path,
+) -> tuple[MatchEvaluationJob, ...]:
     clock.now = 21.0
-    jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 1))
+    jobs = manager.schedule_due_jobs(checkpoint(run_path, 1))
     rung_jobs = tuple(
         job for job in jobs if isinstance(job, MatchEvaluationJob) and job.definition.kind == 'stockfish_fixed_nodes'
     )
     assert len(rung_jobs) == 4
+    return rung_jobs
+
+
+def _rung_nodes(job: MatchEvaluationJob) -> int:
+    assert isinstance(job.definition, StockfishFixedNodesEvaluationDefinition)
+    return job.definition.nodes
+
+
+_NATURAL_RUNG_OUTCOMES = {
+    30: (CandidateOutcome.WIN,) * 18 + (CandidateOutcome.DRAW,) + (CandidateOutcome.LOSS,),
+    100: (CandidateOutcome.WIN,) * 17 + (CandidateOutcome.DRAW,) * 2 + (CandidateOutcome.LOSS,),
+    300: (CandidateOutcome.WIN,) * 13 + (CandidateOutcome.DRAW,) * 3 + (CandidateOutcome.LOSS,) * 4,
+    1000: (CandidateOutcome.WIN,) * 5 + (CandidateOutcome.DRAW,) * 2 + (CandidateOutcome.LOSS,) * 13,
+}
+
+
+def _expected_ladder_elo() -> float:
+    return fit_ladder_elo(
+        tuple(
+            LadderRungObservation(
+                anchor_elo=STOCKFISH_FIXED_NODES_ANCHOR_ELO[nodes],
+                score=(
+                    sum(outcome is CandidateOutcome.WIN for outcome in outcomes)
+                    + 0.5 * sum(outcome is CandidateOutcome.DRAW for outcome in outcomes)
+                )
+                / len(outcomes),
+                game_count=len(outcomes),
+            )
+            for nodes, outcomes in sorted(_NATURAL_RUNG_OUTCOMES.items())
+        )
+    )
+
+
+def test_manager_publishes_ladder_elo_once_every_fixed_node_rung_reports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = _experiment_with_fixed_node_rungs(tmp_path)
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
+    rung_jobs = _scheduled_rung_jobs(manager, clock, tmp_path)
 
     scalar_events: list[tuple[str, float, int]] = []
     monkeypatch.setattr(
         'src.evaluation.manager.log_scalar',
         lambda name, value, step: scalar_events.append((name, value, step)),
     )
-    generating_rating = 1500.0
     for job in rung_jobs:
-        assert isinstance(job.definition, StockfishFixedNodesEvaluationDefinition)
-        score = _expected_rung_score(STOCKFISH_FIXED_NODES_ANCHOR_ELO[job.definition.nodes], generating_rating)
-        write_evaluation_result(
-            MatchEvaluationResult(
-                kind='match',
-                job=job,
-                games=_rung_pair_games(job),
-                aggregate=MatchAggregate(
-                    wins=1,
-                    draws=0,
-                    losses=1,
-                    score=score,
-                    first_player_score=score,
-                    second_player_score=score,
-                    pair_count=1,
-                    score_confidence_low=max(0.0, score - 0.1),
-                    score_confidence_high=min(1.0, score + 0.1),
-                ),
-                duration_seconds=1.0,
-            ),
-            job.result_path,
-        )
+        _write_rung_result(job, _rung_games(_NATURAL_RUNG_OUTCOMES[_rung_nodes(job)]))
     for process in context.processes:
         process.exitcode = 0
     manager.collect_completed_jobs()
@@ -450,7 +498,80 @@ def test_manager_publishes_ladder_elo_once_every_fixed_node_rung_reports(
     ladder_events = tuple(event for event in scalar_events if event[0] == 'evaluation/ladder_elo')
     assert ladder_events
     assert all(step == 20 for _, _, step in ladder_events)
-    assert ladder_events[-1][1] == pytest.approx(generating_rating, abs=1.0)
+    assert ladder_events[-1][1] == pytest.approx(_expected_ladder_elo(), abs=1e-6)
+
+
+def test_manager_ladder_uses_only_non_capped_games_and_skips_all_capped_rungs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = _experiment_with_fixed_node_rungs(tmp_path)
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
+    rung_jobs = _scheduled_rung_jobs(manager, clock, tmp_path)
+
+    scalar_events: list[tuple[str, float, int]] = []
+    monkeypatch.setattr(
+        'src.evaluation.manager.log_scalar',
+        lambda name, value, step: scalar_events.append((name, value, step)),
+    )
+    fitted_observations: list[tuple[LadderRungObservation, ...]] = []
+
+    def recording_fit(observations: tuple[LadderRungObservation, ...]) -> float:
+        fitted_observations.append(observations)
+        return fit_ladder_elo(observations)
+
+    monkeypatch.setattr('src.evaluation.manager.fit_ladder_elo', recording_fit)
+    for job in rung_jobs:
+        if _rung_nodes(job) == 30:
+            games = _rung_games((), capped_draw_count=20)
+        else:
+            games = _rung_games(_NATURAL_RUNG_OUTCOMES[_rung_nodes(job)], capped_draw_count=10)
+        _write_rung_result(job, games)
+    for process in context.processes:
+        process.exitcode = 0
+    manager.collect_completed_jobs()
+
+    assert any(event[0] == 'evaluation/ladder_elo' for event in scalar_events)
+    assert fitted_observations
+    assert fitted_observations[-1] == tuple(
+        LadderRungObservation(
+            anchor_elo=STOCKFISH_FIXED_NODES_ANCHOR_ELO[nodes],
+            score=(
+                sum(outcome is CandidateOutcome.WIN for outcome in outcomes)
+                + 0.5 * sum(outcome is CandidateOutcome.DRAW for outcome in outcomes)
+            )
+            / len(outcomes),
+            game_count=len(outcomes),
+        )
+        for nodes, outcomes in sorted(_NATURAL_RUNG_OUTCOMES.items())
+        if nodes != 30
+    )
+
+
+def test_manager_skips_ladder_publication_when_every_rung_game_is_ply_capped(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = _experiment_with_fixed_node_rungs(tmp_path)
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
+    rung_jobs = _scheduled_rung_jobs(manager, clock, tmp_path)
+
+    scalar_events: list[tuple[str, float, int]] = []
+    monkeypatch.setattr(
+        'src.evaluation.manager.log_scalar',
+        lambda name, value, step: scalar_events.append((name, value, step)),
+    )
+    for job in rung_jobs:
+        _write_rung_result(job, _rung_games((), capped_draw_count=20))
+    for process in context.processes:
+        process.exitcode = 0
+    manager.collect_completed_jobs()
+
+    assert not any(event[0] == 'evaluation/ladder_elo' for event in scalar_events)
 
 
 def test_manager_publishes_missing_artifact_and_deadline_failures(tmp_path: Path) -> None:

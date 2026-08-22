@@ -185,6 +185,7 @@ class StockfishOpponent(FrozenModel):
 class StockfishFixedNodesOpponent(FrozenModel):
     kind: Literal['stockfish_fixed_nodes']
     nodes: int = Field(gt=0)
+    engine_executable_path: str | None = None
 
 
 class KataGoOpponent(FrozenModel):

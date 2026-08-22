@@ -18,6 +18,11 @@ grep -F 'id name Stockfish 18' <<<"${stockfish_protocol_output}"
 grep -F 'uciok' <<<"${stockfish_protocol_output}"
 grep -F 'readyok' <<<"${stockfish_protocol_output}"
 
+stockfish13_protocol_output="$(printf 'uci\nisready\nquit\n' | "${engine_directory}/stockfish-13")"
+grep -F 'id name Stockfish 13' <<<"${stockfish13_protocol_output}"
+grep -F 'uciok' <<<"${stockfish13_protocol_output}"
+grep -F 'readyok' <<<"${stockfish13_protocol_output}"
+
 katago_version_output="$("${engine_directory}/katago" version 2>&1)"
 printf '%s\n' "${katago_version_output}"
 grep -F 'Using CUDA backend' <<<"${katago_version_output}"

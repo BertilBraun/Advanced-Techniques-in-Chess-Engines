@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
-from src.evaluation.configuration import EvaluationConfiguration, StockfishFixedNodesEvaluationDefinition
+from src.evaluation.configuration import (
+    EvaluationConfiguration,
+    StockfishEngineConfiguration,
+    StockfishFixedNodesEvaluationDefinition,
+)
 from src.evaluation.contracts import (
     EvaluationJob,
     MatchEvaluationJob,
@@ -12,6 +16,7 @@ from src.evaluation.contracts import (
     RandomOpponent,
     StockfishFixedNodesOpponent,
 )
+from src.evaluation.process import PROJECT_ROOT, stockfish_fixed_nodes_executable_path
 from src.evaluation.scheduling import ScheduledEvaluationSuite, jobs_for_suite
 from src.experiment.configuration import load_experiment_configuration
 from test_helpers.checkpoints import checkpoint_reference
@@ -106,7 +111,50 @@ def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opp
     assert isinstance(job.opponent, StockfishFixedNodesOpponent)
     assert job.opponent.nodes == 300
     serialized_job = TypeAdapter(EvaluationJob).validate_json(job.model_dump_json()).model_dump(mode='json')
-    assert serialized_job['opponent'] == {'kind': 'stockfish_fixed_nodes', 'nodes': 300}
+    assert serialized_job['opponent'] == {
+        'kind': 'stockfish_fixed_nodes',
+        'nodes': 300,
+        'engine_executable_path': None,
+    }
+
+
+def test_stockfish_fixed_nodes_engine_override_reaches_opponent_and_executable(tmp_path: Path) -> None:
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    skill_definition = next(
+        definition for definition in experiment.evaluation.definitions if definition.kind == 'stockfish'
+    )
+    definition_payload = skill_definition.model_dump(mode='json')
+    definition_payload['kind'] = 'stockfish_fixed_nodes'
+    definition_payload['definition_id'] = 'stockfish-fixed-nodes'
+    definition_payload['nodes'] = 300
+    definition_payload['engine_executable_path'] = 'engines/stockfish-13'
+    del definition_payload['skill_level']
+    evaluation_payload = experiment.evaluation.model_dump(mode='json')
+    evaluation_payload['definitions'].append(definition_payload)
+    evaluation = EvaluationConfiguration.model_validate(evaluation_payload)
+    configured_experiment = experiment.model_copy(update={'evaluation': evaluation})
+    assert isinstance(evaluation.engine, StockfishEngineConfiguration)
+
+    jobs, _ = jobs_for_suite(
+        configured_experiment,
+        tmp_path,
+        tmp_path / 'results',
+        ScheduledEvaluationSuite(boundary_seconds=1200, checkpoint=checkpoint_reference(tmp_path)),
+        (),
+        0,
+    )
+    job = next(job for job in jobs if job.definition.kind == 'stockfish_fixed_nodes')
+
+    assert isinstance(job, MatchEvaluationJob)
+    assert isinstance(job.opponent, StockfishFixedNodesOpponent)
+    assert job.opponent.engine_executable_path == 'engines/stockfish-13'
+    assert stockfish_fixed_nodes_executable_path(evaluation.engine, job.opponent) == PROJECT_ROOT / Path(
+        'engines/stockfish-13'
+    )
+    default_opponent = StockfishFixedNodesOpponent(kind='stockfish_fixed_nodes', nodes=300)
+    assert stockfish_fixed_nodes_executable_path(evaluation.engine, default_opponent) == PROJECT_ROOT / Path(
+        evaluation.engine.executable_path
+    )
 
 
 def test_stockfish_fixed_node_rungs_require_unique_node_counts() -> None:
