@@ -277,13 +277,12 @@ def _terminal_result(
     maximum_game_plies: int,
 ) -> tuple[WdlTarget, GoDiagnosticTerminationReason] | None:
     if game.position.is_terminal:
-        if game.position.termination_reason.name == 'MAXIMUM_MOVES':
+        terminal = state.natural_terminal_wdl(game.position)
+        if terminal is None:
             return (
                 state.adjudicated_wdl(game.position, TerminationReason.MAXIMUM_PLIES),
                 GoDiagnosticTerminationReason.NATIVE_MAXIMUM_MOVES,
             )
-        terminal = state.natural_terminal_wdl(game.position)
-        assert terminal is not None
         return terminal, GoDiagnosticTerminationReason.TWO_PASSES
     total_plies = len(game.initial_action_ids) + len(game.played_action_ids)
     if total_plies < maximum_game_plies:
@@ -309,12 +308,14 @@ def _outcome_for_measured(
     return CandidateOutcome.DRAW
 
 
-def _native_area_score(position: NativeGoPosition) -> NativeAreaScore:
+def _native_area_score(state: GoStateContract, position: NativeGoPosition) -> NativeAreaScore:
     score = position.area_score()
     if score.winner is None:
         winner: Literal['first', 'second', 'draw'] = 'draw'
     else:
-        winner = 'first' if score.winner.name == 'BLACK' else 'second'
+        current_player = state.current_player(position)
+        winning_player = current_player if score.winner == position.player else Player(-current_player)
+        winner = 'first' if winning_player is Player.FIRST else 'second'
     return NativeAreaScore(
         black_half_points=score.black_half_points,
         white_half_points=score.white_half_points,
@@ -436,7 +437,7 @@ def run_go_diagnostic_match(
             duration_seconds=completed_game.duration_seconds,
         )
         aggregate_games.append(evaluation_game)
-        area_score = _native_area_score(game.position)
+        area_score = _native_area_score(state, game.position)
         game_results.append(
             GoDiagnosticGameResult(
                 game=evaluation_game,
