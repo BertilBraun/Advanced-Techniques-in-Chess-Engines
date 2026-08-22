@@ -10,6 +10,8 @@ class ReplayConfiguration(FrozenModel):
     maximum_capacity: int = Field(gt=0)
     maximum_policy_entries: int = Field(ge=1, le=255)
     materialization_processes: int = Field(default=1, ge=1)
+    materialization_shard_maximum_games: int = Field(default=32, ge=1)
+    materialization_shard_target_source_bytes: int = Field(default=16 * 1024 * 1024, ge=1)
 
     @model_validator(mode='after')
     def validate_capacity(self) -> ReplayConfiguration:

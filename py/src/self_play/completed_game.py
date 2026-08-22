@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from enum import Enum
 from math import isclose, isfinite
 from pathlib import Path
@@ -48,6 +49,19 @@ class GameIdentity(FrozenModel):
     worker_id: int = Field(ge=0)
     process_instance_id: UUID
     game_number: int = Field(ge=0)
+
+    @classmethod
+    def from_file_name(cls, file_name: str) -> GameIdentity:
+        match = re.fullmatch(
+            r'worker-(\d+)-process-([0-9a-fA-F-]{36})-game-(\d{20})\.json',
+            file_name,
+        )
+        if match is None:
+            raise ValueError(f'Completed-game file name is invalid: {file_name}')
+        identity = cls(worker_id=int(match[1]), process_instance_id=UUID(match[2]), game_number=int(match[3]))
+        if identity.file_name != file_name:
+            raise ValueError(f'Completed-game file name is not canonical: {file_name}')
+        return identity
 
     @property
     def file_name(self) -> str:
