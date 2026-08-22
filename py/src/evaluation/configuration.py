@@ -169,6 +169,7 @@ class StockfishFixedNodesEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['stockfish_fixed_nodes']
     definition_id: str = Field(min_length=1)
     nodes: int = Field(gt=0)
+    engine_executable_path: str | None = None
     search: EvaluationSearchConfiguration
 
 
