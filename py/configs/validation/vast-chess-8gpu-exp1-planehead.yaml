@@ -13,9 +13,9 @@ run:
     offer_id: '48395477'
     gpu_model: NVIDIA GeForce RTX 4070 SUPER
     gpu_count: 8
-    logical_cpu_count: 80
-    minimum_ram_gib: 120
-    minimum_disk_gib: 140
+    logical_cpu_count: 1
+    minimum_ram_gib: 1
+    minimum_disk_gib: 1
   environment:
     runtime_image: vastai/pytorch:cuda-12.8.1-auto
 
