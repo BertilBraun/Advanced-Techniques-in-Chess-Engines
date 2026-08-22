@@ -168,7 +168,13 @@ class ReplayShardReader:
         self._closed = False
 
     @classmethod
-    def open(cls, manifest_path: Path, layout: ReplayLayout) -> ReplayShardReader:
+    def open(
+        cls,
+        manifest_path: Path,
+        layout: ReplayLayout,
+        *,
+        verify_data_hash: bool = True,
+    ) -> ReplayShardReader:
         try:
             manifest = SealedReplayShardManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
         except (OSError, UnicodeError, ValueError) as error:
@@ -180,7 +186,7 @@ class ReplayShardReader:
             raise ValueError('Sealed replay shard data file does not exist.')
         if data_path.stat().st_size != manifest.data_size:
             raise ValueError('Replay shard data size does not match its manifest.')
-        if _file_sha256(data_path) != manifest.data_sha256:
+        if verify_data_hash and _file_sha256(data_path) != manifest.data_sha256:
             raise ValueError('Replay shard data hash does not match its manifest.')
         file = data_path.open('rb')
         mapping: mmap.mmap | None = None

@@ -345,6 +345,58 @@ def test_reader_rejects_hash_size_and_derived_slab_corruption(tmp_path: Path) ->
         ReplayShardReader.open(manifest_path, layout)
 
 
+def test_reader_can_explicitly_skip_whole_file_hash_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = _layout('go')
+    manifest, manifest_path = _write_valid_shard(tmp_path, layout)
+    data_path = tmp_path / manifest.data_file
+    payload = bytearray(data_path.read_bytes())
+    payload[-1] ^= 1
+    data_path.write_bytes(payload)
+
+    def unexpected_hash_scan(path: Path) -> str:
+        raise AssertionError(f'Unexpected replay shard hash scan: {path}')
+
+    monkeypatch.setattr(shard_module, '_file_sha256', unexpected_hash_scan)
+    with ReplayShardReader.open(manifest_path, layout, verify_data_hash=False) as reader:
+        assert reader.columns.row_count == manifest.row_count
+
+
+@pytest.mark.parametrize('corruption', ('size', 'header', 'layout'))
+def test_reader_without_hash_still_rejects_structural_corruption(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    corruption: str,
+) -> None:
+    layout = _layout('go')
+    manifest, manifest_path = _write_valid_shard(tmp_path, layout)
+    data_path = tmp_path / manifest.data_file
+    expected_message = corruption
+    opened_layout = layout
+    match corruption:
+        case 'size':
+            with data_path.open('ab') as file:
+                file.write(b'\x00')
+        case 'header':
+            payload = bytearray(data_path.read_bytes())
+            payload[:8] = b'BADMAGIC'
+            data_path.write_bytes(payload)
+            expected_message = 'magic'
+        case 'layout':
+            opened_layout = _layout('chess')
+        case _:
+            raise AssertionError(f'Unhandled replay shard corruption: {corruption}')
+
+    def unexpected_hash_scan(path: Path) -> str:
+        raise AssertionError(f'Unexpected replay shard hash scan: {path}')
+
+    monkeypatch.setattr(shard_module, '_file_sha256', unexpected_hash_scan)
+    with pytest.raises(ValueError, match=expected_message):
+        ReplayShardReader.open(manifest_path, opened_layout, verify_data_hash=False)
+
+
 def test_reader_rejects_layout_mismatch(tmp_path: Path) -> None:
     manifest, manifest_path = _write_valid_shard(tmp_path, _layout('chess'))
     assert manifest.layout_digest != _layout('go').digest
