@@ -7,11 +7,13 @@ valid where this file is silent.
 
 ## Read before you act
 
+- `documentation/CURRENT-STATE.md` — what the system is today.
 - `documentation/research/chess-recovery-plan-20260820.md` — the current plan; work is referenced by WP number.
 - `documentation/research/chess-post-four-day-regression-analysis-20260820.md` — why the plan exists.
+- `documentation/operations/run-control.md` — before starting, stopping or archiving any run.
 - `documentation/operations/experiment-platform.md` — before any experiment configuration, provisioning, queue,
-  monitoring or export work.
-- `documentation/architecture/platform-rework.md` and `python-runtime-rework.md` — before architectural changes.
+  monitoring or export work (read its supersession banners first).
+- `documentation/architecture/python-runtime-rework.md` — before architectural changes.
 - `cpp/AGENTS.md` and `cpp/README.md` — before touching native code.
 
 ## Authority and handoffs
@@ -25,8 +27,7 @@ validated.
 ## Evidence rules
 
 - A test run that has no fetched archive under `.codex-diagnostics/` did not happen. Use `deployment/run_control.sh`
-  (start / stop / status / preserve / fetch) for every run once WP8 lands; until then, archive TensorBoard, run state,
-  resolved config and log by hand before a node is released.
+  (start / stop / status / preserve / fetch) for every run.
 - Configurations are resolved and hashed (`experiment_configuration_sha256`); record the SHA with every measurement.
 - Benchmarks go under `documentation/benchmarks/<topic>-<hardware>-<date>/README.md` with config SHA, source SHA, node
   and raw numbers. Do not compare numbers across different hardware without saying so.

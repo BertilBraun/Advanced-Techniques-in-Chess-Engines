@@ -1,5 +1,9 @@
 # Chess four-day baseline and next-run plan
 
+> Superseded 2026-08-20 by `documentation/research/chess-recovery-plan-20260820.md`. The run this document plans
+> was not launched. Retained for its baseline-freeze procedure, strength-calibration method and
+> rejected-alternatives record. Do not take configuration values or acceptance criteria from this document.
+
 ## Status and constraint
 
 This document records the agreed research plan. It does not authorize a run, implementation, evaluation, or change

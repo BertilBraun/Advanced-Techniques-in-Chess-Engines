@@ -1,5 +1,9 @@
 # Second four-day chess run readiness
 
+> Superseded 2026-08-20. The second four-day run was not launched; see
+> `documentation/research/chess-post-four-day-regression-analysis-20260820.md`. Retained for its revision- and
+> approval-ownership procedure, which `documentation/operations/run-control.md` now implements.
+
 This run uses the canonical configuration
 `py/configs/production/vast-chess-8gpu-optimal.yaml`. It is a single approved experiment, not a queue campaign. The
 configuration owns the four-day wall-time cap, the RTX 3090 offer contract, output paths, progressive models, search

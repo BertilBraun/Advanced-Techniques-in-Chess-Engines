@@ -1,5 +1,10 @@
 # Experiment platform
 
+> Partly superseded 2026-08-20. Production and test runs are started, stopped and archived through
+> `documentation/operations/run-control.md`, not through the queue commands below. The ingestion and
+> self-play-pause behaviour in "Training and evaluation lifecycle" is replaced by WP2 of
+> `documentation/research/chess-recovery-plan-20260820.md`.
+
 This is the current operational entry point for configuring, provisioning, launching, observing, and collecting
 AlphaZero experiments. The architecture rework ledgers are historical design records; consult them only for an
 architectural change or a concrete design ambiguity.
@@ -36,7 +41,13 @@ groups, and publishes only the active stage after the complete quantum. Candidat
 private restart state and are not production inference artifacts.
 
 Run preparation verifies a clean exact source revision, approval, hardware/runtime contract, output paths, and
-immutable evaluation inputs. The coordinator starts self-play, ingests completed games into replay only until the
+immutable evaluation inputs.
+
+> As-built, not target. The regression analysis identifies bounded ingestion and the self-play pause below as a
+> throughput and freshness defect; WP2 replaces it with a continuous file-staged materialiser pool. Do not treat
+> the next paragraph as intended design.
+
+The coordinator starts self-play, ingests completed games into replay only until the
 next training quantum is funded, grants trainer credits at the configured replay ratio, publishes inference checkpoints after DDP quanta, schedules evaluation,
 and records a durable outcome on clean shutdown. Six of eight self-play workers pause during each training quantum
 in the current two-GPU baseline.
@@ -100,6 +111,9 @@ configuration are fixed. It must bind the approver, exact Git revision, canonica
 price, and wall-time limit. Never reuse an approval from another revision, configuration, node, or campaign.
 
 ## Queue ownership and operation
+
+> For production and test runs use `documentation/operations/run-control.md`. `py/queue_experiments.py` remains
+> the screening-campaign supervisor only, and no screening campaign is currently authorised.
 
 The queue owns slot allocation, per-experiment detached Git worktrees, child process groups, sampled process-tree
 RAM limits, logs, and the atomic summary.
