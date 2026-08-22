@@ -1,10 +1,10 @@
-# Columnar replay and exact shard ingestion
+# Columnar replay and shard ingestion
 
 Status: accepted implementation design, 2026-08-22.
 
-This decision supersedes the approximate replay-recovery policy in
-`python-runtime-rework.md`. Completed-game rows, replay credits, and downstream reporting metadata are now recovered
-exactly once. The producer-facing completed-game JSON contract and per-game atomic inbox publication remain unchanged.
+This decision supersedes the old fixed-row replay design in `python-runtime-rework.md`. The producer-facing
+completed-game JSON contract and per-game atomic inbox publication remain unchanged. Normal operation is deterministic
+and processes every game; an unclean boundary restart may lose or duplicate a small bounded shard set.
 
 ## Canonical representation
 
@@ -15,7 +15,7 @@ the mapped loader use those same descriptors and `ReplayColumnViews`; they do no
 The live replay is one preallocated schema-4 binary file. It has a fixed 64 KiB header and aligned fixed-capacity
 column slabs. The header records maximum and logical capacities, FIFO head and size, total appended and evicted rows,
 append sequence, and the last transaction identity. Logical indices are converted to physical indices once and whole
-columns are gathered with NumPy indexing. Append plans copy each source column into at most two ring slices.
+columns are gathered with NumPy indexing. Each append copies a source column into at most two ring slices.
 
 Columns retain packed encoded states, sparse visit policies and legal actions, WDL/root/weight/source metadata, and
 the configured auxiliary targets. Storage-boundary validation enforces action ranges, uniqueness, legal subsets,
@@ -37,29 +37,28 @@ The default bounds are 32 games and a soft 16 MiB of source JSON per shard. An i
 singleton. Transient worker failures retry the same durable claim; invalid game data is surfaced as a fatal run error
 without dropping or bypassing the game.
 
-## Boundary transaction and recovery
+## Boundary append and restart
 
-At a quantum boundary the manager opens the contiguous sealed prefix, validates layout and structural headers, plans
-one append transaction per shard, and writes an append-recovery manifest before copying. Normal trusted-boundary opens
-avoid a redundant whole-shard hash pass; startup recovery verifies full shard hashes.
+At a quantum boundary the manager opens the contiguous sealed prefix, validates layout and structural headers,
+appends each shard directly, and flushes once. Normal trusted-boundary opens avoid a redundant whole-shard hash pass.
+Zero-row shards still advance the append sequence and transaction identity without inventing rows.
 
-The store prevalidates the complete plan chain and every source column before mutation. It reapplies every planned
-destination from the recorded starting geometry, writes linked intermediate headers, reaches the exact final state,
-and flushes once. Reapplication repairs partial data even when the final header was already persisted. Zero-row shards
-advance the append sequence and transaction identity without inventing rows.
+After the replay flush, resignation observations are applied through their identity-idempotent SQLite sink, committed
+claims are atomically removed from the queue, and shard/inbox leftovers are deleted. On startup, queued claims below
+the store append sequence are recognized as committed cleanup leftovers; sealed uncommitted claims remain appendable
+and unsealed claims are resubmitted.
 
-After the replay flush, resignation observations are applied through their identity-idempotent SQLite sink and one
-durable ingestion receipt is written. Only then are shard files, leftover matching inbox files, durable claims, and the
-append manifest removed. Startup repeats any incomplete suffix safely. Capacity changes persist a queue-owned resize
-record so evictions remain attributable across a crash between resize and append.
+The design intentionally does not infer torn header states or journal every boundary instruction. A process crash
+during append may lose or duplicate the small in-flight shard set. Invalid store headers fail clearly. This bounded
+risk is preferable to carrying a larger transaction and reporting-receipt subsystem for a run that restarts rarely.
 
 Schema 4 is intentionally incompatible with earlier replay files. Resuming an older run requires the blocked,
 offline-only [schema-4 migration procedure](../operations/replay-schema4-migration.md); it must never be attempted
 against a running experiment.
 
-Credits are reconciled from the absolute durable total: committed store rows plus unique sealed uncommitted shard
-rows. Completion callbacks never add row deltas. Reporting receipts are deduplicated by identity, replayed after
-restart, and acknowledged only after training reporting succeeds.
+Credits are reconciled from the absolute materialized total: committed store rows plus unique sealed uncommitted shard
+rows. Completion callbacks never add row deltas. Reporting metadata is accumulated in memory between training quanta;
+losing a small amount on an unclean restart is accepted.
 
 ## Vectorized training path
 
@@ -79,11 +78,11 @@ end-to-end performance evidence.
 
 ## Required invariants
 
-- Every completed game remains in exactly one durable lifecycle state and is eventually ingested without skipping.
+- Every completed game is processed in deterministic FIFO order during normal operation without skipping.
 - Shard and replay order is independent of process completion order.
 - Shard/store layout digests must match exactly before mutation.
 - A shard is complete only when its final typed manifest validates.
-- Reapplying a recovery plan is byte-idempotent for its planned destinations and final state.
-- Rows, append sequences, credits, resignation evidence, and reporting receipts cannot be duplicated or lost.
+- Sealed uncommitted and committed-cleanup shard states have simple restart handling.
+- A dirty boundary restart may lose or duplicate a small bounded number of games; no exact recovery journal is kept.
 - Chess and Go share the representation and lifecycle; game contracts own only representation-specific transforms.
 - The eight-rank DDP topology, self-play worker count, and training pause topology are unchanged.

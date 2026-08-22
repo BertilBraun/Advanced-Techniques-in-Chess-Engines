@@ -46,7 +46,7 @@ to interpret the old store. Do not open the live replay with the new runtime.
    snapshot unless the storage platform provides an atomic snapshot of the complete run directory.
 3. Inspect the old append/recovery state with the old revision. A pending append must be recovered by that revision
    on the offline copy, or migration must stop. Do not synthesize completion from file names or row counts.
-4. Inventory `replay.bin`, the credit ledger, completed-game inbox, staged files, append/recovery manifests,
+4. Inventory `replay.bin`, the credit ledger, completed-game inbox, staged files,
    resignation state, checkpoints, and reporting artifacts. Persist this inventory and checksums beside the snapshot.
 5. Compute the schema-4 destination size with the exact destination `ReplayLayout` and maximum capacity. Available
    space on the conversion filesystem must cover the immutable source snapshot, the complete destination file,
@@ -90,13 +90,10 @@ The converter must create a new file; it must never update the source in place.
    not claim that this newly introduced counter existed in the source.
 5. Initialize a schema-4 shard queue with the destination layout digest and `next_sequence` equal to the converted
    store's append sequence. It must contain no fabricated claims. Convert any approved legacy staged pairs through a
-   separately validated append plan after the baseline, not by changing baseline counters.
+   separately validated shard append after the baseline, not by changing baseline counters.
 6. Preserve the credit ledger. Validate that absolute materialized rows account for earned credits and that consumed
-   credits remain legal. Do not add callback deltas, reset credits, or create receipts for historical reporting that
-   already succeeded. Any migrated unreported boundary metadata requires a typed receipt with a deterministic
-   identity and an explicit audit record.
-7. Start with no append-recovery manifest and no pending resize unless the converter has explicitly created and
-   validated that state. Preserve the resignation journal and verify its game identities against migrated metadata.
+   credits remain legal. Do not add callback deltas or reset credits.
+7. Preserve the resignation journal and verify its game identities against migrated metadata.
 
 Chunk size is an operational parameter, not a semantic one. Repeating conversion with different chunk sizes must
 produce identical headers, logical column checksums, queue state, and migration manifest.
@@ -116,7 +113,7 @@ The conversion tool must fail before activation unless all checks pass:
 - a read-only schema-4 open passes complete header, descriptor, padding, dtype, and semantic validation;
 - a copied credit ledger reconciles to the converted absolute materialized total without changing earned or consumed
   credit; and
-- an isolated restart smoke on the converted copy creates no duplicate rows, games, metadata, credits, or receipts.
+- an isolated restart smoke on the converted copy opens the store and queue without errors.
 
 Record tool version, commands, stdout/stderr, elapsed time, peak memory, source and destination file SHA-256 digests,
 the logical per-column manifest, and the complete validation result. Two conversions of the same snapshot must have
