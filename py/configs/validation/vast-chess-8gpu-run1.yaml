@@ -63,12 +63,12 @@ training:
       cpu_threads: 4
       interop_threads: 1
     self_play:
-      # PLACEHOLDER — node topology unknown: set processes per GPU and the paused-during-training set once the
-      # node is rented. The string sentinels below fail resolution loudly on purpose.
-      device_ids: PLACEHOLDER — node topology unknown
+      # r3-derived 8-GPU default (two processes per GPU, odd workers paused during training) — confirm against
+      # the rented node's topology at rental; the approval hash pins whatever is confirmed here.
+      device_ids: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]
       parallel_games_per_process: 512
       tensorboard_processes: 1
-      node_ids_to_pause_during_training: PLACEHOLDER — node topology unknown
+      node_ids_to_pause_during_training: [1, 3, 5, 7, 9, 11, 13, 15]
     evaluation:
       device_cycle: [4, 5, 6, 7]
   lifecycle:
