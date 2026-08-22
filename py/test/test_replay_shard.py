@@ -386,6 +386,15 @@ def test_typed_manifests_reject_bad_spans_order_and_duplicate_games() -> None:
         )
 
 
+def test_game_metadata_allows_primary_and_auxiliary_policy_truncations_per_row() -> None:
+    source = _source(0)
+    game = _game_metadata(source, 0, 1)
+
+    validated = ReplayShardGameMetadata.model_validate(game.model_dump() | {'policies_truncated': 2})
+
+    assert validated.policies_truncated == 2
+
+
 def test_data_and_temporary_files_without_manifest_are_not_sealed(tmp_path: Path) -> None:
     identity = '0' * 64
     data_path = tmp_path / shard_module.replay_shard_data_name(identity)

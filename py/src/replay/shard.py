@@ -109,8 +109,6 @@ class ReplayShardGameMetadata(FrozenModel):
             raise ValueError('A resignation observation cannot select an action.')
         if self.termination_reason is TerminationReason.RESIGNATION and self.is_resignation_continuation:
             raise ValueError('Replay shard continuation games cannot terminate by resignation.')
-        if self.policies_truncated > self.row_count:
-            raise ValueError('Replay shard policy truncations cannot exceed its game rows.')
 
 
 class SealedReplayShardManifest(FrozenModel):
