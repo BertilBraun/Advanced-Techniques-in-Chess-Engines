@@ -1,0 +1,36 @@
+# Experiment 1 of the 2026-08-22 diagnosis ladder on the 8x4070 node: run1's "old recipe, new head" as
+# designed — r3 recipe, CNN 12x112, plane policy head, warm-up 1,000 — after the everything-on overnight
+# run flatlined and the dense-head baseline tracked the four-day yardstick (1x4070, gen 28 verified).
+# Topology: 3 self-play processes per GPU, two thirds paused during training, per the stand-in used for
+# the provisional resolution (the 8x4070 node matches that shape).
+extends: vast-chess-8gpu-run1.yaml
+
+run:
+  run_name: vast-chess-8gpu-exp1-planehead
+  tensorboard_run_directory: vast-chess-8gpu-exp1-planehead
+  hardware:
+    provider_name: vast.ai
+    offer_id: 'PATCH_OFFER_ID'
+    gpu_model: NVIDIA GeForce RTX 4070
+    gpu_count: 8
+    logical_cpu_count: 64
+    minimum_ram_gib: 120
+    minimum_disk_gib: 140
+
+training:
+  save_path: py/training_data/validation/vast-chess-8gpu-exp1-planehead
+  topology:
+    self_play:
+      device_ids: [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7]
+      parallel_games_per_process: 512
+      tensorboard_processes: 1
+      node_ids_to_pause_during_training: [1, 2, 4, 5, 7, 8, 10, 11, 13, 14, 16, 17, 19, 20, 22, 23]
+  limits:
+    hourly_price: 0.0  # PATCH with the rented offer's dph_total
+    maximum_cost: null
+    maximum_wall_time_seconds: 14400
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-exp1-planehead.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 20.0
+    resource_telemetry_interval_seconds: 5.0
