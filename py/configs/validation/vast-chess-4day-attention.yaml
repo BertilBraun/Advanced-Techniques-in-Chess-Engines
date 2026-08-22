@@ -4,6 +4,9 @@
 # Included beyond r3: Syzygy adjudication (improves adjudicated label quality), compilation, progressive
 # sizing over three attention rungs (promotions time-scheduled at 12 h and 1.5 d, gated by the loss-EMA
 # criterion). Resignation stays on per the r3 schedule (calibrated, from generation 70).
+# Rung parameters double each step: 1.52M -> 3.07M -> 5.73M. Rung 1 sized to 11x128 after the
+# 2026-08-23 throughput benchmark (documentation/benchmarks/progressive-sizing-throughput-rtx4070super-20260823):
+# the 1M-class model gives 1.86x the searches/s of 12x176 in the production 4-process topology.
 extends: vast-chess-8gpu-exp2-attention.yaml
 
 run:
@@ -16,13 +19,13 @@ training:
     compilation: default
   progressive_model_sizing:
     models:
-      - model_id: chess-attention-8x128
+      - model_id: chess-attention-11x128
         training_start_days: 0.0
         network:
           kind: attention
-          num_layers: 8
+          num_layers: 11
           embedding_size: 128
-          num_heads: 4
+          num_heads: 8
           feedforward_size: 256
           dropout: 0.0
           policy_head: {kind: chess_76_plane_direct_v2}
