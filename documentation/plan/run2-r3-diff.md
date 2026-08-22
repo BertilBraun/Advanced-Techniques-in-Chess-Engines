@@ -1,7 +1,7 @@
 # vast-chess-8gpu-run2 — resolved diff against the r3 snapshot
 
 Run 2 extends `vast-chess-8gpu-run1.yaml`; everything in
-[`vast-chess-8gpu-run1.r3-diff.md`](vast-chess-8gpu-run1.r3-diff.md) applies unchanged unless listed here,
+[`run1-r3-diff.md`](run1-r3-diff.md) applies unchanged unless listed here,
 including the resolution status, the pending WP1/WP3 keys and the topology/hourly-price placeholders.
 
 ## Resolution status (2026-08-21, phase-a @ 7c146d79, locked venv on the Phase A test node)
