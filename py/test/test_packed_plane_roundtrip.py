@@ -26,4 +26,4 @@ def test_python_codec_round_trips_the_native_fixture_payloads(fixture: dict[str,
     decoded = decode_packed_planes(payload, CHESS_LAYOUT, BINARY_CHANNELS, SCALAR_CHANNELS)
     assert decoded.shape == (29, 8, 8)
     re_encoded = encode_packed_planes(decoded, CHESS_LAYOUT, BINARY_CHANNELS, SCALAR_CHANNELS)
-    assert bytes(re_encoded) == payload
+    assert bytes(re_encoded) == bytes(payload)
