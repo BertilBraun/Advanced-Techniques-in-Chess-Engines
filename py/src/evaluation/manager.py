@@ -26,6 +26,7 @@ from src.evaluation.ladder import (
     STOCKFISH_FIXED_NODES_ANCHOR_ELO,
     LadderRungObservation,
     fit_ladder_elo,
+    ladder_rung_observation,
 )
 from src.evaluation.process import run_evaluation_job, write_evaluation_result
 from src.evaluation.scheduling import (
@@ -447,13 +448,10 @@ class EvaluationManager:
             anchor_elo = STOCKFISH_FIXED_NODES_ANCHOR_ELO.get(definition.nodes)
             if anchor_elo is None or not isinstance(result, MatchEvaluationResult):
                 continue
-            observations.append(
-                LadderRungObservation(
-                    anchor_elo=anchor_elo,
-                    score=result.aggregate.score,
-                    game_count=len(result.games),
-                )
-            )
+            observation = ladder_rung_observation(anchor_elo, result.games)
+            if observation is None:
+                continue
+            observations.append(observation)
         if not observations:
             return
         ladder_elo = fit_ladder_elo(tuple(observations))
