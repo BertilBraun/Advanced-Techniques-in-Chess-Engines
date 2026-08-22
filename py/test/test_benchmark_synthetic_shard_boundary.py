@@ -27,5 +27,5 @@ def test_synthetic_shard_boundary_benchmark_is_bounded_wrapped_and_exact(tmp_pat
     assert report.file_count_reduction_factor == 4.0
     assert report.shard_count == 2
     assert report.columnar_boundary_total.median_seconds > 0.0
-    assert report.columnar_copy_and_flush.median_rows_per_second > 0.0
+    assert report.columnar_sequential_append_and_flush.median_rows_per_second > 0.0
     assert report.old_aos_boundary_total.median_seconds > 0.0

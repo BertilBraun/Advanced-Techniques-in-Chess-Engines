@@ -26,7 +26,7 @@ from src.replay.shard import (
     replay_shard_manifest_path,
     write_replay_shard,
 )
-from src.replay.store import ReplayAppendTransaction, ReplayStore, plan_replay_append_chain
+from src.replay.store import ReplayStore
 from src.self_play.completed_game import GameIdentity, SearchVisitCounts, TerminationReason
 from src.training.targets import TrainingTargetLayout
 from src.util.atomic_file import write_text_atomically
@@ -63,8 +63,7 @@ class SyntheticShardBoundaryReport(FrozenModel):
     old_aos_copy_and_flush: BoundaryTiming
     old_aos_boundary_total: BoundaryTiming
     columnar_validation_and_map: BoundaryTiming
-    columnar_plan_chain: BoundaryTiming
-    columnar_copy_and_flush: BoundaryTiming
+    columnar_sequential_append_and_flush: BoundaryTiming
     columnar_boundary_total: BoundaryTiming
 
 
@@ -193,37 +192,34 @@ def _columnar_boundary_trial(
     ],
     total_rows: int,
     initial_samples: tuple[ReplaySample, ...],
-) -> tuple[float, float, float, float, bool, str]:
+) -> tuple[float, float, float, bool, str]:
     store = _seed_store(path, layout, total_rows, initial_samples)
     readers: list[ReplayShardReader] = []
-    total_started = time.perf_counter()
-    validation_started = time.perf_counter()
-    for pending, _, _ in inputs:
-        readers.append(
-            ReplayShardReader.open(
-                replay_shard_manifest_path(staging_path, pending.shard_identity),
-                layout,
-                verify_data_hash=False,
+    try:
+        total_started = time.perf_counter()
+        validation_started = time.perf_counter()
+        for pending, _, _ in inputs:
+            readers.append(
+                ReplayShardReader.open(
+                    replay_shard_manifest_path(staging_path, pending.shard_identity),
+                    layout,
+                    verify_data_hash=False,
+                )
             )
-        )
-    validation_seconds = time.perf_counter() - validation_started
-    planning_started = time.perf_counter()
-    plans = plan_replay_append_chain(
-        store.state,
-        tuple(ReplayAppendTransaction(reader.manifest.row_count, reader.manifest.shard_identity) for reader in readers),
-    )
-    planning_seconds = time.perf_counter() - planning_started
-    copy_started = time.perf_counter()
-    store.reapply_append_plan_chain(tuple((reader.columns,) for reader in readers), plans)
-    store.flush()
-    copy_seconds = time.perf_counter() - copy_started
-    total_seconds = time.perf_counter() - total_started
-    wrapped = store.state.head + store.state.size > store.state.maximum_capacity
-    checksum = _validate_store(store, layout, tuple(sample for _, _, shard in inputs for sample in shard))
-    for reader in readers:
-        reader.close()
-    store.close()
-    return validation_seconds, planning_seconds, copy_seconds, total_seconds, wrapped, checksum
+        validation_seconds = time.perf_counter() - validation_started
+        append_started = time.perf_counter()
+        for reader in readers:
+            store.append_columns(reader.columns, reader.manifest.shard_identity)
+        store.flush()
+        append_seconds = time.perf_counter() - append_started
+        total_seconds = time.perf_counter() - total_started
+        wrapped = store.state.head + store.state.size > store.state.maximum_capacity
+        checksum = _validate_store(store, layout, tuple(sample for _, _, shard in inputs for sample in shard))
+        return validation_seconds, append_seconds, total_seconds, wrapped, checksum
+    finally:
+        for reader in readers:
+            reader.close()
+        store.close()
 
 
 def _validate_store(store: ReplayStore, layout: ReplayLayout, expected_samples: tuple[ReplaySample, ...]) -> str:
@@ -301,8 +297,7 @@ def run_benchmark(
         for start in range(0, total_rows, rows_per_game)
     )
     trial_values = {
-        name: []
-        for name in ('shard_write', 'old_concat', 'old_copy', 'old_total', 'validation', 'planning', 'copy', 'total')
+        name: [] for name in ('shard_write', 'old_concat', 'old_copy', 'old_total', 'validation', 'append', 'total')
     }
     checksums = []
     wrapped = []
@@ -319,7 +314,7 @@ def run_benchmark(
             old_concat, old_copy, old_total, _ = _old_aos_trial(
                 root / f'old-{repeat}.bin', layout, game_blocks, total_rows, initial_rows
             )
-            validation, planning, copy, total, is_wrapped, checksum = _columnar_boundary_trial(
+            validation, append, total, is_wrapped, checksum = _columnar_boundary_trial(
                 root / f'columnar-{repeat}.bin',
                 staging_paths[repeat],
                 layout,
@@ -331,8 +326,7 @@ def run_benchmark(
             trial_values['old_copy'].append(old_copy)
             trial_values['old_total'].append(old_total)
             trial_values['validation'].append(validation)
-            trial_values['planning'].append(planning)
-            trial_values['copy'].append(copy)
+            trial_values['append'].append(append)
             trial_values['total'].append(total)
             wrapped.append(is_wrapped)
             checksums.append(checksum)
@@ -347,7 +341,7 @@ def run_benchmark(
         comparator_scope=(
             'AoS reference times preloaded per-game row-block concatenate plus structured memmap copy/flush; '
             'it excludes historical per-file JSON/NPY parsing. Columnar total includes manifest validation/map, '
-            'plan-chain construction, copy, and one store flush; it excludes shard deletion.'
+            'sequential per-shard append, and one store flush; it excludes shard deletion.'
         ),
         python_version=platform.python_version(),
         cpu=platform.processor() or platform.machine(),
@@ -370,8 +364,7 @@ def run_benchmark(
         old_aos_copy_and_flush=_timing(trial_values['old_copy'], total_rows),
         old_aos_boundary_total=_timing(trial_values['old_total'], total_rows),
         columnar_validation_and_map=_timing(trial_values['validation'], total_rows),
-        columnar_plan_chain=_timing(trial_values['planning'], total_rows),
-        columnar_copy_and_flush=_timing(trial_values['copy'], total_rows),
+        columnar_sequential_append_and_flush=_timing(trial_values['append'], total_rows),
         columnar_boundary_total=_timing(trial_values['total'], total_rows),
     )
     output.parent.mkdir(parents=True, exist_ok=True)
