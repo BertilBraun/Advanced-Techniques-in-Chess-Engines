@@ -1,7 +1,7 @@
 # Second four-day chess run readiness
 
 > Superseded 2026-08-20. The second four-day run was not launched; see
-> `documentation/research/chess-post-four-day-regression-analysis-20260820.md`. Retained for its revision- and
+> `documentation/plan/chess-post-four-day-regression-analysis-20260820.md`. Retained for its revision- and
 > approval-ownership procedure, which `documentation/operations/run-control.md` now implements.
 
 This run uses the canonical configuration
@@ -50,7 +50,7 @@ the clean checkout before creating any run state.
 ## Provision, verify, then launch later
 
 Read `/etc/vast-agents-guide.md`, record the hardware/runtime facts required by
-[`experiment-platform.md`](experiment-platform.md), and provision without starting training:
+[`experiment-platform.md`](../../operations/experiment-platform.md), and provision without starting training:
 
 ```bash
 export ENGINE_REPOSITORY_REF=master

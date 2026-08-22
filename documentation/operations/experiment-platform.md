@@ -3,7 +3,7 @@
 > Partly superseded 2026-08-20. Production and test runs are started, stopped and archived through
 > `documentation/operations/run-control.md`, not through the queue commands below. The ingestion and
 > self-play-pause behaviour in "Training and evaluation lifecycle" was replaced by WP2 of
-> `documentation/research/chess-recovery-plan-20260820.md` (landed 2026-08-21, `1e8e24f9`).
+> `documentation/plan/chess-recovery-plan-20260820.md` (landed 2026-08-21, `1e8e24f9`).
 
 This is the current operational entry point for configuring, provisioning, launching, observing, and collecting
 AlphaZero experiments. The architecture rework ledgers are historical design records; consult them only for an

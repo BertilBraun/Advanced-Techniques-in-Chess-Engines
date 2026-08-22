@@ -1,4 +1,4 @@
-# Phase A kickoff — hardware choice and session prompt
+# Phase A kickoff — hardware choice (2026-08-21)
 
 ## Hardware: what to rent and why
 
@@ -44,31 +44,3 @@ vastai search offers 'num_gpus=8 reliability>0.95 cpu_cores_effective>=64 cpu_ra
 Check `cpu_cores_effective` rather than `cpu_cores` (the cgroup quota is what you get), and look at
 `direct_port_count` if you want the TensorBoard forward without an SSH tunnel.
 
-## Prompt for the new session
-
-Paste as the first message:
-
-> Read `CLAUDE.md`, then `documentation/research/chess-recovery-plan-20260820.md` (the plan) and, for background,
-> `documentation/research/chess-post-four-day-regression-analysis-20260820.md`. We are starting Phase A of the plan.
->
-> Act as orchestrator. Create one task per work package and run WP1 (output heads and initialisation), WP2
-> (file-staged ingestion rework) and WP8 (run-control interface) as three parallel sub-agent work streams on
-> branches `wp1-heads`, `wp2-ingestion`, `wp8-run-control`. Fold the WP3 fixes into the stream that owns the touched
-> files (mirror castling planes → WP1 stream; `parallel_searches` schedule and `virtual_loss_weight` → a small
-> native change in its own branch `wp3-search`; early termination and the fixed-node evaluator → WP2 stream or a
-> fourth stream, your call). Each stream works to the acceptance criterion in the plan, with tests, ruff and a
-> compile check, and reports back with the handoff format from `CLAUDE.md`. You review each stream's diff before
-> merging into an integration branch `phase-a`; nothing goes to `master` until I accept.
->
-> Development node: `<1×/2× RTX 3090, instance id, ssh command>`; image `vastai/pytorch:cuda-13.0.3-auto`;
-> provision with `deployment/setup_remote.sh` on branch `phase-a` once WP1/WP2/WP8 have merged. Use it for WP4
-> (supervised testbed on the frozen replay — the four-day freeze and three-day stores are at
-> `.codex-diagnostics/chess-baseline-four-day-freeze-20260817/`, upload the replay and the Stockfish evaluation
-> dataset), WP5 (throughput) and WP7 (50-generation smoke test). Ask before starting anything that runs longer
-> than 30 minutes on the GPU, and before every node-level action that costs money.
->
-> Report in the handoff format after each stream lands and after each measurement, with the numbers against the
-> plan's acceptance criteria.
-
-Fill in the node line. If you want the streams to start before the node exists, leave the node line out; WP1, WP2,
-WP8 and the WP3 items need no GPU.

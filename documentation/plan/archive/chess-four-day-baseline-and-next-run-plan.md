@@ -1,6 +1,6 @@
 # Chess four-day baseline and next-run plan
 
-> Superseded 2026-08-20 by `documentation/research/chess-recovery-plan-20260820.md`. The run this document plans
+> Superseded 2026-08-20 by `documentation/plan/chess-recovery-plan-20260820.md`. The run this document plans
 > was not launched. Retained for its baseline-freeze procedure, strength-calibration method and
 > rejected-alternatives record. Do not take configuration values or acceptance criteria from this document.
 
@@ -153,7 +153,7 @@ control reached 61.0k positions/s with automatic dispatch and 63.5k with memory-
 with approximately 59.8k positions/s for the historical dense-policy control. The direct-policy CNN control was also
 effectively unchanged at 36.2k positions/s versus approximately 35.9k historically. The lower throughput of the largest progressive
 model is explained by its 15 sequential attention blocks, not by the policy rework. The complete controlled comparison
-is recorded in [the kernel-control benchmark](../benchmarks/chess-direct-policy-kernel-controls-rtx4070s-20260818/README.md).
+is recorded in [the kernel-control benchmark](../../benchmarks/chess-direct-policy-kernel-controls-rtx4070s-20260818/README.md).
 
 The selected production-equivalent progressive models measured as follows at batch 64, BF16, fused TorchScript, and
 memory-efficient SDPA:
@@ -165,7 +165,7 @@ memory-efficient SDPA:
 | `chess-attention-4m5` | 15x192, 6 heads, FFN 384 | 4,500,898 | 4,485,971 | 26,126.9 |
 
 The exact final run and environment are recorded in
-[the final progressive benchmark](../benchmarks/chess-direct-policy-final-progressive-rtx4070s-20260818/README.md).
+[the final progressive benchmark](../../benchmarks/chess-direct-policy-final-progressive-rtx4070s-20260818/README.md).
 
 ## 6. Progressive model sizing
 

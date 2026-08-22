@@ -1,6 +1,6 @@
 # Second four-day chess run: adaptive search and auxiliary-target plan
 
-> Superseded 2026-08-20 by `documentation/research/chess-recovery-plan-20260820.md`. The "accepted design" status
+> Superseded 2026-08-20 by `documentation/plan/chess-recovery-plan-20260820.md`. The "accepted design" status
 > below applies to the design only; no run was authorised. Its adaptive-budget, search-correction and
 > auxiliary-target designs are kept and re-validated per work package; the `parallel_searches: 4` decision was
 > reversed.

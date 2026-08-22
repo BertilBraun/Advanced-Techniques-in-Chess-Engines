@@ -5,7 +5,7 @@ treat everything below as unverified.
 
 ## Programme
 
-Chess recovery, [plan](research/chess-recovery-plan-20260820.md) of 2026-08-20. Phase A (development and
+Chess recovery, [plan](plan/chess-recovery-plan-20260820.md) of 2026-08-20. Phase A (development and
 small-scale tests on a 1–2 GPU node) is nearly complete; the WP7 overnight pipeline smoke — the gate for
 Phase B — is running on the 1×4070 test node using the run2 recipe
 (`py/configs/validation/vast-chess-1x4070-overnight.yaml`, attention 8x128). Go 7x7/9x9 screening is paused.
@@ -33,7 +33,7 @@ Frozen evidence: `.codex-diagnostics/chess-baseline-four-day-freeze-20260817` an
 
 ## Pass/fail reference
 
-The [per-generation yardstick](research/chess-recovery-plan-20260820.md#1-per-generation-yardstick-from-the-four-day-run)
+The [per-generation yardstick](plan/chess-recovery-plan-20260820.md#1-per-generation-yardstick-from-the-four-day-run)
 is the reference for any new run. Test-run rule: at generation 50, fixed top-1 ≥ 0.27 and SF level 0 ≥ 0.5; at
 generation 20, prev-20m ≥ 0.65.
 

@@ -8,8 +8,8 @@ valid where this file is silent.
 ## Read before you act
 
 - `documentation/CURRENT-STATE.md` — what the system is today.
-- `documentation/research/chess-recovery-plan-20260820.md` — the current plan; work is referenced by WP number.
-- `documentation/research/chess-post-four-day-regression-analysis-20260820.md` — why the plan exists.
+- `documentation/plan/chess-recovery-plan-20260820.md` — the current plan; work is referenced by WP number.
+- `documentation/plan/chess-post-four-day-regression-analysis-20260820.md` — why the plan exists.
 - `documentation/operations/run-control.md` — before starting, stopping or archiving any run.
 - `documentation/operations/experiment-platform.md` — before any experiment configuration, provisioning, queue,
   monitoring or export work (read its supersession banners first).

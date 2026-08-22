@@ -91,5 +91,5 @@ The native interactive chess engine is shared by both deployments and is intenti
 ## Research and references
 
 - [Experiment backlog](THINGS_TO_TRY.md)
-- [Research references](documentation/research/references.md)
+- [Research references](documentation/references.md)
 - [Historical insights](documentation/history/insights-and-recommendations.md)

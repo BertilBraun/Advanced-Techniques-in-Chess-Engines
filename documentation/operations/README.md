@@ -23,6 +23,6 @@ Procedures that are re-executed. Dated node and run records are evidence, listed
 - [Node benchmark note, 2026-08-21](node-benchmark-20260821.md) — spent; its output is
   [the four-node comparison](../benchmarks/node-comparison-vast-4nodes-20260821/README.md).
 - [R11 Vast integrated validation](../evidence/node-r11-vast-20260810.md) — frozen evidence from a destroyed node.
-- [Second four-day run readiness](chess-second-four-day-run-readiness.md) — superseded; the run was not launched.
+- [Second four-day run readiness](../plan/archive/chess-second-four-day-run-readiness.md) — superseded; the run was not launched.
 
 Operational guides do not authorize external mutations, rentals, provisioning, or experiments by themselves.

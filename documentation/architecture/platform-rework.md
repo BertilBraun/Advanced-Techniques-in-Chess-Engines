@@ -2,7 +2,7 @@
 
 > Status: closed 2026-08-13. The R1–R12 execution ledger below is the historical record of the multi-game
 > platform rework. R10, R11 and R12 were never authorised and are not pending work. Current work is tracked
-> by work package in `documentation/research/chess-recovery-plan-20260820.md`; this document authorises nothing.
+> by work package in `documentation/plan/chess-recovery-plan-20260820.md`; this document authorises nothing.
 
 ## Purpose
 

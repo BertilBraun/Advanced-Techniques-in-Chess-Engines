@@ -5,7 +5,7 @@ Every result is scoped to its recorded source revision, hardware, configuration,
 README may reproduce that historical run but may reference paths or interfaces removed later.
 
 Current acceptance criteria come from the per-generation yardstick in
-[the chess recovery plan](../research/chess-recovery-plan-20260820.md); deployment commands from the
+[the chess recovery plan](../plan/chess-recovery-plan-20260820.md); deployment commands from the
 [operations guides](../operations/README.md). Historical figures here are not acceptance criteria.
 
 ## Active harnesses

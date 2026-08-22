@@ -9,13 +9,13 @@ This index is updated in the same commit as any document it lists.
 
 - [Current state](CURRENT-STATE.md) — what the system is today, in two pages.
 - [Onboarding](ONBOARDING.md) — read-in-this-order path for a new contributor or agent.
-- [Chess recovery plan](research/chess-recovery-plan-20260820.md) — **the current plan**; work is referenced by
+- [Chess recovery plan](plan/chess-recovery-plan-20260820.md) — **the current plan**; work is referenced by
   WP number and its per-generation yardstick is the pass/fail reference for new runs.
 
 ## Current authority
 
-- [Chess recovery plan](research/chess-recovery-plan-20260820.md), grounded in the
-  [post-four-day regression analysis](research/chess-post-four-day-regression-analysis-20260820.md).
+- [Chess recovery plan](plan/chess-recovery-plan-20260820.md), grounded in the
+  [post-four-day regression analysis](plan/chess-post-four-day-regression-analysis-20260820.md).
 - [Python runtime architecture](architecture/python-runtime-rework.md) — accepted Python ownership and process
   model (read its as-built banner: the ingestion contract is being reworked under WP2).
 - [Progressive model sizing](architecture/progressive-model-sizing.md) — accepted training policy.
@@ -45,4 +45,4 @@ it is retained as the historical record of the platform rework.
 ## Research
 
 - [Experiment backlog](../THINGS_TO_TRY.md) — candidate experiments; ideas, not authorized runs.
-- [Research references](research/references.md) — papers and external resources.
+- [Research references](references.md) — papers and external resources.

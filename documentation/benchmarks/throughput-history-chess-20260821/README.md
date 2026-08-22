@@ -45,5 +45,5 @@ Readings:
 
 Provenance: WP5 raw JSON in `.codex-diagnostics/wp5-throughput-20260821/`; v11 telemetry in
 `.codex-diagnostics/v11-credit-training-telemetry.jsonl`; four-day numbers from
-`documentation/research/chess-post-four-day-regression-analysis-20260820.md` §3.2; WP5/WP4 configs resolved from
+`documentation/plan/chess-post-four-day-regression-analysis-20260820.md` §3.2; WP5/WP4 configs resolved from
 `vast-chess-8gpu-run1.yaml` (stand-in topology, SHA `f52e87ae…`).

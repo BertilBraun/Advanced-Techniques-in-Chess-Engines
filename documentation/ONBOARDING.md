@@ -6,8 +6,8 @@ Read-in-this-order path for a new contributor or agent.
 
 1. `CLAUDE.md` (5 min) — the working agreement: authority, evidence rules, conventions.
 2. [`CURRENT-STATE.md`](CURRENT-STATE.md) (5 min) — what the system is today.
-3. [Chess recovery plan](research/chess-recovery-plan-20260820.md) §0–§2 (30 min) — the current plan and
-   yardstick; skim the [regression analysis](research/chess-post-four-day-regression-analysis-20260820.md) for
+3. [Chess recovery plan](plan/chess-recovery-plan-20260820.md) §0–§2 (30 min) — the current plan and
+   yardstick; skim the [regression analysis](plan/chess-post-four-day-regression-analysis-20260820.md) for
    why it exists.
 4. [`py/README.md`](../py/README.md) (20 min) — entry points, setup, validation.
 5. [`cpp/README.md`](../cpp/README.md) + [`cpp/AGENTS.md`](../cpp/AGENTS.md) (20 min) — native build and

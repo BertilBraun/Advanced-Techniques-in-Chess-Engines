@@ -5,6 +5,6 @@
 - [Progressive model sizing](progressive-model-sizing.md): accepted progressive training policy.
 - [Platform rework](platform-rework.md): the **closed** R1–R12 execution ledger of the multi-game platform
   rework. Historical record only; it authorises nothing. Current work is tracked by work package in
-  [the chess recovery plan](../research/chess-recovery-plan-20260820.md).
+  [the chess recovery plan](../plan/chess-recovery-plan-20260820.md).
 
 Historical roadmaps elsewhere in Git history or under `documentation/history/` do not authorize work.
