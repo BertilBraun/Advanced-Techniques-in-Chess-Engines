@@ -201,85 +201,28 @@ def save_model_and_optimizer(
     write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')
 
 
-def import_checkpoint(
-    source_manifest_path: Path,
+def _checkpoint_identity(manifest: CheckpointManifest) -> tuple[NetworkDefinition, str, str, str]:
+    return (
+        manifest.network,
+        manifest.model_sha256,
+        manifest.optimizer_sha256,
+        manifest.inference_model_sha256,
+    )
+
+
+def _copy_checkpoint(
+    source_manifest: CheckpointManifest,
+    source_paths: tuple[Path, Path, Path],
     generation: int,
     destination_folder: Path,
-) -> CheckpointReference:
-    source_manifest = load_checkpoint_manifest_path(source_manifest_path, generation)
-    destination_manifest_path = checkpoint_manifest_path(generation, destination_folder)
-    if destination_manifest_path.exists():
-        destination_reference = CheckpointReference.load(destination_folder, generation)
-        destination_manifest = load_checkpoint_manifest(generation, destination_folder)
-        source_hashes = (
-            source_manifest.model_sha256,
-            source_manifest.optimizer_sha256,
-            source_manifest.inference_model_sha256,
-        )
-        destination_hashes = (
-            destination_manifest.model_sha256,
-            destination_manifest.optimizer_sha256,
-            destination_manifest.inference_model_sha256,
-        )
-        if destination_hashes != source_hashes:
-            raise ValueError('Existing imported checkpoint does not match the configured source checkpoint.')
-        return destination_reference
-
-    destination_paths = (
-        model_save_path(generation, destination_folder),
-        optimizer_save_path(generation, destination_folder),
-        model_save_path(generation, destination_folder).with_suffix('.jit.pt'),
-    )
-    if any(path.exists() for path in destination_paths):
-        raise ValueError('Imported checkpoint artifacts exist without their checkpoint manifest.')
-
-    destination_folder.mkdir(parents=True, exist_ok=True)
-    source_paths = (
-        source_manifest_path.parent / source_manifest.model_path,
-        source_manifest_path.parent / source_manifest.optimizer_path,
-        source_manifest_path.parent / source_manifest.inference_model_path,
-    )
-    for source_path, destination_path in zip(source_paths, destination_paths, strict=True):
-        temporary_path = _temporary_path(destination_path)
-        shutil.copyfile(source_path, temporary_path)
-        temporary_path.replace(destination_path)
-
-    imported_manifest = CheckpointManifest(
-        generation=generation,
-        network=source_manifest.network,
-        model_path=destination_paths[0].name,
-        model_sha256=source_manifest.model_sha256,
-        optimizer_path=destination_paths[1].name,
-        optimizer_sha256=source_manifest.optimizer_sha256,
-        inference_model_path=destination_paths[2].name,
-        inference_model_sha256=source_manifest.inference_model_sha256,
-    )
-    write_text_atomically(destination_manifest_path, imported_manifest.model_dump_json(indent=2) + '\n')
-    return CheckpointReference.load(destination_folder, generation)
-
-
-def publish_checkpoint(
-    source: CheckpointReference,
-    generation: int,
-    destination_folder: Path,
+    mismatch_message: str,
 ) -> CheckpointReference:
     destination_manifest_path = checkpoint_manifest_path(generation, destination_folder)
-    source_manifest = load_checkpoint_manifest_path(source.manifest_path, source.generation)
     if destination_manifest_path.exists():
         destination = CheckpointReference.load(destination_folder, generation)
         destination_manifest = load_checkpoint_manifest(generation, destination_folder)
-        if (
-            destination_manifest.network,
-            destination_manifest.model_sha256,
-            destination_manifest.optimizer_sha256,
-            destination_manifest.inference_model_sha256,
-        ) != (
-            source_manifest.network,
-            source_manifest.model_sha256,
-            source_manifest.optimizer_sha256,
-            source_manifest.inference_model_sha256,
-        ):
-            raise ValueError('Existing published checkpoint does not match the progressive model checkpoint.')
+        if _checkpoint_identity(destination_manifest) != _checkpoint_identity(source_manifest):
+            raise ValueError(mismatch_message)
         return destination
 
     destination_paths = (
@@ -287,7 +230,10 @@ def publish_checkpoint(
         optimizer_save_path(generation, destination_folder),
         model_save_path(generation, destination_folder).with_suffix('.jit.pt'),
     )
-    source_paths = (source.model_path, source.optimizer_path, source.inference_model_path)
+    if any(path.exists() for path in destination_paths):
+        raise ValueError('Checkpoint artifacts exist without their checkpoint manifest.')
+
+    destination_folder.mkdir(parents=True, exist_ok=True)
     for source_path, destination_path in zip(source_paths, destination_paths, strict=True):
         temporary_path = _temporary_path(destination_path)
         shutil.copyfile(source_path, temporary_path)
@@ -305,3 +251,39 @@ def publish_checkpoint(
     )
     write_text_atomically(destination_manifest_path, manifest.model_dump_json(indent=2) + '\n')
     return CheckpointReference.load(destination_folder, generation)
+
+
+def import_checkpoint(
+    source_manifest_path: Path,
+    generation: int,
+    destination_folder: Path,
+) -> CheckpointReference:
+    source_manifest = load_checkpoint_manifest_path(source_manifest_path, generation)
+    source_paths = (
+        source_manifest_path.parent / source_manifest.model_path,
+        source_manifest_path.parent / source_manifest.optimizer_path,
+        source_manifest_path.parent / source_manifest.inference_model_path,
+    )
+    return _copy_checkpoint(
+        source_manifest,
+        source_paths,
+        generation,
+        destination_folder,
+        'Existing imported checkpoint does not match the configured source checkpoint.',
+    )
+
+
+def publish_checkpoint(
+    source: CheckpointReference,
+    generation: int,
+    destination_folder: Path,
+) -> CheckpointReference:
+    source_manifest = load_checkpoint_manifest_path(source.manifest_path, source.generation)
+    source_paths = (source.model_path, source.optimizer_path, source.inference_model_path)
+    return _copy_checkpoint(
+        source_manifest,
+        source_paths,
+        generation,
+        destination_folder,
+        'Existing published checkpoint does not match the progressive model checkpoint.',
+    )
