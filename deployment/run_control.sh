@@ -192,6 +192,13 @@ command_supervised_runner() {
     local run_name="$1"
     load_registry "${run_name}"
 
+    # A supervised start means "run": clear any stop file a previous shutdown's trap left behind,
+    # otherwise every restart exits within seconds as "manual stop requested".
+    if [[ -e "${STOP_FILE}" ]]; then
+        echo "run_control: removing stale manual stop file left by a previous shutdown: ${STOP_FILE}" >&2
+        rm -f "${STOP_FILE}"
+    fi
+
     ulimit -Sn "${OPEN_FILE_SOFT_LIMIT}" \
         || echo "run_control: could not raise the open-file soft limit to ${OPEN_FILE_SOFT_LIMIT}" >&2
 
