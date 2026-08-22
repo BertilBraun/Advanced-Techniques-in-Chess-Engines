@@ -122,10 +122,6 @@ class TrainerGroup:
             ),
             total_loss=_mean(tuple(result.total_loss for result in results)),
             gradient_norm=_mean(tuple(result.gradient_norm for result in results)),
-            replay_rows_per_second=(
-                sum(result.replay_rows_read for result in results)
-                / max(result.replay_read_seconds for result in results)
-            ),
             training_samples_per_second=(
                 self.configuration.training.trainer.global_batch_size
                 * self.configuration.training.lifecycle.credit.optimizer_steps_per_quantum

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from collections import deque
 from collections.abc import Generator, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -83,12 +82,6 @@ class MappedReplayBatchLoader(Generic[PositionT]):
         self.rank = rank
         self.sampler_seed = sampler_seed
         self.pin_memory = pin_memory
-        self.rows_read = 0
-        self.read_seconds = 0.0
-
-    @property
-    def rows_per_second(self) -> float:
-        return self.rows_read / self.read_seconds if self.read_seconds > 0.0 else 0.0
 
     def __iter__(self) -> Iterator[TrainingBatch]:
         return self._prepared_batches()
@@ -131,15 +124,12 @@ class MappedReplayBatchLoader(Generic[PositionT]):
                 local_stop = local_start + self.local_batch_size
                 sample_indices = global_sample_indices[local_start:local_stop]
                 augmentation_indices = global_augmentation_indices[local_start:local_stop]
-                started_at = time.perf_counter()
                 batch = build_training_batch(
                     store,
                     self.state,
                     sample_indices,
                     augmentation_indices,
                 )
-                self.rows_read += len(sample_indices)
-                self.read_seconds += time.perf_counter() - started_at
                 yield batch
         finally:
             store.close()

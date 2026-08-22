@@ -352,8 +352,6 @@ def train_rank_quantum(
         auxiliary_losses=tuple(value / divisor for value in totals.auxiliary),
         total_loss=totals.total / divisor,
         gradient_norm=totals.gradient_norm / divisor,
-        replay_rows_read=loader.rows_read,
-        replay_read_seconds=loader.read_seconds,
         elapsed_seconds=time.perf_counter() - started_at,
         checkpoint=checkpoint,
         distributions=training_result.distributions,

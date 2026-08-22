@@ -161,7 +161,6 @@ class TrainingReporter:
         ):
             log_scalar(f'training_auxiliary/{_auxiliary_name(index, head)}/loss', auxiliary_loss, generation)
         _record_training_distributions(statistics.distributions, self.auxiliary_heads, generation)
-        log_scalar('throughput/replay_rows_per_second', statistics.replay_rows_per_second, generation)
         log_scalar('throughput/training_samples_per_second', statistics.training_samples_per_second, generation)
         log_scalar('training/optimizer_steps', publication.completed_optimizer_steps, generation)
         log_scalar('training/learning_rate', training.trainer.learning_rate.value_at(generation - 1), generation)
@@ -183,7 +182,6 @@ class TrainingReporter:
         log_scalar('replay/fill_fraction', lifecycle.replay_fill_fraction, generation)
         log(
             f'Completed generation {generation}: loss={statistics.total_loss:.4f}, '
-            f'replay={statistics.replay_rows_per_second:.0f} rows/s, '
             f'training={statistics.training_samples_per_second:.0f} samples/s, '
             f'credit-wait={credit_wait_seconds:.1f}s, '
             f'available-presentations={lifecycle.available_presentations:.0f}, '
