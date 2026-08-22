@@ -107,8 +107,10 @@ directory in `LD_LIBRARY_PATH`. Otherwise KataGo children can fail to load CUDA 
 passed.
 
 Every production run needs a new approval JSON outside Git. Create it only after the final revision and resolved
-configuration are fixed. It must bind the approver, exact Git revision, canonical configuration hash, offer, hourly
-price, and wall-time limit. Never reuse an approval from another revision, configuration, node, or campaign.
+configuration are fixed. It binds the approver, approval timestamp, exact Git revision, canonical configuration
+hash, and cost ceiling — the offer, hourly price and wall-time limit are already pinned by the configuration hash.
+The format is in [Run control](run-control.md#approval-file); approval files written before that trim are invalid
+and must be re-issued. Never reuse an approval from another revision, configuration, node, or campaign.
 
 ## Queue ownership and operation
 
@@ -152,7 +154,7 @@ script; agents do not run CMake separately. The fresh-node bootstrap installs `c
 automatically, and changed-C++ revisions reuse compatible compilation units. The bootstrap also seeds the native
 artifact cache from its initial Release build.
 
-The bootstrap virtual environment is reused while `py/requirements-training.lock` is unchanged. A revision that
+The bootstrap virtual environment is reused while the repository `uv.lock` is unchanged. A revision that
 changes the lock requires a new locked environment, but the package manager's download cache still avoids fetching
 unchanged wheels. Do not point a changed-lock experiment at an environment created for a different lock.
 

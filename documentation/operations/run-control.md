@@ -29,13 +29,31 @@ All paths are overridable; defaults target the standard Vast.ai node layout.
 optionally `RUN_CONTROL_SSH_KEY` (a local key path; keys never enter the repository or the node filesystem), and
 optionally `RUN_CONTROL_REMOTE_ARCHIVE_ROOT`.
 
+## Approval file
+
+`<approval-directory>/<config-stem>.json` has exactly these five fields; unknown fields are rejected:
+
+```json
+{
+  "approved_by": "USER_NAME",
+  "approved_at_utc": "UTC_TIMESTAMP_WITH_OFFSET",
+  "source_revision": "APPROVED_REVISION",
+  "configuration_sha256": "RESOLVED_CONFIGURATION_SHA256",
+  "maximum_cost": null
+}
+```
+
+`source_revision`, `configuration_sha256` and `maximum_cost` are compared against the run; the resolved
+configuration hash already pins the run name, hardware offer, price and wall-time limit, so those are no longer
+carried separately. Approval files written before this change are invalid and must be re-issued.
+
 ## Commands
 
 ### `run_control.sh start <config.yaml>`
 
 Validates before anything runs: clean checkout (`git status --porcelain` empty), the configuration resolves through
 `load_experiment_configuration`, a non-null `training.limits.manual_stop_file`, the approval JSON at
-`<approval-directory>/<config-stem>.json` matches run name, `experiment_configuration_sha256` and `HEAD`, and no
+`<approval-directory>/<config-stem>.json` matches `experiment_configuration_sha256` and `HEAD`, and no
 stale stop file exists. It then writes the run registry entry (`$RUN_CONTROL_ROOT/runs/<run-name>.env`), installs a
 supervisor program named after the run, and starts it via `supervisorctl reread` / `update` / `start`. The deep
 validation (hardware contract, runtime image, dependency lock, evaluation artifacts) still happens inside

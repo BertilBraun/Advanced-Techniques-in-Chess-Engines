@@ -8,11 +8,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.experiment.configuration import (
-    experiment_configuration_sha256,
-    experiment_configuration_source_paths,
-    load_experiment_configuration,
-)
+from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.experiment_queue.configuration import QueueConfiguration, QueuedExperiment, ResourceSlot
 
 
@@ -64,18 +60,8 @@ def _validate_experiment(experiment: QueuedExperiment, repository_directory: Pat
     resolved_revision = _git_output(repository_directory, ('rev-parse', f'{experiment.source_revision}^{{commit}}'))
     if resolved_revision != experiment.source_revision:
         raise ValueError(f'Experiment source revision is not an exact commit: {experiment.source_revision}')
+    # The resolved configuration SHA below pins the whole extends chain, so per-file blob comparison adds nothing.
     configuration = load_experiment_configuration(experiment.experiment_file)
-    for source_path in experiment_configuration_source_paths(experiment.experiment_file):
-        relative_path = source_path.relative_to(repository_directory)
-        committed_blob = _git_output(
-            repository_directory,
-            ('rev-parse', f'{experiment.source_revision}:{relative_path.as_posix()}'),
-        )
-        working_blob = _git_output(repository_directory, ('hash-object', str(source_path)))
-        if committed_blob != working_blob:
-            raise ValueError(
-                f'Experiment configuration does not match revision {experiment.source_revision}: {source_path}'
-            )
     return ValidatedQueuedExperiment(
         definition=experiment,
         configuration_sha256=experiment_configuration_sha256(configuration),

@@ -45,14 +45,9 @@ class ResolvedHardware(FrozenModel):
 class ApprovalRecord(FrozenModel):
     approved_by: str = Field(min_length=1)
     approved_at_utc: datetime
-    run_name: str
     source_revision: str = Field(pattern=r'^[0-9a-f]{40}$')
     configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
-    provider_name: str
-    offer_id: str
-    hourly_price: float
     maximum_cost: float | None
-    maximum_wall_time_minutes: int | None
 
     @model_validator(mode='after')
     def validate_approval_timestamp(self) -> ApprovalRecord:

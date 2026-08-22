@@ -126,23 +126,20 @@ def _validate_approval(
     approval: ApprovalRecord,
     source_revision: str,
 ) -> None:
-    run = experiment.run
-    limits = experiment.training.limits
-    if not run.requires_explicit_approval:
+    if not experiment.run.requires_explicit_approval:
         raise ValueError('Training configurations must require explicit approval.')
-    expected = (
-        approval.run_name == run.run_name
-        and approval.source_revision == source_revision
-        and approval.configuration_sha256 == experiment_configuration_sha256(experiment)
-        and approval.provider_name == run.hardware.provider_name
-        and approval.offer_id == run.hardware.offer_id
-        and approval.hourly_price == limits.hourly_price
-        and approval.maximum_cost == limits.maximum_cost
-        and approval.maximum_wall_time_minutes
-        == (None if limits.maximum_wall_time_seconds is None else int(limits.maximum_wall_time_seconds / 60))
+    compared = (
+        ('source_revision', approval.source_revision, source_revision),
+        ('configuration_sha256', approval.configuration_sha256, experiment_configuration_sha256(experiment)),
+        ('maximum_cost', approval.maximum_cost, experiment.training.limits.maximum_cost),
     )
-    if not expected:
-        raise ValueError('Approval does not match the requested experiment.')
+    mismatches = [
+        f'{name} (approval {approved!r} vs run {expected!r})'
+        for name, approved, expected in compared
+        if approved != expected
+    ]
+    if mismatches:
+        raise ValueError(f'Approval mismatch on: {", ".join(mismatches)}')
 
 
 def _write_manifest(path: Path, manifest: ExperimentRunManifest) -> ExperimentRunManifest:

@@ -119,14 +119,9 @@ def _fixture(tmp_path: Path) -> tuple[ExportRequest, Path, Path]:
     approval = ApprovalRecord(
         approved_by='test',
         approved_at_utc=datetime.now(timezone.utc),
-        run_name=experiment.run.run_name,
         source_revision=source_revision,
         configuration_sha256=configuration_sha256,
-        provider_name=experiment.run.hardware.provider_name,
-        offer_id=experiment.run.hardware.offer_id,
-        hourly_price=experiment.training.limits.hourly_price,
         maximum_cost=experiment.training.limits.maximum_cost,
-        maximum_wall_time_minutes=int(experiment.training.limits.maximum_wall_time_seconds / 60),
     )
     run_manifest = ExperimentRunManifest(
         experiment=experiment,

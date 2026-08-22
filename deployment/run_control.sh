@@ -89,14 +89,14 @@ PYTHON
 }
 
 validate_approval() {
-    local approval_file="$1" run_name="$2" configuration_sha256="$3" source_revision="$4"
+    local approval_file="$1" configuration_sha256="$2" source_revision="$3"
     [[ -f "${approval_file}" ]] || fail "approval file does not exist: ${approval_file}"
-    "$(venv_python)" - "${approval_file}" "${run_name}" "${configuration_sha256}" "${source_revision}" <<'PYTHON'
+    "$(venv_python)" - "${approval_file}" "${configuration_sha256}" "${source_revision}" <<'PYTHON'
 import json
 import sys
 
 approval = json.load(open(sys.argv[1], encoding='utf-8'))
-expected = {'run_name': sys.argv[2], 'configuration_sha256': sys.argv[3], 'source_revision': sys.argv[4]}
+expected = {'configuration_sha256': sys.argv[2], 'source_revision': sys.argv[3]}
 for key, value in expected.items():
     if approval.get(key) != value:
         raise SystemExit(f'approval mismatch on {key}: approval has {approval.get(key)!r}, run has {value!r}')
@@ -135,7 +135,7 @@ command_start() {
 
     local approval_file
     approval_file="${approval_directory}/$(basename "${config_path%.*}").json"
-    validate_approval "${approval_file}" "${run_name}" "${configuration_sha256}" "${source_revision}"
+    validate_approval "${approval_file}" "${configuration_sha256}" "${source_revision}"
 
     [[ -e "${stop_file}" ]] && fail "stale manual stop file exists: ${stop_file} — inspect and remove it before starting"
 
