@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -701,6 +702,27 @@ def test_replay_shard_queue_rejects_cross_claim_duplicates_and_reordering(tmp_pa
             next_sequence=2,
             pending=(reordered_first, reordered_second),
         )
+    manager.close()
+
+
+def test_late_arriving_older_inbox_file_is_requeued_behind_claimed_games(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 1)
+    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8, shard_maximum_games=1)
+    sealed: list[SealedReplayShard] = []
+    manager.materialize_available_games(sealed.append)
+    assert len(sealed) == 1
+
+    _publish_games(inbox, 1, first_game_number=99)
+    late_file = next(iter(inbox.glob('*.json')))
+    os.utime(late_file, ns=(0, 0))
+
+    manager.materialize_available_games(sealed.append)
+
+    assert len(sealed) == 2
+    queue = ReplayShardQueue.model_validate_json(manager.queue_path.read_text(encoding='utf-8'))
+    keys = tuple(source.order.key for claim in queue.pending for source in claim.games)
+    assert keys == tuple(sorted(keys))
     manager.close()
 
 

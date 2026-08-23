@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import threading
 import time
 from concurrent.futures import Future, ProcessPoolExecutor, wait
@@ -467,6 +468,10 @@ class ReplayManager(Generic[PositionT]):
                 return
             queue_snapshot = self._queue
             claimed = {source.order.file_name for claim in queue_snapshot.pending for source in claim.games}
+            last_claimed_key = max(
+                (source.order.key for claim in queue_snapshot.pending for source in claim.games),
+                default=None,
+            )
             available = tuple(path for path in self.inbox_files_by_modification_time() if path.name not in claimed)
             maximum_pending = max(_MINIMUM_PENDING_SHARD_LIMIT, 2 * self.configuration.materialization_processes)
             claim_slots = maximum_pending - sum(
@@ -484,6 +489,13 @@ class ReplayManager(Generic[PositionT]):
                 candidate = available[candidate_index]
                 try:
                     status = candidate.stat()
+                    # A game renamed into the inbox can surface after a younger file was already
+                    # claimed; refresh its timestamp so it re-enters the FIFO at the tail instead
+                    # of violating the queue's global order.
+                    if last_claimed_key is not None and (status.st_mtime_ns, candidate.name) <= last_claimed_key:
+                        os.utime(candidate)
+                        candidate_index += 1
+                        continue
                     if (
                         batch
                         and batch_bytes + status.st_size > self.configuration.materialization_shard_target_source_bytes
