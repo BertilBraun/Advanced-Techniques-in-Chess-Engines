@@ -15,7 +15,13 @@ from src.training.checkpoint.contracts import (
 )
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
 from src.training.configuration import OptimizerType
-from src.training.network import InferenceNetwork, Network, NetworkConfiguration, NetworkDefinition
+from src.training.network import (
+    InferenceNetwork,
+    Network,
+    NetworkConfiguration,
+    NetworkDefinition,
+    apply_bootstrap_policy_prior,
+)
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
@@ -176,6 +182,8 @@ def save_model_and_optimizer(
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
 
     fused_model = InferenceNetwork(model)
+    if generation == 0:
+        apply_bootstrap_policy_prior(fused_model, model.network_args)
     fused_model.eval()
     fused_model.fuse_model()
 

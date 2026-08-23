@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.network import (
     ATTENTION_LINEAR_INITIALIZATION_STD,
+    BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE,
     AttentionEncoderBlock,
     AttentionNetworkParams,
     Chess76PlaneDirectPolicyHeadConfiguration,
@@ -14,6 +15,7 @@ from src.training.network import (
     GlobalPoolingBias,
     GlobalPoolingResBlock,
     GlobalPoolingResidualContext,
+    InferenceNetwork,
     Network,
     NetworkParams,
     PolicyPlaneHead,
@@ -21,6 +23,7 @@ from src.training.network import (
     ResidualContextPlacement,
     SqueezeExcitation,
     SqueezeExcitationResidualContext,
+    apply_bootstrap_policy_prior,
 )
 from src.training.targets import (
     LegalMovesHeadLayout,
@@ -341,3 +344,46 @@ def test_dense_policy_head_remains_selectable_with_replica_initialization() -> N
     assert isinstance(network.policy_head, nn.Sequential)
     assert isinstance(dense_output, nn.Linear)
     assert float(dense_output.weight.std()) == pytest.approx((2.0 / 512) ** 0.5, rel=0.1)
+
+
+def test_bootstrap_policy_prior_sharpens_attention_inference_export_only() -> None:
+    torch.manual_seed(11)
+    attention = Network(
+        AttentionNetworkParams(
+            num_layers=2,
+            embedding_size=16,
+            num_heads=2,
+            feedforward_size=32,
+            policy_head=CHESS_POLICY_HEAD,
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+    )
+    export = InferenceNetwork(attention)
+    training_weight_before = attention.policy_head.output_projection.weight.clone()
+
+    apply_bootstrap_policy_prior(export, attention.network_args)
+
+    scale = BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE
+    assert torch.allclose(export.policy_head.output_projection.weight, training_weight_before * scale)
+    assert torch.equal(attention.policy_head.output_projection.weight, training_weight_before)
+
+
+def test_bootstrap_policy_prior_leaves_convolutional_networks_unscaled() -> None:
+    torch.manual_seed(11)
+    convolutional = Network(
+        NetworkParams(
+            num_layers=2,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=CHESS_POLICY_HEAD,
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+    )
+    export = InferenceNetwork(convolutional)
+    weight_before = export.policy_head.output_projection.weight.clone()
+
+    apply_bootstrap_policy_prior(export, convolutional.network_args)
+
+    assert torch.equal(export.policy_head.output_projection.weight, weight_before)

@@ -329,6 +329,24 @@ class InferenceNetwork(nn.Module):
         fuse_conv_batchnorm(self)
 
 
+# Deep BatchNorm CNNs get an accidental sharp random behaviour prior at generation 0 (eval-mode
+# running-statistics mismatch, measured logit std 7-52), which the r3 recipe depends on to break
+# search symmetry and bootstrap decisive self-play. LayerNorm trunks have no such artifact (measured
+# 0.04-0.07) and stall in uniform search; this scale recreates the sharp prior deliberately, on the
+# inference export only, so the training model still starts near-uniform for healthy optimization.
+BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE = 75.0
+
+
+def apply_bootstrap_policy_prior(inference_model: InferenceNetwork, args: NetworkConfiguration) -> None:
+    match args:
+        case AttentionNetworkParams():
+            match inference_model.policy_head:
+                case PolicyPlaneHead(output_projection=output_projection):
+                    with torch.no_grad():
+                        output_projection.weight.mul_(BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE)
+                        output_projection.bias.mul_(BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE)
+
+
 def fuse_conv_batchnorm(root: nn.Module) -> None:
     for module in root.modules():
         if (
