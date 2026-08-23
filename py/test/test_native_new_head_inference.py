@@ -14,7 +14,7 @@ from src.games.chess.interactive.engine import InteractiveEngine
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.network import (
     AttentionNetworkParams,
-    Chess76PlaneDirectPolicyHeadConfiguration,
+    DensePolicyHeadConfiguration,
     DisabledResidualContext,
     Network,
     NetworkConfiguration,
@@ -32,7 +32,7 @@ pytestmark = pytest.mark.integration
             num_layers=1,
             hidden_size=64,
             residual_context=DisabledResidualContext(),
-            policy_head=Chess76PlaneDirectPolicyHeadConfiguration(),
+            policy_head=DensePolicyHeadConfiguration(channels=2),
             num_value_channels=2,
             value_fc_size=16,
         ),
@@ -41,7 +41,7 @@ pytestmark = pytest.mark.integration
             embedding_size=64,
             num_heads=2,
             feedforward_size=128,
-            policy_head=Chess76PlaneDirectPolicyHeadConfiguration(),
+            policy_head=DensePolicyHeadConfiguration(channels=2),
             num_value_channels=2,
             value_fc_size=16,
         ),
@@ -52,7 +52,9 @@ def test_native_inference_pipeline_searches_with_an_exported_new_head_model(
     parameters: NetworkConfiguration,
 ) -> None:
     torch.manual_seed(19)
-    auxiliary_heads = (NextPolicyHeadLayout(kind='next_policy', action_size=4864, ply_offset=1),)
+    auxiliary_heads = (
+        NextPolicyHeadLayout(kind='next_policy', action_size=CHESS_NETWORK_DIMENSIONS.actions, ply_offset=1),
+    )
     model = Network(parameters, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, auxiliary_heads)
     save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 0, tmp_path)
 

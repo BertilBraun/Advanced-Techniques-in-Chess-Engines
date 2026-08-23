@@ -13,6 +13,8 @@ from src.games.representation import (
 )
 from src.self_play.completed_game import TerminationReason
 
+CHESS_ACTION_SIZE = 1880
+
 OWN_KING_SIDE_CASTLING_PLANE = 12
 OWN_QUEEN_SIDE_CASTLING_PLANE = 13
 OPPONENT_KING_SIDE_CASTLING_PLANE = 14
@@ -65,7 +67,7 @@ class ChessStateContract(GameStateContract[ChessPosition]):
 
     @property
     def action_size(self) -> int:
-        return 4864
+        return CHESS_ACTION_SIZE
 
     @property
     def maximum_legal_action_count(self) -> int:

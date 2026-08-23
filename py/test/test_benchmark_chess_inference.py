@@ -7,7 +7,8 @@ import pytest
 import torch
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
-from src.training.network import Network
+from src.games.representation import NetworkDimensions
+from src.training.network import CHESS_POLICY_PLANE_COUNT, Network
 from src.training.targets import build_training_target_layout
 from tools.benchmark_chess_inference import (
     _benchmark_models,
@@ -17,6 +18,12 @@ from tools.benchmark_chess_inference import (
 )
 
 CONFIGURATION_PATH = Path('configs/production/vast-chess-8gpu-optimal.yaml')
+CHESS_PLANE_NETWORK_DIMENSIONS = NetworkDimensions(
+    channels=CHESS_NETWORK_DIMENSIONS.channels,
+    rows=CHESS_NETWORK_DIMENSIONS.rows,
+    columns=CHESS_NETWORK_DIMENSIONS.columns,
+    actions=CHESS_POLICY_PLANE_COUNT * 64,
+)
 
 
 @pytest.mark.parametrize(
@@ -59,7 +66,7 @@ def test_production_progressive_model_parameter_counts_are_derived_directly() ->
     progressive = configuration.training.progressive_model_sizing
     assert progressive is not None
     target_layout = build_training_target_layout(
-        CHESS_NETWORK_DIMENSIONS.actions,
+        CHESS_PLANE_NETWORK_DIMENSIONS.actions,
         configuration.chess.objective.auxiliary_targets,
     )
 
@@ -73,7 +80,7 @@ def test_production_progressive_model_parameter_counts_are_derived_directly() ->
         network = Network(
             model.network,
             torch.device('cpu'),
-            CHESS_NETWORK_DIMENSIONS,
+            CHESS_PLANE_NETWORK_DIMENSIONS,
             target_layout.auxiliary_heads,
         )
         count = parameter_counts(network)

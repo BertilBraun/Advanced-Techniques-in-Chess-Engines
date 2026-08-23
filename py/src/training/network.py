@@ -244,12 +244,12 @@ class Network(nn.Module):
                 _initialize_attention_trunk(self.start_block, self.backbone, num_layers)
             case NetworkParams():
                 pass
-        _initialize_small_policy_output(self.policy_head)
+        _initialize_small_policy_output(self.policy_head, args.policy_head)
         _initialize_small_linear_output(self.value_head[-1])
         for auxiliary_module, auxiliary_layout in zip(self.auxiliary_head_modules, self.auxiliary_heads):
             match auxiliary_layout:
                 case NextPolicyHeadLayout() | LegalMovesHeadLayout():
-                    _initialize_small_policy_output(auxiliary_module)
+                    _initialize_small_policy_output(auxiliary_module, args.policy_head)
                 case _:
                     _initialize_small_linear_output(auxiliary_module[-1])
 
@@ -414,7 +414,11 @@ def _build_policy_head(
     match configuration:
         case Chess76PlaneDirectPolicyHeadConfiguration():
             if row_count != 8 or column_count != 8 or action_size != CHESS_POLICY_PLANE_COUNT * 64:
-                raise ValueError('Chess direct policy heads require an 8x8 board and 4,864 actions.')
+                raise ValueError(
+                    f'Chess direct policy heads require an 8x8 board and '
+                    f'{CHESS_POLICY_PLANE_COUNT * 64} actions, not {action_size}; '
+                    f'the reduced chess action encoding needs a dense policy head.'
+                )
             return PolicyPlaneHead(input_channels, plane_hidden_channels, CHESS_POLICY_PLANE_COUNT)
         case DensePolicyHeadConfiguration(channels=channels):
             return nn.Sequential(
@@ -492,13 +496,17 @@ def _initialize_attention_trunk(
                     nn.init.zeros_(residual_projection.bias)
 
 
-def _initialize_small_policy_output(module: nn.Module) -> None:
-    match module:
-        case PolicyPlaneHead(output_projection=output_projection):
-            nn.init.normal_(output_projection.weight, std=SMALL_OUTPUT_INITIALIZATION_STD)
-            nn.init.zeros_(output_projection.bias)
-        case _:
-            # The dense replica head and the Go point-pass head keep their historical Kaiming initialization.
+def _initialize_small_policy_output(module: nn.Module, configuration: PolicyHeadConfiguration) -> None:
+    match configuration:
+        case Chess76PlaneDirectPolicyHeadConfiguration():
+            assert isinstance(module, PolicyPlaneHead), 'The 76-plane policy configuration must build a plane head.'
+            nn.init.normal_(module.output_projection.weight, std=SMALL_OUTPUT_INITIALIZATION_STD)
+            nn.init.zeros_(module.output_projection.bias)
+        case DensePolicyHeadConfiguration():
+            assert isinstance(module, nn.Sequential), 'The dense policy configuration must build a sequential head.'
+            _initialize_small_linear_output(module[-1])
+        case GoPointPassPolicyHeadConfiguration():
+            # The Go point-pass head keeps its historical Kaiming initialization.
             pass
 
 

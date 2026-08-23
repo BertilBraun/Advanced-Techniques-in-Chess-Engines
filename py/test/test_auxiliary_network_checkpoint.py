@@ -14,6 +14,7 @@ from src.training.checkpoint.persistence import (
     save_model_and_optimizer,
 )
 from src.training.network import (
+    CHESS_POLICY_PLANE_COUNT,
     AttentionNetworkParams,
     Chess76PlaneDirectPolicyHeadConfiguration,
     DensePolicyHeadConfiguration,
@@ -26,6 +27,14 @@ from src.training.network import (
     ResidualContextPlacement,
 )
 from src.training.targets import LegalMovesHeadLayout, NextPolicyHeadLayout, RemainingGameLengthHeadLayout
+
+CHESS_PLANE_ACTION_SIZE = CHESS_POLICY_PLANE_COUNT * 64
+CHESS_PLANE_NETWORK_DIMENSIONS = NetworkDimensions(
+    channels=CHESS_NETWORK_DIMENSIONS.channels,
+    rows=CHESS_NETWORK_DIMENSIONS.rows,
+    columns=CHESS_NETWORK_DIMENSIONS.columns,
+    actions=CHESS_PLANE_ACTION_SIZE,
+)
 
 
 @pytest.mark.parametrize(
@@ -130,10 +139,10 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
         value_fc_size=8,
     )
     auxiliary_heads = (
-        NextPolicyHeadLayout(kind='next_policy', action_size=4864, ply_offset=1),
+        NextPolicyHeadLayout(kind='next_policy', action_size=CHESS_PLANE_ACTION_SIZE, ply_offset=1),
         RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
     )
-    model = Network(parameters, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, auxiliary_heads)
+    model = Network(parameters, torch.device('cpu'), CHESS_PLANE_NETWORK_DIMENSIONS, auxiliary_heads)
     model.eval()
     inputs = torch.randn((2, 29, 8, 8))
     expected_training_output = model.training_output(inputs)
@@ -144,7 +153,7 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
         tmp_path / 'model_1.pt',
         parameters,
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
         auxiliary_heads,
     )
     loaded.eval()
@@ -152,8 +161,11 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
     inference_model = torch.jit.load(str(tmp_path / 'model_1.jit.pt'), map_location='cpu')
     inference_policy, inference_wdl, inference_search_correction = inference_model(inputs)
 
-    assert expected_training_output.policy_logits.shape == (2, 4864)
-    assert tuple(output.shape for output in expected_training_output.auxiliary_logits) == ((2, 4864), (2, 1))
+    assert expected_training_output.policy_logits.shape == (2, CHESS_PLANE_ACTION_SIZE)
+    assert tuple(output.shape for output in expected_training_output.auxiliary_logits) == (
+        (2, CHESS_PLANE_ACTION_SIZE),
+        (2, 1),
+    )
     assert all('action_plane_indices' not in name for name, _ in loaded.named_buffers())
     assert all(not name.startswith('auxiliary_head_modules.') for name, _ in inference_model.named_buffers())
     torch.testing.assert_close(loaded_training_output.policy_logits, expected_training_output.policy_logits)
@@ -199,11 +211,11 @@ def test_jit_export_matches_training_forward_for_chess_heads(
 ) -> None:
     torch.manual_seed(17)
     auxiliary_heads = (
-        NextPolicyHeadLayout(kind='next_policy', action_size=4864, ply_offset=1),
-        LegalMovesHeadLayout(kind='legal_moves', action_size=4864),
+        NextPolicyHeadLayout(kind='next_policy', action_size=CHESS_PLANE_ACTION_SIZE, ply_offset=1),
+        LegalMovesHeadLayout(kind='legal_moves', action_size=CHESS_PLANE_ACTION_SIZE),
         RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
     )
-    model = Network(parameters, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, auxiliary_heads)
+    model = Network(parameters, torch.device('cpu'), CHESS_PLANE_NETWORK_DIMENSIONS, auxiliary_heads)
     model.eval()
     inputs = torch.rand((4, 29, 8, 8))
     expected_policy_logits, expected_value = model(inputs)
@@ -213,6 +225,6 @@ def test_jit_export_matches_training_forward_for_chess_heads(
     inference_model.eval()
     inference_policy, inference_wdl, _ = inference_model(inputs)
 
-    assert inference_policy.shape == (4, 4864)
+    assert inference_policy.shape == (4, CHESS_PLANE_ACTION_SIZE)
     torch.testing.assert_close(inference_policy, expected_policy_logits, rtol=0.0, atol=1e-5)
     torch.testing.assert_close(inference_wdl, expected_value, rtol=0.0, atol=1e-5)
