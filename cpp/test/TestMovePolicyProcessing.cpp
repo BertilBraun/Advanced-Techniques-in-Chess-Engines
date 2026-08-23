@@ -90,39 +90,78 @@ void testRepresentativePositions() {
     requireNormalized(promotion, finiteLogits(), "promotion position");
 }
 
-void testDirectPolicyLayout() {
-    require(ChessEncoding::actionCount == ChessRepresentationDimensions::policyPlaneCount * 64,
-            "chess action space is not the direct policy-plane layout");
+void testSelectedActionSpaceLayout() {
+    if constexpr (chessActionEncoding == ChessActionEncoding::Reduced) {
+        require(ChessEncoding::actionCount == ChessRepresentationDimensions::reducedActionCount,
+                "chess action space is not the reduced move layout");
+    } else {
+        require(ChessEncoding::actionCount == ChessRepresentationDimensions::policyPlaneActionCount,
+                "chess action space is not the direct policy-plane layout");
+    }
     for (const int actionId : range(ChessEncoding::actionCount)) {
         require(ChessEncoding::mirrorActionId(ChessEncoding::mirrorActionId(actionId)) == actionId,
-                "policy-plane mirroring is not an involution");
+                "chess action mirroring is not an involution");
     }
+
     const Board promotion("7k/P7/8/8/8/8/8/7K w - - 0 1");
-    std::vector<int> promotionPlanes;
+    std::vector<int> promotionIds;
     for (const Stockfish::Move move : promotion.validMoves()) {
         if (move.type_of() == Stockfish::PROMOTION) {
             const int actionId = ChessEncoding::actionId(ChessAction(move), promotion);
-            require(actionId % 64 == static_cast<int>(move.from_sq()),
-                    "white promotion action does not retain its canonical origin square");
-            promotionPlanes.push_back(actionId / 64);
+            if constexpr (chessActionEncoding == ChessActionEncoding::PolicyPlane) {
+                require(actionId % 64 == static_cast<int>(move.from_sq()),
+                        "white promotion action does not retain its canonical origin square");
+                require(actionId / 64 >= 64,
+                        "promotion choices did not use explicit promotion planes");
+            }
+            promotionIds.push_back(actionId);
         }
     }
-    std::ranges::sort(promotionPlanes);
-    require(std::ranges::unique(promotionPlanes).begin() == promotionPlanes.end() &&
-                promotionPlanes.size() == 4,
-            "promotion choices do not occupy distinct spatial policy planes");
-    require(promotionPlanes.front() >= 64,
-            "promotion choices did not use explicit promotion planes");
+    std::ranges::sort(promotionIds);
+    require(std::ranges::unique(promotionIds).begin() == promotionIds.end() &&
+                promotionIds.size() == 4,
+            "promotion choices do not occupy distinct action ids");
 
     const Board blackPromotion("7K/8/8/8/8/8/p7/7k b - - 0 1");
     for (const Stockfish::Move move : blackPromotion.validMoves()) {
         if (move.type_of() == Stockfish::PROMOTION) {
             const int actionId = ChessEncoding::actionId(ChessAction(move), blackPromotion);
-            require(actionId % 64 == static_cast<int>(Stockfish::flip_rank(move.from_sq())),
-                    "black promotion action does not retain its canonical origin square");
+            if constexpr (chessActionEncoding == ChessActionEncoding::PolicyPlane) {
+                require(actionId % 64 == static_cast<int>(Stockfish::flip_rank(move.from_sq())),
+                        "black promotion action does not retain its canonical origin square");
+            }
             require(ChessEncoding::decodeAction(actionId, blackPromotion) == ChessAction(move),
-                    "black promotion action did not round-trip through the direct layout");
+                    "black promotion action did not round-trip through the selected layout");
         }
+    }
+}
+
+void testReducedActionSpaceIsTotal() {
+    if constexpr (chessActionEncoding != ChessActionEncoding::Reduced) {
+        return;
+    }
+    const Board initial;
+    for (const int actionId : range(ChessEncoding::actionCount)) {
+        try {
+            static_cast<void>(ChessEncoding::decodeAction(actionId, initial));
+        } catch (const std::invalid_argument &error) {
+            require(std::string(error.what()) == "Chess action ID is illegal in this position",
+                    "reduced chess action id did not encode an on-board move");
+        }
+    }
+}
+
+void testPlayoutRoundTrips() {
+    Board board;
+    for (int ply = 0; ply < 400 && !board.isGameOver(); ++ply) {
+        requireLegalRoundTrips(board, "playout ply " + std::to_string(ply));
+        const std::vector<Stockfish::Move> &moves = board.validMoves();
+        const Stockfish::Move move = moves[static_cast<std::size_t>(ply * 7 + 3) % moves.size()];
+        const int actionId = ChessEncoding::actionId(ChessAction(move), board);
+        const int mirroredActionId = ChessEncoding::mirrorActionId(actionId);
+        require(ChessEncoding::mirrorActionId(mirroredActionId) == actionId,
+                "playout mirroring is not an involution");
+        board.makeMove(move);
     }
 }
 
@@ -198,9 +237,11 @@ void testDecodeRejections() {
             static_cast<void>(ChessEncoding::decodeAction(ChessEncoding::actionCount, initial));
         },
         "out-of-range chess action id was accepted");
-    requireInvalidArgument(
-        [&initial] { static_cast<void>(ChessEncoding::decodeAction(63, initial)); },
-        "off-board chess action id was accepted");
+    if constexpr (chessActionEncoding == ChessActionEncoding::PolicyPlane) {
+        requireInvalidArgument(
+            [&initial] { static_cast<void>(ChessEncoding::decodeAction(63, initial)); },
+            "off-board chess action id was accepted");
+    }
     requireInvalidArgument(
         [&initial] { static_cast<void>(ChessEncoding::decodeAction(0, initial)); },
         "position-illegal chess action id was accepted");
@@ -296,7 +337,9 @@ int runMovePolicyProcessingTests() {
     Stockfish::Bitboards::init();
     Stockfish::Position::init();
     testRepresentativePositions();
-    testDirectPolicyLayout();
+    testSelectedActionSpaceLayout();
+    testReducedActionSpaceIsTotal();
+    testPlayoutRoundTrips();
     testSpecialMoveRoundTrips();
     testSemanticMirroring();
     testDecodeRejections();
