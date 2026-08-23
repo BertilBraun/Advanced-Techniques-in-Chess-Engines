@@ -1,0 +1,48 @@
+# Zero-deviation r3 replica on the restored 1,880-action encoding (2026-08-23/24 night).
+# vast-chess-4day-final (dense-2ch head, ratio 10, adaptive) missed the gen-31 yardstick gate
+# (level-0 score 0.11 at gen 40-47 vs floor 0.21), so this run removes EVERY remaining deviation
+# from the r3 recipe: dense channels-4 head (256 features, the exact r3 design), replay ratio 8,
+# fixed r3 visit schedule, the two r3 auxiliary targets, no Syzygy, no adaptive budget, no
+# compilation — all inherited from the run1/exp1 chain. Only progressive sizing and the modern
+# platform remain. Rungs: 12x128 dense4 (3.89M) cold start, 14x152 (6.06M) at 1.0 day.
+# Yardstick gates apply UNINFLATED (ratio 8): level-0 score >=0.16 @ g19, >=0.35 @ g31, >=0.5 @ g41-50.
+# If this run also misses, the residual gap is platform-level, not configuration.
+extends: vast-chess-8gpu-exp1-planehead.yaml
+
+run:
+  run_name: vast-chess-4day-r3replica
+  tensorboard_run_directory: vast-chess-4day-r3replica
+
+training:
+  save_path: py/training_data/validation/vast-chess-4day-r3replica
+  progressive_model_sizing:
+    models:
+      - model_id: chess-cnn-12x128-dense4
+        training_start_days: 0.0
+        network:
+          kind: convolutional
+          num_layers: 12
+          hidden_size: 128
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: dense, channels: 4}
+          num_value_channels: 2
+          value_fc_size: 48
+      - model_id: chess-cnn-14x152-dense4
+        training_start_days: 1.0
+        network:
+          kind: convolutional
+          num_layers: 14
+          hidden_size: 152
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: dense, channels: 4}
+          num_value_channels: 2
+          value_fc_size: 48
+  limits:
+    hourly_price: 0.755
+    maximum_cost: null
+    maximum_wall_time_seconds: 345600
+    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-r3replica.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 1.0
+    resource_telemetry_interval_seconds: 5.0
