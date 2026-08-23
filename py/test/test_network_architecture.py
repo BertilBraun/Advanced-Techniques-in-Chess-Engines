@@ -4,9 +4,12 @@ import pytest
 import torch
 from pydantic import ValidationError
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.games.representation import NetworkDimensions
 from src.training.network import (
     ATTENTION_LINEAR_INITIALIZATION_STD,
     BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE,
+    CHESS_POLICY_PLANE_COUNT,
+    SMALL_OUTPUT_INITIALIZATION_STD,
     AttentionEncoderBlock,
     AttentionNetworkParams,
     Chess76PlaneDirectPolicyHeadConfiguration,
@@ -33,6 +36,13 @@ from src.training.targets import (
 from torch import Tensor, nn
 
 CHESS_POLICY_HEAD = Chess76PlaneDirectPolicyHeadConfiguration()
+CHESS_PLANE_ACTION_SIZE = CHESS_POLICY_PLANE_COUNT * 64
+CHESS_PLANE_NETWORK_DIMENSIONS = NetworkDimensions(
+    channels=CHESS_NETWORK_DIMENSIONS.channels,
+    rows=CHESS_NETWORK_DIMENSIONS.rows,
+    columns=CHESS_NETWORK_DIMENSIONS.columns,
+    actions=CHESS_PLANE_ACTION_SIZE,
+)
 
 
 class Multiply(nn.Module):
@@ -84,7 +94,7 @@ def test_squeeze_excitation_placement_modes() -> None:
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
     )
     every_block = Network(
         NetworkParams(
@@ -96,7 +106,7 @@ def test_squeeze_excitation_placement_modes() -> None:
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
     )
     every_second_block = Network(
         NetworkParams(
@@ -108,7 +118,7 @@ def test_squeeze_excitation_placement_modes() -> None:
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
     )
 
     assert len(disabled.backbone) == 4
@@ -149,7 +159,7 @@ def test_global_pooling_placement_uses_one_quarter_of_channels() -> None:
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
     )
 
     assert global_pooling_blocks(network) == (False, True, False, True)
@@ -172,7 +182,7 @@ def test_global_pooling_requires_distinct_global_and_local_channels() -> None:
 
 def test_chess_76_plane_policy_heads_preserve_action_outputs_and_backpropagate() -> None:
     auxiliary_heads = (
-        NextPolicyHeadLayout(kind='next_policy', action_size=4864, ply_offset=1),
+        NextPolicyHeadLayout(kind='next_policy', action_size=CHESS_PLANE_ACTION_SIZE, ply_offset=1),
         RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
     )
     network = Network(
@@ -183,7 +193,7 @@ def test_chess_76_plane_policy_heads_preserve_action_outputs_and_backpropagate()
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
         auxiliary_heads,
     )
 
@@ -191,8 +201,8 @@ def test_chess_76_plane_policy_heads_preserve_action_outputs_and_backpropagate()
     loss = output.policy_logits.sum() + sum(logits.sum() for logits in output.auxiliary_logits)
     loss.backward()
 
-    assert output.policy_logits.shape == (2, 4864)
-    assert tuple(logits.shape for logits in output.auxiliary_logits) == ((2, 4864), (2, 1))
+    assert output.policy_logits.shape == (2, CHESS_PLANE_ACTION_SIZE)
+    assert tuple(logits.shape for logits in output.auxiliary_logits) == ((2, CHESS_PLANE_ACTION_SIZE), (2, 1))
     assert isinstance(network.policy_head, PolicyPlaneHead)
     assert isinstance(network.auxiliary_head_modules[0], PolicyPlaneHead)
     learned_head_parameters = sum(
@@ -230,10 +240,10 @@ def test_chess_plane_heads_use_hidden_64_primary_and_32_auxiliary() -> None:
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
         (
-            NextPolicyHeadLayout(kind='next_policy', action_size=4864, ply_offset=1),
-            LegalMovesHeadLayout(kind='legal_moves', action_size=4864),
+            NextPolicyHeadLayout(kind='next_policy', action_size=CHESS_PLANE_ACTION_SIZE, ply_offset=1),
+            LegalMovesHeadLayout(kind='legal_moves', action_size=CHESS_PLANE_ACTION_SIZE),
         ),
     )
 
@@ -260,9 +270,9 @@ def test_head_output_layers_use_small_initialization() -> None:
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
         (
-            NextPolicyHeadLayout(kind='next_policy', action_size=4864, ply_offset=1),
+            NextPolicyHeadLayout(kind='next_policy', action_size=CHESS_PLANE_ACTION_SIZE, ply_offset=1),
             RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
         ),
     )
@@ -289,7 +299,7 @@ def test_attention_trunk_normalizes_tokens_before_spatial_output() -> None:
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
     )
 
     assert isinstance(network.finish_block, nn.Sequential)
@@ -309,7 +319,7 @@ def test_attention_initialization_scales_residual_output_projections() -> None:
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
     )
     expected_residual_std = ATTENTION_LINEAR_INITIALIZATION_STD / (2 * num_layers) ** 0.5
 
@@ -323,7 +333,7 @@ def test_attention_initialization_scales_residual_output_projections() -> None:
     assert float(network.start_block.row_embeddings.std()) == pytest.approx(128**-0.5, rel=0.3)
 
 
-def test_dense_policy_head_remains_selectable_with_replica_initialization() -> None:
+def test_dense_policy_head_remains_selectable_with_small_output_initialization() -> None:
     torch.manual_seed(7)
     network = Network(
         NetworkParams(
@@ -340,10 +350,10 @@ def test_dense_policy_head_remains_selectable_with_replica_initialization() -> N
     logits, _ = network.logit_forward(torch.randn((2, 29, 8, 8)))
     dense_output = network.policy_head[-1]
 
-    assert logits.shape == (2, 4864)
+    assert logits.shape == (2, CHESS_NETWORK_DIMENSIONS.actions)
     assert isinstance(network.policy_head, nn.Sequential)
     assert isinstance(dense_output, nn.Linear)
-    assert float(dense_output.weight.std()) == pytest.approx((2.0 / 512) ** 0.5, rel=0.1)
+    assert float(dense_output.weight.detach().std()) == pytest.approx(SMALL_OUTPUT_INITIALIZATION_STD, rel=0.1)
 
 
 def test_bootstrap_policy_prior_sharpens_attention_inference_export_only() -> None:
@@ -357,7 +367,7 @@ def test_bootstrap_policy_prior_sharpens_attention_inference_export_only() -> No
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
     )
     export = InferenceNetwork(attention)
     training_weight_before = attention.policy_head.output_projection.weight.clone()
@@ -379,7 +389,7 @@ def test_bootstrap_policy_prior_leaves_convolutional_networks_unscaled() -> None
             policy_head=CHESS_POLICY_HEAD,
         ),
         torch.device('cpu'),
-        CHESS_NETWORK_DIMENSIONS,
+        CHESS_PLANE_NETWORK_DIMENSIONS,
     )
     export = InferenceNetwork(convolutional)
     weight_before = export.policy_head.output_projection.weight.clone()

@@ -7,6 +7,7 @@ from __future__ import annotations
 import typing
 
 __all__ = [
+    'CHESS_ACTION_SIZE',
     'ActionAnalysisCandidate',
     'AdaptiveSearchLimit',
     'AnalysisMode',
@@ -1140,4 +1141,5 @@ def mirror_chess_action_id(action_id: int) -> int: ...
 def new_root(fen: str, arena_capacity: int) -> ChessSearchRoot: ...
 def new_root_with_history(starting_fen: str, moves_uci: list[str], arena_capacity: int) -> ChessSearchRoot: ...
 
+CHESS_ACTION_SIZE: int = 1880
 OutcomeProbabilities = WdlPrediction

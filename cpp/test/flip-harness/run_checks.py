@@ -6,6 +6,7 @@ Uses ./harness2 (compiled from /tmp/az/head/cpp sources + Stockfish fork) as an 
 from __future__ import annotations
 
 import collections
+import os
 import random
 import subprocess
 import sys
@@ -13,12 +14,17 @@ import sys
 import chess
 import numpy as np
 
-sys.path.insert(0, '/tmp/az/work/codeA/stub')  # AlphaZeroCpp stub (only used for mirror id; we compare to C++ anyway)
-sys.path.insert(0, '/tmp/az/head/py')
+for extra_path in reversed(
+    os.environ.get('FLIP_HARNESS_PYTHON_PATHS', '/tmp/az/work/codeA/stub:/tmp/az/head/py').split(os.pathsep)
+):
+    if extra_path:
+        sys.path.insert(0, extra_path)
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.games.representation import decode_packed_planes
+from src.games.representation import decode_packed_planes, encode_packed_planes
 
-HARNESS = '/tmp/az/work/flip/harness2'
+HARNESS = os.environ.get('FLIP_HARNESS_BINARY', '/tmp/az/work/flip/harness2')
+ACTION_SIZE = CHESS_STATE_CONTRACT.action_size
+PLANE_LAYOUT = ACTION_SIZE == 76 * 64
 rng = random.Random(12345)
 
 
@@ -185,12 +191,14 @@ def main():
                 failures.append(('DECODE_ROUNDTRIP', b.fen(), u, aid, dec_u))
             ids_p.add(aid)
             ids_pm.add(aid_m)
-            # from-square of canonical id == canonical from square
+            if not 0 <= aid < ACTION_SIZE:
+                failures.append(('ID_RANGE', b.fen(), u, aid, ACTION_SIZE))
+            # from-square of canonical id == canonical from square (only the plane layout embeds it in the id)
             canon_from = fsq if b.turn == chess.WHITE else fsq ^ 56
-            if aid % 64 != canon_from:
+            if PLANE_LAYOUT and aid % 64 != canon_from:
                 failures.append(('FROMSQ', b.fen(), u, aid, canon_from))
             # the piece on the canonical from-square must be an OWN piece in the input planes (planes 0..5 = own pieces)
-            own = r['planes'][: 6 * 64].reshape(6, 64)[:, aid % 64].sum()
+            own = r['planes'][: 6 * 64].reshape(6, 64)[:, canon_from].sum()
             if own != 1:
                 failures.append(('OWN_PIECE_AT_FROM', b.fen(), u, aid, int(own)))
             ids_seen.add(aid)
@@ -239,7 +247,13 @@ def main():
             mir_fail.append(('MIRROR_PLANES', b.fen()))
         # via the actual contract code path
         payload = CHESS_STATE_CONTRACT.packed_plane_layout.value(r['packed'])
-        aug2 = CHESS_STATE_CONTRACT.transform_encoded_state(payload, 1)
+        states = decode_packed_planes(payload, rep.packed_planes, rep.binary_channels, rep.scalar_channels).astype(
+            np.float32
+        )[np.newaxis, ...]
+        CHESS_STATE_CONTRACT.transform_decoded_states(states, np.asarray((1,), dtype=np.int64))
+        aug2 = encode_packed_planes(
+            states[0].astype(np.int8), rep.packed_planes, rep.binary_channels, rep.scalar_channels
+        )
         if bytes(aug2.payload) != rf['packed']:
             mir_fail.append(('MIRROR_PACKED', b.fen()))
         ids_f = {v[0] for v in rf['moves'].values()}
@@ -273,10 +287,11 @@ def main():
         r['moves']['e1g1'][0],
         '-> mirrored id',
         r['moves']['e1g1'][4],
-        '= plane',
-        r['moves']['e1g1'][4] // 64,
-        'from',
-        r['moves']['e1g1'][4] % 64,
+        *(
+            ('= plane', r['moves']['e1g1'][4] // 64, 'from', r['moves']['e1g1'][4] % 64)
+            if PLANE_LAYOUT
+            else ('(reduced action encoding: ids do not decompose into plane and square)',)
+        ),
     )
     return 0 if not failures and not mir_fail else 1
 

@@ -31,7 +31,8 @@ std::filesystem::path createTestModel(const std::string &name, const float win, 
     model.define(R"JIT(
         def forward(self, boards):
             batch_size = boards.size(0)
-            policies = torch.zeros((batch_size, 4864), device=boards.device)
+            policies = torch.zeros((batch_size, )JIT" +
+                 std::to_string(ChessEncoding::actionCount) + R"JIT(), device=boards.device)
             outcome = torch.cat((self.outcome_parameter, self.outcome_buffer))
             outcomes = outcome.unsqueeze(0).repeat((batch_size, 1))
             search_correction = torch.full((batch_size, 1), 0.5, device=boards.device)

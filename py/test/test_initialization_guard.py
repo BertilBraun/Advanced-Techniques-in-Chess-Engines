@@ -5,6 +5,7 @@ import math
 import pytest
 import torch
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.games.representation import NetworkDimensions
 from src.training.initialization_guard import (
     InitializationProbe,
     assert_healthy_policy_initialization,
@@ -12,49 +13,84 @@ from src.training.initialization_guard import (
     summarize_policy_initialization,
 )
 from src.training.network import (
+    CHESS_POLICY_PLANE_COUNT,
     AttentionNetworkParams,
     Chess76PlaneDirectPolicyHeadConfiguration,
+    DensePolicyHeadConfiguration,
     DisabledResidualContext,
     Network,
     NetworkParams,
 )
 
+CHESS_PLANE_NETWORK_DIMENSIONS = NetworkDimensions(
+    channels=CHESS_NETWORK_DIMENSIONS.channels,
+    rows=CHESS_NETWORK_DIMENSIONS.rows,
+    columns=CHESS_NETWORK_DIMENSIONS.columns,
+    actions=CHESS_POLICY_PLANE_COUNT * 64,
+)
 
-def _chess_probe_batch(batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
+
+def _chess_probe_batch(batch_size: int, action_size: int) -> tuple[torch.Tensor, torch.Tensor]:
     generator = torch.Generator().manual_seed(11)
     states = (torch.rand((batch_size, 29, 8, 8), generator=generator) < 0.15).float()
     states[:, 22:] = torch.rand((batch_size, 7, 1, 1), generator=generator)
     legal_action_ids = torch.full((batch_size, 24), -1, dtype=torch.int64)
     for row in range(batch_size):
         legal_count = 12 + row % 12
-        legal_action_ids[row, :legal_count] = torch.randperm(4864, generator=generator)[:legal_count]
+        legal_action_ids[row, :legal_count] = torch.randperm(action_size, generator=generator)[:legal_count]
     return states, legal_action_ids
 
 
 @pytest.mark.parametrize(
-    'parameters',
+    ('parameters', 'dimensions'),
     (
-        NetworkParams(
-            num_layers=2,
-            hidden_size=64,
-            residual_context=DisabledResidualContext(),
-            policy_head=Chess76PlaneDirectPolicyHeadConfiguration(),
+        (
+            NetworkParams(
+                num_layers=2,
+                hidden_size=64,
+                residual_context=DisabledResidualContext(),
+                policy_head=Chess76PlaneDirectPolicyHeadConfiguration(),
+            ),
+            CHESS_PLANE_NETWORK_DIMENSIONS,
         ),
-        AttentionNetworkParams(
-            num_layers=2,
-            embedding_size=64,
-            num_heads=2,
-            feedforward_size=128,
-            policy_head=Chess76PlaneDirectPolicyHeadConfiguration(),
+        (
+            AttentionNetworkParams(
+                num_layers=2,
+                embedding_size=64,
+                num_heads=2,
+                feedforward_size=128,
+                policy_head=Chess76PlaneDirectPolicyHeadConfiguration(),
+            ),
+            CHESS_PLANE_NETWORK_DIMENSIONS,
+        ),
+        (
+            NetworkParams(
+                num_layers=2,
+                hidden_size=64,
+                residual_context=DisabledResidualContext(),
+                policy_head=DensePolicyHeadConfiguration(channels=2),
+            ),
+            CHESS_NETWORK_DIMENSIONS,
+        ),
+        (
+            AttentionNetworkParams(
+                num_layers=2,
+                embedding_size=64,
+                num_heads=2,
+                feedforward_size=128,
+                policy_head=DensePolicyHeadConfiguration(channels=2),
+            ),
+            CHESS_NETWORK_DIMENSIONS,
         ),
     ),
 )
 def test_freshly_initialized_chess_networks_pass_the_startup_guard(
     parameters: NetworkParams | AttentionNetworkParams,
+    dimensions: NetworkDimensions,
 ) -> None:
     torch.manual_seed(13)
-    model = Network(parameters, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
-    states, legal_action_ids = _chess_probe_batch(16)
+    model = Network(parameters, torch.device('cpu'), dimensions)
+    states, legal_action_ids = _chess_probe_batch(16, dimensions.actions)
 
     probe = probe_policy_initialization(model, states, legal_action_ids)
 

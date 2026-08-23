@@ -88,6 +88,8 @@ void bind_chess_game(py::module_ &module) {
             })
         .def("__repr__", &Board::repr);
 
+    module.attr("CHESS_ACTION_SIZE") = ChessEncoding::actionCount;
+
     module.def(
         "mirror_chess_action_id",
         [](const int actionId) {
