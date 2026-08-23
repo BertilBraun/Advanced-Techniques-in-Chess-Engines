@@ -1,0 +1,86 @@
+# Four-day production run, final design (2026-08-23 late evening) on the restored 1,880-action
+# encoding — directly comparable to the four-day per-generation yardstick (same action space and
+# dense head family; deviations from r3: replay ratio 10, adaptive search budget with the mean
+# calibrated to the r3 visit schedule, search-correction aux only, compilation, Syzygy).
+# Rungs: 12x128 dense-2ch (3.64M) from cold start, 14x152 (5.82M) promoted at 1.0 day.
+# Yardstick gates: SF level-0 score >= 0.16 @ gen 19, >= 0.35 @ gen 31, >= 0.5 @ gen 41-50.
+extends: vast-chess-8gpu-exp1-planehead.yaml
+
+run:
+  run_name: vast-chess-4day-final
+  tensorboard_run_directory: vast-chess-4day-final
+
+training:
+  save_path: py/training_data/validation/vast-chess-4day-final
+  trainer:
+    compilation: default
+  lifecycle:
+    credit:
+      replay_ratio: 10
+  progressive_model_sizing:
+    models:
+      - model_id: chess-cnn-12x128-dense
+        training_start_days: 0.0
+        network:
+          kind: convolutional
+          num_layers: 12
+          hidden_size: 128
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: dense, channels: 2}
+          num_value_channels: 2
+          value_fc_size: 48
+      - model_id: chess-cnn-14x152-dense
+        training_start_days: 1.0
+        network:
+          kind: convolutional
+          num_layers: 14
+          hidden_size: 152
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: dense, channels: 2}
+          num_value_channels: 2
+          value_fc_size: 48
+  limits:
+    hourly_price: 0.755
+    maximum_cost: null
+    maximum_wall_time_seconds: 345600
+    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-final.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 1.0
+    resource_telemetry_interval_seconds: 5.0
+
+chess:
+  self_play:
+    maximum_ply_syzygy_paths:
+      - /workspace/syzygy/wdl345
+    search:
+      # Maximum visits = r3 fixed schedule x1.25 so the realized adaptive mean (~0.8 utilization
+      # observed live in comp2) lands on the r3 full-search budget.
+      full_search_budget:
+        kind: adaptive
+        minimum_visits: 200
+        maximum_visits:
+          kind: staged
+          stages:
+            - {start_generation: 0, value: 250}
+            - {start_generation: 10, value: 375}
+            - {start_generation: 30, value: 500}
+            - {start_generation: 50, value: 625}
+            - {start_generation: 90, value: 750}
+            - {start_generation: 180, value: 875}
+            - {start_generation: 250, value: 1000}
+            - {start_generation: 550, value: 1250}
+        observation_interval: 100
+        leader_stability_window: 200
+        root_value_tolerance: 0.04
+        initial_top_visit_share: 0.7
+        final_top_visit_share: 0.5
+        initial_top_two_margin: 0.45
+        final_top_two_margin: 0.15
+        threshold_relaxation_visits: 1200
+        learned_gate_start_generation: 50
+        minimum_search_correction_to_unlock_tail: 0.4
+  objective:
+    auxiliary_targets:
+      - kind: search_correction
+        loss_weight: 0.05
