@@ -7,10 +7,14 @@ Then ties this to the C++ action ids from harness2: id % 64 == canonical from-sq
 
 from __future__ import annotations
 
+import os
 import sys
 
-sys.path.insert(0, '/tmp/az/work/codeA/stub')
-sys.path.insert(0, '/tmp/az/head/py')
+for extra_path in reversed(
+    os.environ.get('FLIP_HARNESS_PYTHON_PATHS', '/tmp/az/work/codeA/stub:/tmp/az/head/py').split(os.pathsep)
+):
+    if extra_path:
+        sys.path.insert(0, extra_path)
 import numpy as np
 import torch
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
@@ -25,6 +29,9 @@ torch.manual_seed(0)
 dev = torch.device('cpu')
 dims = CHESS_NETWORK_DIMENSIONS
 print('dims', dims)
+if dims.actions != 76 * 64:
+    print('skipped: the 76-plane head check only applies to the policy-plane action encoding')
+    sys.exit(0)
 
 
 def test(net, name):
@@ -86,7 +93,7 @@ f2 = test(att, 'attention(2x16, value-proj zeroed)')
 # Now tie to C++ ids: for a black-to-move position, id%64 must equal the square index where the own piece sits in input planes.
 import chess
 
-sys.path.insert(0, '/tmp/az/work/flip')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from run_checks import run_harness
 
 b = chess.Board('r3k2r/pppqppbp/2np1np1/8/2PP4/2N2NP1/PP2PPBP/R2QK2R b KQkq - 0 1')
