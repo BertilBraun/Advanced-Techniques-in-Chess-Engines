@@ -1,0 +1,46 @@
+# Component run 1 of the 2026-08-23 ladder: the slope-validated architecture plus the deferred
+# low-risk components — replay ratio 10, all six auxiliary targets (old two at r3 weights, four
+# new at the run2-designed weights). Adaptive search budget and early termination stay off;
+# sparse policy targets not yet promoted (loader surgery, tracked separately).
+# Pass criterion: accuracy/ladder slope over four evaluation points comparable to the parent run.
+extends: vast-chess-4day-cnn.yaml
+
+run:
+  run_name: vast-chess-comp1-components
+  tensorboard_run_directory: vast-chess-comp1-components
+
+training:
+  save_path: py/training_data/validation/vast-chess-comp1-components
+  lifecycle:
+    credit:
+      replay_ratio: 10
+  limits:
+    hourly_price: 0.755
+    maximum_cost: null
+    maximum_wall_time_seconds: 345600
+    manual_stop_file: /workspace/run-control/stop/vast-chess-comp1-components.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 1.0
+    resource_telemetry_interval_seconds: 5.0
+
+chess:
+  objective:
+    auxiliary_targets:
+      - kind: next_policy
+        ply_offset: 1
+        loss_weight: 0.1
+      - kind: remaining_game_length
+        loss_weight: 0.1
+        normalization_scale: 400.0
+      - kind: future_search_value
+        ply_offset: 4
+        smooth_l1_beta: 0.1
+        loss_weight: 0.025
+      - kind: irreversible_progress
+        horizon_plies: 16
+        loss_weight: 0.0125
+      - kind: legal_moves
+        loss_weight: 0.0125
+      - kind: search_correction
+        loss_weight: 0.05

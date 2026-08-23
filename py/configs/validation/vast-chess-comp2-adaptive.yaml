@@ -1,0 +1,50 @@
+# Component run 2 of the 2026-08-23 ladder: component run 1 plus the adaptive search budget
+# (parameters from the run2 design; calibrated before launch with tools/calibrate_adaptive_search.py).
+# The search-correction auxiliary target the learned gate needs is enabled by the parent.
+# Pass criterion: slope comparable to component run 1 over four evaluation points; on pass this
+# run simply continues as the four-day production run.
+extends: vast-chess-comp1-components.yaml
+
+run:
+  run_name: vast-chess-comp2-adaptive
+  tensorboard_run_directory: vast-chess-comp2-adaptive
+
+training:
+  save_path: py/training_data/validation/vast-chess-comp2-adaptive
+  limits:
+    hourly_price: 0.755
+    maximum_cost: null
+    maximum_wall_time_seconds: 345600
+    manual_stop_file: /workspace/run-control/stop/vast-chess-comp2-adaptive.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 1.0
+    resource_telemetry_interval_seconds: 5.0
+
+chess:
+  self_play:
+    search:
+      full_search_budget:
+        kind: adaptive
+        minimum_visits: 200
+        maximum_visits:
+          kind: staged
+          stages:
+            - {start_generation: 0, value: 200}
+            - {start_generation: 10, value: 300}
+            - {start_generation: 30, value: 400}
+            - {start_generation: 50, value: 500}
+            - {start_generation: 90, value: 600}
+            - {start_generation: 180, value: 700}
+            - {start_generation: 250, value: 800}
+            - {start_generation: 550, value: 1000}
+        observation_interval: 100
+        leader_stability_window: 200
+        root_value_tolerance: 0.04
+        initial_top_visit_share: 0.7
+        final_top_visit_share: 0.5
+        initial_top_two_margin: 0.45
+        final_top_two_margin: 0.15
+        threshold_relaxation_visits: 1200
+        learned_gate_start_generation: 50
+        minimum_search_correction_to_unlock_tail: 0.4
