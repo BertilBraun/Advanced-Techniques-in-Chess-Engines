@@ -1,0 +1,14 @@
+{
+  "tag": "nodeB-m1",
+  "generation": 60,
+  "workers": 32,
+  "makespan_seconds": 94.19178191013634,
+  "searches_per_second": 617471.2147975735,
+  "searches_completed": 58160714,
+  "completed_games": 183,
+  "aggregate_process_cpu_percent": 2043.1075421036794,
+  "mean_process_cpu_percent": 63.84711069073998,
+  "average_inference_batch": 222.053131307715,
+  "inference_model_calls": 261089,
+  "summed_peak_rss_mib": 59838.6875
+}

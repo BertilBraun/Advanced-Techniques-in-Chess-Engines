@@ -1,0 +1,2 @@
+mean_gpu_utilization_percent 93.6
+cpu_user 0.0 cpu_sys 0.0 cpu_idle 0.0
