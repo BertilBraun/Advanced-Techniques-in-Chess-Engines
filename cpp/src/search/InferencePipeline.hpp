@@ -82,7 +82,7 @@ class InferenceRunner {
 public:
     InferenceRunner(const std::string &modelPath, InferenceDevice device, int deviceId,
                     size_t maximumBatchSize, bool useDedicatedCudaStream,
-                    InferenceDimensions dimensions, bool allowGraphCapture,
+                    InferenceDimensions dimensions,
                     SdpaBackend sdpaBackend = SdpaBackend::Automatic);
 
     [[nodiscard]] torch::Tensor createInputBuffer() const;
@@ -113,7 +113,6 @@ private:
     const torch::Dtype m_torchDtype;
     const size_t m_maximumBatchSize;
     const InferenceDimensions m_dimensions;
-    const bool m_allowGraphCapture;
     PreparedInferenceModel m_model;
     torch::Tensor m_deviceInput;
     // Every dtype-changing copy across the host boundary allocates a device temporary and launches
@@ -141,7 +140,7 @@ public:
 
     InferencePipeline(const std::string &modelPath, InferenceDevice device, int deviceId,
                       size_t maximumBatchSize, size_t slotCount, bool useDedicatedCudaStream,
-                      InferenceDimensions dimensions, bool allowGraphCapture,
+                      InferenceDimensions dimensions,
                       SdpaBackend sdpaBackend = SdpaBackend::Automatic);
     ~InferencePipeline();
 

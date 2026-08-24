@@ -41,7 +41,7 @@ void fillBatch(const InferencePipeline::WritableBatch &batch, const std::int8_t 
 void testTwoOutstandingBatches(const std::filesystem::path &modelPath, const InferenceDevice device,
                                const bool dedicatedCudaStream) {
     InferencePipeline pipeline(modelPath.string(), device, 0, 4, 2, dedicatedCudaStream,
-                               ChessGame::Encoding::inferenceDimensions(), true);
+                               ChessGame::Encoding::inferenceDimensions());
     const InferencePipeline::WritableBatch first = pipeline.acquireWritableBatch();
     fillBatch(first, 0);
     pipeline.submit(first.slotIndex, 2);
@@ -75,7 +75,7 @@ void testTwoOutstandingBatches(const std::filesystem::path &modelPath, const Inf
 
 void testFailureReleasesSlot(const std::filesystem::path &modelPath) {
     InferencePipeline pipeline(modelPath.string(), InferenceDevice::Cpu, 0, 2, 2, false,
-                               ChessGame::Encoding::inferenceDimensions(), true);
+                               ChessGame::Encoding::inferenceDimensions());
     const InferencePipeline::WritableBatch failing = pipeline.acquireWritableBatch();
     fillBatch(failing, -1);
     pipeline.submit(failing.slotIndex, 1);
@@ -103,7 +103,7 @@ int runInferencePipelineTests() {
     const std::filesystem::path modelPath = createTestModel();
     try {
         InferenceRunner runner(modelPath.string(), InferenceDevice::Cpu, 0, 4, false,
-                               ChessGame::Encoding::inferenceDimensions(), true);
+                               ChessGame::Encoding::inferenceDimensions());
         torch::Tensor input = runner.createInputBuffer();
         input.zero_();
         InferenceOutput output = runner.createOutputBuffer();
@@ -116,7 +116,7 @@ int runInferencePipelineTests() {
         try {
             InferenceRunner explicitCudaRunner(modelPath.string(), InferenceDevice::Cpu, 0, 4,
                                                false, ChessGame::Encoding::inferenceDimensions(),
-                                               true, SdpaBackend::MemoryEfficient);
+                                               SdpaBackend::MemoryEfficient);
         } catch (const std::invalid_argument &) {
             rejectedCudaBackendOnCpu = true;
         }

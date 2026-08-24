@@ -7,6 +7,7 @@
 #include <torch/csrc/jit/api/module.h>
 
 #include <iostream>
+#include <map>
 #include <mutex>
 
 namespace {
@@ -144,6 +145,20 @@ std::mutex &graphSerializationMutex() {
     static std::mutex mutex;
     return mutex;
 }
+
+// Graphs replayed on separate streams within one process execute concurrently and corrupt one
+// another; sharing a stream per device makes the device order them, without the host blocking.
+at::cuda::CUDAStream sharedGraphStream(const c10::DeviceIndex deviceIndex) {
+    static std::mutex mutex;
+    static std::map<c10::DeviceIndex, at::cuda::CUDAStream> streams;
+    const std::lock_guard<std::mutex> guard(mutex);
+    const auto existing = streams.find(deviceIndex);
+    if (existing != streams.end()) {
+        return existing->second;
+    }
+    return streams.emplace(deviceIndex, at::cuda::getStreamFromPool(false, deviceIndex))
+        .first->second;
+}
 } // namespace
 
 InferenceCompletion::~InferenceCompletion() noexcept { waitWithoutThrowing(); }
@@ -193,10 +208,9 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
                                  const int deviceId, const size_t maximumBatchSize,
                                  const bool useDedicatedCudaStream,
                                  const InferenceDimensions dimensions,
-                                 const bool allowGraphCapture, const SdpaBackend sdpaBackend)
+                                 const SdpaBackend sdpaBackend)
     : m_device(resolveDevice(device, deviceId)), m_torchDtype(dtypeForDevice(m_device)),
       m_maximumBatchSize(maximumBatchSize), m_dimensions(dimensions),
-      m_allowGraphCapture(allowGraphCapture),
       m_model(std::make_unique<torch::jit::script::Module>(
           loadInferenceModel(modelPath, m_device, m_torchDtype))) {
     configureSdpaBackend(m_device, sdpaBackend);
@@ -209,7 +223,7 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
     }
 #ifdef USE_CUDA
     if (m_device.is_cuda() && useDedicatedCudaStream) {
-        m_cudaStream = at::cuda::getStreamFromPool(false, m_device.index());
+        m_cudaStream = sharedGraphStream(m_device.index());
     }
 #else
     if (m_device.is_cuda() && useDedicatedCudaStream) {
@@ -312,13 +326,7 @@ void InferenceRunner::captureBatchGraphs() {
     if (!m_device.is_cuda() || !m_cudaStream.has_value()) {
         return;
     }
-    if (!m_allowGraphCapture) {
-        std::cerr << "Inference graph replay disabled: it needs a single inference worker, and a "
-                     "second worker has nothing left to overlap once submission is a graph launch"
-                  << std::endl;
-        return;
-    }
-    constexpr size_t bucketCount = 8;
+    constexpr size_t bucketCount = 16;
     constexpr size_t warmupIterations = 16;
     constexpr size_t bucketWarmupIterations = 3;
     const std::lock_guard<std::mutex> serialized(graphSerializationMutex());
@@ -504,9 +512,9 @@ InferencePipeline::InferencePipeline(const std::string &modelPath, const Inferen
                                      const int deviceId, const size_t maximumBatchSize,
                                      const size_t slotCount, const bool useDedicatedCudaStream,
                                      const InferenceDimensions dimensions,
-                                     const bool allowGraphCapture, const SdpaBackend sdpaBackend)
+                                     const SdpaBackend sdpaBackend)
     : m_runner(modelPath, device, deviceId, maximumBatchSize, useDedicatedCudaStream, dimensions,
-               allowGraphCapture, sdpaBackend) {
+               sdpaBackend) {
     if (slotCount < 2) {
         throw std::invalid_argument("Inference pipeline requires at least two slots");
     }
