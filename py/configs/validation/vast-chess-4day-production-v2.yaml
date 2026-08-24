@@ -1,0 +1,178 @@
+# Four-day production v2 (2026-08-24 afternoon) — final decided package on the 1,880 encoding.
+# Deltas vs v1, each measured today: replay ratio 4 (A/B: low reuse won the ladder trend) with all
+# generation schedules scaled x2/3 rounded down to multiples of 5; inference batch 256 (+26%
+# searches/s at the best per-game pace, sweep table in .codex-diagnostics); parallel searches
+# 2 -> 3@30 -> 4@60; bottleneck head prior re-centred (logit std 13-32 across seeds).
+# Carried from v1: dense ch4+rank96 head, search discount 0.99/target 1.0, aux next_policy +
+# remaining_game_length (permanent) + search_correction, adaptive budget (caps = 1.25x the visit
+# means), virtual loss 0.5, Syzygy, compilation. Judged by wall-clock evaluation curves.
+extends: vast-chess-8gpu-exp1-planehead.yaml
+
+run:
+  run_name: vast-chess-4day-production-v2
+  tensorboard_run_directory: vast-chess-4day-production-v2
+
+training:
+  save_path: py/training_data/validation/vast-chess-4day-production-v2
+  trainer:
+    compilation: default
+  lifecycle:
+    replay:
+      capacity:
+        kind: linear
+        start_generation: 0
+        end_generation: 65
+        start_value: 300000
+        end_value: 2000000
+        rounding: nearest
+      maximum_capacity: 2000000
+      maximum_policy_entries: 60
+      materialization_processes: 8
+    credit:
+      replay_ratio: 4
+      optimizer_steps_per_quantum: 500
+      maximum_optimizer_steps: null
+      retained_checkpoint_interval_generations: 6
+      self_play_backpressure_quanta: 5
+  progressive_model_sizing:
+    models:
+      - model_id: chess-cnn-12x128-dense4r96
+        training_start_days: 0.0
+        network:
+          kind: convolutional
+          num_layers: 12
+          hidden_size: 128
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: dense, channels: 4, bottleneck_rank: 96}
+          num_value_channels: 2
+          value_fc_size: 48
+      - model_id: chess-cnn-14x152-dense4r96
+        training_start_days: 1.0
+        network:
+          kind: convolutional
+          num_layers: 14
+          hidden_size: 152
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: dense, channels: 4, bottleneck_rank: 96}
+          num_value_channels: 2
+          value_fc_size: 48
+  limits:
+    hourly_price: 0.755
+    maximum_cost: null
+    maximum_wall_time_seconds: 345600
+    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v2.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 1.0
+    resource_telemetry_interval_seconds: 5.0
+
+chess:
+  self_play:
+    maximum_ply_syzygy_paths:
+      - /workspace/syzygy/wdl345
+    resignation:
+      kind: calibrated
+      first_production_generation: 45
+      false_nonloss_rate_ceiling: 0.03
+      continuation_game_probability: 0.1
+      triggered_game_window: 2000
+      candidate_threshold_minimum: -0.99
+      candidate_threshold_maximum: -0.7
+      candidate_threshold_step: 0.01
+      minimum_evidence_trigger_count: 100
+      confidence_level: 0.95
+      maximum_relaxation_per_generation: 0.01
+    search:
+      virtual_loss_weight: 0.5
+      full_search_budget:
+        kind: adaptive
+        minimum_visits: 200
+        maximum_visits:
+          kind: staged
+          stages:
+            - {start_generation: 0, value: 250}
+            - {start_generation: 5, value: 375}
+            - {start_generation: 20, value: 500}
+            - {start_generation: 30, value: 625}
+            - {start_generation: 60, value: 750}
+            - {start_generation: 120, value: 875}
+            - {start_generation: 165, value: 1000}
+            - {start_generation: 365, value: 1250}
+        observation_interval: 100
+        leader_stability_window: 200
+        root_value_tolerance: 0.04
+        initial_top_visit_share: 0.7
+        final_top_visit_share: 0.5
+        initial_top_two_margin: 0.45
+        final_top_two_margin: 0.15
+        threshold_relaxation_visits: 1200
+        learned_gate_start_generation: 30
+        minimum_search_correction_to_unlock_tail: 0.4
+      fast_searches:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 50}
+          - {start_generation: 5, value: 75}
+          - {start_generation: 20, value: 100}
+          - {start_generation: 30, value: 125}
+          - {start_generation: 60, value: 150}
+      parallel_searches:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 2}
+          - {start_generation: 30, value: 3}
+          - {start_generation: 60, value: 4}
+    inference:
+      inference_workers: 2
+      inference_batch_size: 256
+      outstanding_batches_per_worker: 2
+      sdpa_backend: memory_efficient
+    start_position:
+      kind: restart_state
+      true_start_probability: 0.5
+      candidate_visit_mass: 0.85
+      minimum_candidates: 2
+      maximum_candidates: 3
+      maximum_absolute_root_value: 0.8
+      minimum_remaining_plies: 15
+      maximum_archive_positions: 50000
+      maximum_age_generations: 25
+    full_search_probability:
+      kind: linear
+      start_generation: 0
+      end_generation: 45
+      start_value: 1.0
+      end_value: 0.25
+      rounding: none
+    greedy_after_ply:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 60}
+        - {start_generation: 70, value: 80}
+    maximum_game_plies:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 150}
+        - {start_generation: 30, value: 160}
+        - {start_generation: 50, value: 180}
+        - {start_generation: 70, value: 200}
+        - {start_generation: 90, value: 250}
+  objective:
+    search_value_discount_per_ply: 0.99
+    root_value_blend:
+      kind: linear
+      start_generation: 30
+      end_generation: 70
+      start_value: 0.0
+      end_value: 0.15
+      rounding: none
+    auxiliary_targets:
+      - kind: next_policy
+        ply_offset: 1
+        loss_weight: 0.1
+      - kind: remaining_game_length
+        loss_weight: 0.1
+        normalization_scale: 400.0
+      - kind: search_correction
+        loss_weight: 0.05
+
