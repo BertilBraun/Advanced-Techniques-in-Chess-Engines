@@ -1,0 +1,8 @@
+procs games outcome
+1 128 stable
+2 128 stable
+2 512 stable
+3 512 1of3-died
+4 128 stable
+4 256 stable
+4 512 3of4-died
