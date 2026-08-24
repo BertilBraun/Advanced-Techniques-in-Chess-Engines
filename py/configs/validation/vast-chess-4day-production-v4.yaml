@@ -71,15 +71,14 @@ training:
       cpu_threads: 4
       interop_threads: 1
     self_play:
-      # GPUs 4-7 also host evaluation, so they carry three self-play processes instead of four.
-      # Four plus the trainer plus concurrent evaluation jobs exhausts 12 GiB and the resulting
-      # CUDA OOM kills workers, which wedges the coordinator loop in restart_exited_workers.
-      device_ids: [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7]
+      device_ids: [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7]
       parallel_games_per_process: 512
       tensorboard_processes: 1
-      node_ids_to_pause_during_training: [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 20, 21, 23, 24, 26, 27]
+      node_ids_to_pause_during_training: [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19, 21, 22, 23, 25, 26, 27, 29, 30, 31]
     evaluation:
-      device_cycle: [4, 5, 6, 7]
+      # Every GPU: evaluation jobs are placed round-robin over this cycle, so spreading it across
+      # all eight keeps one job per device instead of two or three stacked on four devices.
+      device_cycle: [0, 1, 2, 3, 4, 5, 6, 7]
   lifecycle:
     replay:
       capacity:
@@ -142,9 +141,9 @@ evaluation:
   job_timeout_seconds: 1800
   shutdown_grace_seconds: 30
   bootstrap_samples: 10000
-  # Three, not ten: evaluation shares GPUs 4-7 with self-play and the trainer, and ten concurrent
-  # jobs exhaust device memory.
-  maximum_concurrent_jobs: 3
+  # Eight, matching the eight-device cycle: one evaluation job per GPU. Ten over a four-device
+  # cycle stacked two to three jobs on a device and exhausted its memory.
+  maximum_concurrent_jobs: 8
   dataset:
     path: /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v1.bin
     source:

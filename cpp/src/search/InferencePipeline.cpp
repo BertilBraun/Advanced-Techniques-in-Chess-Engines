@@ -326,7 +326,9 @@ void InferenceRunner::captureBatchGraphs() {
     if (!m_device.is_cuda() || !m_cudaStream.has_value()) {
         return;
     }
-    constexpr size_t bucketCount = 16;
+    // Eight, not sixteen: every capture adds intermediates to the shared graph mempool, and the
+    // self-play processes sharing a device ran it out of memory at sixteen.
+    constexpr size_t bucketCount = 8;
     constexpr size_t warmupIterations = 16;
     constexpr size_t bucketWarmupIterations = 3;
     const std::lock_guard<std::mutex> serialized(graphSerializationMutex());
