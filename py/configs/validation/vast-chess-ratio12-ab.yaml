@@ -1,0 +1,22 @@
+# Replay-ratio A/B (2026-08-24 morning): the r3replica recipe with only the ratio changed.
+# Judged on wall-clock evaluation slopes over ~65 minutes against its sibling.
+extends: vast-chess-4day-r3replica.yaml
+
+run:
+  run_name: vast-chess-ratio12-ab
+  tensorboard_run_directory: vast-chess-ratio12-ab
+
+training:
+  save_path: py/training_data/validation/vast-chess-ratio12-ab
+  lifecycle:
+    credit:
+      replay_ratio: 12
+  limits:
+    hourly_price: 0.755
+    maximum_cost: null
+    maximum_wall_time_seconds: 5400
+    manual_stop_file: /workspace/run-control/stop/vast-chess-ratio12-ab.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 1.0
+    resource_telemetry_interval_seconds: 5.0
