@@ -200,6 +200,32 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
     }
 #endif
     m_deviceInput = createDeviceInputBuffer();
+    m_deviceTypedInput =
+        torch::empty({tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.channels),
+                      tensorSize(m_dimensions.rows), tensorSize(m_dimensions.columns)},
+                     torch::TensorOptions().device(m_device).dtype(m_torchDtype));
+    const torch::TensorOptions stagingOptions =
+        torch::TensorOptions().device(m_device).dtype(torch::kFloat32);
+    m_deviceOutputStaging = {
+        .policies = torch::empty(
+            {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.actions)}, stagingOptions),
+        .outcomes = torch::empty(
+            {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.outcomes)}, stagingOptions),
+        .search_corrections =
+            torch::empty({tensorSize(m_maximumBatchSize), 1}, stagingOptions),
+    };
+}
+
+void InferenceRunner::stageOutput(const torch::Tensor &modelOutput, torch::Tensor &staging,
+                                  torch::Tensor &destination, const size_t batchSize) {
+    const torch::Tensor rows = destination.narrow(0, 0, tensorSize(batchSize));
+    if (modelOutput.scalar_type() == rows.scalar_type()) {
+        rows.copy_(modelOutput, usesCuda());
+        return;
+    }
+    const torch::Tensor cast = staging.narrow(0, 0, tensorSize(batchSize));
+    cast.copy_(modelOutput);
+    rows.copy_(cast, usesCuda());
 }
 
 torch::Tensor InferenceRunner::createInputBuffer() const {
@@ -212,7 +238,7 @@ torch::Tensor InferenceRunner::createInputBuffer() const {
 torch::Tensor InferenceRunner::createDeviceInputBuffer() const {
     return torch::empty({tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.channels),
                          tensorSize(m_dimensions.rows), tensorSize(m_dimensions.columns)},
-                        torch::TensorOptions().device(m_device).dtype(m_torchDtype));
+                        torch::TensorOptions().device(m_device).dtype(torch::kInt8));
 }
 
 InferenceOutput InferenceRunner::createOutputBuffer() const {
@@ -263,8 +289,12 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards,
 #endif
     try {
         const torch::Tensor source = encodedBoards.narrow(0, 0, static_cast<int64_t>(batchSize));
-        torch::Tensor deviceInput = deviceInputBuffer.narrow(0, 0, static_cast<int64_t>(batchSize));
-        deviceInput.copy_(source, usesCuda());
+        const torch::Tensor deviceRaw =
+            deviceInputBuffer.narrow(0, 0, static_cast<int64_t>(batchSize));
+        deviceRaw.copy_(source, usesCuda());
+        torch::Tensor deviceInput =
+            m_deviceTypedInput.narrow(0, 0, static_cast<int64_t>(batchSize));
+        deviceInput.copy_(deviceRaw);
 
         m_modelInputs[0] = deviceInput;
         const torch::jit::IValue modelOutput = m_model->forward(m_modelInputs);
@@ -276,10 +306,10 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards,
         const torch::Tensor policies = outputTuple->elements()[0].toTensor();
         const torch::Tensor outcomes = outputTuple->elements()[1].toTensor();
         const torch::Tensor searchCorrections = outputTuple->elements()[2].toTensor();
-        output.policies.narrow(0, 0, static_cast<int64_t>(batchSize)).copy_(policies, usesCuda());
-        output.outcomes.narrow(0, 0, static_cast<int64_t>(batchSize)).copy_(outcomes, usesCuda());
-        output.search_corrections.narrow(0, 0, static_cast<int64_t>(batchSize))
-            .copy_(searchCorrections, usesCuda());
+        stageOutput(policies, m_deviceOutputStaging.policies, output.policies, batchSize);
+        stageOutput(outcomes, m_deviceOutputStaging.outcomes, output.outcomes, batchSize);
+        stageOutput(searchCorrections, m_deviceOutputStaging.search_corrections,
+                    output.search_corrections, batchSize);
         completion.record();
     } catch (...) {
         completion.finishFailedSubmission();

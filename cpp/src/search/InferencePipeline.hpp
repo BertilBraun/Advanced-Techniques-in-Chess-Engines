@@ -81,6 +81,8 @@ private:
     friend class InferencePipeline;
 
     [[nodiscard]] torch::Tensor createDeviceInputBuffer() const;
+    void stageOutput(const torch::Tensor &modelOutput, torch::Tensor &staging,
+                     torch::Tensor &destination, size_t batchSize);
     void forwardInto(const torch::Tensor &encodedBoards, const torch::Tensor &deviceInputBuffer,
                      size_t batchSize, InferenceOutput &output, InferenceCompletion &completion);
 
@@ -90,6 +92,10 @@ private:
     const InferenceDimensions m_dimensions;
     PreparedInferenceModel m_model;
     torch::Tensor m_deviceInput;
+    // Every dtype-changing copy across the host boundary allocates a device temporary and launches
+    // a cast kernel; these persistent buffers make both copies same-dtype and allocation free.
+    torch::Tensor m_deviceTypedInput;
+    InferenceOutput m_deviceOutputStaging;
     std::vector<torch::jit::IValue> m_modelInputs{1};
 #ifdef USE_CUDA
     std::optional<at::cuda::CUDAStream> m_cudaStream;
