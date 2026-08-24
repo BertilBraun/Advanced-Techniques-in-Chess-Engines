@@ -45,6 +45,10 @@ public:
     }
 
     [[nodiscard]] const Node &node(const std::size_t index) const { return m_arena.node(index); }
+    [[nodiscard]] const Position &position(const std::size_t index) const {
+        return m_arena.position(index);
+    }
+    [[nodiscard]] const Position &rootPosition() const { return m_arena.rootPosition(); }
     [[nodiscard]] Node &node(const std::size_t index) { return m_arena.node(index); }
     [[nodiscard]] const Node &root() const { return m_arena.root(); }
     [[nodiscard]] Node &root() { return m_arena.root(); }
@@ -97,7 +101,7 @@ public:
 
     void expand(const std::size_t nodeIndex, const SearchInferenceResult<Game> &inferenceResult) {
         Node &selected = node(nodeIndex);
-        if (selected.expanded() || Game::isTerminal(selected.position)) {
+        if (selected.expanded() || Game::isTerminal(m_arena.position(nodeIndex))) {
             return;
         }
         selected.children.reserve(inferenceResult.actions.size());
@@ -339,7 +343,7 @@ public:
         : m_tree(std::make_shared<Tree>(std::move(position), initialCapacity, maximumCapacity,
                                         valueDiscountPerPly)) {}
 
-    [[nodiscard]] const Position &position() const { return m_tree->root().position; }
+    [[nodiscard]] const Position &position() const { return m_tree->rootPosition(); }
     [[nodiscard]] bool isTerminal() const { return Game::isTerminal(position()); }
     [[nodiscard]] std::uint32_t visits() const { return m_tree->root().visits; }
     [[nodiscard]] std::size_t liveNodeCount() const { return m_tree->liveNodeCount(); }

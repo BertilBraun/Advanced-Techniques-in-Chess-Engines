@@ -283,7 +283,7 @@ private:
         [[nodiscard]] std::size_t size() const noexcept { return m_leaves.size(); }
         [[nodiscard]] const Position &operator[](const std::size_t index) const {
             const PendingLeaf &leaf = m_leaves[index];
-            return m_tasks[leaf.task_index].root.tree().node(leaf.node_index).position;
+            return m_tasks[leaf.task_index].root.tree().position(leaf.node_index);
         }
 
     private:
@@ -557,8 +557,8 @@ private:
         {
             ScopedNanosecondTimer selectionTimer(m_statistics.treeSelectionNanoseconds);
             if (!tree.root().expanded()) {
-                if (Game::isTerminal(tree.root().position)) {
-                    tree.backPropagate(tree.rootIndex(), Game::terminalValue(tree.root().position));
+                if (Game::isTerminal(tree.rootPosition())) {
+                    tree.backPropagate(tree.rootIndex(), Game::terminalValue(tree.rootPosition()));
                     return true;
                 }
                 leaf = tree.rootIndex();
@@ -572,8 +572,8 @@ private:
                     task.selection_blocked = true;
                     return false;
                 }
-                if (Game::isTerminal(tree.node(*leaf).position)) {
-                    tree.backPropagate(*leaf, Game::terminalValue(tree.node(*leaf).position));
+                if (Game::isTerminal(tree.position(*leaf))) {
+                    tree.backPropagate(*leaf, Game::terminalValue(tree.position(*leaf)));
                     if (task.in_flight == 0) {
                         updateAdaptiveStop(task);
                     }
@@ -585,7 +585,7 @@ private:
         constexpr std::size_t encodedSize = Game::Encoding::inferenceDimensions().encodedSize();
         {
             ScopedNanosecondTimer encodingTimer(m_statistics.boardEncodingNanoseconds);
-            Game::Encoding::encodeInputInto(tree.node(*leaf).position,
+            Game::Encoding::encodeInputInto(tree.position(*leaf),
                                             writable.data + leaves.size() * encodedSize);
         }
         ++task.in_flight;

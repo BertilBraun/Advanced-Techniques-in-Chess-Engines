@@ -32,6 +32,7 @@ public:
         }
         m_nodes.reserve(initialCapacity);
         m_nodes.resize(initialCapacity);
+        m_positions.resize(initialCapacity);
         for (const auto offset : range(initialCapacity)) {
             m_freeSlots.push_back(initialCapacity - offset - 1);
         }
@@ -56,6 +57,14 @@ public:
     }
     [[nodiscard]] Node &liveNode(const std::size_t index) noexcept { return *m_nodes[index]; }
 
+    [[nodiscard]] const Position &position(const std::size_t index) const {
+        if (index >= m_positions.size() || !m_positions[index].has_value()) {
+            throw std::out_of_range("Game search position is not live");
+        }
+        return *m_positions[index];
+    }
+    [[nodiscard]] const Position &rootPosition() const { return position(m_rootIndex); }
+
     [[nodiscard]] const Node &root() const { return node(m_rootIndex); }
     [[nodiscard]] Node &root() { return node(m_rootIndex); }
     [[nodiscard]] std::size_t rootIndex() const noexcept { return m_rootIndex; }
@@ -78,7 +87,7 @@ public:
         if (edge.child_index.has_value()) {
             return *edge.child_index;
         }
-        Position child = Game::childState(node(parentIndex).position, edge.action);
+        Position child = Game::childState(position(parentIndex), edge.action);
         const std::size_t childIndex = allocateNode(std::move(child), parentIndex, edgeIndex);
         Edge &retainedEdge = node(parentIndex).children[edgeIndex];
         Node &childNode = node(childIndex);
@@ -107,7 +116,7 @@ public:
         retainedRoot.parent_index.reset();
         retainedRoot.parent_edge_index.reset();
         m_rootIndex = retainedIndex;
-        m_initialPosition = retainedRoot.position;
+        m_initialPosition = position(retainedIndex);
         releaseNode(oldRootIndex);
     }
 
@@ -116,6 +125,7 @@ public:
         for (const auto offset : range(m_nodes.size())) {
             const std::size_t slot = m_nodes.size() - offset - 1;
             m_nodes[slot].reset();
+            m_positions[slot].reset();
             m_freeSlots.push_back(slot);
         }
         m_liveNodeCount = 0;
@@ -219,6 +229,7 @@ private:
     std::size_t m_maximumCapacity;
     Position m_initialPosition;
     std::vector<std::optional<Node>> m_nodes;
+    std::vector<std::optional<Position>> m_positions;
     std::vector<std::size_t> m_freeSlots;
     std::size_t m_liveNodeCount = 0;
     std::size_t m_rootIndex;
@@ -231,6 +242,7 @@ private:
             const std::size_t newCapacity =
                 std::min(m_maximumCapacity, std::max(oldCapacity + 1, oldCapacity * 2));
             m_nodes.resize(newCapacity);
+            m_positions.resize(newCapacity);
             for (const auto offset : range(newCapacity - oldCapacity)) {
                 m_freeSlots.push_back(newCapacity - offset - 1);
             }
@@ -240,11 +252,11 @@ private:
         }
         const std::size_t slot = m_freeSlots.back();
         m_freeSlots.pop_back();
+        m_positions[slot].emplace(std::move(position));
         m_nodes[slot].emplace(Node{
             .children = {},
             .parent_index = parentIndex,
             .parent_edge_index = parentEdgeIndex,
-            .position = std::move(position),
         });
         ++m_liveNodeCount;
         return slot;
@@ -256,6 +268,7 @@ private:
         }
         static_cast<void>(node(index));
         m_nodes[index].reset();
+        m_positions[index].reset();
         m_freeSlots.push_back(index);
         --m_liveNodeCount;
     }

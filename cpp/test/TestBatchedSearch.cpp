@@ -166,8 +166,7 @@ int runBatchedSearchTests() {
                     "search exposed the wrong highest-child visit count");
             const auto &rootNode = result.root.tree().root();
             const auto edge = std::ranges::find_if(rootNode.children, [&](const auto &candidate) {
-                return ChessGame::Encoding::actionId(candidate.action, rootNode.position) ==
-                       result.highest_visited_child_action_id;
+                return candidate.action_id == result.highest_visited_child_action_id;
             });
             require(edge != rootNode.children.end(),
                     "highest-visited child action is absent from the root");
