@@ -464,7 +464,7 @@ def test_dense_policy_head_rejects_more_reductions_than_supported() -> None:
         DensePolicyHeadConfiguration(channels=4, spatial_reductions=3)
 
 
-def test_dense_bottleneck_applies_small_output_initialization_to_the_final_linear_only() -> None:
+def test_dense_bottleneck_applies_small_initialization_to_both_factors() -> None:
     torch.manual_seed(13)
     network = Network(
         NetworkParams(
@@ -485,7 +485,9 @@ def test_dense_bottleneck_applies_small_output_initialization_to_the_final_linea
     assert float(network.policy_head[-1].weight.detach().std()) == pytest.approx(
         SMALL_OUTPUT_INITIALIZATION_STD, rel=0.1
     )
-    assert float(network.policy_head[-2].weight.detach().std()) > 10 * SMALL_OUTPUT_INITIALIZATION_STD
+    assert float(network.policy_head[-2].weight.detach().std()) == pytest.approx(
+        SMALL_OUTPUT_INITIALIZATION_STD / 2, rel=0.1
+    )
 
 
 def test_next_policy_auxiliary_head_follows_the_dense_head_variant() -> None:

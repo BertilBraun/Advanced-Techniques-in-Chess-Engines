@@ -546,9 +546,13 @@ def _initialize_small_policy_output(module: nn.Module, configuration: PolicyHead
             assert isinstance(module, nn.Sequential), 'The dense policy configuration must build a sequential head.'
             _initialize_small_linear_output(module[-1])
             if bottleneck_rank is not None:
-                # Kaiming on the first factor stacks with the BN eval-mode blowup and over-sharpens
-                # the generation-0 behaviour prior far beyond the validated band; small-init both factors.
-                _initialize_small_linear_output(module[-2])
+                # Kaiming on the first factor stacks with the BN eval-mode blowup and over-sharpens the
+                # generation-0 behaviour prior far beyond the validated logit-std band (measured 256 vs
+                # the proven 7-52); halving the first factor's std lands the export near band-centre (~32).
+                first_factor = module[-2]
+                assert isinstance(first_factor, nn.Linear)
+                nn.init.normal_(first_factor.weight, std=SMALL_OUTPUT_INITIALIZATION_STD / 2)
+                nn.init.zeros_(first_factor.bias)
         case GoPointPassPolicyHeadConfiguration():
             # The Go point-pass head keeps its historical Kaiming initialization.
             pass
