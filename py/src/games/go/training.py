@@ -58,10 +58,11 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
         return self.configuration.go.objective.value_discount_per_ply
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
+        objective = self.configuration.go.objective
         return self.self_play_configuration.resolve(
             model_generation,
             self.configuration.go.rules.maximum_moves,
-            self.value_discount_per_ply.value_at(model_generation),
+            objective.effective_search_value_discount_per_ply.value_at(model_generation),
         )
 
     def create_native_search(

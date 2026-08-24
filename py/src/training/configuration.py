@@ -142,6 +142,9 @@ class TrainingObjectiveConfiguration(FrozenModel):
     value_loss_weight: FloatGenerationSchedule
     root_value_blend: FloatGenerationSchedule
     value_discount_per_ply: FloatGenerationSchedule
+    # r3 discounted MCTS backups by 0.99/ply while keeping replay WDL targets undiscounted;
+    # None keeps the single-key behaviour where search follows value_discount_per_ply.
+    search_value_discount_per_ply: FloatGenerationSchedule | None = None
     auxiliary_targets: tuple[AuxiliaryTargetConfiguration, ...] = ()
 
     @model_validator(mode='after')
@@ -156,7 +159,19 @@ class TrainingObjectiveConfiguration(FrozenModel):
             raise ValueError('Root-value blend must remain in [0, 1].')
         if any(not 0.0 < value <= 1.0 for value in defined_schedule_values(self.value_discount_per_ply)):
             raise ValueError('Value discount per ply must remain in (0, 1].')
+        if self.search_value_discount_per_ply is not None and any(
+            not 0.0 < value <= 1.0 for value in defined_schedule_values(self.search_value_discount_per_ply)
+        ):
+            raise ValueError('Search value discount per ply must remain in (0, 1].')
         return self
+
+    @property
+    def effective_search_value_discount_per_ply(self) -> FloatGenerationSchedule:
+        return (
+            self.value_discount_per_ply
+            if self.search_value_discount_per_ply is None
+            else self.search_value_discount_per_ply
+        )
 
 
 class TrainingLifecycleParams(FrozenModel):

@@ -31,6 +31,7 @@ from src.self_play.parameters import (
 from src.training.configuration import TrainingCompilation, TrainingPrecision
 from src.training.targets import RemainingGameLengthTargetConfiguration
 from src.util.frozen_model import JsonValue
+from src.util.generation_schedule import ConstantSchedule
 from test_helpers.chess_configuration import (
     CHESS_EXPERIMENT,
     CHESS_EXPERIMENT_TEMPLATE_PATH,
@@ -550,3 +551,29 @@ def test_removed_configuration_fields_are_rejected(
 
     with pytest.raises(ValidationError, match=field_name):
         ChessExperimentConfiguration.model_validate(candidate)
+
+
+def test_search_value_discount_defaults_to_the_replay_discount() -> None:
+    configuration = load_experiment_configuration(OPTIMAL_CHESS_EXPERIMENT_PATH)
+    objective = configuration.chess.objective
+
+    assert objective.search_value_discount_per_ply is None
+    assert objective.effective_search_value_discount_per_ply is objective.value_discount_per_ply
+
+
+def test_search_value_discount_splits_from_the_replay_discount() -> None:
+    configuration = load_experiment_configuration(OPTIMAL_CHESS_EXPERIMENT_PATH)
+    objective = configuration.chess.objective.validated_copy(
+        update={'search_value_discount_per_ply': ConstantSchedule[float](kind='constant', value=0.99)}
+    )
+
+    assert objective.effective_search_value_discount_per_ply.value_at(0) == pytest.approx(0.99)
+    assert objective.value_discount_per_ply.value_at(0) == 1.0
+
+
+def test_search_value_discount_rejects_values_outside_unit_interval() -> None:
+    configuration = load_experiment_configuration(OPTIMAL_CHESS_EXPERIMENT_PATH)
+    with pytest.raises(ValueError, match='Search value discount'):
+        configuration.chess.objective.validated_copy(
+            update={'search_value_discount_per_ply': ConstantSchedule[float](kind='constant', value=1.5)}
+        )
