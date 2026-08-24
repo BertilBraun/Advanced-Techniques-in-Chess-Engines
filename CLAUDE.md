@@ -66,6 +66,10 @@ validated.
 
 ## Remote nodes
 
+- Run every command on a node through `deployment/remote_command.sh <HOST[:PORT]> <command …>`; never
+  hand-assemble `ssh`. The script owns the key, user and connection options, takes the destination from
+  `documentation/operations/current-node.md`, and returns the remote exit status (255 = connection failed).
+  Runs are still started, stopped and archived only through `deployment/run_control.sh`.
 - Provision with `deployment/setup_remote.sh` (clones the revision, installs the locked dependencies, builds the
   Release extension, smokes the engines). KataGo must be the CUDA build; never the Eigen fallback.
 - Record `nvidia-smi`, driver, GPU model/count, effective CPUs, RAM, disk and the locked PyTorch CUDA/cuDNN runtime

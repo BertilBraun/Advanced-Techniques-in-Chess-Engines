@@ -21,6 +21,8 @@ Phase A validation and the WP7 overnight smoke only. Not a benchmark or producti
 
 ## Before you connect
 
+Connect with `deployment/remote_command.sh <HOST[:PORT]> <command …>` (it owns the key and the
+connection options; the destination is the SSH row above), not a hand-written `ssh` line.
 Read `/etc/vast-agents-guide.md` on the node before changing it. Runs go through
 `deployment/run_control.sh` only. Provisioning history and deviations:
 [node-phase-a-20260821.md](../evidence/node-phase-a-20260821.md).

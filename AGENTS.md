@@ -14,6 +14,22 @@ Only the user accepts a phase or authorizes another phase.
 
 ## Remote execution
 
+To run anything on a rented node, use `deployment/remote_command.sh` — never hand-assemble an `ssh`
+invocation. It owns the key, user and connection options; you supply the destination and the command:
+
+```bash
+deployment/remote_command.sh 98.142.241.120:22658 nvidia-smi
+deployment/remote_command.sh 98.142.241.120:22658 'cd /workspace/alphazero-engine && git rev-parse HEAD'
+deployment/remote_command.sh 98.142.241.120:22658 bash -s < local-script.sh
+```
+
+The destination is `HOST`, `HOST:PORT`, `user@HOST` or `user@HOST:PORT` (default user `root`, default port
+22) — take it from `documentation/operations/current-node.md`. The arguments are joined and interpreted by
+the remote login shell, so quote what the local shell must not expand. The exit status is the remote
+command's; 255 means the connection failed. Overrides: `REMOTE_SSH_KEY`, `REMOTE_SSH_USER`,
+`REMOTE_SSH_PORT`, `REMOTE_SSH_CONNECT_TIMEOUT`, `REMOTE_SSH_EXTRA_OPTIONS`. Starting, stopping and
+archiving runs still goes through `deployment/run_control.sh`, not through ad-hoc remote commands.
+
 Use `deployment/setup_remote.sh` for a fresh compute node. It clones the
 requested revision, installs the locked training dependencies, builds the
 Release C++ extension, exports `ENGINE_SOURCE_REVISION`, and starts the supplied
