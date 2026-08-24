@@ -577,3 +577,30 @@ def test_search_value_discount_rejects_values_outside_unit_interval() -> None:
         configuration.chess.objective.validated_copy(
             update={'search_value_discount_per_ply': ConstantSchedule[float](kind='constant', value=1.5)}
         )
+
+
+def _chess_experiment_with_manual_stop_file(manual_stop_file: str) -> ChessExperimentConfiguration:
+    limits = CHESS_EXPERIMENT.training.limits.validated_copy(update={'manual_stop_file': manual_stop_file})
+    training = CHESS_EXPERIMENT.training.validated_copy(update={'limits': limits.model_dump(mode='json')})
+    return CHESS_EXPERIMENT.validated_copy(update={'training': training.model_dump(mode='json')})
+
+
+def test_manual_stop_file_serialises_with_forward_slashes() -> None:
+    configuration = _chess_experiment_with_manual_stop_file('/workspace/run-control/stop/vast-chess.stop')
+
+    assert '"manual_stop_file":"/workspace/run-control/stop/vast-chess.stop"' in configuration.model_dump_json()
+    assert '\\\\' not in configuration.model_dump_json()
+
+
+def test_experiment_configuration_hash_is_stable_across_host_path_separators() -> None:
+    posix_style = _chess_experiment_with_manual_stop_file('/workspace/run-control/stop/vast-chess.stop')
+    windows_style = _chess_experiment_with_manual_stop_file('\\workspace\\run-control\\stop\\vast-chess.stop')
+
+    assert experiment_configuration_sha256(posix_style) == experiment_configuration_sha256(windows_style)
+
+
+def test_experiment_configuration_hash_matches_pinned_regression_value() -> None:
+    assert (
+        experiment_configuration_sha256(CHESS_EXPERIMENT)
+        == '53e741fcc70957a530624072ab668f01a3628c662f30e75a939c12f71cb368ed'
+    )

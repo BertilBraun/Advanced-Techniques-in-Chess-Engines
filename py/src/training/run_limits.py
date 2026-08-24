@@ -6,14 +6,14 @@ from pathlib import Path
 
 import psutil
 from pydantic import Field
-from src.util.frozen_model import FrozenModel
+from src.util.frozen_model import ConfigurationPath, FrozenModel
 
 
 class RuntimeLimits(FrozenModel):
     hourly_price: float = Field(ge=0.0)
     maximum_cost: float | None = Field(default=None, gt=0.0)
     maximum_wall_time_seconds: float | None = Field(default=None, gt=0.0)
-    manual_stop_file: Path | None = None
+    manual_stop_file: ConfigurationPath | None = None
     maximum_open_file_count: int = Field(gt=0)
     maximum_host_ram_percent: float = Field(gt=0.0, le=100.0)
     minimum_free_disk_gib: float = Field(ge=0.0)
