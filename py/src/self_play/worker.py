@@ -164,6 +164,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             inference.averageNumberOfPositionsInInferenceCall,
             self.model_generation,
         )
+        self._log_search_thread_split(inference)
         self._log_restart_statistics()
         return SelfPlayStatisticsSnapshot(
             model_generation=self.model_generation,
@@ -426,6 +427,19 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if self.restart_archive is None:
             raise RuntimeError('Restart-state self-play requires an initialized archive.')
         return self.restart_archive
+
+    def _log_search_thread_split(self, inference: InferenceStatistics) -> None:
+        assert self.model_generation is not None
+        for name, nanoseconds in (
+            ('tree_selection', inference.treeSelectionNanoseconds),
+            ('board_encoding', inference.boardEncodingNanoseconds),
+            ('result_processing', inference.resultProcessingNanoseconds),
+            ('tree_backup', inference.treeBackupNanoseconds),
+            ('inference_wait', inference.treeOwnerWaitNanoseconds),
+            ('inference_submission', inference.inferenceNanoseconds),
+        ):
+            log_scalar(f'search_cpu_seconds/{name}', nanoseconds / 1e9, self.model_generation)
+        log_scalar('inference/worker_utilization', inference.workerUtilization, self.model_generation)
 
     def _log_restart_statistics(self) -> None:
         if self.restart_archive is None or self.model_generation is None:
