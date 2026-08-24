@@ -59,11 +59,27 @@ and the host never blocks. The single-worker gate is removed.
 | 32×1, 768 games, cap 256 | 623,272 | 19.9 | 251.1 | 92.9 |
 | 32×2, 512 games, cap 256 | 530,058 | 18.1 | 140.5 | 93.4 |
 | 32×1, 1024 games, cap 512 | 656,682 | 22.6 | 466 | 88.7 |
-| **32×1, 768 games, cap 384** — 4 runs | **660,292 / 664,487 / 666,928 / 670,415** | 21.8–22.9 | 342–343 | 89.9–91.8 |
+| 32×1, 768 games, cap 384 — 4 runs | 660,292 / 664,487 / 666,928 / 670,415 | 21.8–22.9 | 342–343 | 89.9–91.8 |
 | 32×2, 768 games, cap 384 | 580,945 | 20.2 | 217.7 | 91.2 |
 
-Median of the chosen configuration is **665,708 searches/s**, spread 1.5 %, against a node baseline
-of 509,511 — **+30.6 % on 42 % of the CPU**.
+### Batch cap at the production 512 games per process
+
+A batch advances every game by one ply, so game duration scales with games in flight divided by
+throughput. Holding games at 512 keeps that duration fixed and makes the cap the only free variable.
+
+| cap | searches/s | avg batch | GPU % | game duration vs cap 256 |
+| ---: | ---: | ---: | ---: | ---: |
+| 256 | 619,882 | 222 | 92.9 | baseline |
+| 288 | 630,231 | 232.9 | 93.0 | −1.7 % |
+| **320** | **656,854 / 648,472 / 647,523** | 241.4 | 92.4–93.3 | **−4.6 %** |
+| 352 | 622,970 | 249.8 | 91.3 | −0.5 % |
+| 384 | 628,618 | 256.3 | 90.6 | −1.4 % |
+
+320 is a real optimum, not a plateau edge: both neighbours fall away. Median 648,472.
+
+The chosen configuration — 512 games per process, cap 320 — has a median of **648,472 searches/s**
+against a node baseline of 509,511: **+27.3 % on 40 % of the CPU**, and with games completing 4.6 %
+faster rather than slower.
 
 ### Graph bucket granularity
 
@@ -73,19 +89,22 @@ of 509,511 — **+30.6 % on 42 % of the CPU**.
 | 256 | 16 | 251 | 256 | 618,040 |
 | 384 | 8 | 343 | 384 | 663,509 / 652,936 |
 | 384 | 16 | 343 | 360 | 660,292 / 666,928 / 670,415 |
+| 320 | 16 | 241 | 260 | 648,472 (median of three) |
 
-Finer buckets pay only when the average batch sits well below the cap; sixteen is kept because the
-chosen cap leaves a 12 % pad at eight.
+Finer buckets pay when the average batch sits well below the cap. At the chosen 320 cap the average
+batch is 241, which pads to 280 in eight buckets and 260 in sixteen.
 
 ## Interpretation
 
-- One inference worker remains the right setting: two are now **safe** but 13 % slower
-  (580,945 against 665,708), because a second worker halves the batch.
+- One inference worker remains the right setting: two are now **safe** but slower, because a second
+  worker halves the batch.
 - Three processes per GPU is worse than four; four with more games per process is best.
 - The batch cap only became a constraint after submission stopped being one. At 3.5 ms of host
   dispatch per call the pipeline could not fill 256; at 31 µs it fills 343 of 384.
-- Host RAM rises from 58.5 to 68 GiB at 768 games per process — comfortable at 188 GiB, but it is
-  the setting to reduce first on a smaller node.
+- Raising games per process buys throughput only by holding more games in flight, which lengthens
+  every game in proportion: 768 games and a cap of 384 reach 665,708 but stretch each game by 40 %
+  and host RAM from 58.5 to 68 GiB. Raising the cap at fixed games costs nothing, which is why the
+  recommendation moves the cap and leaves games alone.
 - Cross-node caution: a separate evaluation measured 662,137 searches/s for the **unoptimised** code
   on a different 8×4070 SUPER node with a faster CPU (208 % per process, 66.6 of 80 cores). That is
   not comparable to the figures here, which are all this node against itself.
@@ -93,7 +112,7 @@ chosen cap leaves a 12 % pad at eight.
 ## Reproduce
 
 ```bash
-python3 tools/benchmark_self_play_search.py --run-config configs/validation/vast-chess-4day-production-v2.yaml --model /workspace/benchmodel/chess-v2.jit.pt --device 0 --worker-id 0 --inference-device cuda --games 768 --generation 60 --warmup-batches 2 --duration-seconds 90 --inference-workers 1 --inference-batch-size 384
+python3 tools/benchmark_self_play_search.py --run-config configs/validation/vast-chess-4day-production-v2.yaml --model /workspace/benchmodel/chess-v2.jit.pt --device 0 --worker-id 0 --inference-device cuda --games 512 --generation 60 --warmup-batches 2 --duration-seconds 90 --inference-workers 1 --inference-batch-size 320
 ```
 
 ## Files

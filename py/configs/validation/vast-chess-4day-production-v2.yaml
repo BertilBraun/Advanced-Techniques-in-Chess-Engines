@@ -14,9 +14,6 @@ run:
 
 training:
   save_path: py/training_data/validation/vast-chess-4day-production-v2
-  topology:
-    self_play:
-      parallel_games_per_process: 768
   trainer:
     compilation: default
   lifecycle:
@@ -129,9 +126,10 @@ chess:
       # One worker: submission is a graph launch now, so a second worker has nothing to overlap,
       # and two capturing workers in one process fault the device.
       inference_workers: 1
-      # 384 with 768 games per process: the batch cap became the binding constraint once graph
-      # replay made submission microseconds, and 512 overshoots (656,682 against 666,928).
-      inference_batch_size: 384
+      # The cap became the binding constraint once graph replay made submission microseconds.
+      # 320 is a measured optimum at 512 games: 288 and 352 both fall away, and a larger cap only
+      # buys throughput by holding more games in flight, which lengthens every game to pay for it.
+      inference_batch_size: 320
       outstanding_batches_per_worker: 2
       sdpa_backend: memory_efficient
     start_position:
