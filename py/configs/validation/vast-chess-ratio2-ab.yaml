@@ -3,19 +3,19 @@
 extends: vast-chess-4day-r3replica.yaml
 
 run:
-  run_name: vast-chess-ratio12-ab
-  tensorboard_run_directory: vast-chess-ratio12-ab
+  run_name: vast-chess-ratio2-ab
+  tensorboard_run_directory: vast-chess-ratio2-ab
 
 training:
-  save_path: py/training_data/validation/vast-chess-ratio12-ab
+  save_path: py/training_data/validation/vast-chess-ratio2-ab
   lifecycle:
     credit:
-      replay_ratio: 12
+      replay_ratio: 2
   limits:
     hourly_price: 0.755
     maximum_cost: null
     maximum_wall_time_seconds: 5400
-    manual_stop_file: /workspace/run-control/stop/vast-chess-ratio12-ab.stop
+    manual_stop_file: /workspace/run-control/stop/vast-chess-ratio2-ab.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
     minimum_free_disk_gib: 1.0
