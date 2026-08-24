@@ -35,6 +35,11 @@ class SearchVisitCounts(FrozenModel):
             visit_counts=tuple(visit.visit_count for visit in visits),
         )
 
+    @classmethod
+    def from_columns(cls, columns: tuple[list[int], list[int]]) -> SearchVisitCounts:
+        action_ids, visit_counts = columns
+        return cls(action_ids=tuple(action_ids), visit_counts=tuple(visit_counts))
+
     def native_visits(self) -> tuple[GameSearchVisit, ...]:
         # Imported here so the on-disk game schema stays importable without the native extension.
         from AlphaZeroCpp import GameSearchVisit

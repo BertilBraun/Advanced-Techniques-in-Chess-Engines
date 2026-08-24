@@ -32,7 +32,7 @@ from src.self_play.restart_archive import RestartStateArchive, worker_restart_ar
 from src.util.tensorboard import log_scalar
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import GameSearchVisit, InferenceStatistics
+    from AlphaZeroCpp import InferenceStatistics
     from src.games.implementation import GameImplementation
     from src.training.checkpoint import CheckpointReference
 
@@ -253,14 +253,14 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         parameters: ResolvedSelfPlayParameters,
     ) -> CompletedSelfPlayGame | None:
         assert self.model_generation is not None
-        search_visits = tuple(result.search_visits)
-        if not search_visits:
+        search_visits = result.search_visit_columns
+        if not search_visits[0]:
             raise RuntimeError('Native search returned no visited action for a nonterminal root.')
         ply = len(active_game.action_ids)
         if active_game.reserved_restart_action_id is not None and not request.full_search:
             raise RuntimeError('Restart roots require a full search.')
-        policy_target_visits = tuple(result.policy_target_visits)
-        if not policy_target_visits:
+        policy_target_columns = result.policy_target_columns
+        if not policy_target_columns[0]:
             raise RuntimeError('Native search returned an empty policy target for a nonterminal root.')
         resignation_triggered = (
             not active_game.is_resignation_continuation
@@ -274,7 +274,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         observation = SearchObservation(
             ply=ply,
             model_generation=self.model_generation,
-            policy_target_visits=SearchVisitCounts.from_native(policy_target_visits),
+            policy_target_visits=SearchVisitCounts.from_columns(policy_target_columns),
             root_value=result.root_value,
             highest_visited_child_action_id=result.highest_visited_child_action_id,
             highest_visited_child_visit_count=result.highest_visited_child_visit_count,
@@ -334,21 +334,22 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
 
     def _select_action(
         self,
-        visits: tuple[GameSearchVisit, ...],
+        visits: tuple[list[int], list[int]],
         ply: int,
         parameters: ResolvedSelfPlayParameters,
     ) -> int:
+        action_ids, visit_counts = visits
         if ply >= parameters.greedy_after_ply:
-            return min(visits, key=lambda visit: (-visit.visit_count, visit.action_id)).action_id
+            return min(zip(visit_counts, action_ids, strict=True), key=lambda visit: (-visit[0], visit[1]))[1]
         progress = ply / parameters.greedy_after_ply
         temperature = (
             parameters.starting_temperature
             + (parameters.final_temperature - parameters.starting_temperature) * progress
         )
-        counts = np.asarray([visit.visit_count for visit in visits], dtype=np.float64)
+        counts = np.asarray(visit_counts, dtype=np.float64)
         probabilities = np.power(counts, 1.0 / temperature)
         probabilities /= probabilities.sum()
-        return visits[int(self.random.choice(len(visits), p=probabilities))].action_id
+        return action_ids[int(self.random.choice(len(action_ids), p=probabilities))]
 
     @staticmethod
     def _complete(

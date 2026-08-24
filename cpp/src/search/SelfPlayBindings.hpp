@@ -2,12 +2,27 @@
 
 #include "search/SelfPlay.hpp"
 
+#include <cstdint>
 #include <utility>
+#include <vector>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
+
+[[nodiscard]] inline std::pair<std::vector<int>, std::vector<std::uint32_t>>
+visitColumns(const std::vector<GameSearchVisit> &visits) {
+    std::vector<int> actionIds;
+    std::vector<std::uint32_t> visitCounts;
+    actionIds.reserve(visits.size());
+    visitCounts.reserve(visits.size());
+    for (const GameSearchVisit &visit : visits) {
+        actionIds.push_back(visit.action_id);
+        visitCounts.push_back(visit.visit_count);
+    }
+    return {std::move(actionIds), std::move(visitCounts)};
+}
 
 struct SelfPlayBindingNames {
     const char *root;
@@ -64,6 +79,13 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def_readonly("highest_visited_child_q", &Result::highest_visited_child_q)
         .def_readonly("search_visits", &Result::search_visits)
         .def_readonly("policy_target_visits", &Result::policy_target_visits)
+        // Columns instead of a list of bound visit objects: the worker reads these once per ply
+        // per game, and one Python object per root child dominated the advance loop.
+        .def_property_readonly("search_visit_columns",
+                               [](const Result &result) { return visitColumns(result.search_visits); })
+        .def_property_readonly(
+            "policy_target_columns",
+            [](const Result &result) { return visitColumns(result.policy_target_visits); })
         .def_readonly("network_root_value", &Result::network_root_value)
         .def_readonly("policy_correction", &Result::policy_correction)
         .def_readonly("value_correction", &Result::value_correction)
