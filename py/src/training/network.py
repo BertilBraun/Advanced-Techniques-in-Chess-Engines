@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import math
+from dataclasses import dataclass
 from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
@@ -335,21 +336,73 @@ class InferenceNetwork(nn.Module):
 
 
 # Deep BatchNorm CNNs get an accidental sharp random behaviour prior at generation 0 (eval-mode
-# running-statistics mismatch, measured logit std 7-52), which the r3 recipe depends on to break
-# search symmetry and bootstrap decisive self-play. LayerNorm trunks have no such artifact (measured
-# 0.04-0.07) and stall in uniform search; this scale recreates the sharp prior deliberately, on the
-# inference export only, so the training model still starts near-uniform for healthy optimization.
-BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE = 75.0
+# running-statistics mismatch), which the r3 recipe depends on to break search symmetry and bootstrap
+# decisive self-play; the validated band for the export's mean per-position policy logit std is 7-52,
+# while a LayerNorm attention trunk at 0.065 stalled and a rank-96 dense head at 256 was over-sharp.
+# Calibrating the generation-0 export to the band centre makes the prior deliberate and
+# architecture-agnostic; the training model itself stays near-uniform for healthy optimization.
+BOOTSTRAP_POLICY_PRIOR_TARGET_LOGIT_STD = 25.0
+POLICY_PRIOR_PROBE_POSITIONS = 256
+POLICY_PRIOR_PROBE_SEED = 20260824
 
 
-def apply_bootstrap_policy_prior(inference_model: InferenceNetwork, args: NetworkConfiguration) -> None:
-    match args:
-        case AttentionNetworkParams():
-            match inference_model.policy_head:
-                case PolicyPlaneHead(output_projection=output_projection):
-                    with torch.no_grad():
-                        output_projection.weight.mul_(BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE)
-                        output_projection.bias.mul_(BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE)
+@dataclass(frozen=True)
+class BootstrapPolicyPriorCalibration:
+    measured_logit_std: float
+    applied_scale: float
+    target_logit_std: float
+
+
+def calibrate_bootstrap_policy_prior(
+    inference_model: InferenceNetwork,
+    target_logit_std: float = BOOTSTRAP_POLICY_PRIOR_TARGET_LOGIT_STD,
+) -> BootstrapPolicyPriorCalibration:
+    dimensions = inference_model.checkpoint_definition().dimensions
+    device = next(inference_model.parameters()).device
+    was_training = inference_model.training
+    inference_model.eval()
+    with torch.no_grad():
+        policy_logits, _, _ = inference_model(policy_prior_probe_states(dimensions, device))
+    inference_model.train(was_training)
+
+    measured_logit_std = float(policy_logits.double().std(dim=1, correction=0).mean())
+    assert measured_logit_std > 0.0, 'The generation-0 export produced constant policy logits.'
+    applied_scale = target_logit_std / measured_logit_std
+    with torch.no_grad():
+        for projection in _final_policy_projections(inference_model.policy_head):
+            projection.weight.mul_(applied_scale)
+            if projection.bias is not None:
+                projection.bias.mul_(applied_scale)
+    return BootstrapPolicyPriorCalibration(
+        measured_logit_std=measured_logit_std,
+        applied_scale=applied_scale,
+        target_logit_std=target_logit_std,
+    )
+
+
+def policy_prior_probe_states(dimensions: NetworkDimensions, device: torch.device) -> Tensor:
+    # No game contract is reachable at export time, so the probe approximates the input contract with
+    # dense Bernoulli(0.5) planes instead of the sparse binary-plus-scalar encoding served at runtime.
+    generator = torch.Generator().manual_seed(POLICY_PRIOR_PROBE_SEED)
+    probabilities = torch.full(
+        (POLICY_PRIOR_PROBE_POSITIONS, dimensions.channels, dimensions.rows, dimensions.columns),
+        0.5,
+    )
+    return torch.bernoulli(probabilities, generator=generator).to(device=device, dtype=torch.float32)
+
+
+def _final_policy_projections(policy_head: nn.Module) -> tuple[nn.Conv2d | nn.Linear, ...]:
+    match policy_head:
+        case PolicyPlaneHead(output_projection=output_projection):
+            return (output_projection,)
+        case GoPointPassPolicyHead(point_projection=point_projection, pass_projection=pass_projection):
+            return (point_projection, pass_projection)
+        case nn.Sequential():
+            final_layer = policy_head[-1]
+            assert isinstance(final_layer, nn.Linear), 'A dense policy head must end in a linear projection.'
+            return (final_layer,)
+        case _:
+            raise AssertionError(f'Policy head {type(policy_head).__name__} has no known final projection.')
 
 
 def fuse_conv_batchnorm(root: nn.Module) -> None:
@@ -540,26 +593,24 @@ def _initialize_small_policy_output(module: nn.Module, configuration: PolicyHead
     match configuration:
         case Chess76PlaneDirectPolicyHeadConfiguration():
             assert isinstance(module, PolicyPlaneHead), 'The 76-plane policy configuration must build a plane head.'
-            nn.init.normal_(module.output_projection.weight, std=SMALL_OUTPUT_INITIALIZATION_STD)
-            nn.init.zeros_(module.output_projection.bias)
+            projections: tuple[nn.Module, ...] = (module.output_projection,)
         case DensePolicyHeadConfiguration(bottleneck_rank=bottleneck_rank):
             assert isinstance(module, nn.Sequential), 'The dense policy configuration must build a sequential head.'
-            _initialize_small_linear_output(module[-1])
-            if bottleneck_rank is not None:
-                # Kaiming on the first factor stacks with the BN eval-mode blowup and over-sharpens the
-                # generation-0 behaviour prior far beyond the validated logit-std band (measured 256 vs
-                # the proven 7-52); halving the first factor's std lands the export near band-centre (~32).
-                first_factor = module[-2]
-                assert isinstance(first_factor, nn.Linear)
-                nn.init.normal_(first_factor.weight, std=SMALL_OUTPUT_INITIALIZATION_STD / 2)
-                nn.init.zeros_(first_factor.bias)
+            projections = (module[-1],) if bottleneck_rank is None else (module[-2], module[-1])
         case GoPointPassPolicyHeadConfiguration():
             # The Go point-pass head keeps its historical Kaiming initialization.
-            pass
+            projections = ()
+    for projection in projections:
+        _initialize_small_projection(projection)
 
 
 def _initialize_small_linear_output(module: nn.Module) -> None:
     assert isinstance(module, nn.Linear), 'Small-output initialization expects the final head layer to be linear.'
+    _initialize_small_projection(module)
+
+
+def _initialize_small_projection(module: nn.Module) -> None:
+    assert isinstance(module, nn.Conv2d | nn.Linear), 'Small initialization expects a convolution or a linear layer.'
     nn.init.normal_(module.weight, std=SMALL_OUTPUT_INITIALIZATION_STD)
     nn.init.zeros_(module.bias)
 

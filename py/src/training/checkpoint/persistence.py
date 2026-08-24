@@ -20,7 +20,7 @@ from src.training.network import (
     Network,
     NetworkConfiguration,
     NetworkDefinition,
-    apply_bootstrap_policy_prior,
+    calibrate_bootstrap_policy_prior,
 )
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
@@ -182,10 +182,15 @@ def save_model_and_optimizer(
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
 
     fused_model = InferenceNetwork(model)
-    if generation == 0:
-        apply_bootstrap_policy_prior(fused_model, model.network_args)
     fused_model.eval()
     fused_model.fuse_model()
+    if generation == 0:
+        calibration = calibrate_bootstrap_policy_prior(fused_model)
+        log(
+            f'Calibrated the generation-0 policy prior: probe logit std '
+            f'{calibration.measured_logit_std:.3f} scaled by {calibration.applied_scale:.4g} '
+            f'to {calibration.target_logit_std}.'
+        )
 
     torch.jit.save(
         torch.jit.script(fused_model),
