@@ -315,10 +315,13 @@ chess:
         kind: enabled
         coefficient: 1.5
     inference:
-      # One worker: submission is a graph launch now, so a second worker has nothing to overlap,
-      # and two capturing workers in one process fault the device.
+      # One worker: submission is a graph launch now, so a second worker has nothing to overlap
+      # and only halves the batch.
       inference_workers: 1
-      inference_batch_size: 256
+      # 320 is a measured optimum at 512 games per process (288 and 352 both fall away) and
+      # completes each game 4.6% faster, so it carries no staleness cost. The live run of this
+      # configuration started at 256 and was left alone rather than restarted for the difference.
+      inference_batch_size: 320
       outstanding_batches_per_worker: 2
       sdpa_backend: memory_efficient
     start_position:
