@@ -26,7 +26,9 @@ from src.training.network import (
     ResidualContextPlacement,
     SqueezeExcitation,
     SqueezeExcitationResidualContext,
+    _build_dense_policy_head,
     apply_bootstrap_policy_prior,
+    fuse_conv_batchnorm,
 )
 from src.training.targets import (
     LegalMovesHeadLayout,
@@ -397,3 +399,125 @@ def test_bootstrap_policy_prior_leaves_convolutional_networks_unscaled() -> None
     apply_bootstrap_policy_prior(export, convolutional.network_args)
 
     assert torch.equal(export.policy_head.output_projection.weight, weight_before)
+
+
+DENSE_HEAD_PARAMETER_COUNTS = (
+    ('A', DensePolicyHeadConfiguration(channels=4), 483_680),
+    ('C', DensePolicyHeadConfiguration(channels=8, spatial_reductions=2), 538_984),
+    ('E', DensePolicyHeadConfiguration(channels=4, bottleneck_rank=96), 207_552),
+)
+
+
+def _legacy_dense_policy_head(input_channels: int, channels: int, squares: int, action_size: int) -> nn.Sequential:
+    return nn.Sequential(
+        nn.Conv2d(input_channels, channels, kernel_size=1, bias=False),
+        nn.BatchNorm2d(channels),
+        nn.ReLU(inplace=True),
+        nn.Flatten(),
+        nn.Linear(channels * squares, action_size),
+    )
+
+
+def test_dense_policy_head_defaults_keep_the_legacy_state_dict_layout() -> None:
+    legacy = _legacy_dense_policy_head(128, 4, 64, 1880)
+    head = _build_dense_policy_head(128, 8, 8, 1880, DensePolicyHeadConfiguration(channels=4))
+
+    head.load_state_dict(legacy.state_dict())
+
+    assert tuple(head.state_dict()) == tuple(legacy.state_dict())
+    assert torch.equal(head[-1].weight, legacy[-1].weight)
+
+
+@pytest.mark.parametrize(('label', 'configuration', 'expected'), DENSE_HEAD_PARAMETER_COUNTS)
+def test_dense_policy_head_parameter_counts_are_pinned(
+    label: str,
+    configuration: DensePolicyHeadConfiguration,
+    expected: int,
+) -> None:
+    head = _build_dense_policy_head(128, 8, 8, 1880, configuration)
+
+    assert sum(parameter.numel() for parameter in head.parameters()) == expected
+
+
+@pytest.mark.parametrize('spatial_reductions', (1, 2))
+def test_dense_policy_head_reductions_shrink_the_flattened_field(spatial_reductions: int) -> None:
+    head = _build_dense_policy_head(
+        32,
+        8,
+        8,
+        1880,
+        DensePolicyHeadConfiguration(channels=4, spatial_reductions=spatial_reductions),
+    )
+    side = 8 - 2 * spatial_reductions
+
+    assert head(torch.zeros((2, 32, 8, 8))).shape == (2, 1880)
+    assert head[-1].in_features == 4 * side * side
+
+
+def test_dense_policy_head_rejects_reductions_that_do_not_fit_the_board() -> None:
+    with pytest.raises(ValueError, match='do not fit'):
+        _build_dense_policy_head(32, 3, 3, 10, DensePolicyHeadConfiguration(channels=4, spatial_reductions=2))
+
+
+def test_dense_policy_head_rejects_more_reductions_than_supported() -> None:
+    with pytest.raises(ValidationError):
+        DensePolicyHeadConfiguration(channels=4, spatial_reductions=3)
+
+
+def test_dense_bottleneck_applies_small_output_initialization_to_the_final_linear_only() -> None:
+    torch.manual_seed(13)
+    network = Network(
+        NetworkParams(
+            num_layers=1,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=DensePolicyHeadConfiguration(channels=4, spatial_reductions=1, bottleneck_rank=32),
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+    )
+    network.eval()
+
+    logits, _ = network.logit_forward(torch.randn((2, 29, 8, 8)))
+
+    assert logits.shape == (2, CHESS_NETWORK_DIMENSIONS.actions)
+    assert network.policy_head[-2].out_features == 32
+    assert float(network.policy_head[-1].weight.detach().std()) == pytest.approx(
+        SMALL_OUTPUT_INITIALIZATION_STD, rel=0.1
+    )
+    assert float(network.policy_head[-2].weight.detach().std()) > 10 * SMALL_OUTPUT_INITIALIZATION_STD
+
+
+def test_next_policy_auxiliary_head_follows_the_dense_head_variant() -> None:
+    torch.manual_seed(17)
+    configuration = DensePolicyHeadConfiguration(channels=8, spatial_reductions=1, bottleneck_rank=64)
+    network = Network(
+        NetworkParams(
+            num_layers=1,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=configuration,
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+        (NextPolicyHeadLayout(kind='next_policy', action_size=CHESS_NETWORK_DIMENSIONS.actions, ply_offset=1),),
+    )
+    auxiliary_head = network.auxiliary_head_modules[0]
+
+    assert isinstance(auxiliary_head, nn.Sequential)
+    assert sum(parameter.numel() for parameter in auxiliary_head.parameters()) == sum(
+        parameter.numel() for parameter in network.policy_head.parameters()
+    )
+    assert float(auxiliary_head[-1].weight.detach().std()) == pytest.approx(SMALL_OUTPUT_INITIALIZATION_STD, rel=0.1)
+
+
+def test_fusion_folds_every_reduction_stage_of_a_dense_head() -> None:
+    head = _build_dense_policy_head(16, 8, 8, 1880, DensePolicyHeadConfiguration(channels=4, spatial_reductions=2))
+    head.eval()
+    inputs = torch.randn((2, 16, 8, 8))
+    expected = head(inputs)
+
+    fuse_conv_batchnorm(head)
+
+    assert not any(isinstance(layer, nn.BatchNorm2d) for layer in head)
+    assert torch.allclose(head(inputs), expected, atol=1e-4)
