@@ -39,10 +39,13 @@ public:
                            std::vector<std::size_t>(inferenceParameters.batch_size + 1, 0)} {
         m_workers.resize(inferenceParameters.workers);
         for (const auto workerIndex : range(inferenceParameters.workers)) {
+            // Two capturing workers in one process fault the device inside a minute; with graph
+            // replay a second worker buys nothing anyway, since submitting a batch is microseconds.
             m_workers[workerIndex] = std::make_unique<InferencePipeline>(
                 modelPath, device, deviceId, inferenceParameters.batch_size,
                 std::max<std::size_t>(2, inferenceParameters.outstanding_batches_per_worker), true,
-                Game::Encoding::inferenceDimensions(), sdpaBackend);
+                Game::Encoding::inferenceDimensions(), inferenceParameters.workers == 1,
+                sdpaBackend);
         }
     }
 

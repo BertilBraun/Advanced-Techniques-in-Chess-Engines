@@ -193,9 +193,10 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
                                  const int deviceId, const size_t maximumBatchSize,
                                  const bool useDedicatedCudaStream,
                                  const InferenceDimensions dimensions,
-                                 const SdpaBackend sdpaBackend)
+                                 const bool allowGraphCapture, const SdpaBackend sdpaBackend)
     : m_device(resolveDevice(device, deviceId)), m_torchDtype(dtypeForDevice(m_device)),
       m_maximumBatchSize(maximumBatchSize), m_dimensions(dimensions),
+      m_allowGraphCapture(allowGraphCapture),
       m_model(std::make_unique<torch::jit::script::Module>(
           loadInferenceModel(modelPath, m_device, m_torchDtype))) {
     configureSdpaBackend(m_device, sdpaBackend);
@@ -287,7 +288,7 @@ void InferenceRunner::releaseBatchGraphs() noexcept {
 void InferenceRunner::captureBatchGraphs() {
 #ifdef USE_CUDA
     releaseBatchGraphs();
-    if (!m_device.is_cuda() || !m_cudaStream.has_value()) {
+    if (!m_allowGraphCapture || !m_device.is_cuda() || !m_cudaStream.has_value()) {
         return;
     }
     constexpr size_t bucketCount = 8;
@@ -475,9 +476,9 @@ InferencePipeline::InferencePipeline(const std::string &modelPath, const Inferen
                                      const int deviceId, const size_t maximumBatchSize,
                                      const size_t slotCount, const bool useDedicatedCudaStream,
                                      const InferenceDimensions dimensions,
-                                     const SdpaBackend sdpaBackend)
+                                     const bool allowGraphCapture, const SdpaBackend sdpaBackend)
     : m_runner(modelPath, device, deviceId, maximumBatchSize, useDedicatedCudaStream, dimensions,
-               sdpaBackend) {
+               allowGraphCapture, sdpaBackend) {
     if (slotCount < 2) {
         throw std::invalid_argument("Inference pipeline requires at least two slots");
     }
