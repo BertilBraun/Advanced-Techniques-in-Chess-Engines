@@ -1285,15 +1285,15 @@ def test_inbox_rescan_stats_only_newly_arrived_files(tmp_path: Path) -> None:
         (directory / f'game-{index:03d}.json').write_text('{}', encoding='utf-8')
 
     stat_calls = 0
-    original_stat = os.DirEntry.stat
+    original_stat = Path.stat
 
-    def counted_stat(entry: os.DirEntry[str], **keywords: object) -> os.stat_result:
+    def counted_stat(path: Path, **keywords: object) -> os.stat_result:
         nonlocal stat_calls
         stat_calls += 1
-        return original_stat(entry, **keywords)  # type: ignore[arg-type]
+        return original_stat(path, **keywords)  # type: ignore[arg-type]
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(os.DirEntry, 'stat', counted_stat, raising=False)
+        patch.setattr(Path, 'stat', counted_stat)
         first = scanner.scan()
         after_first = stat_calls
         second = scanner.scan()

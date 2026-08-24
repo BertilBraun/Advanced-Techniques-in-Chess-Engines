@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import heapq
 import os
 import threading
 import time
@@ -743,32 +744,47 @@ class InboxScanner:
         self.directory = directory
         self.suffix = suffix
         self._modified_at_by_name: dict[str, int] = {}
+        self._ordered_keys: list[tuple[int, str]] = []
+        self._ordered: tuple[Path, ...] = ()
 
     def invalidate(self, file_name: str) -> None:
-        self._modified_at_by_name.pop(file_name, None)
+        modified_at_ns = self._modified_at_by_name.pop(file_name, None)
+        if modified_at_ns is None:
+            return
+        self._ordered_keys.remove((modified_at_ns, file_name))
+        self._ordered = tuple(path for path in self._ordered if path.name != file_name)
 
     def scan(self) -> tuple[Path, ...]:
         try:
-            entries = tuple(os.scandir(self.directory))
+            names = {entry.name for entry in os.scandir(self.directory) if entry.name.endswith(self.suffix)}
         except FileNotFoundError:
-            self._modified_at_by_name.clear()
+            self._modified_at_by_name = {}
+            self._ordered_keys = []
+            self._ordered = ()
             return ()
         known = self._modified_at_by_name
-        modified_at_by_name: dict[str, int] = {}
-        for entry in entries:
-            name = entry.name
-            if not name.endswith(self.suffix):
-                continue
-            # A completed game is renamed into place fully written, so a name's timestamp is
-            # immutable for as long as the name exists; only re-queued files are invalidated.
-            cached = known.get(name)
-            if cached is not None:
-                modified_at_by_name[name] = cached
-                continue
+        arrived = names - known.keys()
+        departed = known.keys() - names
+        if not arrived and not departed:
+            return self._ordered
+        arrived_keys: list[tuple[int, str]] = []
+        for name in sorted(arrived):
             try:
-                modified_at_by_name[name] = entry.stat().st_mtime_ns
+                # A completed game is renamed into place fully written, so a name's timestamp is
+                # immutable for as long as the name exists; only re-queued files are invalidated.
+                modified_at_ns = (self.directory / name).stat().st_mtime_ns
             except OSError:
                 continue
-        self._modified_at_by_name = modified_at_by_name
-        ordered = sorted(modified_at_by_name.items(), key=lambda item: (item[1], item[0]))
-        return tuple(self.directory / name for name, _ in ordered)
+            known[name] = modified_at_ns
+            arrived_keys.append((modified_at_ns, name))
+        arrived_keys.sort()
+        retained = zip(self._ordered_keys, self._ordered)
+        surviving = [pair for pair in retained if pair[0][1] not in departed] if departed else list(retained)
+        merged = list(heapq.merge(surviving, ((key, self.directory / key[1]) for key in arrived_keys), key=_first))
+        self._ordered_keys = [key for key, _ in merged]
+        self._ordered = tuple(path for _, path in merged)
+        return self._ordered
+
+
+def _first(pair: tuple[tuple[int, str], Path]) -> tuple[int, str]:
+    return pair[0]
