@@ -1,38 +1,26 @@
-# Four-day production v4 (2026-08-24 evening) — v3 with the graph-replay inference sizing.
+# Four-day production v4 (2026-08-24 night) — the "option B" control on node B.
 #
-# Only delta from v3: inference batch cap 256 -> 320. Submission stopped being the constraint once
-# the forward became a replayed CUDA graph (host cost per call 3537 -> 31 us), so the cap became
-# one. Measured on the 8x4070 SUPER node at generation 60, 32 processes of 512 games, one inference
-# worker: 619,882 searches/s at 256 and 648,472 median at 320, with 288 (630,231) and 352 (622,970)
-# both falling away, so 320 is an optimum rather than a plateau edge.
+# v2 and v3 both trailed the r3-replica reference per unit of fresh data, and they share exactly
+# one thing the replica has none of: an unvalidated delta set (rank-96 bottleneck head, virtual
+# loss 0.5, the 0.99 search discount, the search_correction auxiliary, the adaptive visit budget,
+# Syzygy adjudication). Fixing the generation-0 prior closed part of that gap in v3 but not all of
+# it. This configuration removes the whole delta set and returns to the only learning recipe that
+# has ever demonstrated the target rate on this platform — the r3 replica — while keeping the two
+# changes that provably cannot affect learning:
 #
-# Games per process stays at 512 deliberately. A batch advances every game by one ply, so game
-# duration tracks games in flight over throughput: 768 games with a cap of 384 reach 665,708 but
-# stretch every game by 40 %, whereas 320 at 512 games is faster and shortens games by 4.6 %.
-# Evidence: documentation/benchmarks/self-play-graph-multiworker-8xrtx4070super-20260824/.
+#   * the ingestion and self-play throughput work (wall-clock only), and
+#   * the shape-calibrated generation-0 policy prior, which replaces the accidental BatchNorm
+#     artefact with a deterministic one (top-3 mass 0.95 on real positions) for ANY head.
 #
-# Inherited from v3, verbatim below — standalone, no extends (every key explicit).
+# Plus the measured inference topology: 512 games per process, one inference worker, batch 320.
+# Compilation stays on; it is a kernel-level optimisation, not a learning-side change.
 #
-# Four-day production v3 (2026-08-24 evening) — standalone, no extends (every key explicit).
+# Everything else is the replica: dense channels-4 head at full rank (483k), replay ratio 8, the
+# fixed r3 visit schedule, virtual loss 1.0, parallel searches 2 -> 4@90, the two permanent
+# auxiliary targets only, no Syzygy, no adaptive budget, no search discount.
 #
-# v2 post-mortem (search-statistics forensics, .codex-diagnostics/experiment-ladder-20260823):
-# the rank-96 bottleneck head with the re-centred init produced a near-uniform effective gen-0
-# prior (search target top-1 mass 0.16 at gen 1 vs 0.73 replica / 0.67 comp2; target entropy 2.86
-# vs 1.05), so search never concentrated and ~30 generations were spent bootstrapping sharpness
-# the r3 head gets for free from its BN eval-mode artifact. Secondary: ingestion starved under
-# host CPU saturation (inbox 70k files, stale training samples) — backpressure is credit-based
-# and credits are granted at materialization, so a lagging ingester never pauses self-play.
-#
-# v3 therefore: rank-96 dense head (207k) WITH the unified shape-calibrated gen-0 prior
-# (725fd16d: export scaled to top-3 mass 0.95 on 256 real evaluation-dataset positions —
-# replaces the seed-lottery init that killed v2), replay ratio 10 (comp2 ran ~9.7 effective
-# with replica-equal early per-generation slope), UNSCALED r3-paced schedules. Kept from v2:
-# split search discount 0.99 (targets 1.0), adaptive budget with caps at 1.25x the r3 visit
-# schedule (gate at 50), virtual loss 0.5 (residual untested delta, user call), parallel
-# searches 2 -> 3@45 -> 4@90, aux next_policy + remaining_game_length (permanent) +
-# search_correction, Syzygy wdl345, compilation, inference batch 256 @ 512 games.
-# Judged by wall-clock evaluation curves against the replica reference
-# (level-0 0.10@1.4h / 0.21@3.7h / 0.685@5.6h; gates 0.16@g19 / 0.35@g31 / 0.5@g41).
+# Judged on wall-clock against the replica reference (level-0 0.15@1.0h, 0.175@1.33h, 0.26@1.67h,
+# 0.255@2.0h) and head-to-head against v3 running concurrently on node A.
 game: chess
 run:
   run_name: vast-chess-4day-production-v4
@@ -43,12 +31,12 @@ run:
     mode: random_initialization
   hardware:
     provider_name: vast.ai
-    offer_id: '48571853'
+    offer_id: '48395477'
     gpu_model: NVIDIA GeForce RTX 4070 SUPER
     gpu_count: 8
     logical_cpu_count: 80
-    minimum_ram_gib: 200
-    minimum_disk_gib: 120
+    minimum_ram_gib: 150
+    minimum_disk_gib: 40
   environment:
     runtime_image: vastai/pytorch:cuda-12.8.1-auto
     python_version: '3.12'
@@ -102,7 +90,7 @@ training:
       maximum_policy_entries: 60
       materialization_processes: 8
     credit:
-      replay_ratio: 10
+      replay_ratio: 8
       optimizer_steps_per_quantum: 500
       maximum_optimizer_steps: null
       retained_checkpoint_interval_generations: 6
@@ -111,7 +99,7 @@ training:
       recent_checkpoint_count: 22
       milestone_interval: 20
   limits:
-    hourly_price: 0.72
+    hourly_price: 0.755
     maximum_cost: null
     maximum_wall_time_seconds: 345600
     manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v4.stop
@@ -122,24 +110,24 @@ training:
   random_seed: 20260811
   progressive_model_sizing:
     models:
-      - model_id: chess-cnn-12x128-dense4r96
+      - model_id: chess-cnn-12x128-dense4
         training_start_days: 0.0
         network:
           kind: convolutional
           num_layers: 12
           hidden_size: 128
           residual_context: {kind: global_pooling, placement: every_second_block}
-          policy_head: {kind: dense, channels: 4, bottleneck_rank: 96}
+          policy_head: {kind: dense, channels: 4}
           num_value_channels: 2
           value_fc_size: 48
-      - model_id: chess-cnn-14x152-dense4r96
+      - model_id: chess-cnn-14x152-dense4
         training_start_days: 1.0
         network:
           kind: convolutional
           num_layers: 14
           hidden_size: 152
           residual_context: {kind: global_pooling, placement: every_second_block}
-          policy_head: {kind: dense, channels: 4, bottleneck_rank: 96}
+          policy_head: {kind: dense, channels: 4}
           num_value_channels: 2
           value_fc_size: 48
     promotion:
@@ -266,8 +254,6 @@ evaluation:
       search: *evaluation_search
 chess:
   self_play:
-    maximum_ply_syzygy_paths:
-      - /workspace/syzygy/wdl345
     resignation:
       kind: calibrated
       first_production_generation: 70
@@ -282,29 +268,18 @@ chess:
       maximum_relaxation_per_generation: 0.01
     search:
       full_search_budget:
-        kind: adaptive
-        minimum_visits: 200
-        maximum_visits:
+        kind: fixed
+        visits:
           kind: staged
           stages:
-            - {start_generation: 0, value: 250}
-            - {start_generation: 10, value: 375}
-            - {start_generation: 30, value: 500}
-            - {start_generation: 50, value: 625}
-            - {start_generation: 90, value: 750}
-            - {start_generation: 180, value: 875}
-            - {start_generation: 250, value: 1000}
-            - {start_generation: 550, value: 1250}
-        observation_interval: 100
-        leader_stability_window: 200
-        root_value_tolerance: 0.04
-        initial_top_visit_share: 0.7
-        final_top_visit_share: 0.5
-        initial_top_two_margin: 0.45
-        final_top_two_margin: 0.15
-        threshold_relaxation_visits: 1200
-        learned_gate_start_generation: 50
-        minimum_search_correction_to_unlock_tail: 0.4
+            - {start_generation: 0, value: 200}
+            - {start_generation: 10, value: 300}
+            - {start_generation: 30, value: 400}
+            - {start_generation: 50, value: 500}
+            - {start_generation: 90, value: 600}
+            - {start_generation: 180, value: 700}
+            - {start_generation: 250, value: 800}
+            - {start_generation: 550, value: 1000}
       fast_searches:
         kind: staged
         stages:
@@ -317,9 +292,8 @@ chess:
         kind: staged
         stages:
           - {start_generation: 0, value: 2}
-          - {start_generation: 45, value: 3}
           - {start_generation: 90, value: 4}
-      virtual_loss_weight: 0.5
+      virtual_loss_weight: 1.0
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
       exploration_constant: 1.5
@@ -330,8 +304,6 @@ chess:
         kind: enabled
         coefficient: 1.5
     inference:
-      # One worker: submission is a graph launch now, so a second worker has nothing to overlap.
-      # It halves the batch instead, and measures 580,945 searches/s against 648,472.
       inference_workers: 1
       inference_batch_size: 320
       outstanding_batches_per_worker: 2
@@ -383,7 +355,6 @@ chess:
       end_value: 0.15
       rounding: none
     value_discount_per_ply: 1.0
-    search_value_discount_per_ply: 0.99
     auxiliary_targets:
       - kind: next_policy
         ply_offset: 1
@@ -391,5 +362,3 @@ chess:
       - kind: remaining_game_length
         loss_weight: 0.1
         normalization_scale: 400.0
-      - kind: search_correction
-        loss_weight: 0.05
