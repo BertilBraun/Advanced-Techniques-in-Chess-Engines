@@ -123,7 +123,9 @@ chess:
           - {start_generation: 30, value: 3}
           - {start_generation: 60, value: 4}
     inference:
-      inference_workers: 2
+      # One worker: submission is a graph launch now, so a second worker has nothing to overlap,
+      # and two capturing workers in one process fault the device.
+      inference_workers: 1
       inference_batch_size: 256
       outstanding_batches_per_worker: 2
       sdpa_backend: memory_efficient
