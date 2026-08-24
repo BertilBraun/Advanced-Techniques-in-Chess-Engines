@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import time
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
@@ -25,7 +26,7 @@ from src.self_play.protocol import (
 from src.self_play.resignation import PublishedResignationPolicy
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import SelfPlayTopologyParams
-from src.training.self_play_group import SelfPlayGroup
+from src.training.self_play_group import SelfPlayGroup, SelfPlaySupervision, SelfPlayWorkerSlot
 from test_helpers.checkpoints import checkpoint_reference
 
 
@@ -112,6 +113,10 @@ class _Connection:
     def send(self, desired_state: RunningSelfPlayState) -> None:
         self.sent.append(desired_state)
 
+    def poll(self, timeout: float = 0.0) -> bool:
+        del timeout
+        return self.response is not None
+
     def recv(self) -> RunningSelfPlayStateApplied:
         assert self.response is not None
         return self.response
@@ -124,12 +129,22 @@ class _Process:
     def __init__(self, alive: bool) -> None:
         self.alive = alive
         self.joined = False
+        self.terminated = False
+        self.exitcode = None if alive else 1
 
     def is_alive(self) -> bool:
         return self.alive
 
-    def join(self) -> None:
+    def join(self, timeout: float | None = None) -> None:
+        del timeout
         self.joined = True
+
+    def terminate(self) -> None:
+        self.terminated = True
+        self.alive = False
+
+    def kill(self) -> None:
+        self.terminate()
 
 
 def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:
@@ -202,58 +217,105 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     assert observed_tensorboard_states == [True]
 
 
+def _applied(worker_id: int, checkpoint: CheckpointReference) -> RunningSelfPlayStateApplied:
+    return RunningSelfPlayStateApplied(
+        worker_id=worker_id,
+        loaded_generation=checkpoint.generation,
+        loaded_inference_model_sha256=checkpoint.inference_model_sha256,
+        completed_generation_statistics=None,
+    )
+
+
+def _group(connections: list[_Connection], processes: list[_Process]) -> SelfPlayGroup:
+    group = SelfPlayGroup.__new__(SelfPlayGroup)
+    group._closed = False
+    group._slots = [
+        SelfPlayWorkerSlot(worker_id, worker_id, cast(Connection, connection), cast(BaseProcess, process))
+        for worker_id, (connection, process) in enumerate(zip(connections, processes))
+    ]
+    return group
+
+
 def test_group_restarts_only_exited_workers_at_active_checkpoint(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     checkpoint = _checkpoint(tmp_path, 3)
-    healthy_connection = _Connection()
     exited_connection = _Connection()
-    replacement_connection = _Connection(
-        RunningSelfPlayStateApplied(
-            worker_id=1,
-            loaded_generation=checkpoint.generation,
-            loaded_inference_model_sha256=checkpoint.inference_model_sha256,
-            completed_generation_statistics=None,
-        )
-    )
-    healthy_process = _Process(alive=True)
+    replacement_connection = _Connection(_applied(1, checkpoint))
     exited_process = _Process(alive=False)
-    replacement_process = _Process(alive=True)
-    group = SelfPlayGroup.__new__(SelfPlayGroup)
-    group._closed = False
-    group._device_ids = (0, 1)
-    group._connections = [cast(Connection, healthy_connection), cast(Connection, exited_connection)]
-    group._processes = [cast(BaseProcess, healthy_process), cast(BaseProcess, exited_process)]
+    group = _group([_Connection(), exited_connection], [_Process(alive=True), exited_process])
 
     def start_worker(worker_id: int, device_id: int) -> tuple[Connection, BaseProcess]:
         assert (worker_id, device_id) == (1, 1)
-        return cast(Connection, replacement_connection), cast(BaseProcess, replacement_process)
+        return cast(Connection, replacement_connection), cast(BaseProcess, _Process(alive=True))
 
     monkeypatch.setattr(group, '_start_worker', start_worker)
+    policy = PublishedResignationPolicy()
 
-    assert group.restart_exited_workers(checkpoint, PublishedResignationPolicy()) == (1,)
-    assert exited_process.joined
+    assert group.supervise(checkpoint, policy) == SelfPlaySupervision((), ())
+    assert group.supervise(checkpoint, policy) == SelfPlaySupervision((), ())
+    assert group.supervise(checkpoint, policy) == SelfPlaySupervision((1,), ())
     assert exited_connection.closed
     assert replacement_connection.sent == [RunningSelfPlayState(checkpoint=checkpoint)]
 
 
+def test_group_abandons_a_restart_whose_handshake_never_answers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint(tmp_path, 3)
+    group = _group([_Connection(), _Connection()], [_Process(alive=True), _Process(alive=False)])
+    monkeypatch.setattr(
+        group,
+        '_start_worker',
+        lambda worker_id, device_id: (cast(Connection, _Connection()), cast(BaseProcess, _Process(alive=True))),
+    )
+    policy = PublishedResignationPolicy()
+    group.supervise(checkpoint, policy)
+    group.supervise(checkpoint, policy)
+    group._slots[1].handshake_deadline = 0.0
+
+    assert group.supervise(checkpoint, policy) == SelfPlaySupervision((), (1,))
+    assert group.live_worker_count == 1
+
+
+def test_group_backs_off_before_retrying_a_failed_restart(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint(tmp_path, 3)
+    group = _group([_Connection()], [_Process(alive=False)])
+    started_worker_ids: list[int] = []
+
+    def start_worker(worker_id: int, device_id: int) -> tuple[Connection, BaseProcess]:
+        del device_id
+        started_worker_ids.append(worker_id)
+        return cast(Connection, _Connection()), cast(BaseProcess, _Process(alive=False))
+
+    monkeypatch.setattr(group, '_start_worker', start_worker)
+    policy = PublishedResignationPolicy()
+    for _ in range(4):
+        group.supervise(checkpoint, policy)
+
+    assert started_worker_ids == [0]
+
+
+def test_group_retires_a_worker_that_does_not_answer_an_applied_state(tmp_path: Path) -> None:
+    checkpoint = _checkpoint(tmp_path, 3)
+    connections = [_Connection(_applied(0, checkpoint)), _Connection()]
+    group = _group(connections, [_Process(alive=True), _Process(alive=True)])
+
+    responses = group.apply((RunningSelfPlayState(checkpoint=checkpoint),) * 2)
+
+    assert [response.worker_id for response in responses] == [0]
+    assert group.live_worker_count == 1
+
+
 def test_group_applies_state_only_to_selected_workers(tmp_path: Path) -> None:
     checkpoint = _checkpoint(tmp_path, 3)
-    connections = [
-        _Connection(
-            RunningSelfPlayStateApplied(
-                worker_id=worker_id,
-                loaded_generation=checkpoint.generation,
-                loaded_inference_model_sha256=checkpoint.inference_model_sha256,
-                completed_generation_statistics=None,
-            )
-        )
-        for worker_id in range(4)
-    ]
-    group = SelfPlayGroup.__new__(SelfPlayGroup)
-    group._closed = False
-    group._connections = [cast(Connection, connection) for connection in connections]
+    connections = [_Connection(_applied(worker_id, checkpoint)) for worker_id in range(4)]
+    group = _group(connections, [_Process(alive=True) for _ in range(4)])
 
     desired_state = RunningSelfPlayState(checkpoint=checkpoint)
     responses = group.apply_to_workers((1, 3), desired_state)
@@ -263,6 +325,17 @@ def test_group_applies_state_only_to_selected_workers(tmp_path: Path) -> None:
     assert connections[1].sent == [desired_state]
     assert connections[2].sent == []
     assert connections[3].sent == [desired_state]
+
+
+def test_receive_gives_up_when_a_worker_never_answers() -> None:
+    parent, child = multiprocessing.get_context('spawn').Pipe(duplex=True)
+    try:
+        started_at = time.monotonic()
+        assert SelfPlayGroup._receive(parent, timeout_seconds=0.05) is None
+        assert time.monotonic() - started_at < 5.0
+    finally:
+        parent.close()
+        child.close()
 
 
 @pytest.mark.parametrize(

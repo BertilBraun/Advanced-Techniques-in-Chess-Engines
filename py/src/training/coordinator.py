@@ -29,8 +29,9 @@ from src.training.initialization_guard import (
 from src.training.reporting import ReplayIngestionTelemetry, TrainingReporter
 from src.training.run_limits import RunLimitMonitor
 from src.training.self_play_group import SelfPlayGroup
+from src.training.self_play_health import SelfPlayHealthMonitor
 from src.training.session import TrainingSessionQuantum, TrainingSessionResult, create_training_session
-from src.util.log import log
+from src.util.log import log, warn
 from src.util.tensorboard import log_scalar
 
 IDLE_WAIT_SECONDS = 1.0
@@ -96,6 +97,7 @@ class Coordinator:
         # Durable replay state is the credit ground truth across callbacks and restarts.
         self.ledger.reconcile_materialized_samples(self.replay_manager.total_materialized_samples())
         self.self_play_group = SelfPlayGroup(game)
+        self.self_play_health = SelfPlayHealthMonitor(self.self_play_group.worker_count)
         self.evaluation_manager = EvaluationManager(self.configuration, self.ledger.state.active_checkpoint)
         self.checkpoint_retention = CheckpointRetention(run_path, training.lifecycle)
         self._apply_checkpoint_retention()
@@ -117,20 +119,16 @@ class Coordinator:
             self.replay_manager.start_materialization(self._reconcile_materialized_shard)
             while not self.ledger.training_complete:
                 self.replay_manager.raise_if_materialization_failed()
+                # Appending must not wait for a full quantum of credits, and must not sit behind worker
+                # management: sealed shards occupy claim slots, and crediting stalls permanently once all
+                # slots are sealed.
+                self._append_staged_games()
+                self._apply_self_play_backpressure()
                 self.evaluation_manager.collect_completed_jobs()
-                restarted_workers = self.self_play_group.restart_exited_workers(
-                    self.ledger.state.active_checkpoint,
-                    self._resignation_policy(),
-                )
-                for worker_id in restarted_workers:
-                    log(f'Restarted self-play worker {worker_id} at generation {self.ledger.model_generation}.')
-                self.final_stop_reason = self.run_limit_monitor.stop_reason()
+                self._supervise_self_play()
+                self.final_stop_reason = self.run_limit_monitor.stop_reason() or self._self_play_stop_reason()
                 if self.final_stop_reason is not None:
                     break
-                self._apply_self_play_backpressure()
-                # Appending must not wait for a full quantum of credits: sealed shards occupy
-                # claim slots, and crediting stalls permanently once all slots are sealed.
-                self._append_staged_games()
                 if not self.ledger.has_quantum_credits:
                     self.evaluation_manager.schedule_due_jobs(self.ledger.state.active_checkpoint)
                     time.sleep(IDLE_WAIT_SECONDS)
@@ -157,9 +155,24 @@ class Coordinator:
                 for _ in range(self.self_play_group.worker_count)
             )
         )
-        if any(response.kind != 'running' for response in responses):
+        if len(responses) != self.self_play_group.worker_count or any(
+            response.kind != 'running' for response in responses
+        ):
             raise RuntimeError('Self-play workers did not enter the running state.')
         self._credit_wait_started_at = time.perf_counter()
+
+    def _supervise_self_play(self) -> None:
+        supervision = self.self_play_group.supervise(
+            self.ledger.state.active_checkpoint,
+            self._resignation_policy(),
+        )
+        for worker_id in supervision.restarted_worker_ids:
+            log(f'Restarted self-play worker {worker_id} at generation {self.ledger.model_generation}.')
+        for worker_id in supervision.failed_worker_ids:
+            warn(f'Self-play worker {worker_id} failed to restart; retrying after backoff.')
+
+    def _self_play_stop_reason(self) -> str | None:
+        return self.self_play_health.stop_reason(self.self_play_group.live_worker_count, time.monotonic())
 
     def _reconcile_materialized_shard(self, sealed: SealedReplayShard) -> None:
         del sealed
@@ -240,9 +253,7 @@ class Coordinator:
                 )
                 for worker_id in range(self.self_play_group.worker_count)
             )
-            applied = self.self_play_group.apply(desired_states)
-            if any(response.kind != 'running' for response in applied):
-                raise RuntimeError('Self-play workers did not apply the trained checkpoint.')
+            self.self_play_group.apply(desired_states)
         checkpoint_activation_seconds = time.perf_counter() - checkpoint_activation_started_at
         if self_play_started:
             self._backpressure_pause_requested = False
@@ -297,9 +308,7 @@ class Coordinator:
             checkpoint=self.ledger.state.active_checkpoint,
             resignation_policy=self._resignation_policy(),
         )
-        applied = self.self_play_group.apply_to_workers(self._topology_pause_worker_ids(), state)
-        if any(response.kind != 'running' for response in applied):
-            raise RuntimeError('Self-play workers did not resume after backpressure ended.')
+        self.self_play_group.apply_to_workers(self._topology_pause_worker_ids(), state)
         self._backpressure_pause_requested = False
 
     def _self_play_backpressure_required(self) -> bool:
