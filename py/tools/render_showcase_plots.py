@@ -201,7 +201,8 @@ def _apply_style() -> None:
             'lines.linewidth': 1.8,
             'lines.markersize': 4,
             'savefig.bbox': 'tight',
-            'svg.fonttype': 'none',
+            'svg.fonttype': 'path',
+            'svg.hashsalt': 'alphazero-showcase',
         }
     )
 
@@ -232,8 +233,9 @@ def _annotate_provenance(figure: Figure, runs: Sequence[RunSeries], reference: R
 
 
 def _write_figure(figure: Figure, output_path: Path) -> None:
+    # Dropping the creation date, with the fixed svg.hashsalt, keeps re-renders byte-identical in the tree.
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(output_path, format='svg')
+    figure.savefig(output_path, format='svg', metadata={'Date': None})
     plt.close(figure)
 
 
