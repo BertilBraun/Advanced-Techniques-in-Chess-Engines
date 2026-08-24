@@ -47,7 +47,9 @@ private:
 
     const bool m_usesCuda;
 #ifdef USE_CUDA
-    c10::cuda::CUDAEvent m_cudaEvent;
+    // Blocking sync: the default event spins, and the thread that waits here is the tree owner,
+    // so a spinning wait costs a core per self-play process for the whole of every GPU batch.
+    c10::cuda::CUDAEvent m_cudaEvent{cudaEventDisableTiming | cudaEventBlockingSync};
 #endif
 };
 
