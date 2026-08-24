@@ -100,6 +100,7 @@ private:
     [[nodiscard]] torch::Tensor createDeviceInputBuffer() const;
     void stageOutput(const torch::Tensor &modelOutput, torch::Tensor &staging,
                      torch::Tensor &destination, size_t batchSize);
+    void runModelToStaging(size_t batchSize);
     void runEagerModel(size_t batchSize, InferenceOutput &output);
     void copyStagedOutput(size_t batchSize, InferenceOutput &output);
     void captureBatchGraphs();

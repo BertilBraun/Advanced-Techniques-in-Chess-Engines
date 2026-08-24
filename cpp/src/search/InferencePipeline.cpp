@@ -250,6 +250,24 @@ size_t InferenceRunner::capturedBatchSize(const size_t batchSize) const noexcept
     return 0;
 }
 
+void InferenceRunner::runModelToStaging(const size_t batchSize) {
+    const std::int64_t rows = tensorSize(batchSize);
+    const torch::Tensor typedInput = m_deviceTypedInput.narrow(0, 0, rows);
+    typedInput.copy_(m_deviceInput.narrow(0, 0, rows));
+    m_modelInputs[0] = typedInput;
+    const auto outputTuple = m_model->forward(m_modelInputs).toTuple();
+    if (outputTuple->elements().size() != 3) {
+        throw std::runtime_error(
+            "Inference model must return policy, WDL, and search-correction tensors");
+    }
+    m_deviceOutputStaging.policies.narrow(0, 0, rows)
+        .copy_(outputTuple->elements()[0].toTensor());
+    m_deviceOutputStaging.outcomes.narrow(0, 0, rows)
+        .copy_(outputTuple->elements()[1].toTensor());
+    m_deviceOutputStaging.search_corrections.narrow(0, 0, rows)
+        .copy_(outputTuple->elements()[2].toTensor());
+}
+
 void InferenceRunner::runEagerModel(const size_t batchSize, InferenceOutput &output) {
     const torch::Tensor typedInput =
         m_deviceTypedInput.narrow(0, 0, tensorSize(batchSize));
@@ -291,11 +309,18 @@ void InferenceRunner::releaseBatchGraphs() noexcept {
 void InferenceRunner::captureBatchGraphs() {
 #ifdef USE_CUDA
     releaseBatchGraphs();
-    if (!m_allowGraphCapture || !m_device.is_cuda() || !m_cudaStream.has_value()) {
+    if (!m_device.is_cuda() || !m_cudaStream.has_value()) {
+        return;
+    }
+    if (!m_allowGraphCapture) {
+        std::cerr << "Inference graph replay disabled: it needs a single inference worker, and a "
+                     "second worker has nothing left to overlap once submission is a graph launch"
+                  << std::endl;
         return;
     }
     constexpr size_t bucketCount = 8;
-    constexpr size_t warmupIterations = 24;
+    constexpr size_t warmupIterations = 16;
+    constexpr size_t bucketWarmupIterations = 3;
     const std::lock_guard<std::mutex> serialized(graphSerializationMutex());
     const c10::cuda::CUDAGuard deviceGuard(m_device);
     const at::cuda::CUDAStreamGuard streamGuard(*m_cudaStream);
@@ -304,10 +329,11 @@ void InferenceRunner::captureBatchGraphs() {
     try {
         // The profiling executor only specialises after a few runs; capturing before it settles
         // would bake its bailout path into the graph.
-        InferenceOutput discarded = createOutputBuffer();
+        // Deliberately staging-only: a device-to-host copy makes the pinned allocator record an
+        // event on this stream, and processing that event later inside a capture invalidates it.
         for (const auto iteration : range(warmupIterations)) {
             static_cast<void>(iteration);
-            runEagerModel(m_maximumBatchSize, discarded);
+            runModelToStaging(m_maximumBatchSize);
         }
         m_cudaStream->synchronize();
         const at::cuda::MempoolId_t pool = at::cuda::graph_pool_handle();
@@ -317,23 +343,19 @@ void InferenceRunner::captureBatchGraphs() {
             if (!m_batchGraphs.empty() && m_batchGraphs.back().batch_size >= batchSize) {
                 continue;
             }
+            // cuDNN picks an algorithm the first time it sees a shape, which allocates workspace
+            // and can synchronise; doing that inside a capture invalidates it.
+            for (const auto iteration : range(bucketWarmupIterations)) {
+                static_cast<void>(iteration);
+                runModelToStaging(batchSize);
+            }
+            m_cudaStream->synchronize();
             capturing = std::make_unique<at::cuda::CUDAGraph>();
             // Thread-local error mode: the default checks the whole process, and PyTorch's pinned
             // host allocator lazily frees blocks from whichever thread allocates next, which
             // invalidates an otherwise valid capture and poisons the stream.
             capturing->capture_begin(pool, cudaStreamCaptureModeThreadLocal);
-            const torch::Tensor typedInput =
-                m_deviceTypedInput.narrow(0, 0, tensorSize(batchSize));
-            typedInput.copy_(m_deviceInput.narrow(0, 0, tensorSize(batchSize)));
-            m_modelInputs[0] = typedInput;
-            const auto outputTuple = m_model->forward(m_modelInputs).toTuple();
-            const std::int64_t rows = tensorSize(batchSize);
-            m_deviceOutputStaging.policies.narrow(0, 0, rows)
-                .copy_(outputTuple->elements()[0].toTensor());
-            m_deviceOutputStaging.outcomes.narrow(0, 0, rows)
-                .copy_(outputTuple->elements()[1].toTensor());
-            m_deviceOutputStaging.search_corrections.narrow(0, 0, rows)
-                .copy_(outputTuple->elements()[2].toTensor());
+            runModelToStaging(batchSize);
             capturing->capture_end();
             m_batchGraphs.push_back({.batch_size = batchSize, .graph = std::move(capturing)});
         }
