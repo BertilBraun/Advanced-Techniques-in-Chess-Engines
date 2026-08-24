@@ -281,7 +281,10 @@ void InferenceRunner::copyStagedOutput(const size_t batchSize, InferenceOutput &
 
 void InferenceRunner::releaseBatchGraphs() noexcept {
 #ifdef USE_CUDA
-    m_batchGraphs.clear();
+    try {
+        m_batchGraphs.clear();
+    } catch (...) {
+    }
 #endif
 }
 
@@ -315,7 +318,10 @@ void InferenceRunner::captureBatchGraphs() {
                 continue;
             }
             capturing = std::make_unique<at::cuda::CUDAGraph>();
-            capturing->capture_begin(pool);
+            // Thread-local error mode: the default checks the whole process, and PyTorch's pinned
+            // host allocator lazily frees blocks from whichever thread allocates next, which
+            // invalidates an otherwise valid capture and poisons the stream.
+            capturing->capture_begin(pool, cudaStreamCaptureModeThreadLocal);
             const torch::Tensor typedInput =
                 m_deviceTypedInput.narrow(0, 0, tensorSize(batchSize));
             typedInput.copy_(m_deviceInput.narrow(0, 0, tensorSize(batchSize)));
