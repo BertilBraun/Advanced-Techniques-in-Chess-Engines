@@ -45,6 +45,7 @@ _QUEUE_FILE = 'shard-queue.json'
 _LEGACY_STAGED_ROWS_SUFFIX = '.rows.npy'
 _LEGACY_STAGED_METADATA_SUFFIX = '.meta.json'
 _MINIMUM_PENDING_SHARD_LIMIT = 32
+_STAGED_SHARD_LIMIT_FACTOR = 3
 
 
 @dataclass(frozen=True)
@@ -260,6 +261,7 @@ class ReplayManager(Generic[PositionT]):
         if store.state.maximum_capacity != configuration.maximum_capacity:
             raise ValueError('Replay file does not match replay maximum capacity configuration.')
         self.inbox_path = completed_games_path / 'inbox'
+        self._inbox_scanner = InboxScanner(self.inbox_path, '.json')
         self.staging_path = completed_games_path / 'staging'
         self.queue_path = completed_games_path / _QUEUE_FILE
         for directory in (self.inbox_path, self.staging_path):
@@ -374,7 +376,8 @@ class ReplayManager(Generic[PositionT]):
             self.store.set_logical_capacity(self.configuration.capacity_at(model_generation))
             claims = self._contiguous_sealed_claims()
             if not claims:
-                self.store.flush()
+                # Nothing was written since the previous append, and msync of the whole store
+                # mapping costs ~0.2 s per gigabyte while holding this lock.
                 after = self.store.state
                 return ReplayIngestion(
                     0,
@@ -440,7 +443,7 @@ class ReplayManager(Generic[PositionT]):
         self.store.close()
 
     def inbox_files_by_modification_time(self) -> tuple[Path, ...]:
-        return _files_by_modification_time(self.inbox_path, '*.json')
+        return self._inbox_scanner.scan()
 
     def _load_queue(self) -> ReplayShardQueue:
         if not self.queue_path.exists():
@@ -473,10 +476,7 @@ class ReplayManager(Generic[PositionT]):
                 default=None,
             )
             available = tuple(path for path in self.inbox_files_by_modification_time() if path.name not in claimed)
-            maximum_pending = max(_MINIMUM_PENDING_SHARD_LIMIT, 2 * self.configuration.materialization_processes)
-            claim_slots = maximum_pending - sum(
-                claim.sequence >= self.store.state.append_sequence for claim in queue_snapshot.pending
-            )
+            claim_slots = self._claim_slots(queue_snapshot)
         batches: list[tuple[ReplayShardSourceGame, ...]] = []
         fatal_error: RuntimeError | None = None
         candidate_index = 0
@@ -494,6 +494,7 @@ class ReplayManager(Generic[PositionT]):
                     # of violating the queue's global order.
                     if last_claimed_key is not None and (status.st_mtime_ns, candidate.name) <= last_claimed_key:
                         os.utime(candidate)
+                        self._inbox_scanner.invalidate(candidate.name)
                         candidate_index += 1
                         continue
                     if (
@@ -555,6 +556,16 @@ class ReplayManager(Generic[PositionT]):
                 self._dispatcher.failed_game_count += 1
                 log(str(fatal_error))
 
+    def _claim_slots(self, queue: ReplayShardQueue) -> int:
+        append_sequence = self.store.state.append_sequence
+        outstanding = tuple(claim for claim in queue.pending if claim.sequence >= append_sequence)
+        unsealed = sum(not self._is_sealed(claim) for claim in outstanding)
+        materialization_limit = max(_MINIMUM_PENDING_SHARD_LIMIT, 2 * self.configuration.materialization_processes)
+        # Sealed shards wait on the single-threaded appender; counting them as in-flight work
+        # idles every materialization worker for the whole duration of an append.
+        staging_limit = _STAGED_SHARD_LIMIT_FACTOR * materialization_limit
+        return min(materialization_limit - unsealed, staging_limit - len(outstanding))
+
     def _unclaimed_inbox_files(self) -> tuple[Path, ...]:
         with self._lock:
             claimed = {source.order.file_name for claim in self._queue.pending for source in claim.games}
@@ -562,9 +573,7 @@ class ReplayManager(Generic[PositionT]):
 
     def _has_claim_capacity(self) -> bool:
         with self._lock:
-            outstanding = sum(claim.sequence >= self.store.state.append_sequence for claim in self._queue.pending)
-            maximum_pending = max(_MINIMUM_PENDING_SHARD_LIMIT, 2 * self.configuration.materialization_processes)
-            return outstanding < maximum_pending
+            return self._claim_slots(self._queue) > 0
 
     def _has_unsealed_claims(self) -> bool:
         with self._lock:
@@ -597,18 +606,14 @@ class ReplayManager(Generic[PositionT]):
         return replay_shard_manifest_path(self.staging_path, claim.shard_identity).exists()
 
     def _open_claim(self, claim: PendingReplayShardManifest) -> ReplayShardReader:
-        reader = ReplayShardReader.open(
+        # _sealed_manifest already validated this manifest against the claim; re-parsing its
+        # embedded search observations here costs more than the row copy it guards.
+        return ReplayShardReader.open(
             replay_shard_manifest_path(self.staging_path, claim.shard_identity),
             self.store.layout,
             verify_data_hash=False,
+            manifest=self._sealed_manifest(claim),
         )
-        if (
-            reader.manifest.sequence != claim.sequence
-            or tuple(game.source for game in reader.manifest.games) != claim.games
-        ):
-            reader.close()
-            raise ValueError('Sealed replay shard does not match its durable claim.')
-        return reader
 
     def _sealed_result(self, claim: PendingReplayShardManifest) -> SealedReplayShard:
         manifest = self._sealed_manifest(claim)
@@ -731,13 +736,39 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _files_by_modification_time(directory: Path, pattern: str) -> tuple[Path, ...]:
-    if not directory.exists():
-        return ()
-    modified_at_by_path: dict[Path, int] = {}
-    for path in directory.glob(pattern):
+class InboxScanner:
+    """Orders inbox files by modification time without re-stat()ing the whole backlog every cycle."""
+
+    def __init__(self, directory: Path, suffix: str) -> None:
+        self.directory = directory
+        self.suffix = suffix
+        self._modified_at_by_name: dict[str, int] = {}
+
+    def invalidate(self, file_name: str) -> None:
+        self._modified_at_by_name.pop(file_name, None)
+
+    def scan(self) -> tuple[Path, ...]:
         try:
-            modified_at_by_path[path] = path.stat().st_mtime_ns
-        except OSError:
-            continue
-    return tuple(sorted(modified_at_by_path, key=lambda path: (modified_at_by_path[path], path.name)))
+            entries = tuple(os.scandir(self.directory))
+        except FileNotFoundError:
+            self._modified_at_by_name.clear()
+            return ()
+        known = self._modified_at_by_name
+        modified_at_by_name: dict[str, int] = {}
+        for entry in entries:
+            name = entry.name
+            if not name.endswith(self.suffix):
+                continue
+            # A completed game is renamed into place fully written, so a name's timestamp is
+            # immutable for as long as the name exists; only re-queued files are invalidated.
+            cached = known.get(name)
+            if cached is not None:
+                modified_at_by_name[name] = cached
+                continue
+            try:
+                modified_at_by_name[name] = entry.stat().st_mtime_ns
+            except OSError:
+                continue
+        self._modified_at_by_name = modified_at_by_name
+        ordered = sorted(modified_at_by_name.items(), key=lambda item: (item[1], item[0]))
+        return tuple(self.directory / name for name, _ in ordered)

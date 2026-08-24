@@ -174,11 +174,13 @@ class ReplayShardReader:
         layout: ReplayLayout,
         *,
         verify_data_hash: bool = True,
+        manifest: SealedReplayShardManifest | None = None,
     ) -> ReplayShardReader:
-        try:
-            manifest = SealedReplayShardManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
-        except (OSError, UnicodeError, ValueError) as error:
-            raise ValueError(f'Replay shard manifest is invalid: {manifest_path}') from error
+        if manifest is None:
+            try:
+                manifest = SealedReplayShardManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
+            except (OSError, UnicodeError, ValueError) as error:
+                raise ValueError(f'Replay shard manifest is invalid: {manifest_path}') from error
         if manifest.layout_digest != layout.digest:
             raise ValueError('Replay shard layout does not match the experiment.')
         data_path = manifest_path.parent / manifest.data_file
