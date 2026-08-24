@@ -28,12 +28,12 @@ run:
     mode: random_initialization
   hardware:
     provider_name: vast.ai
-    offer_id: '48395477'
+    offer_id: '48571853'
     gpu_model: NVIDIA GeForce RTX 4070 SUPER
     gpu_count: 8
-    logical_cpu_count: 1
-    minimum_ram_gib: 1
-    minimum_disk_gib: 1
+    logical_cpu_count: 80
+    minimum_ram_gib: 200
+    minimum_disk_gib: 120
   environment:
     runtime_image: vastai/pytorch:cuda-12.8.1-auto
     python_version: '3.12'
@@ -96,7 +96,7 @@ training:
       recent_checkpoint_count: 22
       milestone_interval: 20
   limits:
-    hourly_price: 0.755
+    hourly_price: 0.72
     maximum_cost: null
     maximum_wall_time_seconds: 345600
     manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v3.stop
