@@ -4,34 +4,11 @@
 #include "util/py.hpp"
 
 #include <ATen/Context.h>
+#include <torch/csrc/jit/api/module.h>
+
+#include <iostream>
 
 namespace {
-template <typename NamedTensorList>
-void validateNamedTensors(const NamedTensorList &currentTensors,
-                          const NamedTensorList &updatedTensors, const std::string &tensorKind) {
-    if (currentTensors.size() != updatedTensors.size()) {
-        throw std::invalid_argument("Updated inference model has a different number of " +
-                                    tensorKind + "s");
-    }
-
-    auto current = currentTensors.begin();
-    auto updated = updatedTensors.begin();
-    while (current != currentTensors.end()) {
-        const auto currentTensor = *current;
-        const auto updatedTensor = *updated;
-        if (currentTensor.name != updatedTensor.name) {
-            throw std::invalid_argument("Updated inference model " + tensorKind +
-                                        " names do not match");
-        }
-        if (currentTensor.value.sizes() != updatedTensor.value.sizes()) {
-            throw std::invalid_argument("Updated inference model " + tensorKind + " " +
-                                        currentTensor.name + " has a different shape");
-        }
-        ++current;
-        ++updated;
-    }
-}
-
 torch::jit::script::Module loadInferenceModel(const std::string &modelPath,
                                               const torch::Device &device,
                                               const torch::Dtype dataType) {
@@ -52,19 +29,49 @@ torch::jit::script::Module loadInferenceModel(const std::string &modelPath,
     return model;
 }
 
+[[nodiscard]] std::vector<ModelTensorSignature>
+tensorSignature(const torch::jit::named_parameter_list &tensors) {
+    std::vector<ModelTensorSignature> signature;
+    for (const auto &tensor : tensors) {
+        signature.push_back({.name = tensor.name, .sizes = tensor.value.sizes().vec()});
+    }
+    return signature;
+}
+
+[[nodiscard]] std::vector<ModelTensorSignature>
+tensorSignature(const torch::jit::named_buffer_list &tensors) {
+    std::vector<ModelTensorSignature> signature;
+    for (const auto &tensor : tensors) {
+        signature.push_back({.name = tensor.name, .sizes = tensor.value.sizes().vec()});
+    }
+    return signature;
+}
+
+void requireMatchingSignature(const std::vector<ModelTensorSignature> &current,
+                              const std::vector<ModelTensorSignature> &updated,
+                              const std::string &tensorKind) {
+    if (current != updated) {
+        throw std::invalid_argument("Updated inference model " + tensorKind +
+                                    "s do not match the loaded model");
+    }
+}
+
 PreparedInferenceModel
-prepareInferenceModelUpdate(const torch::jit::script::Module &model, const std::string &modelPath,
-                            const torch::Device &device, const torch::Dtype dataType,
-                            const torch::Tensor &validationInput, const std::int64_t actionCount,
-                            const std::int64_t outcomeCount) {
-    auto updatedModel = std::make_unique<torch::jit::script::Module>(
+prepareInferenceModelUpdate(const std::vector<ModelTensorSignature> &parameterSignature,
+                            const std::vector<ModelTensorSignature> &bufferSignature,
+                            const std::string &modelPath, const torch::Device &device,
+                            const torch::Dtype dataType, const torch::Tensor &validationInput,
+                            const std::int64_t actionCount, const std::int64_t outcomeCount) {
+    auto loadedModel = std::make_unique<torch::jit::script::Module>(
         loadInferenceModel(modelPath, device, dataType));
-    const auto currentParameters = model.named_parameters();
-    const auto updatedParameters = updatedModel->named_parameters();
-    const auto currentBuffers = model.named_buffers();
-    const auto updatedBuffers = updatedModel->named_buffers();
-    validateNamedTensors(currentParameters, updatedParameters, "parameter");
-    validateNamedTensors(currentBuffers, updatedBuffers, "buffer");
+    requireMatchingSignature(parameterSignature, tensorSignature(loadedModel->named_parameters()),
+                             "parameter");
+    requireMatchingSignature(bufferSignature, tensorSignature(loadedModel->named_buffers()),
+                             "buffer");
+    // Freezing folds the weights into constants, which is what makes the graph capture replayable
+    // and is a fifth of the host dispatch cost on its own.
+    auto updatedModel =
+        std::make_unique<torch::jit::script::Module>(torch::jit::freeze(*loadedModel));
     torch::InferenceMode inferenceMode;
     const torch::jit::IValue output = updatedModel->forward({validationInput});
     if (!output.isTuple()) {
@@ -199,6 +206,9 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
         throw std::runtime_error("Dedicated CUDA streams require a CUDA-enabled native build");
     }
 #endif
+    m_parameterSignature = tensorSignature(m_model->named_parameters());
+    m_bufferSignature = tensorSignature(m_model->named_buffers());
+    *m_model = torch::jit::freeze(*m_model);
     m_deviceInput = createDeviceInputBuffer();
     m_deviceTypedInput =
         torch::empty({tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.channels),
@@ -214,6 +224,108 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
         .search_corrections =
             torch::empty({tensorSize(m_maximumBatchSize), 1}, stagingOptions),
     };
+    captureBatchGraphs();
+}
+
+size_t InferenceRunner::capturedBatchSize(const size_t batchSize) const noexcept {
+#ifdef USE_CUDA
+    for (const CapturedInferenceGraph &captured : m_batchGraphs) {
+        if (captured.batch_size >= batchSize) {
+            return captured.batch_size;
+        }
+    }
+#else
+    static_cast<void>(batchSize);
+#endif
+    return 0;
+}
+
+void InferenceRunner::runEagerModel(const size_t batchSize, InferenceOutput &output) {
+    const torch::Tensor typedInput =
+        m_deviceTypedInput.narrow(0, 0, tensorSize(batchSize));
+    typedInput.copy_(m_deviceInput.narrow(0, 0, tensorSize(batchSize)));
+    m_modelInputs[0] = typedInput;
+    const torch::jit::IValue modelOutput = m_model->forward(m_modelInputs);
+    const auto outputTuple = modelOutput.toTuple();
+    if (outputTuple->elements().size() != 3) {
+        throw std::runtime_error(
+            "Inference model must return policy, WDL, and search-correction tensors");
+    }
+    stageOutput(outputTuple->elements()[0].toTensor(), m_deviceOutputStaging.policies,
+                output.policies, batchSize);
+    stageOutput(outputTuple->elements()[1].toTensor(), m_deviceOutputStaging.outcomes,
+                output.outcomes, batchSize);
+    stageOutput(outputTuple->elements()[2].toTensor(), m_deviceOutputStaging.search_corrections,
+                output.search_corrections, batchSize);
+}
+
+void InferenceRunner::copyStagedOutput(const size_t batchSize, InferenceOutput &output) {
+    const std::int64_t rows = tensorSize(batchSize);
+    output.policies.narrow(0, 0, rows).copy_(m_deviceOutputStaging.policies.narrow(0, 0, rows),
+                                             usesCuda());
+    output.outcomes.narrow(0, 0, rows).copy_(m_deviceOutputStaging.outcomes.narrow(0, 0, rows),
+                                             usesCuda());
+    output.search_corrections.narrow(0, 0, rows)
+        .copy_(m_deviceOutputStaging.search_corrections.narrow(0, 0, rows), usesCuda());
+}
+
+void InferenceRunner::releaseBatchGraphs() noexcept {
+#ifdef USE_CUDA
+    m_batchGraphs.clear();
+#endif
+}
+
+void InferenceRunner::captureBatchGraphs() {
+#ifdef USE_CUDA
+    releaseBatchGraphs();
+    if (!m_device.is_cuda() || !m_cudaStream.has_value()) {
+        return;
+    }
+    constexpr size_t bucketCount = 8;
+    constexpr size_t warmupIterations = 24;
+    const c10::cuda::CUDAGuard deviceGuard(m_device);
+    const at::cuda::CUDAStreamGuard streamGuard(*m_cudaStream);
+    torch::InferenceMode inferenceMode;
+    try {
+        // The profiling executor only specialises after a few runs; capturing before it settles
+        // would bake its bailout path into the graph.
+        InferenceOutput discarded = createOutputBuffer();
+        for (const auto iteration : range(warmupIterations)) {
+            static_cast<void>(iteration);
+            runEagerModel(m_maximumBatchSize, discarded);
+        }
+        m_cudaStream->synchronize();
+        const at::cuda::MempoolId_t pool = at::cuda::graph_pool_handle();
+        for (const auto bucket : range<size_t>(1, bucketCount + 1)) {
+            const size_t batchSize =
+                std::max<size_t>(1, m_maximumBatchSize * bucket / bucketCount);
+            if (!m_batchGraphs.empty() && m_batchGraphs.back().batch_size >= batchSize) {
+                continue;
+            }
+            auto graph = std::make_unique<at::cuda::CUDAGraph>();
+            graph->capture_begin(pool);
+            const torch::Tensor typedInput =
+                m_deviceTypedInput.narrow(0, 0, tensorSize(batchSize));
+            typedInput.copy_(m_deviceInput.narrow(0, 0, tensorSize(batchSize)));
+            m_modelInputs[0] = typedInput;
+            const auto outputTuple = m_model->forward(m_modelInputs).toTuple();
+            const std::int64_t rows = tensorSize(batchSize);
+            m_deviceOutputStaging.policies.narrow(0, 0, rows)
+                .copy_(outputTuple->elements()[0].toTensor());
+            m_deviceOutputStaging.outcomes.narrow(0, 0, rows)
+                .copy_(outputTuple->elements()[1].toTensor());
+            m_deviceOutputStaging.search_corrections.narrow(0, 0, rows)
+                .copy_(outputTuple->elements()[2].toTensor());
+            graph->capture_end();
+            m_batchGraphs.push_back({.batch_size = batchSize, .graph = std::move(graph)});
+        }
+        m_cudaStream->synchronize();
+    } catch (const std::exception &failure) {
+        // A machine that cannot capture still has to run, just without the replay path.
+        releaseBatchGraphs();
+        std::cerr << "Inference graph capture unavailable: " << failure.what() << std::endl;
+    }
+#endif
 }
 
 void InferenceRunner::stageOutput(const torch::Tensor &modelOutput, torch::Tensor &staging,
@@ -253,8 +365,7 @@ InferenceOutput InferenceRunner::createOutputBuffer() const {
     };
 }
 
-void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards,
-                                  const torch::Tensor &deviceInputBuffer, const size_t batchSize,
+void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size_t batchSize,
                                   InferenceOutput &output, InferenceCompletion &completion) {
     if (batchSize == 0 || batchSize > m_maximumBatchSize) {
         throw std::invalid_argument("Inference batch size is outside runner capacity");
@@ -288,28 +399,24 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards,
     }
 #endif
     try {
-        const torch::Tensor source = encodedBoards.narrow(0, 0, static_cast<int64_t>(batchSize));
-        const torch::Tensor deviceRaw =
-            deviceInputBuffer.narrow(0, 0, static_cast<int64_t>(batchSize));
-        deviceRaw.copy_(source, usesCuda());
-        torch::Tensor deviceInput =
-            m_deviceTypedInput.narrow(0, 0, static_cast<int64_t>(batchSize));
-        deviceInput.copy_(deviceRaw);
-
-        m_modelInputs[0] = deviceInput;
-        const torch::jit::IValue modelOutput = m_model->forward(m_modelInputs);
-        const auto outputTuple = modelOutput.toTuple();
-        if (outputTuple->elements().size() != 3) {
-            throw std::runtime_error(
-                "Inference model must return policy, WDL, and search-correction tensors");
+        const std::int64_t rows = tensorSize(batchSize);
+        m_deviceInput.narrow(0, 0, rows).copy_(encodedBoards.narrow(0, 0, rows), usesCuda());
+        const size_t capturedBatch = capturedBatchSize(batchSize);
+        if (capturedBatch == 0) {
+            runEagerModel(batchSize, output);
+        } else {
+#ifdef USE_CUDA
+            // Rows beyond the real batch carry the previous call's bytes; the network has no
+            // cross-sample coupling, so the rows that are read back are bit-identical either way.
+            for (const CapturedInferenceGraph &captured : m_batchGraphs) {
+                if (captured.batch_size == capturedBatch) {
+                    captured.graph->replay();
+                    break;
+                }
+            }
+            copyStagedOutput(batchSize, output);
+#endif
         }
-        const torch::Tensor policies = outputTuple->elements()[0].toTensor();
-        const torch::Tensor outcomes = outputTuple->elements()[1].toTensor();
-        const torch::Tensor searchCorrections = outputTuple->elements()[2].toTensor();
-        stageOutput(policies, m_deviceOutputStaging.policies, output.policies, batchSize);
-        stageOutput(outcomes, m_deviceOutputStaging.outcomes, output.outcomes, batchSize);
-        stageOutput(searchCorrections, m_deviceOutputStaging.search_corrections,
-                    output.search_corrections, batchSize);
         completion.record();
     } catch (...) {
         completion.finishFailedSubmission();
@@ -320,7 +427,7 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards,
 void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size_t batchSize,
                                   InferenceOutput &output) {
     InferenceCompletion completion(usesCuda());
-    forwardInto(encodedBoards, m_deviceInput, batchSize, output, completion);
+    forwardInto(encodedBoards, batchSize, output, completion);
     completion.wait();
 }
 
@@ -329,7 +436,8 @@ PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &m
         torch::zeros({1, tensorSize(m_dimensions.channels), tensorSize(m_dimensions.rows),
                       tensorSize(m_dimensions.columns)},
                      torch::TensorOptions().device(m_device).dtype(m_torchDtype));
-    return prepareInferenceModelUpdate(*m_model, modelPath, m_device, m_torchDtype, validationInput,
+    return prepareInferenceModelUpdate(m_parameterSignature, m_bufferSignature, modelPath, m_device,
+                                       m_torchDtype, validationInput,
                                        tensorSize(m_dimensions.actions),
                                        tensorSize(m_dimensions.outcomes));
 }
@@ -337,7 +445,10 @@ PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &m
 void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
     assert(m_model != nullptr);
     assert(updatedModel != nullptr);
+    // Captured graphs replay the previous weights from their own addresses, so they must go first.
+    releaseBatchGraphs();
     m_model.swap(updatedModel);
+    captureBatchGraphs();
 }
 
 InferencePipeline::InferencePipeline(const std::string &modelPath, const InferenceDevice device,
@@ -354,7 +465,6 @@ InferencePipeline::InferencePipeline(const std::string &modelPath, const Inferen
     for (const auto index : range(slotCount)) {
         auto slot = std::make_unique<Slot>(m_runner.usesCuda());
         slot->input = m_runner.createInputBuffer();
-        slot->deviceInput = m_runner.createDeviceInputBuffer();
         slot->output = m_runner.createOutputBuffer();
         m_slots[index] = std::move(slot);
     }
@@ -516,8 +626,7 @@ void InferencePipeline::inferenceLoop() {
         slot.state.store(SlotState::Running, std::memory_order_release);
         try {
             Stopwatch inferenceTimer;
-            m_runner.forwardInto(slot.input, slot.deviceInput, slot.batchSize, slot.output,
-                                 slot.completion);
+            m_runner.forwardInto(slot.input, slot.batchSize, slot.output, slot.completion);
             m_statistics.inference_nanoseconds.fetch_add(inferenceTimer.elapsedNanoseconds(),
                                                          std::memory_order_relaxed);
             slot.state.store(SlotState::Complete, std::memory_order_release);

@@ -17,6 +17,7 @@
 
 #ifdef USE_CUDA
 #include <ATen/cuda/CUDAContext.h>
+#include <ATen/cuda/CUDAGraph.h>
 #include <c10/cuda/CUDAEvent.h>
 #include <c10/cuda/CUDAGuard.h>
 #endif
@@ -61,6 +62,22 @@ processInferencePosition(const float *policy, const float *outcome,
 
 using PreparedInferenceModel = std::unique_ptr<torch::jit::script::Module>;
 
+// Name and shape of every parameter and buffer of the loaded model. Freezing folds them into
+// constants, so the refresh contract is checked against this signature instead.
+struct ModelTensorSignature {
+    std::string name;
+    std::vector<std::int64_t> sizes;
+
+    [[nodiscard]] bool operator==(const ModelTensorSignature &) const = default;
+};
+
+#ifdef USE_CUDA
+struct CapturedInferenceGraph {
+    std::size_t batch_size;
+    std::unique_ptr<at::cuda::CUDAGraph> graph;
+};
+#endif
+
 class InferenceRunner {
 public:
     InferenceRunner(const std::string &modelPath, InferenceDevice device, int deviceId,
@@ -83,8 +100,13 @@ private:
     [[nodiscard]] torch::Tensor createDeviceInputBuffer() const;
     void stageOutput(const torch::Tensor &modelOutput, torch::Tensor &staging,
                      torch::Tensor &destination, size_t batchSize);
-    void forwardInto(const torch::Tensor &encodedBoards, const torch::Tensor &deviceInputBuffer,
-                     size_t batchSize, InferenceOutput &output, InferenceCompletion &completion);
+    void runEagerModel(size_t batchSize, InferenceOutput &output);
+    void copyStagedOutput(size_t batchSize, InferenceOutput &output);
+    void captureBatchGraphs();
+    void releaseBatchGraphs() noexcept;
+    [[nodiscard]] size_t capturedBatchSize(size_t batchSize) const noexcept;
+    void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize,
+                     InferenceOutput &output, InferenceCompletion &completion);
 
     const torch::Device m_device;
     const torch::Dtype m_torchDtype;
@@ -97,8 +119,13 @@ private:
     torch::Tensor m_deviceTypedInput;
     InferenceOutput m_deviceOutputStaging;
     std::vector<torch::jit::IValue> m_modelInputs{1};
+    std::vector<ModelTensorSignature> m_parameterSignature;
+    std::vector<ModelTensorSignature> m_bufferSignature;
 #ifdef USE_CUDA
     std::optional<at::cuda::CUDAStream> m_cudaStream;
+    // One replayable graph per batch bucket: a 12-layer tower costs milliseconds of host dispatch
+    // per call and microseconds to replay, so the submitting thread stops starving the device.
+    std::vector<CapturedInferenceGraph> m_batchGraphs;
 #endif
 };
 
@@ -167,7 +194,6 @@ private:
         explicit Slot(const bool usesCuda) : completion(usesCuda) {}
 
         torch::Tensor input;
-        torch::Tensor deviceInput;
         InferenceOutput output;
         // Destruction drains the event before the preceding slot buffers are released.
         InferenceCompletion completion;
