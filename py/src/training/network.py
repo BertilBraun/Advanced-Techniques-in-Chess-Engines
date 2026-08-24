@@ -542,9 +542,13 @@ def _initialize_small_policy_output(module: nn.Module, configuration: PolicyHead
             assert isinstance(module, PolicyPlaneHead), 'The 76-plane policy configuration must build a plane head.'
             nn.init.normal_(module.output_projection.weight, std=SMALL_OUTPUT_INITIALIZATION_STD)
             nn.init.zeros_(module.output_projection.bias)
-        case DensePolicyHeadConfiguration():
+        case DensePolicyHeadConfiguration(bottleneck_rank=bottleneck_rank):
             assert isinstance(module, nn.Sequential), 'The dense policy configuration must build a sequential head.'
             _initialize_small_linear_output(module[-1])
+            if bottleneck_rank is not None:
+                # Kaiming on the first factor stacks with the BN eval-mode blowup and over-sharpens
+                # the generation-0 behaviour prior far beyond the validated band; small-init both factors.
+                _initialize_small_linear_output(module[-2])
         case GoPointPassPolicyHeadConfiguration():
             # The Go point-pass head keeps its historical Kaiming initialization.
             pass
