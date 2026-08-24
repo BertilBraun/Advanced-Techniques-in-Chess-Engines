@@ -1,93 +1,99 @@
-# AlphaZero chess and Go experimentation platform
+# AlphaZero, from scratch, on a rented GPU budget
 
-This repository is a typed, configuration-driven AlphaZero research runtime for chess, 7x7 Go, and 9x9 Go. Native
-C++ owns game rules, packed network encoding, batched inference, tree search, and interactive analysis. Python owns
-experiment composition, self-play supervision, memory-mapped replay, persistent DDP training, elapsed evaluation,
-telemetry, and artifact management.
+A complete AlphaZero-style engine for **chess** and **Go** (7×7 and 9×9): self-play, tree search, network
+training, and strength evaluation, written from the ground up. A C++20 runtime owns the parts that have to be
+fast — rules, board encoding, batched TorchScript inference and the search tree — while Python owns experiment
+configuration, self-play supervision, memory-mapped replay, DDP training and evaluation. Runs are rented by the
+hour on Vast.ai, so every design decision is judged in Elo per wall-clock hour rather than in the abstract.
 
-The original chess project produced an approximately 2000-2100 Elo model on a modest personal research budget.
-Those models, games, plots, and logs remain available as
-[historical result evidence](documentation/evidence/chess-legacy-a10-2024/README.md); they do not describe the current runtime.
+### ▶ [Play or analyse against the model — chess.bertil-braun.de](https://chess.bertil-braun.de)
 
-## Current architecture
+Browser board, native search behind a FastAPI service, with policy priors, value and visit counts exposed per
+candidate move. The [same engine](documentation/operations/lichess-vast-evaluation.md) also speaks UCI.
 
-One resolved experiment configuration selects a concrete chess or Go implementation. Both games then use the same
-production lifecycle:
+![Stockfish-ladder scores of the four-day run](documentation/evidence/chess-four-day-freeze-20260817/plot_stockfish_scores_full.png)
 
-1. persistent workers run the shared native self-play search and publish atomic completed trajectories;
-2. the coordinator drains those trajectories into one fixed-slot circular memory-mapped replay;
-3. persistent symmetric DDP ranks train one blocking optimizer quantum from read-only mapped replay;
-4. rank zero publishes the complete checkpoint and trimmed policy/WDL inference artifact;
-5. workers transition to the new generation, while short-lived evaluation jobs run on fixed elapsed boundaries.
+*The strongest run to date: four days on 8× RTX 3060, scores against six Stockfish rungs over wall-clock hours.
+Level 0 is saturated within ~6 h; the bottom curve is Stockfish at a fixed 1,000 nodes.*
 
-There is no Python search implementation, alternate replay/trainer architecture, or generation-gating evaluator.
-Chess and Go evaluation share the same manager, paired-match runner, fixed-dataset metrics, result artifacts, and
-reporting path. Stockfish and KataGo remain explicitly configured external processes.
+## Results
 
-For the authoritative design and current phase status, start at the
-[documentation index](documentation/README.md). `THINGS_TO_TRY.md` is the experiment backlog, not an authorization
-ledger.
+| Run | Compute | Strength | Evidence |
+| --- | --- | --- | --- |
+| 2024 legacy chess model | ~12 h on 4× A10 (≈$13) | ≈2,000–2,100 Elo against Stockfish | [record + games](documentation/evidence/chess-legacy-a10-2024/README.md) |
+| Four-day run (r3/r4), 2026-08 | 96 h on 8× RTX 3060 (≈$44) | ≈2,800 fitted ladder Elo at 10k visits; generation 445 scored 66.0 % vs Stockfish 13 at 6,500 nodes (CI 58.5–73.5 %) | [freeze evidence](documentation/evidence/chess-four-day-freeze-20260817/), [ladder report](documentation/benchmarks/chess-stockfish-ladder-8xrtx3060-20260816/README.md) |
+| Recovery run `production-v2` | 8× RTX 4070 SUPER, live until ~2026-08-28 | **in progress** — targeting the four-day run's wall-clock curve | plots land here when its archive is fetched |
+
+The four-day result is the reference every current run is measured against; the
+[recovery plan](documentation/plan/chess-recovery-plan-20260820.md) exists because a platform rework regressed
+it, and the [regression analysis](documentation/plan/chess-post-four-day-regression-analysis-20260820.md) says
+why. Nothing is claimed here that does not have a fetched archive behind it.
+
+![Recovery run strength against the four-day reference](documentation/showcase/chess-strength-vs-wall-clock.svg)
+
+*Interim figure — a 9 h screening run against the four-day reference (dashed). Ladder Elo climbs monotonically;
+against the reference the same level-0 score arrives hours later, which is the gap the current run is closing.
+Regenerated from the production archive after 2026-08-28: see
+[documentation/showcase/](documentation/showcase/README.md).*
+
+## What is interesting here
+
+- **[The experiment ledger](documentation/experiments/README.md)** — what was tried and what survived: why an
+  attention trunk plateaued for seven hours (a BatchNorm eval-mode artifact in the generation-0 export flattened
+  the policy prior, not the architecture), why replay ratio turned out to be a scheduling knob rather than a
+  data-efficiency one, how a 208k-parameter policy head tied a 484k one, and why self-play throughput is bound
+  by host CPU and batching rather than by GPU FLOPs.
+- **Everything is measured.** Configurations are resolved and hashed; a run that has no fetched archive did not
+  happen; benchmarks record hardware, source revision and config SHA, and are not compared across hardware.
+- **One search, in C++.** There is no second, Python implementation of rules, encoding or MCTS to drift out of
+  sync — a deliberately unoptimised Python PUCT reference exists only as an order-of-magnitude
+  [baseline](documentation/benchmarks/naive-python-mcts-rtx3060-20260816/README.md) (~81 sims/s).
+
+The production lifecycle in five steps: persistent workers run the native self-play search and publish atomic
+trajectories → the coordinator drains them into one fixed-slot circular memory-mapped replay → persistent
+symmetric DDP ranks train a blocking optimizer quantum from read-only mapped replay → rank zero publishes the
+checkpoint and a trimmed policy/WDL inference artifact → workers switch generation while short-lived evaluation
+jobs run on fixed elapsed boundaries. Diagrams: [C++ overview](documentation/architecture/diagrams/cpp-overview.png) ·
+[inference pipeline](documentation/architecture/diagrams/cpp-inference-pipeline.png) ·
+[chess input representation](documentation/architecture/diagrams/chess-input-representation.png) ·
+[network architecture](documentation/architecture/diagrams/neural-network-architecture.png).
 
 ## Repository layout
 
-- `cpp/`: native chess/Go state, encoding, inference, search, bindings, benchmarks, and tests;
-- `py/`: experiment configuration, coordinator, replay, training, evaluation, UCI, and optional tools;
-- `deployment/`: fresh-node bootstrap plus web and Lichess deployment assets;
-- `documentation/plan/`: the current plan and its evidence — start with `documentation/CURRENT-STATE.md`;
-- `documentation/architecture/`: accepted designs;
-- `documentation/operations/`: current deployment and operations guidance;
-- `documentation/evidence/`: dated per-run and per-node records;
-- `documentation/history/`: explicitly non-normative implementation history;
-- `documentation/benchmarks/`: historical benchmark and result evidence.
+| Path | Contents |
+| --- | --- |
+| `cpp/` | native chess/Go state, encoding, inference, search, bindings, benchmarks, tests |
+| `py/` | experiment configuration, coordinator, replay, training, evaluation, UCI, tools |
+| `deployment/` | fresh-node bootstrap, run control, web and Lichess deployment |
+| `documentation/` | plan, architecture, operations, experiments, benchmarks, evidence |
 
-## Fresh compute-node setup
+## Go deeper
 
-[`deployment/setup_remote.sh`](deployment/setup_remote.sh) is the authoritative bootstrap for a fresh training node.
-It clones the requested revision, installs the hashed training environment, builds the Release extension, exports
-`ENGINE_SOURCE_REVISION`, and executes the supplied command:
+| Topic | Start here |
+| --- | --- |
+| Setup, running a training run, validation | [documentation/ONBOARDING.md](documentation/ONBOARDING.md) |
+| What the system is *today* | [documentation/CURRENT-STATE.md](documentation/CURRENT-STATE.md) |
+| Accepted designs | [documentation/architecture/](documentation/architecture/README.md) |
+| Measurements, with hardware and config SHAs | [documentation/benchmarks/](documentation/benchmarks/README.md) |
+| Experiment ledger — what worked and what did not | [documentation/experiments/](documentation/experiments/README.md) |
+| Operating a run: control, evaluation engines, deployment | [documentation/operations/](documentation/operations/README.md) |
+| Generated showcase figures and how to regenerate them | [documentation/showcase/](documentation/showcase/README.md) |
+| Full documentation index | [documentation/README.md](documentation/README.md) |
 
-After bootstrap, runs are started, stopped, inspected and archived exclusively through
-[`deployment/run_control.sh`](deployment/run_control.sh) — see
-[run-control.md](documentation/operations/run-control.md).
+## Running it yourself
 
-Set `ENGINE_REPOSITORY_REF`, `ENGINE_REPOSITORY_DIRECTORY`, `ENGINE_VIRTUAL_ENVIRONMENT`, or
-`ENGINE_REPOSITORY_URL` to override checkout/environment locations. The script intentionally does not install
-Stockfish, KataGo, or their model/configuration artifacts.
-
-The checked-in `py/configs/*-experiment-template.yaml` files are validation templates, not approved production
-runs. Hardware, artifact paths and hashes, output paths, source revision, and approval must be resolved explicitly.
-
-## Validation
-
-Run Python validation from `py`:
-
-```powershell
-uv run ruff format
-uv run ruff check --fix
-python -m pytest --import-mode=importlib .\test -q
-```
-
-Build and test native code from the repository root:
-
-```powershell
-cmake -S .\cpp -B .\cpp\build -DCMAKE_BUILD_TYPE=Release
-cmake --build .\cpp\build --parallel
-ctest --test-dir .\cpp\build --output-on-failure
-```
-
-Native-facing Python tests require the freshly built extension. Real Stockfish/KataGo smoke tests are opt-in and
-require provisioned external artifacts.
-
-## Interactive chess deployment
-
-The native interactive chess engine is shared by both deployments and is intentionally retained production code:
-
-- [web play](documentation/operations/web-play.md) uses the typed FastAPI backend and browser client;
-- [Lichess/Vast](deployment/lichess/README.md) invokes `python -m src.games.chess.uci` through the checked-in UCI
-  launcher.
+Realistically nobody will reproduce a four-day 8-GPU run, but everything needed to do so is checked in:
+[`deployment/setup_remote.sh`](deployment/setup_remote.sh) bootstraps a fresh node (clone, locked environment,
+Release extension, engine smoke test) and [`deployment/run_control.sh`](deployment/run_control.sh) is the only
+supported way to start, stop, inspect and archive a run. Local build, test and lint commands, the config-template
+rules and the read-in-this-order path are in [documentation/ONBOARDING.md](documentation/ONBOARDING.md);
+entry points are in [`py/README.md`](py/README.md) and [`cpp/README.md`](cpp/README.md).
 
 ## Research and references
 
-- [Experiment backlog](THINGS_TO_TRY.md)
-- [Research references](documentation/references.md)
-- [Historical insights](documentation/history/insights-and-recommendations.md)
+[Experiment backlog](THINGS_TO_TRY.md) (ideas, not authorised runs) ·
+[research references](documentation/references.md) ·
+[historical insights](documentation/history/insights-and-recommendations.md) ·
+[`pre-rework`](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/releases/tag/pre-rework) and
+[`four-day-baseline`](https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/releases/tag/four-day-baseline)
+releases.
