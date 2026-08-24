@@ -21,6 +21,7 @@ from src.training.network import (
     NetworkParams,
 )
 from src.training.targets import NextPolicyHeadLayout
+from test_helpers.probe_states import bernoulli_probe_states
 
 pytestmark = pytest.mark.integration
 
@@ -56,7 +57,13 @@ def test_native_inference_pipeline_searches_with_an_exported_new_head_model(
         NextPolicyHeadLayout(kind='next_policy', action_size=CHESS_NETWORK_DIMENSIONS.actions, ply_offset=1),
     )
     model = Network(parameters, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, auxiliary_heads)
-    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 0, tmp_path)
+    save_model_and_optimizer(
+        model,
+        create_optimizer(model, 'adamw'),
+        0,
+        tmp_path,
+        bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS),
+    )
 
     engine = InteractiveEngine(
         InteractiveEngineConfiguration(

@@ -435,6 +435,27 @@ def load_evaluation_dataset(
     return np.memmap(path, mode='r', dtype=dtype, shape=(manifest.position_count,))
 
 
+def load_dataset_probe_states(
+    path: Path,
+    state: GameStateContract[PositionT],
+    position_count: int,
+) -> torch.Tensor:
+    manifest_path = dataset_manifest_path(path)
+    if not path.exists() or not manifest_path.exists():
+        raise ValueError(f'Probe positions require the evaluation dataset and its manifest at {path}.')
+    manifest = EVALUATION_DATASET_MANIFEST_ADAPTER.validate_json(manifest_path.read_text(encoding='utf-8'))
+    if manifest.packed_payload_bytes != state.packed_plane_layout.payload_bytes:
+        raise ValueError('Evaluation dataset packed layout does not match the configured game representation.')
+    if manifest.position_count < position_count:
+        raise ValueError(
+            f'Evaluation dataset holds {manifest.position_count} positions, '
+            f'fewer than the {position_count} requested probe positions.'
+        )
+    data = load_evaluation_dataset(path, manifest)
+    packed_states = tuple(state.packed_plane_layout.value(bytes(row['packed_state'])) for row in data[:position_count])
+    return torch.from_numpy(decode_packed_inputs(state, packed_states))
+
+
 def evaluate_fixed_dataset(
     job: FixedDatasetEvaluationJob,
     state: GameStateContract[PositionT],

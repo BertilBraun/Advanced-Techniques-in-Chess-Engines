@@ -10,7 +10,7 @@ from src.games.representation import NetworkDimensions
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.network import (
     ATTENTION_LINEAR_INITIALIZATION_STD,
-    BOOTSTRAP_POLICY_PRIOR_TARGET_LOGIT_STD,
+    BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
     CHESS_POLICY_PLANE_COUNT,
     SMALL_OUTPUT_INITIALIZATION_STD,
     AttentionEncoderBlock,
@@ -32,13 +32,14 @@ from src.training.network import (
     _build_dense_policy_head,
     calibrate_bootstrap_policy_prior,
     fuse_conv_batchnorm,
-    policy_prior_probe_states,
+    measure_policy_prior_shape,
 )
 from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
 )
+from test_helpers.probe_states import bernoulli_probe_states
 from torch import Tensor, nn
 
 CHESS_POLICY_HEAD = Chess76PlaneDirectPolicyHeadConfiguration()
@@ -374,6 +375,16 @@ CALIBRATION_ARCHITECTURES = (
         CHESS_NETWORK_DIMENSIONS,
     ),
     (
+        'convolutional_dense_full',
+        NetworkParams(
+            num_layers=2,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=DensePolicyHeadConfiguration(channels=4),
+        ),
+        CHESS_NETWORK_DIMENSIONS,
+    ),
+    (
         'convolutional_plane',
         NetworkParams(
             num_layers=2,
@@ -404,31 +415,29 @@ def _fused_export(model: Network) -> InferenceNetwork:
     return export
 
 
-def _mean_probe_logit_std(export: InferenceNetwork, dimensions: NetworkDimensions) -> float:
-    with torch.no_grad():
-        policy_logits, _, _ = export(policy_prior_probe_states(dimensions, torch.device('cpu')))
-    return float(policy_logits.double().std(dim=1, correction=0).mean())
-
-
+@pytest.mark.parametrize('initialization_seed', (11, 23, 47))
 @pytest.mark.parametrize(
     ('parameters', 'dimensions'),
     tuple((parameters, dimensions) for _, parameters, dimensions in CALIBRATION_ARCHITECTURES),
     ids=tuple(name for name, _, _ in CALIBRATION_ARCHITECTURES),
 )
-def test_generation_zero_calibration_reaches_the_target_policy_logit_std(
+def test_generation_zero_calibration_hits_the_target_top3_mass(
     parameters: NetworkParams | AttentionNetworkParams,
     dimensions: NetworkDimensions,
+    initialization_seed: int,
 ) -> None:
-    torch.manual_seed(19)
+    torch.manual_seed(initialization_seed)
     model = Network(parameters, torch.device('cpu'), dimensions)
     export = _fused_export(model)
+    probe_states = bernoulli_probe_states(dimensions)
 
-    calibration = calibrate_bootstrap_policy_prior(export)
+    calibration = calibrate_bootstrap_policy_prior(export, probe_states)
+    calibrated_shape = measure_policy_prior_shape(export, probe_states)
 
-    assert _mean_probe_logit_std(export, dimensions) == pytest.approx(BOOTSTRAP_POLICY_PRIOR_TARGET_LOGIT_STD, rel=0.2)
-    assert calibration.applied_scale == pytest.approx(
-        BOOTSTRAP_POLICY_PRIOR_TARGET_LOGIT_STD / calibration.measured_logit_std
-    )
+    assert calibrated_shape.top3_mass == pytest.approx(BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=0.01)
+    assert 0.4 <= calibrated_shape.top1_mass <= 0.85
+    assert calibration.calibrated_shape.top3_mass == pytest.approx(BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=1e-6)
+    assert calibration.applied_scale > 0.0
 
 
 def test_calibration_is_deterministic_and_leaves_the_training_model_untouched() -> None:
@@ -444,9 +453,10 @@ def test_calibration_is_deterministic_and_leaves_the_training_model_untouched() 
         CHESS_PLANE_NETWORK_DIMENSIONS,
     )
     training_weight_before = model.policy_head.output_projection.weight.clone()
+    probe_states = bernoulli_probe_states(CHESS_PLANE_NETWORK_DIMENSIONS)
 
-    first = calibrate_bootstrap_policy_prior(_fused_export(model))
-    second = calibrate_bootstrap_policy_prior(_fused_export(model))
+    first = calibrate_bootstrap_policy_prior(_fused_export(model), probe_states)
+    second = calibrate_bootstrap_policy_prior(_fused_export(model), probe_states)
 
     assert first == second
     assert torch.equal(model.policy_head.output_projection.weight, training_weight_before)
@@ -465,21 +475,38 @@ def test_generation_zero_checkpoint_export_is_calibrated_and_later_generations_a
         CHESS_NETWORK_DIMENSIONS,
     )
     optimizer = create_optimizer(model, 'adamw')
-    uncalibrated_std = _mean_probe_logit_std(_fused_export(model), CHESS_NETWORK_DIMENSIONS)
-    probe_states = policy_prior_probe_states(CHESS_NETWORK_DIMENSIONS, torch.device('cpu'))
+    probe_states = bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS)
+    uncalibrated_shape = measure_policy_prior_shape(_fused_export(model), probe_states)
 
-    save_model_and_optimizer(model, optimizer, 0, tmp_path)
+    save_model_and_optimizer(model, optimizer, 0, tmp_path, probe_states)
     save_model_and_optimizer(model, optimizer, 1, tmp_path)
 
-    exported_stds: dict[int, float] = {}
-    for generation in (0, 1):
-        exported = torch.jit.load(str(tmp_path / f'model_{generation}.jit.pt'))
-        with torch.no_grad():
-            policy_logits, _, _ = exported(probe_states)
-        exported_stds[generation] = float(policy_logits.double().std(dim=1, correction=0).mean())
+    generation_zero = torch.jit.load(str(tmp_path / 'model_0.jit.pt'))
+    generation_one = torch.jit.load(str(tmp_path / 'model_1.jit.pt'))
 
-    assert exported_stds[0] == pytest.approx(BOOTSTRAP_POLICY_PRIOR_TARGET_LOGIT_STD, rel=0.2)
-    assert exported_stds[1] == pytest.approx(uncalibrated_std, rel=1e-5)
+    assert measure_policy_prior_shape(generation_zero, probe_states).top3_mass == pytest.approx(
+        BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=0.01
+    )
+    assert measure_policy_prior_shape(generation_one, probe_states).top3_mass == pytest.approx(
+        uncalibrated_shape.top3_mass, abs=1e-5
+    )
+
+
+def test_generation_zero_export_without_probe_states_fails(tmp_path: Path) -> None:
+    torch.manual_seed(31)
+    model = Network(
+        NetworkParams(
+            num_layers=1,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=DensePolicyHeadConfiguration(channels=4),
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+    )
+
+    with pytest.raises(ValueError, match='probe positions'):
+        save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 0, tmp_path)
 
 
 DENSE_HEAD_PARAMETER_COUNTS = (

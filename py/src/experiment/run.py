@@ -13,6 +13,7 @@ from pathlib import Path
 import psutil
 import torch
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
+from src.evaluation.dataset import load_dataset_probe_states
 from src.evaluation.preparation import PreparedEvaluationArtifacts, prepare_evaluation_artifacts
 from src.experiment.base_configuration import (
     CheckpointResumeConfiguration,
@@ -31,6 +32,7 @@ from src.training.checkpoint.persistence import (
     load_model,
     save_model_and_optimizer,
 )
+from src.training.network import POLICY_PRIOR_PROBE_POSITIONS
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -213,6 +215,14 @@ def _auxiliary_heads(experiment: ExperimentConfiguration) -> tuple[AuxiliaryHead
     return create_game_implementation(experiment).target_layout.auxiliary_heads
 
 
+def _bootstrap_probe_states(experiment: ExperimentConfiguration) -> torch.Tensor:
+    return load_dataset_probe_states(
+        _resolve_source_path(experiment.evaluation.dataset.path),
+        create_game_implementation(experiment).state,
+        POLICY_PRIOR_PROBE_POSITIONS,
+    )
+
+
 def _prepare_initial_checkpoint(
     experiment: ExperimentConfiguration,
     output_path: Path,
@@ -245,7 +255,13 @@ def _prepare_initial_checkpoint(
                     experiment.network_dimensions,
                     auxiliary_heads,
                 )
-                save_model_and_optimizer(model, create_optimizer(model, training.trainer.optimizer), 0, output_path)
+                save_model_and_optimizer(
+                    model,
+                    create_optimizer(model, training.trainer.optimizer),
+                    0,
+                    output_path,
+                    _bootstrap_probe_states(experiment),
+                )
         case RandomInitializationResumeConfiguration():
             if checkpoint_path.exists() and not manifest_path.exists():
                 raise ValueError(f'Random checkpoint exists without a run manifest: {checkpoint_path}')
@@ -256,7 +272,13 @@ def _prepare_initial_checkpoint(
                     experiment.network_dimensions,
                     auxiliary_heads,
                 )
-                save_model_and_optimizer(model, create_optimizer(model, training.trainer.optimizer), 0, output_path)
+                save_model_and_optimizer(
+                    model,
+                    create_optimizer(model, training.trainer.optimizer),
+                    0,
+                    output_path,
+                    _bootstrap_probe_states(experiment),
+                )
     return CheckpointReference.load(output_path, 0)
 
 

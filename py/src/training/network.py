@@ -335,60 +335,110 @@ class InferenceNetwork(nn.Module):
         fuse_conv_batchnorm(self)
 
 
-# Deep BatchNorm CNNs get an accidental sharp random behaviour prior at generation 0 (eval-mode
-# running-statistics mismatch), which the r3 recipe depends on to break search symmetry and bootstrap
-# decisive self-play; the validated band for the export's mean per-position policy logit std is 7-52,
-# while a LayerNorm attention trunk at 0.065 stalled and a rank-96 dense head at 256 was over-sharp.
-# Calibrating the generation-0 export to the band centre makes the prior deliberate and
-# architecture-agnostic; the training model itself stays near-uniform for healthy optimization.
-BOOTSTRAP_POLICY_PRIOR_TARGET_LOGIT_STD = 25.0
+# Deep BatchNorm CNNs amplify a freshly initialized policy head by a seed-dependent random gain at
+# generation 0 (eval-mode running-statistics mismatch), so no constant initialization controls the
+# exported prior's sharpness, while LayerNorm trunks have no such gain and export near-uniform priors.
+# Within a legal-move-sized action subset the generation-0 logits are effectively iid Gaussian, so the
+# prior's softmax shape is fully determined by the logit scale; the export is scaled until the mean
+# top-3 mass over random legal-move-sized subsets of the probe positions hits the target. The probe
+# must be real encoded positions: structured inputs amplify CNN logits 6-9x over iid noise, and the
+# target sits on the steep part of the shape curve. The training model stays near-uniform.
+BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS = 0.95
 POLICY_PRIOR_PROBE_POSITIONS = 256
-POLICY_PRIOR_PROBE_SEED = 20260824
+POLICY_PRIOR_SUBSET_SEED = 20260824
+POLICY_PRIOR_SUBSET_ACTIONS = 32
+POLICY_PRIOR_SUBSETS_PER_POSITION = 8
+_POLICY_PRIOR_SCALE_SEARCH_ITERATIONS = 60
+
+
+@dataclass(frozen=True)
+class PolicyPriorShape:
+    top1_mass: float
+    top3_mass: float
 
 
 @dataclass(frozen=True)
 class BootstrapPolicyPriorCalibration:
-    measured_logit_std: float
+    initial_shape: PolicyPriorShape
+    calibrated_shape: PolicyPriorShape
     applied_scale: float
-    target_logit_std: float
+    target_top3_mass: float
 
 
 def calibrate_bootstrap_policy_prior(
     inference_model: InferenceNetwork,
-    target_logit_std: float = BOOTSTRAP_POLICY_PRIOR_TARGET_LOGIT_STD,
+    probe_states: Tensor,
+    target_top3_mass: float = BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
 ) -> BootstrapPolicyPriorCalibration:
-    dimensions = inference_model.checkpoint_definition().dimensions
-    device = next(inference_model.parameters()).device
-    was_training = inference_model.training
-    inference_model.eval()
-    with torch.no_grad():
-        policy_logits, _, _ = inference_model(policy_prior_probe_states(dimensions, device))
-    inference_model.train(was_training)
-
-    measured_logit_std = float(policy_logits.double().std(dim=1, correction=0).mean())
-    assert measured_logit_std > 0.0, 'The generation-0 export produced constant policy logits.'
-    applied_scale = target_logit_std / measured_logit_std
+    subset_logits = _policy_prior_subset_logits(_probe_policy_logits(inference_model, probe_states))
+    initial_shape = _policy_prior_shape(subset_logits)
+    # Scaling the final projection's weight and bias scales the logits exactly, so the scale search
+    # runs on the cached probe logits instead of re-running the network.
+    applied_scale = _search_policy_prior_scale(subset_logits, target_top3_mass)
     with torch.no_grad():
         for projection in _final_policy_projections(inference_model.policy_head):
             projection.weight.mul_(applied_scale)
             if projection.bias is not None:
                 projection.bias.mul_(applied_scale)
     return BootstrapPolicyPriorCalibration(
-        measured_logit_std=measured_logit_std,
+        initial_shape=initial_shape,
+        calibrated_shape=_policy_prior_shape(subset_logits * applied_scale),
         applied_scale=applied_scale,
-        target_logit_std=target_logit_std,
+        target_top3_mass=target_top3_mass,
     )
 
 
-def policy_prior_probe_states(dimensions: NetworkDimensions, device: torch.device) -> Tensor:
-    # No game contract is reachable at export time, so the probe approximates the input contract with
-    # dense Bernoulli(0.5) planes instead of the sparse binary-plus-scalar encoding served at runtime.
-    generator = torch.Generator().manual_seed(POLICY_PRIOR_PROBE_SEED)
-    probabilities = torch.full(
-        (POLICY_PRIOR_PROBE_POSITIONS, dimensions.channels, dimensions.rows, dimensions.columns),
-        0.5,
+def measure_policy_prior_shape(inference_model: InferenceNetwork, probe_states: Tensor) -> PolicyPriorShape:
+    return _policy_prior_shape(_policy_prior_subset_logits(_probe_policy_logits(inference_model, probe_states)))
+
+
+def _probe_policy_logits(inference_model: InferenceNetwork, probe_states: Tensor) -> Tensor:
+    device = next(inference_model.parameters()).device
+    was_training = inference_model.training
+    inference_model.eval()
+    with torch.no_grad():
+        policy_logits, _, _ = inference_model(probe_states.to(device=device, dtype=torch.float32))
+    inference_model.train(was_training)
+    return policy_logits.double().cpu()
+
+
+def _policy_prior_subset_logits(policy_logits: Tensor) -> Tensor:
+    position_count, action_count = policy_logits.shape
+    if action_count < POLICY_PRIOR_SUBSET_ACTIONS:
+        raise ValueError(
+            f'Policy prior calibration needs at least {POLICY_PRIOR_SUBSET_ACTIONS} actions, found {action_count}.'
+        )
+    generator = torch.Generator().manual_seed(POLICY_PRIOR_SUBSET_SEED)
+    subset_scores = torch.rand((position_count, POLICY_PRIOR_SUBSETS_PER_POSITION, action_count), generator=generator)
+    subset_indices = subset_scores.topk(POLICY_PRIOR_SUBSET_ACTIONS, dim=2).indices
+    expanded_logits = policy_logits[:, None, :].expand(-1, POLICY_PRIOR_SUBSETS_PER_POSITION, -1)
+    return expanded_logits.gather(2, subset_indices)
+
+
+def _policy_prior_shape(subset_logits: Tensor) -> PolicyPriorShape:
+    top_masses = torch.softmax(subset_logits, dim=-1).topk(3, dim=-1).values
+    return PolicyPriorShape(
+        top1_mass=float(top_masses[..., 0].mean()),
+        top3_mass=float(top_masses.sum(dim=-1).mean()),
     )
-    return torch.bernoulli(probabilities, generator=generator).to(device=device, dtype=torch.float32)
+
+
+def _search_policy_prior_scale(subset_logits: Tensor, target_top3_mass: float) -> float:
+    assert bool(torch.isfinite(subset_logits).all()), 'The generation-0 export produced non-finite policy logits.'
+    assert float(subset_logits.std()) > 0.0, 'The generation-0 export produced constant policy logits.'
+    lower_scale = 1.0
+    upper_scale = 1.0
+    while _policy_prior_shape(subset_logits * lower_scale).top3_mass > target_top3_mass:
+        lower_scale /= 2.0
+    while _policy_prior_shape(subset_logits * upper_scale).top3_mass < target_top3_mass:
+        upper_scale *= 2.0
+    for _ in range(_POLICY_PRIOR_SCALE_SEARCH_ITERATIONS):
+        midpoint_scale = math.sqrt(lower_scale * upper_scale)
+        if _policy_prior_shape(subset_logits * midpoint_scale).top3_mass < target_top3_mass:
+            lower_scale = midpoint_scale
+        else:
+            upper_scale = midpoint_scale
+    return math.sqrt(lower_scale * upper_scale)
 
 
 def _final_policy_projections(policy_head: nn.Module) -> tuple[nn.Conv2d | nn.Linear, ...]:

@@ -8,6 +8,8 @@ from pathlib import Path
 
 import torch
 import torch.distributed as distributed
+from src.evaluation.dataset import load_dataset_probe_states
+from src.evaluation.process import resolve_project_path
 from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration_json
 from src.games.composition import create_game_implementation
 from src.games.implementation import GameImplementation
@@ -18,7 +20,7 @@ from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.checkpoint.persistence import load_model_and_optimizer, save_model_and_optimizer
 from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
 from src.training.distributions import TrainingDistributionSnapshot, capture_training_distributions
-from src.training.network import Network
+from src.training.network import POLICY_PRIOR_PROBE_POSITIONS, Network
 from src.training.objective import ResolvedTrainingObjective
 from src.training.trainer.contracts import (
     RankTrainingFailure,
@@ -115,7 +117,20 @@ def _initialize_rank(
     )
     if not initial_checkpoint_exists:
         if rank == 0:
-            save_model_and_optimizer(model, optimizer, startup.starting_generation, startup.save_path)
+            bootstrap_probe_states = None
+            if startup.starting_generation == 0:
+                bootstrap_probe_states = load_dataset_probe_states(
+                    resolve_project_path(configuration.evaluation.dataset.path),
+                    game.state,
+                    POLICY_PRIOR_PROBE_POSITIONS,
+                )
+            save_model_and_optimizer(
+                model,
+                optimizer,
+                startup.starting_generation,
+                startup.save_path,
+                bootstrap_probe_states,
+            )
         distributed.barrier()
     return _RankRuntime(game, model, distributed_model, optimizer, device, startup.save_path)
 

@@ -32,9 +32,11 @@ from src.evaluation.dataset import (
     build_katago_book_evaluation_dataset,
     dataset_manifest_path,
     evaluate_fixed_dataset,
+    load_dataset_probe_states,
     load_evaluation_dataset,
 )
 from src.evaluation.engine import EnginePolicy, EnginePolicyEntry
+from src.evaluation.inference import decode_packed_inputs
 from src.evaluation.katago_book import (
     KataGoBookExport,
     KataGoBookPageProvenance,
@@ -481,6 +483,34 @@ def test_dataset_builder_retains_every_third_position_in_requested_range(tmp_pat
     assert (
         build_evaluation_dataset(path, configuration, go_like_fake_game_state(), FakeEngine(), 'revision') == manifest
     )
+
+
+def test_probe_states_are_decoded_dataset_positions_in_row_order(tmp_path: Path) -> None:
+    state = go_like_fake_game_state()
+    dataset_path, manifest = _build_fake_evaluation_dataset(tmp_path, state)
+
+    probe_states = load_dataset_probe_states(dataset_path, state, 16)
+
+    data = load_evaluation_dataset(dataset_path, manifest)
+    expected = decode_packed_inputs(
+        state,
+        tuple(state.packed_plane_layout.value(bytes(row['packed_state'])) for row in data[:16]),
+    )
+    assert probe_states.shape == (16, 1, 8, 8)
+    assert torch.equal(probe_states, torch.from_numpy(expected))
+
+
+def test_probe_states_require_an_existing_dataset(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match='evaluation dataset'):
+        load_dataset_probe_states(tmp_path / 'missing.bin', go_like_fake_game_state(), 16)
+
+
+def test_probe_states_require_enough_dataset_positions(tmp_path: Path) -> None:
+    state = go_like_fake_game_state()
+    dataset_path, manifest = _build_fake_evaluation_dataset(tmp_path, state)
+
+    with pytest.raises(ValueError, match='fewer'):
+        load_dataset_probe_states(dataset_path, state, manifest.position_count + 1)
 
 
 def test_dataset_builder_stops_at_natural_terminal_with_remaining_legal_actions() -> None:
