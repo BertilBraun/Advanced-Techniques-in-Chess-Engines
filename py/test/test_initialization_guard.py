@@ -82,6 +82,15 @@ def _chess_probe_batch(batch_size: int, action_size: int) -> tuple[torch.Tensor,
             ),
             CHESS_NETWORK_DIMENSIONS,
         ),
+        (
+            NetworkParams(
+                num_layers=2,
+                hidden_size=64,
+                residual_context=DisabledResidualContext(),
+                policy_head=DensePolicyHeadConfiguration(channels=2, bottleneck_rank=96),
+            ),
+            CHESS_NETWORK_DIMENSIONS,
+        ),
     ),
 )
 def test_freshly_initialized_chess_networks_pass_the_startup_guard(

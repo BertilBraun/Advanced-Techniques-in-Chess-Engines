@@ -27,6 +27,7 @@ from src.training.trainer import TrainerGroup
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.trainer.rank import DistributedTrainingModel
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
+from test_helpers.probe_states import bernoulli_probe_states
 from torch import nn
 
 
@@ -103,7 +104,13 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
     configuration = _configuration(tmp_path)
     game = ChessImplementation(configuration)
     model = Network(configuration.training.initial_model.network, torch.device('cpu'), game.network_dimensions)
-    save_model_and_optimizer(model, create_optimizer(model, configuration.training.trainer.optimizer), 0, tmp_path)
+    save_model_and_optimizer(
+        model,
+        create_optimizer(model, configuration.training.trainer.optimizer),
+        0,
+        tmp_path,
+        bernoulli_probe_states(game.network_dimensions),
+    )
     starting_checkpoint = CheckpointReference.load(tmp_path, 0)
     layout = ReplayLayout(
         packed_planes=game.state.packed_plane_layout,

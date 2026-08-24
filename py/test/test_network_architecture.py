@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import torch
 from pydantic import ValidationError
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.games.representation import NetworkDimensions
+from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.network import (
     ATTENTION_LINEAR_INITIALIZATION_STD,
-    BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE,
+    BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
     CHESS_POLICY_PLANE_COUNT,
     SMALL_OUTPUT_INITIALIZATION_STD,
     AttentionEncoderBlock,
@@ -27,14 +30,16 @@ from src.training.network import (
     SqueezeExcitation,
     SqueezeExcitationResidualContext,
     _build_dense_policy_head,
-    apply_bootstrap_policy_prior,
+    calibrate_bootstrap_policy_prior,
     fuse_conv_batchnorm,
+    measure_policy_prior_shape,
 )
 from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
 )
+from test_helpers.probe_states import bernoulli_probe_states
 from torch import Tensor, nn
 
 CHESS_POLICY_HEAD = Chess76PlaneDirectPolicyHeadConfiguration()
@@ -358,32 +363,86 @@ def test_dense_policy_head_remains_selectable_with_small_output_initialization()
     assert float(dense_output.weight.detach().std()) == pytest.approx(SMALL_OUTPUT_INITIALIZATION_STD, rel=0.1)
 
 
-def test_bootstrap_policy_prior_sharpens_attention_inference_export_only() -> None:
-    torch.manual_seed(11)
-    attention = Network(
+CALIBRATION_ARCHITECTURES = (
+    (
+        'convolutional_dense_rank',
+        NetworkParams(
+            num_layers=2,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=DensePolicyHeadConfiguration(channels=4, bottleneck_rank=96),
+        ),
+        CHESS_NETWORK_DIMENSIONS,
+    ),
+    (
+        'convolutional_dense_full',
+        NetworkParams(
+            num_layers=2,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=DensePolicyHeadConfiguration(channels=4),
+        ),
+        CHESS_NETWORK_DIMENSIONS,
+    ),
+    (
+        'convolutional_plane',
+        NetworkParams(
+            num_layers=2,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=CHESS_POLICY_HEAD,
+        ),
+        CHESS_PLANE_NETWORK_DIMENSIONS,
+    ),
+    (
+        'attention_dense',
         AttentionNetworkParams(
             num_layers=2,
             embedding_size=16,
             num_heads=2,
             feedforward_size=32,
-            policy_head=CHESS_POLICY_HEAD,
+            policy_head=DensePolicyHeadConfiguration(channels=4),
         ),
-        torch.device('cpu'),
-        CHESS_PLANE_NETWORK_DIMENSIONS,
-    )
-    export = InferenceNetwork(attention)
-    training_weight_before = attention.policy_head.output_projection.weight.clone()
-
-    apply_bootstrap_policy_prior(export, attention.network_args)
-
-    scale = BOOTSTRAP_POLICY_PRIOR_LOGIT_SCALE
-    assert torch.allclose(export.policy_head.output_projection.weight, training_weight_before * scale)
-    assert torch.equal(attention.policy_head.output_projection.weight, training_weight_before)
+        CHESS_NETWORK_DIMENSIONS,
+    ),
+)
 
 
-def test_bootstrap_policy_prior_leaves_convolutional_networks_unscaled() -> None:
-    torch.manual_seed(11)
-    convolutional = Network(
+def _fused_export(model: Network) -> InferenceNetwork:
+    export = InferenceNetwork(model)
+    export.eval()
+    export.fuse_model()
+    return export
+
+
+@pytest.mark.parametrize('initialization_seed', (11, 23, 47))
+@pytest.mark.parametrize(
+    ('parameters', 'dimensions'),
+    tuple((parameters, dimensions) for _, parameters, dimensions in CALIBRATION_ARCHITECTURES),
+    ids=tuple(name for name, _, _ in CALIBRATION_ARCHITECTURES),
+)
+def test_generation_zero_calibration_hits_the_target_top3_mass(
+    parameters: NetworkParams | AttentionNetworkParams,
+    dimensions: NetworkDimensions,
+    initialization_seed: int,
+) -> None:
+    torch.manual_seed(initialization_seed)
+    model = Network(parameters, torch.device('cpu'), dimensions)
+    export = _fused_export(model)
+    probe_states = bernoulli_probe_states(dimensions)
+
+    calibration = calibrate_bootstrap_policy_prior(export, probe_states)
+    calibrated_shape = measure_policy_prior_shape(export, probe_states)
+
+    assert calibrated_shape.top3_mass == pytest.approx(BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=0.01)
+    assert 0.4 <= calibrated_shape.top1_mass <= 0.85
+    assert calibration.calibrated_shape.top3_mass == pytest.approx(BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=1e-6)
+    assert calibration.applied_scale > 0.0
+
+
+def test_calibration_is_deterministic_and_leaves_the_training_model_untouched() -> None:
+    torch.manual_seed(23)
+    model = Network(
         NetworkParams(
             num_layers=2,
             hidden_size=16,
@@ -393,12 +452,61 @@ def test_bootstrap_policy_prior_leaves_convolutional_networks_unscaled() -> None
         torch.device('cpu'),
         CHESS_PLANE_NETWORK_DIMENSIONS,
     )
-    export = InferenceNetwork(convolutional)
-    weight_before = export.policy_head.output_projection.weight.clone()
+    training_weight_before = model.policy_head.output_projection.weight.clone()
+    probe_states = bernoulli_probe_states(CHESS_PLANE_NETWORK_DIMENSIONS)
 
-    apply_bootstrap_policy_prior(export, convolutional.network_args)
+    first = calibrate_bootstrap_policy_prior(_fused_export(model), probe_states)
+    second = calibrate_bootstrap_policy_prior(_fused_export(model), probe_states)
 
-    assert torch.equal(export.policy_head.output_projection.weight, weight_before)
+    assert first == second
+    assert torch.equal(model.policy_head.output_projection.weight, training_weight_before)
+
+
+def test_generation_zero_checkpoint_export_is_calibrated_and_later_generations_are_not(tmp_path: Path) -> None:
+    torch.manual_seed(29)
+    model = Network(
+        NetworkParams(
+            num_layers=2,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=DensePolicyHeadConfiguration(channels=4),
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+    )
+    optimizer = create_optimizer(model, 'adamw')
+    probe_states = bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS)
+    uncalibrated_shape = measure_policy_prior_shape(_fused_export(model), probe_states)
+
+    save_model_and_optimizer(model, optimizer, 0, tmp_path, probe_states)
+    save_model_and_optimizer(model, optimizer, 1, tmp_path)
+
+    generation_zero = torch.jit.load(str(tmp_path / 'model_0.jit.pt'))
+    generation_one = torch.jit.load(str(tmp_path / 'model_1.jit.pt'))
+
+    assert measure_policy_prior_shape(generation_zero, probe_states).top3_mass == pytest.approx(
+        BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=0.01
+    )
+    assert measure_policy_prior_shape(generation_one, probe_states).top3_mass == pytest.approx(
+        uncalibrated_shape.top3_mass, abs=1e-5
+    )
+
+
+def test_generation_zero_export_without_probe_states_fails(tmp_path: Path) -> None:
+    torch.manual_seed(31)
+    model = Network(
+        NetworkParams(
+            num_layers=1,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=DensePolicyHeadConfiguration(channels=4),
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+    )
+
+    with pytest.raises(ValueError, match='probe positions'):
+        save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 0, tmp_path)
 
 
 DENSE_HEAD_PARAMETER_COUNTS = (
@@ -464,7 +572,7 @@ def test_dense_policy_head_rejects_more_reductions_than_supported() -> None:
         DensePolicyHeadConfiguration(channels=4, spatial_reductions=3)
 
 
-def test_dense_bottleneck_applies_small_initialization_to_both_factors() -> None:
+def test_dense_bottleneck_applies_the_same_small_initialization_to_both_factors() -> None:
     torch.manual_seed(13)
     network = Network(
         NetworkParams(
@@ -486,7 +594,7 @@ def test_dense_bottleneck_applies_small_initialization_to_both_factors() -> None
         SMALL_OUTPUT_INITIALIZATION_STD, rel=0.1
     )
     assert float(network.policy_head[-2].weight.detach().std()) == pytest.approx(
-        SMALL_OUTPUT_INITIALIZATION_STD / 2, rel=0.1
+        SMALL_OUTPUT_INITIALIZATION_STD, rel=0.1
     )
 
 

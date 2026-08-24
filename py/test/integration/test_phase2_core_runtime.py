@@ -20,6 +20,7 @@ from src.training.checkpoint.persistence import create_model, create_optimizer, 
 from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
+from test_helpers.probe_states import bernoulli_probe_states
 
 pytestmark = [
     pytest.mark.integration,
@@ -163,7 +164,7 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
         tuple(head.action_size for head in game.target_layout.auxiliary_heads),
     )
     optimizer = create_optimizer(model, configuration.training.trainer.optimizer)
-    save_model_and_optimizer(model, optimizer, 0, tmp_path)
+    save_model_and_optimizer(model, optimizer, 0, tmp_path, bernoulli_probe_states(game.network_dimensions))
     checkpoint = CheckpointReference.load(tmp_path, 0)
     inbox_path = tmp_path / 'completed-games' / 'inbox'
     worker = SelfPlayWorker(game, 1, 0, 0, inbox_path)

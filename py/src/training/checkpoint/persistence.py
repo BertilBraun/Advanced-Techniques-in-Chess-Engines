@@ -20,12 +20,13 @@ from src.training.network import (
     Network,
     NetworkConfiguration,
     NetworkDefinition,
-    apply_bootstrap_policy_prior,
+    calibrate_bootstrap_policy_prior,
 )
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
 from src.util.log import LogLevel, log
+from src.util.tensorboard import log_scalar
 
 
 def _temporary_path(path: Path) -> Path:
@@ -169,6 +170,7 @@ def save_model_and_optimizer(
     optimizer: torch.optim.Optimizer,
     generation: int,
     save_folder: str | PathLike[str],
+    bootstrap_probe_states: torch.Tensor | None = None,
 ) -> None:
     raw_model_path = model_save_path(generation, save_folder)
     raw_optimizer_path = optimizer_save_path(generation, save_folder)
@@ -182,10 +184,25 @@ def save_model_and_optimizer(
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
 
     fused_model = InferenceNetwork(model)
-    if generation == 0:
-        apply_bootstrap_policy_prior(fused_model, model.network_args)
     fused_model.eval()
     fused_model.fuse_model()
+    if generation == 0:
+        if bootstrap_probe_states is None:
+            raise ValueError(
+                'The generation-0 export requires real probe positions from the evaluation dataset '
+                'to calibrate the bootstrap policy prior.'
+            )
+        calibration = calibrate_bootstrap_policy_prior(fused_model, bootstrap_probe_states)
+        log(
+            f'Calibrated the generation-0 policy prior: top-1 mass '
+            f'{calibration.initial_shape.top1_mass:.3f} -> {calibration.calibrated_shape.top1_mass:.3f}, '
+            f'top-3 mass {calibration.initial_shape.top3_mass:.3f} -> {calibration.calibrated_shape.top3_mass:.3f} '
+            f'(target {calibration.target_top3_mass}), applied scale {calibration.applied_scale:.4g}.'
+        )
+        log_scalar('init/policy_prior_initial_top3_mass', calibration.initial_shape.top3_mass)
+        log_scalar('init/policy_prior_top1_mass', calibration.calibrated_shape.top1_mass)
+        log_scalar('init/policy_prior_top3_mass', calibration.calibrated_shape.top3_mass)
+        log_scalar('init/policy_prior_scale', calibration.applied_scale)
 
     torch.jit.save(
         torch.jit.script(fused_model),
