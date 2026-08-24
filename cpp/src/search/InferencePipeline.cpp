@@ -7,6 +7,7 @@
 #include <torch/csrc/jit/api/module.h>
 
 #include <iostream>
+#include <mutex>
 
 namespace {
 torch::jit::script::Module loadInferenceModel(const std::string &modelPath,
@@ -134,6 +135,14 @@ void configureSdpaBackend(const torch::Device &device, const SdpaBackend backend
 
 constexpr std::int64_t tensorSize(const std::size_t size) noexcept {
     return static_cast<std::int64_t>(size);
+}
+
+// Capture registers a device-wide allocation filter and replays execute against private memory
+// pools, neither of which tolerates a second inference worker doing the same thing at the same
+// time in the same process. One graph is submitted at a time; a launch is microseconds.
+std::mutex &graphSerializationMutex() {
+    static std::mutex mutex;
+    return mutex;
 }
 } // namespace
 
@@ -283,9 +292,11 @@ void InferenceRunner::captureBatchGraphs() {
     }
     constexpr size_t bucketCount = 8;
     constexpr size_t warmupIterations = 24;
+    const std::lock_guard<std::mutex> serialized(graphSerializationMutex());
     const c10::cuda::CUDAGuard deviceGuard(m_device);
     const at::cuda::CUDAStreamGuard streamGuard(*m_cudaStream);
     torch::InferenceMode inferenceMode;
+    std::unique_ptr<at::cuda::CUDAGraph> capturing;
     try {
         // The profiling executor only specialises after a few runs; capturing before it settles
         // would bake its bailout path into the graph.
@@ -302,8 +313,8 @@ void InferenceRunner::captureBatchGraphs() {
             if (!m_batchGraphs.empty() && m_batchGraphs.back().batch_size >= batchSize) {
                 continue;
             }
-            auto graph = std::make_unique<at::cuda::CUDAGraph>();
-            graph->capture_begin(pool);
+            capturing = std::make_unique<at::cuda::CUDAGraph>();
+            capturing->capture_begin(pool);
             const torch::Tensor typedInput =
                 m_deviceTypedInput.narrow(0, 0, tensorSize(batchSize));
             typedInput.copy_(m_deviceInput.narrow(0, 0, tensorSize(batchSize)));
@@ -316,12 +327,20 @@ void InferenceRunner::captureBatchGraphs() {
                 .copy_(outputTuple->elements()[1].toTensor());
             m_deviceOutputStaging.search_corrections.narrow(0, 0, rows)
                 .copy_(outputTuple->elements()[2].toTensor());
-            graph->capture_end();
-            m_batchGraphs.push_back({.batch_size = batchSize, .graph = std::move(graph)});
+            capturing->capture_end();
+            m_batchGraphs.push_back({.batch_size = batchSize, .graph = std::move(capturing)});
         }
         m_cudaStream->synchronize();
     } catch (const std::exception &failure) {
-        // A machine that cannot capture still has to run, just without the replay path.
+        // An abandoned capture leaves the stream capturing, which corrupts every later launch on
+        // it, so the in-flight capture has to be ended before the graphs are discarded.
+        if (capturing != nullptr) {
+            try {
+                capturing->capture_end();
+            } catch (...) {
+            }
+            capturing.reset();
+        }
         releaseBatchGraphs();
         std::cerr << "Inference graph capture unavailable: " << failure.what() << std::endl;
     }
@@ -408,6 +427,7 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size
 #ifdef USE_CUDA
             // Rows beyond the real batch carry the previous call's bytes; the network has no
             // cross-sample coupling, so the rows that are read back are bit-identical either way.
+            const std::lock_guard<std::mutex> serialized(graphSerializationMutex());
             for (const CapturedInferenceGraph &captured : m_batchGraphs) {
                 if (captured.batch_size == capturedBatch) {
                     captured.graph->replay();
