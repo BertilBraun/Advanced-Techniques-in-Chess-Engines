@@ -53,6 +53,9 @@ ResidualContextConfiguration: TypeAlias = Annotated[
 ]
 
 
+MAXIMUM_DENSE_SPATIAL_REDUCTIONS = 2
+
+
 class Chess76PlaneDirectPolicyHeadConfiguration(FrozenModel):
     kind: Literal['chess_76_plane_direct_v2'] = 'chess_76_plane_direct_v2'
 
@@ -60,6 +63,8 @@ class Chess76PlaneDirectPolicyHeadConfiguration(FrozenModel):
 class DensePolicyHeadConfiguration(FrozenModel):
     kind: Literal['dense'] = 'dense'
     channels: int = Field(gt=0)
+    spatial_reductions: int = Field(default=0, ge=0, le=MAXIMUM_DENSE_SPATIAL_REDUCTIONS)
+    bottleneck_rank: int | None = Field(default=None, gt=0)
 
 
 class GoPointPassPolicyHeadConfiguration(FrozenModel):
@@ -349,18 +354,27 @@ def apply_bootstrap_policy_prior(inference_model: InferenceNetwork, args: Networ
 
 def fuse_conv_batchnorm(root: nn.Module) -> None:
     for module in root.modules():
-        if (
-            type(module) is nn.Sequential
-            and len(module) >= 2
-            and isinstance(module[0], nn.Conv2d)
-            and isinstance(module[1], nn.BatchNorm2d)
-        ):
-            # Fuses Conv2d, BatchNorm2d and the optional trailing ReLU.
-            torch.ao.quantization.fuse_modules(
-                module,
-                [str(index) for index in range(min(3, len(module)))],
-                inplace=True,
-            )
+        if type(module) is not nn.Sequential:
+            continue
+        groups = _conv_batchnorm_groups(module)
+        if groups:
+            torch.ao.quantization.fuse_modules(module, groups, inplace=True)
+
+
+def _conv_batchnorm_groups(module: nn.Sequential) -> list[list[str]]:
+    # Fuses every Conv2d, BatchNorm2d and optional trailing ReLU run, not only a leading one.
+    groups: list[list[str]] = []
+    index = 0
+    while index + 1 < len(module):
+        if isinstance(module[index], nn.Conv2d) and isinstance(module[index + 1], nn.BatchNorm2d):
+            group = [str(index), str(index + 1)]
+            if index + 2 < len(module) and isinstance(module[index + 2], nn.ReLU):
+                group.append(str(index + 2))
+            groups.append(group)
+            index += len(group)
+        else:
+            index += 1
+    return groups
 
 
 def _search_correction_head(training_model: Network) -> nn.Module:
@@ -420,18 +434,44 @@ def _build_policy_head(
                     f'the reduced chess action encoding needs a dense policy head.'
                 )
             return PolicyPlaneHead(input_channels, plane_hidden_channels, CHESS_POLICY_PLANE_COUNT)
-        case DensePolicyHeadConfiguration(channels=channels):
-            return nn.Sequential(
-                nn.Conv2d(input_channels, channels, kernel_size=1, bias=False),
-                nn.BatchNorm2d(channels),
-                nn.ReLU(inplace=True),
-                nn.Flatten(),
-                nn.Linear(channels * row_count * column_count, action_size),
-            )
+        case DensePolicyHeadConfiguration():
+            return _build_dense_policy_head(input_channels, row_count, column_count, action_size, configuration)
         case GoPointPassPolicyHeadConfiguration():
             if action_size != row_count * column_count + 1:
                 raise ValueError('Go point-pass policy heads require one action per point plus pass.')
             return GoPointPassPolicyHead(input_channels)
+
+
+def _build_dense_policy_head(
+    input_channels: int,
+    row_count: int,
+    column_count: int,
+    action_size: int,
+    configuration: DensePolicyHeadConfiguration,
+) -> nn.Sequential:
+    reduced_rows = row_count - 2 * configuration.spatial_reductions
+    reduced_columns = column_count - 2 * configuration.spatial_reductions
+    if reduced_rows < 1 or reduced_columns < 1:
+        raise ValueError(
+            f'{configuration.spatial_reductions} unpadded 3x3 reductions do not fit a {row_count}x{column_count} board.'
+        )
+    layers: list[nn.Module] = []
+    for _ in range(configuration.spatial_reductions):
+        layers.append(nn.Conv2d(input_channels, input_channels, kernel_size=3, bias=False))
+        layers.append(nn.BatchNorm2d(input_channels))
+        layers.append(nn.ReLU(inplace=True))
+    layers.append(nn.Conv2d(input_channels, configuration.channels, kernel_size=1, bias=False))
+    layers.append(nn.BatchNorm2d(configuration.channels))
+    layers.append(nn.ReLU(inplace=True))
+    layers.append(nn.Flatten())
+    flattened_features = configuration.channels * reduced_rows * reduced_columns
+    match configuration.bottleneck_rank:
+        case None:
+            layers.append(nn.Linear(flattened_features, action_size))
+        case bottleneck_rank:
+            layers.append(nn.Linear(flattened_features, bottleneck_rank))
+            layers.append(nn.Linear(bottleneck_rank, action_size))
+    return nn.Sequential(*layers)
 
 
 def _build_auxiliary_head(
