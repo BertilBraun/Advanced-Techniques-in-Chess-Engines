@@ -7,6 +7,7 @@ import torch
 from pydantic import ValidationError
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.games.representation import NetworkDimensions
+from src.training.checkpoint.contracts import read_checkpoint_manifest
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.network import (
     ATTENTION_LINEAR_INITIALIZATION_STD,
@@ -490,6 +491,35 @@ def test_generation_zero_checkpoint_export_is_calibrated_and_later_generations_a
     assert measure_policy_prior_shape(generation_one, probe_states).top3_mass == pytest.approx(
         uncalibrated_shape.top3_mass, abs=1e-5
     )
+
+
+def test_generation_zero_manifest_records_the_calibration_and_generation_one_does_not(tmp_path: Path) -> None:
+    torch.manual_seed(29)
+    model = Network(
+        NetworkParams(
+            num_layers=2,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=DensePolicyHeadConfiguration(channels=4),
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+    )
+    optimizer = create_optimizer(model, 'adamw')
+    probe_states = bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS)
+    uncalibrated_shape = measure_policy_prior_shape(_fused_export(model), probe_states)
+
+    save_model_and_optimizer(model, optimizer, 0, tmp_path, probe_states)
+    save_model_and_optimizer(model, optimizer, 1, tmp_path)
+
+    record = read_checkpoint_manifest(0, tmp_path).policy_prior_calibration
+    assert record is not None
+    assert record.target_top3_mass == BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS
+    assert record.calibrated_top3_mass == pytest.approx(BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=1e-6)
+    assert record.initial_top3_mass == pytest.approx(uncalibrated_shape.top3_mass, abs=1e-6)
+    assert record.initial_top1_mass == pytest.approx(uncalibrated_shape.top1_mass, abs=1e-6)
+    assert record.applied_scale > 0.0
+    assert read_checkpoint_manifest(1, tmp_path).policy_prior_calibration is None
 
 
 def test_generation_zero_export_without_probe_states_fails(tmp_path: Path) -> None:

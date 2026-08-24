@@ -9,6 +9,15 @@ from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
 
 
+class BootstrapPolicyPriorRecord(FrozenModel):
+    initial_top1_mass: float
+    initial_top3_mass: float
+    calibrated_top1_mass: float
+    calibrated_top3_mass: float
+    target_top3_mass: float
+    applied_scale: float
+
+
 class CheckpointManifest(FrozenModel):
     generation: int
     network: NetworkDefinition
@@ -18,6 +27,7 @@ class CheckpointManifest(FrozenModel):
     optimizer_sha256: str
     inference_model_path: str
     inference_model_sha256: str
+    policy_prior_calibration: BootstrapPolicyPriorRecord | None = None
 
 
 def _validate_checkpoint_artifact(path: Path, expected_sha256: str) -> None:

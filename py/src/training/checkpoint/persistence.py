@@ -8,6 +8,7 @@ from time import sleep
 import torch
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint.contracts import (
+    BootstrapPolicyPriorRecord,
     CheckpointManifest,
     CheckpointReference,
     load_checkpoint_manifest,
@@ -26,7 +27,6 @@ from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
 from src.util.log import LogLevel, log
-from src.util.tensorboard import log_scalar
 
 
 def _temporary_path(path: Path) -> Path:
@@ -186,6 +186,7 @@ def save_model_and_optimizer(
     fused_model = InferenceNetwork(model)
     fused_model.eval()
     fused_model.fuse_model()
+    policy_prior_calibration: BootstrapPolicyPriorRecord | None = None
     if generation == 0:
         if bootstrap_probe_states is None:
             raise ValueError(
@@ -199,10 +200,14 @@ def save_model_and_optimizer(
             f'top-3 mass {calibration.initial_shape.top3_mass:.3f} -> {calibration.calibrated_shape.top3_mass:.3f} '
             f'(target {calibration.target_top3_mass}), applied scale {calibration.applied_scale:.4g}.'
         )
-        log_scalar('init/policy_prior_initial_top3_mass', calibration.initial_shape.top3_mass)
-        log_scalar('init/policy_prior_top1_mass', calibration.calibrated_shape.top1_mass)
-        log_scalar('init/policy_prior_top3_mass', calibration.calibrated_shape.top3_mass)
-        log_scalar('init/policy_prior_scale', calibration.applied_scale)
+        policy_prior_calibration = BootstrapPolicyPriorRecord(
+            initial_top1_mass=calibration.initial_shape.top1_mass,
+            initial_top3_mass=calibration.initial_shape.top3_mass,
+            calibrated_top1_mass=calibration.calibrated_shape.top1_mass,
+            calibrated_top3_mass=calibration.calibrated_shape.top3_mass,
+            target_top3_mass=calibration.target_top3_mass,
+            applied_scale=calibration.applied_scale,
+        )
 
     torch.jit.save(
         torch.jit.script(fused_model),
@@ -223,6 +228,7 @@ def save_model_and_optimizer(
         optimizer_sha256=file_sha256(raw_optimizer_path),
         inference_model_path=jit_model_path.name,
         inference_model_sha256=file_sha256(jit_model_path),
+        policy_prior_calibration=policy_prior_calibration,
     )
     manifest_path = checkpoint_manifest_path(generation, save_folder)
     write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')
@@ -275,6 +281,7 @@ def _copy_checkpoint(
         optimizer_sha256=source_manifest.optimizer_sha256,
         inference_model_path=destination_paths[2].name,
         inference_model_sha256=source_manifest.inference_model_sha256,
+        policy_prior_calibration=source_manifest.policy_prior_calibration,
     )
     write_text_atomically(destination_manifest_path, manifest.model_dump_json(indent=2) + '\n')
     return CheckpointReference.load(destination_folder, generation)
