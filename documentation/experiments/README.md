@@ -45,9 +45,12 @@ Related measurements: [contended architecture comparison](../benchmarks/chess-ar
 [SDPA backends](../benchmarks/chess-attention-sdpa-backends-rtx4070s-20260818/README.md),
 [attention training throughput](../benchmarks/chess-attention-training-rtx4070s-20260818/README.md).
 
-> Caveat on the fix: the export-time prior scale is a constant chosen per architecture, and the resulting logit
-> standard deviation varies by seed and by head shape. It has to be re-measured whenever the policy head changes
-> — the rank-96 head below is exactly such a case.
+That first fix was a constant scale factor per architecture, and it did not survive contact with a new head: the
+BatchNorm gain is seed-dependent, so no constant controls the exported prior. It has since been replaced by an
+export-time calibration that measures the prior's *shape* — mean top-3 softmax mass over random legal-move-sized
+action subsets of real encoded probe positions — and binary-searches the scale until it hits 0.95
+([`training/network.py`](../../py/src/training/network.py), `calibrate_bootstrap_policy_prior`). The training
+model stays near-uniform; only the generation-0 export is scaled.
 
 ## Replay ratio: nearly free, and mostly a scheduling knob
 
@@ -80,10 +83,10 @@ Reading: a rank-96 bottleneck removes 57 % of the head's parameters at no measur
 board, not the channels. Production uses dense channels 4 with bottleneck rank 96. Evidence bundle:
 `.codex-diagnostics/policy-head-bakeoff-20260824/` (run-local, not tracked).
 
-The small-initialisation of that bottleneck is not free: two factors multiply, so Kaiming-scaled first factors
-plus the BatchNorm blowup put the exported gen-0 prior at logit std 256, five times beyond the validated band.
-Small-initialising both factors and halving the first factor's standard deviation brings it back to 13–32
-across seeds.
+The bottleneck is not free at initialisation: two factors multiply, so the first attempt put the exported
+generation-0 prior at logit std 256 — five times beyond the band that had been validated for the full-rank head,
+and the reason the constant-scale bootstrap fix above had to be replaced by the shape calibration. Both factors
+now get plain small initialisation and the export is calibrated, so no head shape carries its own constant.
 
 ## Encoding: back to 1,880 actions
 
