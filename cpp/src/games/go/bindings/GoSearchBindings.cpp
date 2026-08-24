@@ -37,7 +37,7 @@ void bindGoSearch(py::module_ &module, const char *rootName, const char *searchN
                 std::vector<std::pair<int, std::uint32_t>> children;
                 for (const auto &edge : root.tree().root().children) {
                     children.emplace_back(
-                        Contract::Encoding::actionId(edge.action, root.position()), edge.visits);
+                        edge.action_id, edge.visits);
                 }
                 return children;
             });

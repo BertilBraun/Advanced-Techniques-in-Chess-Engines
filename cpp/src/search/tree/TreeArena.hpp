@@ -49,6 +49,13 @@ public:
         return const_cast<Node &>(std::as_const(*this).node(index));
     }
 
+    // Selection, backup and reroot walk indices they just read out of a live edge or parent link,
+    // so the liveness check on that path only costs a branch per node touched.
+    [[nodiscard]] const Node &liveNode(const std::size_t index) const noexcept {
+        return *m_nodes[index];
+    }
+    [[nodiscard]] Node &liveNode(const std::size_t index) noexcept { return *m_nodes[index]; }
+
     [[nodiscard]] const Node &root() const { return node(m_rootIndex); }
     [[nodiscard]] Node &root() { return node(m_rootIndex); }
     [[nodiscard]] std::size_t rootIndex() const noexcept { return m_rootIndex; }
@@ -71,8 +78,8 @@ public:
         if (edge.child_index.has_value()) {
             return *edge.child_index;
         }
-        const Position child = Game::childState(node(parentIndex).position, edge.action);
-        const std::size_t childIndex = allocateNode(child, parentIndex, edgeIndex);
+        Position child = Game::childState(node(parentIndex).position, edge.action);
+        const std::size_t childIndex = allocateNode(std::move(child), parentIndex, edgeIndex);
         Edge &retainedEdge = node(parentIndex).children[edgeIndex];
         Node &childNode = node(childIndex);
         childNode.visits = retainedEdge.visits;
@@ -234,10 +241,10 @@ private:
         const std::size_t slot = m_freeSlots.back();
         m_freeSlots.pop_back();
         m_nodes[slot].emplace(Node{
-            .position = std::move(position),
             .children = {},
             .parent_index = parentIndex,
             .parent_edge_index = parentEdgeIndex,
+            .position = std::move(position),
         });
         ++m_liveNodeCount;
         return slot;

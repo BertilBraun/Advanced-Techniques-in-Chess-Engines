@@ -63,8 +63,9 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
 
     const Square epSquare = position.ep_square();
     out.binaryPlanes[ch++] = canonicalBits(epSquare == SQ_NONE ? 0ULL : square_bb(epSquare));
-    out.binaryPlanes[ch++] = canonicalBits(ALL_SET * (board.repetitionCount() >= 1));
-    out.binaryPlanes[ch++] = canonicalBits(ALL_SET * (board.repetitionCount() >= 2));
+    const int repetitions = board.repetitionCount();
+    out.binaryPlanes[ch++] = canonicalBits(ALL_SET * (repetitions >= 1));
+    out.binaryPlanes[ch++] = canonicalBits(ALL_SET * (repetitions >= 2));
 
     assert(ch == ChessRepresentationDimensions::binaryChannelCount);
 

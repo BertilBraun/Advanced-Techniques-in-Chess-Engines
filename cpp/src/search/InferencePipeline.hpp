@@ -208,7 +208,7 @@ processInferencePosition(const float *policy, const float *outcome,
     }
 
     const std::vector<typename Game::Action> legalActions = Game::legalActions(position);
-    std::vector<std::pair<typename Game::Action, float>> actions;
+    std::vector<ScoredAction<typename Game::Action>> actions;
     actions.reserve(legalActions.size());
     float maximumLegalLogit = -std::numeric_limits<float>::infinity();
     for (const typename Game::Action action : legalActions) {
@@ -222,23 +222,19 @@ processInferencePosition(const float *policy, const float *outcome,
             throw std::runtime_error(
                 "Inference model policy logits must be finite for legal actions");
         }
-        actions.emplace_back(action, logit);
+        actions.push_back({.action = action, .action_id = actionId, .prior = logit});
         maximumLegalLogit = std::max(maximumLegalLogit, logit);
     }
-    std::ranges::sort(actions, {}, [&position](const auto &actionProbability) {
-        return Game::Encoding::actionId(actionProbability.first, position);
-    });
+    std::ranges::sort(actions, {}, &ScoredAction<typename Game::Action>::action_id);
     if (!actions.empty()) {
         float exponentialSum = 0.0F;
-        for (auto &[action, logit] : actions) {
-            static_cast<void>(action);
-            logit = std::exp(logit - maximumLegalLogit);
-            exponentialSum += logit;
+        for (ScoredAction<typename Game::Action> &scored : actions) {
+            scored.prior = std::exp(scored.prior - maximumLegalLogit);
+            exponentialSum += scored.prior;
         }
         assert(std::isfinite(exponentialSum) && exponentialSum > 0.0F);
-        for (auto &[action, probability] : actions) {
-            static_cast<void>(action);
-            probability /= exponentialSum;
+        for (ScoredAction<typename Game::Action> &scored : actions) {
+            scored.prior /= exponentialSum;
         }
     }
     return {

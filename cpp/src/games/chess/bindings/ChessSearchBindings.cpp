@@ -21,12 +21,11 @@ using Search = GameSelfPlaySearch<ChessGame>;
 using InferenceResult = SearchInferenceResult<ChessGame>;
 using EncodedInference = std::pair<std::vector<std::pair<int, float>>, float>;
 
-[[nodiscard]] EncodedInference encodeInference(const Board &board,
-                                               const InferenceResult &inferenceResult) {
+[[nodiscard]] EncodedInference encodeInference(const InferenceResult &inferenceResult) {
     std::vector<std::pair<int, float>> encodedMoves;
     encodedMoves.reserve(inferenceResult.actions.size());
-    for (const auto &[action, score] : inferenceResult.actions) {
-        encodedMoves.emplace_back(ChessGame::Encoding::actionId(action, board), score);
+    for (const ScoredAction<ChessAction> &scored : inferenceResult.actions) {
+        encodedMoves.emplace_back(scored.action_id, scored.prior);
     }
     return {encodedMoves, inferenceResult.value()};
 }
@@ -43,7 +42,7 @@ using EncodedInference = std::pair<std::vector<std::pair<int, float>>, float>;
     std::vector<EncodedInference> encodedResults;
     encodedResults.reserve(boards.size());
     for (const auto index : range(boards.size())) {
-        encodedResults.push_back(encodeInference(boards[index], inferenceResults[index]));
+        encodedResults.push_back(encodeInference(inferenceResults[index]));
     }
     return encodedResults;
 }

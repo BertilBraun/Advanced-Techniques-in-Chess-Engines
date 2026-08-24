@@ -113,7 +113,7 @@ public:
                 m_searchParameters.tree_search.exploration_constant, task.force_root_playouts);
             for (const auto index : range(node.children.size())) {
                 const auto &edge = node.children[index];
-                const int actionId = Game::Encoding::actionId(edge.action, node.position);
+                const int actionId = edge.action_id;
                 if (edge.visits > 0) {
                     result.search_visits.push_back({
                         .action_id = actionId,
@@ -253,6 +253,7 @@ private:
         bool count_root_initialization;
         bool force_root_playouts;
         bool admitted;
+        bool selection_blocked;
         bool staged_fast_search;
         bool completion_recorded;
         bool stopped;
@@ -317,6 +318,7 @@ private:
             .count_root_initialization = request.count_root_initialization,
             .force_root_playouts = request.force_root_playouts,
             .admitted = request.admission != SearchAdmission::WaitingFast,
+            .selection_blocked = false,
             .staged_fast_search = request.admission != SearchAdmission::Immediate,
             .completion_recorded = false,
             .stopped = request.root.visits() >= maximumVisits(request.limit),
@@ -377,8 +379,7 @@ private:
         const std::size_t historyCount =
             limit.leader_stability_window / limit.observation_interval;
         bool stable = task.checkpoints.size() >= historyCount;
-        const int leaderAction =
-            Game::Encoding::actionId(rootNode.children[leader].action, rootNode.position);
+        const int leaderAction = rootNode.children[leader].action_id;
         int mostVisitedAction = -1;
         std::uint32_t mostVisits = 0;
         std::vector<GameSearchVisit> checkpointVisits;
@@ -387,7 +388,7 @@ private:
         }
         for (const auto index : range(policyVisits.size())) {
             const auto &edge = rootNode.children[index];
-            const int actionId = Game::Encoding::actionId(edge.action, rootNode.position);
+            const int actionId = edge.action_id;
             if (mostVisitedAction < 0 || edge.visits > mostVisits ||
                 (edge.visits == mostVisits && actionId < mostVisitedAction)) {
                 mostVisitedAction = actionId;
@@ -507,7 +508,7 @@ private:
         for (const auto offset : range(tasks.size())) {
             const std::size_t index = (m_nextTask + offset) % tasks.size();
             const RootTask &task = tasks[index];
-            if (!task.admitted) {
+            if (!task.admitted || task.selection_blocked) {
                 continue;
             }
             if (!task.root.tree().root().expanded() && task.in_flight != 0) {
@@ -568,6 +569,7 @@ private:
                 leaf = tree.selectAvailableLeaf(m_searchParameters.tree_search,
                                                 task.force_root_playouts);
                 if (!leaf.has_value()) {
+                    task.selection_blocked = true;
                     return false;
                 }
                 if (Game::isTerminal(tree.node(*leaf).position)) {
@@ -608,7 +610,10 @@ private:
                     break;
                 }
                 if (!appendInferenceLeaf(tasks, *taskIndex, writable, leaves)) {
-                    break;
+                    // Only a completing reservation can free a leaf in that tree, so the task is
+                    // skipped rather than ending the fill: one blocked tree used to truncate the
+                    // whole inference batch.
+                    continue;
                 }
             }
         } catch (...) {
@@ -647,6 +652,7 @@ private:
             tree.completeReservation(pendingLeaf.node_index, inference.value());
         }
         --task.in_flight;
+        task.selection_blocked = false;
         if (task.in_flight == 0) {
             updateAdaptiveStop(task);
         }
@@ -691,6 +697,7 @@ private:
             } catch (...) {
             }
             --task.in_flight;
+            task.selection_blocked = false;
         }
     }
 

@@ -15,7 +15,7 @@ std::vector<ChessSearchChild> chessSearchChildren(const ChessSearchRoot &root) {
     for (const GameSearchEdge<ChessAction> &child : rootNode.children) {
         children.push_back({
             .move = child.action.toUci(),
-            .encoded_move = ChessGame::Encoding::actionId(child.action, rootNode.position),
+            .encoded_move = child.action_id,
             .raw_policy = child.raw_prior,
             .policy = child.prior,
             .visits = child.visits,
@@ -32,7 +32,7 @@ ChessSearchRoot rerootChessSearch(ChessSearchRoot root, const std::uint32_t chil
     if (childIndex >= rootNode.children.size()) {
         throw std::out_of_range("Cannot reroot to a missing chess action");
     }
-    root.play(ChessGame::Encoding::actionId(rootNode.children[childIndex].action, root.position()));
+    root.play(rootNode.children[childIndex].action_id);
     return root;
 }
 

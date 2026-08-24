@@ -50,6 +50,7 @@ Board &Board::operator=(const Board &other) {
         m_pos = other.m_pos;
         m_history = other.m_history;
         m_validMoves.reset();
+        m_repetitionCount.reset();
     }
     return *this;
 }
@@ -78,6 +79,7 @@ void Board::makeMove(Move m) {
     m_history =
         std::make_shared<const PositionHistory>(m_pos.repetition_key(), std::move(previous));
     m_validMoves.reset();
+    m_repetitionCount.reset();
     validateHistory();
 }
 
@@ -87,10 +89,14 @@ void Board::setFen(const std::string &fen) {
     m_pos = std::move(position);
     m_history = std::make_shared<const PositionHistory>(m_pos.repetition_key(), nullptr);
     m_validMoves.reset();
+    m_repetitionCount.reset();
     validateHistory();
 }
 
 int Board::repetitionCount() const {
+    if (m_repetitionCount.has_value()) {
+        return *m_repetitionCount;
+    }
     validateHistory();
     int occurrences = 0;
     std::uint16_t inspectedPositions = 0;
@@ -101,6 +107,7 @@ int Board::repetitionCount() const {
             ++occurrences;
         }
     }
+    m_repetitionCount = occurrences;
     return occurrences;
 }
 

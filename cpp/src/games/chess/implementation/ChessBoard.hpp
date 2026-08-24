@@ -102,6 +102,7 @@ private:
     Stockfish::Position m_pos;
     std::shared_ptr<const PositionHistory> m_history;
     mutable std::optional<std::vector<Stockfish::Move>> m_validMoves;
+    mutable std::optional<int> m_repetitionCount;
 
     [[nodiscard]] static constexpr const char *pieceSymbol(Stockfish::PieceType pt,
                                                            Stockfish::Color c);

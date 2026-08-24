@@ -46,6 +46,19 @@ deserializeBinaryPlanes(std::span<const std::int8_t> source) noexcept {
     return planes;
 }
 
+// Byte -> eight little-endian 0/1 bytes, so a packed plane expands with one store per byte.
+inline constexpr std::array<std::uint64_t, 256> EXPANDED_BITS = [] {
+    std::array<std::uint64_t, 256> table{};
+    for (std::size_t byte = 0; byte < table.size(); ++byte) {
+        std::uint64_t expanded = 0;
+        for (std::size_t bit = 0; bit < 8; ++bit) {
+            expanded |= static_cast<std::uint64_t>((byte >> bit) & 1U) << (8 * bit);
+        }
+        table[byte] = expanded;
+    }
+    return table;
+}();
+
 template <std::size_t BoardSize, std::size_t BinaryPlaneCount, std::size_t ScalarPlaneCount>
 struct EncodedPlanes {
     static constexpr std::size_t binaryPlaneCount = BinaryPlaneCount;
@@ -76,9 +89,14 @@ struct EncodedPlanes {
                     static_cast<std::uint8_t>(plane.word(firstPoint / 64) >> (firstPoint % 64));
                 const std::size_t pointsInByte =
                     std::min<std::size_t>(8, BitBoard<BoardSize>::bitCount - firstPoint);
-                for (std::size_t bit = 0; bit < pointsInByte; ++bit) {
-                    destination[offset++] = static_cast<std::int8_t>((byte >> bit) & 1U);
+                // One widened store per byte; the scalar bit loop was a tenth of self-play encoding.
+                const std::uint64_t expanded = EXPANDED_BITS[byte];
+                if (pointsInByte == 8) {
+                    std::memcpy(destination.data() + offset, &expanded, sizeof(expanded));
+                } else {
+                    std::memcpy(destination.data() + offset, &expanded, pointsInByte);
                 }
+                offset += pointsInByte;
             }
         }
         for (const std::int8_t value : scalarPlanes) {

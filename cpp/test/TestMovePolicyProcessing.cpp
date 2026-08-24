@@ -66,8 +66,8 @@ void requireNormalized(const Board &board, const std::vector<float> &policy,
         processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), 0.5F, board);
     float sum = 0.0F;
     int previousActionId = -1;
-    for (const auto &[action, probability] : result.actions) {
-        const int actionId = ChessGame::Encoding::actionId(action, board);
+    for (const auto &[action, actionId, probability] : result.actions) {
+        static_cast<void>(action);
         require(actionId > previousActionId, description + ": actions are not ordered by id");
         require(probability >= 0.0F, description + ": returned a negative probability");
         previousActionId = actionId;
@@ -258,8 +258,9 @@ void testStableLegalOnlySoftmax() {
     require(uniform.actions.size() == board.validMoves().size(),
             "uniform fallback omitted legal actions");
     const float expected = 1.0F / static_cast<float>(uniform.actions.size());
-    for (const auto &[action, probability] : uniform.actions) {
+    for (const auto &[action, actionId, probability] : uniform.actions) {
         static_cast<void>(action);
+        static_cast<void>(actionId);
         require(std::abs(probability - expected) <= scoreTolerance,
                 "legal-only softmax returned a non-uniform probability");
     }
@@ -273,11 +274,10 @@ void testStableLegalOnlySoftmax() {
     const SearchInferenceResult<ChessGame> weighted =
         processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), 0.5F, board);
     require(weighted.actions.size() == board.validMoves().size(), "softmax omitted legal actions");
-    const auto preferred = std::ranges::find_if(weighted.actions, [&](const auto &entry) {
-        return ChessEncoding::actionId(entry.first, board) == preferredAction;
-    });
+    const auto preferred = std::ranges::find_if(
+        weighted.actions, [&](const auto &entry) { return entry.action_id == preferredAction; });
     require(preferred != weighted.actions.end(), "softmax omitted the preferred legal action");
-    require(std::abs(preferred->second - 2.0F / 21.0F) <= scoreTolerance,
+    require(std::abs(preferred->prior - 2.0F / 21.0F) <= scoreTolerance,
             "softmax did not preserve the requested legal-logit ratio");
 }
 
@@ -295,11 +295,12 @@ void testGoPointPassLegalOnlySoftmax() {
     const SearchInferenceResult<Go7Game> result =
         processInferencePosition<Go7Game>(policy.data(), validOutcome.data(), 0.5F, occupied);
     require(result.actions.size() == 49, "Go legal-only softmax returned the wrong action count");
-    require(result.actions.back().first.isPass(), "Go pass was not the final point-pass action");
-    require(std::abs(result.actions.back().second - 1.0F / 17.0F) <= scoreTolerance,
+    require(result.actions.back().action.isPass(), "Go pass was not the final point-pass action");
+    require(std::abs(result.actions.back().prior - 1.0F / 17.0F) <= scoreTolerance,
             "Go legal-only softmax did not preserve the pass-logit ratio");
     float probabilitySum = 0.0F;
-    for (const auto &[action, probability] : result.actions) {
+    for (const auto &[action, actionId, probability] : result.actions) {
+        static_cast<void>(actionId);
         require(action.id != 0, "Go legal-only softmax returned an occupied point");
         probabilitySum += probability;
     }

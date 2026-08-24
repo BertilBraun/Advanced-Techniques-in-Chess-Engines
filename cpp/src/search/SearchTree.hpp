@@ -10,6 +10,7 @@
 #include "util/py.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -29,6 +30,9 @@ public:
     using Action = typename Game::Action;
     using Node = GameSearchNode<Game>;
     using Edge = GameSearchEdge<Action>;
+
+    // Chess tops out at 218 legal moves and Go 9x9 at 82; the selection bitmask is sized from this.
+    static constexpr std::size_t maximumBranchingFactor = 256;
 
     GameSearchTree(Position rootPosition, const std::size_t initialCapacity,
                    const std::size_t maximumCapacity = 0, const float valueDiscountPerPly = 1.0F)
@@ -99,25 +103,26 @@ public:
         selected.children.reserve(inferenceResult.actions.size());
         selected.network_outcome = inferenceResult.outcome;
         selected.search_correction = inferenceResult.search_correction;
-        for (const auto &[action, prior] : inferenceResult.actions) {
+        for (const ScoredAction<Action> &scored : inferenceResult.actions) {
             selected.children.push_back({
-                .action = action,
-                .raw_prior = prior,
-                .prior = prior,
+                .action = scored.action,
+                .action_id = scored.action_id,
+                .raw_prior = scored.prior,
+                .prior = scored.prior,
             });
         }
     }
 
     void backPropagate(std::size_t nodeIndex, float value) {
         while (true) {
-            Node &selected = node(nodeIndex);
+            Node &selected = m_arena.liveNode(nodeIndex);
             ++selected.visits;
             selected.value_sum += value;
             if (!selected.parent_index.has_value()) {
                 break;
             }
-            Node &parent = node(*selected.parent_index);
-            Edge &incoming = parent.children.at(*selected.parent_edge_index);
+            Node &parent = m_arena.liveNode(*selected.parent_index);
+            Edge &incoming = parent.children[*selected.parent_edge_index];
             ++incoming.visits;
             incoming.value_sum += value;
             value = -value * m_valueDiscountPerPly;
@@ -170,8 +175,7 @@ public:
     [[nodiscard]] std::size_t actionIdToEdgeIndex(const int actionId) const {
         const Node &selected = root();
         for (const auto index : range(selected.children.size())) {
-            if (Game::Encoding::actionId(selected.children[index].action, selected.position) ==
-                actionId) {
+            if (selected.children[index].action_id == actionId) {
                 return index;
             }
         }
@@ -233,24 +237,29 @@ private:
 
     [[nodiscard]] std::optional<std::size_t>
     selectAvailableLeaf(const std::size_t nodeIndex, const TreeSearchParameters &parameters) {
-        if (!node(nodeIndex).expanded()) {
-            return node(nodeIndex).inference_pending ? std::nullopt
-                                                     : std::optional<std::size_t>(nodeIndex);
+        const Node &selected = m_arena.liveNode(nodeIndex);
+        if (!selected.expanded()) {
+            return selected.inference_pending ? std::nullopt
+                                              : std::optional<std::size_t>(nodeIndex);
         }
-        const std::size_t edgeCount = node(nodeIndex).children.size();
-        std::vector<bool> attempted(edgeCount, false);
+        const std::size_t edgeCount = selected.children.size();
+        if (edgeCount > maximumBranchingFactor) {
+            throw std::logic_error("Game search node exceeds the supported branching factor");
+        }
+        // A stack bitmask: the descent allocated one std::vector<bool> per node per simulation.
+        std::array<std::uint64_t, maximumBranchingFactor / 64> attempted{};
         for (const auto attempt : range(edgeCount)) {
             static_cast<void>(attempt);
+            const Node &parent = m_arena.liveNode(nodeIndex);
+            const float parentScale = std::sqrt(static_cast<float>(std::max(1U, parent.visits)));
             float bestScore = -std::numeric_limits<float>::infinity();
             std::size_t bestIndex = 0;
-            const float parentScale =
-                std::sqrt(static_cast<float>(std::max(1U, node(nodeIndex).visits)));
             for (const auto index : range(edgeCount)) {
-                if (attempted[index]) {
+                if ((attempted[index / 64] >> (index % 64) & 1U) != 0U) {
                     continue;
                 }
-                const Edge &edge = node(nodeIndex).children[index];
-                const float score = edgeValueForParent(node(nodeIndex), edge, parameters) +
+                const Edge &edge = parent.children[index];
+                const float score = edgeValueForParent(parent, edge, parameters) +
                                     parameters.exploration_constant * edge.prior * parentScale /
                                         (1.0F + edge.visits);
                 if (score > bestScore) {
@@ -258,7 +267,7 @@ private:
                     bestIndex = index;
                 }
             }
-            attempted[bestIndex] = true;
+            attempted[bestIndex / 64] |= std::uint64_t{1} << (bestIndex % 64);
             const std::optional<std::size_t> leaf =
                 selectAvailableLeaf(m_arena.materializeChild(nodeIndex, bestIndex), parameters);
             if (leaf.has_value()) {
@@ -283,7 +292,7 @@ private:
     void updatePath(std::size_t nodeIndex, const int visitDelta, float value,
                     const float virtualLossDelta) {
         while (true) {
-            Node &selected = node(nodeIndex);
+            Node &selected = m_arena.liveNode(nodeIndex);
             selected.visits =
                 static_cast<std::uint32_t>(static_cast<std::int64_t>(selected.visits) + visitDelta);
             selected.value_sum += value;
@@ -291,7 +300,8 @@ private:
             if (!selected.parent_index.has_value()) {
                 break;
             }
-            Edge &incoming = node(*selected.parent_index).children.at(*selected.parent_edge_index);
+            Edge &incoming =
+                m_arena.liveNode(*selected.parent_index).children[*selected.parent_edge_index];
             incoming.visits =
                 static_cast<std::uint32_t>(static_cast<std::int64_t>(incoming.visits) + visitDelta);
             incoming.value_sum += value;
@@ -303,13 +313,14 @@ private:
 
     void completeReservedPath(std::size_t nodeIndex, float value) {
         while (true) {
-            Node &selected = node(nodeIndex);
+            Node &selected = m_arena.liveNode(nodeIndex);
             selected.value_sum += value;
             selected.virtual_loss -= 1.0F;
             if (!selected.parent_index.has_value()) {
                 break;
             }
-            Edge &incoming = node(*selected.parent_index).children.at(*selected.parent_edge_index);
+            Edge &incoming =
+                m_arena.liveNode(*selected.parent_index).children[*selected.parent_edge_index];
             incoming.value_sum += value;
             incoming.virtual_loss -= 1.0F;
             value = -value * m_valueDiscountPerPly;

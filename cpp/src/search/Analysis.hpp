@@ -85,7 +85,7 @@ public:
         rejectTerminal(root);
         Stopwatch analysisTimer;
         const SearchInferenceResult<Game> inference = m_search.evaluate({root.position()}).front();
-        std::vector<AnalysisCandidate> candidates = policyCandidates(inference, root.position());
+        std::vector<AnalysisCandidate> candidates = policyCandidates(inference);
         if (candidates.empty()) {
             throw std::runtime_error("Inference returned no legal candidates");
         }
@@ -130,13 +130,13 @@ private:
     }
 
     [[nodiscard]] static std::vector<AnalysisCandidate>
-    policyCandidates(const SearchInferenceResult<Game> &inference, const Position &position) {
+    policyCandidates(const SearchInferenceResult<Game> &inference) {
         std::vector<AnalysisCandidate> candidates;
         candidates.reserve(inference.actions.size());
-        for (const auto &[action, prior] : inference.actions) {
+        for (const ScoredAction<typename Game::Action> &scored : inference.actions) {
             candidates.push_back({
-                .action_id = Game::Encoding::actionId(action, position),
-                .policy_prior = prior,
+                .action_id = scored.action_id,
+                .policy_prior = scored.prior,
                 .visits = 0,
                 .visit_share = 0.0F,
                 .mean_value = std::nullopt,
@@ -166,7 +166,7 @@ private:
                     ? std::nullopt
                     : std::optional<float>{-child.value_sum / static_cast<float>(child.visits)};
             candidates.push_back({
-                .action_id = Game::Encoding::actionId(child.action, root.position),
+                .action_id = child.action_id,
                 .policy_prior = child.raw_prior,
                 .visits = child.visits,
                 .visit_share = totalChildVisits == 0 ? 0.0F
@@ -197,20 +197,19 @@ private:
                 break;
             }
             const auto best = std::ranges::max_element(
-                node.children, [&node](const Edge &left, const Edge &right) {
+                node.children, [](const Edge &left, const Edge &right) {
                     if (left.visits != right.visits) {
                         return left.visits < right.visits;
                     }
                     if (left.prior != right.prior) {
                         return left.prior < right.prior;
                     }
-                    return Game::Encoding::actionId(left.action, node.position) >
-                           Game::Encoding::actionId(right.action, node.position);
+                    return left.action_id > right.action_id;
                 });
             if (best->visits == 0 || !best->child_index.has_value()) {
                 break;
             }
-            variation.push_back(Game::Encoding::actionId(best->action, node.position));
+            variation.push_back(best->action_id);
             nodeIndex = *best->child_index;
         }
         return variation;

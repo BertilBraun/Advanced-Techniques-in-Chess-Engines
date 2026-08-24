@@ -24,10 +24,17 @@ struct WdlPrediction {
 
 using OutcomeProbabilities = WdlPrediction;
 
+// The action id is carried from inference so the search never recomputes it per edge visit.
+template <typename Action> struct ScoredAction {
+    Action action;
+    int action_id;
+    float prior;
+};
+
 template <SearchGame Game> struct SearchInferenceResult {
     using Action = typename Game::Action;
 
-    std::vector<std::pair<Action, float>> actions;
+    std::vector<ScoredAction<Action>> actions;
     WdlPrediction outcome;
     float search_correction;
 
