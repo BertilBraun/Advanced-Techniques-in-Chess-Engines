@@ -80,3 +80,31 @@ def test_non_game_inbox_entries_are_left_alone(tmp_path: Path) -> None:
 
     assert InboxDispatcher(inbox, workers).dispatch_once() == 1
     assert [path.name for path in inbox.iterdir()] == ['.partial.tmp']
+
+
+def _write_inbox_games(inbox: Path, count: int) -> None:
+    for index in range(count):
+        (inbox / f'worker-0-process-abc-game-{index:020d}.json').write_text('{}', encoding='utf-8')
+
+
+def test_dispatch_levels_worker_depth_instead_of_handing_out_equal_shares(tmp_path: Path) -> None:
+    inbox, workers = _inbox_and_workers(tmp_path, 4)
+    for backlog_index in range(9):
+        name = worker_source_file_name(backlog_index, f'worker-0-process-abc-game-{backlog_index:020d}.json')
+        (workers[0] / name).write_text('{}', encoding='utf-8')
+    _write_inbox_games(inbox, 12)
+
+    dispatcher = InboxDispatcher(inbox, workers)
+    assert dispatcher.dispatch_once() == 12
+
+    # A blind round robin would have handed the already-deep worker three more and left it at 12.
+    assert [len(worker_source_file_names(worker)) for worker in workers] == [9, 4, 4, 4]
+
+
+def test_dispatch_spreads_evenly_when_every_worker_starts_empty(tmp_path: Path) -> None:
+    inbox, workers = _inbox_and_workers(tmp_path, 4)
+    _write_inbox_games(inbox, 8)
+
+    assert InboxDispatcher(inbox, workers).dispatch_once() == 8
+
+    assert [len(worker_source_file_names(worker)) for worker in workers] == [2, 2, 2, 2]

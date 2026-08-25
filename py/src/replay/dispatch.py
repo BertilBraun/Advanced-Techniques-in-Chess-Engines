@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 import os
 from itertools import islice
 from pathlib import Path
@@ -52,7 +53,6 @@ class InboxDispatcher:
         self.worker_paths = worker_paths
         self.rename_cap = rename_cap
         self._counters = [next_worker_counter(path) for path in worker_paths]
-        self._next_worker_index = 0
         self.dispatched_games = 0
 
     def dispatch_once(self) -> int:
@@ -61,18 +61,23 @@ class InboxDispatcher:
             entries = os.scandir(self.inbox_path)
         except FileNotFoundError:
             return 0
+        # One listing per worker per pass. A blind round robin hands a stalled worker an equal share
+        # every pass regardless of what it still owes, so its backlog never recovers.
+        depths = [(len(worker_source_file_names(path)), index) for index, path in enumerate(self.worker_paths)]
+        heapq.heapify(depths)
         with entries:
             # islice over the lazy scandir iterator keeps a pass O(rename_cap), never O(inbox depth).
             candidates = (entry for entry in entries if entry.name.endswith(COMPLETED_GAME_SUFFIX))
             for entry in islice(candidates, self.rename_cap):
-                if self._dispatch_entry(entry.name):
+                depth, index = heapq.heappop(depths)
+                if self._dispatch_entry(entry.name, index):
                     dispatched += 1
+                    depth += 1
+                heapq.heappush(depths, (depth, index))
         self.dispatched_games += dispatched
         return dispatched
 
-    def _dispatch_entry(self, file_name: str) -> bool:
-        index = self._next_worker_index
-        self._next_worker_index = (index + 1) % len(self.worker_paths)
+    def _dispatch_entry(self, file_name: str, index: int) -> bool:
         target = self.worker_paths[index] / worker_source_file_name(self._counters[index], file_name)
         try:
             os.rename(self.inbox_path / file_name, target)
