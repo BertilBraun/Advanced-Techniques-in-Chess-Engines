@@ -36,3 +36,30 @@ private:
     std::uint64_t &m_accumulator;
     Stopwatch m_stopwatch;
 };
+
+#ifndef ALPHAZERO_SEARCH_PHASE_TIMING
+#define ALPHAZERO_SEARCH_PHASE_TIMING 0
+#endif
+
+// Two clock reads on every visit is a measurable tax on the search loop, so per-simulation phase
+// timing compiles away unless a profiling build defines ALPHAZERO_SEARCH_PHASE_TIMING.
+class ScopedSearchPhaseTimer {
+public:
+#if ALPHAZERO_SEARCH_PHASE_TIMING
+    explicit ScopedSearchPhaseTimer(std::uint64_t &accumulator) noexcept
+        : m_accumulator(accumulator) {}
+
+    ~ScopedSearchPhaseTimer() { m_accumulator += m_stopwatch.elapsedNanoseconds(); }
+#else
+    explicit ScopedSearchPhaseTimer(std::uint64_t &) noexcept {}
+#endif
+
+    ScopedSearchPhaseTimer(const ScopedSearchPhaseTimer &) = delete;
+    ScopedSearchPhaseTimer &operator=(const ScopedSearchPhaseTimer &) = delete;
+
+#if ALPHAZERO_SEARCH_PHASE_TIMING
+private:
+    std::uint64_t &m_accumulator;
+    Stopwatch m_stopwatch;
+#endif
+};

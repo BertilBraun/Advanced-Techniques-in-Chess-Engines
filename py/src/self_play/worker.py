@@ -431,15 +431,6 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
 
     def _log_search_thread_split(self, inference: InferenceStatistics) -> None:
         assert self.model_generation is not None
-        for name, nanoseconds in (
-            ('tree_selection', inference.treeSelectionNanoseconds),
-            ('board_encoding', inference.boardEncodingNanoseconds),
-            ('result_processing', inference.resultProcessingNanoseconds),
-            ('tree_backup', inference.treeBackupNanoseconds),
-            ('inference_wait', inference.treeOwnerWaitNanoseconds),
-            ('inference_submission', inference.inferenceNanoseconds),
-        ):
-            log_scalar(f'search_cpu_seconds/{name}', nanoseconds / 1e9, self.model_generation)
         log_scalar('inference/worker_utilization', inference.workerUtilization, self.model_generation)
 
     def _log_restart_statistics(self) -> None:

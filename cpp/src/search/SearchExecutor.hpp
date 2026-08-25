@@ -555,7 +555,7 @@ private:
         bool rootInitialization = false;
         std::optional<std::size_t> leaf;
         {
-            ScopedNanosecondTimer selectionTimer(m_statistics.treeSelectionNanoseconds);
+            ScopedSearchPhaseTimer selectionTimer(m_statistics.treeSelectionNanoseconds);
             if (!tree.root().expanded()) {
                 if (Game::isTerminal(tree.rootPosition())) {
                     tree.backPropagate(tree.rootIndex(), Game::terminalValue(tree.rootPosition()));
@@ -584,7 +584,7 @@ private:
         }
         constexpr std::size_t encodedSize = Game::Encoding::inferenceDimensions().encodedSize();
         {
-            ScopedNanosecondTimer encodingTimer(m_statistics.boardEncodingNanoseconds);
+            ScopedSearchPhaseTimer encodingTimer(m_statistics.boardEncodingNanoseconds);
             Game::Encoding::encodeInputInto(tree.position(*leaf),
                                             writable.data + leaves.size() * encodedSize);
         }
@@ -637,7 +637,7 @@ private:
     void completeLeaf(RootTask &task, const PendingLeaf &pendingLeaf,
                       const SearchInferenceResult<Game> &inference) {
         Tree &tree = task.root.tree();
-        ScopedNanosecondTimer backupTimer(m_statistics.treeBackupNanoseconds);
+        ScopedSearchPhaseTimer backupTimer(m_statistics.treeBackupNanoseconds);
         tree.expand(pendingLeaf.node_index, inference);
         if (pendingLeaf.root_initialization) {
             tree.node(pendingLeaf.node_index).inference_pending = false;
