@@ -31,6 +31,30 @@ std::filesystem::path createTestModel(const bool assertNonNegativeInput = true) 
     return path;
 }
 
+// A refresh that keeps the captured graphs has to carry the new weights in through the frozen
+// graph constants, so the refresh tests need a model whose output actually depends on a parameter.
+std::filesystem::path createWeightedTestModel(const float winScale) {
+    torch::jit::script::Module model("inference_pipeline_weighted_test");
+    model.register_parameter("win_scale", torch::full({1}, winScale), false);
+    model.define(R"JIT(
+        def forward(self, boards):
+            batch_size = boards.size(0)
+            policies = torch.zeros((batch_size, )JIT" +
+                 std::to_string(ChessEncoding::actionCount) + R"JIT(), device=boards.device)
+            wins = torch.clamp(boards[:, 0, 0, 0].float() * self.win_scale, 0.0, 1.0)
+            draws = torch.zeros_like(wins)
+            outcomes = torch.stack((wins, draws, 1.0 - wins), 1)
+            search_correction = torch.full((batch_size, 1), 0.5, device=boards.device)
+            return policies, outcomes, search_correction
+    )JIT");
+    const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() /
+        ("inference-pipeline-weighted-test-" + std::to_string(uniqueSuffix) + ".jit.pt");
+    model.save(path.string());
+    return path;
+}
+
 void require(const bool condition, const std::string &message) {
     if (!condition) {
         throw std::runtime_error(message);
@@ -111,6 +135,36 @@ void testRepeatedModelRefresh(const std::filesystem::path &modelPath, const Infe
     }
 }
 
+void testRefreshedWeightsAreServed(const std::filesystem::path &servingModelPath,
+                                   const std::filesystem::path &silencedModelPath,
+                                   const InferenceDevice device, const bool dedicatedCudaStream) {
+    InferenceRunner runner(servingModelPath.string(), device, 0, 4, dedicatedCudaStream,
+                           ChessGame::Encoding::inferenceDimensions());
+    torch::Tensor input = runner.createInputBuffer();
+    input.fill_(1);
+    InferenceOutput output = runner.createOutputBuffer();
+    runner.forwardInto(input, 3, output);
+    require(output.outcomes[0][0].item<float>() == 1.0F,
+            "runner did not serve the initial weights");
+
+#ifdef USE_CUDA
+    const size_t captures = runner.graphCaptureCount();
+#endif
+    runner.commitModelRefresh(runner.prepareModelRefresh(silencedModelPath.string()));
+    runner.forwardInto(input, 3, output);
+    require(output.outcomes[0][0].item<float>() == 0.0F,
+            "model refresh did not change the weights the runner serves");
+
+    runner.commitModelRefresh(runner.prepareModelRefresh(servingModelPath.string()));
+    runner.forwardInto(input, 3, output);
+    require(output.outcomes[0][0].item<float>() == 1.0F,
+            "model refresh did not restore the original weights");
+#ifdef USE_CUDA
+    require(!runner.usesCuda() || runner.graphCaptureCount() == captures,
+            "model refresh recaptured the inference graphs instead of replacing their weights");
+#endif
+}
+
 void testFailureReleasesSlot(const std::filesystem::path &modelPath) {
     InferencePipeline pipeline(modelPath.string(), InferenceDevice::Cpu, 0, 2, 2, false,
                                ChessGame::Encoding::inferenceDimensions());
@@ -164,6 +218,8 @@ void testDisabledGraphsRefreshWithoutPool(const std::filesystem::path &modelPath
 int runInferencePipelineTests() {
     const std::filesystem::path modelPath = createTestModel();
     const std::filesystem::path capturableModelPath = createTestModel(false);
+    const std::filesystem::path servingModelPath = createWeightedTestModel(1.0F);
+    const std::filesystem::path silencedModelPath = createWeightedTestModel(0.0F);
     try {
         InferenceRunner runner(modelPath.string(), InferenceDevice::Cpu, 0, 4, false,
                                ChessGame::Encoding::inferenceDimensions());
@@ -188,19 +244,27 @@ int runInferencePipelineTests() {
         testTwoOutstandingBatches(modelPath, InferenceDevice::Cpu, false);
         testFailureReleasesSlot(modelPath);
         testRepeatedModelRefresh(capturableModelPath, InferenceDevice::Cpu, false);
+        testRefreshedWeightsAreServed(servingModelPath, silencedModelPath, InferenceDevice::Cpu,
+                                      false);
 #ifdef USE_CUDA
         if (torch::cuda::is_available()) {
             testTwoOutstandingBatches(modelPath, InferenceDevice::Cuda, true);
             testRepeatedModelRefresh(capturableModelPath, InferenceDevice::Cuda, true);
+            testRefreshedWeightsAreServed(servingModelPath, silencedModelPath,
+                                          InferenceDevice::Cuda, true);
             testDisabledGraphsRefreshWithoutPool(capturableModelPath);
         }
 #endif
     } catch (...) {
         std::filesystem::remove(modelPath);
         std::filesystem::remove(capturableModelPath);
+        std::filesystem::remove(servingModelPath);
+        std::filesystem::remove(silencedModelPath);
         throw;
     }
     std::filesystem::remove(modelPath);
     std::filesystem::remove(capturableModelPath);
+    std::filesystem::remove(servingModelPath);
+    std::filesystem::remove(silencedModelPath);
     return 0;
 }

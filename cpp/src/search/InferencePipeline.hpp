@@ -98,6 +98,9 @@ public:
         return m_graphPool;
     }
     [[nodiscard]] size_t capturedGraphCount() const noexcept { return m_batchGraphs.size(); }
+    // A refresh that recaptures strands device-side JIT code, so the count staying put is the
+    // property the refresh tests assert.
+    [[nodiscard]] size_t graphCaptureCount() const noexcept { return m_graphCaptureCount; }
 #endif
 
 private:
@@ -111,6 +114,9 @@ private:
     void copyStagedOutput(size_t batchSize, InferenceOutput &output);
     void captureBatchGraphs();
     void captureBatchGraphsSerialized();
+#ifdef USE_CUDA
+    [[nodiscard]] bool adoptWeightsInPlace(const torch::jit::script::Module &updatedModel) noexcept;
+#endif
     void releaseBatchGraphs() noexcept;
     [[nodiscard]] size_t capturedBatchSize(size_t batchSize) const noexcept;
     void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize,
@@ -137,6 +143,7 @@ private:
     // The private memory pool the graphs were captured into. It exists only while a graph still
     // references it, so it is held for the runner's lifetime and every recapture reuses its blocks.
     std::optional<at::cuda::MempoolId_t> m_graphPool;
+    size_t m_graphCaptureCount = 0;
 #endif
 };
 

@@ -5,6 +5,7 @@
 
 #include <ATen/Context.h>
 #include <torch/csrc/jit/api/module.h>
+#include <torch/csrc/jit/ir/ir.h>
 
 #include <cstdlib>
 #include <iostream>
@@ -100,6 +101,45 @@ prepareInferenceModelUpdate(const std::vector<ModelTensorSignature> &parameterSi
         throw std::invalid_argument("Updated inference model returned invalid output");
     }
     return updatedModel;
+}
+
+void collectConstantTensors(const torch::jit::Block &block, std::vector<torch::Tensor> &tensors) {
+    for (const torch::jit::Node *node : block.nodes()) {
+        if (node->kind() == torch::jit::prim::Constant &&
+            node->hasAttribute(torch::jit::attr::value) &&
+            node->kindOf(torch::jit::attr::value) == torch::jit::AttributeKind::t) {
+            tensors.push_back(node->t(torch::jit::attr::value));
+        }
+        for (const torch::jit::Block *nested : node->blocks()) {
+            collectConstantTensors(*nested, tensors);
+        }
+    }
+}
+
+// Freezing turns every weight into a graph constant, and a captured graph launches its kernels
+// against those constants' addresses; the addresses are the whole reason the weights can be
+// replaced without recapturing.
+[[nodiscard]] std::vector<torch::Tensor>
+frozenConstantTensors(const torch::jit::script::Module &module) {
+    std::vector<torch::Tensor> tensors;
+    collectConstantTensors(*module.get_method("forward").graph()->block(), tensors);
+    return tensors;
+}
+
+[[nodiscard]] bool interchangeableConstants(const std::vector<torch::Tensor> &current,
+                                            const std::vector<torch::Tensor> &updated) {
+    if (current.empty() || current.size() != updated.size()) {
+        return false;
+    }
+    for (const auto index : range(current.size())) {
+        if (current[index].sizes() != updated[index].sizes() ||
+            current[index].strides() != updated[index].strides() ||
+            current[index].dtype() != updated[index].dtype() ||
+            current[index].device() != updated[index].device()) {
+            return false;
+        }
+    }
+    return true;
 }
 
 torch::Device resolveDevice(const InferenceDevice requestedDevice, const int deviceId) {
@@ -395,6 +435,7 @@ void InferenceRunner::captureBatchGraphsSerialized() {
         m_cudaStream->synchronize();
         m_batchGraphs.swap(replacement);
         m_graphPool = pool;
+        ++m_graphCaptureCount;
         // The superseded graphs share their pool blocks with the replacements now, so they can
         // never be replayed again and are dropped while the replay lock is still held.
         replacement.clear();
@@ -530,6 +571,30 @@ PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &m
                                        tensorSize(m_dimensions.outcomes));
 }
 
+#ifdef USE_CUDA
+bool InferenceRunner::adoptWeightsInPlace(const torch::jit::script::Module &updatedModel) noexcept {
+    try {
+        const std::vector<torch::Tensor> current = frozenConstantTensors(*m_model);
+        const std::vector<torch::Tensor> updated = frozenConstantTensors(updatedModel);
+        if (!interchangeableConstants(current, updated)) {
+            return false;
+        }
+        const c10::cuda::CUDAGuard deviceGuard(m_device);
+        const at::cuda::CUDAStreamGuard streamGuard(*m_cudaStream);
+        const torch::InferenceMode inferenceMode;
+        for (const auto index : range(current.size())) {
+            current[index].copy_(updated[index]);
+        }
+        m_cudaStream->synchronize();
+        return true;
+    } catch (const std::exception &failure) {
+        std::cerr << "In-place inference weight refresh unavailable: " << failure.what()
+                  << std::endl;
+        return false;
+    }
+}
+#endif
+
 void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
     assert(m_model != nullptr);
     assert(updatedModel != nullptr);
@@ -537,6 +602,13 @@ void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) no
     // Swap and recapture under the replay lock: the graphs that still hold the private pool replay
     // the previous weights, so nothing may replay them between the swap and their replacement.
     const std::lock_guard<std::mutex> serialized(graphSerializationMutex());
+    // Recapturing is what leaks: every fresh module is a fresh TorchScript executor, and warming it
+    // at each captured shape makes the JIT compile a specialisation per shape whose device code
+    // the process never gets back. Overwriting the weights the live graphs already point at keeps
+    // both the graphs and the executor, so nothing is compiled and nothing is stranded.
+    if (!m_batchGraphs.empty() && adoptWeightsInPlace(*updatedModel)) {
+        return;
+    }
     m_model.swap(updatedModel);
     captureBatchGraphsSerialized();
 #else
