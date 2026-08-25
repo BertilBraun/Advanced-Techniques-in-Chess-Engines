@@ -352,11 +352,18 @@ chess:
         kind: staged
         stages:
           - {start_generation: 0, value: 150}
-          - {start_generation: 50, value: 160}
-          - {start_generation: 80, value: 180}
-          - {start_generation: 110, value: 200}
-          - {start_generation: 140, value: 250}
-    force_fast_search_after_ply: 200
+          - {start_generation: 20, value: 160}
+          - {start_generation: 40, value: 180}
+          - {start_generation: 60, value: 200}
+          - {start_generation: 100, value: 250}
+    force_fast_search_after_ply:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 110}
+        - {start_generation: 20, value: 120}
+        - {start_generation: 40, value: 140}
+        - {start_generation: 60, value: 160}
+        - {start_generation: 100, value: 200}
     starting_temperature: 1.3
     final_temperature: 0.1
     primary_sample_weight: 1.0
