@@ -32,7 +32,10 @@ cmake --build .\cpp\build --parallel
 On a fresh compute node, [`deployment/setup_remote.sh`](../deployment/setup_remote.sh) performs the locked install
 and Release build before starting the supplied runner command.
 
-The ordinary build copies `AlphaZeroCpp.so` into `py/` and generates type stubs in the build tree. Production
+The ordinary build copies `AlphaZeroCpp.so` into `py/`, regenerates `py/AlphaZeroCpp.pyi` from the bindings and
+restyles it with `ruff check --fix` and `ruff format`, so a rebuild of unchanged bindings leaves the checkout clean
+and `deployment/run_control.sh` can start. This needs `ruff` in the build interpreter's environment (the `dev`
+dependency group); configuration fails with a clear message if it is missing. Production
 inference loads the trimmed TorchScript policy/WDL artifact published by the Python checkpoint writer.
 
 ## Validation

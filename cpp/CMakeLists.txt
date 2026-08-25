@@ -270,6 +270,19 @@ set_target_properties(AlphaZeroCpp PROPERTIES
 set(PYTHON_MODULE_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../py")
 
 if (NOT CMAKE_BUILD_TYPE STREQUAL "CompileCheck")
+    # The stub is restyled after generation, so a rebuild leaves the checkout clean and run_control can start.
+    execute_process(
+            COMMAND ${Python3_EXECUTABLE} -m ruff --version
+            RESULT_VARIABLE ruff_probe_result
+            OUTPUT_QUIET
+            ERROR_QUIET
+    )
+    if (NOT ruff_probe_result EQUAL 0)
+        message(FATAL_ERROR
+                "ruff is unavailable to ${Python3_EXECUTABLE}; the generated stub cannot be restyled. "
+                "Install the dev dependency group (uv sync) or configure with -DCMAKE_BUILD_TYPE=CompileCheck.")
+    endif ()
+
     add_custom_command(TARGET AlphaZeroCpp POST_BUILD
             COMMENT "Copying AlphaZeroCpp.so and generating stubs..."
 
@@ -287,6 +300,12 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "CompileCheck")
             # The committed stub IS the generated stub: hand edits drift from the bindings.
             COMMAND ${CMAKE_COMMAND} -E copy
             ${CMAKE_CURRENT_BINARY_DIR}/stubs/AlphaZeroCpp.pyi ${PYTHON_MODULE_OUTPUT_DIR}/AlphaZeroCpp.pyi
+
+            # Restyle in place so regeneration is a no-op against the committed copy.
+            COMMAND ${Python3_EXECUTABLE} -m ruff check --fix --quiet
+            ${PYTHON_MODULE_OUTPUT_DIR}/AlphaZeroCpp.pyi
+            COMMAND ${Python3_EXECUTABLE} -m ruff format --quiet
+            ${PYTHON_MODULE_OUTPUT_DIR}/AlphaZeroCpp.pyi
     )
 endif ()
 
