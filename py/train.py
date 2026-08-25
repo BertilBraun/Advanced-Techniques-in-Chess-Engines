@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import os
 import random
 import signal
@@ -25,6 +26,10 @@ def parse_arguments() -> argparse.Namespace:
 
 
 if __name__ == '__main__':
+    if hasattr(signal, 'SIGUSR1'):
+        # A wedged run gives no stack otherwise: the rented container has no CAP_SYS_PTRACE, so py-spy
+        # cannot attach.
+        faulthandler.register(signal.SIGUSR1, all_threads=True)
     command_line_arguments = parse_arguments()
     import torch.multiprocessing as mp
 
