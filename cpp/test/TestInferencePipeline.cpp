@@ -3,12 +3,18 @@
 #include "search/InferencePipeline.hpp"
 
 namespace {
-std::filesystem::path createTestModel() {
+// The assertion reads a tensor back on the host, which is exactly what a stream capture forbids, so
+// the graph tests need a model without it.
+std::filesystem::path createTestModel(const bool assertNonNegativeInput = true) {
     torch::jit::script::Module model("inference_pipeline_test");
     model.define(R"JIT(
         def forward(self, boards):
-            batch_size = boards.size(0)
-            torch._assert(torch.all(boards >= 0), "negative test input")
+            batch_size = boards.size(0))JIT" +
+                 std::string(assertNonNegativeInput
+                                 ? R"JIT(
+            torch._assert(torch.all(boards >= 0), "negative test input"))JIT"
+                                 : "") +
+                 R"JIT(
             policies = torch.zeros((batch_size, )JIT" +
                  std::to_string(ChessEncoding::actionCount) + R"JIT(), device=boards.device)
             wins = torch.clamp(boards[:, 0, 0, 0].float(), 0.0, 1.0)
@@ -73,6 +79,38 @@ void testTwoOutstandingBatches(const std::filesystem::path &modelPath, const Inf
     pipeline.discardWritableBatch(reused.slotIndex);
 }
 
+constexpr size_t refreshCount = 4;
+
+void testRepeatedModelRefresh(const std::filesystem::path &modelPath, const InferenceDevice device,
+                              const bool dedicatedCudaStream) {
+    InferenceRunner runner(modelPath.string(), device, 0, 4, dedicatedCudaStream,
+                           ChessGame::Encoding::inferenceDimensions());
+    torch::Tensor input = runner.createInputBuffer();
+    InferenceOutput output = runner.createOutputBuffer();
+#ifdef USE_CUDA
+    const std::optional<at::cuda::MempoolId_t> capturePool = runner.graphPool();
+    const size_t capturedGraphs = runner.capturedGraphCount();
+    require(!runner.usesCuda() || capturedGraphs > 0,
+            "runner captured no graphs for a capturable model");
+#endif
+    for (const auto refresh : range(refreshCount)) {
+        static_cast<void>(refresh);
+        runner.commitModelRefresh(runner.prepareModelRefresh(modelPath.string()));
+        input.fill_(1);
+        runner.forwardInto(input, 3, output);
+        require(output.outcomes[0][0].item<float>() == 1.0F,
+                "runner did not serve the refreshed model");
+#ifdef USE_CUDA
+        // The refreshed graphs must land in the pool the first capture created; a second pool is
+        // memory this process never gets back.
+        require(runner.graphPool() == capturePool,
+                "model refresh allocated an additional CUDA graph memory pool");
+        require(runner.capturedGraphCount() == capturedGraphs,
+                "model refresh changed the number of captured graphs");
+#endif
+    }
+}
+
 void testFailureReleasesSlot(const std::filesystem::path &modelPath) {
     InferencePipeline pipeline(modelPath.string(), InferenceDevice::Cpu, 0, 2, 2, false,
                                ChessGame::Encoding::inferenceDimensions());
@@ -97,10 +135,35 @@ void testFailureReleasesSlot(const std::filesystem::path &modelPath) {
             "pipeline did not release a failed slot for reuse");
     pipeline.discardWritableBatch(reused.slotIndex);
 }
+
+#ifdef USE_CUDA
+void testDisabledGraphsRefreshWithoutPool(const std::filesystem::path &modelPath) {
+    setenv("ALPHAZERO_DISABLE_INFERENCE_GRAPHS", "1", 1);
+    try {
+        InferenceRunner runner(modelPath.string(), InferenceDevice::Cuda, 0, 4, true,
+                               ChessGame::Encoding::inferenceDimensions());
+        runner.commitModelRefresh(runner.prepareModelRefresh(modelPath.string()));
+        require(runner.capturedGraphCount() == 0, "disabled inference graphs were captured anyway");
+        require(!runner.graphPool().has_value(),
+                "disabled inference graphs still claimed a memory pool");
+        torch::Tensor input = runner.createInputBuffer();
+        input.fill_(1);
+        InferenceOutput output = runner.createOutputBuffer();
+        runner.forwardInto(input, 3, output);
+        require(output.outcomes[0][0].item<float>() == 1.0F,
+                "eager fallback did not serve the refreshed model");
+    } catch (...) {
+        unsetenv("ALPHAZERO_DISABLE_INFERENCE_GRAPHS");
+        throw;
+    }
+    unsetenv("ALPHAZERO_DISABLE_INFERENCE_GRAPHS");
+}
+#endif
 } // namespace
 
 int runInferencePipelineTests() {
     const std::filesystem::path modelPath = createTestModel();
+    const std::filesystem::path capturableModelPath = createTestModel(false);
     try {
         InferenceRunner runner(modelPath.string(), InferenceDevice::Cpu, 0, 4, false,
                                ChessGame::Encoding::inferenceDimensions());
@@ -124,15 +187,20 @@ int runInferencePipelineTests() {
 
         testTwoOutstandingBatches(modelPath, InferenceDevice::Cpu, false);
         testFailureReleasesSlot(modelPath);
+        testRepeatedModelRefresh(capturableModelPath, InferenceDevice::Cpu, false);
 #ifdef USE_CUDA
         if (torch::cuda::is_available()) {
             testTwoOutstandingBatches(modelPath, InferenceDevice::Cuda, true);
+            testRepeatedModelRefresh(capturableModelPath, InferenceDevice::Cuda, true);
+            testDisabledGraphsRefreshWithoutPool(capturableModelPath);
         }
 #endif
     } catch (...) {
         std::filesystem::remove(modelPath);
+        std::filesystem::remove(capturableModelPath);
         throw;
     }
     std::filesystem::remove(modelPath);
+    std::filesystem::remove(capturableModelPath);
     return 0;
 }

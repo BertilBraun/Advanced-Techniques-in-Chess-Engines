@@ -318,31 +318,45 @@ void InferenceRunner::releaseBatchGraphs() noexcept {
         m_batchGraphs.clear();
     } catch (...) {
     }
+    // The pool is destroyed with its last graph and cannot be captured into again, so the id must
+    // not outlive them.
+    m_graphPool.reset();
 #endif
 }
 
 void InferenceRunner::captureBatchGraphs() {
 #ifdef USE_CUDA
-    releaseBatchGraphs();
+    const std::lock_guard<std::mutex> serialized(graphSerializationMutex());
+    captureBatchGraphsSerialized();
+#endif
+}
+
+void InferenceRunner::captureBatchGraphsSerialized() {
+#ifdef USE_CUDA
     if (!m_device.is_cuda() || !m_cudaStream.has_value()) {
+        releaseBatchGraphs();
         return;
     }
-    // Escape hatch: the captured graphs cost roughly 1.8 GiB of mempool per process, which is what
-    // exhausts a 12 GiB device once several self-play processes and a trainer rank share it.
+    // Escape hatch: capture is the newest part of this path, so it stays switchable on a node
+    // without a rebuild. One captured set costs about 160 MiB of private pool per process.
     if (const char *disabled = std::getenv("ALPHAZERO_DISABLE_INFERENCE_GRAPHS");
         disabled != nullptr && disabled[0] != '\0' && disabled[0] != '0') {
+        releaseBatchGraphs();
         return;
     }
-    // Eight, not sixteen: every capture adds intermediates to the shared graph mempool, and the
-    // self-play processes sharing a device ran it out of memory at sixteen.
+    // Eight, not sixteen: sixteen ran the self-play processes sharing a device out of memory back
+    // when every refresh stranded a private pool.
     constexpr size_t bucketCount = 8;
     constexpr size_t warmupIterations = 16;
     constexpr size_t bucketWarmupIterations = 3;
-    const std::lock_guard<std::mutex> serialized(graphSerializationMutex());
     const c10::cuda::CUDAGuard deviceGuard(m_device);
     const at::cuda::CUDAStreamGuard streamGuard(*m_cudaStream);
     torch::InferenceMode inferenceMode;
     std::unique_ptr<at::cuda::CUDAGraph> capturing;
+    // The graphs being replaced stay alive across the capture: they are what keeps the private pool
+    // referenced, and PyTorch refuses to capture into a pool whose last graph is gone, so releasing
+    // them first would strand that pool's memory and start a fresh one on every refresh.
+    std::vector<CapturedInferenceGraph> replacement;
     try {
         // The profiling executor only specialises after a few runs; capturing before it settles
         // would bake its bailout path into the graph.
@@ -353,11 +367,12 @@ void InferenceRunner::captureBatchGraphs() {
             runModelToStaging(m_maximumBatchSize);
         }
         m_cudaStream->synchronize();
-        const at::cuda::MempoolId_t pool = at::cuda::graph_pool_handle();
+        const at::cuda::MempoolId_t pool =
+            m_graphPool.has_value() ? *m_graphPool : at::cuda::graph_pool_handle();
         for (const auto bucket : range<size_t>(1, bucketCount + 1)) {
             const size_t batchSize =
                 std::max<size_t>(1, m_maximumBatchSize * bucket / bucketCount);
-            if (!m_batchGraphs.empty() && m_batchGraphs.back().batch_size >= batchSize) {
+            if (!replacement.empty() && replacement.back().batch_size >= batchSize) {
                 continue;
             }
             // cuDNN picks an algorithm the first time it sees a shape, which allocates workspace
@@ -374,9 +389,14 @@ void InferenceRunner::captureBatchGraphs() {
             capturing->capture_begin(pool, cudaStreamCaptureModeThreadLocal);
             runModelToStaging(batchSize);
             capturing->capture_end();
-            m_batchGraphs.push_back({.batch_size = batchSize, .graph = std::move(capturing)});
+            replacement.push_back({.batch_size = batchSize, .graph = std::move(capturing)});
         }
         m_cudaStream->synchronize();
+        m_batchGraphs.swap(replacement);
+        m_graphPool = pool;
+        // The superseded graphs share their pool blocks with the replacements now, so they can
+        // never be replayed again and are dropped while the replay lock is still held.
+        replacement.clear();
     } catch (const std::exception &failure) {
         // An abandoned capture leaves the stream capturing, which corrupts every later launch on
         // it, so the in-flight capture has to be ended before the graphs are discarded.
@@ -387,6 +407,7 @@ void InferenceRunner::captureBatchGraphs() {
             }
             capturing.reset();
         }
+        replacement.clear();
         releaseBatchGraphs();
         std::cerr << "Inference graph capture unavailable: " << failure.what() << std::endl;
     }
@@ -511,10 +532,15 @@ PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &m
 void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
     assert(m_model != nullptr);
     assert(updatedModel != nullptr);
-    // Captured graphs replay the previous weights from their own addresses, so they must go first.
-    releaseBatchGraphs();
+#ifdef USE_CUDA
+    // Swap and recapture under the replay lock: the graphs that still hold the private pool replay
+    // the previous weights, so nothing may replay them between the swap and their replacement.
+    const std::lock_guard<std::mutex> serialized(graphSerializationMutex());
     m_model.swap(updatedModel);
-    captureBatchGraphs();
+    captureBatchGraphsSerialized();
+#else
+    m_model.swap(updatedModel);
+#endif
 }
 
 InferencePipeline::InferencePipeline(const std::string &modelPath, const InferenceDevice device,

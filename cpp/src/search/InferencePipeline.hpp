@@ -93,6 +93,12 @@ public:
 
     [[nodiscard]] size_t maximumBatchSize() const noexcept { return m_maximumBatchSize; }
     [[nodiscard]] bool usesCuda() const noexcept { return m_device.is_cuda(); }
+#ifdef USE_CUDA
+    [[nodiscard]] std::optional<at::cuda::MempoolId_t> graphPool() const noexcept {
+        return m_graphPool;
+    }
+    [[nodiscard]] size_t capturedGraphCount() const noexcept { return m_batchGraphs.size(); }
+#endif
 
 private:
     friend class InferencePipeline;
@@ -104,6 +110,7 @@ private:
     void runEagerModel(size_t batchSize, InferenceOutput &output);
     void copyStagedOutput(size_t batchSize, InferenceOutput &output);
     void captureBatchGraphs();
+    void captureBatchGraphsSerialized();
     void releaseBatchGraphs() noexcept;
     [[nodiscard]] size_t capturedBatchSize(size_t batchSize) const noexcept;
     void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize,
@@ -127,6 +134,9 @@ private:
     // One replayable graph per batch bucket: a 12-layer tower costs milliseconds of host dispatch
     // per call and microseconds to replay, so the submitting thread stops starving the device.
     std::vector<CapturedInferenceGraph> m_batchGraphs;
+    // The private memory pool the graphs were captured into. It exists only while a graph still
+    // references it, so it is held for the runner's lifetime and every recapture reuses its blocks.
+    std::optional<at::cuda::MempoolId_t> m_graphPool;
 #endif
 };
 
