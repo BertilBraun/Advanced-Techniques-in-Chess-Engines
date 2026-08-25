@@ -4,6 +4,7 @@ from collections import deque
 from collections.abc import Generator, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
+from threading import Lock
 from types import TracebackType
 from typing import Generic, TypeVar
 
@@ -31,6 +32,21 @@ from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
 
 PositionT = TypeVar('PositionT')
+
+_transfer_streams: dict[int, torch.cuda.Stream] = {}
+_transfer_streams_lock = Lock()
+
+
+def shared_transfer_stream(device: torch.device) -> torch.cuda.Stream:
+    # Cached for the process lifetime: the caching allocator segregates blocks by stream and cuBLAS keeps a workspace
+    # per stream, so a stream per training quantum strands both and grows device memory every generation.
+    device_index = torch.cuda.current_device() if device.index is None else device.index
+    with _transfer_streams_lock:
+        stream = _transfer_streams.get(device_index)
+        if stream is None:
+            stream = torch.cuda.Stream(device=torch.device('cuda', device_index))
+            _transfer_streams[device_index] = stream
+        return stream
 
 
 @dataclass(frozen=True)
@@ -148,7 +164,7 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
         self.uses_cuda = uses_cuda
         self._closed = False
         self._prepared_batches = loader._prepared_batches()
-        self._transfer_stream = torch.cuda.Stream(device=device) if uses_cuda else None
+        self._transfer_stream = shared_transfer_stream(device) if uses_cuda else None
         self._pinned_slots = PinnedBatchSlotPool(depth) if uses_cuda and loader.pin_memory else None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='replay-batch-prefetch')
         self._pending_batches: deque[Future[_PrefetchedBatch]] = deque(

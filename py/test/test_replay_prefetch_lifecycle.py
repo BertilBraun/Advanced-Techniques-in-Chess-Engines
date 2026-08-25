@@ -6,7 +6,12 @@ from threading import Event
 
 import pytest
 import torch
-from src.replay.batch_loader import MappedReplayBatchLoader, PrefetchedReplayBatches, _PrefetchedBatch
+from src.replay.batch_loader import (
+    MappedReplayBatchLoader,
+    PrefetchedReplayBatches,
+    _PrefetchedBatch,
+    shared_transfer_stream,
+)
 from src.training.batch import TrainingBatch
 from tools.benchmark_supervised_testbed import parse_arguments
 
@@ -190,3 +195,60 @@ def test_supervised_benchmark_accepts_supported_prefetch_depths(
     )
 
     assert parse_arguments().replay_prefetch_depth == depth
+
+
+def _cuda_device() -> torch.device:
+    return torch.device('cuda', torch.cuda.current_device())
+
+
+requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason='CUDA device required.')
+
+
+def test_cpu_prefetch_creates_no_transfer_stream() -> None:
+    batches = PrefetchedReplayBatches(
+        _FakeReplayBatchLoader(batch_count=2),
+        torch.device('cpu'),
+        uses_cuda=False,
+        depth=1,
+    )
+
+    assert batches._transfer_stream is None
+    batches.close()
+
+
+@requires_cuda
+def test_shared_transfer_stream_returns_the_same_stream_for_one_device() -> None:
+    device = _cuda_device()
+
+    assert shared_transfer_stream(device) is shared_transfer_stream(device)
+
+
+@requires_cuda
+def test_shared_transfer_stream_ignores_an_unset_device_index() -> None:
+    assert shared_transfer_stream(torch.device('cuda')) is shared_transfer_stream(_cuda_device())
+
+
+@requires_cuda
+@pytest.mark.parametrize('depth', (1, 2))
+def test_cuda_prefetch_reuses_the_shared_transfer_stream(depth: int) -> None:
+    device = _cuda_device()
+    first = PrefetchedReplayBatches(_FakeReplayBatchLoader(batch_count=depth + 1), device, uses_cuda=True, depth=depth)
+    second = PrefetchedReplayBatches(_FakeReplayBatchLoader(batch_count=depth + 1), device, uses_cuda=True, depth=depth)
+
+    assert first._transfer_stream is second._transfer_stream is shared_transfer_stream(device)
+    first.close()
+    second.close()
+
+
+@requires_cuda
+def test_closing_a_cuda_prefetch_keeps_the_shared_transfer_stream_for_the_next_one() -> None:
+    device = _cuda_device()
+    closed = PrefetchedReplayBatches(_FakeReplayBatchLoader(batch_count=2), device, uses_cuda=True, depth=1)
+    stream = closed._transfer_stream
+    closed.close()
+
+    successor = PrefetchedReplayBatches(_FakeReplayBatchLoader(batch_count=2), device, uses_cuda=True, depth=1)
+
+    assert successor._transfer_stream is stream
+    assert float(next(successor).states[0, 0].item()) == 0.0
+    successor.close()
