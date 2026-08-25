@@ -380,6 +380,10 @@ command_preserve() {
     for checkpoint_manifest in "${SAVE_PATH}"/checkpoint_*.json; do
         [[ -f "${checkpoint_manifest}" ]] && archive_copy "${checkpoint_manifest}" "${partial}/run/$(basename "${checkpoint_manifest}")"
     done
+    # The weights themselves, not just the manifests that name them: training retains only the most
+    # recent generations, so this is tens of megabytes, and without it an archive cannot re-evaluate
+    # or resume the model the run produced.
+    archive_copy "${SAVE_PATH}/models" "${partial}/run/models"
 
     (
         cd "${partial}"
