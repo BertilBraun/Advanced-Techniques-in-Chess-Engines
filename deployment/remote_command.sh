@@ -14,6 +14,13 @@
 # Key, user, port and the connection options are the only things this script owns; overrides:
 # REMOTE_SSH_KEY, REMOTE_SSH_USER, REMOTE_SSH_PORT, REMOTE_SSH_CONNECT_TIMEOUT, REMOTE_SSH_EXTRA_OPTIONS.
 # The exit status is the remote command's (255 for connection failures).
+#
+# The Vast.ai login banner is dropped from stderr so it does not have to be grepped away at every
+# call site; stdout is never touched, so binary streams stay intact:
+#
+#   deployment/remote_command.sh 38.49.42.120:53893 'cd /workspace && tar czf - dir' | tar xzf -
+#
+# Set REMOTE_SHOW_BANNER=1 to keep the banner.
 
 set -euo pipefail
 
@@ -62,13 +69,24 @@ key="${REMOTE_SSH_KEY:-$(default_key)}"
 
 read -r -a extra_options <<< "${REMOTE_SSH_EXTRA_OPTIONS:-}"
 
-exec ssh \
-    -o BatchMode=yes \
-    -o ConnectTimeout="${REMOTE_SSH_CONNECT_TIMEOUT:-25}" \
-    -o StrictHostKeyChecking=accept-new \
-    -o IdentitiesOnly=yes \
-    -i "${key}" \
-    -p "${port}" \
-    ${extra_options[@]+"${extra_options[@]}"} \
-    "${user}@${host}" \
+ssh_command=(
+    ssh
+    -o BatchMode=yes
+    -o ConnectTimeout="${REMOTE_SSH_CONNECT_TIMEOUT:-25}"
+    -o StrictHostKeyChecking=accept-new
+    -o IdentitiesOnly=yes
+    -i "${key}"
+    -p "${port}"
+    ${extra_options[@]+"${extra_options[@]}"}
+    "${user}@${host}"
     "$@"
+)
+
+if [[ -n "${REMOTE_SHOW_BANNER:-}" ]]; then
+    exec "${ssh_command[@]}"
+fi
+
+# The Vast.ai login banner is written to stderr, so filtering it there leaves stdout byte-exact and
+# keeps `tar` and other binary streams usable.
+"${ssh_command[@]}" 2> >(grep -v -E \
+    '^(Welcome to vast\.ai|Have fun!|AI agents: READ )' >&2)
