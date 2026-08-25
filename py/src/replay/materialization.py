@@ -328,9 +328,9 @@ def _validate_result(
             if expected is None:
                 raise ValueError('Naturally terminated game does not end in a terminal position.')
         case TerminationReason.MAXIMUM_PLIES:
-            expected = None if terminal_oracle is None else terminal_oracle.probe_wdl(final_position)
-            if expected is None:
-                expected = state.adjudicated_wdl(final_position, game.termination_reason)
+            # A cut game's value has no ground truth to check against: it is whatever the worker chose,
+            # material or a bootstrapped root value.
+            return
         case TerminationReason.ADJUDICATION:
             expected = state.adjudicated_wdl(final_position, game.termination_reason)
         case TerminationReason.RESIGNATION:

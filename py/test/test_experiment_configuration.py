@@ -604,3 +604,31 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
         experiment_configuration_sha256(CHESS_EXPERIMENT)
         == '56b68542d28312e649ec58def5aaf784d45a37f23a27e20b32071038dcc88bd8'
     )
+
+
+@pytest.mark.parametrize(
+    ('value_target', 'expected'),
+    (('search_root_value', True), ('material', False)),
+)
+def test_cut_game_value_target_selects_whether_self_play_bootstraps(value_target: str, expected: bool) -> None:
+    path = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'vast-chess-4day-production-v6.yaml'
+    configuration = load_chess_experiment_configuration(path)
+    early_termination = configuration.chess.self_play.early_termination
+    assert early_termination is not None
+    configuration = configuration.model_copy(
+        update={
+            'chess': configuration.chess.model_copy(
+                update={
+                    'self_play': configuration.chess.self_play.model_copy(
+                        update={
+                            'early_termination': early_termination.model_copy(update={'value_target': value_target})
+                        }
+                    )
+                }
+            )
+        }
+    )
+
+    implementation = ChessImplementation(configuration)
+
+    assert implementation.self_play_parameters_at(0).bootstrap_cut_game_value is expected

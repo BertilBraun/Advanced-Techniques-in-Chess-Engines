@@ -16,6 +16,7 @@ from src.util.generation_schedule import IntegerGenerationSchedule, defined_sche
 class EarlyTerminationConfiguration(FrozenModel):
     maximum_game_plies: IntegerGenerationSchedule
     censor_remaining_game_length_target: bool
+    value_target: Literal['material', 'search_root_value'] = 'material'
 
     @model_validator(mode='after')
     def validate_maximum_game_plies(self) -> EarlyTerminationConfiguration:

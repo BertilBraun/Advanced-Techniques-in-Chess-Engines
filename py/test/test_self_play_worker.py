@@ -192,6 +192,7 @@ class FakeGame:
         force_fast_search_after_ply: int | None = None,
         resignation_configuration: CalibratedResignationConfiguration | None = None,
         maximum_game_plies: int | None = None,
+        bootstrap_cut_game_value: bool = False,
         terminal_oracle: TerminalOracle[FakePosition] | None = None,
     ) -> None:
         self.search = FakeSearch()
@@ -200,6 +201,7 @@ class FakeGame:
         self.force_fast_search_after_ply = force_fast_search_after_ply
         self.resignation_configuration = resignation_configuration
         self.maximum_game_plies = maximum_game_plies
+        self.bootstrap_cut_game_value = bootstrap_cut_game_value
         self.terminal_oracle = terminal_oracle
 
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
@@ -227,6 +229,7 @@ class FakeGame:
             primary_sample_weight=1.0,
             value_discount_per_ply=1.0,
             force_fast_search_after_ply=self.force_fast_search_after_ply,
+            bootstrap_cut_game_value=self.bootstrap_cut_game_value,
         )
 
     def close(self) -> None:
@@ -661,3 +664,39 @@ def test_restart_archives_are_private_to_each_worker_and_survive_replacement(tmp
     assert replacement.restart_archive_path == first_path
     assert replacement.restart_starts == 1
     replacement.close()
+
+
+def test_cut_game_bootstraps_its_value_from_the_last_search_root_value(tmp_path: Path) -> None:
+    oracle = RecordingTerminalOracle(None)
+    game = FakeGame(maximum_game_plies=1, terminal_oracle=oracle, bootstrap_cut_game_value=True)
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path,
+    )
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    worker.run_batch()
+
+    completed = CompletedSelfPlayGame.model_validate_json(next(tmp_path.glob('*.json')).read_text(encoding='utf-8'))
+    assert oracle.probed_positions == [FakePosition(1)]
+    assert completed.final_wdl == WdlTarget.from_scalar(-completed.observations[-1].root_value)
+
+
+def test_cut_game_falls_back_to_adjudication_when_bootstrapping_is_disabled(tmp_path: Path) -> None:
+    game = FakeGame(maximum_game_plies=1, terminal_oracle=RecordingTerminalOracle(None))
+    worker = SelfPlayWorker(
+        cast(GameImplementation, game),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path,
+    )
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    worker.run_batch()
+
+    completed = CompletedSelfPlayGame.model_validate_json(next(tmp_path.glob('*.json')).read_text(encoding='utf-8'))
+    assert completed.final_wdl == WdlTarget(win=0.0, draw=1.0, loss=0.0)

@@ -75,10 +75,16 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
     def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
         configuration = self.self_play_configuration
         objective = self.configuration.chess.objective
-        return configuration.resolve(
-            model_generation,
-            configuration.maximum_game_plies_at(model_generation),
-            objective.effective_search_value_discount_per_ply.value_at(model_generation),
+        early_termination = configuration.early_termination
+        return replace(
+            configuration.resolve(
+                model_generation,
+                configuration.maximum_game_plies_at(model_generation),
+                objective.effective_search_value_discount_per_ply.value_at(model_generation),
+            ),
+            bootstrap_cut_game_value=(
+                early_termination is not None and early_termination.value_target == 'search_root_value'
+            ),
         )
 
     @property

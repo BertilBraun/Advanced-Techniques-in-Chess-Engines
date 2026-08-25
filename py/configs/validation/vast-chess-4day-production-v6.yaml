@@ -348,6 +348,7 @@ chess:
         - {start_generation: 110, value: 80}
     early_termination:
       censor_remaining_game_length_target: true
+      value_target: search_root_value
       maximum_game_plies:
         kind: staged
         stages:

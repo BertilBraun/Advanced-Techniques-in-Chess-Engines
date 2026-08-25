@@ -147,6 +147,7 @@ class ResolvedSelfPlayParameters:
     value_discount_per_ply: float
     force_fast_search_after_ply: int | None = None
     virtual_loss_weight: float = 1.0
+    bootstrap_cut_game_value: bool = False
 
     def __post_init__(self) -> None:
         if not 0.0 < self.full_search_probability <= 1.0:

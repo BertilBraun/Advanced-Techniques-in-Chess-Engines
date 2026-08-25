@@ -324,6 +324,10 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if parameters.maximum_game_plies is not None and len(active_game.action_ids) >= parameters.maximum_game_plies:
             oracle = self.game.terminal_oracle
             final_wdl = None if oracle is None else oracle.probe_wdl(active_game.root.position)
+            if final_wdl is None and parameters.bootstrap_cut_game_value and active_game.observations:
+                # The observation's root value belongs to the player who moved, and the cut position is
+                # seen by the opponent.
+                final_wdl = WdlTarget.from_scalar(-active_game.observations[-1].root_value)
             if final_wdl is None:
                 final_wdl = self.game.state.adjudicated_wdl(
                     active_game.root.position,
