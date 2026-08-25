@@ -344,9 +344,10 @@ void InferenceRunner::captureBatchGraphsSerialized() {
         releaseBatchGraphs();
         return;
     }
-    // Eight, not sixteen: sixteen ran the self-play processes sharing a device out of memory back
-    // when every refresh stranded a private pool.
-    constexpr size_t bucketCount = 8;
+    // Finer buckets pad less: at a cap of 320 an average batch of 241 rounds to 280 with eight
+    // buckets and 260 with sixteen. Sixteen was only reduced to eight while every refresh stranded
+    // a private pool, which is no longer the case.
+    constexpr size_t bucketCount = 16;
     constexpr size_t warmupIterations = 16;
     constexpr size_t bucketWarmupIterations = 3;
     const c10::cuda::CUDAGuard deviceGuard(m_device);
