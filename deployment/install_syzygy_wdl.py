@@ -1,3 +1,6 @@
+# Manual-use only: provisioning no longer runs this, because no code path reads the tables since chess ply-cap
+# adjudication was removed. Kept in case an evaluation needs them again.
+
 from __future__ import annotations
 
 import argparse

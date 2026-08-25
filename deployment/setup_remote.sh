@@ -10,8 +10,6 @@ python_command="${ENGINE_PYTHON:-python3}"
 uv_version="${ENGINE_UV_VERSION:-0.11.14}"
 open_file_soft_limit="${ENGINE_OPEN_FILE_SOFT_LIMIT:-65536}"
 install_ccache="${ENGINE_INSTALL_CCACHE:-1}"
-syzygy_wdl_directory="${ENGINE_SYZYGY_WDL_DIRECTORY:-/workspace/syzygy/wdl345}"
-syzygy_wdl_base_url="${ENGINE_SYZYGY_WDL_BASE_URL:-https://tablebase.lichess.ovh/tables/standard/3-4-5-wdl}"
 
 if [[ $# -eq 0 ]]; then
     echo "Usage: setup_remote.sh COMMAND [ARGUMENT ...]" >&2
@@ -76,9 +74,8 @@ if [[ -n "${python_nvidia_library_path}" ]]; then
     export LD_LIBRARY_PATH="${python_nvidia_library_path}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 fi
 
-"${virtual_environment_python}" "${repository_directory}/deployment/install_syzygy_wdl.py" \
-    --destination "${syzygy_wdl_directory}" \
-    --source-base-url "${syzygy_wdl_base_url}"
+# Syzygy is deliberately not provisioned: nothing reads the tables since chess ply-cap adjudication was
+# removed. Run deployment/install_syzygy_wdl.py by hand if an evaluation ever needs them again.
 
 cmake \
     -S "${repository_directory}/cpp" \
@@ -107,7 +104,6 @@ export EVALUATION_STOCKFISH_EXECUTABLE="${repository_directory}/engines/stockfis
 export EVALUATION_KATAGO_EXECUTABLE="${repository_directory}/engines/katago"
 export EVALUATION_KATAGO_MODEL="${repository_directory}/engines/katago.bin.gz"
 export EVALUATION_KATAGO_CONFIGURATION="${repository_directory}/engines/katago-analysis.cfg"
-export ENGINE_SYZYGY_WDL_DIRECTORY="${syzygy_wdl_directory}"
 export PATH="${virtual_environment}/bin:${PATH}"
 
 cd "${repository_directory}"

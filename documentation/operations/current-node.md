@@ -13,7 +13,7 @@ Exactly one node is described here. When it is released, replace the body with
 | CPU / RAM / disk | Ryzen 7 7700X, 16 effective CPUs · 30 GiB · 150 GiB overlay |
 | `/workspace` volume-backed | **no** — nothing survives recycle/destroy; fetch evidence before release |
 | Environment | Python 3.12 venv at `/workspace/alphazero-engine-venv`, torch 2.12.1+cu126, cuDNN 91002 |
-| Engines | Stockfish UCI + KataGo CUDA (smoked at setup); Syzygy WDL 3-4-5 at `/workspace/syzygy/wdl345` |
+| Engines | Stockfish UCI + KataGo CUDA (smoked at setup) |
 
 ## Purpose and limits
 
