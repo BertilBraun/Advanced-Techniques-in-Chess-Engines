@@ -179,6 +179,7 @@ constexpr std::int64_t tensorSize(const std::size_t size) noexcept {
     return static_cast<std::int64_t>(size);
 }
 
+#ifdef USE_CUDA
 // Capture registers a device-wide allocation filter and replays execute against private memory
 // pools, neither of which tolerates a second inference worker doing the same thing at the same
 // time in the same process. One graph is submitted at a time; a launch is microseconds.
@@ -200,6 +201,7 @@ at::cuda::CUDAStream sharedGraphStream(const c10::DeviceIndex deviceIndex) {
     return streams.emplace(deviceIndex, at::cuda::getStreamFromPool(false, deviceIndex))
         .first->second;
 }
+#endif
 } // namespace
 
 InferenceCompletion::~InferenceCompletion() noexcept { waitWithoutThrowing(); }
