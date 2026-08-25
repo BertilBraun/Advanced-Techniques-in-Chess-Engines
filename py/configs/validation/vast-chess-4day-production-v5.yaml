@@ -13,7 +13,7 @@
 #     artefact with a deterministic one (top-3 mass 0.95 on real positions) for ANY head.
 #
 # Plus the measured inference topology: 512 games per process, one inference worker, batch 320.
-# Compilation is OFF: it leaks trainer device memory per generation (see the trainer block).
+# Compilation stays on; it is a kernel-level optimisation, not a learning-side change.
 #
 # Everything else is the replica: dense channels-4 head at full rank (483k), replay ratio 8, the
 # fixed r3 visit schedule, virtual loss 1.0, parallel searches 2 -> 4@90, the two permanent
@@ -52,12 +52,7 @@ training:
     local_batch_size: 256
     optimizer: adamw
     precision: bfloat16
-    # Disabled: torch.compile grows trainer device memory by roughly 50 MiB per
-    # generation and exhausts a 12 GiB device in four to five hours. The r3 replica,
-    # the only recent run whose memory stayed flat, is also the only one that had this
-    # disabled. Self-play is the throughput bottleneck, so the training step it
-    # accelerates is not the constraint.
-    compilation: disabled
+    compilation: default
     learning_rate:
       kind: staged
       stages:
