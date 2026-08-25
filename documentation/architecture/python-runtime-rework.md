@@ -1827,14 +1827,13 @@ statistics. The game-owned `ResolvedTrainingObjective` owns only model-output in
 for one resolved generation.
 
 The terminal oracle is a typed game-agnostic `position -> WdlTarget | None` boundary owned by the concrete game
-composition. Chess may configure a Syzygy WDL implementation; Go currently supplies no oracle. The shared worker
-calls it only after the move that reaches `maximum_game_plies`, never during ordinary search, and the replay manager
-uses the same boundary only to validate the completed result while reconstructing that capped trajectory. An oracle
-result changes only the final WDL value target. It does not add visits, policy targets, search priors, move choices,
-or pre-cap tablebase probes. Chess collapses Syzygy's cursed wins and blessed losses to draws, preserving the
-fifty-move-rule interpretation when converting five-state tablebase WDL to the network's three-state target. At the
-Python/C++ boundary, the chess adapter reads the native `ChessPosition.fen` property already exposed by the binding;
-search requests, retained roots, visits, and native move selection remain unchanged.
+composition. Since 2026-08-25 neither game supplies one: the chess Syzygy implementation was removed and a
+ply-capped game takes its value from the search root value instead. The boundary itself remains part of the game
+implementation contract. Where an oracle is supplied, the shared worker calls it only after the move that reaches
+`maximum_game_plies`, never during ordinary search, and the replay manager uses the same boundary only to validate
+the completed result while reconstructing that capped trajectory. An oracle result changes only the final WDL value
+target. It does not add visits, policy targets, search priors, or move choices. Search requests, retained roots,
+visits, and native move selection remain unchanged.
 
 ### Network and inference outputs
 
