@@ -215,9 +215,13 @@ command_supervised_runner() {
     export TRAINING_TENSORBOARD_LOG_PATH="${tensorboard_root}"
     export TRAINING_LOG_PATH="${LOG_DIRECTORY}"
 
+    # The EXIT trap runs after this function's locals are gone, so the run name must outlive them.
+    supervised_run_name="${run_name}"
+
     # A cancelled run must still be archived: preserve on every exit path.
     preserve_on_exit() {
-        command_preserve "${run_name}" || echo "run_control: preservation on exit failed for ${run_name}" >&2
+        command_preserve "${supervised_run_name}" \
+            || echo "run_control: preservation on exit failed for ${supervised_run_name}" >&2
     }
     trap preserve_on_exit EXIT
 
