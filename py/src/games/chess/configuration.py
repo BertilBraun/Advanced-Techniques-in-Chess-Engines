@@ -27,17 +27,8 @@ class EarlyTerminationConfiguration(FrozenModel):
 
 class ChessSelfPlayConfiguration(SelfPlayConfiguration):
     maximum_game_plies: IntegerGenerationSchedule | None = None
-    maximum_ply_syzygy_paths: tuple[str, ...] | None = None
     early_termination: EarlyTerminationConfiguration | None = None
     resignation: ResignationConfiguration
-
-    @model_validator(mode='after')
-    def validate_syzygy_paths(self) -> ChessSelfPlayConfiguration:
-        if self.maximum_ply_syzygy_paths is not None and (
-            not self.maximum_ply_syzygy_paths or any(not path.strip() for path in self.maximum_ply_syzygy_paths)
-        ):
-            raise ValueError('Maximum-ply Syzygy paths must contain at least one nonempty directory path.')
-        return self
 
     def maximum_game_plies_at(self, model_generation: int) -> int | None:
         limits: list[int] = []

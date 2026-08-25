@@ -116,7 +116,6 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
         0.25,
         0.2,
     )
-    assert configuration.chess.self_play.maximum_ply_syzygy_paths == ('/workspace/syzygy/wdl345',)
     auxiliary_targets = configuration.chess.objective.auxiliary_targets
     assert tuple(target.kind for target in auxiliary_targets) == (
         'next_policy',
@@ -484,26 +483,6 @@ def test_network_rejects_unknown_parameters() -> None:
         ChessExperimentConfiguration.model_validate(candidate)
 
 
-def test_chess_maximum_ply_syzygy_paths_are_optional_and_typed() -> None:
-    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
-    candidate['chess']['self_play']['maximum_ply_syzygy_paths'] = ['/tablebases/3-5', '/tablebases/6-7']
-
-    configuration = ChessExperimentConfiguration.model_validate(candidate)
-
-    assert configuration.chess.self_play.maximum_ply_syzygy_paths == (
-        '/tablebases/3-5',
-        '/tablebases/6-7',
-    )
-
-
-def test_chess_maximum_ply_syzygy_paths_reject_empty_entries() -> None:
-    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
-    candidate['chess']['self_play']['maximum_ply_syzygy_paths'] = ['']
-
-    with pytest.raises(ValidationError, match='nonempty directory path'):
-        ChessExperimentConfiguration.model_validate(candidate)
-
-
 def test_training_configuration_is_frozen() -> None:
     configuration = load_chess_experiment_configuration(CHESS_EXPERIMENT_TEMPLATE_PATH)
 
@@ -602,7 +581,7 @@ def test_experiment_configuration_hash_is_stable_across_host_path_separators() -
 def test_experiment_configuration_hash_matches_pinned_regression_value() -> None:
     assert (
         experiment_configuration_sha256(CHESS_EXPERIMENT)
-        == '56b68542d28312e649ec58def5aaf784d45a37f23a27e20b32071038dcc88bd8'
+        == '3a2322e91c9d6b3e7af2fce3571d101463e4671471bf80d057f5a790bd8ec2fa'
     )
 
 

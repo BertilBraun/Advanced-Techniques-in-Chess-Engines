@@ -257,8 +257,6 @@ evaluation:
       search: *evaluation_search
 chess:
   self_play:
-    maximum_ply_syzygy_paths:
-      - /workspace/syzygy/wdl345
     resignation:
       kind: calibrated
       first_production_generation: 70

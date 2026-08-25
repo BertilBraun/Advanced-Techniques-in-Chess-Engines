@@ -51,8 +51,6 @@ training:
 
 chess:
   self_play:
-    maximum_ply_syzygy_paths:
-      - /workspace/syzygy/wdl345
     search:
       # Maximum visits = r3 fixed schedule x1.25 so the realized adaptive mean (~0.8 utilization
       # observed live in comp2) lands on the r3 full-search budget.

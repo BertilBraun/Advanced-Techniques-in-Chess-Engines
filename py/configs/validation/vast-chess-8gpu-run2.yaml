@@ -42,8 +42,6 @@ evaluation:
 
 chess:
   self_play:
-    maximum_ply_syzygy_paths:
-      - /workspace/syzygy/wdl345
     search:
       # Adaptive budget parameters carried from the last committed adaptive configuration (61d31c45 /
       # e48b0376^) with the maximum-visit schedule matched to Run 1's fixed schedule; open decision.

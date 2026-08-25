@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from src.evaluation.configuration import EvaluationSearchConfiguration
 from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
-from src.games.chess.syzygy import SyzygyTerminalOracle
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import BatchedInferenceParams
@@ -29,7 +28,6 @@ if TYPE_CHECKING:
 class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch]):
     def __init__(self, configuration: ChessExperimentConfiguration) -> None:
         self._configuration = configuration
-        self._terminal_oracle: SyzygyTerminalOracle | None = None
 
     @property
     def configuration(self) -> ChessExperimentConfiguration:
@@ -44,18 +42,11 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         return CHESS_STATE_CONTRACT
 
     @property
-    def terminal_oracle(self) -> SyzygyTerminalOracle | None:
-        paths = self.self_play_configuration.maximum_ply_syzygy_paths
-        if paths is None:
-            return None
-        if self._terminal_oracle is None:
-            self._terminal_oracle = SyzygyTerminalOracle(paths)
-        return self._terminal_oracle
+    def terminal_oracle(self) -> None:
+        return None
 
     def close(self) -> None:
-        if self._terminal_oracle is not None:
-            self._terminal_oracle.close()
-            self._terminal_oracle = None
+        return None
 
     @property
     def self_play_configuration(self) -> ChessSelfPlayConfiguration:
