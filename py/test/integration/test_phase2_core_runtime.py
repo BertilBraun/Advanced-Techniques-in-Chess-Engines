@@ -192,7 +192,7 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
         value_discount_per_ply=game.value_discount_per_ply,
         terminal_oracle=None,
     )
-    replay_manager.materialize_available_games(lambda staged: None)
+    replay_manager.materialize_available_games()
     ingestion = replay_manager.append_staged_games(0)
     description = replay_manager.description()
     replay_manager.close()
@@ -291,17 +291,16 @@ def _assert_pool_ingestion_matches_inline_result(
         terminal_oracle=None,
         experiment_configuration=configuration,
     )
-    staged_row_counts: list[int] = []
-    manager.start_materialization(lambda staged: staged_row_counts.append(staged.row_count), 0.1)
+    manager.start_materialization(0.1)
     deadline = time.monotonic() + 300.0
-    while (manager.inbox_depth > 0 or len(staged_row_counts) < flooded_games) and time.monotonic() < deadline:
+    while (manager.inbox_depth > 0 or manager.staging_depth < flooded_games) and time.monotonic() < deadline:
         time.sleep(0.1)
     assert manager.inbox_depth == 0
-    assert len(staged_row_counts) == flooded_games
+    assert manager.staging_depth == flooded_games
 
     ingestion = manager.append_staged_games(0)
     assert ingestion.games_ingested == flooded_games
-    assert ingestion.samples_added == sum(staged_row_counts)
+    assert ingestion.samples_added > 0
     assert manager.store.total_appended_rows == already_appended_rows + ingestion.samples_added
     description = manager.description()
     manager.close()

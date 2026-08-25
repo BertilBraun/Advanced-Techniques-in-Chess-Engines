@@ -1,6 +1,8 @@
 # Columnar replay and shard ingestion
 
-Status: accepted implementation design, 2026-08-22.
+Status: accepted implementation design, 2026-08-22. Its materialization dispatch was replaced on 2026-08-25 by
+the per-worker-directory pipeline described below; the analysis behind that replacement is
+`replay-materialization-rework.md`. The columnar store, shard file format and boundary-append rules are unchanged.
 
 This decision supersedes the old fixed-row replay design in `python-runtime-rework.md`. The producer-facing
 completed-game JSON contract and per-game atomic inbox publication remain unchanged. Normal operation is deterministic
@@ -23,19 +25,26 @@ positive visit mass, finite/ranged scalar values, eligibility, padding, shapes, 
 
 ## Materialization lifecycle
 
-1. Self-play atomically publishes one typed completed-game JSON file.
-2. The manager snapshots inbox files in `(mtime_ns, canonical filename)` order and durably assigns contiguous shard
-   sequences before dispatch.
-3. A worker receives a bounded ordered game batch, validates source size/hash/identity, materializes every game with
-   the existing game-neutral semantics, and encodes samples directly into replay columns.
+1. Self-play atomically publishes one typed completed-game JSON file into `completed-games/inbox/`.
+2. A dispatcher pass renames each inbox game into a per-worker directory, round-robin, prefixing a fifteen-digit
+   per-worker counter. The pass reads at most `materialization_inbox_rename_cap` entries from a lazy `scandir`, so its
+   cost is independent of inbox depth and of how many games were already ingested. A game exists at exactly one path
+   at a time, so `rename(2)` alone prevents double ingestion; there is no queue, no hash and no timestamp cache.
+3. One long-lived process per worker index owns one directory for the life of the run and consumes it in counter
+   order. It takes a bounded batch, materializes each game independently, and encodes samples into replay columns.
 4. The worker flushes and atomically seals one uncompressed shard data file, writes its typed manifest last, and only
-   then removes the consumed inbox files.
-5. Worker completion order does not affect replay order. Only the maximal contiguous sealed sequence is appendable;
-   a missing or invalid earlier sequence blocks later shards.
+   then removes the consumed sources. The shard identity is `sha256(layout digest, worker index, first counter, last
+   counter)`, so a worker killed between sealing and unlinking re-derives the same identity on restart and adopts the
+   existing shard instead of producing a duplicate.
+5. Order across shards is approximate by decision: eviction is positional and sampling uniform, so round-robin
+   dispatch plus per-worker FIFO is sufficient. Order within a shard is exact and follows the dispatch counter.
 
 The default bounds are 32 games and a soft 16 MiB of source JSON per shard. An indivisible oversized game becomes a
-singleton. Transient worker failures retry the same durable claim; invalid game data is surfaced as a fatal run error
-without dropping or bypassing the game.
+singleton. Any game that cannot be read, parsed or materialized is moved to `completed-games/rejected/` and the rest
+of its batch still seals; a shard that fails to encode or seal rejects its whole batch. Nothing about bad game data
+stalls or kills the run. A rolling rejection-rate alarm
+(`materialization_rejection_window_games`, `materialization_rejection_rate_ceiling`) fails the run loudly if discarding
+becomes systematic. Worker backpressure is `materialization_staging_shard_limit` sealed shards in staging.
 
 ## Boundary append and restart
 
@@ -43,10 +52,13 @@ At a quantum boundary the manager opens the contiguous sealed prefix, validates 
 appends each shard directly, and flushes once. Normal trusted-boundary opens avoid a redundant whole-shard hash pass.
 Zero-row shards still advance the append sequence and transaction identity without inventing rows.
 
-After the replay flush, resignation observations are applied through their identity-idempotent SQLite sink, committed
-claims are atomically removed from the queue, and shard/inbox leftovers are deleted. On startup, queued claims below
-the store append sequence are recognized as committed cleanup leftovers; sealed uncommitted claims remain appendable
-and unsealed claims are resubmitted.
+At a boundary every sealed shard in staging is appendable; there is no sequence cursor and no head-of-line block.
+After the replay flush, resignation observations are applied through their identity-idempotent SQLite sink and the
+appended shard files are deleted. Training credit is reconciled from `total_appended_rows` strictly after that flush:
+late credit costs one coordinator iteration, early credit would let the ledger over-earn against the store. On
+startup, games left in a worker directory are re-materialized in the same counter order, sealed shards in staging are
+appended by the normal path, and per-worker counters are reseeded from the highest prefix present. A worker directory
+left behind by a reduced `materialization_processes` has its games renamed back into the inbox.
 
 The design intentionally does not infer torn header states or journal every boundary instruction. A process crash
 during append may lose or duplicate the small in-flight shard set. Invalid store headers fail clearly. This bounded
@@ -78,8 +90,10 @@ end-to-end performance evidence.
 
 ## Required invariants
 
-- Every completed game is processed in deterministic FIFO order during normal operation without skipping.
-- Shard and replay order is independent of process completion order.
+- Every completed game is seen exactly once by the dispatcher, because it is renamed out of the inbox on first sight.
+- Ingestion order is approximate across shards and exact within a shard.
+- A game that cannot be materialized is discarded individually and quarantined, never stalling the pipeline.
+- A systematic rejection rate fails the run instead of silently discarding every game.
 - Shard/store layout digests must match exactly before mutation.
 - A shard is complete only when its final typed manifest validates.
 - Sealed uncommitted and committed-cleanup shard states have simple restart handling.

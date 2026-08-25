@@ -1,52 +1,56 @@
 from __future__ import annotations
 
-import hashlib
-import heapq
+import multiprocessing
 import os
 import threading
 import time
-from concurrent.futures import Future, ProcessPoolExecutor, wait
+from collections import deque
 from dataclasses import dataclass
+from multiprocessing.context import SpawnProcess
+from multiprocessing.queues import Queue
+from multiprocessing.synchronize import Event as EventType
 from pathlib import Path
-from typing import Callable, Generic, Literal, TypeVar
+from queue import Empty
+from typing import Generic, TypeVar
 
-from pydantic import Field, model_validator
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.replay.configuration import ReplayConfiguration
 from src.replay.description import ReplayDescription
+from src.replay.dispatch import (
+    COMPLETED_GAME_SUFFIX,
+    InboxDispatcher,
+    parse_worker_source_file_name,
+    worker_directory_paths,
+    worker_source_file_names,
+)
 from src.replay.layout import ReplayLayout
-from src.replay.parallel_materialization import (
-    SealedReplayShard,
-    initialize_materialization_worker,
-    stage_replay_shard,
-    stage_replay_shard_path,
+from src.replay.materialization_worker import (
+    MaterializationReport,
+    MaterializationSettings,
+    MaterializationWorker,
+    run_materialization_worker,
 )
 from src.replay.shard import (
-    InboxGameOrder,
-    PendingReplayShardManifest,
+    MANIFEST_SUFFIX,
     ReplayShardGameMetadata,
     ReplayShardReader,
-    ReplayShardSourceGame,
     SealedReplayShardManifest,
     replay_shard_data_path,
     replay_shard_manifest_path,
+    sealed_replay_shard_manifest_paths,
 )
 from src.replay.store import ReplayStore
-from src.self_play.completed_game import GameIdentity, SearchObservation, TerminationReason
+from src.self_play.completed_game import SearchObservation, TerminationReason
 from src.self_play.resignation import ResignationCalibrator
-from src.util.atomic_file import write_text_atomically
-from src.util.frozen_model import FrozenModel
 from src.util.generation_schedule import FloatGenerationSchedule
-from src.util.log import log
+from src.util.log import log, warn
 
 PositionT = TypeVar('PositionT')
 DISPATCH_INTERVAL_SECONDS = 1.0
-_QUEUE_FILE = 'shard-queue.json'
 _LEGACY_STAGED_ROWS_SUFFIX = '.rows.npy'
 _LEGACY_STAGED_METADATA_SUFFIX = '.meta.json'
-_MINIMUM_PENDING_SHARD_LIMIT = 32
-_STAGED_SHARD_LIMIT_FACTOR = 3
+_LEGACY_QUEUE_FILE = 'shard-queue.json'
 
 
 @dataclass(frozen=True)
@@ -73,48 +77,45 @@ class ReplayIngestion:
         return self.samples_added / self.elapsed_seconds if self.elapsed_seconds > 0.0 else 0.0
 
 
-class ReplayShardQueue(FrozenModel):
-    schema_version: Literal[1] = 1
-    layout_digest: str = Field(pattern=r'^[0-9a-f]{64}$')
-    next_sequence: int = Field(ge=0)
-    pending: tuple[PendingReplayShardManifest, ...] = ()
+class _RejectionRateAlarm:
+    """Bounds the fraction of discarded games so that "skip a bad game" cannot become "skip every game"."""
 
-    @model_validator(mode='after')
-    def validate_pending(self) -> ReplayShardQueue:
-        sequences = tuple(claim.sequence for claim in self.pending)
-        if sequences != tuple(sorted(set(sequences))):
-            raise ValueError('Replay shard queue claims must have unique increasing sequences.')
-        if sequences and sequences != tuple(range(sequences[0], self.next_sequence)):
-            raise ValueError('Replay shard queue claims must form one contiguous sequence.')
-        if sequences and self.next_sequence != sequences[-1] + 1:
-            raise ValueError('Replay shard queue next sequence must follow its final claim.')
-        sources = tuple(source for claim in self.pending for source in claim.games)
-        identities = tuple(source.identity.archive_key for source in sources)
-        file_names = tuple(source.order.file_name for source in sources)
-        orders = tuple(source.order.key for source in sources)
-        if len(set(identities)) != len(identities) or len(set(file_names)) != len(file_names):
-            raise ValueError('Replay shard queue source games must be globally unique.')
-        if orders != tuple(sorted(orders)) or len(set(orders)) != len(orders):
-            raise ValueError('Replay shard queue source games must preserve global FIFO order.')
-        return self
+    def __init__(self, window_games: int, rate_ceiling: float) -> None:
+        self.window_games = window_games
+        self.rate_ceiling = rate_ceiling
+        self._outcomes: deque[bool] = deque(maxlen=window_games)
+
+    @property
+    def rejection_rate(self) -> float:
+        if not self._outcomes:
+            return 0.0
+        return sum(self._outcomes) / len(self._outcomes)
+
+    def observe(self, materialized_games: int, rejected_games: int) -> None:
+        self._outcomes.extend([False] * materialized_games)
+        self._outcomes.extend([True] * rejected_games)
+
+    def breached(self) -> bool:
+        return len(self._outcomes) == self.window_games and self.rejection_rate > self.rate_ceiling
 
 
-class _MaterializationDispatcher:
-    def __init__(self, manager: ReplayManager[PositionT]) -> None:
+class _MaterializationSupervisor:
+    """Owns the dispatcher thread and one long-lived process per worker directory."""
+
+    def __init__(self, manager: ReplayManager[PositionT], poll_interval_seconds: float) -> None:
         self._manager = manager
-        self.on_sealed: Callable[[SealedReplayShard], None] = lambda sealed: None
-        self.poll_interval_seconds = DISPATCH_INTERVAL_SECONDS
-        self._pending: dict[Future[SealedReplayShard], int] = {}
-        self._retry_after: dict[int, float] = {}
-        self._notified: set[int] = set()
-        self._stop_event = threading.Event()
+        self.poll_interval_seconds = poll_interval_seconds
+        self._context = multiprocessing.get_context('spawn')
+        self._stop_event: EventType = self._context.Event()
+        self._report_queue: Queue[MaterializationReport] = self._context.Queue()
+        self._processes: dict[int, SpawnProcess] = {}
         self._thread: threading.Thread | None = None
-        self._lock = threading.RLock()
-        self.failed_game_count = 0
 
     def start(self) -> None:
         assert self._thread is None
-        self._thread = threading.Thread(target=self._run, name='replay-materialization-dispatcher', daemon=True)
+        for worker_index in range(len(self._manager.worker_paths)):
+            self._start_worker(worker_index)
+        self._thread = threading.Thread(target=self._run, name='replay-materialization-supervisor', daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
@@ -122,122 +123,63 @@ class _MaterializationDispatcher:
         if self._thread is not None:
             self._thread.join()
             self._thread = None
-        if self._pending:
-            wait(tuple(self._pending))
-            self._collect_finished()
+        for process in self._processes.values():
+            process.join(timeout=5.0)
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=5.0)
+        self._processes.clear()
+        self._manager.drain_worker_reports()
+        self._report_queue.close()
 
-    def dispatch_once(self) -> None:
-        with self._lock:
-            try:
-                self._collect_finished()
-                self._manager._allocate_claims()
-                active = set(self._pending.values())
-                with self._manager._lock:
-                    claims = self._manager._queue.pending
-                for claim in claims:
-                    sealed: SealedReplayShard | None = None
-                    submit_claim = False
-                    stage_inline = False
-                    with self._manager._lock:
-                        if claim not in self._manager._queue.pending:
-                            continue
-                        if claim.sequence < self._manager.store.state.append_sequence:
-                            continue
-                        if self._manager._is_sealed(claim):
-                            if claim.sequence not in self._notified:
-                                sealed = self._manager._sealed_result(claim)
-                        elif (
-                            claim.sequence not in active
-                            and self._retry_after.get(claim.sequence, 0.0) <= time.monotonic()
-                        ):
-                            executor = self._manager.materialization_executor
-                            submit_claim = executor is not None
-                            stage_inline = executor is None
-                    if sealed is not None:
-                        self._notify_sealed(sealed)
-                    elif submit_claim:
-                        executor = self._manager.materialization_executor
-                        assert executor is not None
-                        try:
-                            future = executor.submit(
-                                stage_replay_shard_path,
-                                claim,
-                                self._manager.inbox_path,
-                                self._manager.staging_path,
-                            )
-                        except BaseException as error:
-                            self._manager._set_fatal_materialization_error(
-                                RuntimeError(
-                                    f'Replay shard executor submission failed for sequence {claim.sequence}: {error}'
-                                )
-                            )
-                        else:
-                            self._pending[future] = claim.sequence
-                    elif stage_inline:
-                        self._stage_inline(claim)
-                self._collect_finished()
-            except BaseException as error:
-                self._manager._set_fatal_materialization_error(
-                    RuntimeError(f'Replay materialization dispatcher failed: {error}')
-                )
-
-    def drain(self) -> None:
+    def drain_reports(self) -> None:
         while True:
-            self.dispatch_once()
-            if self._manager._fatal_materialization_error is not None:
+            try:
+                report = self._report_queue.get_nowait()
+            except (Empty, OSError, ValueError):
                 return
-            if (
-                not self._pending
-                and not self._manager._has_unsealed_claims()
-                and (not self._manager._unclaimed_inbox_files() or not self._manager._has_claim_capacity())
-            ):
-                return
-            time.sleep(0.01)
+            self._manager.record_materialization_report(report)
 
-    def _stage_inline(self, claim: PendingReplayShardManifest) -> None:
-        try:
-            sealed = self._manager._stage_shard_inline(claim)
-        except Exception as error:  # noqa: BLE001
-            self._record_failure(claim, error)
-            return
-        self._retry_after.pop(claim.sequence, None)
-        self._notify_sealed(sealed)
-
-    def _collect_finished(self) -> None:
-        for future in [candidate for candidate in self._pending if candidate.done()]:
-            sequence = self._pending.pop(future)
-            error = future.exception()
-            if error is not None:
-                self._record_failure(self._manager._claim(sequence), error)
-                continue
-            self._retry_after.pop(sequence, None)
-            self._notify_sealed(future.result())
-
-    def _notify_sealed(self, sealed: SealedReplayShard) -> None:
-        try:
-            self.on_sealed(sealed)
-        except BaseException as error:
-            self._manager._set_fatal_materialization_error(
-                RuntimeError(f'Replay shard callback failed for sequence {sealed.sequence}: {error}')
-            )
-            return
-        self._notified.add(sealed.sequence)
-
-    def _record_failure(self, claim: PendingReplayShardManifest, error: BaseException) -> None:
-        self.failed_game_count += len(claim.games)
-        if isinstance(error, ValueError | FileNotFoundError):
-            self._manager._set_fatal_materialization_error(
-                RuntimeError(f'Replay shard {claim.sequence} is not materializable: {error}')
-            )
-            log(f'Fatal replay materialization failure for shard {claim.sequence}: {error}')
-            return
-        retry_seconds = min(max(self.poll_interval_seconds, 0.1), 5.0)
-        self._retry_after[claim.sequence] = time.monotonic() + retry_seconds
-        log(f'Transient replay materialization failure for shard {claim.sequence}: {error}')
+    def _start_worker(self, worker_index: int) -> None:
+        configuration_json = self._manager.experiment_configuration_json
+        assert configuration_json is not None
+        process = self._context.Process(
+            target=run_materialization_worker,
+            args=(
+                configuration_json,
+                self._manager.completed_games_path,
+                worker_index,
+                self._manager.materialization_settings,
+                self.poll_interval_seconds,
+                self._report_queue,
+                self._stop_event,
+            ),
+            name=f'replay-materialization-worker-{worker_index}',
+            daemon=True,
+        )
+        process.start()
+        self._processes[worker_index] = process
 
     def _run(self) -> None:
-        while not self._stop_event.wait(self.poll_interval_seconds):
-            self.dispatch_once()
+        while not self._stop_event.is_set():
+            try:
+                self._manager.dispatch_once()
+                self.drain_reports()
+                self._supervise_workers()
+            except BaseException as error:  # noqa: BLE001
+                self._manager.set_fatal_materialization_error(
+                    RuntimeError(f'Replay materialization supervisor failed: {error}')
+                )
+                return
+            self._stop_event.wait(self.poll_interval_seconds)
+
+    def _supervise_workers(self) -> None:
+        for worker_index, process in tuple(self._processes.items()):
+            if process.is_alive():
+                continue
+            warn(f'Replay materialization worker {worker_index} died with code {process.exitcode}; restarting.')
+            process.join(timeout=1.0)
+            self._start_worker(worker_index)
 
 
 class ReplayManager(Generic[PositionT]):
@@ -261,11 +203,12 @@ class ReplayManager(Generic[PositionT]):
             raise ValueError('Replay layout does not match replay policy retention configuration.')
         if store.state.maximum_capacity != configuration.maximum_capacity:
             raise ValueError('Replay file does not match replay maximum capacity configuration.')
+        self.completed_games_path = completed_games_path
         self.inbox_path = completed_games_path / 'inbox'
-        self._inbox_scanner = InboxScanner(self.inbox_path, '.json')
         self.staging_path = completed_games_path / 'staging'
-        self.queue_path = completed_games_path / _QUEUE_FILE
-        for directory in (self.inbox_path, self.staging_path):
+        self.rejected_path = completed_games_path / 'rejected'
+        self.worker_paths = worker_directory_paths(completed_games_path, configuration.materialization_processes)
+        for directory in (self.inbox_path, self.staging_path, self.rejected_path, *self.worker_paths):
             directory.mkdir(parents=True, exist_ok=True)
         self.store = store
         self.state = state
@@ -274,23 +217,29 @@ class ReplayManager(Generic[PositionT]):
         self.resignation_calibrator = resignation_calibrator
         self.terminal_oracle = terminal_oracle
         self.censor_remaining_game_length_on_cut_games = censor_remaining_game_length_on_cut_games
-        self._lock = threading.RLock()
-        self._sealed_manifest_cache: dict[str, SealedReplayShardManifest] = {}
-        self._fatal_materialization_error: RuntimeError | None = None
-        if configuration.materialization_processes > 1 and experiment_configuration is None:
-            raise ValueError('Parallel replay materialization requires the experiment configuration.')
-        self._queue = self._load_queue()
-        self._recover_directories()
-        self.materialization_executor = (
-            None
-            if configuration.materialization_processes == 1
-            else ProcessPoolExecutor(
-                max_workers=configuration.materialization_processes,
-                initializer=initialize_materialization_worker,
-                initargs=(experiment_configuration.model_dump_json(), configuration.maximum_policy_entries),
-            )
+        self.experiment_configuration_json = (
+            None if experiment_configuration is None else experiment_configuration.model_dump_json()
         )
-        self._dispatcher = _MaterializationDispatcher(self)
+        self.materialization_settings = MaterializationSettings(
+            shard_maximum_games=configuration.materialization_shard_maximum_games,
+            shard_target_source_bytes=configuration.materialization_shard_target_source_bytes,
+            staging_shard_limit=configuration.materialization_staging_shard_limit,
+            maximum_policy_entries=configuration.maximum_policy_entries,
+        )
+        self._lock = threading.RLock()
+        self._fatal_materialization_error: RuntimeError | None = None
+        self._rejection_alarm = _RejectionRateAlarm(
+            configuration.materialization_rejection_window_games,
+            configuration.materialization_rejection_rate_ceiling,
+        )
+        self.rejected_games = 0
+        self._sealed_manifest_cache: dict[str, SealedReplayShardManifest] = {}
+        self._recover_directories()
+        self._dispatcher = InboxDispatcher(
+            self.inbox_path, self.worker_paths, configuration.materialization_inbox_rename_cap
+        )
+        self._inline_workers: dict[int, MaterializationWorker[PositionT]] = {}
+        self._supervisor: _MaterializationSupervisor | None = None
 
     @classmethod
     def open(
@@ -338,63 +287,87 @@ class ReplayManager(Generic[PositionT]):
 
     @property
     def inbox_depth(self) -> int:
-        return len(self.inbox_files_by_modification_time())
+        return len(_completed_game_names(self.inbox_path)) + sum(
+            len(worker_source_file_names(path)) for path in self.worker_paths
+        )
 
     @property
     def staging_depth(self) -> int:
-        return sum(len(self._sealed_manifest(claim).games) for claim in self._queue.pending if self._is_sealed(claim))
+        return sum(len(manifest.games) for manifest in self._staged_manifests())
 
     @property
     def materialization_failures(self) -> int:
-        return self._dispatcher.failed_game_count
+        return self.rejected_games
+
+    @property
+    def rejection_rate(self) -> float:
+        return self._rejection_alarm.rejection_rate
 
     def total_materialized_samples(self) -> int:
         self.raise_if_materialization_failed()
+        return self.store.total_appended_rows
+
+    def start_materialization(self, poll_interval_seconds: float = DISPATCH_INTERVAL_SECONDS) -> None:
+        if self.experiment_configuration_json is None:
+            raise ValueError('Replay materialization workers require the experiment configuration.')
+        assert self._supervisor is None
+        self._supervisor = _MaterializationSupervisor(self, poll_interval_seconds)
+        self._supervisor.start()
+
+    def materialize_available_games(self) -> None:
+        """Runs the dispatcher and every worker loop in this process until nothing more can be sealed."""
+        while True:
+            self.dispatch_once()
+            progressed = False
+            for worker_index in range(len(self.worker_paths)):
+                worker = self._inline_worker(worker_index)
+                while (report := worker.materialize_once()) is not None:
+                    self.record_materialization_report(report)
+                    progressed = True
+            if not progressed:
+                self.raise_if_materialization_failed()
+                return
+
+    def dispatch_once(self) -> int:
+        return self._dispatcher.dispatch_once()
+
+    def drain_worker_reports(self) -> None:
+        if self._supervisor is not None:
+            self._supervisor.drain_reports()
+
+    def record_materialization_report(self, report: MaterializationReport) -> None:
         with self._lock:
-            return self.store.total_appended_rows + sum(
-                self._sealed_manifest(claim).row_count
-                for claim in self._queue.pending
-                if claim.sequence >= self.store.state.append_sequence and self._is_sealed(claim)
-            )
-
-    def start_materialization(
-        self, on_staged: Callable[[SealedReplayShard], None], poll_interval_seconds: float = DISPATCH_INTERVAL_SECONDS
-    ) -> None:
-        self._dispatcher.on_sealed = on_staged
-        self._dispatcher.poll_interval_seconds = poll_interval_seconds
-        self._dispatcher.start()
-
-    def materialize_available_games(self, on_staged: Callable[[SealedReplayShard], None]) -> None:
-        self._dispatcher.on_sealed = on_staged
-        self._dispatcher.drain()
-        self.raise_if_materialization_failed()
+            self.rejected_games += report.rejected_games
+            self._rejection_alarm.observe(report.materialized_games, report.rejected_games)
+            if self._rejection_alarm.breached():
+                self.set_fatal_materialization_error(
+                    RuntimeError(
+                        f'Replay materialization rejected {self._rejection_alarm.rejection_rate:.1%} of the last '
+                        f'{self._rejection_alarm.window_games} games, above the configured ceiling of '
+                        f'{self._rejection_alarm.rate_ceiling:.1%}.'
+                    )
+                )
 
     def append_staged_games(self, model_generation: int) -> ReplayIngestion:
         self.raise_if_materialization_failed()
+        self.drain_worker_reports()
         started_at = time.perf_counter()
         with self._lock:
             before = self.store.state
             self.store.set_logical_capacity(self.configuration.capacity_at(model_generation))
-            claims = self._contiguous_sealed_claims()
-            if not claims:
+            manifests = self._staged_manifests()
+            if not manifests:
                 # Nothing was written since the previous append, and msync of the whole store
                 # mapping costs ~0.2 s per gigabyte while holding this lock.
                 after = self.store.state
+                elapsed_seconds = time.perf_counter() - started_at
                 return ReplayIngestion(
-                    0,
-                    0,
-                    after.size,
-                    after.evicted_rows - before.evicted_rows,
-                    0,
-                    0,
-                    0,
-                    time.perf_counter() - started_at,
-                    (),
+                    0, 0, after.size, after.evicted_rows - before.evicted_rows, 0, 0, 0, elapsed_seconds, ()
                 )
             readers: list[ReplayShardReader] = []
             try:
-                for claim in claims:
-                    readers.append(self._open_claim(claim))
+                for manifest in manifests:
+                    readers.append(self._open_staged_shard(manifest))
                 metadata = tuple(game for reader in readers for game in reader.manifest.games)
                 for reader in readers:
                     self.store.append_columns(reader.columns, reader.manifest.shard_identity)
@@ -403,7 +376,8 @@ class ReplayManager(Generic[PositionT]):
                 for reader in readers:
                     reader.close()
             self._observe_resignation_games(metadata)
-            self._finalize_committed_claims(claims)
+            for manifest in manifests:
+                self._delete_shard_artifacts(manifest.shard_identity)
             after = self.store.state
             return ReplayIngestion(
                 len(metadata),
@@ -426,6 +400,12 @@ class ReplayManager(Generic[PositionT]):
         if error is not None:
             raise error
 
+    def set_fatal_materialization_error(self, error: RuntimeError) -> None:
+        with self._lock:
+            if self._fatal_materialization_error is None:
+                self._fatal_materialization_error = error
+                log(str(error))
+
     def description(self) -> ReplayDescription:
         state = self.store.state
         return ReplayDescription(
@@ -438,211 +418,56 @@ class ReplayManager(Generic[PositionT]):
         )
 
     def close(self) -> None:
-        self._dispatcher.stop()
-        if self.materialization_executor is not None:
-            self.materialization_executor.shutdown()
+        if self._supervisor is not None:
+            self._supervisor.stop()
+            self._supervisor = None
         self.store.close()
 
-    def inbox_files_by_modification_time(self) -> tuple[Path, ...]:
-        return self._inbox_scanner.scan()
-
-    def _load_queue(self) -> ReplayShardQueue:
-        if not self.queue_path.exists():
-            queue = ReplayShardQueue(
-                layout_digest=self.store.layout.digest, next_sequence=self.store.state.append_sequence
+    def _inline_worker(self, worker_index: int) -> MaterializationWorker[PositionT]:
+        worker = self._inline_workers.get(worker_index)
+        if worker is None:
+            worker = MaterializationWorker(
+                worker_index,
+                self.worker_paths[worker_index],
+                self.staging_path,
+                self.rejected_path,
+                self.state,
+                self.terminal_oracle,
+                self.store.layout,
+                self.value_discount_per_ply,
+                self.censor_remaining_game_length_on_cut_games,
+                self.materialization_settings,
             )
-            self._save_queue(queue)
-            return queue
-        queue = ReplayShardQueue.model_validate_json(self.queue_path.read_text(encoding='utf-8'))
-        if queue.layout_digest != self.store.layout.digest:
-            raise ValueError('Replay shard queue layout does not match the replay store.')
-        if queue.next_sequence < self.store.state.append_sequence:
-            raise ValueError('Replay shard queue sequence precedes the replay store.')
-        first_sequence = queue.pending[0].sequence if queue.pending else queue.next_sequence
-        if first_sequence > self.store.state.append_sequence:
-            raise ValueError('Replay shard queue begins after the replay store append sequence.')
-        return queue
+            self._inline_workers[worker_index] = worker
+        return worker
 
-    def _save_queue(self, queue: ReplayShardQueue) -> None:
-        write_text_atomically(self.queue_path, queue.model_dump_json() + '\n')
-
-    def _allocate_claims(self) -> None:
-        with self._lock:
-            if self._fatal_materialization_error is not None:
-                return
-            queue_snapshot = self._queue
-            claimed = {source.order.file_name for claim in queue_snapshot.pending for source in claim.games}
-            last_claimed_key = max(
-                (source.order.key for claim in queue_snapshot.pending for source in claim.games),
-                default=None,
-            )
-            available = tuple(path for path in self.inbox_files_by_modification_time() if path.name not in claimed)
-            claim_slots = self._claim_slots(queue_snapshot)
-        batches: list[tuple[ReplayShardSourceGame, ...]] = []
-        fatal_error: RuntimeError | None = None
-        candidate_index = 0
-        while candidate_index < len(available) and len(batches) < claim_slots:
-            batch: list[ReplayShardSourceGame] = []
-            batch_bytes = 0
-            while (
-                candidate_index < len(available) and len(batch) < self.configuration.materialization_shard_maximum_games
-            ):
-                candidate = available[candidate_index]
+    def _staged_manifests(self) -> tuple[SealedReplayShardManifest, ...]:
+        manifests = []
+        for manifest_path in sealed_replay_shard_manifest_paths(self.staging_path):
+            identity = manifest_path.name.removesuffix(MANIFEST_SUFFIX)
+            # A sealed manifest never changes, and re-parsing its embedded search observations on
+            # every coordinator loop iteration costs more than the append it precedes.
+            manifest = self._sealed_manifest_cache.get(identity)
+            if manifest is None:
                 try:
-                    status = candidate.stat()
-                    # A game renamed into the inbox can surface after a younger file was already
-                    # claimed; refresh its timestamp so it re-enters the FIFO at the tail instead
-                    # of violating the queue's global order.
-                    if last_claimed_key is not None and (status.st_mtime_ns, candidate.name) <= last_claimed_key:
-                        os.utime(candidate)
-                        self._inbox_scanner.invalidate(candidate.name)
-                        candidate_index += 1
-                        continue
-                    if (
-                        batch
-                        and batch_bytes + status.st_size > self.configuration.materialization_shard_target_source_bytes
-                    ):
-                        break
-                    identity = GameIdentity.from_file_name(candidate.name)
-                    source = ReplayShardSourceGame(
-                        identity=identity,
-                        order=InboxGameOrder(modified_at_ns=status.st_mtime_ns, file_name=candidate.name),
-                        source_size=status.st_size,
-                        source_sha256=_file_sha256(candidate),
-                    )
-                except (OSError, ValueError) as error:
-                    fatal_error = RuntimeError(f'Completed game cannot be claimed in FIFO order: {candidate}: {error}')
-                    break
-                candidate_index += 1
-                batch.append(source)
-                batch_bytes += status.st_size
-            if batch:
-                batches.append(tuple(batch))
-            if fatal_error is not None:
-                break
-            if not batch:
-                break
-        with self._lock:
-            if self._queue != queue_snapshot:
-                return
-            pending = list(queue_snapshot.pending)
-            next_sequence = queue_snapshot.next_sequence
-            claimed_now = {source.order.file_name for claim in pending for source in claim.games}
-            for batch in batches:
-                for source in batch:
-                    path = self.inbox_path / source.order.file_name
-                    try:
-                        status = path.stat()
-                    except OSError:
-                        return
-                    if (
-                        source.order.file_name in claimed_now
-                        or status.st_size != source.source_size
-                        or status.st_mtime_ns != source.order.modified_at_ns
-                    ):
-                        return
-                    claimed_now.add(source.order.file_name)
-                pending.append(PendingReplayShardManifest.create(self.store.layout, next_sequence, batch))
-                next_sequence += 1
-            queue = ReplayShardQueue(
-                layout_digest=self.store.layout.digest,
-                next_sequence=next_sequence,
-                pending=tuple(pending),
-            )
-            if queue != self._queue:
-                self._save_queue(queue)
-                self._queue = queue
-            if fatal_error is not None:
-                self._set_fatal_materialization_error(fatal_error)
-                self._dispatcher.failed_game_count += 1
-                log(str(fatal_error))
+                    manifest = SealedReplayShardManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
+                except (OSError, UnicodeError, ValueError) as error:
+                    raise ValueError(f'Sealed replay shard manifest is invalid: {manifest_path}') from error
+                if manifest.layout_digest != self.store.layout.digest:
+                    raise ValueError('Sealed replay shard layout does not match the replay store.')
+                self._sealed_manifest_cache[identity] = manifest
+            manifests.append(manifest)
+        return tuple(manifests)
 
-    def _claim_slots(self, queue: ReplayShardQueue) -> int:
-        append_sequence = self.store.state.append_sequence
-        outstanding = tuple(claim for claim in queue.pending if claim.sequence >= append_sequence)
-        unsealed = sum(not self._is_sealed(claim) for claim in outstanding)
-        materialization_limit = max(_MINIMUM_PENDING_SHARD_LIMIT, 2 * self.configuration.materialization_processes)
-        # Sealed shards wait on the single-threaded appender; counting them as in-flight work
-        # idles every materialization worker for the whole duration of an append.
-        staging_limit = _STAGED_SHARD_LIMIT_FACTOR * materialization_limit
-        return min(materialization_limit - unsealed, staging_limit - len(outstanding))
-
-    def _unclaimed_inbox_files(self) -> tuple[Path, ...]:
-        with self._lock:
-            claimed = {source.order.file_name for claim in self._queue.pending for source in claim.games}
-        return tuple(path for path in self.inbox_files_by_modification_time() if path.name not in claimed)
-
-    def _has_claim_capacity(self) -> bool:
-        with self._lock:
-            return self._claim_slots(self._queue) > 0
-
-    def _has_unsealed_claims(self) -> bool:
-        with self._lock:
-            return any(
-                claim.sequence >= self.store.state.append_sequence and not self._is_sealed(claim)
-                for claim in self._queue.pending
-            )
-
-    def _set_fatal_materialization_error(self, error: RuntimeError) -> None:
-        with self._lock:
-            if self._fatal_materialization_error is None:
-                self._fatal_materialization_error = error
-
-    def _claim(self, sequence: int) -> PendingReplayShardManifest:
-        return next(claim for claim in self._queue.pending if claim.sequence == sequence)
-
-    def _stage_shard_inline(self, claim: PendingReplayShardManifest) -> SealedReplayShard:
-        return stage_replay_shard(
-            claim,
-            self.inbox_path,
-            self.staging_path,
-            self.state,
-            self.terminal_oracle,
-            self.store.layout,
-            self.value_discount_per_ply,
-            self.censor_remaining_game_length_on_cut_games,
-        )
-
-    def _is_sealed(self, claim: PendingReplayShardManifest) -> bool:
-        return replay_shard_manifest_path(self.staging_path, claim.shard_identity).exists()
-
-    def _open_claim(self, claim: PendingReplayShardManifest) -> ReplayShardReader:
-        # _sealed_manifest already validated this manifest against the claim; re-parsing its
-        # embedded search observations here costs more than the row copy it guards.
+    def _open_staged_shard(self, manifest: SealedReplayShardManifest) -> ReplayShardReader:
+        # The manifest was parsed and layout-checked above; re-parsing its embedded search
+        # observations here costs more than the row copy it would guard.
         return ReplayShardReader.open(
-            replay_shard_manifest_path(self.staging_path, claim.shard_identity),
+            replay_shard_manifest_path(self.staging_path, manifest.shard_identity),
             self.store.layout,
             verify_data_hash=False,
-            manifest=self._sealed_manifest(claim),
+            manifest=manifest,
         )
-
-    def _sealed_result(self, claim: PendingReplayShardManifest) -> SealedReplayShard:
-        manifest = self._sealed_manifest(claim)
-        return SealedReplayShard(manifest.sequence, manifest.shard_identity, manifest.row_count, len(manifest.games))
-
-    def _sealed_manifest(self, claim: PendingReplayShardManifest) -> SealedReplayShardManifest:
-        cached = self._sealed_manifest_cache.get(claim.shard_identity)
-        if cached is not None:
-            return cached
-        path = replay_shard_manifest_path(self.staging_path, claim.shard_identity)
-        manifest = SealedReplayShardManifest.model_validate_json(path.read_text(encoding='utf-8'))
-        if (
-            manifest.layout_digest != self.store.layout.digest
-            or manifest.sequence != claim.sequence
-            or tuple(game.source for game in manifest.games) != claim.games
-        ):
-            raise ValueError('Sealed replay shard does not match its durable claim.')
-        self._sealed_manifest_cache[claim.shard_identity] = manifest
-        return manifest
-
-    def _contiguous_sealed_claims(self) -> tuple[PendingReplayShardManifest, ...]:
-        by_sequence = {claim.sequence: claim for claim in self._queue.pending}
-        sequence = self.store.state.append_sequence
-        claims = []
-        while (claim := by_sequence.get(sequence)) is not None and self._is_sealed(claim):
-            claims.append(claim)
-            sequence += 1
-        return tuple(claims)
 
     def _observe_resignation_games(self, metadata: tuple[ReplayShardGameMetadata, ...]) -> None:
         if self.resignation_calibrator is None:
@@ -658,34 +483,10 @@ class ReplayManager(Generic[PositionT]):
                     observations=game.observations,
                 )
 
-    def _finalize_committed_claims(self, claims: tuple[PendingReplayShardManifest, ...]) -> None:
-        committed = {claim.shard_identity for claim in claims}
-        for claim in claims:
-            self._validate_leftover_sources(claim.games)
-        queue = ReplayShardQueue(
-            layout_digest=self._queue.layout_digest,
-            next_sequence=self._queue.next_sequence,
-            pending=tuple(claim for claim in self._queue.pending if claim.shard_identity not in committed),
-        )
-        self._save_queue(queue)
-        self._queue = queue
-        for claim in claims:
-            self._delete_shard_artifacts(claim.shard_identity, claim.games)
-
-    def _validate_leftover_sources(self, sources: tuple[ReplayShardSourceGame, ...]) -> None:
-        for source in sources:
-            inbox_file = self.inbox_path / source.order.file_name
-            if not inbox_file.exists():
-                continue
-            if inbox_file.stat().st_size != source.source_size or _file_sha256(inbox_file) != source.source_sha256:
-                raise ValueError('Leftover completed-game source does not match its committed replay shard.')
-
-    def _delete_shard_artifacts(self, identity: str, sources: tuple[ReplayShardSourceGame, ...]) -> None:
-        for source in sources:
-            (self.inbox_path / source.order.file_name).unlink(missing_ok=True)
-        self._sealed_manifest_cache.pop(identity, None)
-        replay_shard_manifest_path(self.staging_path, identity).unlink(missing_ok=True)
-        replay_shard_data_path(self.staging_path, identity).unlink(missing_ok=True)
+    def _delete_shard_artifacts(self, shard_identity: str) -> None:
+        self._sealed_manifest_cache.pop(shard_identity, None)
+        replay_shard_manifest_path(self.staging_path, shard_identity).unlink(missing_ok=True)
+        replay_shard_data_path(self.staging_path, shard_identity).unlink(missing_ok=True)
 
     def _recover_directories(self) -> None:
         legacy = tuple(self.staging_path.glob(f'*{_LEGACY_STAGED_ROWS_SUFFIX}')) + tuple(
@@ -693,98 +494,41 @@ class ReplayManager(Generic[PositionT]):
         )
         if legacy:
             raise ValueError('Legacy per-game replay staging exists; an explicit replay migration is required.')
-        for directory in (self.inbox_path, self.staging_path):
+        if (self.completed_games_path / _LEGACY_QUEUE_FILE).exists():
+            raise ValueError('A legacy replay shard queue exists; an explicit replay migration is required.')
+        self._assert_one_filesystem()
+        for directory in (self.inbox_path, self.staging_path, *self.worker_paths):
             for temporary in directory.glob('.*.tmp'):
                 temporary.unlink(missing_ok=True)
-        committed_claims = tuple(
-            claim for claim in self._queue.pending if claim.sequence < self.store.state.append_sequence
-        )
-        committed_metadata = tuple(
-            game for claim in committed_claims if self._is_sealed(claim) for game in self._sealed_manifest(claim).games
-        )
-        self._observe_resignation_games(committed_metadata)
-        if committed_claims:
-            self._finalize_committed_claims(committed_claims)
-        claimed = {claim.shard_identity for claim in self._queue.pending}
-        for manifest_path in self.staging_path.glob('*.replay-shard.json'):
-            identity = manifest_path.name.removesuffix('.replay-shard.json')
-            if identity not in claimed:
-                manifest = SealedReplayShardManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
-                if (
-                    manifest.layout_digest != self.store.layout.digest
-                    or manifest.shard_identity != identity
-                    or manifest.sequence >= self.store.state.append_sequence
-                ):
-                    raise ValueError('Sealed replay shard is not owned by the durable shard queue.')
-                self._observe_resignation_games(manifest.games)
-                sources = tuple(game.source for game in manifest.games)
-                self._validate_leftover_sources(sources)
-                self._delete_shard_artifacts(identity, sources)
         for data_path in self.staging_path.glob('*.replay-shard.bin'):
             identity = data_path.name.removesuffix('.replay-shard.bin')
             if not replay_shard_manifest_path(self.staging_path, identity).exists():
                 data_path.unlink(missing_ok=True)
-        for claim in self._queue.pending:
-            if self._is_sealed(claim):
-                self._stage_shard_inline(claim)
+        self._return_orphaned_worker_directories()
 
+    def _assert_one_filesystem(self) -> None:
+        # A cross-device rename silently degrades to copy+unlink, which is the whole cost the
+        # per-worker dispatch exists to avoid.
+        devices = {path.stat().st_dev for path in (self.inbox_path, self.staging_path, *self.worker_paths)}
+        if len(devices) != 1:
+            raise ValueError('Replay inbox, worker and staging directories must share one filesystem.')
 
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open('rb') as file:
-        while block := file.read(1024 * 1024):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-class InboxScanner:
-    """Orders inbox files by modification time without re-stat()ing the whole backlog every cycle."""
-
-    def __init__(self, directory: Path, suffix: str) -> None:
-        self.directory = directory
-        self.suffix = suffix
-        self._modified_at_by_name: dict[str, int] = {}
-        self._ordered_keys: list[tuple[int, str]] = []
-        self._ordered: tuple[Path, ...] = ()
-
-    def invalidate(self, file_name: str) -> None:
-        modified_at_ns = self._modified_at_by_name.pop(file_name, None)
-        if modified_at_ns is None:
-            return
-        self._ordered_keys.remove((modified_at_ns, file_name))
-        self._ordered = tuple(path for path in self._ordered if path.name != file_name)
-
-    def scan(self) -> tuple[Path, ...]:
-        try:
-            names = {entry.name for entry in os.scandir(self.directory) if entry.name.endswith(self.suffix)}
-        except FileNotFoundError:
-            self._modified_at_by_name = {}
-            self._ordered_keys = []
-            self._ordered = ()
-            return ()
-        known = self._modified_at_by_name
-        arrived = names - known.keys()
-        departed = known.keys() - names
-        if not arrived and not departed:
-            return self._ordered
-        arrived_keys: list[tuple[int, str]] = []
-        for name in sorted(arrived):
-            try:
-                # A completed game is renamed into place fully written, so a name's timestamp is
-                # immutable for as long as the name exists; only re-queued files are invalidated.
-                modified_at_ns = (self.directory / name).stat().st_mtime_ns
-            except OSError:
+    def _return_orphaned_worker_directories(self) -> None:
+        for entry in self.completed_games_path.glob('worker-*'):
+            if not entry.is_dir() or entry in self.worker_paths:
                 continue
-            known[name] = modified_at_ns
-            arrived_keys.append((modified_at_ns, name))
-        arrived_keys.sort()
-        retained = zip(self._ordered_keys, self._ordered)
-        surviving = [pair for pair in retained if pair[0][1] not in departed] if departed else list(retained)
-        merged = list(heapq.merge(surviving, ((key, self.directory / key[1]) for key in arrived_keys), key=_first))
-        self._ordered_keys = [key for key, _ in merged]
-        self._ordered = tuple(path for _, path in merged)
-        return self._ordered
+            for file_name in worker_source_file_names(entry):
+                _, completed_game_file_name = parse_worker_source_file_name(file_name)
+                os.replace(entry / file_name, self.inbox_path / completed_game_file_name)
+            try:
+                entry.rmdir()
+            except OSError:
+                warn(f'Orphaned replay worker directory {entry} is not empty; leaving it in place.')
 
 
-def _first(pair: tuple[tuple[int, str], Path]) -> tuple[int, str]:
-    return pair[0]
+def _completed_game_names(directory: Path) -> tuple[str, ...]:
+    try:
+        with os.scandir(directory) as entries:
+            return tuple(entry.name for entry in entries if entry.name.endswith(COMPLETED_GAME_SUFFIX))
+    except FileNotFoundError:
+        return ()

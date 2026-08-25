@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, cast
+from typing import cast
 
 import pytest
 import src.training.coordinator as coordinator_module
 from src.replay.manager import ReplayIngestion
-from src.replay.parallel_materialization import SealedReplayShard
 from src.self_play.protocol import (
     RunningSelfPlayState,
     RunningSelfPlayStateApplied,
@@ -46,6 +45,9 @@ class _Ledger:
     def save(self) -> None:
         self.saved = True
 
+    def reconcile_materialized_samples(self, total_materialized_samples: int) -> None:
+        del total_materialized_samples
+
 
 @dataclass
 class _ReplayManager:
@@ -54,8 +56,11 @@ class _ReplayManager:
     closed: bool = False
     live_samples: int = 0
 
-    def start_materialization(self, on_sealed_shard: Callable[[SealedReplayShard], None]) -> None:
-        del on_sealed_shard
+    def start_materialization(self) -> None:
+        pass
+
+    def total_materialized_samples(self) -> int:
+        return 0
 
     def raise_if_materialization_failed(self) -> None:
         pass

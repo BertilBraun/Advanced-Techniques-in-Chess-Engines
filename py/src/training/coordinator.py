@@ -11,7 +11,6 @@ from src.games.implementation import GameImplementation
 from src.replay.batch_loader import build_training_batch
 from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame, ReplayManager
-from src.replay.parallel_materialization import SealedReplayShard
 from src.replay.store import ReplayStore
 from src.self_play.protocol import (
     RunningSelfPlayState,
@@ -116,7 +115,7 @@ class Coordinator:
                 self._train_quantum(self_play_started=False)
             self.evaluation_manager.start()
             self._start_self_play()
-            self.replay_manager.start_materialization(self._reconcile_materialized_shard)
+            self.replay_manager.start_materialization()
             while not self.ledger.training_complete:
                 self.replay_manager.raise_if_materialization_failed()
                 # Appending must not wait for a full quantum of credits, and must not sit behind worker
@@ -174,13 +173,12 @@ class Coordinator:
     def _self_play_stop_reason(self) -> str | None:
         return self.self_play_health.stop_reason(self.self_play_group.live_worker_count, time.monotonic())
 
-    def _reconcile_materialized_shard(self, sealed: SealedReplayShard) -> None:
-        del sealed
-        self.ledger.reconcile_materialized_samples(self.replay_manager.total_materialized_samples())
-
     def _append_staged_games(self) -> None:
         generation = self.ledger.model_generation
         ingestion = self.replay_manager.append_staged_games(generation)
+        # Credit is earned strictly after the append and its flush: late credit costs one loop
+        # iteration, early credit lets the ledger over-earn against the store.
+        self.ledger.reconcile_materialized_samples(self.replay_manager.total_materialized_samples())
         self._completed_games_since_last_quantum.extend(ingestion.completed_games)
         self._ingest_seconds_since_last_quantum += ingestion.elapsed_seconds
         if ingestion.games_ingested:
@@ -282,6 +280,7 @@ class Coordinator:
                 inbox_depth=self.replay_manager.inbox_depth,
                 staging_depth=self.replay_manager.staging_depth,
                 materialization_failures=self.replay_manager.materialization_failures,
+                rejection_rate=self.replay_manager.rejection_rate,
             ),
         )
         self._completed_games_since_last_quantum.clear()
