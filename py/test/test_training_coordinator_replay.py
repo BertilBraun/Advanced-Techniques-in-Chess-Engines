@@ -5,7 +5,6 @@ from typing import cast
 
 from src.replay.description import ReplayDescription
 from src.replay.manager import IngestedCompletedGame, ReplayIngestion
-from src.replay.parallel_materialization import SealedReplayShard
 from src.self_play.completed_game import TerminationReason
 from src.training.coordinator import Coordinator
 from src.training.credit_ledger import CreditLedgerState
@@ -53,6 +52,10 @@ class _FakeReplayManager:
     def materialization_failures(self) -> int:
         return 0
 
+    @property
+    def rejection_rate(self) -> float:
+        return 0.0
+
 
 @dataclass
 class _FakeReporter:
@@ -98,13 +101,12 @@ def _coordinator(replay_manager: _FakeReplayManager) -> Coordinator:
     return coordinator
 
 
-def test_duplicate_sealed_callback_reconciles_absolute_credit_without_double_counting() -> None:
+def test_append_credits_the_absolute_appended_total_without_double_counting() -> None:
     replay_manager = _FakeReplayManager(total_materialized=12, ingestion=_ingestion())
     coordinator = _coordinator(replay_manager)
-    sealed = SealedReplayShard(sequence=0, shard_identity='3' * 64, row_count=12, game_count=1)
 
-    coordinator._reconcile_materialized_shard(sealed)
-    coordinator._reconcile_materialized_shard(sealed)
+    coordinator._append_staged_games()
+    coordinator._append_staged_games()
 
     ledger = cast(_FakeLedger, coordinator.ledger)
     assert ledger.reconciled_total == 12

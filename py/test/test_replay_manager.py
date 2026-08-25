@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import os
-import time
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Event, Thread
-from typing import Callable, NoReturn
 from uuid import UUID
 
 import numpy as np
@@ -22,17 +18,11 @@ from src.replay.contracts import (
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
 )
+from src.replay.dispatch import parse_worker_source_file_name, worker_source_file_names
 from src.replay.layout import ReplayLayout
-from src.replay.manager import _STAGED_SHARD_LIMIT_FACTOR, InboxScanner, ReplayManager, ReplayShardQueue
+from src.replay.manager import ReplayManager
 from src.replay.materialization import materialize_completed_game
-from src.replay.parallel_materialization import SealedReplayShard
-from src.replay.shard import (
-    PendingReplayShardManifest,
-    ReplayShardReader,
-    ReplayShardSourceGame,
-    SealedReplayShardManifest,
-    replay_shard_manifest_path,
-)
+from src.replay.shard import SealedReplayShardManifest, replay_shard_manifest_path
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
@@ -568,13 +558,23 @@ def _open_manager(
     resignation_calibrator: ResignationCalibrator | None = None,
     shard_maximum_games: int = 32,
     shard_maximum_source_bytes: int = 16 * 1024 * 1024,
+    materialization_processes: int = 1,
+    staging_shard_limit: int = 96,
+    inbox_rename_cap: int = 4096,
+    rejection_window_games: int = 512,
+    rejection_rate_ceiling: float = 0.05,
 ) -> ReplayManager[LinearPosition]:
     configuration = ReplayConfiguration(
         capacity=capacity,
         maximum_capacity=maximum_capacity,
         maximum_policy_entries=1,
+        materialization_processes=materialization_processes,
         materialization_shard_maximum_games=shard_maximum_games,
         materialization_shard_target_source_bytes=shard_maximum_source_bytes,
+        materialization_staging_shard_limit=staging_shard_limit,
+        materialization_inbox_rename_cap=inbox_rename_cap,
+        materialization_rejection_window_games=rejection_window_games,
+        materialization_rejection_rate_ceiling=rejection_rate_ceiling,
     )
     return ReplayManager.open(
         tmp_path,
@@ -605,6 +605,25 @@ def _publish_games(inbox: Path, count: int, first_game_number: int = 7) -> None:
         )
 
 
+def _publish_malformed_games(inbox: Path, count: int, first_game_number: int = 500) -> None:
+    inbox.mkdir(parents=True, exist_ok=True)
+    for game_number in range(first_game_number, first_game_number + count):
+        identity = GameIdentity(
+            worker_id=3,
+            process_instance_id=UUID('38c8809f-a49d-4d98-8da5-034614893665'),
+            game_number=game_number,
+        )
+        (inbox / identity.file_name).write_text('{}', encoding='utf-8')
+
+
+def _worker_source_paths(manager: ReplayManager[LinearPosition]) -> tuple[Path, ...]:
+    return tuple(
+        worker_path / name
+        for worker_path in manager.worker_paths
+        for name in sorted(worker_source_file_names(worker_path))
+    )
+
+
 SAMPLES_PER_GAME = 3
 
 
@@ -631,17 +650,24 @@ def test_replay_manager_rejects_legacy_per_game_staging_artifacts(
         _open_manager(tmp_path, capacity=4, maximum_capacity=4)
 
 
-def test_replay_manager_stages_appends_and_reopens_fifo(tmp_path: Path) -> None:
+def test_replay_manager_rejects_a_legacy_shard_queue(tmp_path: Path) -> None:
+    completed_games = tmp_path / 'completed-games'
+    completed_games.mkdir(parents=True)
+    (completed_games / 'shard-queue.json').write_text('{"next_sequence": 2738, "pending": []}', encoding='utf-8')
+
+    with pytest.raises(ValueError, match='explicit replay migration'):
+        _open_manager(tmp_path, capacity=4, maximum_capacity=4)
+
+
+def test_replay_manager_materializes_appends_and_reopens(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
     _publish_games(inbox, 2)
     manager = _open_manager(tmp_path, capacity=4, maximum_capacity=6)
-    staged: list[SealedReplayShard] = []
 
-    manager.materialize_available_games(staged.append)
+    manager.materialize_available_games()
 
     assert manager.inbox_depth == 0
     assert manager.staging_depth == 2
-    assert [result.row_count for result in staged] == [6]
 
     ingestion = manager.append_staged_games(2)
 
@@ -664,66 +690,62 @@ def test_replay_manager_stages_appends_and_reopens_fifo(tmp_path: Path) -> None:
     reopened.close()
 
 
-def test_materialization_claims_use_bounded_deterministic_game_batches(tmp_path: Path) -> None:
+def test_dispatch_moves_every_inbox_game_into_worker_directories_round_robin(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 6)
+    manager = _open_manager(tmp_path, capacity=64, maximum_capacity=64, materialization_processes=3)
+
+    assert manager.dispatch_once() == 6
+
+    assert not tuple(inbox.glob('*.json'))
+    assert [len(worker_source_file_names(path)) for path in manager.worker_paths] == [2, 2, 2]
+    counters = [
+        [parse_worker_source_file_name(name)[0] for name in sorted(worker_source_file_names(path))]
+        for path in manager.worker_paths
+    ]
+    assert counters == [[0, 1], [0, 1], [0, 1]]
+    manager.close()
+
+
+def test_dispatch_is_bounded_by_its_rename_cap_and_resumes_on_the_next_pass(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 5)
+    manager = _open_manager(tmp_path, capacity=64, maximum_capacity=64, inbox_rename_cap=2)
+
+    assert manager.dispatch_once() == 2
+    assert len(tuple(inbox.glob('*.json'))) == 3
+    assert manager.dispatch_once() == 2
+    assert manager.dispatch_once() == 1
+    assert manager.dispatch_once() == 0
+    manager.close()
+
+
+def test_within_shard_order_follows_the_dispatch_counter(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 4)
+    manager = _open_manager(tmp_path, capacity=64, maximum_capacity=64)
+    manager.dispatch_once()
+    dispatched = tuple(parse_worker_source_file_name(path.name) for path in _worker_source_paths(manager))
+
+    manager.materialize_available_games()
+
+    manifests = manager._staged_manifests()
+    assert len(manifests) == 1
+    sources = manifests[0].games
+    assert tuple(game.source.counter for game in sources) == tuple(counter for counter, _ in dispatched)
+    assert tuple(game.source.identity.file_name for game in sources) == tuple(name for _, name in dispatched)
+    manager.close()
+
+
+def test_materialization_uses_bounded_game_batches(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
     _publish_games(inbox, 5)
     manager = _open_manager(tmp_path, capacity=32, maximum_capacity=32, shard_maximum_games=2)
-    sealed: list[SealedReplayShard] = []
 
-    manager.materialize_available_games(sealed.append)
+    manager.materialize_available_games()
 
-    assert [result.game_count for result in sealed] == [2, 2, 1]
-    queue = ReplayShardQueue.model_validate_json(manager.queue_path.read_text(encoding='utf-8'))
-    assert tuple(claim.sequence for claim in queue.pending) == (0, 1, 2)
-    assert tuple(source.identity.game_number for claim in queue.pending for source in claim.games) == (7, 8, 9, 10, 11)
-    manager.close()
-
-
-def test_replay_shard_queue_rejects_cross_claim_duplicates_and_reordering(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 2)
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8, shard_maximum_games=1)
-    manager.materialize_available_games(lambda sealed: None)
-    queue = ReplayShardQueue.model_validate_json(manager.queue_path.read_text(encoding='utf-8'))
-    first, second = queue.pending
-
-    duplicate = PendingReplayShardManifest.create(manager.store.layout, 1, first.games)
-    with pytest.raises(ValueError, match='globally unique'):
-        ReplayShardQueue(
-            layout_digest=queue.layout_digest,
-            next_sequence=2,
-            pending=(first, duplicate),
-        )
-
-    reordered_first = PendingReplayShardManifest.create(manager.store.layout, 0, second.games)
-    reordered_second = PendingReplayShardManifest.create(manager.store.layout, 1, first.games)
-    with pytest.raises(ValueError, match='global FIFO'):
-        ReplayShardQueue(
-            layout_digest=queue.layout_digest,
-            next_sequence=2,
-            pending=(reordered_first, reordered_second),
-        )
-    manager.close()
-
-
-def test_late_arriving_older_inbox_file_is_requeued_behind_claimed_games(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 1)
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8, shard_maximum_games=1)
-    sealed: list[SealedReplayShard] = []
-    manager.materialize_available_games(sealed.append)
-    assert len(sealed) == 1
-
-    _publish_games(inbox, 1, first_game_number=99)
-    late_file = next(iter(inbox.glob('*.json')))
-    os.utime(late_file, ns=(0, 0))
-
-    manager.materialize_available_games(sealed.append)
-
-    assert len(sealed) == 2
-    queue = ReplayShardQueue.model_validate_json(manager.queue_path.read_text(encoding='utf-8'))
-    keys = tuple(source.order.key for claim in queue.pending for source in claim.games)
-    assert keys == tuple(sorted(keys))
+    assert sorted(len(manifest.games) for manifest in manager._staged_manifests()) == [1, 2, 2]
+    assert manager.staging_depth == 5
     manager.close()
 
 
@@ -737,174 +759,11 @@ def test_oversize_source_forms_one_game_shard_without_blocking_later_games(tmp_p
         shard_maximum_games=8,
         shard_maximum_source_bytes=1,
     )
-    sealed: list[SealedReplayShard] = []
 
-    manager.materialize_available_games(sealed.append)
+    manager.materialize_available_games()
 
-    assert [result.game_count for result in sealed] == [1, 1]
+    assert sorted(len(manifest.games) for manifest in manager._staged_manifests()) == [1, 1]
     assert manager.inbox_depth == 0
-    manager.close()
-
-
-def test_inline_materialization_does_not_hold_manager_boundary_lock(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 1)
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-    materialization_started = Event()
-    release_materialization = Event()
-    original_stage = manager._stage_shard_inline
-
-    def blocked_stage(claim: PendingReplayShardManifest) -> SealedReplayShard:
-        materialization_started.set()
-        assert release_materialization.wait(timeout=5.0)
-        return original_stage(claim)
-
-    monkeypatch.setattr(manager, '_stage_shard_inline', blocked_stage)
-    dispatch_thread = Thread(target=manager._dispatcher.dispatch_once)
-    dispatch_thread.start()
-    assert materialization_started.wait(timeout=5.0)
-
-    started_at = time.perf_counter()
-    ingestion = manager.append_staged_games(2)
-    elapsed = time.perf_counter() - started_at
-
-    assert ingestion.games_ingested == 0
-    assert elapsed < 0.5
-    release_materialization.set()
-    dispatch_thread.join(timeout=5.0)
-    assert not dispatch_thread.is_alive()
-    manager.close()
-
-
-def test_sealed_callback_racing_append_cleanup_does_not_resubmit_claim(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 1)
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-    manager.materialize_available_games(lambda sealed: None)
-    manager._dispatcher._notified.clear()
-    callback_started = Event()
-    release_callback = Event()
-
-    def blocked_callback(sealed: SealedReplayShard) -> None:
-        del sealed
-        callback_started.set()
-        assert release_callback.wait(timeout=5.0)
-
-    manager._dispatcher.on_sealed = blocked_callback
-    dispatch_thread = Thread(target=manager._dispatcher.dispatch_once)
-    dispatch_thread.start()
-    assert callback_started.wait(timeout=5.0)
-
-    ingestion = manager.append_staged_games(2)
-    release_callback.set()
-    dispatch_thread.join(timeout=5.0)
-    manager._dispatcher.dispatch_once()
-
-    assert not dispatch_thread.is_alive()
-    assert ingestion.games_ingested == 1
-    assert manager.staging_depth == 0
-    manager.raise_if_materialization_failed()
-    manager.close()
-
-
-def test_callback_failure_is_reported_by_manager_health(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 1)
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-
-    def failed_callback(sealed: SealedReplayShard) -> None:
-        del sealed
-        raise RuntimeError('callback exploded')
-
-    with pytest.raises(RuntimeError, match='callback failed'):
-        manager.materialize_available_games(failed_callback)
-    manager.close()
-
-
-def test_executor_submission_failure_is_reported_by_manager_health(tmp_path: Path) -> None:
-    class FailingExecutor:
-        def submit(
-            self,
-            function: Callable[[PendingReplayShardManifest, Path, Path], SealedReplayShard],
-            claim: PendingReplayShardManifest,
-            inbox_path: Path,
-            staging_path: Path,
-        ) -> NoReturn:
-            del function, claim, inbox_path, staging_path
-            raise RuntimeError('executor unavailable')
-
-        def shutdown(self) -> None:
-            return
-
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 1)
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-    manager.materialization_executor = FailingExecutor()  # type: ignore[assignment]
-
-    with pytest.raises(RuntimeError, match='executor submission failed'):
-        manager.materialize_available_games(lambda sealed: None)
-    manager.close()
-
-
-def test_dispatcher_loop_failure_is_reported_by_manager_health(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-
-    def failed_allocation() -> None:
-        raise RuntimeError('queue unavailable')
-
-    monkeypatch.setattr(manager, '_allocate_claims', failed_allocation)
-    manager._dispatcher.dispatch_once()
-
-    with pytest.raises(RuntimeError, match='dispatcher failed'):
-        manager.raise_if_materialization_failed()
-    manager.close()
-
-
-def test_transient_inline_failure_retries_same_durable_claim(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 1)
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-    original_stage = manager._stage_shard_inline
-    attempts = 0
-    sealed: list[SealedReplayShard] = []
-
-    def fail_once(claim: PendingReplayShardManifest) -> SealedReplayShard:
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            raise OSError('transient worker failure')
-        return original_stage(claim)
-
-    monkeypatch.setattr(manager, '_stage_shard_inline', fail_once)
-    manager.materialize_available_games(sealed.append)
-    queue_before = ReplayShardQueue.model_validate_json(manager.queue_path.read_text(encoding='utf-8'))
-
-    queue_after = ReplayShardQueue.model_validate_json(manager.queue_path.read_text(encoding='utf-8'))
-    assert attempts == 2
-    assert len(sealed) == 1
-    assert queue_after.pending == queue_before.pending
-    manager.close()
-
-
-def test_missing_durable_claim_source_is_fatal(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 1)
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-    manager._allocate_claims()
-    source_path = next(inbox.glob('*.json'))
-    source_path.unlink()
-
-    with pytest.raises(RuntimeError, match='not materializable'):
-        manager.materialize_available_games(lambda sealed: None)
     manager.close()
 
 
@@ -915,7 +774,7 @@ def test_capacity_resize_is_flushed_with_boundary_append(
     inbox = tmp_path / 'completed-games' / 'inbox'
     _publish_games(inbox, 1)
     manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-    manager.materialize_available_games(lambda sealed: None)
+    manager.materialize_available_games()
     manager.store.set_logical_capacity(4)
     manager.store.flush()
     flush_count = 0
@@ -935,212 +794,65 @@ def test_capacity_resize_is_flushed_with_boundary_append(
     manager.close()
 
 
-def test_queue_gap_and_orphan_sealed_shard_are_rejected(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 1)
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-    manager.materialize_available_games(lambda sealed: None)
-    queue = ReplayShardQueue.model_validate_json(manager.queue_path.read_text(encoding='utf-8'))
-    manager.close()
-
-    gap_claim = queue.pending[0].model_copy(update={'sequence': 1})
-    gap_queue = ReplayShardQueue(layout_digest=queue.layout_digest, next_sequence=2, pending=(gap_claim,))
-    manager.queue_path.write_text(gap_queue.model_dump_json() + '\n', encoding='utf-8')
-    with pytest.raises(ValueError, match='begins after'):
-        _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-
-    orphan_queue = ReplayShardQueue(layout_digest=queue.layout_digest, next_sequence=0)
-    manager.queue_path.write_text(orphan_queue.model_dump_json() + '\n', encoding='utf-8')
-    with pytest.raises(ValueError, match='not owned'):
-        _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-
-
-def test_repeated_materialized_totals_do_not_reopen_or_hash_sealed_shards(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 2)
-    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
-    manager.materialize_available_games(lambda sealed: None)
-
-    def fail_open(*arguments: object, **keywords: object) -> ReplayShardReader:
-        del arguments, keywords
-        raise AssertionError('sealed shard was reopened')
-
-    monkeypatch.setattr(ReplayShardReader, 'open', fail_open)
-    assert manager.total_materialized_samples() == 2 * SAMPLES_PER_GAME
-    assert manager.total_materialized_samples() == 2 * SAMPLES_PER_GAME
-    assert manager.staging_depth == 2
-    manager.close()
-
-
-def test_missing_earlier_sealed_sequence_blocks_later_shard_without_changing_totals(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 2)
-    manager = _open_manager(tmp_path, capacity=16, maximum_capacity=16, shard_maximum_games=1)
-    callbacks: list[SealedReplayShard] = []
-    manager.materialize_available_games(callbacks.append)
-    queue = ReplayShardQueue.model_validate_json(manager.queue_path.read_text(encoding='utf-8'))
-    first_manifest = replay_shard_manifest_path(manager.staging_path, queue.pending[0].shard_identity)
-    hidden_manifest = first_manifest.with_suffix('.hidden')
-    first_manifest.replace(hidden_manifest)
-
-    assert manager.total_materialized_samples() == SAMPLES_PER_GAME
-    assert manager.append_staged_games(2).samples_added == 0
-    assert manager.store.total_appended_rows == 0
-
-    hidden_manifest.replace(first_manifest)
-    assert manager.total_materialized_samples() == 2 * SAMPLES_PER_GAME
-    manager._dispatcher.dispatch_once()
-    assert len(callbacks) == 2
-    ingestion = manager.append_staged_games(2)
-    assert ingestion.samples_added == 2 * SAMPLES_PER_GAME
-    assert manager.total_materialized_samples() == 2 * SAMPLES_PER_GAME
-    manager.close()
-
-
 def test_synthetic_flood_appends_every_game_exactly_once_with_bounded_inbox(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
-    manager = _open_manager(tmp_path, capacity=128, maximum_capacity=128)
-    staged_shard_ids: list[str] = []
+    manager = _open_manager(tmp_path, capacity=128, maximum_capacity=128, materialization_processes=4)
     appended_samples = 0
     flood_waves = 3
     games_per_wave = 10
 
     for wave in range(flood_waves):
         _publish_games(inbox, games_per_wave, first_game_number=wave * games_per_wave)
-        manager.materialize_available_games(lambda staged: staged_shard_ids.append(staged.shard_identity))
+        manager.materialize_available_games()
         assert manager.inbox_depth == 0
         appended_samples += manager.append_staged_games(2).samples_added
         assert manager.staging_depth == 0
 
     total_games = flood_waves * games_per_wave
-    assert len(staged_shard_ids) == flood_waves
-    assert len(set(staged_shard_ids)) == flood_waves
     assert appended_samples == total_games * SAMPLES_PER_GAME
     assert manager.store.total_appended_rows == total_games * SAMPLES_PER_GAME
     manager.close()
 
 
-@pytest.mark.integration
-def test_dispatcher_thread_stages_flood_without_inbox_growth(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    manager = _open_manager(tmp_path, capacity=128, maximum_capacity=128)
-    staged_row_counts: list[int] = []
-    manager.start_materialization(
-        lambda staged: staged_row_counts.append(staged.row_count),
-        poll_interval_seconds=0.02,
-    )
-
-    total_games = 20
-    for wave in range(4):
-        _publish_games(inbox, 5, first_game_number=wave * 5)
-        deadline = time.monotonic() + 10.0
-        while manager.inbox_depth > 0 and time.monotonic() < deadline:
-            time.sleep(0.02)
-        assert manager.inbox_depth == 0
-
-    deadline = time.monotonic() + 10.0
-    while sum(staged_row_counts) < total_games * SAMPLES_PER_GAME and time.monotonic() < deadline:
-        time.sleep(0.02)
-    assert sum(staged_row_counts) == total_games * SAMPLES_PER_GAME
-    assert all(row_count <= 32 * SAMPLES_PER_GAME for row_count in staged_row_counts)
-    assert manager.staging_depth == total_games
-
-    ingestion = manager.append_staged_games(2)
-    assert ingestion.games_ingested == total_games
-    assert ingestion.samples_added == total_games * SAMPLES_PER_GAME
-    manager.close()
-
-
-def test_restart_removes_inbox_copy_of_already_staged_game(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    game = _completed_game()
-    publish_completed_self_play_game(inbox, game)
-    manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
-    manager.materialize_available_games(lambda staged: None)
-    assert manager.inbox_depth == 0
-    # A worker killed between writing the staging files and unlinking the inbox original leaves both.
-    publish_completed_self_play_game(inbox, game)
-    manager.close()
-
-    restarted = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
-
-    assert restarted.inbox_depth == 0
-    assert restarted.staging_depth == 1
-    ingestion = restarted.append_staged_games(2)
-    assert ingestion.games_ingested == 1
-    assert ingestion.samples_added == SAMPLES_PER_GAME
-    assert restarted.store.total_appended_rows == SAMPLES_PER_GAME
-    restarted.close()
-
-
-def test_restart_cleans_committed_claim_after_boundary_cleanup_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_total_materialized_samples_counts_only_appended_rows(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
     _publish_games(inbox, 2)
-    manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
-    manager.materialize_available_games(lambda staged: None)
+    manager = _open_manager(tmp_path, capacity=16, maximum_capacity=16)
 
-    def simulated_kill(claims: tuple[PendingReplayShardManifest, ...]) -> None:
-        del claims
-        raise RuntimeError('simulated kill -9 after the append flush')
+    manager.materialize_available_games()
 
-    monkeypatch.setattr(manager, '_finalize_committed_claims', simulated_kill)
-    with pytest.raises(RuntimeError, match='simulated kill'):
-        manager.append_staged_games(2)
-
-    assert manager.store.total_appended_rows == 2 * SAMPLES_PER_GAME
     assert manager.staging_depth == 2
+    assert manager.total_materialized_samples() == 0
+
+    manager.append_staged_games(2)
+
+    assert manager.total_materialized_samples() == 2 * SAMPLES_PER_GAME
     manager.close()
-    monkeypatch.undo()
-
-    restarted = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
-
-    assert restarted.staging_depth == 0
-    ingestion = restarted.append_staged_games(2)
-    assert ingestion.games_ingested == 0
-    assert restarted.store.total_appended_rows == 2 * SAMPLES_PER_GAME
-    restarted.close()
 
 
-def test_restart_removes_committed_orphan_after_queue_cleanup(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_restart_materializes_undispatched_and_unmaterialized_games_without_loss(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 1)
-    manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
-    manager.materialize_available_games(lambda staged: None)
-
-    def simulated_kill(identity: str, sources: tuple[ReplayShardSourceGame, ...]) -> None:
-        del identity, sources
-        raise RuntimeError('simulated kill after queue cleanup')
-
-    monkeypatch.setattr(manager, '_delete_shard_artifacts', simulated_kill)
-    with pytest.raises(RuntimeError, match='after queue cleanup'):
-        manager.append_staged_games(2)
-    queue = ReplayShardQueue.model_validate_json(manager.queue_path.read_text(encoding='utf-8'))
-    assert queue.pending == ()
-    assert manager.staging_depth == 0
+    _publish_games(inbox, 4)
+    manager = _open_manager(tmp_path, capacity=64, maximum_capacity=64, materialization_processes=2)
+    manager.dispatch_once()
+    _publish_games(inbox, 2, first_game_number=100)
     manager.close()
-    monkeypatch.undo()
 
-    restarted = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
+    restarted = _open_manager(tmp_path, capacity=64, maximum_capacity=64, materialization_processes=2)
+    restarted.materialize_available_games()
+    ingestion = restarted.append_staged_games(2)
 
-    assert tuple(restarted.staging_path.glob('*.replay-shard.*')) == ()
-    assert restarted.store.total_appended_rows == SAMPLES_PER_GAME
+    assert ingestion.games_ingested == 6
+    assert restarted.store.total_appended_rows == 6 * SAMPLES_PER_GAME
+    assert restarted.inbox_depth == 0
     restarted.close()
 
 
-def test_restart_appends_sealed_uncommitted_claim(tmp_path: Path) -> None:
+def test_restart_appends_a_sealed_but_unappended_shard(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
     _publish_games(inbox, 2)
     manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
-    manager.materialize_available_games(lambda staged: None)
+    manager.materialize_available_games()
     assert manager.store.total_appended_rows == 0
     manager.close()
 
@@ -1153,13 +865,90 @@ def test_restart_appends_sealed_uncommitted_claim(tmp_path: Path) -> None:
     restarted.close()
 
 
-def test_append_flushes_before_removing_staged_games(tmp_path: Path) -> None:
+def test_restart_after_seal_without_unlink_does_not_double_ingest(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 2)
+    manager = _open_manager(tmp_path, capacity=64, maximum_capacity=64)
+    manager.dispatch_once()
+    sources = {path: path.read_bytes() for path in _worker_source_paths(manager)}
+    manager.materialize_available_games()
+    assert manager.staging_depth == 2
+    # A worker killed between sealing the shard and unlinking its sources leaves both behind.
+    for path, payload in sources.items():
+        path.write_bytes(payload)
+    manager.close()
+
+    restarted = _open_manager(tmp_path, capacity=64, maximum_capacity=64)
+    restarted.materialize_available_games()
+
+    assert restarted.staging_depth == 2
+    assert restarted.inbox_depth == 0
+    ingestion = restarted.append_staged_games(2)
+    assert ingestion.games_ingested == 2
+    assert restarted.store.total_appended_rows == 2 * SAMPLES_PER_GAME
+    restarted.close()
+
+
+def test_malformed_game_is_quarantined_and_the_run_keeps_ingesting(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_malformed_games(inbox, 1)
+    _publish_games(inbox, 2)
+    manager = _open_manager(tmp_path, capacity=16, maximum_capacity=16)
+
+    manager.materialize_available_games()
+    ingestion = manager.append_staged_games(2)
+
+    assert ingestion.games_ingested == 2
+    assert manager.materialization_failures == 1
+    assert manager.inbox_depth == 0
+    assert len(tuple(manager.rejected_path.glob('*.json'))) == 1
+    manager.raise_if_materialization_failed()
+    manager.close()
+
+
+def test_a_systematic_rejection_rate_raises_instead_of_discarding_every_game(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_malformed_games(inbox, 4)
+    manager = _open_manager(
+        tmp_path,
+        capacity=16,
+        maximum_capacity=16,
+        shard_maximum_games=1,
+        rejection_window_games=4,
+        rejection_rate_ceiling=0.5,
+    )
+
+    with pytest.raises(RuntimeError, match='above the configured ceiling'):
+        manager.materialize_available_games()
+
+    assert manager.rejection_rate == 1.0
+    manager.close()
+
+
+def test_orphaned_worker_directory_games_return_to_the_inbox(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 4)
+    manager = _open_manager(tmp_path, capacity=64, maximum_capacity=64, materialization_processes=4)
+    manager.dispatch_once()
+    assert all(worker_source_file_names(path) for path in manager.worker_paths)
+    manager.close()
+
+    narrowed = _open_manager(tmp_path, capacity=64, maximum_capacity=64, materialization_processes=2)
+    narrowed.materialize_available_games()
+    ingestion = narrowed.append_staged_games(2)
+
+    assert ingestion.games_ingested == 4
+    assert not tuple((tmp_path / 'completed-games').glob('worker-2'))
+    assert not tuple((tmp_path / 'completed-games').glob('worker-3'))
+    narrowed.close()
+
+
+def test_append_flushes_before_removing_staged_shards(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
     _publish_games(inbox, 1)
     manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
-    staged: list[SealedReplayShard] = []
-    manager.materialize_available_games(staged.append)
-    manifest_path = replay_shard_manifest_path(manager.staging_path, staged[0].shard_identity)
+    manager.materialize_available_games()
+    manifest_path = replay_shard_manifest_path(manager.staging_path, manager._staged_manifests()[0].shard_identity)
     original_flush = manager.store.flush
 
     def assert_staged_rows_remain_until_flush() -> None:
@@ -1175,27 +964,7 @@ def test_append_flushes_before_removing_staged_games(tmp_path: Path) -> None:
     manager.close()
 
 
-def test_replay_manager_keeps_malformed_game_for_inspection(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    inbox.mkdir(parents=True)
-    malformed = inbox / 'malformed.json'
-    malformed.write_text('{}', encoding='utf-8')
-    _publish_games(inbox, 1)
-    manager = _open_manager(tmp_path, capacity=4, maximum_capacity=4)
-
-    with pytest.raises(RuntimeError, match='cannot be claimed'):
-        manager.materialize_available_games(lambda staged: None)
-
-    assert malformed.exists()
-    assert manager.inbox_depth == 2
-    assert manager.materialization_failures == 1
-    assert manager.staging_depth == 0
-    with pytest.raises(RuntimeError, match='cannot be claimed'):
-        manager.append_staged_games(2)
-    manager.close()
-
-
-def test_zero_row_shard_advances_sequence_and_reports_game(tmp_path: Path) -> None:
+def test_zero_row_shard_reports_its_game_without_adding_samples(tmp_path: Path) -> None:
     game = _completed_game().validated_copy(
         update={
             'observations': tuple(
@@ -1206,13 +975,12 @@ def test_zero_row_shard_advances_sequence_and_reports_game(tmp_path: Path) -> No
     )
     publish_completed_self_play_game(tmp_path / 'completed-games' / 'inbox', game)
     manager = _open_manager(tmp_path, capacity=4, maximum_capacity=4)
-    manager.materialize_available_games(lambda sealed: None)
+    manager.materialize_available_games()
 
     ingestion = manager.append_staged_games(2)
 
     assert ingestion.games_ingested == 1
     assert ingestion.samples_added == 0
-    assert manager.store.state.append_sequence == 1
     assert manager.store.total_appended_rows == 0
     manager.close()
 
@@ -1245,7 +1013,7 @@ def test_replay_ingestion_updates_central_resignation_state(tmp_path: Path) -> N
     calibrator = ResignationCalibrator(calibration_path, resignation_configuration)
     manager = _open_manager(tmp_path, capacity=4, maximum_capacity=4, resignation_calibrator=calibrator)
 
-    manager.materialize_available_games(lambda staged: None)
+    manager.materialize_available_games()
     manager.append_staged_games(2)
     calibrator.advance_generation(50)
     manager.close()
@@ -1256,134 +1024,22 @@ def test_replay_ingestion_updates_central_resignation_state(tmp_path: Path) -> N
     assert restarted.published_policy(50).threshold == pytest.approx(-0.99)
 
 
-def test_leftover_inbox_file_for_ingested_game_is_never_restaged(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    game = _completed_game()
-    publish_completed_self_play_game(inbox, game)
-    manager = _open_manager(tmp_path, capacity=6, maximum_capacity=6)
-    manager.materialize_available_games(lambda staged: None)
-    # A worker killed between staging and its inbox unlink leaves the inbox original behind.
-    publish_completed_self_play_game(inbox, game)
-
-    ingestion = manager.append_staged_games(2)
-    assert ingestion.games_ingested == 1
-    assert manager.inbox_depth == 0
-
-    manager.materialize_available_games(lambda staged: None)
-    assert manager.staging_depth == 0
-    second = manager.append_staged_games(2)
-    assert second.games_ingested == 0
-    assert manager.store.total_appended_rows == SAMPLES_PER_GAME
-    manager.close()
-
-
-def test_inbox_rescan_stats_only_newly_arrived_files(tmp_path: Path) -> None:
-    directory = tmp_path / 'inbox'
-    directory.mkdir()
-    scanner = InboxScanner(directory, '.json')
-    for index in range(8):
-        (directory / f'game-{index:03d}.json').write_text('{}', encoding='utf-8')
-
-    stat_calls = 0
-    original_stat = Path.stat
-
-    def counted_stat(path: Path, **keywords: object) -> os.stat_result:
-        nonlocal stat_calls
-        stat_calls += 1
-        return original_stat(path, **keywords)  # type: ignore[arg-type]
-
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(Path, 'stat', counted_stat)
-        first = scanner.scan()
-        after_first = stat_calls
-        second = scanner.scan()
-        after_second = stat_calls
-        (directory / 'game-008.json').write_text('{}', encoding='utf-8')
-        third = scanner.scan()
-
-    assert [path.name for path in first] == [f'game-{index:03d}.json' for index in range(8)]
-    assert second == first
-    assert after_first == 8
-    assert after_second == after_first
-    assert stat_calls == after_second + 1
-    assert len(third) == 9
-
-
-def test_inbox_rescan_drops_removed_and_refreshes_requeued_files(tmp_path: Path) -> None:
-    directory = tmp_path / 'inbox'
-    directory.mkdir()
-    scanner = InboxScanner(directory, '.json')
-    (directory / 'a.json').write_text('{}', encoding='utf-8')
-    (directory / 'b.json').write_text('{}', encoding='utf-8')
-    os.utime(directory / 'a.json', ns=(0, 0))
-    os.utime(directory / 'b.json', ns=(10**9, 10**9))
-
-    assert [path.name for path in scanner.scan()] == ['a.json', 'b.json']
-
-    os.utime(directory / 'a.json', ns=(2 * 10**9, 2 * 10**9))
-    assert [path.name for path in scanner.scan()] == ['a.json', 'b.json']
-
-    scanner.invalidate('a.json')
-    assert [path.name for path in scanner.scan()] == ['b.json', 'a.json']
-
-    (directory / 'b.json').unlink()
-    assert [path.name for path in scanner.scan()] == ['a.json']
-
-
-def test_appending_a_sealed_shard_does_not_reparse_its_manifest(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    _publish_games(inbox, 2)
-    manager = _open_manager(tmp_path, capacity=16, maximum_capacity=16)
-    manager.materialize_available_games(lambda sealed: None)
-    assert manager.staging_depth == 2
-
-    parses = 0
-    original_validate = SealedReplayShardManifest.model_validate_json
-
-    def counted_validate(*arguments: object, **keywords: object) -> SealedReplayShardManifest:
-        nonlocal parses
-        parses += 1
-        return original_validate(*arguments, **keywords)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(SealedReplayShardManifest, 'model_validate_json', counted_validate)
-    ingestion = manager.append_staged_games(2)
-
-    assert ingestion.games_ingested == 2
-    assert parses == 0
-    manager.close()
-
-
-def test_sealed_shards_awaiting_append_do_not_consume_materialization_slots(tmp_path: Path) -> None:
-    inbox = tmp_path / 'completed-games' / 'inbox'
-    manager = _open_manager(tmp_path, capacity=4096, maximum_capacity=4096, shard_maximum_games=1)
-    slot_limit = max(32, 2 * manager.configuration.materialization_processes)
-    _publish_games(inbox, slot_limit)
-    manager.materialize_available_games(lambda sealed: None)
-    assert manager.staging_depth == slot_limit
-
-    # Every claim is sealed but none has been appended; the workers must still take new games.
-    _publish_games(inbox, 4, first_game_number=7 + slot_limit)
-    manager.materialize_available_games(lambda sealed: None)
-
-    assert manager.staging_depth == slot_limit + 4
-    assert manager.inbox_depth == 0
-    manager.close()
-
-
 def test_staged_shard_backlog_is_bounded_when_the_appender_stalls(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
-    manager = _open_manager(tmp_path, capacity=4096, maximum_capacity=4096, shard_maximum_games=1)
-    slot_limit = max(32, 2 * manager.configuration.materialization_processes)
-    bound = _STAGED_SHARD_LIMIT_FACTOR * slot_limit
-    _publish_games(inbox, bound + 16)
+    manager = _open_manager(
+        tmp_path,
+        capacity=4096,
+        maximum_capacity=4096,
+        shard_maximum_games=1,
+        staging_shard_limit=8,
+    )
+    _publish_games(inbox, 24)
 
-    manager.materialize_available_games(lambda sealed: None)
+    manager.materialize_available_games()
 
-    assert manager.staging_depth == bound
+    assert manager.staging_depth == 8
     assert manager.inbox_depth == 16
+    assert manager.append_staged_games(2).games_ingested == 8
     manager.close()
 
 
@@ -1403,4 +1059,31 @@ def test_append_with_nothing_staged_does_not_flush_the_store(tmp_path: Path) -> 
 
     assert ingestion.games_ingested == 0
     assert flushes == 0
+    manager.close()
+
+
+def test_staged_shards_are_parsed_once_and_appended_without_reparsing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 2)
+    manager = _open_manager(tmp_path, capacity=16, maximum_capacity=16)
+    manager.materialize_available_games()
+    assert manager.staging_depth == 2
+    assert manager.staging_depth == 2
+
+    parses = 0
+    original_validate = SealedReplayShardManifest.model_validate_json
+
+    def counted_validate(*arguments: object, **keywords: object) -> SealedReplayShardManifest:
+        nonlocal parses
+        parses += 1
+        return original_validate(*arguments, **keywords)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(SealedReplayShardManifest, 'model_validate_json', counted_validate)
+    ingestion = manager.append_staged_games(2)
+
+    assert ingestion.games_ingested == 2
+    assert parses == 0
     manager.close()

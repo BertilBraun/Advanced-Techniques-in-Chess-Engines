@@ -27,62 +27,12 @@ _COLUMN_ALIGNMENT = 4_096
 _HEADER = struct.Struct('<8sHHI64s64sQ')
 _SHA256_PATTERN = r'^[0-9a-f]{64}$'
 _DATA_SUFFIX = '.replay-shard.bin'
-_MANIFEST_SUFFIX = '.replay-shard.json'
-_PENDING_SUFFIX = '.replay-shard.pending.json'
-
-
-class InboxGameOrder(FrozenModel):
-    modified_at_ns: int = Field(ge=0)
-    file_name: str = Field(min_length=1)
-
-    def model_post_init(self, __context: object) -> None:
-        if Path(self.file_name).name != self.file_name:
-            raise ValueError('Replay inbox ordering requires a file basename.')
-
-    @property
-    def key(self) -> tuple[int, str]:
-        return self.modified_at_ns, self.file_name
+MANIFEST_SUFFIX = '.replay-shard.json'
 
 
 class ReplayShardSourceGame(FrozenModel):
     identity: GameIdentity
-    order: InboxGameOrder
-    source_size: int = Field(ge=0)
-    source_sha256: str = Field(pattern=_SHA256_PATTERN)
-
-    def model_post_init(self, __context: object) -> None:
-        if self.order.file_name != self.identity.file_name:
-            raise ValueError('Replay shard source identity does not match its ordered file name.')
-
-
-class PendingReplayShardManifest(FrozenModel):
-    schema_version: Literal[1] = 1
-    sequence: int = Field(ge=0)
-    shard_identity: str = Field(pattern=_SHA256_PATTERN)
-    layout_digest: str = Field(pattern=_SHA256_PATTERN)
-    games: tuple[ReplayShardSourceGame, ...] = Field(min_length=1)
-
-    @model_validator(mode='after')
-    def validate_identity_and_order(self) -> PendingReplayShardManifest:
-        _validate_source_games(self.games)
-        expected_identity = replay_shard_identity(self.layout_digest, self.games)
-        if self.shard_identity != expected_identity:
-            raise ValueError('Pending replay shard identity does not match its ordered sources.')
-        return self
-
-    @classmethod
-    def create(
-        cls,
-        layout: ReplayLayout,
-        sequence: int,
-        games: tuple[ReplayShardSourceGame, ...],
-    ) -> PendingReplayShardManifest:
-        return cls(
-            sequence=sequence,
-            shard_identity=replay_shard_identity(layout.digest, games),
-            layout_digest=layout.digest,
-            games=games,
-        )
+    counter: int = Field(ge=0)
 
 
 class ReplayShardGameMetadata(FrozenModel):
@@ -112,10 +62,12 @@ class ReplayShardGameMetadata(FrozenModel):
 
 
 class SealedReplayShardManifest(FrozenModel):
-    schema_version: Literal[1] = 1
-    sequence: int = Field(ge=0)
+    schema_version: Literal[2] = 2
     shard_identity: str = Field(pattern=_SHA256_PATTERN)
     layout_digest: str = Field(pattern=_SHA256_PATTERN)
+    worker_index: int = Field(ge=0)
+    first_counter: int = Field(ge=0)
+    last_counter: int = Field(ge=0)
     data_file: str = Field(min_length=1)
     data_size: int = Field(ge=_SHARD_HEADER_BYTES)
     data_sha256: str = Field(pattern=_SHA256_PATTERN)
@@ -128,10 +80,15 @@ class SealedReplayShardManifest(FrozenModel):
             raise ValueError('Replay shard data file must be a basename.')
         if self.data_file != replay_shard_data_name(self.shard_identity):
             raise ValueError('Replay shard data file does not match its identity.')
+        if self.first_counter > self.last_counter:
+            raise ValueError('Replay shard counter span must be ordered.')
         sources = tuple(game.source for game in self.games)
-        _validate_source_games(sources)
-        if self.shard_identity != replay_shard_identity(self.layout_digest, sources):
-            raise ValueError('Sealed replay shard identity does not match its ordered sources.')
+        _validate_source_games(sources, self.first_counter, self.last_counter)
+        expected_identity = replay_shard_identity(
+            self.layout_digest, self.worker_index, self.first_counter, self.last_counter
+        )
+        if self.shard_identity != expected_identity:
+            raise ValueError('Sealed replay shard identity does not match its worker counter span.')
         next_row = 0
         for game in self.games:
             if game.row_start != next_row:
@@ -242,16 +199,12 @@ class ReplayShardReader:
         self.close()
 
 
-def replay_shard_identity(layout_digest: str, games: tuple[ReplayShardSourceGame, ...]) -> str:
+def replay_shard_identity(layout_digest: str, worker_index: int, first_counter: int, last_counter: int) -> str:
     _validate_sha256(layout_digest, 'layout digest')
     digest = hashlib.sha256()
     digest.update(_encoded_digest_field(layout_digest))
-    for game in games:
-        digest.update(_encoded_digest_field(game.identity.archive_key))
-        digest.update(_encoded_digest_field(str(game.order.modified_at_ns)))
-        digest.update(_encoded_digest_field(game.order.file_name))
-        digest.update(_encoded_digest_field(str(game.source_size)))
-        digest.update(_encoded_digest_field(game.source_sha256))
+    for component in (worker_index, first_counter, last_counter):
+        digest.update(_encoded_digest_field(str(component)))
     return digest.hexdigest()
 
 
@@ -266,18 +219,13 @@ def replay_shard_data_path(staging_path: Path, shard_identity: str) -> Path:
 
 def replay_shard_manifest_path(staging_path: Path, shard_identity: str) -> Path:
     _validate_sha256(shard_identity, 'shard identity')
-    return staging_path / f'{shard_identity}{_MANIFEST_SUFFIX}'
-
-
-def pending_replay_shard_manifest_path(staging_path: Path, shard_identity: str) -> Path:
-    _validate_sha256(shard_identity, 'shard identity')
-    return staging_path / f'{shard_identity}{_PENDING_SUFFIX}'
+    return staging_path / f'{shard_identity}{MANIFEST_SUFFIX}'
 
 
 def sealed_replay_shard_manifest_paths(staging_path: Path) -> tuple[Path, ...]:
     if not staging_path.exists():
         return ()
-    return tuple(sorted(staging_path.glob(f'*{_MANIFEST_SUFFIX}'), key=lambda path: path.name))
+    return tuple(sorted(staging_path.glob(f'*{MANIFEST_SUFFIX}'), key=lambda path: path.name))
 
 
 def replay_shard_physical_columns(
@@ -304,26 +252,39 @@ def projected_replay_shard_size(layout: ReplayLayout, row_count: int) -> int:
     return final.offset + final.slab_bytes
 
 
+def read_sealed_replay_shard_manifest(staging_path: Path, shard_identity: str) -> SealedReplayShardManifest | None:
+    manifest_path = replay_shard_manifest_path(staging_path, shard_identity)
+    if not manifest_path.exists():
+        return None
+    return SealedReplayShardManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
+
+
 def write_replay_shard(
     staging_path: Path,
     layout: ReplayLayout,
-    pending: PendingReplayShardManifest,
+    worker_index: int,
+    first_counter: int,
+    last_counter: int,
     columns: ReplayColumnViews,
     games: tuple[ReplayShardGameMetadata, ...],
 ) -> SealedReplayShardManifest:
-    if pending.layout_digest != layout.digest:
-        raise ValueError('Pending replay shard layout does not match the experiment.')
-    if tuple(game.source for game in games) != pending.games:
-        raise ValueError('Replay shard game metadata does not match its pending sources.')
+    shard_identity = replay_shard_identity(layout.digest, worker_index, first_counter, last_counter)
+    # A worker that died between sealing and unlinking its sources re-derives this identity, so the
+    # already sealed manifest is adopted instead of producing a second shard for the same games.
+    existing = read_sealed_replay_shard_manifest(staging_path, shard_identity)
+    if existing is not None:
+        return existing
     row_count = columns.row_count
-    data_file = replay_shard_data_name(pending.shard_identity)
-    data_path = replay_shard_data_path(staging_path, pending.shard_identity)
-    manifest_path = replay_shard_manifest_path(staging_path, pending.shard_identity)
+    data_file = replay_shard_data_name(shard_identity)
+    data_path = replay_shard_data_path(staging_path, shard_identity)
+    manifest_path = replay_shard_manifest_path(staging_path, shard_identity)
     data_size = projected_replay_shard_size(layout, row_count)
     provisional_manifest = SealedReplayShardManifest(
-        sequence=pending.sequence,
-        shard_identity=pending.shard_identity,
+        shard_identity=shard_identity,
         layout_digest=layout.digest,
+        worker_index=worker_index,
+        first_counter=first_counter,
+        last_counter=last_counter,
         data_file=data_file,
         data_size=data_size,
         data_sha256='0' * 64,
@@ -332,8 +293,7 @@ def write_replay_shard(
     )
     arrays = flatten_column_views(layout, columns)
     _validate_column_arrays(layout, arrays, row_count)
-    if data_path.exists() or manifest_path.exists():
-        raise ValueError('Replay shard output already exists.')
+    data_path.unlink(missing_ok=True)
     staging_path.mkdir(parents=True, exist_ok=True)
     temporary_path = data_path.with_name(f'.{data_path.name}.{uuid.uuid4().hex}.tmp')
     try:
@@ -423,13 +383,19 @@ def _validate_column_arrays(
             raise ValueError(f'Replay shard column {descriptor.key.name} has the wrong dtype.')
 
 
-def _validate_source_games(games: tuple[ReplayShardSourceGame, ...]) -> None:
+def _validate_source_games(
+    games: tuple[ReplayShardSourceGame, ...],
+    first_counter: int,
+    last_counter: int,
+) -> None:
     identities = tuple(game.identity.archive_key for game in games)
     if len(set(identities)) != len(identities):
         raise ValueError('Replay shard source game identities must be unique.')
-    orders = tuple(game.order.key for game in games)
-    if orders != tuple(sorted(orders)) or len(set(orders)) != len(orders):
-        raise ValueError('Replay shard source games must use unique deterministic order keys.')
+    counters = tuple(game.counter for game in games)
+    if counters != tuple(sorted(set(counters))):
+        raise ValueError('Replay shard source games must use unique increasing worker counters.')
+    if counters and not (first_counter <= counters[0] and counters[-1] <= last_counter):
+        raise ValueError('Replay shard source counters must lie inside its identity counter span.')
 
 
 def _descriptor_digest(layout: ReplayLayout) -> str:

@@ -49,6 +49,7 @@ class ReplayIngestionTelemetry:
     inbox_depth: int
     staging_depth: int
     materialization_failures: int
+    rejection_rate: float
 
 
 class TrainingReporter:
@@ -120,6 +121,7 @@ class TrainingReporter:
         log_scalar('replay/inbox_depth', ingestion.inbox_depth, generation)
         log_scalar('replay/staging_depth', ingestion.staging_depth, generation)
         log_scalar('replay/materialization_failures', ingestion.materialization_failures, generation)
+        log_scalar('replay/rejection_rate', ingestion.rejection_rate, generation)
 
     def record_resignation(self, diagnostics: ResignationDiagnostics, generation: int) -> None:
         if diagnostics.selected_threshold is not None:

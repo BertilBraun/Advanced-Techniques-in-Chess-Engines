@@ -6,6 +6,7 @@ import platform
 import statistics
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
@@ -18,11 +19,10 @@ from src.replay.contracts import ReplaySample, SparsePolicyTarget
 from src.replay.encoding import encode_replay_columns, encode_replay_rows
 from src.replay.layout import ReplayLayout
 from src.replay.shard import (
-    InboxGameOrder,
-    PendingReplayShardManifest,
     ReplayShardGameMetadata,
     ReplayShardReader,
     ReplayShardSourceGame,
+    replay_shard_identity,
     replay_shard_manifest_path,
     write_replay_shard,
 )
@@ -31,6 +31,8 @@ from src.self_play.completed_game import GameIdentity, SearchVisitCounts, Termin
 from src.training.targets import TrainingTargetLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+
+_WORKER_INDEX = 0
 
 
 class BoundaryTiming(FrozenModel):
@@ -111,13 +113,19 @@ def _source(game_number: int) -> ReplayShardSourceGame:
         process_instance_id=UUID('38c8809f-a49d-4d98-8da5-034614893665'),
         game_number=game_number,
     )
-    payload = f'synthetic-game-{game_number}'.encode()
-    return ReplayShardSourceGame(
-        identity=identity,
-        order=InboxGameOrder(modified_at_ns=game_number, file_name=identity.file_name),
-        source_size=len(payload),
-        source_sha256=hashlib.sha256(payload).hexdigest(),
-    )
+    return ReplayShardSourceGame(identity=identity, counter=game_number)
+
+
+@dataclass(frozen=True)
+class _ShardInput:
+    first_counter: int
+    last_counter: int
+    metadata: tuple[ReplayShardGameMetadata, ...]
+    samples: tuple[ReplaySample, ...]
+
+    @property
+    def shard_identity(self) -> str:
+        return replay_shard_identity(_layout().digest, _WORKER_INDEX, self.first_counter, self.last_counter)
 
 
 def _shard_inputs(
@@ -126,10 +134,11 @@ def _shard_inputs(
     games: int,
     rows_per_game: int,
     games_per_shard: int,
-) -> tuple[tuple[PendingReplayShardManifest, tuple[ReplayShardGameMetadata, ...], tuple[ReplaySample, ...]], ...]:
+) -> tuple[_ShardInput, ...]:
+    del layout
     sources = tuple(_source(game_number) for game_number in range(games))
     shard_inputs = []
-    for sequence, first_game in enumerate(range(0, games, games_per_shard)):
+    for first_game in range(0, games, games_per_shard):
         shard_sources = sources[first_game : first_game + games_per_shard]
         metadata = tuple(
             ReplayShardGameMetadata(
@@ -150,24 +159,27 @@ def _shard_inputs(
         first_row = first_game * rows_per_game
         row_count = len(shard_sources) * rows_per_game
         shard_inputs.append(
-            (
-                PendingReplayShardManifest.create(layout, sequence, shard_sources),
-                metadata,
-                samples[first_row : first_row + row_count],
+            _ShardInput(
+                first_counter=shard_sources[0].counter,
+                last_counter=shard_sources[-1].counter,
+                metadata=metadata,
+                samples=samples[first_row : first_row + row_count],
             )
         )
     return tuple(shard_inputs)
 
 
-def _write_shards(
-    staging_path: Path,
-    layout: ReplayLayout,
-    inputs: tuple[
-        tuple[PendingReplayShardManifest, tuple[ReplayShardGameMetadata, ...], tuple[ReplaySample, ...]], ...
-    ],
-) -> None:
-    for pending, metadata, samples in inputs:
-        write_replay_shard(staging_path, layout, pending, encode_replay_columns(layout, samples), metadata)
+def _write_shards(staging_path: Path, layout: ReplayLayout, inputs: tuple[_ShardInput, ...]) -> None:
+    for shard in inputs:
+        write_replay_shard(
+            staging_path,
+            layout,
+            _WORKER_INDEX,
+            shard.first_counter,
+            shard.last_counter,
+            encode_replay_columns(layout, shard.samples),
+            shard.metadata,
+        )
 
 
 def _seed_store(
@@ -187,9 +199,7 @@ def _columnar_boundary_trial(
     path: Path,
     staging_path: Path,
     layout: ReplayLayout,
-    inputs: tuple[
-        tuple[PendingReplayShardManifest, tuple[ReplayShardGameMetadata, ...], tuple[ReplaySample, ...]], ...
-    ],
+    inputs: tuple[_ShardInput, ...],
     total_rows: int,
     initial_samples: tuple[ReplaySample, ...],
 ) -> tuple[float, float, float, bool, str]:
@@ -198,10 +208,10 @@ def _columnar_boundary_trial(
     try:
         total_started = time.perf_counter()
         validation_started = time.perf_counter()
-        for pending, _, _ in inputs:
+        for shard in inputs:
             readers.append(
                 ReplayShardReader.open(
-                    replay_shard_manifest_path(staging_path, pending.shard_identity),
+                    replay_shard_manifest_path(staging_path, shard.shard_identity),
                     layout,
                     verify_data_hash=False,
                 )
@@ -214,7 +224,7 @@ def _columnar_boundary_trial(
         append_seconds = time.perf_counter() - append_started
         total_seconds = time.perf_counter() - total_started
         wrapped = store.state.head + store.state.size > store.state.maximum_capacity
-        checksum = _validate_store(store, layout, tuple(sample for _, _, shard in inputs for sample in shard))
+        checksum = _validate_store(store, layout, tuple(sample for shard in inputs for sample in shard.samples))
         return validation_seconds, append_seconds, total_seconds, wrapped, checksum
     finally:
         for reader in readers:

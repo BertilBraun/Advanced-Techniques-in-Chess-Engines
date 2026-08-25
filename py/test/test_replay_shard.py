@@ -23,13 +23,12 @@ from src.replay.contracts import (
 )
 from src.replay.layout import ReplayLayout
 from src.replay.shard import (
-    InboxGameOrder,
-    PendingReplayShardManifest,
     ReplayShardGameMetadata,
     ReplayShardReader,
     ReplayShardSourceGame,
     SealedReplayShardManifest,
     projected_replay_shard_size,
+    replay_shard_identity,
     replay_shard_manifest_path,
     replay_shard_physical_columns,
     sealed_replay_shard_manifest_paths,
@@ -130,22 +129,16 @@ def _columns(layout: ReplayLayout, samples: tuple[ReplaySample, ...]) -> ReplayC
     )
 
 
-def _source(game_number: int, modified_at_ns: int | None = None) -> ReplayShardSourceGame:
+WORKER_INDEX = 5
+
+
+def _source(game_number: int) -> ReplayShardSourceGame:
     identity = GameIdentity(
         worker_id=3,
         process_instance_id=UUID('38c8809f-a49d-4d98-8da5-034614893665'),
         game_number=game_number,
     )
-    payload = f'source-{game_number}'.encode()
-    return ReplayShardSourceGame(
-        identity=identity,
-        order=InboxGameOrder(
-            modified_at_ns=100 + game_number if modified_at_ns is None else modified_at_ns,
-            file_name=identity.file_name,
-        ),
-        source_size=len(payload),
-        source_sha256=hashlib.sha256(payload).hexdigest(),
-    )
+    return ReplayShardSourceGame(identity=identity, counter=game_number)
 
 
 def _observation() -> SearchObservation:
@@ -208,13 +201,12 @@ def _write_valid_shard(
 ) -> tuple[SealedReplayShardManifest, Path]:
     shard_samples = samples if samples is not None else (_sample(layout, 0), _sample(layout, 1))
     sources = (_source(0), _source(1))
-    pending = PendingReplayShardManifest.create(layout, 0, sources)
     games = (
         _game_metadata(sources[0], 0, 1),
         _game_metadata(sources[1], 1, len(shard_samples) - 1),
     )
-    manifest = write_replay_shard(path, layout, pending, _columns(layout, shard_samples), games)
-    return manifest, replay_shard_manifest_path(path, pending.shard_identity)
+    manifest = write_replay_shard(path, layout, WORKER_INDEX, 0, 1, _columns(layout, shard_samples), games)
+    return manifest, replay_shard_manifest_path(path, manifest.shard_identity)
 
 
 @pytest.mark.parametrize('game', ('chess', 'go'))
@@ -242,14 +234,13 @@ def test_shard_round_trip_matches_old_rows_and_canonical_columns(tmp_path: Path,
 def test_zero_row_game_shard_is_sealed_and_readable(tmp_path: Path) -> None:
     layout = _layout('go')
     sources = (_source(0),)
-    pending = PendingReplayShardManifest.create(layout, 0, sources)
     games = tuple(_game_metadata(source, 0, 0) for source in sources)
 
-    manifest = write_replay_shard(tmp_path, layout, pending, _columns(layout, ()), games)
+    manifest = write_replay_shard(tmp_path, layout, WORKER_INDEX, 0, 0, _columns(layout, ()), games)
 
     assert manifest.row_count == 0
     assert manifest.data_size == projected_replay_shard_size(layout, 0) == 4_096
-    with ReplayShardReader.open(replay_shard_manifest_path(tmp_path, pending.shard_identity), layout) as reader:
+    with ReplayShardReader.open(replay_shard_manifest_path(tmp_path, manifest.shard_identity), layout) as reader:
         assert reader.columns.row_count == 0
 
 
@@ -263,30 +254,47 @@ def test_shard_slabs_are_derived_from_canonical_descriptors_and_aligned() -> Non
     assert projected_replay_shard_size(layout, 7) == physical[-1].offset + physical[-1].slab_bytes
 
 
-def test_shard_identity_is_stable_and_changes_with_persisted_source_inputs() -> None:
+def test_shard_identity_is_stable_and_changes_with_its_worker_counter_span() -> None:
     layout = _layout('chess')
-    sources = (_source(0), _source(1))
 
-    first = PendingReplayShardManifest.create(layout, 0, sources)
-    repeated = PendingReplayShardManifest.create(layout, 0, sources)
-    changed = PendingReplayShardManifest.create(layout, 0, (sources[0], _source(1, modified_at_ns=999)))
+    first = replay_shard_identity(layout.digest, WORKER_INDEX, 0, 1)
 
-    assert first.shard_identity == repeated.shard_identity
-    assert first.shard_identity != changed.shard_identity
+    assert first == replay_shard_identity(layout.digest, WORKER_INDEX, 0, 1)
+    assert first != replay_shard_identity(layout.digest, WORKER_INDEX + 1, 0, 1)
+    assert first != replay_shard_identity(layout.digest, WORKER_INDEX, 0, 2)
+    assert first != replay_shard_identity(layout.digest, WORKER_INDEX, 1, 1)
+
+
+def test_resealing_the_same_counter_span_adopts_the_existing_shard(tmp_path: Path) -> None:
+    layout = _layout('go')
+    manifest, _ = _write_valid_shard(tmp_path, layout)
+    source = _source(0)
+
+    repeated = write_replay_shard(
+        tmp_path,
+        layout,
+        WORKER_INDEX,
+        0,
+        1,
+        _columns(layout, (_sample(layout, 0),)),
+        (_game_metadata(source, 0, 1),),
+    )
+
+    assert repeated == manifest
 
 
 def test_writer_rejects_noncanonical_column_dtype_before_creating_files(tmp_path: Path) -> None:
     layout = _layout('chess')
     source = _source(0)
-    pending = PendingReplayShardManifest.create(layout, 0, (source,))
+    identity = replay_shard_identity(layout.digest, WORKER_INDEX, 0, 0)
     columns = _columns(layout, (_sample(layout, 0),))
     invalid = replace(columns, source_model_generation=columns.source_model_generation.astype(np.uint16))
 
     with pytest.raises(ValueError, match='dtype'):
-        write_replay_shard(tmp_path, layout, pending, invalid, (_game_metadata(source, 0, 1),))
+        write_replay_shard(tmp_path, layout, WORKER_INDEX, 0, 0, invalid, (_game_metadata(source, 0, 1),))
 
-    assert not replay_shard_manifest_path(tmp_path, pending.shard_identity).exists()
-    assert not (tmp_path / shard_module.replay_shard_data_name(pending.shard_identity)).exists()
+    assert not replay_shard_manifest_path(tmp_path, identity).exists()
+    assert not (tmp_path / shard_module.replay_shard_data_name(identity)).exists()
 
 
 @pytest.mark.parametrize(
@@ -408,34 +416,37 @@ def test_reader_rejects_layout_mismatch(tmp_path: Path) -> None:
 def test_typed_manifests_reject_bad_spans_order_and_duplicate_games() -> None:
     layout = _layout('chess')
     sources = (_source(0), _source(1))
-    pending = PendingReplayShardManifest.create(layout, 0, sources)
+    identity = replay_shard_identity(layout.digest, WORKER_INDEX, 0, 1)
     games = (_game_metadata(sources[0], 0, 1), _game_metadata(sources[1], 1, 1))
     payload = {
-        'sequence': pending.sequence,
-        'shard_identity': pending.shard_identity,
+        'shard_identity': identity,
         'layout_digest': layout.digest,
-        'data_file': shard_module.replay_shard_data_name(pending.shard_identity),
+        'worker_index': WORKER_INDEX,
+        'first_counter': 0,
+        'last_counter': 1,
+        'data_file': shard_module.replay_shard_data_name(identity),
         'data_size': projected_replay_shard_size(layout, 2),
         'data_sha256': '0' * 64,
         'row_count': 2,
         'games': tuple(game.model_dump(mode='json') for game in games),
     }
-    bad_span = dict(payload)
-    bad_span['games'] = (games[0].model_dump(mode='json'), games[1].model_dump(mode='json') | {'row_start': 2})
+    assert SealedReplayShardManifest.model_validate(payload).shard_identity == identity
+
+    bad_span = payload | {
+        'games': (games[0].model_dump(mode='json'), games[1].model_dump(mode='json') | {'row_start': 2})
+    }
     with pytest.raises(ValidationError, match='contiguous'):
         SealedReplayShardManifest.model_validate(bad_span)
-    with pytest.raises(ValidationError, match='order'):
-        PendingReplayShardManifest.create(layout, 0, tuple(reversed(sources)))
+
+    reordered = payload | {'games': tuple(reversed(payload['games']))}
+    with pytest.raises(ValidationError, match='increasing worker counters'):
+        SealedReplayShardManifest.model_validate(reordered)
+
     with pytest.raises(ValidationError, match='at least 1'):
-        PendingReplayShardManifest.create(layout, 0, ())
-    duplicate = (sources[0], sources[0])
-    with pytest.raises(ValidationError, match='unique'):
-        PendingReplayShardManifest(
-            sequence=0,
-            shard_identity=shard_module.replay_shard_identity(layout.digest, duplicate),
-            layout_digest=layout.digest,
-            games=duplicate,
-        )
+        SealedReplayShardManifest.model_validate(payload | {'games': ()})
+
+    with pytest.raises(ValidationError, match='inside its identity counter span'):
+        SealedReplayShardManifest.model_validate(payload | {'first_counter': 1})
 
 
 def test_game_metadata_allows_primary_and_auxiliary_policy_truncations_per_row() -> None:
