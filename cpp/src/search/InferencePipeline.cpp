@@ -6,6 +6,7 @@
 #include <ATen/Context.h>
 #include <torch/csrc/jit/api/module.h>
 
+#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -324,6 +325,12 @@ void InferenceRunner::captureBatchGraphs() {
 #ifdef USE_CUDA
     releaseBatchGraphs();
     if (!m_device.is_cuda() || !m_cudaStream.has_value()) {
+        return;
+    }
+    // Escape hatch: the captured graphs cost roughly 1.8 GiB of mempool per process, which is what
+    // exhausts a 12 GiB device once several self-play processes and a trainer rank share it.
+    if (const char *disabled = std::getenv("ALPHAZERO_DISABLE_INFERENCE_GRAPHS");
+        disabled != nullptr && disabled[0] != '\0' && disabled[0] != '0') {
         return;
     }
     // Eight, not sixteen: every capture adds intermediates to the shared graph mempool, and the
