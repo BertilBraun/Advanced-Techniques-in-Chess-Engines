@@ -1,0 +1,392 @@
+# Four-day production v8 (2026-08-25) — v7 plus a search backup discount.
+#
+# v7 is the strongest engine this platform has produced: at 15,600 s it led the r3 replica on five
+# of six evaluation rungs (level-1 0.62 vs 0.53, level-2 0.425 vs 0.265, fixed-nodes-100 0.47 vs
+# 0.265, fixed-nodes-300 0.31 vs 0.125) and stood 154 points ahead on ladder Elo, 1230 to 1076.
+#
+# It has one specific defect. Against stockfish-level-0 it abandoned 21 games in 100 at the 300-ply
+# evaluation cap, while ahead by a median of 20 pawns — every single one of those 21 was winning by
+# three pawns or more, none was balanced. The r3 replica abandons 1 to 5. v7 wins overwhelming
+# material and then cannot finish, and those unfinished games score as draws, which is the whole of
+# its level-0 deficit.
+#
+# Nothing in v7 rewards finishing sooner. The search backs a win up the tree undiscounted, so mate
+# in three and mate in thirty look identical to it. The historical four-day run — the only run to
+# reach roughly 2,800 Elo — discounted its search backup at 0.9985 per ply; every run since the
+# backup discount was split from the replay-target discount has left it at 1.0 by inheritance,
+# including v7.
+#
+# v8 sets search_value_discount_per_ply to 0.985. At a typical maximum tree depth of 10 plies for
+# a 600-visit search that is a 14% penalty on the deepest backed-up value, against 1.5% for the
+# four-day run's 0.9985 and 9.6% for 0.99. This affects ONLY the search backup
+# (SearchTree.hpp backPropagate); value_discount_per_ply stays 1.0, so training targets are
+# untouched and remain the observed game outcome.
+#
+# The honest limit: a search discount only expresses preference inside the tree horizon, so it
+# reliably picks mate in three over mate in seven but applies no direct pressure to a position that
+# is winning with no mate in sight. The expected mechanism is indirect — faster wins in self-play
+# shorten games, which shifts the training data over time.
+#
+# Everything else is v7: the r3 learning recipe, per-worker materialization dispatch, cut-game
+# values bootstrapped from the search root value, no Syzygy, the ply cap reaching 200 at
+# generation 60, and force_fast_search_after_ply staged from 110 to 200.
+#
+# Judged on wall-clock level-0 score against v7 (0.295@4800s, 0.415@6000s, 0.475@7200s,
+# 0.61@9600s, 0.67@14400s, 0.66@15600s) and on whether abandoned level-0 games fall from 21 per
+# 100 toward the r3 replica's 1 to 5.
+game: chess
+run:
+  run_name: vast-chess-4day-production-v8
+  tensorboard_run_directory: vast-chess-4day-production-v8
+  stage: clean_retrain
+  requires_explicit_approval: true
+  resume:
+    mode: random_initialization
+  hardware:
+    provider_name: vast.ai
+    offer_id: '48571853'
+    gpu_model: NVIDIA GeForce RTX 4070 SUPER
+    gpu_count: 8
+    logical_cpu_count: 80
+    minimum_ram_gib: 200
+    minimum_disk_gib: 100
+  environment:
+    runtime_image: vastai/pytorch:cuda-12.8.1-auto
+    python_version: '3.12'
+    torch_version: 2.12.1+cu126
+    cuda_version: '12.6'
+    dependency_lock_path: uv.lock
+    dependency_lock_sha256: 11074667d5b9e5075faee3d75817f2fbe1af8b863299ed27acd14809f939c484
+    minimum_open_file_soft_limit: 65536
+training:
+  save_path: py/training_data/validation/vast-chess-4day-production-v8
+  trainer:
+    global_batch_size: 2048
+    local_batch_size: 256
+    optimizer: adamw
+    precision: bfloat16
+    compilation: default
+    learning_rate:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 0.005}
+        - {start_generation: 100, value: 0.0035}
+        - {start_generation: 300, value: 0.002}
+    warmup_optimizer_steps: 1000
+    max_grad_norm: 0.5
+    duplicate_multiplicity_weight_cap: null
+  topology:
+    trainer:
+      device_type: cuda
+      process_group_backend: nccl
+      rank_zero_device_id: 0
+      ddp_device_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+      cpu_threads: 4
+      interop_threads: 1
+    self_play:
+      device_ids: [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7]
+      parallel_games_per_process: 512
+      tensorboard_processes: 1
+      node_ids_to_pause_during_training: [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19, 21, 22, 23, 25, 26, 27, 29, 30, 31]
+    evaluation:
+      # Every GPU: evaluation jobs are placed round-robin over this cycle, so spreading it across
+      # all eight keeps one job per device instead of two or three stacked on four devices.
+      device_cycle: [0, 1, 2, 3, 4, 5, 6, 7]
+  lifecycle:
+    replay:
+      capacity:
+        kind: linear
+        start_generation: 0
+        end_generation: 100
+        start_value: 300000
+        end_value: 2000000
+        rounding: nearest
+      maximum_capacity: 2000000
+      maximum_policy_entries: 60
+      materialization_processes: 8
+    credit:
+      replay_ratio: 8
+      optimizer_steps_per_quantum: 500
+      maximum_optimizer_steps: null
+      retained_checkpoint_interval_generations: 6
+      self_play_backpressure_quanta: 5
+    inference_retention:
+      recent_checkpoint_count: 22
+      milestone_interval: 20
+  limits:
+    hourly_price: 0.72
+    maximum_cost: null
+    maximum_wall_time_seconds: 345600
+    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v8.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 1.0
+    resource_telemetry_interval_seconds: 5.0
+  random_seed: 20260811
+  progressive_model_sizing:
+    models:
+      - model_id: chess-cnn-12x128-dense4
+        training_start_days: 0.0
+        network:
+          kind: convolutional
+          num_layers: 12
+          hidden_size: 128
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: dense, channels: 4}
+          num_value_channels: 2
+          value_fc_size: 48
+      - model_id: chess-cnn-14x152-dense4
+        training_start_days: 1.0
+        network:
+          kind: convolutional
+          num_layers: 14
+          hidden_size: 152
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: dense, channels: 4}
+          num_value_channels: 2
+          value_fc_size: 48
+    promotion:
+      decay: 0.8
+      warmup_quanta: 10
+      maximum_relative_loss: 1.01
+evaluation:
+  cadence_seconds: 1200
+  job_timeout_seconds: 1800
+  shutdown_grace_seconds: 30
+  bootstrap_samples: 10000
+  # Eight, matching the eight-device cycle: one evaluation job per GPU. Ten over a four-device
+  # cycle stacked two to three jobs on a device and exhausted its memory.
+  maximum_concurrent_jobs: 8
+  dataset:
+    path: /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v1.bin
+    source:
+      kind: engine_self_play
+      random_seed: 20260811
+      move_sampling_temperature: 1.0
+  openings:
+    path: /workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-openings-v1.json
+    opening_count: 50
+    source:
+      kind: chess_book
+      selection_path: py/reference/chess-stockfish-8moves-v3-openings-50.tsv
+      selection_sha256: ec0fe73449d7ec6ff58db6b060d4c2535afef1d2cfdac098fb44b0cff22735b2
+  engine:
+    kind: stockfish
+    executable_path: engines/stockfish
+    label_nodes: 10000
+    match_nodes: 1000
+    threads: 1
+    hash_mib: 1024
+    multi_pv: 8
+    policy_softmax_temperature: 0.15
+  definitions:
+    - kind: fixed_dataset
+      definition_id: fixed-dataset
+    - kind: previous_checkpoint
+      definition_id: previous-20m
+      boundary_offset: 1
+      boundary_parity: every
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: &evaluation_search
+        searches_per_move: 64
+        parallel_searches: 1
+        exploration_constant: 1.0
+        inference:
+          inference_workers: 1
+          inference_batch_size: 64
+          outstanding_batches_per_worker: 1
+          sdpa_backend: memory_efficient
+    - kind: previous_checkpoint
+      definition_id: previous-40m
+      boundary_offset: 2
+      boundary_parity: every
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: previous_checkpoint
+      definition_id: previous-60m
+      boundary_offset: 3
+      boundary_parity: every
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish
+      definition_id: stockfish-level-0
+      skill_level: 0
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish
+      definition_id: stockfish-level-1
+      skill_level: 1
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish
+      definition_id: stockfish-level-2
+      skill_level: 2
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish
+      definition_id: stockfish-level-3
+      skill_level: 3
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish
+      definition_id: stockfish-level-4
+      skill_level: 4
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-30
+      nodes: 30
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-100
+      nodes: 100
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-300
+      nodes: 300
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-1000
+      nodes: 1000
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+chess:
+  self_play:
+    resignation:
+      kind: calibrated
+      first_production_generation: 70
+      false_nonloss_rate_ceiling: 0.03
+      continuation_game_probability: 0.1
+      triggered_game_window: 2000
+      candidate_threshold_minimum: -0.99
+      candidate_threshold_maximum: -0.7
+      candidate_threshold_step: 0.01
+      minimum_evidence_trigger_count: 100
+      confidence_level: 0.95
+      maximum_relaxation_per_generation: 0.01
+    search:
+      full_search_budget:
+        kind: fixed
+        visits:
+          kind: staged
+          stages:
+            - {start_generation: 0, value: 200}
+            - {start_generation: 10, value: 300}
+            - {start_generation: 30, value: 400}
+            - {start_generation: 50, value: 500}
+            - {start_generation: 90, value: 600}
+            - {start_generation: 180, value: 700}
+            - {start_generation: 250, value: 800}
+            - {start_generation: 550, value: 1000}
+      fast_searches:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 50}
+          - {start_generation: 10, value: 75}
+          - {start_generation: 30, value: 100}
+          - {start_generation: 50, value: 125}
+          - {start_generation: 90, value: 150}
+      parallel_searches:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 2}
+          - {start_generation: 90, value: 4}
+      virtual_loss_weight: 1.0
+      dirichlet_epsilon: 0.25
+      dirichlet_alpha: 0.3
+      exploration_constant: 1.5
+      first_play_urgency:
+        kind: reduced_parent_value
+        reduction: 0.2
+      forced_playouts:
+        kind: enabled
+        coefficient: 1.5
+    inference:
+      inference_workers: 1
+      inference_batch_size: 320
+      outstanding_batches_per_worker: 2
+      sdpa_backend: memory_efficient
+    start_position:
+      kind: restart_state
+      true_start_probability: 0.5
+      candidate_visit_mass: 0.85
+      minimum_candidates: 2
+      maximum_candidates: 3
+      maximum_absolute_root_value: 0.8
+      minimum_remaining_plies: 15
+      maximum_archive_positions: 50000
+      maximum_age_generations: 40
+    full_search_probability:
+      kind: linear
+      start_generation: 0
+      end_generation: 70
+      start_value: 1.0
+      end_value: 0.25
+      rounding: none
+    retained_root_visit_fraction: 0.6
+    greedy_after_ply:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 60}
+        - {start_generation: 110, value: 80}
+    early_termination:
+      censor_remaining_game_length_target: true
+      value_target: search_root_value
+      maximum_game_plies:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 150}
+          - {start_generation: 20, value: 160}
+          - {start_generation: 40, value: 180}
+          - {start_generation: 60, value: 200}
+          - {start_generation: 100, value: 250}
+    force_fast_search_after_ply:
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 110}
+        - {start_generation: 20, value: 120}
+        - {start_generation: 40, value: 140}
+        - {start_generation: 60, value: 160}
+        - {start_generation: 100, value: 200}
+    starting_temperature: 1.3
+    final_temperature: 0.1
+    primary_sample_weight: 1.0
+    detailed_statistics_workers: 1
+  objective:
+    policy_loss_weight: 1.0
+    value_loss_weight: 1.0
+    root_value_blend:
+      kind: linear
+      start_generation: 50
+      end_generation: 110
+      start_value: 0.0
+      end_value: 0.15
+      rounding: none
+    value_discount_per_ply: 1.0
+    search_value_discount_per_ply: 0.985
+    auxiliary_targets:
+      - kind: next_policy
+        ply_offset: 1
+        loss_weight: 0.1
+      - kind: remaining_game_length
+        loss_weight: 0.1
+        normalization_scale: 400.0
