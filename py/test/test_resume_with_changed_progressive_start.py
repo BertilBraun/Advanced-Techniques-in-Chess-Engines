@@ -42,20 +42,23 @@ PRODUCTION_CONFIGURATION_PATH = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'va
 ELEVEN_HOURS_SECONDS = 11.0 * 3600.0
 SIXTEEN_HOURS_SECONDS = 16.0 * 3600.0
 LOWERED_START_DAYS = Decimal('0.667')
+BASELINE_START_DAYS = Decimal('1.0')
 
 
 def _production_configuration() -> ChessExperimentConfiguration:
+    # Pinned to the pre-change threshold rather than whatever the shipped file currently says, so the
+    # probe keeps comparing two different configurations after the production value moves.
     loaded = load_experiment_configuration(PRODUCTION_CONFIGURATION_PATH)
     assert isinstance(loaded, ChessExperimentConfiguration)
-    return loaded
+    baseline = _with_second_rung_start(loaded, BASELINE_START_DAYS)
+    assert isinstance(baseline, ChessExperimentConfiguration)
+    return baseline
 
 
-def _with_lowered_second_rung(configuration: ExperimentConfiguration) -> ExperimentConfiguration:
+def _with_second_rung_start(configuration: ExperimentConfiguration, days: Decimal) -> ExperimentConfiguration:
     sizing = configuration.training.progressive_model_sizing
     first, second = sizing.models
-    lowered = sizing.model_copy(
-        update={'models': (first, second.model_copy(update={'training_start_days': LOWERED_START_DAYS}))}
-    )
+    lowered = sizing.model_copy(update={'models': (first, second.model_copy(update={'training_start_days': days}))})
     return configuration.model_copy(
         update={'training': configuration.training.model_copy(update={'progressive_model_sizing': lowered})}
     )
@@ -83,13 +86,13 @@ def _replay_layout() -> ReplayLayout:
 
 def test_lowering_the_second_rung_changes_the_approval_configuration_sha256() -> None:
     original = _production_configuration()
-    lowered = _with_lowered_second_rung(original)
+    lowered = _with_second_rung_start(original, LOWERED_START_DAYS)
 
     assert experiment_configuration_sha256(original) != experiment_configuration_sha256(lowered)
 
 
 def test_second_rung_is_ineligible_at_eleven_hours_and_eligible_at_sixteen() -> None:
-    sizing = _with_lowered_second_rung(_production_configuration()).training.progressive_model_sizing
+    sizing = _with_second_rung_start(_production_configuration(), LOWERED_START_DAYS).training.progressive_model_sizing
 
     assert sizing.eligible_model_ids(ELEVEN_HOURS_SECONDS) == ('chess-cnn-12x128-dense4',)
     assert sizing.eligible_model_ids(SIXTEEN_HOURS_SECONDS + 60.0) == (
@@ -114,7 +117,9 @@ def test_progressive_state_reopens_under_the_lowered_threshold(tmp_path: Path) -
     before = _progressive_store(state_path, original.training.progressive_model_sizing)
     persisted = state_path.read_text(encoding='utf-8')
 
-    after = _progressive_store(state_path, _with_lowered_second_rung(original).training.progressive_model_sizing)
+    after = _progressive_store(
+        state_path, _with_second_rung_start(original, LOWERED_START_DAYS).training.progressive_model_sizing
+    )
 
     assert state_path.read_text(encoding='utf-8') == persisted
     assert after.state == before.state
@@ -143,7 +148,9 @@ def test_restarted_quantum_admits_the_second_rung_once_elapsed_passes_the_lowere
         before.state.model_copy(update={'pending_quantum': None}).model_dump_json(indent=2) + '\n',
     )
 
-    after = _progressive_store(state_path, _with_lowered_second_rung(original).training.progressive_model_sizing)
+    after = _progressive_store(
+        state_path, _with_second_rung_start(original, LOWERED_START_DAYS).training.progressive_model_sizing
+    )
     pending_after = after.begin_quantum(SIXTEEN_HOURS_SECONDS + 60.0, replay, 115_500, 500)
 
     assert pending_after.required_model_ids == ('chess-cnn-12x128-dense4', 'chess-cnn-14x152-dense4')
@@ -163,7 +170,9 @@ def test_pending_quantum_from_an_unclean_stop_pins_the_old_rung_set(tmp_path: Pa
     before = _progressive_store(state_path, original.training.progressive_model_sizing)
     before.begin_quantum(ELEVEN_HOURS_SECONDS, replay, 115_000, 500)
 
-    after = _progressive_store(state_path, _with_lowered_second_rung(original).training.progressive_model_sizing)
+    after = _progressive_store(
+        state_path, _with_second_rung_start(original, LOWERED_START_DAYS).training.progressive_model_sizing
+    )
     pending_after = after.begin_quantum(SIXTEEN_HOURS_SECONDS + 60.0, replay, 115_000, 500)
 
     assert pending_after.required_model_ids == ('chess-cnn-12x128-dense4',)
@@ -184,7 +193,9 @@ def test_pending_quantum_rejects_a_changed_replay_batch_across_restart(tmp_path:
     before = _progressive_store(state_path, original.training.progressive_model_sizing)
     before.begin_quantum(ELEVEN_HOURS_SECONDS, replay, 115_000, 500)
 
-    after = _progressive_store(state_path, _with_lowered_second_rung(original).training.progressive_model_sizing)
+    after = _progressive_store(
+        state_path, _with_second_rung_start(original, LOWERED_START_DAYS).training.progressive_model_sizing
+    )
     grown = replay.model_copy(update={'size': 1_100})
 
     with pytest.raises(ValueError, match='replay batches changed across restart'):
@@ -310,7 +321,7 @@ def test_run_manifest_accepts_the_changed_configuration_and_archives_the_previou
     manifest_path = tmp_path / 'run_manifest.json'
     experiment_run._write_manifest(manifest_path, _run_manifest(original))
 
-    lowered_manifest = _run_manifest(_with_lowered_second_rung(original))
+    lowered_manifest = _run_manifest(_with_second_rung_start(original, LOWERED_START_DAYS))
     written = experiment_run._write_manifest(manifest_path, lowered_manifest)
 
     assert written == lowered_manifest
