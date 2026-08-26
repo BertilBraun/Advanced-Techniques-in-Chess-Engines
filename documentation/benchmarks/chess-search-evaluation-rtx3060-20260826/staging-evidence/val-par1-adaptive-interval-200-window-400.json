@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "source_revision": "0408bfb7a3c10ec3c244cec8c3ae1f2657364b47",
+  "rule_label": "adaptive-interval-200-window-400",
+  "positions": 200,
+  "exact_agreement": 1.0,
+  "mean_absolute_visit_difference": 0.0,
+  "native_mean_visits": 600.0,
+  "replayed_mean_visits": 600.0,
+  "disagreements": []
+}

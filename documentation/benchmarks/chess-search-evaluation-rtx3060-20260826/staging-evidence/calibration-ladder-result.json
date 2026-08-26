@@ -1,0 +1,100 @@
+{
+  "schema_version": 2,
+  "source_revision": "0408bfb7a3c10ec3c244cec8c3ae1f2657364b47",
+  "tool_sha256": "0f0a84f1bdf865cd6c6edd54a347904fff51ce4db1f873d0888fb2205424d844",
+  "checkpoint_generation": 162,
+  "opening_manifest_path": "/workspace/evaluation-artifacts/chess/chess-elite-2025-11-balanced-4moves-200-v1-openings.json",
+  "opening_manifest_sha256": "ab15a513135c7aec3e19c0ce3b845e03c2f47a9a73f07a72f5a9ab4842470c1e",
+  "stockfish_executable_path": "/workspace/alphazero-engine/engines/upstream/stockfish-13/stockfish_13_linux_x64_bmi2",
+  "stockfish_executable_sha256": "ec56cd6ad04eecd38885912321ee2dfc76aee68415668ba433fa76eb7180ac5a",
+  "stockfish_identity": "Stockfish 13",
+  "probe_game_count": 10,
+  "opening_pair_count": 5,
+  "opening_selection_seed": 20260826,
+  "match_random_seed": 20260827,
+  "model_search_budget": {
+    "kind": "fixed_searches",
+    "searches_per_move": 600,
+    "parallel_searches": 4,
+    "inference_workers": 1,
+    "inference_batch_size": 64,
+    "outstanding_batches_per_worker": 1,
+    "exploration_constant": 1.5,
+    "tree_search": {
+      "first_play_urgency": {
+        "kind": "reduced_parent_value",
+        "reduction": 0.2
+      },
+      "virtual_loss_weight": 1.0,
+      "value_discount_per_ply": 0.99
+    }
+  },
+  "probes": [
+    {
+      "stockfish_nodes": 1000,
+      "result_path": "/workspace/search-eval/output/night-20260826T221145Z/calibration/stockfish-nodes-1000/result.json",
+      "wins": 7,
+      "draws": 1,
+      "losses": 2,
+      "score": 0.75,
+      "score_confidence_low": 0.45,
+      "score_confidence_high": 1.0
+    },
+    {
+      "stockfish_nodes": 2100,
+      "result_path": "/workspace/search-eval/output/night-20260826T221145Z/calibration/stockfish-nodes-2100/result.json",
+      "wins": 8,
+      "draws": 1,
+      "losses": 1,
+      "score": 0.85,
+      "score_confidence_low": 0.65,
+      "score_confidence_high": 1.0
+    },
+    {
+      "stockfish_nodes": 3500,
+      "result_path": "/workspace/search-eval/output/night-20260826T221145Z/calibration/stockfish-nodes-3500/result.json",
+      "wins": 3,
+      "draws": 4,
+      "losses": 3,
+      "score": 0.5,
+      "score_confidence_low": 0.35,
+      "score_confidence_high": 0.65
+    },
+    {
+      "stockfish_nodes": 6500,
+      "result_path": "/workspace/search-eval/output/night-20260826T221145Z/calibration/stockfish-nodes-6500/result.json",
+      "wins": 0,
+      "draws": 1,
+      "losses": 9,
+      "score": 0.05,
+      "score_confidence_low": 0.0,
+      "score_confidence_high": 0.15
+    },
+    {
+      "stockfish_nodes": 11000,
+      "result_path": "/workspace/search-eval/output/night-20260826T221145Z/calibration/stockfish-nodes-11000/result.json",
+      "wins": 0,
+      "draws": 2,
+      "losses": 8,
+      "score": 0.1,
+      "score_confidence_low": 0.0,
+      "score_confidence_high": 0.2
+    },
+    {
+      "stockfish_nodes": 20000,
+      "result_path": "/workspace/search-eval/output/night-20260826T221145Z/calibration/stockfish-nodes-20000/result.json",
+      "wins": 1,
+      "draws": 1,
+      "losses": 8,
+      "score": 0.15,
+      "score_confidence_low": 0.0,
+      "score_confidence_high": 0.35
+    }
+  ],
+  "closest_stockfish_nodes": 3500,
+  "score_bracket": {
+    "lower_stockfish_nodes": 2100,
+    "upper_stockfish_nodes": 3500
+  },
+  "ladder_elo_fit": null
+}

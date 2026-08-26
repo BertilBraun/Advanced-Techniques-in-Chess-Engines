@@ -181,6 +181,18 @@ too small to conclude anything and these numbers must not be quoted as results:
 with `adaptive-baseline` showing `visit_saving` +77.7 and `kullback_leibler_advantage` +0.011 against the fixed
 frontier.
 
+## 7.1 Preserved staging evidence
+
+The node is ephemeral, so the small artefacts that back sections 4.1 and 5.1 are committed under
+`staging-evidence/`:
+
+- `calibration-ladder-result.json`, `chosen-rung.txt` — the rung determination.
+- `val-par1-adaptive-*.json` — the five replay-versus-native validations at `parallel_searches = 1`, each
+  reporting `exact_agreement` 1.0 over 200 positions.
+
+The 3,000-position sample is not committed; it is regenerated exactly from the recorded model hash, seed 20260826
+and the sampler arguments in §5.2, and its hash is recorded there.
+
 ## 8. Reproduction
 
 On the node:
