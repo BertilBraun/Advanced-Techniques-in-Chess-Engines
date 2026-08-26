@@ -39,9 +39,11 @@ from src.util.provenance import read_source_revision_if_available
 
 ProbeMode: TypeAlias = Literal['equal-nodes', 'equal-compute', 'throughput-only']
 
-THROUGHPUT_POSITION_COUNT = 32
+# Roots must match what the match itself batches: with parallel_searches 1 the inference batch is the root count,
+# and a paired match has about half its games on each side to move, so 400 games present ~200 roots per search.
+THROUGHPUT_POSITION_COUNT = 200
 THROUGHPUT_WARMUP_BATCHES = 2
-THROUGHPUT_MEASURED_BATCHES = 8
+THROUGHPUT_MEASURED_BATCHES = 16
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,7 @@ class Arguments:
     random_seed: int
     output: Path
     experiment_config: Path
+    pinned_throughput_ratio: float | None
 
 
 class NetworkIdentity(FrozenModel):
@@ -213,15 +216,12 @@ def _measure_throughput(
 
 def _equal_compute_student_searches(
     teacher_searches_per_move: int,
-    teacher_throughput: ThroughputMeasurement,
-    student_throughput: ThroughputMeasurement,
+    throughput_ratio: float,
     parallel_searches: int,
 ) -> tuple[int, bool]:
-    if teacher_throughput.positions_per_second <= 0.0:
-        raise ValueError('Teacher throughput measured as zero positions per second.')
-    scaled = round(
-        teacher_searches_per_move * student_throughput.positions_per_second / teacher_throughput.positions_per_second
-    )
+    if throughput_ratio <= 0.0:
+        raise ValueError('Throughput ratio must be positive.')
+    scaled = round(teacher_searches_per_move * throughput_ratio)
     # EvaluationSearchConfiguration rejects a budget that does not exceed parallel_searches.
     clamped = max(scaled, parallel_searches + 1)
     return clamped, clamped != scaled
@@ -360,6 +360,15 @@ def run_probe(arguments: Arguments) -> DistillationMatchResult:
     match arguments.mode:
         case 'equal-nodes':
             pass
+        case 'equal-compute' if arguments.pinned_throughput_ratio is not None:
+            # Re-measuring per match drew ratios spanning 3.87-5.69 for one model, moving Elo by tens of points.
+            throughput_ratio = arguments.pinned_throughput_ratio
+            print(f'pinned student/teacher throughput ratio: {throughput_ratio:.4f}')
+            student_searches_per_move, student_budget_clamped = _equal_compute_student_searches(
+                arguments.searches_per_move,
+                throughput_ratio,
+                arguments.parallel_searches,
+            )
         case 'equal-compute' | 'throughput-only':
             teacher_throughput, student_throughput = _measure_both(
                 game,
@@ -374,8 +383,7 @@ def run_probe(arguments: Arguments) -> DistillationMatchResult:
             if arguments.mode == 'equal-compute':
                 student_searches_per_move, student_budget_clamped = _equal_compute_student_searches(
                     arguments.searches_per_move,
-                    teacher_throughput,
-                    student_throughput,
+                    throughput_ratio,
                     arguments.parallel_searches,
                 )
 
@@ -477,6 +485,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--random-seed', default=0, type=int)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--experiment-config', required=True, type=Path)
+    parser.add_argument('--pinned-throughput-ratio', default=None, type=float)
     namespace = parser.parse_args()
     arguments = Arguments(
         teacher_run_state=namespace.teacher_run_state,
@@ -495,6 +504,7 @@ def parse_arguments() -> Arguments:
         random_seed=namespace.random_seed,
         output=namespace.output,
         experiment_config=namespace.experiment_config,
+        pinned_throughput_ratio=namespace.pinned_throughput_ratio,
     )
     required_paths = (
         arguments.teacher_run_state,

@@ -35,6 +35,9 @@ class DistillationDatasetManifest(FrozenModel):
     random_perturbation_probability: float = Field(ge=0.0, le=1.0)
     maximum_game_plies: int = Field(gt=0)
     builder_source_revision: str = Field(min_length=1)
+    # Present only on merged datasets; the generator settings above then describe the last source, whose rows form
+    # the held-out tail.
+    merged_sources: tuple[str, ...] = ()
 
 
 def record_dtype(payload_bytes: int = CHESS_PAYLOAD_BYTES) -> np.dtype:
