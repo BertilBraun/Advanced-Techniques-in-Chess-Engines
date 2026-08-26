@@ -12,7 +12,7 @@ GRID=${SEARCH_EVAL_SOURCE}/py/configs/evaluation/chess-search-stopping-grid-v1.j
 ARMS=${SEARCH_EVAL_SOURCE}/py/configs/evaluation/chess-search-arms-v1.json
 POSITIONS=${SEARCH_EVAL_ROOT}/output/positions-g162-v1.json
 
-OPENING_PAIRS=${OPENING_PAIRS:-150}
+OPENING_PAIRS=${OPENING_PAIRS:-100}
 CONCURRENCY=${CONCURRENCY:-6}
 FIDELITY_POSITIONS=${FIDELITY_POSITIONS:-3000}
 

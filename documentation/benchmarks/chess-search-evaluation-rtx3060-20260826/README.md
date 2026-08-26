@@ -10,7 +10,7 @@ which has not been started. Design and reasoning live in
 | Item | Value |
 |---|---|
 | Branch | `search-evaluations` |
-| Source revision (tooling) | `0408bfb7a3c10ec3c244cec8c3ae1f2657364b47` |
+| Source revision on the node | `50d4b076` (tooling code unchanged since `0408bfb7`; later commits touch configuration line endings and documentation only) |
 | Experiment configuration | `py/configs/validation/vast-chess-4day-production-v9.yaml` |
 | `experiment_configuration_sha256` | `28eceba8d2ea74f9fecbfd1770009ad538fc00c08de6344e8cabc922b523b50c` |
 | Family A arm matrix | `py/configs/evaluation/chess-search-arms-v1.json`, sha256 `7b7d3b2445e18bf36ffd495467837b44e48b1313487bae55a80cb16cf2026f37` |
@@ -77,14 +77,33 @@ session has checked out with uncommitted work.
 | Reference pass, 200 roots, parallel 1, batch 256 | 9,967 simulations/s |
 | Reference pass, 64 roots, parallel 1, batch 128 | 9,973 simulations/s |
 | Family A, one arm, 600 visits, 20 games, Stockfish 300 nodes | 3.94 s/game |
+| Family A, one arm, 600 visits, Stockfish 3,500 nodes (the real rung) | 7.3 s/game |
 | Family A, six concurrent arms, 600 visits | 0.50 games/s aggregate (2.05× one arm) |
+| Family A calibration ladder, 6 rungs × 10 games | ≈ 25 min |
 
-Derived budgets: Family B full pass 30M simulations ≈ 50 min; Family A 21 arms × 300 games ≈ 4–6 h at
-concurrency 6.
+Game cost depends strongly on the rung: balanced games at 3,500 nodes run 1.85× longer than the lopsided games at
+300 nodes. Derived budgets: Family B full pass 30M simulations ≈ 50 min; Family A 21 arms × 200 games ≈ 4.4 h at
+concurrency 6; ≈ 5.5 h for the night.
+
+### 4.1 Calibration result — the rung is known
+
+| Stockfish 13 nodes | Score (10 games) | W/D/L | s/game |
+|---|---|---|---|
+| 1,000 | 0.750 | 7/1/2 | 6.1 |
+| 2,100 | 0.850 | 8/1/1 | 7.7 |
+| **3,500** | **0.500** | **3/4/3** | **7.3** |
+| 6,500 | 0.050 | 0/1/9 | 4.9 |
+| 11,000 | 0.100 | 0/2/8 | 6.0 |
+| 20,000 | 0.150 | 1/1/8 | 6.5 |
+
+`closest_stockfish_nodes` = **3,500**, bracket 2,100–3,500. Ten games per rung is coarse (±0.3), so the tail
+non-monotonicity is noise. `ladder_elo_fit` is `null` because these node counts are not all present in
+`STOCKFISH_FIXED_NODES_ANCHOR_ELO`; only the rung was needed.
 
 ## 5. Staging and smoke tests — all passed
 
 Everything below ran end to end on the node at tiny scale, deliberately without consuming the night's budget.
+The last row is the decisive one: the exact script staged for tonight ran all three stages to completion.
 
 | Check | Result |
 |---|---|
@@ -100,6 +119,8 @@ Everything below ran end to end on the node at tiny scale, deliberately without 
 | Family B self-consistency (`fixed-10000` vs reference) | KL **0.0**, total variation **0.0**, top-1 **1.000** |
 | Replay vs native adaptive search, `parallel_searches=1` | **1.000 exact agreement**, 5 rules × 200 positions |
 | Replay vs native adaptive search, `parallel_searches=4` | 0.900–1.000, mean difference 0–25 visits |
+| Family A calibration ladder, 6 rungs × 10 games | ok; rung 3,500 chosen (§4.1) |
+| **Full `run-night.sh` rehearsal end to end** | **ok, exit 0** — Family B, calibration and all 21 arms in 530 s at 2 pairs/arm |
 
 The 14 node failures are **pre-existing and identical at baseline**, so this branch introduces no regression; it
 adds 23 passing tests. They are the known node-only failures noted in `CURRENT-STATE.md`

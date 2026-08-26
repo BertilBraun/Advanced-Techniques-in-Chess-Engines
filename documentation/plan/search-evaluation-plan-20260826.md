@@ -98,14 +98,15 @@ This is the part to be blunt about, and the measured throughput (§3) improves t
 
 At a **100-game** arm the reference figure is a 95% interval of about ±0.045 on the score, so a difference between
 two arms measured independently carries roughly ±0.064 — about **±45 Elo** near 50%. That is too coarse for the
-FPU and cpuct axes. The measured rate allows far more than 100 games, so the design is sized at **150 opening
-pairs = 300 games per arm**, which scales the interval by 1/sqrt(3):
+FPU and cpuct axes. The measured rate allows more than that, so the design is sized at **100 opening pairs =
+200 games per arm**, which scales the interval by 1/sqrt(2):
 
-| Games per arm | 95% interval, one arm | On an unpaired difference | Near 50% |
-|---|---|---|---|
-| 100 | ±0.045 | ±0.064 | ~±45 Elo |
-| 300 (chosen) | ±0.026 | ±0.037 | ~±26 Elo |
-| 400 (manifest maximum) | ±0.023 | ±0.032 | ~±22 Elo |
+| Games per arm | 95% interval, one arm | On an unpaired difference | Near 50% | Est. wall-clock |
+|---|---|---|---|---|
+| 100 | ±0.045 | ±0.064 | ~±45 Elo | 2.2 h |
+| **200 (chosen default)** | ±0.032 | ±0.045 | ~±31 Elo | **4.4 h** |
+| 300 | ±0.026 | ±0.037 | ~±26 Elo | 6.6 h |
+| 400 (manifest maximum) | ±0.023 | ±0.032 | ~±22 Elo | 8.8 h |
 
 Pairing on openings removes the opening-difficulty component and tightens this further, but *how much* is an
 empirical property of each arm pair and is not knowable before the run — the achieved paired interval is reported
@@ -114,7 +115,7 @@ exactly 0.000 with interval [0.000, 0.000], because the search is deterministic 
 
 Stated without hedging:
 
-- **Detectable at 300 games:** differences of roughly **30 Elo and above** unpaired, somewhat smaller where the
+- **Detectable at 200 games:** differences of roughly **30 Elo and above** unpaired, somewhat smaller where the
   pairing correlates well. The visit-count arms will clear this comfortably.
 - **Not detectable:** differences below roughly 20 Elo. A null result on the FPU or cpuct axes means "no effect
   larger than about 30 Elo", **not** "no effect", and must not be written up as "setting X does not matter".
@@ -127,20 +128,22 @@ different tool, is not built here, and is the follow-up worth authorising if the
 
 ### 1.4 Cost, from measurement
 
-Measured on the node while sharing the GPU with two other tenants (§3): a single 600-visit arm runs at 3.94 s per
-game; six concurrent arms run at 0.50 games/s in aggregate, a 2.05x speedup over one arm, so the GPU is close to
-saturated at concurrency 6.
+Measured on the node while sharing the GPU with two other tenants (§3), and then corrected once calibration
+identified the real rung — this matters, because game length depends on it.
 
-Weighting the 21 arms by visit count gives 22.3 baseline-arm equivalents (17 arms at 600 visits, plus the
-200/400/1000/1600-visit arms at 0.33/0.67/1.67/2.67x). At 0.50 games/s:
+- One 600-visit arm against Stockfish at **300** nodes (score 0.925, games end fast): 3.94 s/game.
+- One 600-visit arm against Stockfish at **3,500** nodes — the actual 50% rung: **7.3 s/game**, 1.85x slower,
+  because balanced games run much longer.
+- Six concurrent arms: 2.05x aggregate speedup over one arm, so the GPU is close to saturated at concurrency 6.
 
-| Games per arm | Estimated wall-clock |
-|---|---|
-| 300 (chosen) | ~3.7 h |
-| 400 | ~5.0 h |
+At the 3,500-node rung that is 0.281 games/s in aggregate. Weighting the 21 arms by visit count gives 22.3
+baseline-arm equivalents (17 arms at 600 visits, plus the 200/400/1000/1600-visit arms at 0.33/0.67/1.67/2.67x),
+so the matrix costs `22.3 x games_per_arm / 0.281` seconds — the wall-clock column in §1.3.
 
-Games at a 50%-score rung run longer than the 300-node probe they were timed against, so carry roughly 1.5x
-margin: **300 games per arm is expected to take 4-6 h**, which is the night. Concurrency 6 is the recommendation.
+**Default: 100 opening pairs (200 games) per arm, about 4.4 h**, plus 50 min for Family B and about 25 min for
+calibration — roughly **5.5 h total**, which leaves margin inside one night for the GPU contention that is
+already present. Raising `OPENING_PAIRS` to 150 buys ~26 Elo resolution instead of ~31 Elo for about two more
+hours; it is a single environment variable on `run-night.sh`.
 
 ## 2. Family B — policy-target fidelity per unit of compute
 
@@ -247,8 +250,29 @@ memory pressure. Chunk 64 is the recommendation.
 
 **Family B full pass:** 3,000 positions x 10,000 visits = 30M simulations at 9,973 simulations/s, about
 **50 minutes**.
-**Family A full matrix:** 4-6 h at 300 games per arm, concurrency 6.
-**Night total:** 5-7 h, Family B first because it is short and its result does not depend on the ladder rung.
+**Family A calibration:** six rungs x 10 games, about **25 minutes** measured.
+**Family A full matrix:** about **4.4 h** at 200 games per arm, concurrency 6.
+**Night total:** about **5.5 h**, Family B first because it is short and its result does not depend on the rung.
+
+### 3.1 Calibration already measured
+
+The calibration stage was run during staging, so the rung is known in advance (the night script re-runs it anyway,
+which is a cheap consistency check):
+
+| Stockfish 13 nodes | Score (10 games) | W/D/L | s/game |
+|---|---|---|---|
+| 1,000 | 0.750 | 7/1/2 | 6.1 |
+| 2,100 | 0.850 | 8/1/1 | 7.7 |
+| **3,500** | **0.500** | **3/4/3** | **7.3** |
+| 6,500 | 0.050 | 0/1/9 | 4.9 |
+| 11,000 | 0.100 | 0/2/8 | 6.0 |
+| 20,000 | 0.150 | 1/1/8 | 6.5 |
+
+**3,500 nodes is the rung.** The curve is steep — 0.85 at 2,100 down to 0.05 at 6,500 — so the arm matrix sits on
+a sensitive part of the scale, which is what maximises the information per game. Ten games per rung is coarse
+(±0.3), so the 6,500/11,000/20,000 non-monotonicity is noise, not a real reversal. `ladder_elo_fit` came back
+`null` because these node counts are not all in `STOCKFISH_FIXED_NODES_ANCHOR_ELO`; only the rung choice was
+needed here.
 
 ## 4. What a result would change
 
