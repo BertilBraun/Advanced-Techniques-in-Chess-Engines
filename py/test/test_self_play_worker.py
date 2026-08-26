@@ -86,6 +86,18 @@ class FakeResult:
     checkpoints: list[SearchCheckpoint]
     root: FakeRoot
 
+    @property
+    def search_visit_columns(self) -> tuple[list[int], list[int]]:
+        return _columns(self.search_visits)
+
+    @property
+    def policy_target_columns(self) -> tuple[list[int], list[int]]:
+        return _columns(self.policy_target_visits)
+
+
+def _columns(visits: list[GameSearchVisit]) -> tuple[list[int], list[int]]:
+    return ([visit.action_id for visit in visits], [visit.visit_count for visit in visits])
+
 
 @dataclass(frozen=True)
 class FakeBatch:
