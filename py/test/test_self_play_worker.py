@@ -678,11 +678,18 @@ def test_cut_game_bootstraps_its_value_from_the_last_search_root_value(tmp_path:
     )
     worker.refresh_published_model(checkpoint(tmp_path, 0))
 
+    # The first batch reaches the cut and defers; the second searches the cut position itself.
+    worker.run_batch()
+    assert not list(tmp_path.glob('*.json'))
     worker.run_batch()
 
     completed = CompletedSelfPlayGame.model_validate_json(next(tmp_path.glob('*.json')).read_text(encoding='utf-8'))
     assert oracle.probed_positions == [FakePosition(1)]
-    assert completed.final_wdl == WdlTarget.from_scalar(-completed.observations[-1].root_value)
+    trailing = completed.observations[-1]
+    assert trailing.ply == len(completed.action_ids)
+    assert trailing.selected_action_id is None
+    assert trailing.full_search
+    assert completed.final_wdl == WdlTarget.from_scalar(trailing.root_value)
 
 
 def test_cut_game_falls_back_to_adjudication_when_bootstrapping_is_disabled(tmp_path: Path) -> None:

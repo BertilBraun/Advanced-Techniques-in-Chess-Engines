@@ -61,6 +61,7 @@ class ActiveSelfPlayGame(Generic[NativeRootT]):
     action_ids: list[int] = field(default_factory=list)
     observations: list[SearchObservation] = field(default_factory=list)
     reserved_restart_action_id: int | None = None
+    awaiting_cut_evaluation: bool = False
     is_resignation_continuation: bool = False
     resignation_threshold: float | None = None
 
@@ -111,8 +112,10 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
                 parameters.force_fast_search_after_ply is not None
                 and len(active_game.action_ids) >= parameters.force_fast_search_after_ply
             )
-            full_search = active_game.reserved_restart_action_id is not None or (
-                not continuation_forces_fast_search and self.random.random() < parameters.full_search_probability
+            full_search = (
+                active_game.awaiting_cut_evaluation
+                or active_game.reserved_restart_action_id is not None
+                or (not continuation_forces_fast_search and self.random.random() < parameters.full_search_probability)
             )
             if full_search:
                 active_game.root.discount(parameters.retained_root_visit_fraction)
@@ -263,13 +266,14 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if not policy_target_columns[0]:
             raise RuntimeError('Native search returned an empty policy target for a nonterminal root.')
         resignation_triggered = (
-            not active_game.is_resignation_continuation
+            not active_game.awaiting_cut_evaluation
+            and not active_game.is_resignation_continuation
             and active_game.resignation_threshold is not None
             and result.root_value <= active_game.resignation_threshold
             and result.highest_visited_child_q <= active_game.resignation_threshold
         )
-        selected_action_id = active_game.reserved_restart_action_id
-        if selected_action_id is None and not resignation_triggered:
+        selected_action_id = None if active_game.awaiting_cut_evaluation else active_game.reserved_restart_action_id
+        if selected_action_id is None and not resignation_triggered and not active_game.awaiting_cut_evaluation:
             selected_action_id = self._select_action(search_visits, ply, parameters)
         observation = SearchObservation(
             ply=ply,
@@ -279,7 +283,9 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             highest_visited_child_action_id=result.highest_visited_child_action_id,
             highest_visited_child_visit_count=result.highest_visited_child_visit_count,
             highest_visited_child_q=result.highest_visited_child_q,
-            selected_action_id=None if resignation_triggered else selected_action_id,
+            selected_action_id=(
+                None if resignation_triggered or active_game.awaiting_cut_evaluation else selected_action_id
+            ),
             full_search=request.full_search,
             sample_weight=parameters.primary_sample_weight,
             search_budget=parameters.maximum_full_searches if request.full_search else parameters.fast_searches,
@@ -307,6 +313,14 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             ),
         )
         active_game.observations.append(observation)
+        if active_game.awaiting_cut_evaluation:
+            # The search ran at the cut position itself, so its root value already belongs to the player
+            # to move there and needs no sign flip.
+            return self._complete(
+                active_game,
+                WdlTarget.from_scalar(result.root_value),
+                TerminationReason.MAXIMUM_PLIES,
+            )
         if resignation_triggered:
             return self._complete(
                 active_game,
@@ -324,10 +338,11 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if parameters.maximum_game_plies is not None and len(active_game.action_ids) >= parameters.maximum_game_plies:
             oracle = self.game.terminal_oracle
             final_wdl = None if oracle is None else oracle.probe_wdl(active_game.root.position)
-            if final_wdl is None and parameters.bootstrap_cut_game_value and active_game.observations:
-                # The observation's root value belongs to the player who moved, and the cut position is
-                # seen by the opponent.
-                final_wdl = WdlTarget.from_scalar(-active_game.observations[-1].root_value)
+            if final_wdl is None and parameters.bootstrap_cut_game_value:
+                # Evaluate the cut position with its own full search rather than reusing the last move's
+                # value, which may have come from a fast search and would be stamped on every sample.
+                active_game.awaiting_cut_evaluation = True
+                return None
             if final_wdl is None:
                 final_wdl = self.game.state.adjudicated_wdl(
                     active_game.root.position,

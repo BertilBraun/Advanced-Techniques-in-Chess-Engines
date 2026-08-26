@@ -1087,3 +1087,54 @@ def test_staged_shards_are_parsed_once_and_appended_without_reparsing(
     assert ingestion.games_ingested == 2
     assert parses == 0
     manager.close()
+
+
+def _cut_game_with_trailing_observation() -> CompletedSelfPlayGame:
+    full = _completed_game()
+    # Cut the game short so the final position is non-terminal, which is what a ply cap produces.
+    game = full.model_copy(update={'action_ids': full.action_ids[:2], 'observations': full.observations[:2]})
+    position = LINEAR_STATE_CONTRACT.initial_position()
+    for action_id in game.action_ids:
+        position = LINEAR_STATE_CONTRACT.child_position(position, action_id)
+    legal = LINEAR_STATE_CONTRACT.legal_action_ids(position)
+    last = game.observations[-1]
+    trailing = last.model_copy(
+        update={
+            'ply': len(game.action_ids),
+            'selected_action_id': None,
+            'full_search': True,
+            'root_value': 0.6,
+            'policy_target_visits': SearchVisitCounts(action_ids=(legal[0],), visit_counts=(11,)),
+            'highest_visited_child_action_id': legal[0],
+            'highest_visited_child_visit_count': 11,
+        }
+    )
+    return game.model_copy(
+        update={
+            'observations': game.observations + (trailing,),
+            'termination_reason': TerminationReason.MAXIMUM_PLIES,
+        }
+    )
+
+
+def test_cut_position_search_becomes_its_own_training_sample() -> None:
+    cut = _cut_game_with_trailing_observation()
+    without_trailing = cut.model_copy(update={'observations': cut.observations[:-1]})
+    baseline = materialize_completed_game(
+        without_trailing, LINEAR_STATE_CONTRACT, None, _target_layout(), 1, UNDISCOUNTED_VALUES
+    )
+
+    materialized = materialize_completed_game(
+        cut,
+        LINEAR_STATE_CONTRACT,
+        None,
+        _target_layout(),
+        1,
+        UNDISCOUNTED_VALUES,
+    )
+
+    # The searched cut position contributes one extra sample beyond the played plies.
+    assert len(materialized.samples) == len(baseline.samples) + 1
+    assert materialized.samples[-1].root_value == 0.6
+    # It has no successor, so the next-policy target cannot be eligible for it.
+    assert isinstance(materialized.samples[-1].auxiliary_targets[0], IneligibleNextPolicyTarget)
