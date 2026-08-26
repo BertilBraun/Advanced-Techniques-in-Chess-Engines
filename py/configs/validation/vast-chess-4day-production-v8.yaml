@@ -49,7 +49,7 @@ run:
     gpu_count: 8
     logical_cpu_count: 80
     minimum_ram_gib: 200
-    minimum_disk_gib: 100
+    minimum_disk_gib: 5
   environment:
     runtime_image: vastai/pytorch:cuda-12.8.1-auto
     python_version: '3.12'
