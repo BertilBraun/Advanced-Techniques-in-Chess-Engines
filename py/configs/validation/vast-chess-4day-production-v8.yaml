@@ -136,7 +136,7 @@ training:
           num_value_channels: 2
           value_fc_size: 48
       - model_id: chess-cnn-14x152-dense4
-        training_start_days: 0.667
+        training_start_days: 0.5
         network:
           kind: convolutional
           num_layers: 14
@@ -382,7 +382,7 @@ chess:
       end_value: 0.15
       rounding: none
     value_discount_per_ply: 1.0
-    search_value_discount_per_ply: 0.985
+    search_value_discount_per_ply: 0.98
     auxiliary_targets:
       - kind: next_policy
         ply_offset: 1
