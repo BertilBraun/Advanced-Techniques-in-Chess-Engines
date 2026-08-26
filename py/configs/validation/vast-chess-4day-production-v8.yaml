@@ -136,7 +136,7 @@ training:
           num_value_channels: 2
           value_fc_size: 48
       - model_id: chess-cnn-14x152-dense4
-        training_start_days: 1.0
+        training_start_days: 0.667
         network:
           kind: convolutional
           num_layers: 14
