@@ -32,25 +32,40 @@ checkpoints — the signature of failing only when far stronger than the opponen
 v2 and v4 lose heavily (81 and 34 per 100) and still finish their games. Weakness and
 non-conversion are independent failures. Abandonment appears exactly at v7.
 
-## Hypotheses eliminated, with the evidence
+## Hypotheses tested, and what the evidence actually settled
 
-Five were proposed and rejected in order. Recording them because each looked plausible.
+Five were proposed. Only two are cleanly dead; the others were narrowed rather than eliminated, and
+three of the five are still present or changed in v9. Recording the distinction because "eliminated"
+overstates what was shown.
+
+**Dead as explanations.**
 
 1. **`remaining_game_length` censoring removed the urgency signal.** The four-day reference has no
-   `early_termination` block at all, so it censored nothing and converted 99/100.
-2. **Search backup discount.** The four-day r3 phase ran `value_discount_per_ply: 1.0` — no discount
-   anywhere — and converted. v7 ran 1.0 and abandoned 21; v8 ran 0.98, a stronger discount than any
-   reference, and abandoned 19. Mechanism: with no terminal inside the tree, every line evaluates
-   ≈1.0 and a backup discount scales them all alike, so it provides no gradient.
-3. **Syzygy removal.** r3-replica has `maximum_ply_syzygy_paths: None` too.
-4. **Resignation rate.** v8 fires at 0.68–0.72, r3-replica at 0.66–0.70; the resignation config
-   blocks are character-identical. `continuation_game_probability` is drawn per game at start,
-   independent of whether the game resigns, so the continuation share cannot drift — measured at
-   9.65–9.99 % in every run.
-5. **`force_fast_search_after_ply` starving endgame training.** Weakened twice: the four-day
-   reference itself ran threshold 160 under a cap of 200 — a 40-ply dead zone — and converted
-   99/100; and by v8's generation 100 the threshold sat at 200 against a p90 game length of 165, so
-   it touched only the top few percent of games while abandonment stayed at 19–21.
+   `early_termination` block at all, so it censored nothing and converted 99/100. Nothing to explain.
+2. **Syzygy removal.** r3-replica has `maximum_ply_syzygy_paths: None` too, and converts.
+
+**Ruled out as *the cause*, but still in the configuration.**
+
+3. **Search backup discount.** It cannot be what separates the runs: the four-day r3 phase ran
+   `value_discount_per_ply: 1.0` — no discount anywhere — and converted; v7 ran 1.0 and abandoned 21;
+   v8 ran 0.98 and abandoned 19. Mechanism for the null result: with no terminal inside the tree,
+   every line evaluates ≈1.0 and a backup discount scales them all alike, giving no gradient.
+   **v9 nonetheless retains it at 0.99** — it is cheap and harmless, not discarded.
+
+**Narrowed, not settled.**
+
+4. **Resignation.** The *rate* is not the differentiator: v8 fires at 0.68–0.72 against r3-replica's
+   0.66–0.70 with character-identical config, and `continuation_game_probability` is drawn per game
+   at start so its share cannot drift (9.65–9.99 % everywhere). But **v9 changed resignation anyway**
+   — continuation 0.1 → 0.2 and the false-nonloss ceiling 0.03 → 0.025 — precisely because
+   continuation games are the only training data that requires delivering mate. Whether that
+   contributed to the fix is untested.
+5. **`force_fast_search_after_ply` starving endgame training.** It does not explain v8's *steady
+   state*: by generation 100 the threshold sat at 200 against a p90 game length of 165, touching only
+   the top few percent of games while abandonment stayed at 19–21; and the four-day reference itself
+   ran a 160/200 dead zone and converted 99/100. But it is directly implicated in the **early
+   poisoning** below, it is one of the changes v9 reverted, and the run that reverted it converts.
+   Treat it as a live contributor, not a dead hypothesis.
 
 A sample-stream comparison against the archived replay stores also ruled out any *current* data
 defect. v8's training samples sit **closer** to terminal positions than the converting references
@@ -114,7 +129,8 @@ reached in 4.3 hours. Ladder Elo 1502 at 4.7 h against v8's 1236; fixed-nodes-10
 
 - **Five changes were applied at once.** Which one fixed conversion is not isolated. The ply discount
   is the best-supported candidate on mechanism and on being the one thing the converting references
-  had, but the cut-position search and the doubled continuation games are untested alternatives.
+  had; reverting the fast-search threshold and doubling continuation games are equally plausible and
+  equally untested. Nothing here licenses claiming a single cause.
 - Matching on level-0 score is mildly circular: v8's score was itself depressed by its abandonment,
   so v8's true strength at 0.690 was somewhat higher than the number implies.
 - One run each side. The four-day reference did not show its own late-run behaviour until well past
