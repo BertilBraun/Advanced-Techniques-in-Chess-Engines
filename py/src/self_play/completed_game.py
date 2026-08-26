@@ -165,8 +165,9 @@ class CompletedSelfPlayGame(FrozenModel):
         trailing = tuple(observation for observation in self.observations if observation.ply == len(self.action_ids))
         if any(observation.ply > len(self.action_ids) for observation in self.observations):
             raise ValueError('Search observations cannot follow the final game position.')
-        if trailing and (self.termination_reason is not TerminationReason.RESIGNATION or len(trailing) != 1):
-            raise ValueError('Only resignation may retain one unplayed final search observation.')
+        unplayed_final = (TerminationReason.RESIGNATION, TerminationReason.MAXIMUM_PLIES)
+        if trailing and (self.termination_reason not in unplayed_final or len(trailing) != 1):
+            raise ValueError('Only resignation or a ply cap may retain one unplayed final search observation.')
         if any(
             observation.selected_action_id != self.action_ids[observation.ply]
             for observation in self.observations

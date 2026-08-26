@@ -53,10 +53,11 @@ class ReplayShardGameMetadata(FrozenModel):
         if plies != tuple(sorted(set(plies))) or any(ply > self.length_plies for ply in plies):
             raise ValueError('Replay shard search observations must use unique ordered game plies.')
         trailing = tuple(observation for observation in self.observations if observation.ply == self.length_plies)
-        if trailing and (self.termination_reason is not TerminationReason.RESIGNATION or len(trailing) != 1):
-            raise ValueError('Only resignation may retain one unplayed final search observation.')
+        unplayed_final = (TerminationReason.RESIGNATION, TerminationReason.MAXIMUM_PLIES)
+        if trailing and (self.termination_reason not in unplayed_final or len(trailing) != 1):
+            raise ValueError('Only resignation or a ply cap may retain one unplayed final search observation.')
         if trailing and trailing[0].selected_action_id is not None:
-            raise ValueError('A resignation observation cannot select an action.')
+            raise ValueError('An unplayed final observation cannot select an action.')
         if self.termination_reason is TerminationReason.RESIGNATION and self.is_resignation_continuation:
             raise ValueError('Replay shard continuation games cannot terminate by resignation.')
 
