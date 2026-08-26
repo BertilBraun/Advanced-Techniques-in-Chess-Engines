@@ -108,6 +108,7 @@ class FakeBatch:
 @dataclass(frozen=True)
 class FakeInferenceStatistics:
     averageNumberOfPositionsInInferenceCall: float = 2.0
+    workerUtilization: float = 0.5
 
 
 class FakeSearch:
