@@ -13,8 +13,11 @@ which has not been started. Design and reasoning live in
 | Source revision (tooling) | `0408bfb7a3c10ec3c244cec8c3ae1f2657364b47` |
 | Experiment configuration | `py/configs/validation/vast-chess-4day-production-v9.yaml` |
 | `experiment_configuration_sha256` | `28eceba8d2ea74f9fecbfd1770009ad538fc00c08de6344e8cabc922b523b50c` |
-| Family A arm matrix | `py/configs/evaluation/chess-search-arms-v1.json`, sha256 `7ca0bbad6ccf8c6b02f13ca29c3340890b2045f5b27d4df6b185544060869ebc` |
-| Family B stopping grid | `py/configs/evaluation/chess-search-stopping-grid-v1.json`, sha256 `cec6523e5dc0017e2f7e647013df3bdcb35793abbace55647c785ceb3b54a666` |
+| Family A arm matrix | `py/configs/evaluation/chess-search-arms-v1.json`, sha256 `7b7d3b2445e18bf36ffd495467837b44e48b1313487bae55a80cb16cf2026f37` |
+| Family B stopping grid | `py/configs/evaluation/chess-search-stopping-grid-v1.json`, sha256 `ee587c89152e98afd7d906525df03490a14d6bd6d029587030954e258642c3b4` |
+
+Configuration JSON is stored and hashed with LF endings, so these hashes match a fresh checkout on the node; each
+result file also records the hash of the file it actually read.
 
 The extension used on the node is the Release `AlphaZeroCpp.so` built at `e8bec367` and copied into this branch's
 checkout. `git diff e8bec367 search-evaluations -- cpp/` is empty, so the binary matches this branch's C++ exactly;
