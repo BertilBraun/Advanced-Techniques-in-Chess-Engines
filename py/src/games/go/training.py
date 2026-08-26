@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import replace
-
-from src.evaluation.configuration import EvaluationSearchConfiguration
+from src.evaluation.configuration import EvaluationSearchConfiguration, EvaluationTreeSearchOverrides
 from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.contract import GoStateContract, NativeGoPosition
-from src.games.implementation import GameImplementation
+from src.games.implementation import GameImplementation, resolved_evaluation_parameters
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
 from src.self_play.native_search import NativeSelfPlaySearch
 from src.self_play.parameters import (
-    FixedFullSearchBudget,
     ResolvedSelfPlayParameters,
 )
 from src.training.checkpoint import CheckpointReference
@@ -77,25 +74,23 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
         device_id: int,
         checkpoint: CheckpointReference,
         configuration: EvaluationSearchConfiguration,
+        tree_search: EvaluationTreeSearchOverrides | None = None,
     ) -> NativeSelfPlaySearch:
-        parameters = self.evaluation_parameters_at(checkpoint.generation, configuration)
+        parameters = self.evaluation_parameters_at(checkpoint.generation, configuration, tree_search)
         return self._create_search(device_id, checkpoint, parameters, configuration.inference)
 
     def evaluation_parameters_at(
         self,
         model_generation: int,
         configuration: EvaluationSearchConfiguration,
+        tree_search: EvaluationTreeSearchOverrides | None = None,
     ) -> ResolvedSelfPlayParameters:
         """Evaluation inherits the self-play first-play urgency; only the listed fields are overridden."""
-        return replace(
+        return resolved_evaluation_parameters(
             self.self_play_parameters_at(model_generation),
-            parallel_searches=configuration.parallel_searches,
-            full_search_budget=FixedFullSearchBudget(kind='fixed', visits=configuration.searches_per_move),
-            fast_searches=configuration.searches_per_move,
-            forced_playout_coefficient=0.0,
-            exploration_constant=configuration.resolved_exploration_constant,
-            dirichlet_alpha=1.0,
-            dirichlet_epsilon=0.0,
+            configuration,
+            model_generation,
+            tree_search,
         )
 
     def _create_search(

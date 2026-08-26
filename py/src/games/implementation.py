@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Generic, TypeVar
 
@@ -24,10 +25,40 @@ from src.util.generation_schedule import FloatGenerationSchedule
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import InferenceConfiguration, SelfPlaySearchParameters
-    from src.evaluation.configuration import EvaluationSearchConfiguration
+    from src.evaluation.configuration import EvaluationSearchConfiguration, EvaluationTreeSearchOverrides
     from src.self_play.native_search import NativeSelfPlaySearch
     from src.self_play.resignation import CalibratedResignationConfiguration
     from src.training.checkpoint import CheckpointReference
+
+
+def resolved_evaluation_parameters(
+    baseline: ResolvedSelfPlayParameters,
+    configuration: EvaluationSearchConfiguration,
+    model_generation: int,
+    overrides: EvaluationTreeSearchOverrides | None,
+) -> ResolvedSelfPlayParameters:
+    parameters = replace(
+        baseline,
+        parallel_searches=configuration.parallel_searches,
+        full_search_budget=FixedFullSearchBudget(kind='fixed', visits=configuration.searches_per_move),
+        fast_searches=configuration.searches_per_move,
+        forced_playout_coefficient=0.0,
+        exploration_constant=configuration.resolved_exploration_constant,
+        first_play_urgency=(
+            baseline.first_play_urgency
+            if overrides is None
+            else overrides.first_play_urgency.resolve(model_generation)
+        ),
+        dirichlet_alpha=1.0,
+        dirichlet_epsilon=0.0,
+    )
+    if overrides is None:
+        return parameters
+    return replace(
+        parameters,
+        virtual_loss_weight=overrides.virtual_loss_weight,
+        value_discount_per_ply=overrides.value_discount_per_ply,
+    )
 
 
 PositionT = TypeVar('PositionT')
@@ -199,6 +230,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
         device_id: int,
         checkpoint: CheckpointReference,
         configuration: EvaluationSearchConfiguration,
+        tree_search: EvaluationTreeSearchOverrides | None = None,
     ) -> NativeSearchT:
         raise NotImplementedError
 
