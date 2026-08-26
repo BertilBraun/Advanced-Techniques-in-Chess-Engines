@@ -1,14 +1,18 @@
 # Current state
 
-As of **2026-08-22**. Update at every phase acceptance and node change; if this date is more than two weeks old,
+As of **2026-08-26**. Update at every phase acceptance and node change; if this date is more than two weeks old,
 treat everything below as unverified.
 
 ## Programme
 
-Chess recovery, [plan](plan/chess-recovery-plan-20260820.md) of 2026-08-20. Phase A (development and
-small-scale tests on a 1–2 GPU node) is nearly complete; the WP7 overnight pipeline smoke — the gate for
-Phase B — is running on the 1×4070 test node using the run2 recipe
-(`py/configs/validation/vast-chess-1x4070-overnight.yaml`, attention 8x128). Go 7x7/9x9 screening is paused.
+Chess recovery, [plan](plan/chess-recovery-plan-20260820.md) of 2026-08-20. Phase A is complete. Multi-day
+production runs on the 8×RTX 4070 SUPER node are the current activity: v2 through v9, each a named
+configuration under `py/configs/validation/`, judged on **wall-clock** against the four-day baseline. Go 7x7/9x9
+screening is paused.
+
+**Live run: `vast-chess-4day-production-v9`** — the strongest engine produced so far. At 4.7 h it stands at
+ladder Elo 1502 and level-0 95/0/5, against v8's 1236 and 0.800 at the same point; at 15600 s it scored 97/1/2,
+which is the four-day reference's twelve-hour level-0 result reached in 4.3 hours.
 
 ## Work-package status
 
@@ -39,9 +43,21 @@ generation 20, prev-20m ≥ 0.65.
 
 ## What was broken, and where it stands
 
-All four defects behind the post-rework stall have fixes landed and are being validated by the WP7 smoke:
-bare 1×1 policy head + Kaiming-ReLU init (WP1), bounded ingestion starving self-play (WP2),
-unstaged `parallel_searches` at low visits (WP3/WP6), and the castling-plane mirror oversight (WP1).
+The four post-rework defects (WP1–WP3, WP6) are fixed and were validated by the Phase A smoke. Since then:
+
+- **Replay materialization wedged four runs.** The claim-queue design did O(inbox) work under a lock shared with
+  the coordinator; v6 died at generation 35 with a 203,845-file inbox. Replaced by per-worker dispatch — games are
+  renamed straight out of the inbox into a directory each materialization worker owns, with no shared mutable
+  state and no global ordering invariant. See
+  [replay-materialization-rework.md](architecture/replay-materialization-rework.md). Stable across v7–v9.
+- **v7 and v8 could not convert won games** — 13–22 evaluation games per 100 abandoned at the ply cap while ahead
+  by a median of 20 pawns. Resolved in v9, which abandons zero. Five hypotheses were eliminated with evidence
+  before the cause was found; the investigation, the eliminations and the method lessons are in
+  [chess-conversion-investigation-20260826.md](analysis/chess-conversion-investigation-20260826.md).
+- **Syzygy adjudication removed entirely** (`02293f38`). A ply-capped game now takes its value from a forced full
+  search at the cut position, so no assumed terminal value enters training from any source.
+- **A trainer CUDA-stream leak** (+50.2 MiB/generation) and a graph-mempool leak were fixed; trainer rank memory
+  has been byte-identical across generations since.
 
 ## How to run something
 
@@ -59,5 +75,14 @@ did not happen. Node facts live in [operations/current-node.md](operations/curre
 
 ## Deliberately not happening
 
-No multi-day run until Run 1 and Run 2 of Phase B pass. No Go screening. No checkpoint averaging or model gating.
-A repository-wide cleanup (code + documentation restructuring) is in progress on the `cleanup` branch.
+No Go screening. No checkpoint averaging or model gating. Syzygy tablebases are no longer provisioned or used.
+
+## Known open items
+
+- `test_self_play_worker.py`, `test_trainer_group.py`, `test_interactive_engine.py` and
+  `test_game_contracts.py` skip without the native extension, so ~13 failures are visible only on a node. **Run
+  the suite on a node before any launch that touches self-play** — two validators that would have rejected every
+  ply-capped game were caught only that way.
+- `documentation/operations/current-node.md` describes a superseded single-GPU node; `run_control.sh` reads it.
+- A failed supervisor spawn runs preserve-on-exit once per retry, so a start that fails for lack of disk creates
+  archives until it succeeds or the disk fills.
