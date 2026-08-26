@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Chess search stopping rules for the 2026-08-26 offline target-fidelity study: a fixed-visit compute frontier plus one-factor-at-a-time variation around the historical adaptive budget of vast-chess-comp2-adaptive resolved at generation 162 (maximum 600 visits).",
+  "description": "Chess search stopping rules for the 2026-08-26 offline target-fidelity study: a fixed-visit compute frontier from 100 to 10000 visits, including one rule equal to the reference budget as a self-consistency assertion, plus one-factor-at-a-time variation around the historical adaptive budget of vast-chess-comp2-adaptive resolved at generation 162 (maximum 600 visits).",
   "rules": [
     {
       "kind": "fixed",
@@ -61,6 +61,16 @@
       "kind": "fixed",
       "label": "fixed-5000",
       "visits": 5000
+    },
+    {
+      "kind": "fixed",
+      "label": "fixed-8000",
+      "visits": 8000
+    },
+    {
+      "kind": "fixed",
+      "label": "fixed-10000",
+      "visits": 10000
     },
     {
       "kind": "adaptive",
