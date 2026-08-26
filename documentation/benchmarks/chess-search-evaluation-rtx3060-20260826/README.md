@@ -10,7 +10,8 @@ which has not been started. Design and reasoning live in
 | Item | Value |
 |---|---|
 | Branch | `search-evaluations` |
-| Source revision on the node | `50d4b076` (tooling code unchanged since `0408bfb7`; later commits touch configuration line endings and documentation only) |
+| Tooling revision | `0408bfb7` — all later commits on this branch touch configuration line endings, documentation and evidence only |
+| Source revision on the node | the `search-evaluations` branch tip; every result file records the revision it actually ran under |
 | Experiment configuration | `py/configs/validation/vast-chess-4day-production-v9.yaml` |
 | `experiment_configuration_sha256` | `28eceba8d2ea74f9fecbfd1770009ad538fc00c08de6344e8cabc922b523b50c` |
 | Family A arm matrix | `py/configs/evaluation/chess-search-arms-v1.json`, sha256 `7b7d3b2445e18bf36ffd495467837b44e48b1313487bae55a80cb16cf2026f37` |
