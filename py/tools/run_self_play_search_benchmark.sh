@@ -25,6 +25,9 @@ parallel_searches=${PARALLEL_SEARCHES:-}
 inference_workers=${INFERENCE_WORKERS:-}
 inference_batch_size=${INFERENCE_BATCH_SIZE:-}
 outstanding_batches_per_worker=${OUTSTANDING_BATCHES_PER_WORKER:-}
+precision=${INFERENCE_PRECISION:-}
+memory_format=${INFERENCE_MEMORY_FORMAT:-}
+cudnn_benchmark=${CUDNN_BENCHMARK:-}
 
 for value in "${gpu_count}" "${processes_per_gpu}" "${parallel_games}" "${duration_seconds}" "${cpus_per_process}"; do
     if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
@@ -38,6 +41,10 @@ if [[ ! "${warmup_batches}" =~ ^[0-9]+$ || ! "${generation}" =~ ^[0-9]+$ ]]; the
 fi
 if [[ "${pin_workers}" != "0" && "${pin_workers}" != "1" ]]; then
     echo "PIN_WORKERS_TO_CPUS must be 0 or 1."
+    exit 1
+fi
+if [[ -n "${cudnn_benchmark}" && "${cudnn_benchmark}" != "0" && "${cudnn_benchmark}" != "1" ]]; then
+    echo "CUDNN_BENCHMARK must be 0, 1, or unset."
     exit 1
 fi
 if [[ ! -f "${model}" || ! -f "${run_config}" ]]; then
@@ -73,6 +80,9 @@ jq -n \
     --arg model_sha256 "$(sha256sum "${model}" | awk '{print $1}')" \
     --arg run_config "$(realpath "${run_config}")" \
     --arg game "${game}" \
+    --arg precision "${precision}" \
+    --arg memory_format "${memory_format}" \
+    --arg cudnn_benchmark "${cudnn_benchmark}" \
     --argjson gpu_count "${gpu_count}" \
     --argjson processes_per_gpu "${processes_per_gpu}" \
     --argjson parallel_games "${parallel_games}" \
@@ -95,7 +105,12 @@ jq -n \
             pin_workers_to_cpus: ($pin_workers == 1),
             cpus_per_process: $cpus_per_process
         },
-        workload: {generation: $generation, warmup_batches: $warmup_batches, duration_seconds: $duration_seconds}
+        workload: {generation: $generation, warmup_batches: $warmup_batches, duration_seconds: $duration_seconds},
+        inference_overrides: {
+            precision: (if $precision == "" then null else $precision end),
+            memory_format: (if $memory_format == "" then null else $memory_format end),
+            cudnn_benchmark: (if $cudnn_benchmark == "" then null else ($cudnn_benchmark == "1") end)
+        }
     }' >"${output_directory}/manifest.json"
 
 cd "${python_root}"
@@ -116,6 +131,13 @@ for ((device = 0; device < gpu_count; device++)); do
         [[ -n "${inference_workers}" ]] && benchmark_overrides+=(--inference-workers "${inference_workers}")
         [[ -n "${inference_batch_size}" ]] && benchmark_overrides+=(--inference-batch-size "${inference_batch_size}")
         [[ -n "${outstanding_batches_per_worker}" ]] && benchmark_overrides+=(--outstanding-batches-per-worker "${outstanding_batches_per_worker}")
+        [[ -n "${precision}" ]] && benchmark_overrides+=(--precision "${precision}")
+        [[ -n "${memory_format}" ]] && benchmark_overrides+=(--memory-format "${memory_format}")
+        if [[ "${cudnn_benchmark}" == "1" ]]; then
+            benchmark_overrides+=(--cudnn-benchmark)
+        elif [[ "${cudnn_benchmark}" == "0" ]]; then
+            benchmark_overrides+=(--no-cudnn-benchmark)
+        fi
         "${worker_command[@]}" \
             --run-config "${run_config}" \
             --model "${model}" \
