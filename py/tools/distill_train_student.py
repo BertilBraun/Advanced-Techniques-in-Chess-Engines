@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -484,6 +485,10 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
     generator = np.random.default_rng(arguments.random_seed)
     model.train()
     recent_training_losses: list[LossValues] = []
+    if device.type == 'cuda':
+        torch.cuda.reset_peak_memory_stats(device)
+    window_started_at = time.perf_counter()
+    window_steps = 0
     for step in range(1, arguments.steps + 1):
         step_learning_rate = learning_rate_at(
             step,
@@ -513,6 +518,7 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
         torch.nn.utils.clip_grad_norm_(model.parameters(), arguments.max_grad_norm)
         optimizer.step()
         recent_training_losses.append(observed_losses(loss))
+        window_steps += 1
         if arguments.checkpoint_every and not step % arguments.checkpoint_every and step != arguments.steps:
             intermediate = intermediate_run_state(arguments.output_run_state, step)
             save_student_checkpoint(model, optimizer, arguments.generation, intermediate)
@@ -521,9 +527,16 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
             continue
         training_loss = mean_loss_values(tuple(recent_training_losses))
         recent_training_losses.clear()
+        window_seconds = time.perf_counter() - window_started_at
+        steps_per_second = window_steps / max(window_seconds, 1e-9)
+        window_started_at = time.perf_counter()
+        window_steps = 0
+        peak_mebibytes = torch.cuda.max_memory_allocated(device) / 1024**2 if device.type == 'cuda' else 0.0
         held_out_loss = evaluate(model, evaluation_batches, objective, device)
         log(
             f'step {step}/{arguments.steps} lr {step_learning_rate:.2e} '
+            f'{steps_per_second:.2f} steps/s {steps_per_second * arguments.batch_size:.0f} samples/s '
+            f'peak {peak_mebibytes:.0f} MiB | '
             f'train policy {training_loss.policy:.4f} wdl {training_loss.wdl:.4f} total {training_loss.total:.4f}'
             f'{auxiliary_loss_report(auxiliary_heads, training_loss)} | '
             f'held-out policy {held_out_loss.policy:.4f} wdl {held_out_loss.wdl:.4f} '
