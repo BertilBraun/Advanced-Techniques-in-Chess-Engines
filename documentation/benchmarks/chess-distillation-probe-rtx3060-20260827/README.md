@@ -158,11 +158,12 @@ positions/s at 32 roots and ~12,573 at 200. Depth costs launch latency only at s
 
 ## Known defects and caveats
 
-1. **All recorded positions have the same side to move.** `distill_build_dataset.py` records when
-   `ply % recorded_ply_interval == 0` and `ply` starts at a fixed `random_opening_plies`, so with an even
-   interval every recorded ply is even. Chess inputs are canonical (side-to-move perspective), which
-   bounds the harm, but for any exchange sequence only one side of it is ever sampled. Fix by sampling
-   positions at random rather than at a fixed stride.
+1. **All recorded positions have the same side to move** — applies to the datasets measured here, fixed
+   since. The builder recorded when `ply % recorded_ply_interval == 0` with `ply` starting at a fixed
+   `random_opening_plies`, so with an even interval every recorded ply was even. Chess inputs are canonical
+   (side-to-move perspective), which bounded the harm, but for any exchange sequence only one side of it
+   was ever sampled. Each ply is now retained independently with probability `1/--sample-one-position-in`.
+   The results in this note were produced before that change.
 2. **Live throughput measurement is too noisy for equal-compute budgets.** Repeated measurements of one
    model spanned 3.87–5.69, moving equal-compute Elo by tens of points. `--pinned-throughput-ratio` now
    exists; use one careful measurement on an idle GPU and hold it fixed across matchups. Contention
@@ -232,7 +233,7 @@ for device in 0 1 2 3 4 5 6 7; do
     --teacher-run-state <run> --teacher-generation <N> \
     --teacher-layers <L> --teacher-hidden-size <H> \
     --output /workspace/distill/shard-${device}.bin --positions <count_per_shard> \
-    --parallel-games 1024 --recorded-ply-interval <N> \
+    --parallel-games 1024 --sample-one-position-in 14 \
     --random-perturbation-probability 0.10 \
     --random-seed $((20260827 + device)) --device-id ${device} \
     > /workspace/distill/shard-${device}.log 2>&1 &
@@ -261,24 +262,80 @@ distorted throughput measurements during this probe.
 Note `pgrep -f <pattern>` matches the polling shell's own command line and will never report the job gone.
 Poll on a sentinel line in the log, or on `nvidia-smi`, instead.
 
+## Learning rate
+
+Every number in this note was measured at a peak rate of **0.002** with 1000 warmup steps and batch size
+1024, so that is the rate to hold fixed when comparing against these results. Production self-play uses a
+staged 0.005 → 0.0035 → 0.002 at batch 2048 on larger networks, so 0.002 is conservative for a small
+student on low-noise targets. **The magnitude was never varied**, so nothing here says it is optimal; it is
+simply the value everything else was measured against.
+
+The `plateau` schedule changes the shape, not the peak. Warmup, then hold the peak, then anneal over the
+final `--anneal-fraction` of the run. Its integrated learning rate is `0.9 × peak` against cosine's
+`0.5 × peak`, so it delivers **1.8× the total learning** over the same step count — which is why it is a
+sweep arm rather than a default. If it wins clearly, the natural follow-up is a higher peak, which needs
+its own arm; the two are separate questions and should not be changed together.
+
 ## Reproduction
 
+Full pipeline, in order. Run from `py/` on the node, with the locked virtual environment.
+
 ```
+# 1. Generate. One process per GPU, distinct seeds (see the sharding section above).
 python -m tools.distill_build_dataset --teacher-run-state <run> --teacher-generation <N> \
-  --teacher-layers 14 --teacher-hidden-size 152 --output <bin> --positions <count> \
-  --parallel-games 1024 --recorded-ply-interval 8 --random-perturbation-probability 0.10 --random-seed <seed>
+  --teacher-layers 14 --teacher-hidden-size 152 --output <shard.bin> --positions <count> \
+  --parallel-games 1024 --sample-one-position-in 14 --random-perturbation-probability 0.10 \
+  --random-seed <distinct per shard> --device-id <device>
 
-python -m tools.distill_merge_datasets --input <a.bin> --input <b.bin> --output <merged.bin>
+# 2. Merge. Refuses sources that share a random seed or disagree on teacher or record layout.
+python -m tools.distill_merge_datasets --input <shard-0.bin> ... --output <merged.bin>
 
+# 3. Train the eight-arm sweep, one arm per GPU, queueing when there are fewer devices than arms.
+python -m tools.distill_training_sweep --dataset <merged.bin> --output-root <students> \
+  --generation <N> --steps 100000 --device-ids 0,1,2,3,4,5,6,7
+
+# Or a single student, which is what the sweep runs underneath.
 python -m tools.distill_train_student --dataset <merged.bin> --output-run-state <students/name> \
-  --layers 8 --hidden-size 96 --policy-bottleneck-rank 16 --batch-size 1024 --steps 80000 \
-  --evaluate-every 4000 --warmup-steps 1000 --generation <N>
+  --layers 8 --hidden-size 96 --policy-bottleneck-rank 16 --batch-size 1024 --steps 100000 \
+  --evaluate-every 4000 --warmup-steps 1000 --generation <N> \
+  [--learning-rate-schedule plateau --anneal-fraction 0.2] \
+  [--training-fraction 0.5] [--distil-auxiliary-heads next_policy remaining_game_length] \
+  [--checkpoint-every 20000]
 
+# 4. Evaluate. Give the student the teacher's generation number, or their search parameters differ.
 python -m tools.distill_match --teacher-run-state <run> --teacher-generation <N> \
   --student-run-state <students/name> --student-generation <N> --openings-manifest <json> \
   --mode equal-nodes --searches-per-move 25 --opening-pair-count 200 \
-  --experiment-config py/configs/validation/distillation-probe-chess-single-gpu.yaml --output <json>
+  --experiment-config py/configs/validation/distillation-probe-chess-single-gpu.yaml --output <json> \
+  [--pinned-throughput-ratio <measured once on an idle GPU>]
 ```
+
+### The sweep arms
+
+`distill_training_sweep.py` runs eight arms, skips any whose checkpoint already exists, and prints a ranked
+summary of the headline policy gap plus `sweep-summary.json`.
+
+| arm | model | variant | question |
+| --- | --- | --- | --- |
+| `6x64-baseline` | 0.48M | cosine, full data | reference |
+| `8x96-baseline` | 1.33M | cosine, full data | reference |
+| `6x64-half-data` | 0.48M | `--training-fraction 0.5` | is the dataset still binding? |
+| `8x96-half-data` | 1.33M | `--training-fraction 0.5` | same, at the larger size |
+| `6x64-plateau` | 0.48M | `plateau`, anneal last 20% | is the cosine tail wasted? |
+| `8x96-plateau` | 1.33M | `plateau` | same, at the larger size |
+| `6x64-aux-both` | 0.48M | both auxiliary heads | |
+| `6x64-aux-next-policy` | 0.48M | `next_policy` only | |
+
+The two auxiliary arms sit at one size deliberately: against `6x64-baseline` they isolate each head in turn
+— baseline versus next-policy-only gives that head's contribution, and next-policy-only versus both gives
+the remaining-game-length head's. Auxiliary heads cost 36.5k parameters for `next_policy` and 131 for
+`remaining_game_length`, but both are stripped by the TorchScript export, so all three students deploy at
+identical size and throughput and the cost is training-time scaffolding only.
+
+All arms share one `--random-seed`, which holds initialisation and batch order fixed so a difference is
+attributable to the arm. The cost is that there is no estimate of seed variance, so gaps smaller than about
+0.005 nats should not be ranked without a repeat at a second seed — for scale, the entire final quarter of
+an 80,000-step run was worth 0.004.
 
 Raw evaluation JSON, the training logs and the merged dataset manifest were fetched off the ephemeral node
 to `.codex-diagnostics/chess-distillation-probe-20260827/` (44 files, 14 MiB). The teacher checkpoint is
