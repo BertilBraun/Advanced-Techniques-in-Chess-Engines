@@ -75,6 +75,7 @@ class Arguments:
     chunk_positions: int
     inference_batch_size: int
     position_limit: int | None
+    per_position_output: Path | None
 
 
 @dataclass(frozen=True)
@@ -122,6 +123,30 @@ class EqualComputeComparison(FrozenModel):
     kullback_leibler_advantage: float | None
     equivalent_fixed_visits: float | None
     visit_saving: float | None
+
+
+class FixedBudgetRecord(FrozenModel):
+    visits: int = Field(gt=0)
+    kullback_leibler: float = Field(ge=0.0)
+    total_variation: float = Field(ge=0.0, le=1.0)
+    top_visit_share: float = Field(ge=0.0, le=1.0)
+    top_two_margin: float = Field(ge=0.0, le=1.0)
+    leader_matches_reference: bool
+
+
+class PositionRecord(FrozenModel):
+    fen: str = Field(min_length=1)
+    budgets: tuple[FixedBudgetRecord, ...] = Field(min_length=1)
+
+
+class PerPositionReport(FrozenModel):
+    schema_version: Literal[1] = 1
+    source_revision: str = Field(min_length=40, max_length=40)
+    model_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    generation: int = Field(ge=0)
+    reference_visits: int = Field(gt=0)
+    parallel_searches: int = Field(gt=0)
+    records: tuple[PositionRecord, ...] = Field(min_length=1)
 
 
 class FidelityReport(FrozenModel):
@@ -340,6 +365,30 @@ def _equal_compute_comparisons(rules: tuple[RuleFidelity, ...]) -> tuple[EqualCo
     return tuple(comparisons)
 
 
+def _position_record(
+    fen: str,
+    trace: tuple[_Checkpoint, ...],
+    reference: _Checkpoint,
+    fixed_rules: tuple[FixedStoppingRule, ...],
+) -> PositionRecord:
+    reference_policy = _probabilities(reference.policy)
+    budgets: list[FixedBudgetRecord] = []
+    for rule in fixed_rules:
+        candidate = _fixed_stop(trace, rule.visits)
+        candidate_policy = _probabilities(candidate.policy)
+        budgets.append(
+            FixedBudgetRecord(
+                visits=rule.visits,
+                kullback_leibler=_kullback_leibler(reference_policy, candidate_policy),
+                total_variation=_total_variation(reference_policy, candidate_policy),
+                top_visit_share=candidate.top_visit_share,
+                top_two_margin=candidate.top_two_margin,
+                leader_matches_reference=candidate.leader_action_id == reference.leader_action_id,
+            )
+        )
+    return PositionRecord(fen=fen, budgets=tuple(budgets))
+
+
 def measure_fidelity(arguments: Arguments) -> FidelityReport:
     sample = PositionSample.model_validate_json(arguments.positions.read_text(encoding='utf-8'))
     grid = STOPPING_RULE_GRID_ADAPTER.validate_json(arguments.grid.read_text(encoding='utf-8'))
@@ -374,6 +423,8 @@ def measure_fidelity(arguments: Arguments) -> FidelityReport:
         arguments.generation,
     )
     accumulators = {rule.label: _RuleAccumulator() for rule in grid.rules}
+    fixed_rules = tuple(rule for rule in grid.rules if rule.kind == 'fixed')
+    position_records: list[PositionRecord] = []
     simulations = 0
     elapsed = 0.0
     for start in range(0, len(fens), arguments.chunk_positions):
@@ -385,11 +436,13 @@ def measure_fidelity(arguments: Arguments) -> FidelityReport:
         )
         elapsed += time.perf_counter() - started
         simulations += sum(result.final_visits - result.starting_visits for result in batch.results)
-        for result in batch.results:
+        for fen, result in zip(chunk, batch.results, strict=True):
             trace = _checkpoints(result.checkpoints)
             if not trace:
                 continue
             reference = trace[-1]
+            if arguments.per_position_output is not None:
+                position_records.append(_position_record(fen, trace, reference, fixed_rules))
             for rule in grid.rules:
                 match rule:
                     case FixedStoppingRule(visits=visits):
@@ -401,6 +454,20 @@ def measure_fidelity(arguments: Arguments) -> FidelityReport:
                 _accumulate(accumulators[rule.label], candidate, reference, maximum_visits)
     inference_statistics = search.inference_statistics()
     game.close()
+
+    if arguments.per_position_output is not None:
+        write_text_atomically(
+            arguments.per_position_output,
+            PerPositionReport(
+                source_revision=read_source_revision().commit,
+                model_sha256=file_sha256(arguments.model),
+                generation=arguments.generation,
+                reference_visits=arguments.reference_visits,
+                parallel_searches=arguments.parallel_searches,
+                records=tuple(position_records),
+            ).model_dump_json()
+            + '\n',
+        )
 
     rules = tuple(_rule_fidelity(rule, accumulators[rule.label]) for rule in grid.rules)
     return FidelityReport(
@@ -447,6 +514,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--chunk-positions', type=int, default=128)
     parser.add_argument('--inference-batch-size', type=int, default=256)
     parser.add_argument('--position-limit', type=int)
+    parser.add_argument('--per-position-output', type=Path)
     parsed = parser.parse_args()
     if min(parsed.generation, parsed.device) < 0:
         parser.error('--generation and --device must be nonnegative')
@@ -479,6 +547,7 @@ def parse_arguments() -> Arguments:
         chunk_positions=parsed.chunk_positions,
         inference_batch_size=parsed.inference_batch_size,
         position_limit=parsed.position_limit,
+        per_position_output=parsed.per_position_output,
     )
 
 
