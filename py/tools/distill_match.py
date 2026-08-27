@@ -65,6 +65,7 @@ class Arguments:
     output: Path
     experiment_config: Path
     pinned_throughput_ratio: float | None
+    throughput_position_count: int
 
 
 class NetworkIdentity(FrozenModel):
@@ -324,7 +325,7 @@ def _measure_both(
     positions = _measurement_positions(
         game.state,
         openings,
-        min(THROUGHPUT_POSITION_COUNT, len(openings.openings)),
+        min(arguments.throughput_position_count, len(openings.openings)),
     )
     teacher_throughput = _measure_throughput(game, teacher, arguments.device_id, measurement_search, positions)
     student_throughput = _measure_throughput(game, student, arguments.device_id, measurement_search, positions)
@@ -486,6 +487,12 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--experiment-config', required=True, type=Path)
     parser.add_argument('--pinned-throughput-ratio', default=None, type=float)
+    parser.add_argument(
+        '--throughput-position-count',
+        default=THROUGHPUT_POSITION_COUNT,
+        type=int,
+        help='Roots per throughput batch; with parallel_searches 1 this is the inference batch size.',
+    )
     namespace = parser.parse_args()
     arguments = Arguments(
         teacher_run_state=namespace.teacher_run_state,
@@ -505,6 +512,7 @@ def parse_arguments() -> Arguments:
         output=namespace.output,
         experiment_config=namespace.experiment_config,
         pinned_throughput_ratio=namespace.pinned_throughput_ratio,
+        throughput_position_count=namespace.throughput_position_count,
     )
     required_paths = (
         arguments.teacher_run_state,
@@ -524,9 +532,12 @@ def parse_arguments() -> Arguments:
         arguments.opening_pair_count,
         arguments.maximum_game_plies,
         arguments.bootstrap_samples,
+        arguments.throughput_position_count,
     )
     if any(value <= 0 for value in positive_values) or arguments.exploration_constant <= 0.0:
-        raise ValueError('Opening pairs, ply cap, bootstrap samples, and exploration constant must be positive.')
+        raise ValueError(
+            'Opening pairs, ply cap, bootstrap samples, throughput positions and exploration constant must be positive.'
+        )
     if arguments.output.exists():
         raise ValueError(f'Distillation match output already exists: {arguments.output}')
     return arguments
