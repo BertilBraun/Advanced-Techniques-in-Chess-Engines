@@ -652,11 +652,12 @@ def parse_arguments() -> Arguments:
         raise ValueError('Head count, feedforward size and policy key size must be positive.')
     if arguments.network_kind is NetworkKind.ATTENTION and arguments.hidden_size % arguments.heads:
         raise ValueError(f'An embedding size of {arguments.hidden_size} is not divisible by {arguments.heads} heads.')
-    if arguments.network_kind is NetworkKind.CONVOLUTIONAL:
-        if arguments.policy_head_kind is PolicyHeadKind.FROM_TO_ATTENTION:
-            raise ValueError('The from-to attention policy head is only meaningful on an attention trunk.')
-        if arguments.attention_bias_kind is not AttentionBiasKind.DISABLED:
-            raise ValueError('A convolutional trunk has no attention logits to bias.')
+    # The from-to head reads the trunk output as 64 square tokens, which a convolutional trunk also
+    # produces, so it is allowed on both: separating the head's contribution from the trunk's needs it.
+    if arguments.network_kind is NetworkKind.CONVOLUTIONAL and arguments.attention_bias_kind is not (
+        AttentionBiasKind.DISABLED
+    ):
+        raise ValueError('A convolutional trunk has no attention logits to bias.')
     if min(arguments.smolgen_compressed_size, arguments.smolgen_hidden_size, arguments.smolgen_generated_size) <= 0:
         raise ValueError('Every generated-bias dimension must be positive.')
     if min(arguments.batch_size, arguments.steps, arguments.evaluate_every) <= 0:

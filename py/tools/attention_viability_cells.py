@@ -136,19 +136,20 @@ SCHEDULE_CELLS = (
     ),
 )
 
-# The architecture cells run the probe-settled protocol, which was settled on the convolutional trunk.
-# A 200-step warm-up is short by transformer standards and the peak was never varied on an attention
-# trunk, so these two cells test whether attn-A is limited by the recipe rather than by the architecture.
+# attn-B beats both cnn-A and attn-A from early on, so the question stops being "is attention weaker"
+# and becomes "is the win the trunk or the head". cnn-from-to is that control: the same from-to head on
+# a convolutional trunk widened to 136 channels so the total parameter count still matches cnn-A. The
+# second cell answers whether the peak learning rate, never varied on an attention trunk, was binding.
 SUPPLEMENTARY_CELLS = (
     Cell(
-        'attn-A-warmup',
-        'attn-A with a transformer-length warm-up instead of the convolutional one',
-        replace(ARCHITECTURE_CELLS[1].arguments, warmup_steps=2000),
+        'cnn-from-to',
+        'the from-to policy head on a convolutional trunk, at cnn-A parameters',
+        replace(BASE, hidden_size=136, policy_head_kind=PolicyHeadKind.FROM_TO_ATTENTION),
     ),
     Cell(
-        'attn-A-half-rate',
-        'attn-A at half the peak learning rate',
-        replace(ARCHITECTURE_CELLS[1].arguments, learning_rate=PROTOCOL_PEAK_LEARNING_RATE / 2),
+        'attn-B-double-rate',
+        'attn-B at twice the peak learning rate',
+        replace(ARCHITECTURE_CELLS[2].arguments, learning_rate=2 * PROTOCOL_PEAK_LEARNING_RATE),
     ),
 )
 
