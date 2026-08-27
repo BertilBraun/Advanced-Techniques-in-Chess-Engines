@@ -74,49 +74,82 @@ one. The two come apart exactly where budget allocation lives:
 This is the inverted-U of findings §2 in another form, and it is the most likely reason the learned gate never
 earned its keep.
 
-### The proposed label: convergence residual
+### What the label should be — measured, not argued
 
-For a full search that ran to budget `B`, with the checkpoints it already emits:
+Three candidate quantities were compared on the 3,000-position dataset by handing out the *oracle's own multiset
+of budgets* in the order each signal implies, so the budget distribution is identical and only the ordering
+differs. At a mean of 600 visits, flat is KL 0.2971 and the oracle is 0.1249.
 
-```
-r = TV( policy_target at B/2 , policy_target at B )
-```
+| Ordering signal | KL | Share of the oracle gain captured |
+|---|---|---|
+| True Lagrangian optimum (the oracle itself) | 0.1249 | 100% |
+| **True remaining error, KL(target@600 ‖ truth)** | **0.2036** | **54.3%** |
+| True benefit, KL(200) − KL(600) | 0.2751 | 12.8% |
+| True benefit, KL(300) − KL(600) | 0.2981 | −0.6% |
+| Observable `top_visit_share` at 200 visits | 0.4881 | −110.9% |
+| Observable `top_two_margin` at 200 visits | 0.4953 | −115.1% |
+| Random ordering (control) | 0.4249 | −74.2% |
 
-Total variation, matching the existing `policy_correction` convention: bounded, needs no smoothing, and free on
-every full search already being run. Ordinary self-play labels its own data at no extra cost.
+Three conclusions, and the first two overturn the earlier proposal in this document.
 
-Why this quantity rather than the budget itself:
+**Predict remaining error, not movement.** An earlier draft proposed the convergence residual
+`TV(target@B/2, target@B)` — how much the target moved over the second half of the search. Ranking by the closest
+measurable analogue of that captures essentially nothing (−0.6% at 300→600, 12.8% at 200→600), while ranking by
+how far the target still sits from truth captures 54.3%. Movement is a poor proxy for distance: a position can
+move a great deal and remain far from converged, or barely move because the search is stuck.
 
-- **It estimates what the next doubling buys**, which is the marginal quantity a Lagrangian threshold compares
-  against. `r` near zero means converged; large `r` means the target is still moving.
-- **It is independent of the budget schedule and of the mean-compute constraint.** Regressing "the budget this
-  position should have had" bakes in both, so those labels go stale the moment the generation schedule changes
-  the base budget. Predict the position's property; let the allocator choose the threshold at runtime.
-- **Censoring is benign.** Positions that need more than `B` all read as "still moving at `B`" and cannot be
-  distinguished from each other. That is fine for ranking, which is where the value is, and it should be recorded
-  as a known limit rather than modelled away.
+**A weak head is actively harmful.** Randomly dispersing the oracle's budget multiset scores −74.2%, far worse
+than flat. This is the Jensen convexity of findings §2 again: any non-uniform allocation starts in a deep hole and
+must order positions well simply to break even. The two observable within-search statistics score *below* random,
+so no hand-made rule reading them can help — which is the strongest argument for a learned head, and equally the
+strongest argument for blending it in cautiously and gating on beating flat.
 
-### Turning predictions into budgets
+**Even a perfect predictor of remaining error reaches only 54%** of the oracle, because remaining error alone does
+not determine the optimal budget — the shape of each position's marginal-return curve matters too. Treat 54% as
+the realistic ceiling for a single-scalar head, not 100%.
 
-Rank the positions in the batch by predicted `r`, then assign from a small fixed menu — for example
-`0.5B / B / 2B` — in fixed proportions chosen so the mean budget stays at `B`. Ranking-based allocation holds the
-throughput budget exactly, is robust to a miscalibrated head, and matches where the measured value sits: the
-oracle gain comes from ordering positions correctly, not from emitting a precisely calibrated multiplier.
+### Getting a trainable label for remaining error
 
-### WP-S2b gate — validate the free label before building anything
+Remaining error is not observable in production: it needs a reference deeper than the search being labelled.
+Obtain it by **sampling**, not by proxy.
 
-The whole approach rests on an assumption that is **not yet tested**: that the observable residual
-`TV(target@B/2, target@B)` predicts the unobservable quantity that matters, `KL(target@B || truth)`.
+Run a small fraction of full searches — 1–2% — at a multiple of the base budget, and label those positions with
+`KL(target@B ‖ target@deep)`. At 4× depth on 2% of full searches this costs about 6% of full-search compute and
+under 2% of total self-play compute, and it yields the quantity that measurably ranks best. Everything else rides
+the scalar rails that `search_correction_target` already uses.
 
-The per-position output currently records each budget's divergence against the 10,000-visit reference, but not
-the divergence between adjacent budgets, so this cannot be checked from the data already on disk. It needs a
-small addition to `PerPositionReport` and one 45-minute pass.
+This also solves the feedback problem: the deep-labelled subsample is drawn at random, so the label distribution
+stays covered regardless of what the head does with the rest.
 
-**Gate:** correlate the observable residual against the true remaining error across the 3,000 positions, and
-against the true benefit of a further doubling. If the correlation is weak, the free label is not a usable
-surrogate and the approach stops here, cheaply, before any head is trained.
+### Calibration and the output parameterisation
 
-Run this before WP-S2's probe: it is cheaper, and a negative result makes the probe pointless.
+Do **not** bucket into a narrow menu. Measured at a mean of 600 visits:
+
+| Budget menu | KL | Share of oracle gain |
+|---|---|---|
+| Flat 600 | 0.2971 | 0% |
+| 3 levels, 0.5× / 1× / 2× (300 / 600 / 1200) | 0.2062 | 52.8% |
+| 3 levels, wide (100 / 600 / 2400) | 0.1730 | 72.0% |
+| 3 levels, wider (100 / 600 / 3200) | 0.1699 | 73.9% |
+| Full 14-level menu | 0.1249 | 100% |
+
+A narrow 0.5×–2× menu throws away nearly half the available gain; the dynamic range matters far more than the
+number of levels. The oracle's own allocation is heavily right-skewed — 36% of positions sit at the 100-visit
+minimum, with a tail to 10,000 — so the useful multiplier range is roughly **0.17× to 16×** of the base budget,
+not 0.5× to 2×.
+
+That shape also rules out mapping a mean-0.5 output linearly onto [minimum, maximum]: it would pile budget into
+the middle, where the oracle spends almost none. The parameterisation that satisfies both constraints is:
+
+- **Head output** `s ∈ [0, 1]`: the position's predicted **quantile of remaining error** within the current
+  population. Uniform by construction, so its mean is 0.5 without the loss having to enforce it, and the heavy
+  skew of the underlying quantity cannot swamp the tail the way a raw-magnitude regression would.
+- **Allocator** `b = Q(s)`: a fixed budget-quantile function shaped like the oracle's distribution and normalised
+  so the mean lands on the generation's scheduled budget. Continuous, not bucketed, and it reproduces the right
+  skew.
+
+Collapse to a constant 0.5 is not a failure mode to engineer around — it is precisely the null result the WP-S2
+probe exists to detect. If the features carry no signal, the head should say so.
 
 ## WP-S3 — Difficulty head, phase 2: wire it in
 
