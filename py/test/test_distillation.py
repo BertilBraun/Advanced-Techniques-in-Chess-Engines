@@ -507,8 +507,15 @@ def test_every_row_is_eligible_for_every_auxiliary_head(auxiliary_batch: Trainin
     assert bool(auxiliary_batch.auxiliary_eligibility[head_index].all())
 
 
-def test_the_next_policy_head_reuses_the_primary_legal_actions(auxiliary_batch: TrainingBatch) -> None:
-    assert torch.equal(auxiliary_batch.auxiliary_legal_action_ids[0], auxiliary_batch.policy_legal_action_ids)
+def test_the_next_policy_head_is_masked_by_its_own_entries(auxiliary_batch: TrainingBatch) -> None:
+    stored = auxiliary_batch.auxiliary_targets[0][0].nonzero().flatten()
+    mask = auxiliary_batch.auxiliary_legal_action_ids[0][0]
+
+    assert torch.equal(mask[mask >= 0].sort().values, stored.sort().values)
+
+
+def test_the_next_policy_head_does_not_reuse_the_primary_legal_actions(auxiliary_batch: TrainingBatch) -> None:
+    assert not torch.equal(auxiliary_batch.auxiliary_legal_action_ids[0], auxiliary_batch.policy_legal_action_ids)
 
 
 def test_the_remaining_game_length_head_gets_padding_only_legal_actions(auxiliary_batch: TrainingBatch) -> None:
@@ -521,9 +528,11 @@ def _synthetic_auxiliary_records(row_count: int, seed: int, legal_count: int = 8
     records = _synthetic_records(row_count, seed, legal_count)
     generator = np.random.default_rng(seed + 1)
     for row_index in range(row_count):
-        # The builder renormalizes the teacher's next-policy head over the current position's legal actions and
-        # build_training_batch masks it the same way, so support outside that set would score against a -inf logit.
-        action_ids = records['legal_action_ids'][row_index, :legal_count]
+        # The head predicts the following ply, whose action ids are in the opponent's frame, so this support is
+        # deliberately disjoint from the current position's legal actions.
+        action_ids = (
+            records['legal_action_ids'][row_index, :legal_count].astype(np.int64) + ACTION_SIZE // 2
+        ) % ACTION_SIZE
         records['next_policy_count'][row_index] = legal_count
         records['next_policy_action_ids'][row_index, :legal_count] = action_ids
         records['next_policy_probabilities'][row_index, :legal_count] = generator.dirichlet(np.full(legal_count, 0.6))

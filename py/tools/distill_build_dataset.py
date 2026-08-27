@@ -208,8 +208,11 @@ def write_record(
     record['policy_probabilities'][:entry_count] = entries.probabilities
     record['wdl'] = wdl_probabilities
     if auxiliary.next_policy_logits is not None:
-        next_policy = softmax(auxiliary.next_policy_logits[legal_action_ids].astype(np.float64))
-        next_entries = top_policy_entries(legal_action_ids, next_policy)
+        # This head predicts the following ply, whose action ids sit in the opponent's canonical frame, so the
+        # current position's legal set says nothing about it and the whole action space is kept.
+        all_action_ids = np.arange(len(auxiliary.next_policy_logits), dtype=np.int64)
+        next_policy = softmax(auxiliary.next_policy_logits.astype(np.float64))
+        next_entries = top_policy_entries(all_action_ids, next_policy)
         next_entry_count = len(next_entries.action_ids)
         record['next_policy_count'] = next_entry_count
         record['next_policy_action_ids'][:next_entry_count] = next_entries.action_ids

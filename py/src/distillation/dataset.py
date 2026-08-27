@@ -135,8 +135,15 @@ def build_training_batch(
                 dense = _dense_policy(
                     rows, action_size, 'next_policy_count', 'next_policy_action_ids', 'next_policy_probabilities'
                 )
+                # The head predicts the following ply, whose action ids are in the opponent's canonical frame, so
+                # this mask comes from the stored entries themselves and never from the current position.
+                next_policy_ids = np.full((batch_size, MAXIMUM_LEGAL_ACTIONS), -1, dtype=np.int64)
+                entry_mask = np.arange(MAXIMUM_POLICY_ENTRIES)[None, :] < rows['next_policy_count'][:, None]
+                next_policy_ids[:, :MAXIMUM_POLICY_ENTRIES][entry_mask] = rows['next_policy_action_ids'][entry_mask]
                 auxiliary_targets.append(torch.from_numpy(dense).to(device=device, non_blocking=True))
-                auxiliary_legal_action_ids.append(legal_action_tensor)
+                auxiliary_legal_action_ids.append(
+                    torch.from_numpy(next_policy_ids).to(device=device, non_blocking=True)
+                )
             case 'remaining_game_length':
                 scalar = np.array(rows['remaining_game_length'], dtype=np.float32).reshape(batch_size, 1)
                 auxiliary_targets.append(torch.from_numpy(scalar).to(device=device, non_blocking=True))
