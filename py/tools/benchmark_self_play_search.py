@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-from src.experiment.configuration import load_experiment_configuration
+from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.composition import create_game_implementation
 from src.games.go.configuration import GoExperimentConfiguration
@@ -50,6 +50,7 @@ class BatchSizeCount:
 
 @dataclass(frozen=True)
 class BenchmarkResult:
+    experiment_configuration_sha256: str
     process_id: int
     worker_id: int
     game: str
@@ -144,6 +145,7 @@ def _apply_self_play_overrides(
 def run_benchmark(arguments: Arguments) -> BenchmarkResult:
     experiment = load_experiment_configuration(arguments.run_config)
     experiment = _apply_self_play_overrides(experiment, arguments)
+    configuration_sha256 = experiment_configuration_sha256(experiment)
     configured_trainer = experiment.training.topology.trainer
     trainer = configured_trainer.validated_copy(
         update={
@@ -208,6 +210,7 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         if calls > initial.inference.modelBatchSizeHistogram[batch_size]
     )
     return BenchmarkResult(
+        experiment_configuration_sha256=configuration_sha256,
         process_id=os.getpid(),
         worker_id=arguments.worker_id,
         game=experiment.game,
