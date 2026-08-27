@@ -79,8 +79,8 @@ training:
       kind: staged
       stages:
         - {start_generation: 0, value: 0.005}
-        - {start_generation: 100, value: 0.0035}
-        - {start_generation: 300, value: 0.002}
+        - {start_generation: 100, value: 0.004}
+        - {start_generation: 1000, value: 0.003}
     warmup_optimizer_steps: 1000
     max_grad_norm: 0.5
     duplicate_multiplicity_weight_cap: null
@@ -286,6 +286,7 @@ chess:
             - {start_generation: 180, value: 700}
             - {start_generation: 250, value: 800}
             - {start_generation: 550, value: 1000}
+            - {start_generation: 1200, value: 1200}
       fast_searches:
         kind: staged
         stages:
