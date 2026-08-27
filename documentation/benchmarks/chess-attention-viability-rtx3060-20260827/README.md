@@ -188,6 +188,9 @@ saving. `cnn-from-to-narrow` keeps cnn-A's exact trunk and changes only the head
 | `cnn-from-to-narrow` | **12x128** | from-to | **3,395,008** | 3,451,655 | 0.0771 | **−0.0298** [−0.0311, −0.0285] |
 | `cnn-from-to` | 12x136 | from-to | 3,829,964 | 3,887,651 | 0.0753 | −0.0316 [−0.0328, −0.0303] |
 
+`cnn-dense-wide` (12x136 with the dense head) would complete the square and was deliberately not run;
+the widening's contribution is therefore inferred from the other three corners, not measured directly.
+
 **The head is 94% of the effect.** Holding the trunk at cnn-A's exact 12x128, the head alone is worth
 0.0298 nats; widening to 136 adds only 0.0018 more, for 42% of the forward throughput. The head is not
 buying its gain with the 435,000 parameters it freed — `cnn-from-to-narrow` is 11% *smaller* than cnn-A

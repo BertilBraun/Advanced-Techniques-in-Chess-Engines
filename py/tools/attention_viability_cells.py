@@ -138,29 +138,12 @@ SCHEDULE_CELLS = (
 
 # attn-B beats both cnn-A and attn-A from early on, so the question stops being "is attention weaker"
 # and becomes "is the win the trunk or the head". cnn-from-to is that control: the same from-to head on
-# a convolutional trunk widened to 136 channels so the total parameter count still matches cnn-A. The
-# second cell answers whether the peak learning rate, never varied on an attention trunk, was binding.
+# a convolutional trunk widened to 136 channels so the total parameter count still matches cnn-A.
 SUPPLEMENTARY_CELLS = (
     Cell(
         'cnn-from-to',
         'the from-to policy head on a convolutional trunk, at cnn-A parameters',
         replace(BASE, hidden_size=136, policy_head_kind=PolicyHeadKind.FROM_TO_ATTENTION),
-    ),
-    Cell(
-        'attn-B-double-rate',
-        'attn-B at twice the peak learning rate',
-        replace(ARCHITECTURE_CELLS[2].arguments, learning_rate=2 * PROTOCOL_PEAK_LEARNING_RATE),
-    ),
-    # Raising the rate on one trunk only would stop the comparison being matched, so both get it.
-    Cell(
-        'cnn-from-to-double-rate',
-        'the head control at twice the peak learning rate',
-        replace(
-            BASE,
-            hidden_size=136,
-            policy_head_kind=PolicyHeadKind.FROM_TO_ATTENTION,
-            learning_rate=2 * PROTOCOL_PEAK_LEARNING_RATE,
-        ),
     ),
 )
 
