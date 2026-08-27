@@ -61,8 +61,8 @@ The system operates as an asynchronous loop:
 1. Self-play for generation `g` uses the allocator policy published before that generation. During warm-up this is a flat budget because the blend is zero.
 2. Training completes and publishes an immutable checkpoint for generation `g`.
 3. A separate background label job samples positions uniformly from that generation's newly produced replay observations.
-4. A spawned GPU process pool evaluates the frozen generation-`g` checkpoint on every selected position and returns the raw search-budget scores before any deep target is known.
-5. The coordinator calibrates those scores against the generation-wide prediction distribution, constructs every candidate's exactly mean-preserving budget vector across the complete sample, and records each position's union of required policy-checkpoint visits.
+4. Each normal 512-position shard evaluates the frozen generation-`g` checkpoint and persists its raw search-budget scores before any deep target is known.
+5. After all shard predictions complete, the coordinator performs one lightweight post-processing pass: it aggregates the scalars, calibrates them against the generation-wide prediction distribution, constructs every candidate's exactly mean-preserving budget vector across the complete sample, and records each position's union of required policy-checkpoint visits.
 6. The pool searches deterministic chunks of at most 512 roots to the baseline, all required counterfactual checkpoint budgets, and the configured deep limit while retaining policy snapshots.
 7. Each worker atomically writes its shard artifact and returns only a lightweight completion record. The coordinator verifies exact position coverage before publishing the generation label manifest.
 8. The job computes `KL(pi_deep || pi_baseline)` and converts it to the current quantile-normalized target.
@@ -103,7 +103,7 @@ The sample fraction remains configurable for later runs, but 2% is the concrete 
 
 ### Deep-policy write-back
 
-Deep searches are the highest-fidelity policy targets produced by the system. Their final search observations are written back into replay as ordinary training samples rather than discarded after producing the scalar label. Duplicate positions are acceptable; self-play already revisits positions with different noise and targets.
+Deep searches are the highest-fidelity policy targets produced by the system. Their final search observations are written back into replay as ordinary training samples rather than discarded after producing the scalar label. Duplicate positions are acceptable; self-play already revisits positions, and each labelled observation retains its own source context and target identity.
 
 No sample is downweighted because it received a low assigned budget. A low budget means the policy target was predicted to settle cheaply, not that its resulting target is untrustworthy.
 
@@ -111,7 +111,7 @@ No sample is downweighted because it received a low assigned budget. A low budge
 
 One deep search can cheaply retain policy snapshots at the baseline and at the visit limits needed to evaluate candidate allocator blends. `SearchCheckpointDetail::Policies` must remain available.
 
-Prediction scores are collected for the complete generation sample before deep-search chunks are dispatched. Candidate blends are then converted into concrete per-position visit budgets with exact sample-wide mean normalization. The deep searches retain each position's union of those visit limits, plus the baseline and final deep limit. Normalizing independently inside each 512-position chunk would answer a different allocation question and is not allowed. This two-phase flow permits exact shadow evaluation of all configured blend candidates without running a separate search for each candidate.
+Prediction scores are computed inside the ordinary 512-position shards. The coordinator then waits at a lightweight barrier, aggregates only those scalars, and converts candidate blends into concrete per-position visit budgets with exact sample-wide mean normalization. The same shards are dispatched again for deep search with each position's union of required visit limits, plus the baseline and final deep limit. Normalizing independently inside each shard would answer a different allocation question and is not allowed. This two-phase shard flow permits exact shadow evaluation of all configured blend candidates without a separate monolithic prediction job or one deep search per candidate.
 
 The production interface should express that directly: each deep-label request carries a sorted set of absolute policy-checkpoint visits and one final deep limit. Native search continues the root once and returns the requested policy snapshots. This is a small, explicit native API change and remains useful after the old adaptive threshold machinery is deleted.
 
@@ -119,9 +119,9 @@ Python roots do currently retain their native trees across calls, so staged call
 
 ### Root reconstruction and noise
 
-Each selected replay observation reconstructs a fresh root from its canonical position and game-history context. The labeler does not attempt to serialize or reproduce the production retained tree. It first records the network prediction, then applies self-play root noise exactly once and continues that same tree through the baseline, candidate checkpoints, and final deep limit. Baseline-to-deep KL therefore measures additional search under one shared noise realization rather than the difference between independently randomized searches.
+Each selected replay observation reconstructs a fresh root from its canonical position and game-history context. The labeler does not attempt to serialize or reproduce the production retained tree. Label searches disable Dirichlet root noise and continue one deterministic tree through the baseline, candidate checkpoints, and final deep limit.
 
-The noise seed is derived from the run identity, source generation, and stable replay-observation identity. Retries of one observation reproduce the same label, while repeated positions from different games retain different noise realizations. The native deep-label request consequently needs an explicit per-request root-noise seed in addition to checkpoint visits and final limit. Fresh-root labelling versus production retained roots remains a known distribution mismatch to monitor in the live run.
+This matches the fidelity measurements, which explicitly set `dirichlet_epsilon = 0.0` because root noise is exploration rather than target shape. It also avoids injecting a random realization that the pre-noise network head cannot predict. Fresh-root, noise-free labelling versus noisy production searches with retained roots remains a known distribution mismatch to monitor in the live run; the acting allocator is still judged by the matched live control.
 
 ## Deep-label worker topology
 
@@ -145,7 +145,7 @@ The model gains one scalar `search_budget` output read from the root forward pas
 
 The target is eligible only on deep-labelled replay samples. Training uses the same explicit mask pattern as `IneligibleNextPolicyTarget`; unlabelled positions contribute normally to all primary losses and contribute nothing to the search-budget loss.
 
-The head emits one unconstrained logit. Training applies `sigmoid` and masked Smooth L1 against the quantile target in `[0, 1]`, matching the established bounded-scalar auxiliary path. The masked reduction divides by eligible sample weight, so the 2% label rate does not implicitly shrink the loss by 50x. The first live run uses auxiliary loss weight 0.1, consistent with the active v9 auxiliary heads; the weight remains generation-schedulable and its gradient contribution is reported.
+The head emits one unconstrained logit. Training applies `sigmoid` and masked Smooth L1 against the quantile target in `[0, 1]`, matching the established bounded-scalar auxiliary path. The masked reduction divides by eligible sample weight, so the 2% label rate does not implicitly shrink the loss by 50x. Because production search allocation depends directly on this head, the first live run uses auxiliary loss weight 0.2. The weight remains generation-schedulable and its gradient contribution is reported.
 
 Allocator ranking may use the raw logit because sigmoid is monotone. Telemetry persists both the raw logit and bounded prediction so ordering, saturation, and calibration remain distinguishable.
 
@@ -291,7 +291,7 @@ Configuration is divided by ownership without duplicating fields:
 ### Search-budget target
 
 - masked Smooth L1 on the sigmoid-bounded scalar;
-- generation-schedulable auxiliary loss weight, initially 0.1;
+- generation-schedulable auxiliary loss weight, initially 0.2;
 - eligible-count and gradient-contribution telemetry.
 
 ### Allocation
@@ -324,7 +324,6 @@ Configuration is divided by ownership without duplicating fields:
 
 - eligible device identifiers, initially all eight live-run GPUs;
 - spawned process-pool worker initialization and device pinning;
-- deterministic per-observation root-noise seed policy;
 - positions per persisted shard;
 - roots per native search chunk;
 - inference workers, maximum batch size, and outstanding batches;
@@ -389,7 +388,6 @@ Add:
 - an assigned-additional-visits field with explicit retained-root semantics;
 - per-search parallelism derived from the assigned budget;
 - a per-request sorted policy-checkpoint visit set for the shadow label job;
-- a per-request deterministic root-noise seed applied exactly once;
 - one-pass continuation to the final deep limit without Python checkpoint round trips.
 
 Retain `SearchCheckpointDetail::Policies`.
@@ -428,7 +426,7 @@ All played positions become replay samples. There is no weighting adjustment bas
 ## Implementation sequence
 
 1. **Target and model path.** Add the scalar head, eligibility mask, replay schema, columnar storage, materialization support, losses, metrics, and generated native bindings. Remove the `full_search` materialization filter.
-2. **Deep-label pipeline.** Add deterministic generation sampling and root-noise seeds, the generation-wide prediction phase, exact global candidate-budget construction, fixed 512-position shards plus a final remainder, a run-lifetime spawn-based device-pinned process pool, explicit native checkpoint-visit requests, monotonic immutable-checkpoint refresh, baseline/candidate/deep policy capture from one continued fresh root, atomic shard artifacts, quantile normalization, persistent job state, and deep-policy replay write-back. Use inference batch size 512 and label-search parallelism one.
+2. **Deep-label pipeline.** Add deterministic generation sampling, shard-local prediction, the scalar-aggregation barrier, exact generation-wide candidate-budget construction, fixed 512-position shards plus a final remainder, a run-lifetime spawn-based device-pinned process pool, explicit native checkpoint-visit requests, monotonic immutable-checkpoint refresh, noise-free baseline/candidate/deep policy capture from one continued fresh root, atomic shard artifacts, quantile normalization, persistent job state, and deep-policy replay write-back. Use inference batch size 512 and label-search parallelism one.
 3. **Shadow evaluator and calibrator.** Add exact candidate-budget reconstruction, equal-compute utility scoring, confidence calculation, EMA state, atomic publication, fail-closed behavior, and complete diagnostics.
 4. **Native allocator in shadow-safe form.** Add predicted budget plumbing, mean-preserving generation allocation, retained-root accounting, and per-search parallelism. Ship with the published blend clamped to zero until calibrator conditions permit otherwise.
 5. **Remove superseded systems.** Delete threshold adaptation, `SearchCorrectionGate`, `search_correction`, fast/full admission and configuration, old filters, obsolete tools, stale telemetry, and compatibility layers. Migrate production configuration and documentation in the same phase.
@@ -485,12 +483,12 @@ The labeler overhead must be included in wall-clock comparisons, even though its
 - Train one scalar auxiliary head jointly with the trunk and mask its loss to labelled samples.
 - Keep an independent random audit stream permanently.
 - Use a 2% label sample for the first live run.
-- Collect all generation-sample predictions before constructing candidate checkpoint budgets.
+- Compute predictions inside the normal shards, then aggregate their scalars before constructing generation-wide candidate checkpoint budgets.
 - Run deterministic 512-root shards plus a final remainder through a spawn-based, device-pinned process pool over all eight eligible GPUs.
 - Use label inference batch size 512 and `parallel_searches = 1`.
 - Write policy-heavy shard output atomically and return lightweight manifests to the coordinator.
-- Reconstruct fresh label roots and use one deterministic noise realization through baseline and deep checkpoints.
-- Train the sigmoid-bounded quantile prediction with masked Smooth L1 at initial loss weight 0.1.
+- Reconstruct fresh label roots, disable Dirichlet noise, and continue one tree through baseline and deep checkpoints.
+- Train the sigmoid-bounded quantile prediction with masked Smooth L1 at initial loss weight 0.2.
 - Write final deep policies back into replay.
 - Make every played position a replay sample and remove the fast/full split.
 - Use a fixed nonlinear multiplier curve with a floor near 0.2x and ceiling of at least 4x.
@@ -525,11 +523,11 @@ Implementation is ready for the live experiment when:
 - deep-label jobs are generation-triggered, asynchronous, bounded, retryable, and idempotent;
 - prediction is recorded before the deep target and remains attributable to an immutable source checkpoint;
 - label shards have stable ownership and can be processed by one or multiple workers without duplicate evidence;
-- generation-wide candidate budgets are constructed before sharding and preserve the global sample mean;
+- generation-wide candidate budgets are constructed after shard-local prediction and before deep-search dispatch, preserving the global sample mean;
 - label-search root chunks contain at most 512 roots and bound host memory while sustaining measured inference occupancy;
 - spawned workers remain pinned to one CUDA device and reuse one loaded checkpoint and search engine;
 - shard artifacts survive worker or coordinator failure and the parent verifies exact coverage and checksums;
-- retrying a replay observation reproduces its root noise and checkpoint policies;
+- label searches disable root noise and retries reproduce checkpoint policies;
 - one native continuation returns policies at every explicitly requested visit checkpoint;
 - deep policies are written back as valid replay samples;
 - shadow candidate budgets preserve exact mean new-simulation spend;
