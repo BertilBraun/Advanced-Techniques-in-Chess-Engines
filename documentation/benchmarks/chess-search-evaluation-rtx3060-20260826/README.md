@@ -1,8 +1,8 @@
 # Chess offline search evaluation — RTX 3060 — 2026-08-26
 
-Skeleton for the overnight Family A / Family B study. Sections 1–5 are complete and recorded from the staging and
-smoke work of 2026-08-26/27. **Sections 6 and 7 are placeholders**: they are filled in only after the full run,
-which has not been started. Design and reasoning live in
+Complete result of the overnight Family A / Family B study. Sections 1–5 record staging and smoke work of
+2026-08-26/27; sections 6–8 record the run `night-20260826T224742Z`, which completed on 2026-08-27. Design and
+reasoning live in
 [`plan/search-evaluation-plan-20260826.md`](../../plan/search-evaluation-plan-20260826.md).
 
 ## 1. Provenance
@@ -148,44 +148,162 @@ limit of the result, not a defect in it.
 3,000 positions sampled uniformly from 25,766 observed across all 200 book openings, 200 games, 100-visit
 rollouts, temperature 1.0, seed 20260826. Ply 0–199, median 69. Positions with a single legal move are excluded.
 
-## 6. Family A results — NOT RUN
+## 6. Family A results — playing strength
 
-To be filled after the run. Required contents: calibration ladder result and the chosen Stockfish rung; per-arm
-wins/draws/losses, score and interval; paired difference against `baseline` with `excludes_zero`; per-arm
-wall-clock; and an explicit statement of which axes moved beyond the ±0.037 unpaired detection threshold and which
-returned a null that only bounds the effect at ~30 Elo.
+Run `night-20260826T224742Z`, revision `584fa684`, Stockfish 13 at **3,500 nodes**, 100 opening pairs (200 games)
+per arm, concurrency 6, 2.2 h. Raw: `results/arm-matrix-result.json`.
 
-Raw output: `arm-matrix-result.json` plus one `result.json` per arm.
+The 200-game baseline scored **0.580**, above the 0.500 the 10-game calibration predicted but inside its interval
+[0.35, 0.65]. The rung is therefore slightly easy; arms above ~0.70 sit where the score scale compresses, so their
+Elo equivalents are less reliable than their score differences.
 
-## 7. Family B results — NOT RUN
+Baseline: cpuct 1.5, reduced-parent FPU 0.2, virtual loss 1.0, discount 0.99, 600 visits, 4 parallel searches.
+**97W/38D/65L, score 0.580**, interval [0.517, 0.642].
 
-To be filled after the run. Required contents: the fixed-visit compute–fidelity frontier; per-rule mean stop
-visits, KL, total variation and top-1 agreement; and the `equal_compute_comparisons` table answering whether
-adaptive reduces visits at equal fidelity (`visit_saving`), improves fidelity at equal compute
-(`kullback_leibler_advantage`), or neither. The `fixed-10000` self-consistency row must read KL 0.0 / top-1 1.000
-or the pass is invalid.
+| Arm | Score | W/D/L | Paired diff | 95% CI on paired diff | Signif. | Elo vs baseline | Wall-clock |
+|---|---|---|---|---|---|---|---|
+| `visits-1600` | 0.748 | 137/25/38 | **+0.168** | [+0.080, +0.255] | **yes** | +133 | 4,253 s |
+| `visits-1000` | 0.662 | 115/35/50 | +0.083 | [−0.005, +0.170] | no | +61 | 3,581 s |
+| `discount-1.0` | 0.640 | 110/36/54 | +0.060 | [−0.030, +0.150] | no | +43 | 2,070 s |
+| `cpuct-1.0` | 0.600 | 102/36/62 | +0.020 | [−0.060, +0.102] | no | +14 | 1,930 s |
+| `fpu-parent-value` | 0.598 | 102/35/63 | +0.018 | [−0.065, +0.102] | no | +13 | 2,149 s |
+| `parallel-4-vlw-0.25` | 0.593 | 102/33/65 | +0.013 | [−0.007, +0.035] | no | +9 | 2,050 s |
+| `parallel-8-vlw-1.0` | 0.585 | 98/38/64 | +0.005 | [+0.000, +0.013] | no | +4 | **1,455 s** |
+| `parallel-16-vlw-1.0` | 0.585 | 97/40/63 | +0.005 | [+0.000, +0.013] | no | +4 | **1,450 s** |
+| `parallel-16-vlw-0.5` | 0.583 | 95/43/62 | +0.003 | [−0.015, +0.022] | no | +2 | 1,461 s |
+| **`baseline`** | **0.580** | 97/38/65 | — | — | — | — | 2,011 s |
+| `parallel-1` | 0.580 | 96/40/64 | +0.000 | [−0.020, +0.020] | no | 0 | 2,504 s |
+| `parallel-8-vlw-0.5` | 0.580 | 94/44/62 | +0.000 | [−0.015, +0.015] | no | 0 | 2,041 s |
+| `parallel-4-vlw-0.5` | 0.578 | 95/41/64 | −0.003 | [−0.018, +0.013] | no | −2 | 2,060 s |
+| `fpu-reduced-0.4` | 0.575 | 98/34/68 | −0.005 | [−0.095, +0.083] | no | −4 | 2,047 s |
+| `cpuct-2.0` | 0.552 | 90/41/69 | −0.028 | [−0.113, +0.058] | no | −20 | 2,121 s |
+| `cpuct-1.25` | 0.540 | 85/46/69 | −0.040 | [−0.125, +0.048] | no | −28 | 2,060 s |
+| `visits-400` | 0.537 | 90/35/75 | −0.043 | [−0.142, +0.058] | no | −30 | 1,497 s |
+| `discount-0.98` | 0.532 | 86/41/73 | −0.048 | [−0.140, +0.045] | no | −34 | 2,069 s |
+| `fpu-zero` | 0.472 | 71/47/82 | **−0.107** | [−0.205, −0.007] | **yes** | −76 | 2,038 s |
+| `cpuct-3.0` | 0.445 | 69/40/91 | **−0.135** | [−0.225, −0.045] | **yes** | −95 | 2,063 s |
+| `visits-200` | 0.318 | 42/43/115 | **−0.263** | [−0.345, −0.177] | **yes** | −189 | 712 s |
 
-Raw output: `fidelity-g162-v1.json`.
+Four arms separate from the baseline at 95%.
 
-A 200-position staging probe gave the following, recorded **only** to show the analysis path works — n = 200 is far
-too small to conclude anything and these numbers must not be quoted as results:
+### 6.1 The evaluation search has been understating every checkpoint
 
-| Rule | Mean visits | KL | Top-1 |
+**`fpu-zero` is 0.107 worse than the baseline, interval [−0.205, −0.007], about −76 Elo.** Zero FPU is exactly what
+`create_evaluation_search` has forced on every evaluation to date (§0 of the plan). Every ladder number this
+repository has recorded for any checkpoint was produced by a search handicapped by roughly this much. This is a
+defect in the measurement apparatus, not a tuning preference: the evaluation search should inherit the self-play
+first-play urgency.
+
+The other half of the same mismatch does **not** matter: `cpuct-1.0`, the value evaluation hard-codes, is
+statistically indistinguishable from self-play's 1.5 (+0.020, interval spans zero).
+
+### 6.2 Visits dominate every other axis
+
+Monotone and by far the largest effect: 0.318 → 0.537 → 0.580 → 0.662 → 0.748 for 200 / 400 / 600 / 1,000 / 1,600
+visits. Doubling the current 600 to 1,600 is worth about +133 Elo for 2.1× the wall-clock. 200 visits is
+catastrophic (−189 Elo), so the early generations of the v9 schedule are searching far below the useful range.
+
+This agrees with Family B, which found target fidelity still improving steeply at 10,000 visits. Both instruments
+point the same way, which is the strongest signal in the study.
+
+### 6.3 Parallelism is free throughput
+
+Every virtual-loss × parallel-searches arm lands within ±0.013 of the baseline and none is significant, but
+`parallel-8` and `parallel-16` finish in **1,450–1,455 s against the baseline's 2,011 s — 28% less wall-clock at
+no measurable strength cost**. `parallel-1` is both slowest (2,504 s) and no stronger.
+
+Note these arms carry far tighter paired intervals (±0.015) than the FPU and cpuct arms (±0.09). That is the
+pairing working: changing parallelism perturbs few moves, so the per-opening differences correlate strongly and
+the bootstrap tightens. Changing FPU or cpuct changes many moves and the pairing buys less.
+
+### 6.4 Nulls, and what they bound
+
+`cpuct-1.25`, `cpuct-2.0`, `fpu-reduced-0.4`, `fpu-parent-value`, `discount-0.98` and `discount-1.0` all returned
+intervals spanning zero. Per §1.3 of the plan these bound the effect at roughly ±30 Elo; they do not show the
+settings are irrelevant. `cpuct-3.0` is the one clear boundary: cpuct is safe anywhere in 1.0–2.0 and harmful by
+3.0.
+
+`discount-1.0` (the discount switched off) scored +0.060 with an interval spanning zero — no evidence the search
+value discount helps, and a weak hint it costs. Consistent with the recovery analysis twice finding no conversion
+effect from it, but not on its own a reason to change it.
+
+## 7. Family B results — policy-target fidelity per unit of compute
+
+3,000 positions × 10,000 visits = 30M simulations in 44 min at 11,350 simulations/s, `parallel_searches = 1`.
+Raw: `results/fidelity-g162-v1.json`.
+
+**Self-consistency assertion passed exactly**: `fixed-10000` against the reference returns KL 0.0, total variation
+0.0, top-1 agreement 1.000.
+
+### 7.1 The fixed compute–fidelity frontier
+
+| Visits | KL | Total variation | Top-1 agreement |
 |---|---|---|---|
-| `fixed-200` | 200.0 | 0.4523 | 0.670 |
-| `fixed-600` | 600.0 | 0.2924 | 0.725 |
-| `fixed-1600` | 1600.0 | 0.1881 | 0.815 |
-| `fixed-5000` | 5000.0 | 0.0588 | 0.895 |
-| `fixed-10000` | 10000.0 | **0.0000** | **1.000** |
-| `adaptive-baseline` | 523.5 | 0.2923 | 0.730 |
+| 100 | 0.6501 | 0.2941 | 0.627 |
+| 200 | 0.4561 | 0.2650 | 0.674 |
+| 300 | 0.3904 | 0.2483 | 0.694 |
+| 400 | 0.3473 | 0.2356 | 0.705 |
+| 500 | 0.3194 | 0.2249 | 0.717 |
+| **600 (v9 today)** | **0.2971** | **0.2161** | **0.724** |
+| 800 | 0.2649 | 0.2019 | 0.749 |
+| 1,200 | 0.2139 | 0.1798 | 0.777 |
+| 1,600 | 0.1815 | 0.1621 | 0.798 |
+| 2,400 | 0.1343 | 0.1357 | 0.826 |
+| 3,200 | 0.1005 | 0.1140 | 0.853 |
+| 5,000 | 0.0525 | 0.0784 | 0.898 |
+| 8,000 | 0.0106 | 0.0316 | 0.957 |
+| 10,000 | 0.0000 | 0.0000 | 1.000 |
 
-with `adaptive-baseline` showing `visit_saving` +77.7 and `kullback_leibler_advantage` +0.011 against the fixed
-frontier.
+Returns have not flattened by 10,000 visits. At the production 600 visits the policy target names the same best
+move as its own 10,000-visit reference only **72.4%** of the time.
 
-## 7.1 Preserved staging evidence
+### 7.2 Adaptive loses to fixed everywhere
 
-The node is ephemeral, so the small artefacts that back sections 4.1 and 5.1 are committed under
-`staging-evidence/`:
+**All 21 adaptive rules have a negative visit saving.** None buys fidelity at equal compute; none reaches a given
+fidelity for fewer visits. The best case is a tie — `adaptive-interval-200-window-400`, which never stops early and
+degenerates into `fixed-600`.
+
+| Rule | Mean visits | KL | Fixed visits matching that KL | Visit saving |
+|---|---|---|---|---|
+| `adaptive-baseline` | 513.9 | 0.3290 | ~466 | **−48.2 (−9.4%)** |
+| `adaptive-aggressive` | 443.1 | 0.3536 | ~385 | −57.7 (−13.0%) |
+| `adaptive-maximum-visits-1000` | 742.6 | 0.2972 | ~600 | −142.9 (−19.2%) |
+| `adaptive-maximum-visits-1600` | 1006.6 | 0.2769 | ~726 | −280.8 (−27.9%) |
+| `adaptive-aggressive-tall` | 755.3 | 0.3387 | ~431 | −324.3 (−42.9%) |
+
+It gets **worse the more room it is given** — the tall variants lose 28–43%. That is the mechanism running
+backwards: the stopping rule fires on positions where the search converged early, which are exactly the positions
+where extra visits were cheap, and it keeps searching on hard positions until it hits the cap anyway. It spends
+its budget on the wrong positions. `median_stop_visits` is 600 for nearly every rule, so the median position never
+stops early at all and the whole effect comes from the easy tail.
+
+The seven-parameter grid barely moves anything: across `minimum_visits`, `root_value_tolerance`, both threshold
+schedules and `threshold_relaxation_visits`, mean visits spans only 473.7–531.1 and KL 0.3539–0.3212. **The
+parameters are not mistuned; the mechanism does not pay.**
+
+### 7.3 Limits of the Family B result
+
+Measured at `parallel_searches = 1`, where the replay is provably exact (§5.1); production self-play uses 4.
+Searches start from a fresh root while production retains 60% of parent visits. Dirichlet noise is off. The
+learned search-correction gate was disabled and is not covered by this result. Target fidelity is not a training
+outcome: a cheaper search that reaches different positions could still train better, and this cannot see that.
+
+## 8. Recommendations for the next run
+
+1. **Fix the evaluation search.** Make `create_evaluation_search` inherit the self-play first-play urgency instead
+   of forcing zero (§6.1). This is a correctness fix worth about 76 Elo of measurement bias.
+2. **Raise the visit schedule.** Both instruments agree the current 600 is well short (§6.2, §7.1). The strength
+   gain is large and the target-fidelity gain is steep; the cost is linear wall-clock, partly offset by (3).
+3. **Raise `parallel_searches` to 8.** 28% less wall-clock at no measurable strength cost (§6.3).
+4. **Drop the adaptive full-search budget.** It is dominated everywhere, and removing it retires eight live
+   configuration parameters (§7.2).
+5. **Leave cpuct at 1.5** — anywhere in 1.0–2.0 is indistinguishable, 3.0 is harmful.
+6. **Leave the search value discount alone** pending better evidence; no effect was detected either way.
+
+## 9. Preserved staging evidence
+
+The node is ephemeral, so the artefacts are committed: the run results under `results/`, and the
+small staging artefacts that back sections 4.1 and 5.1 under `staging-evidence/`:
 
 - `calibration-ladder-result.json`, `chosen-rung.txt` — the rung determination.
 - `val-par1-adaptive-*.json` — the five replay-versus-native validations at `parallel_searches = 1`, each
@@ -194,7 +312,7 @@ The node is ephemeral, so the small artefacts that back sections 4.1 and 5.1 are
 The 3,000-position sample is not committed; it is regenerated exactly from the recorded model hash, seed 20260826
 and the sampler arguments in §5.2, and its hash is recorded there.
 
-## 8. Reproduction
+## 10. Reproduction
 
 On the node:
 
