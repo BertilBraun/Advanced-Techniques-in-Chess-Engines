@@ -1,0 +1,56 @@
+[
+  {
+    "hidden_size": 128,
+    "layers": 12,
+    "batch_size": 512,
+    "trunk_parameters": 0,
+    "positions_per_second": 105075.39101804452,
+    "multiply_accumulate_ratio_to_first": 1.0,
+    "throughput_ratio_to_first": 1.0
+  },
+  {
+    "hidden_size": 136,
+    "layers": 12,
+    "batch_size": 512,
+    "trunk_parameters": 0,
+    "positions_per_second": 64056.92819095974,
+    "multiply_accumulate_ratio_to_first": 0.8858131487889274,
+    "throughput_ratio_to_first": 0.6096282637669108
+  },
+  {
+    "hidden_size": 160,
+    "layers": 12,
+    "batch_size": 512,
+    "trunk_parameters": 0,
+    "positions_per_second": 65193.162985259645,
+    "multiply_accumulate_ratio_to_first": 0.6400000000000001,
+    "throughput_ratio_to_first": 0.6204417833102717
+  },
+  {
+    "hidden_size": 128,
+    "layers": 12,
+    "batch_size": 512,
+    "trunk_parameters": 0,
+    "positions_per_second": 102896.55924151767,
+    "multiply_accumulate_ratio_to_first": 1.0,
+    "throughput_ratio_to_first": 0.979264109746185
+  },
+  {
+    "hidden_size": 136,
+    "layers": 12,
+    "batch_size": 512,
+    "trunk_parameters": 0,
+    "positions_per_second": 64029.28144695165,
+    "multiply_accumulate_ratio_to_first": 0.8858131487889274,
+    "throughput_ratio_to_first": 0.6093651503610008
+  },
+  {
+    "hidden_size": 160,
+    "layers": 12,
+    "batch_size": 512,
+    "trunk_parameters": 0,
+    "positions_per_second": 65235.86870756639,
+    "multiply_accumulate_ratio_to_first": 0.6400000000000001,
+    "throughput_ratio_to_first": 0.6208482126548878
+  }
+]

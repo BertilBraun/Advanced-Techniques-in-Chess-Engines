@@ -34,7 +34,7 @@ class ChannelThroughput:
     throughput_ratio_to_first: float
 
 
-def build(layers: int, hidden_size: int, device: torch.device) -> torch.jit.ScriptModule:
+def build(layers: int, hidden_size: int, device: torch.device, channels_last: bool = False) -> torch.jit.ScriptModule:
     architecture = NetworkParams(
         num_layers=layers,
         hidden_size=hidden_size,
@@ -47,6 +47,8 @@ def build(layers: int, hidden_size: int, device: torch.device) -> torch.jit.Scri
     export = InferenceNetwork(model)
     export.eval()
     export.fuse_model()
+    if channels_last:
+        export = export.to(memory_format=torch.channels_last)
     scripted = torch.jit.script(export)
     if device.type == 'cuda':
         for tensors in (scripted.named_parameters(), scripted.named_buffers()):
@@ -56,12 +58,20 @@ def build(layers: int, hidden_size: int, device: torch.device) -> torch.jit.Scri
     return torch.jit.freeze(scripted.eval())
 
 
-def measure(model: torch.jit.ScriptModule, batch_size: int, device: torch.device, repeats: int) -> float:
+def measure(
+    model: torch.jit.ScriptModule,
+    batch_size: int,
+    device: torch.device,
+    repeats: int,
+    channels_last: bool = False,
+) -> float:
     inputs = torch.zeros(
         (batch_size, CHESS_NETWORK_DIMENSIONS.channels, 8, 8),
         device=device,
         dtype=torch.bfloat16 if device.type == 'cuda' else torch.float32,
     )
+    if channels_last:
+        inputs = inputs.to(memory_format=torch.channels_last)
     rates: list[float] = []
     with torch.no_grad():
         for _ in range(WARMUP_FORWARDS):
@@ -88,16 +98,23 @@ def main() -> None:
     parser.add_argument('--repeats', default=5, type=int)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--device-id', default=0, type=int)
+    parser.add_argument('--cudnn-benchmark', action='store_true', help='Let cuDNN autotune each shape.')
+    parser.add_argument(
+        '--channels-last',
+        action='store_true',
+        help='Run the trunk in the NHWC layout the tensor cores actually want.',
+    )
     namespace = parser.parse_args()
 
+    torch.backends.cudnn.benchmark = namespace.cudnn_benchmark
     device = torch.device('cuda', namespace.device_id) if torch.cuda.is_available() else torch.device('cpu')
     torch.manual_seed(20260827)
     results: list[ChannelThroughput] = []
     first_rate: float | None = None
     first_hidden: int | None = None
     for hidden_size in namespace.hidden_sizes:
-        model = build(namespace.layers, hidden_size, device)
-        rate = measure(model, namespace.batch_size, device, namespace.repeats)
+        model = build(namespace.layers, hidden_size, device, namespace.channels_last)
+        rate = measure(model, namespace.batch_size, device, namespace.repeats, namespace.channels_last)
         first_rate = rate if first_rate is None else first_rate
         first_hidden = hidden_size if first_hidden is None else first_hidden
         trunk_parameters = sum(

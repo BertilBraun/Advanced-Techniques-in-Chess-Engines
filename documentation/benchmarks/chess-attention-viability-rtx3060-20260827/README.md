@@ -241,27 +241,64 @@ cannot favour one, seven timed repeats per entry, two passes.
 **The from-to head costs 1.9% at the production trunk width**, not the 21% the search harness suggested
 for `cnn-from-to`. That 21% was the trunk widening, not the head.
 
-#### A throughput discontinuity at 128 channels
+#### Trunk width against throughput, and why 136 was a bad choice
 
-12-layer global-pooling trunks, dense head, batch 512 bf16, widths interleaved, two passes:
+12-layer global-pooling trunks with the dense head, batch 512 bf16, torch 2.12.1+cu126 on one RTX 4070
+SUPER. **One process per width**, each measuring only `{128, width}` interleaved twice, so cuDNN never
+sees more than two distinct shapes. The 128 reference reproduced across twelve independent processes at
+103,022-104,014 positions/s, a spread of 0.5%.
 
-| channels | positions/s | measured, relative to 128 | width-squared predicts |
+| channels | positions/s | ratio to 128 | width-squared predicts | efficiency |
+| --- | --- | --- | --- | --- |
+| 96 | 132,841 | 1.251 | 1.778 | 0.70 |
+| 112 | 95,854 | 0.904 | 1.306 | 0.69 |
+| 120 | 93,448 | 0.881 | 1.138 | 0.77 |
+| **128** | **103,490** | **1.000** | **1.000** | **1.00** |
+| **136** | **59,678** | **0.565** | 0.886 | **0.64** |
+| 144 | 63,808 | 0.605 | 0.790 | 0.77 |
+| 152 | 53,807 | 0.510 | 0.709 | 0.72 |
+| 160 | 61,801 | 0.587 | 0.640 | 0.92 |
+| 176 | 52,443 | 0.499 | 0.529 | 0.94 |
+| 192 | 41,530 | 0.394 | 0.444 | 0.89 |
+| 224 | 35,473 | 0.336 | 0.327 | 1.03 |
+| 256 | 31,148 | 0.295 | 0.250 | 1.18 |
+
+**128 is a sharp isolated optimum and the curve is not monotone.** 112 and 120 are slower in absolute
+terms than 128 despite doing less arithmetic, and 136 is 42% slower than 128 for 13% more arithmetic.
+Efficiency against width-squared then recovers to 0.89-1.18 from 160 upward, which is the ordinary
+picture of a small model becoming compute-bound as it grows.
+
+**It is not an alignment rule.** 96, 112 and 120 are inefficient and 176, 224 and 256 are efficient, so
+divisibility by 32 predicts none of it. Two candidate mechanisms were tested directly and neither
+accounts for it:
+
+| | default | cuDNN autotune | channels-last |
 | --- | --- | --- | --- |
-| 128 | 104,877 | 1.000 | 1.000 |
-| 136 | 59,997 | 0.566 | 0.886 |
-| 160 | 61,858 | 0.583 | 0.640 |
+| 128 | 103,490 | 105,075 | **124,829** |
+| 136 | 59,678 | 64,057 | 66,572 |
+| 160 | 61,801 | 65,193 | 72,905 |
 
-**136 channels is slower than 160 channels** despite 28% less arithmetic, and 128 is roughly 1.7× faster
-than either. The effect reproduces across forward, reversed and interleaved orderings. It is *not* a
-multiple-of-32 rule — 160 and 192 are multiples of 32 and sit with the slow group. The mechanism is
-unconfirmed and most plausibly a cuDNN kernel-selection boundary; it deserves its own investigation,
-because production's progressive sizing runs 96 → 160 → 192 channel trunks and this measurement says the
-step off 128 is far more expensive than its arithmetic.
+Autotuning recovers 7% of 136's deficit and the NHWC layout 12%; the gap survives both. The mechanism is
+unidentified and this note does not claim one. What is established is the shape of the curve and that it
+is neither alignment, nor autotune, nor memory layout.
 
-Two measurement warnings come with it. Sweeping many distinct widths in one process depressed every entry
-after the first by up to 40%, which looks like autotune-cache thrashing; only interleaved measurement with
-few distinct shapes was reproducible. And an earlier reading of this same effect as "a 2× cliff at 128
-versus everything else" was an artifact of exactly that — 160 read 52k in a sweep and 62k interleaved.
+Two consequences beyond this experiment, both needing their own validation before being acted on:
+
+1. **Progressive-sizing rungs should avoid the 132-152 band**, which costs 25-35% beyond its arithmetic.
+   The production rungs of 96 -> 160 -> 192 sit outside it already.
+2. **`channels_last` is worth 21% at 128 and 18% at 160** and is independent of everything else measured
+   here. The `cnn-inference-throughput` work stream is already measuring `bf16-channels-last` on this same
+   node, so this corroborates that line rather than duplicating it.
+
+#### The earlier reading of this effect was wrong twice
+
+Sweeping many distinct widths in one process depressed every entry after the first by up to 40%, which
+looks like autotune-cache thrashing: 160 read 52,000 positions/s in an eight-width sweep and 62,000 when
+measured in isolation against 128. Only one process per width reproduced. Two readings were published to
+the session before that was controlled for — first that the from-to head cost 21% of throughput, when it
+was the trunk widening that did, and then that 128 was 2x faster than every other width, when relative to
+its own arithmetic it is 160 and above that are normal and 132-152 that are not. Both are corrected above;
+the raw per-width JSON under `widths/` is the record.
 
 **Equal-compute implication.** The recommendation below costs 1.9% of forward throughput at batch 512 and
 9% at batch 64, against 0.0298 nats (+33 to +42 Elo). That trade needs no equal-compute arithmetic to
@@ -362,6 +399,8 @@ python -m tools.distill_match --mode throughput-only --throughput-position-count
 | `forward-interleaved.json` | forward-pass throughput, models interleaved with the reference |
 | `channel-136-vs-160.json` | the 128 / 136 / 160 channel comparison, interleaved |
 | `channel-alignment-interleaved.json` | the 128 / 160 alternation that ruled out ordering effects |
+| `widths/w<N>.json` | one process per trunk width, each interleaved against 128 |
+| `widths/cudnn-benchmark.json`, `widths/channels-last.json` | the two candidate mechanisms, neither of which explains the 136 deficit |
 
 Training logs for all nine cells were fetched off the ephemeral node to
 `.codex-diagnostics/chess-attention-viability-20260827/logs/`.
