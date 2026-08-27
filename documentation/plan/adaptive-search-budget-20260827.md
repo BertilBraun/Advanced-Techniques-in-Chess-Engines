@@ -62,7 +62,7 @@ The system operates as an asynchronous loop:
 2. Training completes and publishes an immutable checkpoint for generation `g`.
 3. A separate background label job samples positions uniformly from that generation's newly produced replay observations.
 4. The frozen generation-`g` checkpoint predicts a raw search-budget score for each selected position before its deep target is known.
-5. The same checkpoint searches each sampled position to the baseline, all required counterfactual checkpoint budgets, and the configured deep limit while retaining policy snapshots.
+5. A dedicated label worker searches each sampled position to the baseline, all required counterfactual checkpoint budgets, and the configured deep limit while retaining policy snapshots. The generation job is processed in bounded root chunks rather than one native call containing every sampled position.
 6. The job computes `KL(pi_deep || pi_baseline)` and converts it to the current quantile-normalized target.
 7. The final deep policy is written back as a replay training sample, together with the eligible `search_budget` target and source-generation metadata.
 8. The shadow evaluator scores every configured blend candidate from the recorded checkpoint policies at equal mean visit spend.
@@ -110,6 +110,24 @@ No sample is downweighted because it received a low assigned budget. A low budge
 One deep search can cheaply retain policy snapshots at the baseline and at the visit limits needed to evaluate candidate allocator blends. `SearchCheckpointDetail::Policies` must remain available.
 
 For each label batch, prediction scores are collected first. Candidate blends are then converted into concrete per-position visit budgets with exact batch-mean normalization. The deep searches retain the union of those visit limits, plus the baseline and final deep limit. This permits exact shadow evaluation of all configured blend candidates without running a separate search for each candidate.
+
+The production interface should express that directly: each deep-label request carries a sorted set of absolute policy-checkpoint visits and one final deep limit. Native search continues the root once and returns the requested policy snapshots. This is a small, explicit native API change and remains useful after the old adaptive threshold machinery is deleted.
+
+Python roots do currently retain their native trees across calls, so staged calls can technically continue a search. That is not the intended implementation. The current public self-play budget is global; increasing it changes root arena capacity and invalidates existing roots, while workarounds would depend on the fast-search or adaptive-limit paths being removed. Re-entering Python at every checkpoint also adds synchronization and makes accidental repeated root-noise application easier. A single native deep search with explicit checkpoints has the simpler ownership and fidelity contract.
+
+## Deep-label worker topology
+
+One generation produces one logical label job. The job is deterministically divided into bounded shards and root chunks so retries and optional multi-GPU execution preserve stable position ownership.
+
+The initial deployment uses one label-worker process on one explicitly reserved GPU, preferably device 1 rather than rank-zero device 0. Merely selecting GPU 1 does not isolate the worker when the trainer's DDP topology also includes GPU 1; the live-run topology must actually reserve that device or accept and measure contention.
+
+The worker does not submit all approximately 2,500 roots in one native call. `TreeArena` allocates the configured initial node capacity for every root, so root count multiplied by the roughly 8x deep limit can consume substantial host memory. The worker instead processes chunks large enough to saturate inference while bounding tree memory, initially testing 512 and 1,024 roots per chunk.
+
+Inference batch size is independent of the total number of labelled positions. A maximum batch size of 1,024 is a reasonable benchmark candidate and has already run in the search experiments, but it is not assumed to be optimal for the live checkpoint and GPU. Benchmark 320, 512, and 1,024 for simulations per second, actual average batch size, CUDA memory, graph-capture cost, and host memory before fixing the run configuration.
+
+Deep labels should initially use `parallel_searches = 1`. With hundreds of independent roots, the executor can fill inference batches without multiple simultaneous descents in one tree, and sequential search avoids the measured policy-quality loss from parallel selection. Unlike production adaptive allocation, every label root has the same deep final limit, so there is little long-budget tail to keep fed. Any later increase requires a direct label-fidelity and throughput measurement.
+
+Additional label GPUs are a throughput scaling option, not a separate architecture. For sample fraction `f` and deep multiple `d`, label search costs approximately `f * d` of flat self-play visit compute: 2% at 8x is about 16%. One label GPU can therefore keep up with roughly six equally fast self-play GPU-equivalents before accounting for trainer contention and throughput differences. Start with one worker, monitor queue lag, and add another identically configured worker when the bounded queue cannot finish each generation's labels before the maximum useful lag. Workers claim deterministic persisted shards; no in-memory coordinator owns irreplaceable progress.
 
 ## Network head and training target
 
@@ -282,6 +300,14 @@ Configuration is divided by ownership without duplicating fields:
 - assigned-budget-to-parallel-searches curve;
 - implementation limits imposed by inference batching and worker capacity.
 
+### Label-worker execution
+
+- reserved device identifiers and worker count;
+- positions per persisted shard;
+- roots per native search chunk;
+- inference workers, maximum batch size, and outstanding batches;
+- fixed label-search parallelism, initially one.
+
 ## Required telemetry
 
 The live run must make both learning and acting behavior inspectable.
@@ -340,7 +366,8 @@ Add:
 - a predicted-budget search-limit variant that reads the root scalar once the root is expanded;
 - an assigned-additional-visits field with explicit retained-root semantics;
 - per-search parallelism derived from the assigned budget;
-- policy checkpoints at the exact visits requested by the shadow label job.
+- a per-request sorted policy-checkpoint visit set for the shadow label job;
+- one-pass continuation to the final deep limit without Python checkpoint round trips.
 
 Retain `SearchCheckpointDetail::Policies`.
 
@@ -378,7 +405,7 @@ All played positions become replay samples. There is no weighting adjustment bas
 ## Implementation sequence
 
 1. **Target and model path.** Add the scalar head, eligibility mask, replay schema, columnar storage, materialization support, losses, metrics, and generated native bindings. Remove the `full_search` materialization filter.
-2. **Deep-label pipeline.** Add deterministic generation sampling, immutable-checkpoint execution, baseline/candidate/deep policy capture, quantile normalization, persistent job state, and deep-policy replay write-back.
+2. **Deep-label pipeline.** Add deterministic generation sampling and sharding, explicit native checkpoint-visit requests, immutable-checkpoint execution, bounded root chunks, baseline/candidate/deep policy capture, quantile normalization, persistent job state, and deep-policy replay write-back. Start with one reserved-GPU worker and label-search parallelism one.
 3. **Shadow evaluator and calibrator.** Add exact candidate-budget reconstruction, equal-compute utility scoring, confidence calculation, EMA state, atomic publication, fail-closed behavior, and complete diagnostics.
 4. **Native allocator in shadow-safe form.** Add predicted budget plumbing, mean-preserving generation allocation, retained-root accounting, and per-search parallelism. Ship with the published blend clamped to zero until calibrator conditions permit otherwise.
 5. **Remove superseded systems.** Delete threshold adaptation, `SearchCorrectionGate`, `search_correction`, fast/full admission and configuration, old filters, obsolete tools, stale telemetry, and compatibility layers. Migrate production configuration and documentation in the same phase.
@@ -401,6 +428,7 @@ Before the first acting generation, inspect:
 - exact equal-compute candidate gains and uncertainty;
 - whether the proposed EMA and window react reasonably across generations;
 - per-budget parallelism behavior;
+- label-worker chunk size, inference batch size, memory, and generation lag;
 - total wall-clock overhead.
 
 The run then continues with automatic blend calibration. The central operational questions are:
@@ -447,6 +475,8 @@ The labeler overhead must be included in wall-clock comparisons, even though its
 
 - 1% versus 2% deep-label sampling for the first run;
 - exact deep limit and retained checkpoint set;
+- one versus multiple label-worker GPUs after measuring generation lag;
+- label root-chunk and inference batch sizes;
 - quantile and prediction-calibration windows;
 - multiplier-curve control points and final ceiling;
 - blend candidate grid;
@@ -466,6 +496,9 @@ Implementation is ready for the live experiment when:
 - every self-play position materializes regardless of its assigned budget;
 - deep-label jobs are generation-triggered, asynchronous, bounded, retryable, and idempotent;
 - prediction is recorded before the deep target and remains attributable to an immutable source checkpoint;
+- label shards have stable ownership and can be processed by one or multiple workers without duplicate evidence;
+- label-search root chunks bound host memory while sustaining measured inference occupancy;
+- one native continuation returns policies at every explicitly requested visit checkpoint;
 - deep policies are written back as valid replay samples;
 - shadow candidate budgets preserve exact mean new-simulation spend;
 - shadow utility is reconstructed from exact policy checkpoints and reproduces known offline cases;
