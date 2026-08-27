@@ -257,29 +257,79 @@ Raw: `results/fidelity-g162-v1.json`.
 Returns have not flattened by 10,000 visits. At the production 600 visits the policy target names the same best
 move as its own 10,000-visit reference only **72.4%** of the time.
 
-### 7.2 Adaptive loses to fixed everywhere
+### 7.2 Adaptive does save visits, but the saving does not pay
 
-**All 21 adaptive rules have a negative visit saving.** None buys fidelity at equal compute; none reaches a given
-fidelity for fewer visits. The best case is a tie — `adaptive-interval-200-window-400`, which never stops early and
-degenerates into `fixed-600`.
+The first write-up of this section overstated the result and is corrected here.
 
-| Rule | Mean visits | KL | Fixed visits matching that KL | Visit saving |
-|---|---|---|---|---|
-| `adaptive-baseline` | 513.9 | 0.3290 | ~466 | **−48.2 (−9.4%)** |
-| `adaptive-aggressive` | 443.1 | 0.3536 | ~385 | −57.7 (−13.0%) |
-| `adaptive-maximum-visits-1000` | 742.6 | 0.2972 | ~600 | −142.9 (−19.2%) |
-| `adaptive-maximum-visits-1600` | 1006.6 | 0.2769 | ~726 | −280.8 (−27.9%) |
-| `adaptive-aggressive-tall` | 755.3 | 0.3387 | ~431 | −324.3 (−42.9%) |
+**Adaptive reduces visits as designed.** `adaptive-baseline` averaged 513.9 visits against its own 600 cap, a 14%
+reduction; 65% of positions ran to the cap and the other 35% stopped at 354 visits on average. That is exactly the
+intended mechanism and it is not in question.
 
-It gets **worse the more room it is given** — the tall variants lose 28–43%. That is the mechanism running
-backwards: the stopping rule fires on positions where the search converged early, which are exactly the positions
-where extra visits were cheap, and it keeps searching on hard positions until it hits the cap anyway. It spends
-its budget on the wrong positions. `median_stop_visits` is 600 for nearly every rule, so the median position never
-stops early at all and the whole effect comes from the easy tail.
+What the study measures is whether those saved visits were *well* saved. They were not: the same target quality is
+reached by a **flat 466-visit** budget, so adaptive spent 514 to buy what 466 buys uniformly. Every one of the 21
+adaptive rules shows this sign.
 
-The seven-parameter grid barely moves anything: across `minimum_visits`, `root_value_tolerance`, both threshold
-schedules and `threshold_relaxation_visits`, mean visits spans only 473.7–531.1 and KL 0.3539–0.3212. **The
-parameters are not mistuned; the mechanism does not pay.**
+#### Decomposing the loss
+
+Two different things cause it, and they carry different implications.
+
+The KL-versus-visits curve (§7.1) has strongly diminishing returns, so it is **convex**. By Jensen's inequality any
+rule that spreads visits around a mean scores worse than a flat budget at that mean — *even if it allocates
+perfectly*. Splitting the observed penalty into that unavoidable part and the remainder attributable to which
+positions the rule chose:
+
+| Rule | Mean visits | Observed KL | Flat at same mean | Convexity penalty | Selection penalty |
+|---|---|---|---|---|---|
+| `adaptive-baseline` | 513.9 | 0.3290 | 0.3163 | +0.0053 | +0.0073 |
+| `adaptive-aggressive` | 443.1 | 0.3536 | 0.3353 | +0.0073 | +0.0110 |
+| `adaptive-top-two-margin-0.3-0.1` | 487.1 | 0.3405 | 0.3230 | +0.0068 | +0.0107 |
+| `adaptive-maximum-visits-1000` | 742.6 | 0.2972 | 0.2742 | +0.0092 | +0.0139 |
+| `adaptive-maximum-visits-1600` | 1006.6 | 0.2769 | 0.2386 | +0.0105 | +0.0278 |
+
+The convexity column is the penalty a *randomly chosen* 35% of positions cut to the same depth would incur. Roughly
+**40% of the loss is arithmetic, not a flaw in the stopping rule.** The remaining selection penalty is positive
+throughout, meaning the rule chose worse-than-random positions to cut short — its stability signal is read over a
+short window and is fooled by temporary plateaus, which is a known MCTS failure mode: a line that looks settled at
+400 visits is often overturned by 10,000.
+
+The selection column uses the population-average fidelity curve as a stand-in for the curve of the specific
+positions that stopped early. That is an approximation, and it is the weakest step in this analysis — see §7.4.
+
+#### Magnitude depends on the metric
+
+In total variation, which needs no probability floor, the production-scale gap is much smaller:
+
+| Rule | Observed TV | Flat at same mean | Difference |
+|---|---|---|---|
+| `adaptive-baseline` | 0.2258 | 0.2237 | +0.0021 (~1%) |
+| `adaptive-aggressive` | 0.2349 | 0.2310 | +0.0039 (~2%) |
+| `adaptive-maximum-visits-1600` | 0.2037 | 0.1905 | +0.0133 (~7%) |
+
+So the honest conclusion is narrower than "adaptive loses everywhere":
+
+- **At the production cap of 600 it is roughly a wash** — about 4% worse in KL, about 1% worse in total variation,
+  against a flat budget at its own mean.
+- **It degrades clearly as the cap rises** — both metrics agree at caps of 1,000 and 1,600, where it loses 19-28%
+  of its visits' worth.
+- It never wins anywhere in the grid, at any parameter setting.
+
+The case for dropping it is therefore not that it is catastrophic; it is that it delivers **no measurable gain at
+production scale while carrying eight configuration parameters**, and it becomes actively harmful in exactly the
+direction the visit-schedule evidence (§6.2, §7.1) says the next run should move — upward.
+
+### 7.4 What would settle this properly
+
+The decomposition above infers the selection penalty from population averages. The decisive measurement is a
+per-position one, which the current tool does not emit: record each position's fidelity at every fixed budget,
+then compute the **best achievable allocation** at a given mean compute. That bounds what *any* stopping rule
+could deliver.
+
+- If the oracle allocation cannot beat a flat budget, no stopping rule ever can, and the mechanism is dead on
+  arrival for this metric.
+- If the oracle beats flat substantially, the mechanism is sound and only these particular stopping criteria are
+  bad, which makes better criteria worth designing.
+
+This costs one further reference pass, about 45 minutes. It is not yet run.
 
 ### 7.3 Limits of the Family B result
 
@@ -295,8 +345,8 @@ outcome: a cheaper search that reaches different positions could still train bet
 2. **Raise the visit schedule.** Both instruments agree the current 600 is well short (§6.2, §7.1). The strength
    gain is large and the target-fidelity gain is steep; the cost is linear wall-clock, partly offset by (3).
 3. **Raise `parallel_searches` to 8.** 28% less wall-clock at no measurable strength cost (§6.3).
-4. **Drop the adaptive full-search budget.** It is dominated everywhere, and removing it retires eight live
-   configuration parameters (§7.2).
+4. **Drop the adaptive full-search budget** — provisionally, pending §7.4. It is a wash at the production cap
+   and degrades as the cap rises, so it delivers nothing while carrying eight configuration parameters (§7.2).
 5. **Leave cpuct at 1.5** — anywhere in 1.0–2.0 is indistinguishable, 3.0 is harmful.
 6. **Leave the search value discount alone** pending better evidence; no effect was detected either way.
 
