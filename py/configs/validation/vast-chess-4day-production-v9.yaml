@@ -230,50 +230,6 @@ evaluation:
       opening_pair_count: 50
       maximum_game_plies: 300
       search: *evaluation_search
-    - kind: stockfish
-      definition_id: stockfish-level-0
-      skill_level: 0
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
-    - kind: stockfish
-      definition_id: stockfish-level-1
-      skill_level: 1
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
-    - kind: stockfish
-      definition_id: stockfish-level-2
-      skill_level: 2
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
-    - kind: stockfish
-      definition_id: stockfish-level-3
-      skill_level: 3
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
-    - kind: stockfish
-      definition_id: stockfish-level-4
-      skill_level: 4
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
-    - kind: stockfish_fixed_nodes
-      definition_id: stockfish-fixed-nodes-30
-      nodes: 30
-      engine_executable_path: engines/stockfish-13
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
-    - kind: stockfish_fixed_nodes
-      definition_id: stockfish-fixed-nodes-100
-      nodes: 100
-      engine_executable_path: engines/stockfish-13
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-300
       nodes: 300
@@ -284,6 +240,20 @@ evaluation:
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-1000
       nodes: 1000
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-2000
+      nodes: 2000
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-3000
+      nodes: 3000
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
       maximum_game_plies: 300
