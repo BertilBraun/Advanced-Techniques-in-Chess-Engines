@@ -657,9 +657,10 @@ def _build_attention_bias(
 class ChessFromToAttentionPolicyHead(nn.Module):
     """Scores every action as an attention logit from its origin square's query to its target square's key.
 
-    The reduced chess encoding is already an enumeration of (from, to, promotion) triples, and castling and
-    en passant are ordinary square pairs inside it, so a 64x64 score matrix plus a promotion offset covers
-    the whole action space with one gather.
+    The reduced chess encoding is already an enumeration of (from, to, promotion) triples. En passant is an
+    ordinary diagonal pair in it, and castling is encoded from the king's square to its own rook's square
+    rather than as the two-file move UCI prints, so both are plain entries and a 64x64 score matrix plus a
+    promotion offset covers the whole action space with one gather.
     """
 
     def __init__(self, input_channels: int, key_size: int, rows: int, columns: int) -> None:

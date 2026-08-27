@@ -132,6 +132,48 @@ def test_the_python_action_table_matches_the_native_encoding_after_a_promotion_o
     assert promotions == 4
 
 
+@pytest.mark.native
+def test_castling_is_a_king_to_rook_square_pair_in_the_action_table() -> None:
+    native = pytest.importorskip('AlphaZeroCpp')
+    table = CHESS_FROM_TO_ACTION_TABLE
+    position = native.ChessPosition('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')
+
+    castling = {position.action_uci(action_id): action_id for action_id in position.legal_actions()}
+
+    # The move renders as the two-file king move in UCI but is encoded from the king's square to its own
+    # rook's square, which is an ordinary ray entry and needs no special case in the from-to head.
+    king_side, queen_side = castling['e1g1'], castling['e1c1']
+    assert (int(table.from_squares[king_side]), int(table.to_squares[king_side])) == (4, 7)
+    assert (int(table.from_squares[queen_side]), int(table.to_squares[queen_side])) == (4, 0)
+    assert int(table.promotion_indices[king_side]) == -1
+    assert int(table.promotion_indices[queen_side]) == -1
+
+
+@pytest.mark.native
+def test_en_passant_is_an_ordinary_diagonal_square_pair_in_the_action_table() -> None:
+    native = pytest.importorskip('AlphaZeroCpp')
+    table = CHESS_FROM_TO_ACTION_TABLE
+    position = native.ChessPosition('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 2')
+
+    capture = {position.action_uci(action_id): action_id for action_id in position.legal_actions()}['e5d6']
+
+    assert (int(table.from_squares[capture]), int(table.to_squares[capture])) == (36, 43)
+    assert int(table.promotion_indices[capture]) == -1
+
+
+@pytest.mark.native
+def test_the_from_to_head_gives_every_legal_move_of_a_castling_position_its_own_logit() -> None:
+    native = pytest.importorskip('AlphaZeroCpp')
+    torch.manual_seed(37)
+    head = ChessFromToAttentionPolicyHead(32, 16, 8, 8)
+    position = native.ChessPosition('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')
+    legal = position.legal_actions()
+
+    logits = head(torch.rand((1, 32, 8, 8)))[0, legal]
+
+    assert len(set(logits.tolist())) == len(legal)
+
+
 def test_the_from_to_head_is_an_order_of_magnitude_smaller_than_the_dense_head() -> None:
     from_to = Network(attention_parameters(embedding_size=176, num_heads=11), DEVICE, CHESS_NETWORK_DIMENSIONS)
     dense = Network(
