@@ -36,6 +36,9 @@ class DistillationDatasetManifest(FrozenModel):
     random_perturbation_probability: float = Field(ge=0.0, le=1.0)
     maximum_game_plies: int = Field(gt=0)
     builder_source_revision: str = Field(min_length=1)
+    # Auxiliary head outputs are always captured because generation cannot be repeated cheaply; whether a student
+    # trains on them is decided later. Order matches the teacher's own auxiliary head layout.
+    captured_auxiliary_heads: tuple[str, ...] = ()
     # Present only on merged datasets; the generator settings above then describe the last source, whose rows form
     # the held-out tail.
     merged_sources: tuple[str, ...] = ()
@@ -51,6 +54,10 @@ def record_dtype(payload_bytes: int = CHESS_PAYLOAD_BYTES) -> np.dtype:
             ('policy_action_ids', '<u2', (MAXIMUM_POLICY_ENTRIES,)),
             ('policy_probabilities', '<f4', (MAXIMUM_POLICY_ENTRIES,)),
             ('wdl', '<f4', (3,)),
+            ('next_policy_count', '<u2'),
+            ('next_policy_action_ids', '<u2', (MAXIMUM_POLICY_ENTRIES,)),
+            ('next_policy_probabilities', '<f4', (MAXIMUM_POLICY_ENTRIES,)),
+            ('remaining_game_length', '<f4'),
         ]
     )
 
@@ -77,11 +84,23 @@ def open_dataset(dataset_path: Path) -> tuple[npt.NDArray, DistillationDatasetMa
     return records, manifest
 
 
+def _dense_policy(
+    rows: npt.NDArray, action_size: int, count_field: str, ids_field: str, probs_field: str
+) -> np.ndarray:
+    batch_size = len(rows)
+    dense = np.zeros((batch_size, action_size), dtype=np.float32)
+    entry_mask = np.arange(MAXIMUM_POLICY_ENTRIES)[None, :] < rows[count_field][:, None]
+    row_indices = np.repeat(np.arange(batch_size), entry_mask.sum(axis=1))
+    dense[row_indices, rows[ids_field][entry_mask]] = rows[probs_field][entry_mask]
+    return dense
+
+
 def build_training_batch(
     rows: npt.NDArray,
     state: GameStateContract,
     action_size: int,
     device: torch.device,
+    auxiliary_heads: tuple[str, ...] = (),
 ) -> TrainingBatch:
     batch_size = len(rows)
 
@@ -99,25 +118,41 @@ def build_training_batch(
         decoded,
     )
 
-    policy_targets = np.zeros((batch_size, action_size), dtype=np.float32)
-    entry_columns = np.arange(MAXIMUM_POLICY_ENTRIES)
-    entry_mask = entry_columns[None, :] < rows['policy_count'][:, None]
-    row_indices = np.repeat(np.arange(batch_size), entry_mask.sum(axis=1))
-    policy_targets[row_indices, rows['policy_action_ids'][entry_mask]] = rows['policy_probabilities'][entry_mask]
+    policy_targets = _dense_policy(rows, action_size, 'policy_count', 'policy_action_ids', 'policy_probabilities')
 
     legal_action_ids = np.full((batch_size, MAXIMUM_LEGAL_ACTIONS), -1, dtype=np.int64)
     legal_mask = np.arange(MAXIMUM_LEGAL_ACTIONS)[None, :] < rows['legal_count'][:, None]
     legal_action_ids[legal_mask] = rows['legal_action_ids'][legal_mask]
+    legal_action_tensor = torch.from_numpy(legal_action_ids).to(device=device, non_blocking=True)
+    scalar_legal_filler = torch.full((batch_size, MAXIMUM_LEGAL_ACTIONS), -1, dtype=torch.int64, device=device)
+    eligible = torch.ones(batch_size, dtype=torch.bool, device=device)
+
+    auxiliary_targets: list[torch.Tensor] = []
+    auxiliary_legal_action_ids: list[torch.Tensor] = []
+    for head in auxiliary_heads:
+        match head:
+            case 'next_policy':
+                dense = _dense_policy(
+                    rows, action_size, 'next_policy_count', 'next_policy_action_ids', 'next_policy_probabilities'
+                )
+                auxiliary_targets.append(torch.from_numpy(dense).to(device=device, non_blocking=True))
+                auxiliary_legal_action_ids.append(legal_action_tensor)
+            case 'remaining_game_length':
+                scalar = np.array(rows['remaining_game_length'], dtype=np.float32).reshape(batch_size, 1)
+                auxiliary_targets.append(torch.from_numpy(scalar).to(device=device, non_blocking=True))
+                auxiliary_legal_action_ids.append(scalar_legal_filler)
+            case _:
+                raise ValueError(f'Distillation datasets do not carry an auxiliary head named {head!r}.')
 
     return TrainingBatch(
         states=torch.from_numpy(decoded).to(device=device, non_blocking=True),
         policy_targets=torch.from_numpy(policy_targets).to(device=device, non_blocking=True),
-        policy_legal_action_ids=torch.from_numpy(legal_action_ids).to(device=device, non_blocking=True),
+        policy_legal_action_ids=legal_action_tensor,
         wdl_targets=torch.from_numpy(np.array(rows['wdl'], dtype=np.float32)).to(device=device, non_blocking=True),
         root_values=torch.zeros(batch_size, device=device),
-        auxiliary_targets=(),
-        auxiliary_legal_action_ids=(),
-        auxiliary_eligibility=(),
+        auxiliary_targets=tuple(auxiliary_targets),
+        auxiliary_legal_action_ids=tuple(auxiliary_legal_action_ids),
+        auxiliary_eligibility=tuple(eligible for _ in auxiliary_heads),
         sample_weights=torch.ones(batch_size, device=device),
         source_model_generations=torch.zeros(batch_size, dtype=torch.int64, device=device),
         source_created_at_seconds=torch.zeros(batch_size, dtype=torch.float64, device=device),

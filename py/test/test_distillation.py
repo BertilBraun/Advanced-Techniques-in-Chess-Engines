@@ -20,9 +20,15 @@ from src.distillation.teacher import normalize_state_dict_keys
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT
 from src.training.batch import TrainingBatch
 from src.training.checkpoint.persistence import create_model, create_optimizer
+from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 from tools.benchmark_training_overfit import LossValues, achievable_loss_floor
 from tools.distill_train_student import (
+    AUXILIARY_LOSS_WEIGHT,
+    LearningRateSchedule,
+    auxiliary_head_layouts,
+    dataset_split,
     distillation_objective,
+    held_out_batches,
     learning_rate_at,
     observed_losses,
     parameter_counts,
@@ -31,6 +37,7 @@ from tools.distill_train_student import (
 
 PAYLOAD_BYTES = CHESS_STATE_CONTRACT.packed_plane_layout.payload_bytes
 ACTION_SIZE = CHESS_NETWORK_DIMENSIONS.actions
+DISTILLED_AUXILIARY_HEADS = ('next_policy', 'remaining_game_length')
 
 
 @dataclass(frozen=True)
@@ -247,12 +254,15 @@ def test_the_entropy_floor_bounds_the_reachable_policy_loss() -> None:
     assert floor.wdl > 0.0
 
 
+@pytest.mark.parametrize('schedule', tuple(LearningRateSchedule))
 @pytest.mark.parametrize(
     ('step', 'expected'),
     ((1, 0.005), (10, 0.05), (20, 0.1)),
 )
-def test_warmup_scales_the_learning_rate_linearly(step: int, expected: float) -> None:
-    assert learning_rate_at(step, total_steps=100, peak_learning_rate=0.1, warmup_steps=20) == pytest.approx(expected)
+def test_warmup_scales_the_learning_rate_linearly(schedule: LearningRateSchedule, step: int, expected: float) -> None:
+    rate = learning_rate_at(step, total_steps=100, peak_learning_rate=0.1, warmup_steps=20, schedule=schedule)
+
+    assert rate == pytest.approx(expected)
 
 
 def test_cosine_decay_reaches_zero_at_the_final_step() -> None:
@@ -297,3 +307,342 @@ def test_current_checkpoint_keys_survive_normalization_unchanged() -> None:
     keys = {'backbone.0.weight': torch.zeros(1), 'value_head.1.bias': torch.zeros(1)}
 
     assert tuple(normalize_state_dict_keys(keys)) == tuple(keys)
+
+
+def test_the_cosine_schedule_is_the_default() -> None:
+    explicit = learning_rate_at(
+        60,
+        total_steps=100,
+        peak_learning_rate=0.1,
+        warmup_steps=20,
+        schedule=LearningRateSchedule.COSINE,
+    )
+
+    assert learning_rate_at(60, total_steps=100, peak_learning_rate=0.1, warmup_steps=20) == explicit
+
+
+@pytest.mark.parametrize('anneal_fraction', (0.1, 0.2, 0.5))
+def test_the_cosine_schedule_ignores_the_anneal_fraction(anneal_fraction: float) -> None:
+    rate = learning_rate_at(
+        60,
+        total_steps=100,
+        peak_learning_rate=0.1,
+        warmup_steps=20,
+        schedule=LearningRateSchedule.COSINE,
+        anneal_fraction=anneal_fraction,
+    )
+
+    assert rate == pytest.approx(0.05)
+
+
+@pytest.mark.parametrize('step', (21, 50, 79, 80))
+def test_the_plateau_schedule_holds_the_peak_until_the_anneal_begins(step: int) -> None:
+    rate = learning_rate_at(
+        step,
+        total_steps=100,
+        peak_learning_rate=0.1,
+        warmup_steps=20,
+        schedule=LearningRateSchedule.PLATEAU,
+        anneal_fraction=0.2,
+    )
+
+    assert rate == pytest.approx(0.1)
+
+
+def test_the_plateau_schedule_halves_the_peak_at_the_anneal_midpoint() -> None:
+    rate = learning_rate_at(
+        90,
+        total_steps=100,
+        peak_learning_rate=0.1,
+        warmup_steps=20,
+        schedule=LearningRateSchedule.PLATEAU,
+        anneal_fraction=0.2,
+    )
+
+    assert rate == pytest.approx(0.05)
+
+
+@pytest.mark.parametrize('anneal_fraction', (0.1, 0.2, 0.5, 1.0))
+def test_the_plateau_schedule_reaches_zero_at_the_final_step(anneal_fraction: float) -> None:
+    rate = learning_rate_at(
+        100,
+        total_steps=100,
+        peak_learning_rate=0.1,
+        warmup_steps=20,
+        schedule=LearningRateSchedule.PLATEAU,
+        anneal_fraction=anneal_fraction,
+    )
+
+    assert rate == pytest.approx(0.0)
+
+
+def _plateau_rate_at(step: int, anneal_fraction: float) -> float:
+    return learning_rate_at(
+        step,
+        total_steps=100,
+        peak_learning_rate=0.1,
+        warmup_steps=20,
+        schedule=LearningRateSchedule.PLATEAU,
+        anneal_fraction=anneal_fraction,
+    )
+
+
+@pytest.mark.parametrize(('anneal_fraction', 'anneal_start'), ((0.1, 90), (0.25, 75), (0.5, 50)))
+def test_the_plateau_still_holds_the_peak_on_the_step_the_anneal_starts(
+    anneal_fraction: float, anneal_start: int
+) -> None:
+    assert _plateau_rate_at(anneal_start, anneal_fraction) == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize(('anneal_fraction', 'anneal_start'), ((0.1, 90), (0.25, 75), (0.5, 50)))
+def test_the_plateau_drops_below_the_peak_on_the_first_annealing_step(
+    anneal_fraction: float, anneal_start: int
+) -> None:
+    assert _plateau_rate_at(anneal_start + 1, anneal_fraction) < 0.1
+
+
+@pytest.mark.parametrize(
+    ('heads', 'expected'),
+    (
+        ((), ()),
+        (('next_policy',), (NextPolicyHeadLayout(kind='next_policy', action_size=ACTION_SIZE, ply_offset=1),)),
+        (
+            ('remaining_game_length',),
+            (RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=400.0),),
+        ),
+        (
+            DISTILLED_AUXILIARY_HEADS,
+            (
+                NextPolicyHeadLayout(kind='next_policy', action_size=ACTION_SIZE, ply_offset=1),
+                RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=400.0),
+            ),
+        ),
+    ),
+)
+def test_requested_head_names_build_the_matching_layouts(heads: tuple[str, ...], expected: tuple[object, ...]) -> None:
+    assert auxiliary_head_layouts(heads, ACTION_SIZE) == expected
+
+
+def test_every_distilled_auxiliary_head_carries_the_production_loss_weight() -> None:
+    objective = distillation_objective(DISTILLED_AUXILIARY_HEADS)
+
+    assert [loss.weight for loss in objective.auxiliary_losses] == [AUXILIARY_LOSS_WEIGHT, AUXILIARY_LOSS_WEIGHT]
+
+
+def test_an_objective_without_auxiliary_heads_carries_no_auxiliary_losses() -> None:
+    assert distillation_objective().auxiliary_losses == ()
+
+
+def _auxiliary_records(
+    next_policy_entries: tuple[tuple[tuple[int, float], ...], ...],
+    remaining_game_lengths: tuple[float, ...],
+    legal_counts: tuple[int, ...],
+) -> npt.NDArray:
+    records = _records(tuple(((0, 1.0),) for _ in next_policy_entries), legal_counts)
+    for row_index, entries in enumerate(next_policy_entries):
+        records['next_policy_count'][row_index] = len(entries)
+        for entry_index, (action_id, probability) in enumerate(entries):
+            records['next_policy_action_ids'][row_index, entry_index] = action_id
+            records['next_policy_probabilities'][row_index, entry_index] = probability
+        records['remaining_game_length'][row_index] = remaining_game_lengths[row_index]
+    return records
+
+
+def _auxiliary_batch(records: npt.NDArray) -> TrainingBatch:
+    return build_training_batch(
+        records,
+        CHESS_STATE_CONTRACT,
+        ACTION_SIZE,
+        torch.device('cpu'),
+        DISTILLED_AUXILIARY_HEADS,
+    )
+
+
+@pytest.fixture(scope='module')
+def auxiliary_batch() -> TrainingBatch:
+    return _auxiliary_batch(
+        _auxiliary_records(
+            next_policy_entries=(((11, 0.25), (802, 0.75)), ((7, 1.0),)),
+            remaining_game_lengths=(0.125, 0.5),
+            legal_counts=(2, 1),
+        )
+    )
+
+
+def test_requesting_two_auxiliary_heads_builds_one_target_each(auxiliary_batch: TrainingBatch) -> None:
+    assert len(auxiliary_batch.auxiliary_targets) == len(DISTILLED_AUXILIARY_HEADS)
+
+
+def test_next_policy_targets_have_the_action_space_width(auxiliary_batch: TrainingBatch) -> None:
+    assert auxiliary_batch.auxiliary_targets[0].shape == (2, ACTION_SIZE)
+
+
+def test_remaining_game_length_targets_are_one_column_wide(auxiliary_batch: TrainingBatch) -> None:
+    assert auxiliary_batch.auxiliary_targets[1].shape == (2, 1)
+
+
+def test_next_policy_targets_carry_the_stored_probabilities(auxiliary_batch: TrainingBatch) -> None:
+    dense = auxiliary_batch.auxiliary_targets[0]
+
+    assert (dense[0, 11], dense[0, 802], dense[1, 7]) == pytest.approx((0.25, 0.75, 1.0))
+
+
+def test_next_policy_targets_are_zero_outside_the_stored_entries(auxiliary_batch: TrainingBatch) -> None:
+    stored = torch.zeros(ACTION_SIZE, dtype=torch.bool)
+    stored[[11, 802]] = True
+
+    assert torch.count_nonzero(auxiliary_batch.auxiliary_targets[0][0, ~stored]) == 0
+
+
+def test_next_policy_targets_sum_to_one(auxiliary_batch: TrainingBatch) -> None:
+    assert auxiliary_batch.auxiliary_targets[0].sum(dim=1).tolist() == pytest.approx((1.0, 1.0))
+
+
+def test_remaining_game_length_targets_carry_the_stored_scalars(auxiliary_batch: TrainingBatch) -> None:
+    assert auxiliary_batch.auxiliary_targets[1].flatten().tolist() == pytest.approx((0.125, 0.5))
+
+
+@pytest.mark.parametrize('head_index', range(len(DISTILLED_AUXILIARY_HEADS)))
+def test_every_row_is_eligible_for_every_auxiliary_head(auxiliary_batch: TrainingBatch, head_index: int) -> None:
+    assert bool(auxiliary_batch.auxiliary_eligibility[head_index].all())
+
+
+def test_the_next_policy_head_reuses_the_primary_legal_actions(auxiliary_batch: TrainingBatch) -> None:
+    assert torch.equal(auxiliary_batch.auxiliary_legal_action_ids[0], auxiliary_batch.policy_legal_action_ids)
+
+
+def test_the_remaining_game_length_head_gets_padding_only_legal_actions(auxiliary_batch: TrainingBatch) -> None:
+    padding = auxiliary_batch.auxiliary_legal_action_ids[1]
+
+    assert torch.equal(padding, torch.full((2, MAXIMUM_LEGAL_ACTIONS), -1))
+
+
+def _synthetic_auxiliary_records(row_count: int, seed: int, legal_count: int = 8) -> npt.NDArray:
+    records = _synthetic_records(row_count, seed, legal_count)
+    generator = np.random.default_rng(seed + 1)
+    for row_index in range(row_count):
+        # The builder renormalizes the teacher's next-policy head over the current position's legal actions and
+        # build_training_batch masks it the same way, so support outside that set would score against a -inf logit.
+        action_ids = records['legal_action_ids'][row_index, :legal_count]
+        records['next_policy_count'][row_index] = legal_count
+        records['next_policy_action_ids'][row_index, :legal_count] = action_ids
+        records['next_policy_probabilities'][row_index, :legal_count] = generator.dirichlet(np.full(legal_count, 0.6))
+        records['remaining_game_length'][row_index] = generator.integers(1, 400) / 400.0
+    return records
+
+
+@pytest.fixture(scope='module')
+def auxiliary_overfit_observation() -> OverfitObservation:
+    torch.manual_seed(20260827)
+    batch = _auxiliary_batch(_synthetic_auxiliary_records(8, seed=21))
+    objective = distillation_objective(DISTILLED_AUXILIARY_HEADS)
+    model = create_model(
+        student_architecture(1, 16, 32),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+        auxiliary_head_layouts(DISTILLED_AUXILIARY_HEADS, ACTION_SIZE),
+    )
+    optimizer = create_optimizer(model, 'adamw')
+    for parameter_group in optimizer.param_groups:
+        parameter_group['lr'] = 0.05
+
+    model.train()
+    initial = observed_losses(objective.calculate_loss(model.training_output(batch.states), batch))
+    for _ in range(200):
+        optimizer.zero_grad(set_to_none=True)
+        loss = objective.calculate_loss(model.training_output(batch.states), batch)
+        loss.total.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+        optimizer.step()
+    return OverfitObservation(
+        initial=initial,
+        final=observed_losses(loss),
+        floor=achievable_loss_floor(batch, objective),
+    )
+
+
+def test_the_auxiliary_objective_reports_one_loss_per_head(
+    auxiliary_overfit_observation: OverfitObservation,
+) -> None:
+    assert len(auxiliary_overfit_observation.final.auxiliary) == len(DISTILLED_AUXILIARY_HEADS)
+
+
+def test_auxiliary_training_loss_falls_well_below_its_starting_value(
+    auxiliary_overfit_observation: OverfitObservation,
+) -> None:
+    assert auxiliary_overfit_observation.final.total < 0.8 * auxiliary_overfit_observation.initial.total
+
+
+def test_auxiliary_training_policy_loss_falls_below_its_starting_value(
+    auxiliary_overfit_observation: OverfitObservation,
+) -> None:
+    assert auxiliary_overfit_observation.final.policy < auxiliary_overfit_observation.initial.policy
+
+
+def test_the_next_policy_loss_falls_toward_its_own_entropy_floor(
+    auxiliary_overfit_observation: OverfitObservation,
+) -> None:
+    initial_gap = auxiliary_overfit_observation.initial.auxiliary[0] - auxiliary_overfit_observation.floor.auxiliary[0]
+    final_gap = auxiliary_overfit_observation.final.auxiliary[0] - auxiliary_overfit_observation.floor.auxiliary[0]
+
+    assert final_gap < 0.5 * initial_gap
+
+
+def test_auxiliary_heads_are_counted_apart_from_the_primary_heads() -> None:
+    layouts = auxiliary_head_layouts(DISTILLED_AUXILIARY_HEADS, ACTION_SIZE)
+    plain = create_model(student_architecture(6, 64, 16), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
+    distilling = create_model(student_architecture(6, 64, 16), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, layouts)
+
+    assert parameter_counts(plain).heads == parameter_counts(distilling).heads
+
+
+def test_auxiliary_heads_enlarge_the_reported_total() -> None:
+    layouts = auxiliary_head_layouts(DISTILLED_AUXILIARY_HEADS, ACTION_SIZE)
+    plain = create_model(student_architecture(6, 64, 16), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
+    distilling = create_model(student_architecture(6, 64, 16), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, layouts)
+
+    assert parameter_counts(distilling).total > parameter_counts(plain).total
+
+
+def test_parameter_counts_split_the_whole_student_with_auxiliary_heads() -> None:
+    model = create_model(
+        student_architecture(4, 32, 16),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+        auxiliary_head_layouts(DISTILLED_AUXILIARY_HEADS, ACTION_SIZE),
+    )
+
+    counts = parameter_counts(model)
+
+    assert counts.total == sum(parameter.numel() for parameter in model.parameters())
+
+
+@pytest.mark.parametrize(
+    ('training_fraction', 'expected_training_rows'),
+    ((1.0, 30), (0.5, 15), (0.25, 8)),
+)
+def test_the_training_fraction_shortens_the_training_prefix(
+    training_fraction: float, expected_training_rows: int
+) -> None:
+    split = dataset_split(40, holdout_fraction=0.25, training_fraction=training_fraction)
+
+    assert split.training_row_count == expected_training_rows
+
+
+@pytest.mark.parametrize('training_fraction', (1.0, 0.5, 0.25))
+def test_the_training_fraction_leaves_the_held_out_split_where_it_was(training_fraction: float) -> None:
+    split = dataset_split(40, holdout_fraction=0.25, training_fraction=training_fraction)
+
+    assert (split.held_out_start_row, split.held_out_row_count) == (30, 10)
+
+
+def test_halving_the_training_fraction_leaves_the_held_out_floor_bit_identical() -> None:
+    records = _synthetic_records(40, seed=31)
+    objective = distillation_objective()
+
+    def floor_at(training_fraction: float) -> LossValues:
+        split = dataset_split(len(records), holdout_fraction=0.25, training_fraction=training_fraction)
+        batches = held_out_batches(records, split.held_out_start_row, 5, ACTION_SIZE, torch.device('cpu'))
+        return achievable_loss_floor(batches[0], objective)
+
+    assert floor_at(0.5) == floor_at(1.0)
