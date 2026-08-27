@@ -1,4 +1,4 @@
-# Four-day production v10 (2026-08-27) — schedule and evaluation deltas on top of v9.
+# Four-day production v10 (2026-08-27) — schedule, inference and evaluation deltas on top of v9.
 #
 # Extends v9, so the diff is the whole content of this file. Architecture, search, targets,
 # resignation and early termination are inherited unchanged, so any difference against v9 is
@@ -13,6 +13,10 @@
 # copied: AdamW normalises per parameter, so the conventional analogue is 10-30x and 10x sits at the
 # conservative end. At v9's observed ~18.5 generations/hour, generation 1500 falls at ~81 h, inside a
 # four-day run; the schedule holds 0.0005 as a floor beyond it.
+#
+# Self-play inference uses the measured RTX 4070 SUPER winner: bf16 channels-last with cuDNN
+# benchmarking. It passed the trained-checkpoint agreement gate and improved end-to-end searches/s
+# by 1.168x. Evaluation keeps v9's inference layout because its batch size 64 path was not measured.
 #
 # Replay capacity. v9 ramped linearly 300k -> 2M over generations 0-100 and then held 2M flat for the
 # remaining ~95% of the run: a fixed window of ~15.6 generations of history against ~128k positions
@@ -80,6 +84,11 @@ training:
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v10.stop
 chess:
+  self_play:
+    inference:
+      precision: bfloat16
+      memory_format: channels_last
+      cudnn_benchmark: true
   objective:
     auxiliary_targets:
       - kind: next_policy
