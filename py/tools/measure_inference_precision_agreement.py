@@ -84,6 +84,7 @@ class ModelOutputs:
 class VariantAgreement(FrozenModel):
     precision: Precision
     memory_format: MemoryFormat
+    cudnn_benchmark: bool
     positions: int = Field(gt=0)
     legal_top1_agreement: float = Field(ge=0.0, le=1.0)
     unrestricted_top1_agreement: float = Field(ge=0.0, le=1.0)
@@ -121,6 +122,7 @@ def measure_agreement(
     legal_mask: Tensor,
     precision: Precision,
     memory_format: MemoryFormat,
+    cudnn_benchmark: bool = False,
 ) -> VariantAgreement:
     reference_log_probabilities = masked_log_softmax(reference.policy_logits, legal_mask)
     candidate_log_probabilities = masked_log_softmax(candidate.policy_logits, legal_mask)
@@ -145,6 +147,7 @@ def measure_agreement(
     return VariantAgreement(
         precision=precision,
         memory_format=memory_format,
+        cudnn_benchmark=cudnn_benchmark,
         positions=int(legal_mask.shape[0]),
         legal_top1_agreement=float(legal_agreement.to(torch.float64).mean()),
         unrestricted_top1_agreement=float(unrestricted_agreement.to(torch.float64).mean()),
@@ -187,7 +190,9 @@ def run_variant(
     memory_format: MemoryFormat,
     device: torch.device,
     batch_size: int,
+    cudnn_benchmark: bool = False,
 ) -> ModelOutputs:
+    torch.backends.cudnn.benchmark = cudnn_benchmark
     model = torch.jit.load(str(model_path), map_location=device)
     model.to(precision.torch_dtype)
     model.eval()
@@ -232,15 +237,39 @@ def run_agreement(arguments: AgreementArguments) -> PrecisionAgreementReport:
     states, legal_mask = load_positions(arguments.dataset_path, arguments.position_count)
 
     reference = run_variant(
-        arguments.model_path, states, Precision.BFLOAT16, MemoryFormat.CONTIGUOUS, device, arguments.batch_size
+        arguments.model_path,
+        states,
+        Precision.BFLOAT16,
+        MemoryFormat.CONTIGUOUS,
+        device,
+        arguments.batch_size,
+        cudnn_benchmark=False,
     )
     variants: list[VariantAgreement] = []
     for precision in Precision:
         for memory_format in MemoryFormat:
-            candidate = run_variant(
-                arguments.model_path, states, precision, memory_format, device, arguments.batch_size
-            )
-            variants.append(measure_agreement(reference, candidate, legal_mask, precision, memory_format))
+            # Run exhaustive selection first for a new layout so a heuristic algorithm cannot fill
+            # the process-wide cuDNN cache before the candidate is measured.
+            for cudnn_benchmark in (True, False):
+                candidate = run_variant(
+                    arguments.model_path,
+                    states,
+                    precision,
+                    memory_format,
+                    device,
+                    arguments.batch_size,
+                    cudnn_benchmark,
+                )
+                variants.append(
+                    measure_agreement(
+                        reference,
+                        candidate,
+                        legal_mask,
+                        precision,
+                        memory_format,
+                        cudnn_benchmark,
+                    )
+                )
 
     return PrecisionAgreementReport(
         source_revision=read_source_revision(),
@@ -279,10 +308,14 @@ def main() -> None:
     report = run_agreement(arguments)
     write_text_atomically(arguments.output_path, report.model_dump_json(indent=2) + '\n')
     print(json.dumps({'device': report.device_name, 'positions': report.variants[0].positions}, indent=2))
-    print(f'{"precision":10s} {"layout":14s} {"legal top-1":>12s} {"mean KL":>10s} {"max KL":>10s} {"value MAE":>10s}')
+    print(
+        f'{"precision":10s} {"layout":14s} {"benchmark":>9s} {"legal top-1":>12s} '
+        f'{"mean KL":>10s} {"max KL":>10s} {"value MAE":>10s}'
+    )
     for variant in report.variants:
         print(
             f'{variant.precision.value:10s} {variant.memory_format.value:14s} '
+            f'{str(variant.cudnn_benchmark):>9s} '
             f'{100 * variant.legal_top1_agreement:11.3f}% {variant.mean_policy_kl_divergence:10.3e} '
             f'{variant.maximum_policy_kl_divergence:10.3e} {variant.value_mean_absolute_error:10.3e}'
         )

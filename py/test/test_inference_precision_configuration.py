@@ -100,7 +100,15 @@ def _outputs(policy_logits: list[list[float]], wins: list[float], corrections: l
 def test_identical_outputs_agree_exactly() -> None:
     outputs = _outputs([[1.0, 2.0, 0.5]], [0.7], [0.25])
     legal_mask = torch.tensor([[True, True, True]])
-    agreement = measure_agreement(outputs, outputs, legal_mask, Precision.BFLOAT16, MemoryFormat.CONTIGUOUS)
+    agreement = measure_agreement(
+        outputs,
+        outputs,
+        legal_mask,
+        Precision.BFLOAT16,
+        MemoryFormat.CONTIGUOUS,
+        cudnn_benchmark=True,
+    )
+    assert agreement.cudnn_benchmark
     assert agreement.legal_top1_agreement == 1.0
     assert agreement.mean_policy_kl_divergence == pytest.approx(0.0, abs=1e-12)
     assert agreement.value_mean_absolute_error == pytest.approx(0.0, abs=1e-12)
