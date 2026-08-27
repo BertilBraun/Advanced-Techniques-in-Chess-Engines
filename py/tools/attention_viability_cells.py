@@ -164,7 +164,24 @@ SUPPLEMENTARY_CELLS = (
     ),
 )
 
-ALL_CELLS = ARCHITECTURE_CELLS + SCHEDULE_CELLS + SUPPLEMENTARY_CELLS
+# cnn-from-to changed two things at once: the head, and a trunk widened from 128 to 136 channels to spend
+# the head's parameter saving. These two complete a 2x2 over (trunk width) x (head), so the head's own
+# contribution can be read off at a fixed trunk and the widening's at a fixed head. They also settle the
+# throughput question: 90% of cnn-from-to's extra multiply-accumulates are the widening, not the head.
+HEAD_CONTROL_CELLS = (
+    Cell(
+        'cnn-from-to-narrow',
+        'the from-to head at the production trunk width, isolating the head from the widening',
+        replace(BASE, policy_head_kind=PolicyHeadKind.FROM_TO_ATTENTION),
+    ),
+    Cell(
+        'cnn-dense-wide',
+        'the widened trunk keeping the dense head, isolating the widening from the head',
+        replace(BASE, hidden_size=136),
+    ),
+)
+
+ALL_CELLS = ARCHITECTURE_CELLS + SCHEDULE_CELLS + SUPPLEMENTARY_CELLS + HEAD_CONTROL_CELLS
 
 
 def cell_by_name(name: str) -> Cell:
