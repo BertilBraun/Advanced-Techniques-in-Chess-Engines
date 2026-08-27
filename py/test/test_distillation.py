@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +11,7 @@ from src.distillation.dataset import (
     MAXIMUM_LEGAL_ACTIONS,
     MAXIMUM_POLICY_ENTRIES,
     DistillationDatasetManifest,
+    DistillationRecordLayout,
     build_training_batch,
     open_dataset,
     record_dtype,
@@ -24,7 +25,12 @@ from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLa
 from tools.benchmark_training_overfit import LossValues, achievable_loss_floor
 from tools.distill_train_student import (
     AUXILIARY_LOSS_WEIGHT,
+    Arguments,
+    AttentionBiasKind,
     LearningRateSchedule,
+    NetworkKind,
+    OptimizerKind,
+    PolicyHeadKind,
     auxiliary_head_layouts,
     dataset_split,
     distillation_objective,
@@ -34,6 +40,50 @@ from tools.distill_train_student import (
     parameter_counts,
     student_architecture,
 )
+
+STUDENT_ARGUMENTS = Arguments(
+    dataset=Path('unused.bin'),
+    output_run_state=Path('unused'),
+    network_kind=NetworkKind.CONVOLUTIONAL,
+    layers=6,
+    hidden_size=64,
+    heads=8,
+    feedforward=128,
+    policy_head_kind=PolicyHeadKind.DENSE,
+    policy_key_size=128,
+    attention_bias_kind=AttentionBiasKind.DISABLED,
+    smolgen_compressed_size=8,
+    smolgen_hidden_size=32,
+    smolgen_generated_size=32,
+    optimizer_kind=OptimizerKind.ADAMW,
+    floor_fraction=0.1,
+    policy_bottleneck_rank=16,
+    batch_size=64,
+    steps=1000,
+    learning_rate=0.002,
+    learning_rate_schedule=LearningRateSchedule.COSINE,
+    anneal_fraction=0.2,
+    warmup_steps=200,
+    max_grad_norm=0.5,
+    holdout_fraction=0.02,
+    training_fraction=1.0,
+    evaluate_every=200,
+    checkpoint_every=0,
+    distil_auxiliary_heads=(),
+    device_id=0,
+    random_seed=1,
+    generation=0,
+)
+
+
+def convolutional_student(layers: int, hidden_size: int, policy_bottleneck_rank: int) -> Arguments:
+    return replace(
+        STUDENT_ARGUMENTS,
+        layers=layers,
+        hidden_size=hidden_size,
+        policy_bottleneck_rank=policy_bottleneck_rank,
+    )
+
 
 PAYLOAD_BYTES = CHESS_STATE_CONTRACT.packed_plane_layout.payload_bytes
 ACTION_SIZE = CHESS_NETWORK_DIMENSIONS.actions
@@ -105,6 +155,52 @@ def _synthetic_records(row_count: int, seed: int, legal_count: int = 8) -> npt.N
 
 def _batch(records: npt.NDArray) -> TrainingBatch:
     return build_training_batch(records, CHESS_STATE_CONTRACT, ACTION_SIZE, torch.device('cpu'))
+
+
+def _core_records(row_count: int, seed: int) -> npt.NDArray:
+    with_auxiliary = _synthetic_records(row_count, seed)
+    core = np.zeros(row_count, dtype=record_dtype(PAYLOAD_BYTES, DistillationRecordLayout.CORE))
+    for name in core.dtype.names:
+        core[name] = with_auxiliary[name]
+    return core
+
+
+def test_the_core_record_layout_is_the_auxiliary_one_without_its_trailing_fields() -> None:
+    core = record_dtype(PAYLOAD_BYTES, DistillationRecordLayout.CORE)
+    with_auxiliary = record_dtype(PAYLOAD_BYTES, DistillationRecordLayout.WITH_AUXILIARY)
+
+    assert with_auxiliary.names[: len(core.names)] == core.names
+    assert core.itemsize < with_auxiliary.itemsize
+
+
+def test_a_core_layout_dataset_reopens_at_its_own_record_size(tmp_path: Path) -> None:
+    records = _core_records(5, seed=11)
+    dataset_path = tmp_path / 'core.bin'
+    manifest = _manifest(len(records)).model_copy(update={'record_layout': DistillationRecordLayout.CORE})
+
+    write_dataset(dataset_path, records, manifest)
+    reopened, reopened_manifest = open_dataset(dataset_path)
+
+    assert len(reopened) == len(records)
+    assert reopened_manifest.record_layout is DistillationRecordLayout.CORE
+    assert np.array_equal(reopened['policy_probabilities'], records['policy_probabilities'])
+
+
+def test_a_core_layout_dataset_builds_a_training_batch(tmp_path: Path) -> None:
+    records = _core_records(4, seed=13)
+    dataset_path = tmp_path / 'core.bin'
+    manifest = _manifest(len(records)).model_copy(update={'record_layout': DistillationRecordLayout.CORE})
+    write_dataset(dataset_path, records, manifest)
+
+    reopened, _ = open_dataset(dataset_path)
+    batch = _batch(reopened)
+
+    assert batch.policy_targets.shape == (4, ACTION_SIZE)
+    assert batch.auxiliary_targets == ()
+
+
+def test_the_auxiliary_layout_is_the_default_for_a_new_dataset() -> None:
+    assert _manifest(1).record_layout is DistillationRecordLayout.WITH_AUXILIARY
 
 
 def test_written_dataset_reopens_with_its_manifest(tmp_path: Path) -> None:
@@ -214,7 +310,9 @@ def overfit_observation() -> OverfitObservation:
     torch.manual_seed(20260826)
     batch = _batch(_synthetic_records(8, seed=5))
     objective = distillation_objective()
-    model = create_model(student_architecture(1, 16, 32), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
+    model = create_model(
+        student_architecture(convolutional_student(1, 16, 32)), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS
+    )
     optimizer = create_optimizer(model, 'adamw')
     for parameter_group in optimizer.param_groups:
         parameter_group['lr'] = 0.05
@@ -274,14 +372,20 @@ def test_cosine_decay_halves_the_peak_at_the_decay_midpoint() -> None:
 
 
 def test_the_policy_bottleneck_keeps_the_student_heads_small() -> None:
-    bottlenecked = create_model(student_architecture(6, 64, 16), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
-    unbottlenecked = create_model(student_architecture(6, 64, 1880), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
+    bottlenecked = create_model(
+        student_architecture(convolutional_student(6, 64, 16)), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS
+    )
+    unbottlenecked = create_model(
+        student_architecture(convolutional_student(6, 64, 1880)), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS
+    )
 
     assert parameter_counts(bottlenecked).heads < 0.2 * parameter_counts(unbottlenecked).heads
 
 
 def test_parameter_counts_split_the_whole_student() -> None:
-    model = create_model(student_architecture(4, 32, 16), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
+    model = create_model(
+        student_architecture(convolutional_student(4, 32, 16)), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS
+    )
 
     counts = parameter_counts(model)
 
@@ -546,7 +650,7 @@ def auxiliary_overfit_observation() -> OverfitObservation:
     batch = _auxiliary_batch(_synthetic_auxiliary_records(8, seed=21))
     objective = distillation_objective(DISTILLED_AUXILIARY_HEADS)
     model = create_model(
-        student_architecture(1, 16, 32),
+        student_architecture(convolutional_student(1, 16, 32)),
         torch.device('cpu'),
         CHESS_NETWORK_DIMENSIONS,
         auxiliary_head_layouts(DISTILLED_AUXILIARY_HEADS, ACTION_SIZE),
@@ -599,23 +703,31 @@ def test_the_next_policy_loss_falls_toward_its_own_entropy_floor(
 
 def test_auxiliary_heads_are_counted_apart_from_the_primary_heads() -> None:
     layouts = auxiliary_head_layouts(DISTILLED_AUXILIARY_HEADS, ACTION_SIZE)
-    plain = create_model(student_architecture(6, 64, 16), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
-    distilling = create_model(student_architecture(6, 64, 16), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, layouts)
+    plain = create_model(
+        student_architecture(convolutional_student(6, 64, 16)), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS
+    )
+    distilling = create_model(
+        student_architecture(convolutional_student(6, 64, 16)), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, layouts
+    )
 
     assert parameter_counts(plain).heads == parameter_counts(distilling).heads
 
 
 def test_auxiliary_heads_enlarge_the_reported_total() -> None:
     layouts = auxiliary_head_layouts(DISTILLED_AUXILIARY_HEADS, ACTION_SIZE)
-    plain = create_model(student_architecture(6, 64, 16), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
-    distilling = create_model(student_architecture(6, 64, 16), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, layouts)
+    plain = create_model(
+        student_architecture(convolutional_student(6, 64, 16)), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS
+    )
+    distilling = create_model(
+        student_architecture(convolutional_student(6, 64, 16)), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, layouts
+    )
 
     assert parameter_counts(distilling).total > parameter_counts(plain).total
 
 
 def test_parameter_counts_split_the_whole_student_with_auxiliary_heads() -> None:
     model = create_model(
-        student_architecture(4, 32, 16),
+        student_architecture(convolutional_student(4, 32, 16)),
         torch.device('cpu'),
         CHESS_NETWORK_DIMENSIONS,
         auxiliary_head_layouts(DISTILLED_AUXILIARY_HEADS, ACTION_SIZE),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +16,12 @@ from src.util.frozen_model import FrozenModel
 MAXIMUM_POLICY_ENTRIES = 64
 MAXIMUM_LEGAL_ACTIONS = 218
 CHESS_PAYLOAD_BYTES = 183
+
+
+class DistillationRecordLayout(str, Enum):
+    # Datasets generated before 60bc8612 stop after the primary policy and the WDL.
+    CORE = 'core'
+    WITH_AUXILIARY = 'with_auxiliary'
 
 
 class DistillationDatasetManifest(FrozenModel):
@@ -42,24 +49,33 @@ class DistillationDatasetManifest(FrozenModel):
     # Present only on merged datasets; the generator settings above then describe the last source, whose rows form
     # the held-out tail.
     merged_sources: tuple[str, ...] = ()
+    record_layout: DistillationRecordLayout = DistillationRecordLayout.WITH_AUXILIARY
 
 
-def record_dtype(payload_bytes: int = CHESS_PAYLOAD_BYTES) -> np.dtype:
-    return np.dtype(
-        [
-            ('packed_state', f'V{payload_bytes}'),
-            ('legal_count', '<u2'),
-            ('legal_action_ids', '<u2', (MAXIMUM_LEGAL_ACTIONS,)),
-            ('policy_count', '<u2'),
-            ('policy_action_ids', '<u2', (MAXIMUM_POLICY_ENTRIES,)),
-            ('policy_probabilities', '<f4', (MAXIMUM_POLICY_ENTRIES,)),
-            ('wdl', '<f4', (3,)),
-            ('next_policy_count', '<u2'),
-            ('next_policy_action_ids', '<u2', (MAXIMUM_POLICY_ENTRIES,)),
-            ('next_policy_probabilities', '<f4', (MAXIMUM_POLICY_ENTRIES,)),
-            ('remaining_game_length', '<f4'),
-        ]
-    )
+def record_dtype(
+    payload_bytes: int = CHESS_PAYLOAD_BYTES,
+    layout: DistillationRecordLayout = DistillationRecordLayout.WITH_AUXILIARY,
+) -> np.dtype:
+    fields: list[tuple] = [
+        ('packed_state', f'V{payload_bytes}'),
+        ('legal_count', '<u2'),
+        ('legal_action_ids', '<u2', (MAXIMUM_LEGAL_ACTIONS,)),
+        ('policy_count', '<u2'),
+        ('policy_action_ids', '<u2', (MAXIMUM_POLICY_ENTRIES,)),
+        ('policy_probabilities', '<f4', (MAXIMUM_POLICY_ENTRIES,)),
+        ('wdl', '<f4', (3,)),
+    ]
+    match layout:
+        case DistillationRecordLayout.CORE:
+            pass
+        case DistillationRecordLayout.WITH_AUXILIARY:
+            fields += [
+                ('next_policy_count', '<u2'),
+                ('next_policy_action_ids', '<u2', (MAXIMUM_POLICY_ENTRIES,)),
+                ('next_policy_probabilities', '<f4', (MAXIMUM_POLICY_ENTRIES,)),
+                ('remaining_game_length', '<f4'),
+            ]
+    return np.dtype(fields)
 
 
 def manifest_path(dataset_path: Path) -> Path:
@@ -78,7 +94,7 @@ def read_manifest(dataset_path: Path) -> DistillationDatasetManifest:
 
 def open_dataset(dataset_path: Path) -> tuple[npt.NDArray, DistillationDatasetManifest]:
     manifest = read_manifest(dataset_path)
-    records = np.memmap(dataset_path, dtype=record_dtype(manifest.payload_bytes), mode='r')
+    records = np.memmap(dataset_path, dtype=record_dtype(manifest.payload_bytes, manifest.record_layout), mode='r')
     if len(records) != manifest.position_count:
         raise ValueError(f'Dataset holds {len(records)} rows but its manifest declares {manifest.position_count}.')
     return records, manifest

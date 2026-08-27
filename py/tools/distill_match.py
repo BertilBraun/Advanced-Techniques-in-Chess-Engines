@@ -65,6 +65,7 @@ class Arguments:
     output: Path
     experiment_config: Path
     pinned_throughput_ratio: float | None
+    throughput_position_count: int
 
 
 class NetworkIdentity(FrozenModel):
@@ -88,6 +89,9 @@ class ThroughputMeasurement(FrozenModel):
     average_positions_per_inference_call: float = Field(ge=0.0)
     worker_utilization: float = Field(ge=0.0)
     positions_per_second: float = Field(ge=0.0)
+    # Tree searches completed per second: every root in every measured batch runs searches_per_move of
+    # them. This is the engine-level rate, where positions_per_second counts network evaluations.
+    searches_per_second: float = Field(ge=0.0)
 
 
 class SearchBudgets(FrozenModel):
@@ -211,6 +215,9 @@ def _measure_throughput(
         average_positions_per_inference_call=final.averageNumberOfPositionsInInferenceCall,
         worker_utilization=final.workerUtilization,
         positions_per_second=inference_positions / elapsed_seconds,
+        searches_per_second=(
+            THROUGHPUT_MEASURED_BATCHES * len(positions) * configuration.searches_per_move / elapsed_seconds
+        ),
     )
 
 
@@ -277,8 +284,14 @@ def _report_throughput(
     student_throughput: ThroughputMeasurement,
     ratio: float,
 ) -> None:
-    print(f'teacher throughput: {teacher_throughput.positions_per_second:.1f} positions/s')
-    print(f'student throughput: {student_throughput.positions_per_second:.1f} positions/s')
+    print(
+        f'teacher throughput: {teacher_throughput.positions_per_second:.1f} positions/s, '
+        f'{teacher_throughput.searches_per_second:.1f} searches/s'
+    )
+    print(
+        f'student throughput: {student_throughput.positions_per_second:.1f} positions/s, '
+        f'{student_throughput.searches_per_second:.1f} searches/s'
+    )
     print(f'student/teacher throughput ratio: {ratio:.4f}')
 
 
@@ -324,7 +337,7 @@ def _measure_both(
     positions = _measurement_positions(
         game.state,
         openings,
-        min(THROUGHPUT_POSITION_COUNT, len(openings.openings)),
+        min(arguments.throughput_position_count, len(openings.openings)),
     )
     teacher_throughput = _measure_throughput(game, teacher, arguments.device_id, measurement_search, positions)
     student_throughput = _measure_throughput(game, student, arguments.device_id, measurement_search, positions)
@@ -486,6 +499,12 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--experiment-config', required=True, type=Path)
     parser.add_argument('--pinned-throughput-ratio', default=None, type=float)
+    parser.add_argument(
+        '--throughput-position-count',
+        default=THROUGHPUT_POSITION_COUNT,
+        type=int,
+        help='Roots per throughput batch; with parallel_searches 1 this is the inference batch size.',
+    )
     namespace = parser.parse_args()
     arguments = Arguments(
         teacher_run_state=namespace.teacher_run_state,
@@ -505,6 +524,7 @@ def parse_arguments() -> Arguments:
         output=namespace.output,
         experiment_config=namespace.experiment_config,
         pinned_throughput_ratio=namespace.pinned_throughput_ratio,
+        throughput_position_count=namespace.throughput_position_count,
     )
     required_paths = (
         arguments.teacher_run_state,
@@ -524,9 +544,12 @@ def parse_arguments() -> Arguments:
         arguments.opening_pair_count,
         arguments.maximum_game_plies,
         arguments.bootstrap_samples,
+        arguments.throughput_position_count,
     )
     if any(value <= 0 for value in positive_values) or arguments.exploration_constant <= 0.0:
-        raise ValueError('Opening pairs, ply cap, bootstrap samples, and exploration constant must be positive.')
+        raise ValueError(
+            'Opening pairs, ply cap, bootstrap samples, throughput positions and exploration constant must be positive.'
+        )
     if arguments.output.exists():
         raise ValueError(f'Distillation match output already exists: {arguments.output}')
     return arguments

@@ -13,6 +13,23 @@
 #include <mutex>
 
 namespace {
+// Module::to(dtype) casts every parameter and buffer, integer ones included, unlike Python's
+// nn.Module.to. A head that gathers through an index buffer would have its indices rounded to the
+// inference dtype, and in bfloat16 an index of 4,094 is not even representable.
+void adoptDataType(torch::jit::script::Module &model, const torch::Dtype dataType) {
+    torch::NoGradGuard noGrad;
+    for (const auto &parameter : model.named_parameters(true)) {
+        if (parameter.value.is_floating_point()) {
+            parameter.value.set_data(parameter.value.data().to(dataType));
+        }
+    }
+    for (const auto &buffer : model.named_buffers(true)) {
+        if (buffer.value.is_floating_point()) {
+            buffer.value.set_data(buffer.value.data().to(dataType));
+        }
+    }
+}
+
 // Convolution weights must carry the activation layout: a channels-last activation against a
 // contiguous weight makes cuDNN transpose the weight on every call instead of once here.
 void adoptMemoryFormat(torch::jit::script::Module &model, const at::MemoryFormat memoryFormat) {
@@ -48,7 +65,7 @@ torch::jit::script::Module loadInferenceModel(const std::string &modelPath,
     }
 
     torch::jit::script::Module model = torch::jit::load(modelPathToLoad, device);
-    model.to(dataType);
+    adoptDataType(model, dataType);
     adoptMemoryFormat(model, memoryFormat);
     model.eval();
     return model;

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -14,14 +15,22 @@ from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTR
 from src.training.batch import TrainingBatch
 from src.training.checkpoint.contracts import CheckpointManifest
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
-from src.training.checkpoint.persistence import create_model, create_optimizer
+from src.training.checkpoint.persistence import create_model
+from src.training.model_cost import format_model_cost, measure_model_cost
 from src.training.network import (
+    AttentionNetworkParams,
+    ChessFromToAttentionPolicyHeadConfiguration,
     DensePolicyHeadConfiguration,
+    DisabledAttentionBiasConfiguration,
     GlobalPoolingResidualContext,
     InferenceNetwork,
     Network,
+    NetworkConfiguration,
     NetworkParams,
+    PolicyHeadConfiguration,
+    RelativeAttentionBiasConfiguration,
     ResidualContextPlacement,
+    SmolgenAttentionBiasConfiguration,
 )
 from src.training.objective import ObjectiveLoss, ResolvedTrainingObjective, resolve_auxiliary_losses
 from src.training.targets import (
@@ -47,14 +56,63 @@ REMAINING_GAME_LENGTH_NORMALIZATION_SCALE = 400.0
 class LearningRateSchedule(str, Enum):
     COSINE = 'cosine'
     PLATEAU = 'plateau'
+    # The near-flat production shape, the proposed staged decay and a cosine that stops at the same floor.
+    PRODUCTION_FLAT = 'production_flat'
+    STAGED_DECAY = 'staged_decay'
+    COSINE_FLOOR = 'cosine_floor'
+
+
+class OptimizerKind(str, Enum):
+    ADAMW = 'adamw'
+    SGD_MOMENTUM = 'sgd_momentum'
+
+
+class NetworkKind(str, Enum):
+    CONVOLUTIONAL = 'convolutional'
+    ATTENTION = 'attention'
+
+
+class PolicyHeadKind(str, Enum):
+    DENSE = 'dense'
+    FROM_TO_ATTENTION = 'from_to_attention'
+
+
+class AttentionBiasKind(str, Enum):
+    DISABLED = 'disabled'
+    RELATIVE = 'relative'
+    SMOLGEN = 'smolgen'
+
+
+# Self-play schedules are authored against generations, so they are mapped onto a supervised step budget as
+# (fraction of the run, multiplier on the peak). The reference horizon is generation 1200 at 500 steps each,
+# which is the last generation the staged proposal drops at plus room to sit at the floor.
+SELF_PLAY_REFERENCE_GENERATIONS = 1200
+# 0.005 -> 0.004 at generation 100 -> 0.003 at generation 1000, the schedule production v9 runs.
+PRODUCTION_FLAT_STAGES = ((0.0, 1.0), (100 / 1200, 0.8), (1000 / 1200, 0.6))
+# The proposed v10 drops at generations 200 / 600 / 1000 from 0.005 to 0.0005; the two intermediate rates
+# are not pinned by the proposal, so they are placed at equal ratios along the way to the floor.
+STAGED_DECAY_STAGES = ((0.0, 1.0), (200 / 1200, 0.1 ** (1 / 3)), (600 / 1200, 0.1 ** (2 / 3)), (1000 / 1200, 0.1))
+# AlphaZero: 0.2 -> 0.02 -> 0.002 -> 0.0002 at 0 / 100k / 300k / 500k steps of 700k.
+ALPHAZERO_SGD_STAGES = ((0.0, 1.0), (1.0 / 7.0, 0.1), (3.0 / 7.0, 0.01), (5.0 / 7.0, 0.001))
 
 
 @dataclass(frozen=True)
 class Arguments:
     dataset: Path
     output_run_state: Path
+    network_kind: NetworkKind
     layers: int
     hidden_size: int
+    heads: int
+    feedforward: int
+    policy_head_kind: PolicyHeadKind
+    policy_key_size: int
+    attention_bias_kind: AttentionBiasKind
+    smolgen_compressed_size: int
+    smolgen_hidden_size: int
+    smolgen_generated_size: int
+    optimizer_kind: OptimizerKind
+    floor_fraction: float
     policy_bottleneck_rank: int
     batch_size: int
     steps: int
@@ -101,15 +159,63 @@ def dataset_split(row_count: int, holdout_fraction: float, training_fraction: fl
     )
 
 
-def student_architecture(layers: int, hidden_size: int, policy_bottleneck_rank: int) -> NetworkParams:
-    return NetworkParams(
-        num_layers=layers,
-        hidden_size=hidden_size,
-        residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
-        policy_head=DensePolicyHeadConfiguration(channels=4, bottleneck_rank=policy_bottleneck_rank),
-        num_value_channels=2,
-        value_fc_size=48,
-    )
+def student_policy_head(arguments: Arguments) -> PolicyHeadConfiguration:
+    match arguments.policy_head_kind:
+        case PolicyHeadKind.DENSE:
+            return DensePolicyHeadConfiguration(channels=4, bottleneck_rank=arguments.policy_bottleneck_rank or None)
+        case PolicyHeadKind.FROM_TO_ATTENTION:
+            return ChessFromToAttentionPolicyHeadConfiguration(key_size=arguments.policy_key_size)
+
+
+def student_attention_bias(arguments: Arguments):
+    match arguments.attention_bias_kind:
+        case AttentionBiasKind.DISABLED:
+            return DisabledAttentionBiasConfiguration()
+        case AttentionBiasKind.RELATIVE:
+            return RelativeAttentionBiasConfiguration()
+        case AttentionBiasKind.SMOLGEN:
+            return SmolgenAttentionBiasConfiguration(
+                compressed_size=arguments.smolgen_compressed_size,
+                hidden_size=arguments.smolgen_hidden_size,
+                generated_size=arguments.smolgen_generated_size,
+            )
+
+
+def student_architecture(arguments: Arguments) -> NetworkConfiguration:
+    match arguments.network_kind:
+        case NetworkKind.CONVOLUTIONAL:
+            return NetworkParams(
+                num_layers=arguments.layers,
+                hidden_size=arguments.hidden_size,
+                residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
+                policy_head=student_policy_head(arguments),
+                num_value_channels=2,
+                value_fc_size=48,
+            )
+        case NetworkKind.ATTENTION:
+            return AttentionNetworkParams(
+                num_layers=arguments.layers,
+                embedding_size=arguments.hidden_size,
+                num_heads=arguments.heads,
+                feedforward_size=arguments.feedforward,
+                dropout=0.0,
+                attention_bias=student_attention_bias(arguments),
+                policy_head=student_policy_head(arguments),
+                num_value_channels=2,
+                value_fc_size=48,
+            )
+
+
+def create_student_optimizer(model: Network, kind: OptimizerKind, peak_learning_rate: float) -> torch.optim.Optimizer:
+    match kind:
+        case OptimizerKind.ADAMW:
+            return torch.optim.AdamW(
+                model.parameters(), lr=peak_learning_rate, weight_decay=0.0001, amsgrad=True, eps=1e-5
+            )
+        case OptimizerKind.SGD_MOMENTUM:
+            return torch.optim.SGD(
+                model.parameters(), lr=peak_learning_rate, momentum=0.9, weight_decay=0.0001, nesterov=True
+            )
 
 
 def auxiliary_target_configurations(heads: tuple[str, ...]) -> tuple[AuxiliaryTargetConfiguration, ...]:
@@ -157,6 +263,14 @@ def parameter_counts(model: Network) -> ParameterCounts:
     )
 
 
+def staged_multiplier(stages: tuple[tuple[float, float], ...], progress: float) -> float:
+    multiplier = stages[0][1]
+    for stage_progress, stage_multiplier in stages:
+        if progress >= stage_progress:
+            multiplier = stage_multiplier
+    return multiplier
+
+
 def learning_rate_at(
     step: int,
     total_steps: int,
@@ -164,10 +278,21 @@ def learning_rate_at(
     warmup_steps: int,
     schedule: LearningRateSchedule = LearningRateSchedule.COSINE,
     anneal_fraction: float = 0.2,
+    optimizer_kind: OptimizerKind = OptimizerKind.ADAMW,
+    floor_fraction: float = 0.1,
 ) -> float:
     if step <= warmup_steps:
         return peak_learning_rate * step / warmup_steps
+    progress = step / total_steps
     match schedule:
+        case LearningRateSchedule.PRODUCTION_FLAT:
+            return peak_learning_rate * staged_multiplier(PRODUCTION_FLAT_STAGES, progress)
+        case LearningRateSchedule.STAGED_DECAY:
+            stages = ALPHAZERO_SGD_STAGES if optimizer_kind is OptimizerKind.SGD_MOMENTUM else STAGED_DECAY_STAGES
+            return peak_learning_rate * staged_multiplier(stages, progress)
+        case LearningRateSchedule.COSINE_FLOOR:
+            shape = 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
+            return peak_learning_rate * (floor_fraction + (1.0 - floor_fraction) * shape)
         case LearningRateSchedule.COSINE:
             anneal_start = warmup_steps
         case LearningRateSchedule.PLATEAU:
@@ -320,20 +445,23 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
     torch.cuda.manual_seed_all(arguments.random_seed)
 
     auxiliary_heads = arguments.distil_auxiliary_heads
-    architecture = student_architecture(arguments.layers, arguments.hidden_size, arguments.policy_bottleneck_rank)
+    architecture = student_architecture(arguments)
     model = create_model(
         architecture,
         device,
         CHESS_NETWORK_DIMENSIONS,
         auxiliary_head_layouts(auxiliary_heads, dataset_manifest.action_size),
     )
-    optimizer = create_optimizer(model, 'adamw')
+    optimizer = create_student_optimizer(model, arguments.optimizer_kind, arguments.learning_rate)
     objective = distillation_objective(auxiliary_heads)
     counts = parameter_counts(model)
     log(
         f'Student parameters: {counts.total} total = {counts.backbone} backbone + {counts.heads} primary heads + '
         f'{counts.auxiliary_heads} auxiliary heads {auxiliary_heads if auxiliary_heads else "(none)"}.'
     )
+    log(format_model_cost(f'Student {arguments.network_kind.value}', measure_model_cost(model)))
+    log(f'Student architecture: {architecture.model_dump_json()}')
+    log(f'Optimizer {arguments.optimizer_kind.value}, schedule {arguments.learning_rate_schedule.value}.')
     log(
         f'Training on {split.training_row_count} rows, training fraction {arguments.training_fraction:g} of the '
         f'{split.held_out_start_row} rows before the holdout, holding out the last {split.held_out_row_count} rows.'
@@ -357,6 +485,10 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
     generator = np.random.default_rng(arguments.random_seed)
     model.train()
     recent_training_losses: list[LossValues] = []
+    if device.type == 'cuda':
+        torch.cuda.reset_peak_memory_stats(device)
+    window_started_at = time.perf_counter()
+    window_steps = 0
     for step in range(1, arguments.steps + 1):
         step_learning_rate = learning_rate_at(
             step,
@@ -365,6 +497,8 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
             arguments.warmup_steps,
             arguments.learning_rate_schedule,
             arguments.anneal_fraction,
+            arguments.optimizer_kind,
+            arguments.floor_fraction,
         )
         for parameter_group in optimizer.param_groups:
             parameter_group['lr'] = step_learning_rate
@@ -384,6 +518,7 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
         torch.nn.utils.clip_grad_norm_(model.parameters(), arguments.max_grad_norm)
         optimizer.step()
         recent_training_losses.append(observed_losses(loss))
+        window_steps += 1
         if arguments.checkpoint_every and not step % arguments.checkpoint_every and step != arguments.steps:
             intermediate = intermediate_run_state(arguments.output_run_state, step)
             save_student_checkpoint(model, optimizer, arguments.generation, intermediate)
@@ -392,9 +527,16 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
             continue
         training_loss = mean_loss_values(tuple(recent_training_losses))
         recent_training_losses.clear()
+        window_seconds = time.perf_counter() - window_started_at
+        steps_per_second = window_steps / max(window_seconds, 1e-9)
+        window_started_at = time.perf_counter()
+        window_steps = 0
+        peak_mebibytes = torch.cuda.max_memory_allocated(device) / 1024**2 if device.type == 'cuda' else 0.0
         held_out_loss = evaluate(model, evaluation_batches, objective, device)
         log(
             f'step {step}/{arguments.steps} lr {step_learning_rate:.2e} '
+            f'{steps_per_second:.2f} steps/s {steps_per_second * arguments.batch_size:.0f} samples/s '
+            f'peak {peak_mebibytes:.0f} MiB | '
             f'train policy {training_loss.policy:.4f} wdl {training_loss.wdl:.4f} total {training_loss.total:.4f}'
             f'{auxiliary_loss_report(auxiliary_heads, training_loss)} | '
             f'held-out policy {held_out_loss.policy:.4f} wdl {held_out_loss.wdl:.4f} '
@@ -412,9 +554,41 @@ def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser(description='Distil a teacher-labelled chess dataset into a small student.')
     parser.add_argument('--dataset', required=True, type=Path)
     parser.add_argument('--output-run-state', required=True, type=Path)
+    parser.add_argument(
+        '--network-kind',
+        default=NetworkKind.CONVOLUTIONAL.value,
+        choices=tuple(kind.value for kind in NetworkKind),
+    )
     parser.add_argument('--layers', required=True, type=int)
     parser.add_argument('--hidden-size', required=True, type=int)
-    parser.add_argument('--policy-bottleneck-rank', default=16, type=int)
+    parser.add_argument('--heads', default=8, type=int)
+    parser.add_argument('--feedforward', default=0, type=int, help='Zero means twice the hidden size.')
+    parser.add_argument(
+        '--policy-head-kind',
+        default=PolicyHeadKind.DENSE.value,
+        choices=tuple(kind.value for kind in PolicyHeadKind),
+    )
+    parser.add_argument('--policy-key-size', default=128, type=int)
+    parser.add_argument(
+        '--attention-bias-kind',
+        default=AttentionBiasKind.DISABLED.value,
+        choices=tuple(kind.value for kind in AttentionBiasKind),
+    )
+    parser.add_argument('--smolgen-compressed-size', default=8, type=int)
+    parser.add_argument('--smolgen-hidden-size', default=32, type=int)
+    parser.add_argument('--smolgen-generated-size', default=32, type=int)
+    parser.add_argument(
+        '--optimizer',
+        default=OptimizerKind.ADAMW.value,
+        choices=tuple(kind.value for kind in OptimizerKind),
+    )
+    parser.add_argument('--floor-fraction', default=0.1, type=float)
+    parser.add_argument(
+        '--policy-bottleneck-rank',
+        default=16,
+        type=int,
+        help='Zero removes the bottleneck, which is the dense head production runs.',
+    )
     parser.add_argument('--batch-size', default=1024, type=int)
     parser.add_argument('--steps', required=True, type=int)
     parser.add_argument('--learning-rate', default=0.002, type=float)
@@ -438,8 +612,19 @@ def parse_arguments() -> Arguments:
     arguments = Arguments(
         dataset=namespace.dataset,
         output_run_state=namespace.output_run_state,
+        network_kind=NetworkKind(namespace.network_kind),
         layers=namespace.layers,
         hidden_size=namespace.hidden_size,
+        heads=namespace.heads,
+        feedforward=namespace.feedforward or 2 * namespace.hidden_size,
+        policy_head_kind=PolicyHeadKind(namespace.policy_head_kind),
+        policy_key_size=namespace.policy_key_size,
+        attention_bias_kind=AttentionBiasKind(namespace.attention_bias_kind),
+        smolgen_compressed_size=namespace.smolgen_compressed_size,
+        smolgen_hidden_size=namespace.smolgen_hidden_size,
+        smolgen_generated_size=namespace.smolgen_generated_size,
+        optimizer_kind=OptimizerKind(namespace.optimizer),
+        floor_fraction=namespace.floor_fraction,
         policy_bottleneck_rank=namespace.policy_bottleneck_rank,
         batch_size=namespace.batch_size,
         steps=namespace.steps,
@@ -459,8 +644,22 @@ def parse_arguments() -> Arguments:
     )
     if not arguments.dataset.is_file():
         raise ValueError(f'Dataset does not exist: {arguments.dataset}')
-    if min(arguments.layers, arguments.hidden_size, arguments.policy_bottleneck_rank) <= 0:
-        raise ValueError('Layers, hidden size and policy bottleneck rank must be positive.')
+    if min(arguments.layers, arguments.hidden_size) <= 0:
+        raise ValueError('Layers and hidden size must be positive.')
+    if arguments.policy_bottleneck_rank < 0:
+        raise ValueError('Policy bottleneck rank must be nonnegative; zero removes the bottleneck.')
+    if min(arguments.heads, arguments.feedforward, arguments.policy_key_size) <= 0:
+        raise ValueError('Head count, feedforward size and policy key size must be positive.')
+    if arguments.network_kind is NetworkKind.ATTENTION and arguments.hidden_size % arguments.heads:
+        raise ValueError(f'An embedding size of {arguments.hidden_size} is not divisible by {arguments.heads} heads.')
+    # The from-to head reads the trunk output as 64 square tokens, which a convolutional trunk also
+    # produces, so it is allowed on both: separating the head's contribution from the trunk's needs it.
+    if arguments.network_kind is NetworkKind.CONVOLUTIONAL and arguments.attention_bias_kind is not (
+        AttentionBiasKind.DISABLED
+    ):
+        raise ValueError('A convolutional trunk has no attention logits to bias.')
+    if min(arguments.smolgen_compressed_size, arguments.smolgen_hidden_size, arguments.smolgen_generated_size) <= 0:
+        raise ValueError('Every generated-bias dimension must be positive.')
     if min(arguments.batch_size, arguments.steps, arguments.evaluate_every) <= 0:
         raise ValueError('Batch size, steps and evaluation interval must be positive.')
     if arguments.checkpoint_every < 0:
@@ -469,12 +668,14 @@ def parse_arguments() -> Arguments:
         raise ValueError('Learning rate and gradient-norm bound must be positive.')
     if not 0.0 < arguments.anneal_fraction <= 1.0:
         raise ValueError('Anneal fraction must lie above zero and at most one.')
+    if not 0.0 <= arguments.floor_fraction < 1.0:
+        raise ValueError('Floor fraction must be nonnegative and below one.')
     if not 0.0 < arguments.holdout_fraction < 1.0:
         raise ValueError('Holdout fraction must lie strictly between zero and one.')
     if not 0.0 < arguments.training_fraction <= 1.0:
         raise ValueError('Training fraction must lie above zero and at most one.')
-    if not 0 <= arguments.warmup_steps < arguments.steps:
-        raise ValueError('Warmup must be nonnegative and shorter than the run.')
+    if not 0 < arguments.warmup_steps < arguments.steps:
+        raise ValueError('Warmup must be positive and shorter than the run.')
     anneal_start = arguments.steps - max(1, round(arguments.steps * arguments.anneal_fraction))
     if arguments.learning_rate_schedule is LearningRateSchedule.PLATEAU and arguments.warmup_steps >= anneal_start:
         raise ValueError(

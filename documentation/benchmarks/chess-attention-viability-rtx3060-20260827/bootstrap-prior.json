@@ -1,0 +1,54 @@
+{
+  "probe_positions": 256,
+  "near_uniform_top3_mass": 0.15,
+  "measurements": [
+    {
+      "cell": "cnn-A",
+      "trunk": "convolutional",
+      "total_parameters": 3885287,
+      "logit_standard_deviation": 1234.0950745235,
+      "uncalibrated_top1_mass": 0.9933330896920296,
+      "uncalibrated_top3_mass": 0.9999902933923298,
+      "applied_scale": 0.03536123667099707,
+      "calibrated_top1_mass": 0.8014507607094873,
+      "calibrated_top3_mass": 0.9499999999999998,
+      "manifest_records_calibration": true
+    },
+    {
+      "cell": "attn-A",
+      "trunk": "attention",
+      "total_parameters": 3995783,
+      "logit_standard_deviation": 0.10314685734429918,
+      "uncalibrated_top1_mass": 0.03786966086192189,
+      "uncalibrated_top3_mass": 0.10968580173168163,
+      "applied_scale": 94.50663366172795,
+      "calibrated_top1_mass": 0.7941877141670077,
+      "calibrated_top3_mass": 0.95,
+      "manifest_records_calibration": true
+    },
+    {
+      "cell": "attn-B",
+      "trunk": "attention",
+      "total_parameters": 3817847,
+      "logit_standard_deviation": 0.13800592543231208,
+      "uncalibrated_top1_mass": 0.040727517248870894,
+      "uncalibrated_top3_mass": 0.11463680352361633,
+      "applied_scale": 54.52611263135354,
+      "calibrated_top1_mass": 0.8092119398385049,
+      "calibrated_top3_mass": 0.9499999999999997,
+      "manifest_records_calibration": true
+    },
+    {
+      "cell": "attn-C",
+      "trunk": "attention",
+      "total_parameters": 3842135,
+      "logit_standard_deviation": 0.12597900322179278,
+      "uncalibrated_top1_mass": 0.04008198523479883,
+      "uncalibrated_top3_mass": 0.11375864347505527,
+      "applied_scale": 68.72034081466754,
+      "calibrated_top1_mass": 0.803054646286284,
+      "calibrated_top3_mass": 0.95,
+      "manifest_records_calibration": true
+    }
+  ]
+}

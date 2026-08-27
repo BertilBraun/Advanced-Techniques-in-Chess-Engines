@@ -28,7 +28,7 @@ training:
           num_heads: 8
           feedforward_size: 256
           dropout: 0.0
-          policy_head: {kind: chess_76_plane_direct_v2}
+          policy_head: {kind: dense, channels: 4}
           num_value_channels: 2
           value_fc_size: 48
       - model_id: chess-attention-12x176
@@ -40,7 +40,7 @@ training:
           num_heads: 11
           feedforward_size: 352
           dropout: 0.0
-          policy_head: {kind: chess_76_plane_direct_v2}
+          policy_head: {kind: dense, channels: 4}
           num_value_channels: 2
           value_fc_size: 48
       - model_id: chess-attention-14x224
@@ -52,7 +52,7 @@ training:
           num_heads: 14
           feedforward_size: 448
           dropout: 0.0
-          policy_head: {kind: chess_76_plane_direct_v2}
+          policy_head: {kind: dense, channels: 4}
           num_value_channels: 2
           value_fc_size: 48
   limits:
