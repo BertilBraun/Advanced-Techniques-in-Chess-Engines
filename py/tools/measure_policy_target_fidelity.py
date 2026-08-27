@@ -127,6 +127,7 @@ class EqualComputeComparison(FrozenModel):
 
 class FixedBudgetRecord(FrozenModel):
     visits: int = Field(gt=0)
+    root_value: float = Field(ge=-1.0, le=1.0)
     kullback_leibler: float = Field(ge=0.0)
     total_variation: float = Field(ge=0.0, le=1.0)
     top_visit_share: float = Field(ge=0.0, le=1.0)
@@ -136,6 +137,10 @@ class FixedBudgetRecord(FrozenModel):
 
 class PositionRecord(FrozenModel):
     fen: str = Field(min_length=1)
+    # Recorded at the reference budget: what the search as a whole made of the network's own opinion.
+    policy_correction: float = Field(ge=0.0, le=1.0)
+    value_correction: float = Field(ge=0.0, le=1.0)
+    search_correction_target: float = Field(ge=0.0, le=1.0)
     budgets: tuple[FixedBudgetRecord, ...] = Field(min_length=1)
 
 
@@ -370,6 +375,9 @@ def _position_record(
     trace: tuple[_Checkpoint, ...],
     reference: _Checkpoint,
     fixed_rules: tuple[FixedStoppingRule, ...],
+    policy_correction: float,
+    value_correction: float,
+    search_correction_target: float,
 ) -> PositionRecord:
     reference_policy = _probabilities(reference.policy)
     budgets: list[FixedBudgetRecord] = []
@@ -379,6 +387,7 @@ def _position_record(
         budgets.append(
             FixedBudgetRecord(
                 visits=rule.visits,
+                root_value=candidate.root_value,
                 kullback_leibler=_kullback_leibler(reference_policy, candidate_policy),
                 total_variation=_total_variation(reference_policy, candidate_policy),
                 top_visit_share=candidate.top_visit_share,
@@ -386,7 +395,13 @@ def _position_record(
                 leader_matches_reference=candidate.leader_action_id == reference.leader_action_id,
             )
         )
-    return PositionRecord(fen=fen, budgets=tuple(budgets))
+    return PositionRecord(
+        fen=fen,
+        policy_correction=policy_correction,
+        value_correction=value_correction,
+        search_correction_target=search_correction_target,
+        budgets=tuple(budgets),
+    )
 
 
 def measure_fidelity(arguments: Arguments) -> FidelityReport:
@@ -442,7 +457,17 @@ def measure_fidelity(arguments: Arguments) -> FidelityReport:
                 continue
             reference = trace[-1]
             if arguments.per_position_output is not None:
-                position_records.append(_position_record(fen, trace, reference, fixed_rules))
+                position_records.append(
+                    _position_record(
+                        fen,
+                        trace,
+                        reference,
+                        fixed_rules,
+                        result.policy_correction,
+                        result.value_correction,
+                        result.search_correction_target,
+                    )
+                )
             for rule in grid.rules:
                 match rule:
                     case FixedStoppingRule(visits=visits):
