@@ -89,6 +89,9 @@ class ThroughputMeasurement(FrozenModel):
     average_positions_per_inference_call: float = Field(ge=0.0)
     worker_utilization: float = Field(ge=0.0)
     positions_per_second: float = Field(ge=0.0)
+    # Tree searches completed per second: every root in every measured batch runs searches_per_move of
+    # them. This is the engine-level rate, where positions_per_second counts network evaluations.
+    searches_per_second: float = Field(ge=0.0)
 
 
 class SearchBudgets(FrozenModel):
@@ -212,6 +215,9 @@ def _measure_throughput(
         average_positions_per_inference_call=final.averageNumberOfPositionsInInferenceCall,
         worker_utilization=final.workerUtilization,
         positions_per_second=inference_positions / elapsed_seconds,
+        searches_per_second=(
+            THROUGHPUT_MEASURED_BATCHES * len(positions) * configuration.searches_per_move / elapsed_seconds
+        ),
     )
 
 
@@ -278,8 +284,14 @@ def _report_throughput(
     student_throughput: ThroughputMeasurement,
     ratio: float,
 ) -> None:
-    print(f'teacher throughput: {teacher_throughput.positions_per_second:.1f} positions/s')
-    print(f'student throughput: {student_throughput.positions_per_second:.1f} positions/s')
+    print(
+        f'teacher throughput: {teacher_throughput.positions_per_second:.1f} positions/s, '
+        f'{teacher_throughput.searches_per_second:.1f} searches/s'
+    )
+    print(
+        f'student throughput: {student_throughput.positions_per_second:.1f} positions/s, '
+        f'{student_throughput.searches_per_second:.1f} searches/s'
+    )
     print(f'student/teacher throughput ratio: {ratio:.4f}')
 
 
