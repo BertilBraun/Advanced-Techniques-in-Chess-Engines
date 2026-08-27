@@ -12,7 +12,6 @@ from src.self_play.native_search import NativeSelfPlaySearch
 from src.self_play.parameters import (
     FixedFullSearchBudget,
     ResolvedSelfPlayParameters,
-    ZeroFirstPlayUrgencyParameters,
 )
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
@@ -79,18 +78,25 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
         checkpoint: CheckpointReference,
         configuration: EvaluationSearchConfiguration,
     ) -> NativeSelfPlaySearch:
-        parameters = replace(
-            self.self_play_parameters_at(checkpoint.generation),
+        parameters = self.evaluation_parameters_at(checkpoint.generation, configuration)
+        return self._create_search(device_id, checkpoint, parameters, configuration.inference)
+
+    def evaluation_parameters_at(
+        self,
+        model_generation: int,
+        configuration: EvaluationSearchConfiguration,
+    ) -> ResolvedSelfPlayParameters:
+        """Evaluation inherits the self-play first-play urgency; only the listed fields are overridden."""
+        return replace(
+            self.self_play_parameters_at(model_generation),
             parallel_searches=configuration.parallel_searches,
             full_search_budget=FixedFullSearchBudget(kind='fixed', visits=configuration.searches_per_move),
             fast_searches=configuration.searches_per_move,
             forced_playout_coefficient=0.0,
             exploration_constant=configuration.exploration_constant,
-            first_play_urgency=ZeroFirstPlayUrgencyParameters(),
             dirichlet_alpha=1.0,
             dirichlet_epsilon=0.0,
         )
-        return self._create_search(device_id, checkpoint, parameters, configuration.inference)
 
     def _create_search(
         self,
