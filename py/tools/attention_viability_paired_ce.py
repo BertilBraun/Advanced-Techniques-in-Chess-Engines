@@ -15,7 +15,7 @@ from src.training.checkpoint.persistence import load_model
 from src.training.network import Network
 from src.training.objective import mask_policy_logits
 from src.util.log import log
-from tools.attention_viability_cells import ARCHITECTURE_CELLS, cell_by_name
+from tools.attention_viability_cells import ARCHITECTURE_CELLS, SUPPLEMENTARY_CELLS, cell_by_name
 from tools.distill_train_student import student_architecture
 
 EVALUATION_BATCH_SIZE = 512
@@ -115,7 +115,7 @@ def main() -> None:
 
     gaps: dict[str, np.ndarray] = {}
     summaries: list[CellCrossEntropy] = []
-    for cell in ARCHITECTURE_CELLS:
+    for cell in ARCHITECTURE_CELLS + SUPPLEMENTARY_CELLS:
         run_state = namespace.run_state_root / cell.name
         if not model_save_path(namespace.generation, run_state).is_file():
             log(f'{run_state} carries no generation {namespace.generation} model; skipping {cell.name}.')
