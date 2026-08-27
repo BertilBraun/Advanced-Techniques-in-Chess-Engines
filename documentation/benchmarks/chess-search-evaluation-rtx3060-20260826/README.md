@@ -458,9 +458,28 @@ trace the **best allocation any budget predictor could achieve**, however it is 
 | 2,400 | 0.1343 | 0.0274 | 6,794 | +4,394 |
 
 At the production budget a perfect allocator reaches with 600 visits what a flat budget needs 2,623 visits for —
-**4.4× the effective compute**. So variable per-position budgeting is not a dead idea. The adaptive rules capture
+**4.4× the effective compute** on raw curves, **3.6× once corrected for search noise** (below). So variable per-position budgeting is not a dead idea. The adaptive rules capture
 none of it, and the earlier reading that "the mechanism does not pay" was wrong: the *mechanism* pays enormously,
 the *criteria* do not.
+
+#### Corrected for search noise
+
+The table above is computed on the raw per-position curves, and those are **not monotone**: 17.2% of adjacent
+budget steps move the target *further* from truth, and 78.6% of positions show at least one such step. An oracle
+reading raw curves therefore cherry-picks lucky early stops that no predictor could anticipate.
+
+Forcing each curve to be non-increasing before allocating removes that. The gain survives but shrinks:
+
+| | Raw curves | Noise-free curves |
+|---|---|---|
+| Oracle at mean 600 | KL 0.1249 | KL 0.1476 |
+| Equivalent flat budget | ~2,623 visits | ~2,170 visits |
+| Effective compute | 4.4× | **3.6×** |
+
+**Use 3.6× for planning.** The noise-free allocation still sends 73% of positions below baseline and 22% above,
+close to the raw split. A related claim made in an earlier draft — that shrink-only allocation at mean 400 beats a
+flat 600 budget — was entirely an artefact of the same cherry-picking and is withdrawn: noise-free it beats flat
+400 but not flat 600.
 
 **This is not an artefact of the finite reference.** A position handed the full 10,000-visit reference budget
 scores exactly zero divergence by construction, so the allocator could in principle farm that. It does not: at a
@@ -513,7 +532,7 @@ Two things follow, and they point in different directions:
 - **The large prize needs a different functional form.** Capturing the inverted-U requires distinguishing
   "diffuse and unresolvable" from "genuinely contested" from "already decided". No threshold on a single search
   statistic can express that shape. A **learned per-position difficulty head** can, and this is the quantitative
-  case for building one: up to 4.4× effective search compute, against hand-made online signals that correlate at
+  case for building one: up to 3.6× effective search compute after the noise correction, against hand-made online signals that correlate at
   only ρ ≈ 0.21 and in the wrong shape.
 
 The pipeline that produced this also produces the labels such a head would need: for every position,
@@ -537,7 +556,7 @@ position itself and could do better or worse. And the whole measurement is targe
 4. **Drop the adaptive full-search budget as configured**, but not the idea behind it. Its thresholds sit in the
    band where they select worse than random (§7.5), and it is a wash at the production cap for eight parameters.
    Either raise the top-share threshold to ≥0.85 for a small honest gain, or drop the rule and pursue the learned
-   difficulty head, which is where the 4.4× headroom is (§7.4).
+   difficulty head, which is where the 3.6× headroom is (§7.4).
 7. **Consider a per-position difficulty head.** The evidence for it is §7.4 and §7.5: large headroom, and a target
    shape that no threshold rule can express. The labelling pipeline already exists.
 5. **Leave cpuct at 1.5** — anywhere in 1.0–2.0 is indistinguishable, 3.0 is harmful.

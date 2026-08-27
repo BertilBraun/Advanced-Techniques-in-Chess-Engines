@@ -46,7 +46,8 @@ Two consequences, and they pull in opposite directions.
 
 **Per-position budget scaling on the full searches is the clean win.** Holding the selection random and varying
 only how long each full search runs, the oracle bound of §2 applies directly: at a mean of 600 visits a perfect
-allocator reaches what a flat budget needs 2,623 visits for, **4.4× effective compute**. Nothing about which
+allocator reaches what a flat budget needs about 2,170 visits for, **3.6× effective compute** after correcting
+for non-monotone search convergence. Nothing about which
 positions become targets changes, so there is no distributional hazard.
 
 **Selecting *which* positions become targets by contestedness is not safe on its own.** Ranking positions by how
@@ -97,7 +98,9 @@ and that stops just 13% of positions.
 moved nothing.
 
 Meanwhile the ceiling for per-position budgeting is large: a perfect allocator reaches with 600 visits what a flat
-budget needs **2,623** for, **4.4× effective compute**. Not an artefact of the finite reference — at a mean of 521
+budget needs about **2,170** for, **3.6× effective compute** once the oracle is prevented from exploiting
+non-monotone convergence (17.2% of budget steps move the target further from truth). Not an artefact of the
+finite reference either — at a mean of 521
 visits only 0.1% of positions receive the reference budget, and removing it from the allocator's menu barely moves
 the result.
 

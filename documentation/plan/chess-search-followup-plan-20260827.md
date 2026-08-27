@@ -24,7 +24,8 @@ per-generation yardstick carries an explicit note about which side of the change
 
 ## WP-S2 — Difficulty head, phase 1: is it learnable at all?
 
-The oracle says perfect per-position budgeting of the full searches is worth up to 4.4× effective compute. That
+The oracle says perfect per-position budgeting of the full searches is worth up to 3.6× effective compute
+(noise-corrected). That
 is not reachable, but the gap to the hand-made signals (ρ ≈ 0.21, and in the wrong shape) is wide enough that this
 deserves a real attempt.
 
@@ -164,7 +165,7 @@ Only if WP-S2 clears its gate. Two uses, in increasing order of risk:
 
 1. **Per-position budget scaling on the full searches (do this first).** Keep the random selection of which
    positions get a full search, keep the generation-level visit schedule, and scale it per position by a factor
-   driven by the head. This is where the 4.4× bound lives, and because the set of training positions is unchanged
+   driven by the head. This is where the 3.6× bound lives, and because the set of training positions is unchanged
    it carries no distributional hazard. Hold the *mean* budget fixed so the throughput budget is undisturbed.
 2. **Fast/full selection (only after 1 works).** Replacing the random `full_search_probability` draw with a
    top-fraction-by-predicted-benefit selection looks free because compute is unchanged, but findings §1.3 shows
