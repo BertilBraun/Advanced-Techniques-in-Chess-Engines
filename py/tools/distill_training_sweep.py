@@ -182,7 +182,8 @@ def parse_arguments() -> SweepArguments:
     parser.add_argument('--generation', required=True, type=int)
     parser.add_argument('--steps', default=100000, type=int)
     parser.add_argument('--batch-size', default=1024, type=int)
-    parser.add_argument('--learning-rate', default=0.002, type=float)
+    # Production self-play runs 0.004-0.005 at batch 2048; keep the two in step when changing either.
+    parser.add_argument('--learning-rate', default=0.004, type=float)
     parser.add_argument('--warmup-steps', default=1000, type=int)
     parser.add_argument('--evaluate-every', default=4000, type=int)
     parser.add_argument('--checkpoint-every', default=0, type=int)

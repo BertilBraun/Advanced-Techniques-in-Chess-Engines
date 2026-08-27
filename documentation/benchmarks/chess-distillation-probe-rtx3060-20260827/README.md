@@ -265,10 +265,20 @@ Poll on a sentinel line in the log, or on `nvidia-smi`, instead.
 ## Learning rate
 
 Every number in this note was measured at a peak rate of **0.002** with 1000 warmup steps and batch size
-1024, so that is the rate to hold fixed when comparing against these results. Production self-play uses a
-staged 0.005 → 0.0035 → 0.002 at batch 2048 on larger networks, so 0.002 is conservative for a small
-student on low-noise targets. **The magnitude was never varied**, so nothing here says it is optimal; it is
-simply the value everything else was measured against.
+1024. **The magnitude was never varied**, so nothing here says it is optimal; it is simply the value
+everything else was measured against.
+
+The peak and the batch size have to move together. Production self-play runs a staged 0.005 → 0.0035 →
+0.002 at batch 2048, and under linear scaling 0.004 at batch 2048 is the same noise scale as 0.002 at batch
+1024 — so the probe was already at production-equivalent settings rather than below them. Two effects then
+pull in opposite directions for distillation specifically: a smaller batch argues for a lower rate, while
+targets carrying neither game-outcome noise nor Dirichlet noise argue for a higher one. Which dominates is
+unmeasured.
+
+The sweep therefore defaults to a peak of **0.004**, and should be run at batch 2048 to match production
+rather than at 1024, where 0.004 would sit at roughly twice production's noise scale. Because every arm
+shares the peak, a rate that is too high does not merely lose one arm — it invalidates the whole sweep, so
+the peak is the one parameter worth being conservative about.
 
 The `plateau` schedule changes the shape, not the peak. Warmup, then hold the peak, then anneal over the
 final `--anneal-fraction` of the run. Its integrated learning rate is `0.9 × peak` against cosine's
