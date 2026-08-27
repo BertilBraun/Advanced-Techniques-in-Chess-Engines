@@ -101,6 +101,13 @@ budget needs **2,623** for, **4.4× effective compute**. Not an artefact of the 
 visits only 0.1% of positions receive the reference budget, and removing it from the allocator's menu barely moves
 the result.
 
+A per-position head for this already exists: `search_correction_target`
+(`cpp/src/search/SearchExecutor.hpp:161`) is trained as a scalar auxiliary target and read back at the root by
+`SearchCorrectionGate`. It predicts `max(policy_correction, value_correction)` — how far the search moved the
+answer from the network's prior — which is a *learning-value* signal, not the *marginal-return* signal budget
+allocation needs. A tactic the network missed scores high on it but converges in a few dozen visits; two near-equal
+moves score low on it but keep moving for hundreds. See the follow-up plan WP-S2b for the proposed label.
+
 **Conclusion: retire the current adaptive budget, keep the idea.** The gap between "what the rule achieves" and
 "what perfect allocation achieves" is the entire case for a learned difficulty head.
 

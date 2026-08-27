@@ -46,6 +46,78 @@ find it either — stop, and keep the flat schedule.
 
 **Cost:** a few GPU-hours plus offline fitting. No training run. No production risk.
 
+## WP-S2b — What the head predicts, and how the label is built
+
+### The head already exists and predicts the wrong quantity
+
+`search_correction_target` is computed in `cpp/src/search/SearchExecutor.hpp:161` as
+
+```
+value_correction  = 0.5 * |root_value_after_search - network_root_value|
+policy_correction = 0.5 * sum |searched_probability - raw_prior|
+search_correction_target = max(policy_correction, value_correction)
+```
+
+It flows into training as a scalar auxiliary target (`replay/materialization.py:174`) and the prediction is read
+back at the root by `SearchCorrectionGate`. So the plumbing for a per-position head — target, materialization,
+training, and a native read at root expansion — is already built and does not need inventing.
+
+What it measures is **how wrong the network was**, which is a *learning-value* signal, not a *marginal-return*
+one. The two come apart exactly where budget allocation lives:
+
+- A tactic the network missed: `policy_correction` is high, but search resolves it in a few dozen visits, so the
+  marginal return of more visits is low. The existing target says "spend more" when the right answer is "you
+  already have it".
+- Two near-equal moves the network ranks roughly right: `policy_correction` is low, but the target keeps moving
+  for hundreds of visits. The existing target says "stop" when the right answer is "keep going".
+
+This is the inverted-U of findings §2 in another form, and it is the most likely reason the learned gate never
+earned its keep.
+
+### The proposed label: convergence residual
+
+For a full search that ran to budget `B`, with the checkpoints it already emits:
+
+```
+r = TV( policy_target at B/2 , policy_target at B )
+```
+
+Total variation, matching the existing `policy_correction` convention: bounded, needs no smoothing, and free on
+every full search already being run. Ordinary self-play labels its own data at no extra cost.
+
+Why this quantity rather than the budget itself:
+
+- **It estimates what the next doubling buys**, which is the marginal quantity a Lagrangian threshold compares
+  against. `r` near zero means converged; large `r` means the target is still moving.
+- **It is independent of the budget schedule and of the mean-compute constraint.** Regressing "the budget this
+  position should have had" bakes in both, so those labels go stale the moment the generation schedule changes
+  the base budget. Predict the position's property; let the allocator choose the threshold at runtime.
+- **Censoring is benign.** Positions that need more than `B` all read as "still moving at `B`" and cannot be
+  distinguished from each other. That is fine for ranking, which is where the value is, and it should be recorded
+  as a known limit rather than modelled away.
+
+### Turning predictions into budgets
+
+Rank the positions in the batch by predicted `r`, then assign from a small fixed menu — for example
+`0.5B / B / 2B` — in fixed proportions chosen so the mean budget stays at `B`. Ranking-based allocation holds the
+throughput budget exactly, is robust to a miscalibrated head, and matches where the measured value sits: the
+oracle gain comes from ordering positions correctly, not from emitting a precisely calibrated multiplier.
+
+### WP-S2b gate — validate the free label before building anything
+
+The whole approach rests on an assumption that is **not yet tested**: that the observable residual
+`TV(target@B/2, target@B)` predicts the unobservable quantity that matters, `KL(target@B || truth)`.
+
+The per-position output currently records each budget's divergence against the 10,000-visit reference, but not
+the divergence between adjacent budgets, so this cannot be checked from the data already on disk. It needs a
+small addition to `PerPositionReport` and one 45-minute pass.
+
+**Gate:** correlate the observable residual against the true remaining error across the 3,000 positions, and
+against the true benefit of a further doubling. If the correlation is weak, the free label is not a usable
+surrogate and the approach stops here, cheaply, before any head is trained.
+
+Run this before WP-S2's probe: it is cheaper, and a negative result makes the probe pointless.
+
 ## WP-S3 — Difficulty head, phase 2: wire it in
 
 Only if WP-S2 clears its gate. Two uses, in increasing order of risk:
