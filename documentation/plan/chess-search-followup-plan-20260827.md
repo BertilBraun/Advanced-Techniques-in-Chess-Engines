@@ -46,7 +46,14 @@ find it either — stop, and keep the flat schedule.
 
 **Cost:** a few GPU-hours plus offline fitting. No training run. No production risk.
 
-## WP-S2b — What the head predicts, and how the label is built
+## WP-S2b — superseded
+
+The label and allocator design is now settled and lives in its own document:
+[`adaptive-search-budget-20260827.md`](adaptive-search-budget-20260827.md). It supersedes everything below in
+this section, in particular the convergence-residual label proposed here, which measurement rejected in favour of
+KL against a deep search.
+
+## WP-S2b (superseded) — What the head predicts, and how the label is built
 
 ### The head already exists and predicts the wrong quantity
 
