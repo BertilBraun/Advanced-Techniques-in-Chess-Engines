@@ -33,6 +33,27 @@ driving the GPU to 58% utilisation on its own. Confirm with
 `nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader` before trusting any timing, and
 never `pkill -f` a pattern that also matches your own polling shell.
 
+## Second node: throughput on production hardware (added 2026-08-27)
+
+| | |
+| --- | --- |
+| SSH | `root@154.64.230.50:50623` |
+| GPU | 1× **RTX 4070 SUPER** 12 GiB, driver 580.159.03, compute capability 8.9 |
+| CPU / RAM / disk | 80 effective CPUs · 188 GiB · 32 GiB overlay, 18 GiB free |
+| Environment | Python 3.12.3 venv at `/workspace/alphazero-engine-venv`, torch 2.12.1+cu126 |
+| Shared with | `/workspace/alphazero-engine` is another work stream's checkout, branch `cnn-inference-throughput` at `941653b`. Leave it alone. |
+| This branch's directories | `/workspace/av-throughput` (source + its own native build), `/workspace/av-cells` (checkpoints), `/workspace/av-results` |
+
+This is the production card, so **throughput measured here does transfer**, unlike the RTX 3060 above.
+Two traps found on it:
+
+1. Its clone is **shallow (depth 9)**, so a `git bundle` against any older base does not apply. Ship the
+   tree with `git archive` and record the source revision in a file beside it.
+2. The `AlphaZeroCpp.so` already present was built from the other branch and its
+   `InferenceConfiguration` binding does not match this one. Build the extension from this branch's own
+   `cpp` tree. The post-build step runs `ruff` on the generated stub, so `ruff.toml` has to be present at
+   the tree root or the build fails on `N999`.
+
 ## The production node is off limits
 
 `38.49.42.120:53893` runs the live four-day run `vast-chess-4day-production-v9`. Do not connect to it
