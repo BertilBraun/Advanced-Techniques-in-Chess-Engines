@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 # Floors the candidate policy so a target that never visited a reference action keeps a finite penalty.
 _POLICY_PROBABILITY_FLOOR = 1e-6
+_LABEL_BASELINE_VISITS = (400, 600, 1000)
+_LABEL_DEPTH_VISITS = (2400, 3200, 5000, 8000, 10000)
 _FIRST_CHECKPOINT_VALUE_DELTA = 2.0
 
 
@@ -135,6 +137,13 @@ class FixedBudgetRecord(FrozenModel):
     leader_matches_reference: bool
 
 
+class LabelCandidate(FrozenModel):
+    baseline_visits: int = Field(gt=0)
+    depth_visits: int = Field(gt=0)
+    total_variation: float = Field(ge=0.0, le=1.0)
+    kullback_leibler: float = Field(ge=0.0)
+
+
 class PositionRecord(FrozenModel):
     fen: str = Field(min_length=1)
     # Recorded at the reference budget: what the search as a whole made of the network's own opinion.
@@ -142,6 +151,9 @@ class PositionRecord(FrozenModel):
     value_correction: float = Field(ge=0.0, le=1.0)
     search_correction_target: float = Field(ge=0.0, le=1.0)
     budgets: tuple[FixedBudgetRecord, ...] = Field(min_length=1)
+    # A shallower search standing in for truth is what a live labelling job could actually afford;
+    # these pairs let the usable depth be chosen by measurement rather than assumption.
+    label_candidates: tuple[LabelCandidate, ...] = ()
 
 
 class PerPositionReport(FrozenModel):
@@ -395,12 +407,31 @@ def _position_record(
                 leader_matches_reference=candidate.leader_action_id == reference.leader_action_id,
             )
         )
+    available = {rule.visits for rule in fixed_rules}
+    label_candidates: list[LabelCandidate] = []
+    for baseline in _LABEL_BASELINE_VISITS:
+        if baseline not in available:
+            continue
+        baseline_policy = _probabilities(_fixed_stop(trace, baseline).policy)
+        for depth in _LABEL_DEPTH_VISITS:
+            if depth not in available or depth <= baseline:
+                continue
+            depth_policy = _probabilities(_fixed_stop(trace, depth).policy)
+            label_candidates.append(
+                LabelCandidate(
+                    baseline_visits=baseline,
+                    depth_visits=depth,
+                    total_variation=_total_variation(depth_policy, baseline_policy),
+                    kullback_leibler=_kullback_leibler(depth_policy, baseline_policy),
+                )
+            )
     return PositionRecord(
         fen=fen,
         policy_correction=policy_correction,
         value_correction=value_correction,
         search_correction_target=search_correction_target,
         budgets=tuple(budgets),
+        label_candidates=tuple(label_candidates),
     )
 
 
