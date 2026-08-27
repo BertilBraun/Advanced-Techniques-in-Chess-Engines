@@ -11,6 +11,7 @@ from src.distillation.dataset import (
     MAXIMUM_LEGAL_ACTIONS,
     MAXIMUM_POLICY_ENTRIES,
     DistillationDatasetManifest,
+    DistillationRecordLayout,
     build_training_batch,
     open_dataset,
     record_dtype,
@@ -154,6 +155,52 @@ def _synthetic_records(row_count: int, seed: int, legal_count: int = 8) -> npt.N
 
 def _batch(records: npt.NDArray) -> TrainingBatch:
     return build_training_batch(records, CHESS_STATE_CONTRACT, ACTION_SIZE, torch.device('cpu'))
+
+
+def _core_records(row_count: int, seed: int) -> npt.NDArray:
+    with_auxiliary = _synthetic_records(row_count, seed)
+    core = np.zeros(row_count, dtype=record_dtype(PAYLOAD_BYTES, DistillationRecordLayout.CORE))
+    for name in core.dtype.names:
+        core[name] = with_auxiliary[name]
+    return core
+
+
+def test_the_core_record_layout_is_the_auxiliary_one_without_its_trailing_fields() -> None:
+    core = record_dtype(PAYLOAD_BYTES, DistillationRecordLayout.CORE)
+    with_auxiliary = record_dtype(PAYLOAD_BYTES, DistillationRecordLayout.WITH_AUXILIARY)
+
+    assert with_auxiliary.names[: len(core.names)] == core.names
+    assert core.itemsize < with_auxiliary.itemsize
+
+
+def test_a_core_layout_dataset_reopens_at_its_own_record_size(tmp_path: Path) -> None:
+    records = _core_records(5, seed=11)
+    dataset_path = tmp_path / 'core.bin'
+    manifest = _manifest(len(records)).model_copy(update={'record_layout': DistillationRecordLayout.CORE})
+
+    write_dataset(dataset_path, records, manifest)
+    reopened, reopened_manifest = open_dataset(dataset_path)
+
+    assert len(reopened) == len(records)
+    assert reopened_manifest.record_layout is DistillationRecordLayout.CORE
+    assert np.array_equal(reopened['policy_probabilities'], records['policy_probabilities'])
+
+
+def test_a_core_layout_dataset_builds_a_training_batch(tmp_path: Path) -> None:
+    records = _core_records(4, seed=13)
+    dataset_path = tmp_path / 'core.bin'
+    manifest = _manifest(len(records)).model_copy(update={'record_layout': DistillationRecordLayout.CORE})
+    write_dataset(dataset_path, records, manifest)
+
+    reopened, _ = open_dataset(dataset_path)
+    batch = _batch(reopened)
+
+    assert batch.policy_targets.shape == (4, ACTION_SIZE)
+    assert batch.auxiliary_targets == ()
+
+
+def test_the_auxiliary_layout_is_the_default_for_a_new_dataset() -> None:
+    assert _manifest(1).record_layout is DistillationRecordLayout.WITH_AUXILIARY
 
 
 def test_written_dataset_reopens_with_its_manifest(tmp_path: Path) -> None:
