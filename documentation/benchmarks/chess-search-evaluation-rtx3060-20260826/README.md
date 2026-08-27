@@ -317,6 +317,13 @@ The case for dropping it is therefore not that it is catastrophic; it is that it
 production scale while carrying eight configuration parameters**, and it becomes actively harmful in exactly the
 direction the visit-schedule evidence (§6.2, §7.1) says the next run should move — upward.
 
+### 7.3 Limits of the Family B result
+
+Measured at `parallel_searches = 1`, where the replay is provably exact (§5.1); production self-play uses 4.
+Searches start from a fresh root while production retains 60% of parent visits. Dirichlet noise is off. The
+learned search-correction gate was disabled and is not covered by this result. Target fidelity is not a training
+outcome: a cheaper search that reaches different positions could still train better, and this cannot see that.
+
 ### 7.4 What would settle this properly
 
 The decomposition above infers the selection penalty from population averages. The decisive measurement is a
@@ -330,13 +337,6 @@ could deliver.
   bad, which makes better criteria worth designing.
 
 This costs one further reference pass, about 45 minutes. It is not yet run.
-
-### 7.3 Limits of the Family B result
-
-Measured at `parallel_searches = 1`, where the replay is provably exact (§5.1); production self-play uses 4.
-Searches start from a fresh root while production retains 60% of parent visits. Dirichlet noise is off. The
-learned search-correction gate was disabled and is not covered by this result. Target fidelity is not a training
-outcome: a cheaper search that reaches different positions could still train better, and this cannot see that.
 
 ## 8. Recommendations for the next run
 
