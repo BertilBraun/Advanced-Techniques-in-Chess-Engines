@@ -20,11 +20,23 @@
 #
 # Progressive sizing is restated in full because lists replace wholesale. Two changes against v9.
 #
-# Rung 2 moves from 14x152 to 14x160. 152 channels sits in a measured throughput trough on the RTX
-# 4070 SUPER: at matched depth it delivers 0.72 of what its own arithmetic implies, where 128 and 160
-# deliver 1.00 and 0.92. 14x160 is 9.9% more parameters and still faster than 14x152. Rungs 1 and 3
-# keep 128 and 176, both of which measured efficient. See
-# documentation/benchmarks/chess-attention-viability-rtx3060-20260827.
+# Rungs are 12x128 -> 14x160 -> 19x176: depth rises 12/14/19 and width 128/160/176, and every width
+# was measured efficient on the RTX 4070 SUPER. 152 channels, which v9 used at rung 2, sits in a
+# throughput trough: at matched depth it delivers 0.72 of what its own arithmetic implies, against
+# 1.00 for 128, 0.92 for 160 and 0.94 for 176. 14x160 is measured faster than v9's 14x152 at both
+# production batch sizes -- 1.048x at the self-play batch of 320 and 1.013x at the evaluation batch of
+# 64 -- while carrying 10.8% more trunk parameters.
+#
+# Rungs 2 and 3 match v9's training parameter count to within 4% once the smaller head is accounted
+# for. Rung 1 deliberately does not: restoring its parameters needs 10x160, which costs 28% of
+# self-play throughput (69,000 against 95,833 positions/s at batch 320) to buy capacity during the
+# run's most data-bound phase, where the distillation probe measured parameters as worth approximately
+# nothing. Rung 1's job is to generate games quickly.
+#
+# Depth is the expensive axis at production batch sizes. At the evaluation batch of 64 throughput is
+# close to 213,000/layers regardless of width, so shapes that looked good at batch 512 invert: 20x128
+# is 1.36x of 14x152 at batch 512 and 0.73x at batch 64. Any future rung change should be measured at
+# 320 and 64, never at 512. See documentation/benchmarks/chess-attention-viability-rtx3060-20260827.
 #
 # All three rungs take the from-to policy head instead of the dense one. It scores every action as the
 # attention logit from its origin square's query to its target square's key, which the 1,880-way
@@ -126,11 +138,11 @@ training:
           policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
           num_value_channels: 2
           value_fc_size: 48
-      - model_id: chess-cnn-18x176-fromto
+      - model_id: chess-cnn-19x176-fromto
         training_start_days: 2.0
         network:
           kind: convolutional
-          num_layers: 18
+          num_layers: 19
           hidden_size: 176
           residual_context: {kind: global_pooling, placement: every_second_block}
           policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
