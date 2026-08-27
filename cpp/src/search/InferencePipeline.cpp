@@ -28,7 +28,19 @@ torch::jit::script::Module loadInferenceModel(const std::string &modelPath,
     }
 
     torch::jit::script::Module model = torch::jit::load(modelPathToLoad, device);
-    model.to(dataType);
+    // torch::jit::script::Module::to(dtype) casts every buffer, integer ones included, unlike the Python
+    // nn.Module.to. A head that gathers through an index buffer would have its indices rounded to the
+    // inference dtype, so only the floating-point state is converted here.
+    for (const auto &parameter : model.named_parameters()) {
+        if (parameter.value.is_floating_point()) {
+            parameter.value.set_data(parameter.value.to(dataType));
+        }
+    }
+    for (const auto &buffer : model.named_buffers()) {
+        if (buffer.value.is_floating_point()) {
+            buffer.value.set_data(buffer.value.to(dataType));
+        }
+    }
     model.eval();
     return model;
 }
