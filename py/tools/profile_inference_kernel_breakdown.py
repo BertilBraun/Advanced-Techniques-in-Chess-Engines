@@ -128,7 +128,7 @@ def interval_union_microseconds(intervals: tuple[tuple[float, float], ...]) -> f
 
 
 def _cuda_events(profiler: torch.profiler.profile) -> tuple[FunctionEvent, ...]:
-    return tuple(event for event in profiler.events() if event.device_type is torch.autograd.DeviceType.CUDA)
+    return tuple(event for event in profiler.events() if event.device_type == torch.autograd.DeviceType.CUDA)
 
 
 def _build_report(arguments: ProfileArguments, events: tuple[FunctionEvent, ...]) -> KernelProfileReport:
