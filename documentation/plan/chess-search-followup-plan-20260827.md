@@ -51,13 +51,15 @@ find it either — stop, and keep the flat schedule.
 
 Only if WP-S2 clears its gate. Two uses, in increasing order of risk:
 
-1. **Fast/full assignment (do this first).** Replace the random `full_search_probability` draw with a
-   top-fraction-by-predicted-benefit selection at the *same* full-search rate. Compute is unchanged by
-   construction, so this is the cheapest possible test of the head in a live run, and it targets the largest
-   measured gain.
-2. **Per-position budget scaling.** Keep the generation-level visit schedule and scale it per position by a
-   factor in [0, 1] driven by the head. This is the general form and subsumes (1), but it changes total compute
-   per generation and so perturbs the throughput budget; it should follow (1), not precede it.
+1. **Per-position budget scaling on the full searches (do this first).** Keep the random selection of which
+   positions get a full search, keep the generation-level visit schedule, and scale it per position by a factor
+   driven by the head. This is where the 4.4× bound lives, and because the set of training positions is unchanged
+   it carries no distributional hazard. Hold the *mean* budget fixed so the throughput budget is undisturbed.
+2. **Fast/full selection (only after 1 works).** Replacing the random `full_search_probability` draw with a
+   top-fraction-by-predicted-benefit selection looks free because compute is unchanged, but findings §1.3 shows
+   contested positions carry the *least* reliable targets at a fixed budget — the contested quartile needs about
+   1,600 visits to match a random quartile's accuracy at 600. Selection must therefore come with a budget
+   increase for the positions it selects, which is why it depends on (1) rather than preceding it.
 
 Design notes that follow from the measurements:
 
@@ -111,10 +113,22 @@ finish alongside full searches, which would keep the batch full without needing 
 162 that value is 96, but it is overridden by the capacity-based value of 384, so all games start together and the
 tail starves.
 
-Worth testing whether honouring the ratio-based count — or restoring `inference_workers: 2` to raise capacity —
-fills the tail's batch without paying the parallelism quality cost. **This is a hypothesis from reading the code
-and the batch-occupancy numbers, not a measured result.** If it holds, it recovers the +20% while letting
-`parallel_searches` drop toward 1, which is the best quality setting.
+Worth testing whether honouring the ratio-based count fills the tail's batch without paying the parallelism
+quality cost. **This is a hypothesis from reading the code and the batch-occupancy numbers, not a measured
+result.** If it holds, it recovers the +20% while letting `parallel_searches` drop toward 1, the best quality
+setting.
+
+Raising `inference_workers` is **not** the lever: the measured A/B in
+[`benchmarks/self-play-submission-8xrtx4070super-20260824`](../benchmarks/self-play-submission-8xrtx4070super-20260824/README.md)
+took it from 2 to 1 and the average batch rose from 141 to 222, because two workers means two separate half-empty
+batches plus doubled CUDA contexts, not one larger batch.
+
+A second, stronger variant follows from fast searches producing no training samples: **give fast and full searches
+different parallelism.** Fast searches have no target-quality requirement at all, so they can absorb high
+parallelism to fill the batch, while full searches — which carry the entire training signal — run at parallel 1.
+With staggering, roughly 128 full searches at parallel 1 plus about 96 concurrent fast searches at parallel 2
+would fill a 320 batch exactly. `SelfPlaySearchParameters` currently has one `parallel_searches` for both, so this
+needs a contained native change.
 
 **Cost:** one afternoon with `tools.benchmark_self_play_search`, which already parameterises all of this.
 

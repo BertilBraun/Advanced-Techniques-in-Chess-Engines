@@ -35,21 +35,43 @@ Family B agrees independently: policy-target fidelity is still improving steeply
 production 600 visits the target names the same best move as its own 10,000-visit reference only **72.4%** of the
 time. Two different instruments pointing the same way is the strongest signal in the study.
 
-### 1.3 The fast/full search decision is a coin flip worth more than doubling
+### 1.3 Fast searches produce no training samples, which reframes the whole allocation question
 
-This is the highest-leverage finding and it costs no extra compute to exploit.
+`replay/materialization.py:112` skips every observation with `full_search` false. **A fast-search position is
+never a training sample.** It is played only to advance the game. So the 25% full-search probability is not a
+quality dial on the training set — it decides *which positions the network learns from at all*, and the other 75%
+of search compute buys nothing but a plausible move.
 
-At the current 25% full-search probability, which positions get the full search is chosen at random. Holding that
-25% budget exactly fixed and choosing the best 25% instead:
+Two consequences, and they pull in opposite directions.
 
-| Assignment of the 25% full-search budget | Mean KL | Equivalent flat budget |
-|---|---|---|
-| Random — what runs today | 0.4163 | **261 visits** |
-| Perfect | 0.3017 | **580 visits** |
+**Per-position budget scaling on the full searches is the clean win.** Holding the selection random and varying
+only how long each full search runs, the oracle bound of §2 applies directly: at a mean of 600 visits a perfect
+allocator reaches what a flat budget needs 2,623 visits for, **4.4× effective compute**. Nothing about which
+positions become targets changes, so there is no distributional hazard.
 
-**A perfect fast/full decision more than doubles effective search at identical cost.** The benefit is extremely
-concentrated: the top 10% of positions carry **76.7%** of all available benefit and the top 25% carry 97.1%. That
-makes it a *ranking* problem, not a calibrated regression — a far easier thing to learn.
+**Selecting *which* positions become targets by contestedness is not safe on its own.** Ranking positions by how
+much the target moves between 200 and 600 visits and taking the top quartile gives targets that are markedly less
+reliable:
+
+| Quartile selected for the full search | KL of its 600-visit target |
+|---|---|
+| Random — what runs today | 0.2971 |
+| Most contested 25% | **0.4694** |
+| Least contested 25% | 0.3994 |
+
+The contested quartile needs about **1,600 visits** to reach the target accuracy a random quartile already has at
+600. Contested positions carry the most learning signal *and* the least trustworthy labels at a fixed budget, and
+reallocating budget within that quartile barely helps (0.4530 against 0.4694 flat) because it is homogeneously
+hard — the heterogeneity the oracle exploits lives mostly in *easy* positions, which selection has already
+removed.
+
+Note that both extreme quartiles score worse than random, because low benefit mixes two different populations:
+already-decided positions, where both budgets agree and the target is good, and diffuse positions where search
+does not converge at either budget. Benefit alone does not separate them.
+
+So selection and budget are not independent choices. Selecting hard positions without also lengthening their
+searches trades target accuracy for learning signal at an unmeasured exchange rate; the defensible order is to get
+budget scaling working first, and treat selection as a second step that must come with a budget increase.
 
 ## 2. Adaptive search: the mechanism is sound, the criteria are not
 
