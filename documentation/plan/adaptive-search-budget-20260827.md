@@ -48,7 +48,7 @@ KL divergence between the deep and baseline policies is materially more informat
 | 8,000 | 55.7% |
 | 10,000 | 56.7% |
 
-Around eight times the baseline is the intended operating point: it captures about 92% of what a sixteen-times label provides, whereas four times captures about 73%. Going deeper on fewer randomly selected positions is more useful than going shallower on more positions because label cost scales approximately linearly with visits.
+The deep-label limit is exactly eight times the baseline configured for its source generation. It captures about 92% of what a sixteen-times label provides, whereas four times captures about 73%. Going deeper on fewer randomly selected positions is more useful than going shallower on more positions because label cost scales approximately linearly with visits.
 
 Non-uniform allocation has a serious convexity penalty before ordering quality is considered. Randomly dispersing the measured good budget distribution scored approximately 74% worse than a flat budget. The ceiling carries most of the available value, while a 2x ceiling retains only about 38% of the gain. The production curve therefore needs a floor near 0.2x and a ceiling of at least 4x, but it must not be activated at full strength until the head has demonstrated useful ordering.
 
@@ -95,11 +95,13 @@ The empirical CDF uses deterministic mid-ranks for ties, maps the lowest and hig
 
 Sampling remains random and independent of the predicted budget. Prediction-dependent labelling would create a feedback loop and remove counterfactual evidence exactly where the allocator is uncertain.
 
-The measurements favor approximately 1% of positions at about 8x depth, costing roughly 7% additional self-play compute. The first live run deliberately uses 2% to shorten head warm-up and measures the resulting roughly 14-16% labelling overhead under shared GPU contention.
+The measurements favor approximately 1% of positions at 8x depth, costing roughly 7% additional self-play compute. The first live run deliberately uses 2% to shorten head warm-up and measures the resulting roughly 14-16% labelling overhead under shared GPU contention.
 
 At 120,000 new positions per generation, a 2% sample produces about 2,400 new unique deep labels per generation and about 72,000 after 30 generations. Replay sampling can expose those labels many more times during training, but repeated draws are not counted as new positional coverage.
 
-The sample fraction remains configurable for later runs, but 2% is the concrete first-run setting.
+The sample fraction remains configurable for later runs, but 2% is the concrete first-run setting. Once all new observations for a source generation are known, the labeler selects exactly `floor(0.02 * position_count)` positions uniformly without replacement using the run seed, source generation, and stable position identity. This produces one deterministic generation sample of arbitrary size; 512 is only its execution shard size.
+
+Every selected position participates in that generation's target quantile and shadow evaluation. Every successfully deep-searched position is then written into replay with its deep policy and eligible scalar target. There is no separate rolling calibration-sample window: older labelled positions remain available to ordinary training only for as long as the normal replay-capacity policy retains them.
 
 ### Deep-policy write-back
 
@@ -135,7 +137,7 @@ The first live-run configuration uses all eight GPU identifiers as eligible labe
 
 The native inference maximum batch size is 512 for these shards. Full shards can therefore submit one independent leaf per root, while the final remainder uses its actual smaller size. This is separate from the approximately 2,400 total positions in the generation job; no model batch contains all sampled positions.
 
-Deep labels should initially use `parallel_searches = 1`. With hundreds of independent roots, the executor can fill inference batches without multiple simultaneous descents in one tree, and sequential search avoids the measured policy-quality loss from parallel selection. Unlike production adaptive allocation, every label root has the same deep final limit, so there is little long-budget tail to keep fed. Any later increase requires a direct label-fidelity and throughput measurement.
+Deep labels use `parallel_searches = 1`. Each device-pinned label process owns one inference worker with batch size 512 and two outstanding batches. With hundreds of independent roots, the executor can fill inference batches without multiple simultaneous descents in one tree, and sequential search avoids the measured policy-quality loss from parallel selection. Unlike production adaptive allocation, every label root has the same deep final limit, so there is little long-budget tail to keep fed. Any later change requires a direct label-fidelity and throughput measurement.
 
 For sample fraction `f` and deep multiple `d`, label search costs approximately `f * d` of flat self-play visit compute: 2% at 8x is about 16%. Queue lag determines whether the shared eight-GPU pool keeps up under real contention. Workers write policy-heavy results directly to atomic shard artifacts rather than pickling them through the executor result pipe. The parent receives a typed manifest containing shard identity, device, counts, timings, checksums, and artifact paths. No in-memory coordinator owns irreplaceable search output.
 
@@ -145,7 +147,7 @@ The model gains one scalar `search_budget` output read from the root forward pas
 
 The target is eligible only on deep-labelled replay samples. Training uses the same explicit mask pattern as `IneligibleNextPolicyTarget`; unlabelled positions contribute normally to all primary losses and contribute nothing to the search-budget loss.
 
-The head emits one unconstrained logit. Training applies `sigmoid` and masked Smooth L1 against the quantile target in `[0, 1]`, matching the established bounded-scalar auxiliary path. The bounded output is the predicted quantile used by the allocator; there is no second empirical prediction-CDF calibration layer. The masked reduction divides by eligible sample weight, so the 2% label rate does not implicitly shrink the loss by 50x. Because production search allocation depends directly on this head, the first live run uses auxiliary loss weight 0.2. The weight remains generation-schedulable and its gradient contribution is reported.
+The head emits one unconstrained logit. Training applies `sigmoid` and masked L1 against the quantile target in `[0, 1]`. L1 uses the absolute prediction error directly and, unlike Smooth L1, introduces no transition-width parameter. The bounded output is the predicted quantile used by the allocator; there is no second empirical prediction-CDF calibration layer. The masked reduction divides by eligible sample weight, so the 2% label rate does not implicitly shrink the loss by 50x. The search-budget auxiliary loss weight is 0.2. It remains generation-schedulable as part of the common auxiliary-target interface, but 0.2 is the complete first-run schedule, and its gradient contribution is reported.
 
 Telemetry persists both the raw logit and bounded quantile prediction so ordering, saturation, and calibration remain distinguishable.
 
@@ -168,6 +170,8 @@ The unrounded assigned budget is:
 budget = B * ((1 - alpha) + alpha * m(q))
 ```
 
+For the first run, `B` is the visit schedule inherited by the existing v10 configuration from v9: 200 at generation 0, 300 at 10, 400 at 30, 500 at 50, 600 at 90, 700 at 180, 800 at 250, and 1,000 at 550. The deep-label target for source generation `g` is exactly `8 * B(g)`.
+
 Consequently:
 
 - `alpha = 0` is exactly the flat baseline;
@@ -175,9 +179,28 @@ Consequently:
 - intermediate values continuously reduce the variance and risk of the allocation;
 - the ordering comes from the head, while the amount of dispersion comes from the calibrated blend.
 
-The multiplier curve is configuration, with an intended floor near 0.2x and ceiling of at least 4x. It must map the median prediction below 1x: the measured oracle assigns approximately 73% of positions less than the baseline budget.
+The multiplier curve is fixed for a run. Refitting it from each generation's deep results would use information unavailable when those positions were searched, change the meaning of `alpha` from one generation to the next, and make shadow comparisons unstable. Changes to the curve are versioned experiment-configuration changes made between runs. The per-generation KL quantile target already absorbs changes in the raw KL scale and shape.
 
-The curve is normalized to mean one under a uniform quantile distribution. Production additionally maintains a deterministic cumulative compute ledger: prediction miscalibration, rounding, and finite-sample residuals are carried forward and corrected in later assignments without violating the configured floor or ceiling. Each generation therefore closes with total assigned new simulations matching the flat baseline total within a stated integer tolerance. Monitoring an expected mean of one is insufficient; the realized mean must be enforced.
+The first-run default is the measured noise-corrected oracle allocation histogram at mean 600 visits, with source multipliers above 4x clipped to 4x and the result divided by its exact clipped mean, `3761 / 4500`. It is the following right-open step function, with the final interval closed at one:
+
+| Predicted quantile `q` | Exact multiplier `m(q)` | Approximation |
+| ---: | ---: | ---: |
+| `[0, 1186/3000)` | `750/3761` | 0.199415 |
+| `[1186/3000, 1570/3000)` | `1500/3761` | 0.398830 |
+| `[1570/3000, 1838/3000)` | `2250/3761` | 0.598245 |
+| `[1838/3000, 2048/3000)` | `3000/3761` | 0.797660 |
+| `[2048/3000, 2188/3000)` | `3750/3761` | 0.997075 |
+| `[2188/3000, 2347/3000)` | `4500/3761` | 1.196490 |
+| `[2347/3000, 2547/3000)` | `6000/3761` | 1.595320 |
+| `[2547/3000, 2699/3000)` | `9000/3761` | 2.392981 |
+| `[2699/3000, 2806/3000)` | `12000/3761` | 3.190641 |
+| `[2806/3000, 1]` | `18000/3761` | 4.785961 |
+
+The implementation uses the exact ratios rather than renormalizing the displayed decimal approximations. This curve has mean one under a uniform quantile distribution, a 0.199x floor, a 4.786x ceiling, and sends 72.9% of quantiles below baseline.
+
+Shadow allocation and label calibration operate on different values but share one generation-wide barrier. Candidate budgets are normalized across the complete 2% generation sample, never independently inside 512-position execution shards. The KL values from that same complete sample are separately converted to the head's mid-rank targets.
+
+Production allocation applies the published curve and blend to every self-play position, not only the 2% audit sample. It additionally maintains a deterministic cumulative compute ledger: prediction miscalibration, rounding, and finite-sample residuals are carried forward and corrected in later assignments without violating the configured floor or ceiling. Each generation therefore closes with total assigned new simulations matching the flat baseline total within a stated integer tolerance. Monitoring an expected mean of one is insufficient; the realized mean must be enforced. This ledger is allocator state, not another tuning parameter or label-calibration window.
 
 Budgets are defined as additional simulations, not an absolute root visit count. This keeps compute accounting stable when production retains roots with existing visits. The native limit converts the assigned additional budget to its stopping condition using the root's starting visit count.
 
@@ -244,7 +267,13 @@ Published decisions apply only to later generations, with an explicit lag that p
 
 ## Parallelism follows the assigned budget
 
-Per-search parallelism scales with the assigned visit budget so the number of sequential inference rounds stays approximately bounded. An initial mapping to validate is:
+Per-search parallelism scales with the assigned visit budget so the number of sequential inference rounds stays approximately bounded. The production rule is:
+
+```text
+parallel_searches = min(16, next_power_of_two(ceil(assigned_new_visits / 200)))
+```
+
+This produces:
 
 | Assigned new visits | Parallel searches |
 | ---: | ---: |
@@ -252,11 +281,11 @@ Per-search parallelism scales with the assigned visit budget so the number of se
 | 300 | 2 |
 | 600 | 4 |
 | 1,600 | 8 |
-| 2,400 | 16 |
+| 2,400 or more | 16 |
 
-This mapping is per search task, not one global value shared by every active root.
+This mapping is per search task, not one global value shared by every active root. It never exceeds 16, including when the late-generation baseline and 4.786x curve ceiling assign more than 2,400 visits.
 
-The assumption remains unverified. Previous measurements changed parallelism at fixed total visits and therefore confounded more parallel work with fewer sequential rounds. The shadow evaluator can validate target fidelity at the intended checkpoint budgets, but only a live run can establish GPU utilization, inference-batch health, latency, and any quality loss caused by parallel selection. The parallelism curve is consequently configuration and must be instrumented independently from allocator quality.
+The quality assumption remains unverified. Previous measurements changed parallelism at fixed total visits and therefore confounded more parallel work with fewer sequential rounds. The shadow evaluator can validate target fidelity at the intended checkpoint budgets, but only a live run can establish GPU utilization, inference-batch health, latency, and any quality loss caused by parallel selection. The rule is configuration and must be instrumented independently from allocator quality, but the formula and cap above are the first-run defaults.
 
 ## Background execution and replay ownership
 
@@ -272,23 +301,23 @@ Configuration is divided by ownership without duplicating fields:
 
 ### Deep labelling
 
-- random sample fraction;
-- deep-search multiple or absolute limit derived from the generation baseline;
-- maximum concurrent jobs and GPU allocation;
-- maximum generation lag;
-- retained counterfactual checkpoints.
+- random sample fraction, default `0.02`, converted to `floor(fraction * new_generation_positions)`;
+- deep-search multiple, default and first-run value `8` times the source-generation baseline;
+- one active logical generation job and all unique trainer GPU identifiers eligible by default;
+- maximum unstarted generation lag, default `2`;
+- counterfactual checkpoints derived from the candidate grid, curve, and generation baseline rather than separately authored.
 
 ### Search-budget target
 
-- masked Smooth L1 on the sigmoid-bounded scalar;
-- generation-schedulable auxiliary loss weight, initially 0.2;
+- masked L1 on the sigmoid-bounded scalar;
+- generation-schedulable auxiliary loss weight, default and complete first-run schedule `0.2`;
 - eligible-count and gradient-contribution telemetry.
 
 ### Allocation
 
-- baseline visit schedule;
-- quantile-to-multiplier curve;
-- floor and ceiling;
+- baseline visit schedule inherited from v10;
+- the exact stepwise quantile-to-multiplier curve above;
+- floor `750/3761` and ceiling `18000/3761`;
 - exact mean-preservation, cumulative-ledger, and rounding policy.
 
 ### Blend calibration
@@ -302,8 +331,8 @@ These defaults belong to the canonical typed calibrator configuration, so an ord
 
 ### Parallel execution
 
-- assigned-budget-to-parallel-searches curve;
-- implementation limits imposed by inference batching and worker capacity.
+- next-power-of-two rule targeting 200 sequential rounds;
+- minimum one and maximum 16 parallel searches.
 
 ### Label-worker execution
 
@@ -311,8 +340,8 @@ These defaults belong to the canonical typed calibrator configuration, so an ord
 - spawned process-pool worker initialization and device pinning;
 - positions per persisted shard;
 - roots per native search chunk;
-- inference workers, maximum batch size, and outstanding batches;
-- fixed label-search parallelism, initially one.
+- one inference worker, maximum batch size 512, and two outstanding batches per process;
+- fixed label-search parallelism, one.
 
 ## Required telemetry
 
@@ -411,7 +440,7 @@ All played positions become replay samples. There is no weighting adjustment bas
 ## Implementation sequence
 
 1. **Target and model path.** Add the scalar head, eligibility mask, replay schema, columnar storage, materialization support, losses, metrics, and generated native bindings. Remove the `full_search` materialization filter.
-2. **Deep-label pipeline.** Add deterministic generation sampling, shard-local prediction, the scalar-aggregation barrier, exact generation-wide candidate-budget construction, fixed 512-position shards plus a final remainder, a run-lifetime spawn-based device-pinned process pool, explicit native checkpoint-visit requests, monotonic immutable-checkpoint refresh, noise-free baseline/candidate/deep policy capture from one continued fresh root, atomic shard artifacts, quantile normalization, persistent job state, and deep-policy replay write-back. Use inference batch size 512 and label-search parallelism one.
+2. **Deep-label pipeline.** Add deterministic generation sampling, shard-local prediction, the scalar-aggregation barrier, exact generation-wide candidate-budget construction, fixed 512-position shards plus a final remainder, a run-lifetime spawn-based device-pinned process pool, explicit native checkpoint-visit requests, monotonic immutable-checkpoint refresh, noise-free baseline/candidate/deep policy capture from one continued fresh root, atomic shard artifacts, quantile normalization, persistent job state, and deep-policy replay write-back. Use one inference worker with batch size 512 and two outstanding batches per process, and label-search parallelism one.
 3. **Shadow evaluator and calibrator.** Add exact candidate-budget reconstruction, equal-compute generation utility scoring, EMA state, deterministic selection, atomic publication, fail-closed behavior, and complete diagnostics.
 4. **Native allocator in shadow-safe form.** Add predicted budget plumbing, mean-preserving generation allocation, retained-root accounting, and per-search parallelism. Ship with the published blend clamped to zero until calibrator conditions permit otherwise.
 5. **Remove superseded systems.** Delete threshold adaptation, `SearchCorrectionGate`, `search_correction`, fast/full admission and configuration, old filters, obsolete tools, stale telemetry, and compatibility layers. Migrate production configuration and documentation in the same phase.
@@ -464,20 +493,20 @@ The labeler overhead must be included in wall-clock comparisons, even though its
 
 - Use `KL(pi_deep || pi_baseline)` rather than total variation.
 - Quantile-normalize the scalar target.
-- Generate labels at approximately 8x baseline depth on a small random fraction of positions.
+- Generate labels at exactly 8x the source-generation baseline depth on a small random fraction of positions.
 - Train one scalar auxiliary head jointly with the trunk and mask its loss to labelled samples.
 - Keep an independent random audit stream permanently.
 - Use a 2% label sample for the first live run.
 - Compute predictions inside the normal shards, then aggregate their scalars before constructing generation-wide candidate checkpoint budgets.
 - Run deterministic 512-root shards plus a final remainder through a spawn-based, device-pinned process pool over all eight eligible GPUs.
-- Use label inference batch size 512 and `parallel_searches = 1`.
+- Use one label inference worker per process, batch size 512, two outstanding batches, and `parallel_searches = 1`.
 - Write policy-heavy shard output atomically and return lightweight manifests to the coordinator.
 - Reconstruct fresh label roots, disable Dirichlet noise, and continue one tree through baseline and deep checkpoints.
-- Train the sigmoid-bounded quantile prediction with masked Smooth L1 at initial loss weight 0.2.
+- Train the sigmoid-bounded quantile prediction with masked L1 at loss weight 0.2.
 - Use the bounded head output directly as the predicted quantile; do not add a second prediction-CDF calibration layer.
 - Write final deep policies back into replay.
 - Make every played position a replay sample and remove the fast/full split.
-- Use a fixed nonlinear multiplier curve with a floor near 0.2x and ceiling of at least 4x.
+- Use the fixed measured-oracle multiplier curve above with exact floor `750/3761` and ceiling `18000/3761`.
 - Preserve exact mean new-simulation spend by construction.
 - Scale parallel searches per assigned budget.
 - Hold the blend at zero until approximately 30 source-generation label jobs have completed.
@@ -489,9 +518,6 @@ The labeler overhead must be included in wall-clock comparisons, even though its
 
 ## Decisions to make from live shadow data
 
-- exact deep limit and retained checkpoint set;
-- multiplier-curve control points and final ceiling;
-- per-budget parallelism curve and worker limits;
 - run length and matched-control schedule.
 
 ## Acceptance criteria
@@ -503,6 +529,7 @@ Implementation is ready for the live experiment when:
 - every self-play position materializes regardless of its assigned budget;
 - deep-label jobs are generation-triggered, asynchronous, bounded, retryable, and idempotent;
 - prediction is recorded before the deep target and remains attributable to an immutable source checkpoint;
+- deterministic sampling selects exactly `floor(0.02 * new_generation_positions)` positions without replacement for the first run;
 - label shards have stable ownership and can be processed by one or multiple workers without duplicate evidence;
 - generation-wide candidate budgets are constructed after shard-local prediction and before deep-search dispatch, preserving the global sample mean;
 - label-search root chunks contain at most 512 roots and bound host memory while sustaining measured inference occupancy;
@@ -512,7 +539,9 @@ Implementation is ready for the live experiment when:
 - label searches disable root noise and retries reproduce checkpoint policies;
 - one native continuation returns policies at every explicitly requested visit checkpoint;
 - generation-wide KL values deterministically produce mid-rank quantile targets in `[0, 1]`;
+- every completed deep-labelled position contributes to that source generation's quantiles and shadow score, then enters replay with its deep policy;
 - deep policies and their finalized scalar targets are written back as valid replay samples before blend publication;
+- the exact default multiplier curve integrates to one and reproduces its documented floor, ceiling, and below-baseline share;
 - shadow candidate budgets preserve exact mean new-simulation spend;
 - shadow utility is reconstructed from exact policy checkpoints and reproduces known offline cases;
 - the warm-up clamp prevents nonzero production blend before the configured number of source-generation label jobs has completed;
@@ -521,7 +550,7 @@ Implementation is ready for the live experiment when:
 - an unfinished job preserves the latest completed state, while terminal failure, invalid compute, or incompatible state returns the allocator to zero;
 - each completed source generation updates EMA and blend state exactly once and publishes only for a production generation that has not started;
 - native search stops at the assigned additional-visit budget with retained roots;
-- parallelism differs correctly between simultaneous searches with different budgets;
+- parallelism differs correctly between simultaneous searches with different budgets and follows the documented rule without exceeding 16;
 - old adaptive threshold, learned gate, `search_correction`, and fast/full code and configuration are gone;
 - telemetry can explain every label, candidate score, blend transition, spend residual, and fallback;
 - an 8-GPU live run completes warm-up and demonstrates whether the allocator can safely capture positive oracle gain.
