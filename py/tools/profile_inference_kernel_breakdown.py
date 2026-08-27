@@ -77,6 +77,7 @@ class KernelProfileReport(FrozenModel):
     precision: Precision
     memory_format: MemoryFormat
     cudnn_benchmark: bool
+    graph_captured: Literal[True] = True
     kernel_count: int = Field(gt=0)
     gpu_span_microseconds: float = Field(gt=0.0)
     gpu_busy_microseconds: float = Field(gt=0.0)
@@ -234,15 +235,28 @@ def run_profile(arguments: ProfileArguments) -> KernelProfileReport:
         dtype=arguments.precision.torch_dtype,
     ).to(memory_format=arguments.memory_format.torch_memory_format)
 
-    with torch.inference_mode():
+    capture_stream = torch.cuda.Stream(device=device)
+    capture_stream.wait_stream(torch.cuda.current_stream(device))
+    with torch.inference_mode(), torch.cuda.stream(capture_stream):
         for _ in range(arguments.warmup_iterations):
             scripted(states)
+    torch.cuda.current_stream(device).wait_stream(capture_stream)
+    torch.cuda.synchronize(device)
+
+    graph = torch.cuda.CUDAGraph()
+    with torch.inference_mode(), torch.cuda.graph(graph, stream=capture_stream):
+        captured_outputs = scripted(states)
+    if len(captured_outputs) != 3:
+        raise ValueError('The captured inference model must return three tensors.')
+
+    with torch.inference_mode():
+        graph.replay()
         torch.cuda.synchronize(device)
         with torch.profiler.profile(
             activities=(torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA),
             record_shapes=True,
         ) as profiler:
-            scripted(states)
+            graph.replay()
             torch.cuda.synchronize(device)
     return _build_report(arguments, _cuda_events(profiler))
 
