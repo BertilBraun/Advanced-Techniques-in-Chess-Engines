@@ -375,19 +375,86 @@ Searches start from a fresh root while production retains 60% of parent visits. 
 learned search-correction gate was disabled and is not covered by this result. Target fidelity is not a training
 outcome: a cheaper search that reaches different positions could still train better, and this cannot see that.
 
-### 7.4 What would settle this properly
+### 7.4 The oracle bound — the mechanism has large headroom, the criteria are the problem
 
-The decomposition above infers the selection penalty from population averages. The decisive measurement is a
-per-position one, which the current tool does not emit: record each position's fidelity at every fixed budget,
-then compute the **best achievable allocation** at a given mean compute. That bounds what *any* stopping rule
-could deliver.
+Run on all 3,000 positions with `tools.measure_policy_target_fidelity --per-position-output` followed by
+`tools.analyse_budget_allocation`, which sweeps a Lagrange multiplier over the per-position fidelity curves to
+trace the **best allocation any budget predictor could achieve**, however it is built. Raw:
+`results-oracle/allocation.json`.
 
-- If the oracle allocation cannot beat a flat budget, no stopping rule ever can, and the mechanism is dead on
-  arrival for this metric.
-- If the oracle beats flat substantially, the mechanism is sound and only these particular stopping criteria are
-  bad, which makes better criteria worth designing.
+| Mean visits | Flat KL | Oracle KL | Flat budget needed to match the oracle | Effective saving |
+|---|---|---|---|---|
+| 200 | 0.4561 | 0.2697 | 771 | +571 |
+| 400 | 0.3473 | 0.1685 | 1,821 | +1,421 |
+| **600** | **0.2971** | **0.1249** | **2,623** | **+2,023** |
+| 1,200 | 0.2139 | 0.0666 | 4,470 | +3,270 |
+| 2,400 | 0.1343 | 0.0274 | 6,794 | +4,394 |
 
-This costs one further reference pass, about 45 minutes. It is not yet run.
+At the production budget a perfect allocator reaches with 600 visits what a flat budget needs 2,623 visits for —
+**4.4× the effective compute**. So variable per-position budgeting is not a dead idea. The adaptive rules capture
+none of it, and the earlier reading that "the mechanism does not pay" was wrong: the *mechanism* pays enormously,
+the *criteria* do not.
+
+**This is not an artefact of the finite reference.** A position handed the full 10,000-visit reference budget
+scores exactly zero divergence by construction, so the allocator could in principle farm that. It does not: at a
+mean of 521 visits only **0.1%** of positions receive the reference budget, consuming 1.9% of the spend. Removing
+the reference budget from the allocator's menu entirely leaves the oracle at KL 0.1396 for mean 519 visits against
+0.1249 for mean 600 with it — essentially unchanged, and still far below the flat 0.3137 at that budget.
+
+The allocation is heavily skewed: at a mean of 521 visits the oracle gives 38% of positions the 100-visit minimum
+and spends the savings on a long tail out to 8,000.
+
+### 7.5 Why no threshold rule can capture it
+
+The adaptive rule stops when the top-visit share (or top-two margin) clears a decaying threshold. Measuring what
+those signals actually predict — benefit defined as the divergence reduction from searching 200 → 600 visits —
+shows the relationship is **not monotone**:
+
+| Decile of top-visit share at 200 visits | Signal range | Mean benefit of 200 → 600 | Against population |
+|---|---|---|---|
+| 1 | 0.025–0.093 | 0.0253 | 0.16× |
+| 2 | 0.093–0.180 | 0.0379 | 0.24× |
+| 5 | 0.335–0.408 | 0.2617 | 1.65× |
+| 9 | 0.696–0.842 | 0.2725 | 1.71× |
+| 10 | 0.843–1.000 | 0.0483 | 0.30× |
+
+Benefit collapses at **both** ends and peaks in the middle. Positions where the search is still diffuse gain
+little; positions where one move already dominates gain little; positions where two or three moves are genuinely
+competing gain the most. `top_two_margin` has the same inverted-U shape.
+
+Testing the production rule directly against that:
+
+| Stop at 200 visits when top share ≥ | Positions stopped | Mean forgone benefit | Stopping at random |
+|---|---|---|---|
+| 0.5 | 39.0% | 0.1808 | 0.1589 |
+| 0.6 | 27.9% | 0.1846 | 0.1589 |
+| 0.7 | 19.5% | 0.1595 | 0.1589 |
+| 0.8 | 13.2% | 0.1163 | 0.1589 |
+
+The production schedule runs 0.7 decaying to 0.5 — **exactly the band where the rule forgoes more than choosing
+positions at random**. That independently confirms the selection penalty inferred in §7.2, and explains why the
+seven-parameter grid barely moved anything: a monotone threshold on an inverted-U signal cannot work at any
+setting.
+
+Two things follow, and they point in different directions:
+
+- **A cheap partial fix exists.** Raising the top-share threshold to ≥0.85 stops the 13% of positions that
+  genuinely do not need more search and beats random selection. The ceiling on that is small — stopping 13% of
+  positions at 200 instead of 600 visits saves under 9% of compute, and roughly 40% of that is given back to the
+  convexity penalty (§7.2) — so it turns adaptive from a slight loss into roughly break-even. Not worth eight
+  parameters on its own.
+- **The large prize needs a different functional form.** Capturing the inverted-U requires distinguishing
+  "diffuse and unresolvable" from "genuinely contested" from "already decided". No threshold on a single search
+  statistic can express that shape. A **learned per-position difficulty head** can, and this is the quantitative
+  case for building one: up to 4.4× effective search compute, against hand-made online signals that correlate at
+  only ρ ≈ 0.21 and in the wrong shape.
+
+The pipeline that produced this also produces the labels such a head would need: for every position,
+`benefit = KL(cheap budget) − KL(target budget)`, at 3,000 positions per 45-minute pass.
+
+Caveats. The oracle is an upper bound computed with perfect hindsight; no realisable predictor reaches it, and
+how much of it a learned head could capture is untested. Only two hand-made signals were examined; a head sees the
+position itself and could do better or worse. And the whole measurement is target fidelity, not training outcome.
 
 ## 8. Recommendations for the next run
 
@@ -399,8 +466,12 @@ This costs one further reference pass, about 45 minutes. It is not yet run.
    GPU-contention artefact (§6.3). Parallelism is strength-neutral at 600 visits, and with 512 games per process
    it buys no throughput either. It is worth raising only for few-tree work such as interactive analysis. Whether
    it stays strength-neutral at the 150-visit fast searches is untested.
-4. **Drop the adaptive full-search budget** — provisionally, pending §7.4. It is a wash at the production cap
-   and degrades as the cap rises, so it delivers nothing while carrying eight configuration parameters (§7.2).
+4. **Drop the adaptive full-search budget as configured**, but not the idea behind it. Its thresholds sit in the
+   band where they select worse than random (§7.5), and it is a wash at the production cap for eight parameters.
+   Either raise the top-share threshold to ≥0.85 for a small honest gain, or drop the rule and pursue the learned
+   difficulty head, which is where the 4.4× headroom is (§7.4).
+7. **Consider a per-position difficulty head.** The evidence for it is §7.4 and §7.5: large headroom, and a target
+   shape that no threshold rule can express. The labelling pipeline already exists.
 5. **Leave cpuct at 1.5** — anywhere in 1.0–2.0 is indistinguishable, 3.0 is harmful.
 6. **Leave the search value discount alone** pending better evidence; no effect was detected either way.
 
