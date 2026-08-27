@@ -161,7 +161,7 @@ def dataset_split(row_count: int, holdout_fraction: float, training_fraction: fl
 def student_policy_head(arguments: Arguments) -> PolicyHeadConfiguration:
     match arguments.policy_head_kind:
         case PolicyHeadKind.DENSE:
-            return DensePolicyHeadConfiguration(channels=4, bottleneck_rank=arguments.policy_bottleneck_rank)
+            return DensePolicyHeadConfiguration(channels=4, bottleneck_rank=arguments.policy_bottleneck_rank or None)
         case PolicyHeadKind.FROM_TO_ATTENTION:
             return ChessFromToAttentionPolicyHeadConfiguration(key_size=arguments.policy_key_size)
 
@@ -570,7 +570,12 @@ def parse_arguments() -> Arguments:
         choices=tuple(kind.value for kind in OptimizerKind),
     )
     parser.add_argument('--floor-fraction', default=0.1, type=float)
-    parser.add_argument('--policy-bottleneck-rank', default=16, type=int)
+    parser.add_argument(
+        '--policy-bottleneck-rank',
+        default=16,
+        type=int,
+        help='Zero removes the bottleneck, which is the dense head production runs.',
+    )
     parser.add_argument('--batch-size', default=1024, type=int)
     parser.add_argument('--steps', required=True, type=int)
     parser.add_argument('--learning-rate', default=0.002, type=float)
@@ -626,8 +631,10 @@ def parse_arguments() -> Arguments:
     )
     if not arguments.dataset.is_file():
         raise ValueError(f'Dataset does not exist: {arguments.dataset}')
-    if min(arguments.layers, arguments.hidden_size, arguments.policy_bottleneck_rank) <= 0:
-        raise ValueError('Layers, hidden size and policy bottleneck rank must be positive.')
+    if min(arguments.layers, arguments.hidden_size) <= 0:
+        raise ValueError('Layers and hidden size must be positive.')
+    if arguments.policy_bottleneck_rank < 0:
+        raise ValueError('Policy bottleneck rank must be nonnegative; zero removes the bottleneck.')
     if min(arguments.heads, arguments.feedforward, arguments.policy_key_size) <= 0:
         raise ValueError('Head count, feedforward size and policy key size must be positive.')
     if arguments.network_kind is NetworkKind.ATTENTION and arguments.hidden_size % arguments.heads:
