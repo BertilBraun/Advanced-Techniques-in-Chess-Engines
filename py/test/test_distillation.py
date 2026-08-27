@@ -54,7 +54,7 @@ def _manifest(position_count: int) -> DistillationDatasetManifest:
         random_seed=7,
         random_opening_plies=6,
         sampling_temperature=1.0,
-        recorded_ply_interval=4,
+        sample_one_position_in=14,
         random_perturbation_probability=0.1,
         maximum_game_plies=300,
         builder_source_revision='0123456789abcdef',

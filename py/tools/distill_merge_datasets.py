@@ -28,6 +28,12 @@ def _require_compatible(sources: tuple[DistillationDatasetManifest, ...]) -> Non
                     f'Datasets disagree on {field}: {getattr(first, field)!r} against {getattr(manifest, field)!r}.'
                 )
 
+    # Shards generated with one seed hold identical games, so merging them multiplies the file size and not the
+    # content. The seeds are the only evidence of that available without comparing the rows themselves.
+    seeds = [manifest.random_seed for manifest in sources]
+    if len(set(seeds)) != len(seeds):
+        raise ValueError(f'Datasets must come from distinct random seeds; got {seeds}.')
+
 
 def merge_datasets(inputs: tuple[Path, ...], output: Path) -> DistillationDatasetManifest:
     manifests = tuple(read_manifest(path) for path in inputs)

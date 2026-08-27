@@ -44,7 +44,7 @@ class BuilderArguments:
     parallel_games: int
     random_opening_plies: int
     sampling_temperature: float
-    recorded_ply_interval: int
+    sample_one_position_in: int
     random_perturbation_probability: float
     maximum_game_plies: int
     random_seed: int
@@ -146,7 +146,9 @@ def generate_records(teacher: LoadedTeacher, arguments: BuilderArguments, device
             legal = legal_action_ids[row]
             legal_logits = policy_logits[row, legal].astype(np.float64)
             teacher_policy = softmax(legal_logits)
-            if slot.ply % arguments.recorded_ply_interval == 0:
+            # A fixed stride from a fixed opening length only ever lands on one side to move, so an exchange
+            # is seen from one end and never the other. Retaining each ply independently removes that.
+            if generator.random() < 1.0 / arguments.sample_one_position_in:
                 write_record(records[recorded], packed_states[row], legal, teacher_policy, wdl_probabilities[row])
                 recorded += 1
             if generator.random() < arguments.random_perturbation_probability:
@@ -183,7 +185,12 @@ def parse_arguments() -> BuilderArguments:
     parser.add_argument('--parallel-games', type=int, default=512, help='Games kept in flight per teacher batch.')
     parser.add_argument('--random-opening-plies', type=int, default=4, help='Uniformly random plies opening a game.')
     parser.add_argument('--sampling-temperature', type=float, default=1.0, help='Temperature of the move sampling.')
-    parser.add_argument('--recorded-ply-interval', type=int, default=4, help='Record every Nth ply of a game.')
+    parser.add_argument(
+        '--sample-one-position-in',
+        type=int,
+        default=14,
+        help='Retain each ply with probability 1/N, so a game contributes about its length over N positions.',
+    )
     parser.add_argument(
         '--random-perturbation-probability',
         type=float,
@@ -204,7 +211,7 @@ def parse_arguments() -> BuilderArguments:
         parallel_games=parsed.parallel_games,
         random_opening_plies=parsed.random_opening_plies,
         sampling_temperature=parsed.sampling_temperature,
-        recorded_ply_interval=parsed.recorded_ply_interval,
+        sample_one_position_in=parsed.sample_one_position_in,
         random_perturbation_probability=parsed.random_perturbation_probability,
         maximum_game_plies=parsed.maximum_game_plies,
         random_seed=parsed.random_seed,
@@ -242,7 +249,7 @@ def main() -> None:
         random_seed=arguments.random_seed,
         random_opening_plies=arguments.random_opening_plies,
         sampling_temperature=arguments.sampling_temperature,
-        recorded_ply_interval=arguments.recorded_ply_interval,
+        sample_one_position_in=arguments.sample_one_position_in,
         random_perturbation_probability=arguments.random_perturbation_probability,
         maximum_game_plies=arguments.maximum_game_plies,
         builder_source_revision=revision.commit + ('-dirty' if revision.dirty else ''),

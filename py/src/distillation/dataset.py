@@ -18,7 +18,8 @@ CHESS_PAYLOAD_BYTES = 183
 
 
 class DistillationDatasetManifest(FrozenModel):
-    schema_version: int = Field(default=1, ge=1)
+    # Version 2 replaced the fixed ply stride with independent per-ply retention; version 1 files do not load.
+    schema_version: int = Field(default=2, ge=2)
     game: str = Field(min_length=1)
     position_count: int = Field(gt=0)
     action_size: int = Field(gt=0)
@@ -31,7 +32,7 @@ class DistillationDatasetManifest(FrozenModel):
     random_seed: int = Field(ge=0)
     random_opening_plies: int = Field(ge=0)
     sampling_temperature: float = Field(gt=0.0)
-    recorded_ply_interval: int = Field(gt=0)
+    sample_one_position_in: int = Field(gt=0)
     random_perturbation_probability: float = Field(ge=0.0, le=1.0)
     maximum_game_plies: int = Field(gt=0)
     builder_source_revision: str = Field(min_length=1)
