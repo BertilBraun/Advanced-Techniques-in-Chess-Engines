@@ -61,13 +61,18 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
     def value_discount_per_ply(self) -> FloatGenerationSchedule:
         return self.configuration.chess.objective.value_discount_per_ply
 
-    def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
+    def self_play_parameters_at(
+        self,
+        model_generation: int,
+        search_budget_blend: float,
+    ) -> ResolvedSelfPlayParameters:
         configuration = self.self_play_configuration
         objective = self.configuration.chess.objective
         early_termination = configuration.early_termination
         return replace(
             configuration.resolve(
                 model_generation,
+                search_budget_blend,
                 configuration.maximum_game_plies_at(model_generation),
                 objective.effective_search_value_discount_per_ply.value_at(model_generation),
             ),
@@ -116,7 +121,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
     ) -> ResolvedSelfPlayParameters:
         """Evaluation inherits the self-play first-play urgency; only the listed fields are overridden."""
         return resolved_evaluation_parameters(
-            self.self_play_parameters_at(model_generation),
+            self.self_play_parameters_at(model_generation, 0.0),
             configuration,
             model_generation,
             tree_search,

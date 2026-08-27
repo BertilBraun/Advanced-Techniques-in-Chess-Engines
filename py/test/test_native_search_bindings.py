@@ -55,9 +55,10 @@ def test_resolved_virtual_loss_weight_reaches_the_native_search_parameters() -> 
     configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     assert isinstance(configuration, ChessExperimentConfiguration)
     implementation = ChessImplementation(configuration)
-    resolved = replace(implementation.self_play_parameters_at(0), virtual_loss_weight=0.25)
+    resolved = replace(implementation.self_play_parameters_at(0, 0.4), virtual_loss_weight=0.25)
 
     native_parameters = implementation.native_search_parameters(resolved)
 
     assert native_parameters.tree_search.virtual_loss_weight == pytest.approx(0.25)
-    assert native_parameters.parallel_searches == resolved.parallel_searches
+    assert native_parameters.baseline_visits == resolved.baseline_visits
+    assert native_parameters.search_budget_blend == pytest.approx(0.4)

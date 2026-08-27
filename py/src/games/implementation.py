@@ -11,8 +11,6 @@ from src.games.representation import NetworkDimensions
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
 from src.self_play.native_configuration import native_execution_options
 from src.self_play.parameters import (
-    AdaptiveFullSearchBudget,
-    FixedFullSearchBudget,
     ParentValueFirstPlayUrgencyParameters,
     ReducedParentValueFirstPlayUrgencyParameters,
     ResolvedSelfPlayParameters,
@@ -39,15 +37,12 @@ def resolved_evaluation_parameters(
 ) -> ResolvedSelfPlayParameters:
     parameters = replace(
         baseline,
-        parallel_searches=configuration.parallel_searches,
-        full_search_budget=FixedFullSearchBudget(kind='fixed', visits=configuration.searches_per_move),
-        fast_searches=configuration.searches_per_move,
+        baseline_visits=configuration.searches_per_move,
+        search_budget_blend=0.0,
         forced_playout_coefficient=0.0,
         exploration_constant=configuration.resolved_exploration_constant,
         first_play_urgency=(
-            baseline.first_play_urgency
-            if overrides is None
-            else overrides.first_play_urgency.resolve(model_generation)
+            baseline.first_play_urgency if overrides is None else overrides.first_play_urgency.resolve(model_generation)
         ),
         dirichlet_alpha=1.0,
         dirichlet_epsilon=0.0,
@@ -122,7 +117,11 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
         raise NotImplementedError
 
     @abstractmethod
-    def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
+    def self_play_parameters_at(
+        self,
+        model_generation: int,
+        search_budget_blend: float,
+    ) -> ResolvedSelfPlayParameters:
         raise NotImplementedError
 
     @property
@@ -152,12 +151,8 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:
         from AlphaZeroCpp import (
-            AdaptiveSearchLimit,
-            DisabledSearchCorrectionGate,
             FirstPlayUrgencyKind,
             FirstPlayUrgencyParameters,
-            FixedSearchLimit,
-            SearchCorrectionGate,
             SelfPlaySearchParameters,
             TreeSearchParameters,
         )
@@ -173,37 +168,9 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
                     reduction,
                 )
 
-        match parameters.full_search_budget:
-            case FixedFullSearchBudget(visits=visits):
-                full_search_budget = FixedSearchLimit(visits)
-            case AdaptiveFullSearchBudget() as adaptive:
-                gate_visit = adaptive.minimum_visits + (adaptive.maximum_visits - adaptive.minimum_visits) // 2
-                gate = (
-                    DisabledSearchCorrectionGate()
-                    if adaptive.minimum_search_correction_to_unlock_tail is None
-                    else SearchCorrectionGate(
-                        gate_visit,
-                        adaptive.minimum_search_correction_to_unlock_tail,
-                    )
-                )
-                full_search_budget = AdaptiveSearchLimit(
-                    minimum_visits=adaptive.minimum_visits,
-                    maximum_visits=adaptive.maximum_visits,
-                    observation_interval=adaptive.observation_interval,
-                    leader_stability_window=adaptive.leader_stability_window,
-                    root_value_tolerance=adaptive.root_value_tolerance,
-                    initial_top_visit_share=adaptive.initial_top_visit_share,
-                    final_top_visit_share=adaptive.final_top_visit_share,
-                    initial_top_two_margin=adaptive.initial_top_two_margin,
-                    final_top_two_margin=adaptive.final_top_two_margin,
-                    threshold_relaxation_visits=adaptive.threshold_relaxation_visits,
-                    search_correction_gate=gate,
-                )
-
         return SelfPlaySearchParameters(
-            parallel_searches=parameters.parallel_searches,
-            full_search_budget=full_search_budget,
-            fast_searches=parameters.fast_searches,
+            baseline_visits=parameters.baseline_visits,
+            search_budget_blend=parameters.search_budget_blend,
             tree_search=TreeSearchParameters(
                 exploration_constant=parameters.exploration_constant,
                 first_play_urgency=first_play_urgency,

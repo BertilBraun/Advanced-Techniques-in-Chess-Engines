@@ -53,10 +53,15 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
     def value_discount_per_ply(self) -> FloatGenerationSchedule:
         return self.configuration.go.objective.value_discount_per_ply
 
-    def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
+    def self_play_parameters_at(
+        self,
+        model_generation: int,
+        search_budget_blend: float,
+    ) -> ResolvedSelfPlayParameters:
         objective = self.configuration.go.objective
         return self.self_play_configuration.resolve(
             model_generation,
+            search_budget_blend,
             self.configuration.go.rules.maximum_moves,
             objective.effective_search_value_discount_per_ply.value_at(model_generation),
         )
@@ -87,7 +92,7 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
     ) -> ResolvedSelfPlayParameters:
         """Evaluation inherits the self-play first-play urgency; only the listed fields are overridden."""
         return resolved_evaluation_parameters(
-            self.self_play_parameters_at(model_generation),
+            self.self_play_parameters_at(model_generation, 0.0),
             configuration,
             model_generation,
             tree_search,

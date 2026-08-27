@@ -39,7 +39,7 @@ def test_evaluation_inherits_the_self_play_first_play_urgency() -> None:
     experiment = _experiment()
     implementation = ChessImplementation(experiment)
 
-    self_play = implementation.self_play_parameters_at(0)
+    self_play = implementation.self_play_parameters_at(0, 0.7)
     evaluation = implementation.evaluation_parameters_at(0, _evaluation_search(experiment))
 
     assert evaluation.first_play_urgency == self_play.first_play_urgency
@@ -52,8 +52,8 @@ def test_evaluation_overrides_only_the_search_shaping_fields() -> None:
 
     evaluation = implementation.evaluation_parameters_at(0, search)
 
-    assert evaluation.parallel_searches == search.parallel_searches
-    assert evaluation.fast_searches == search.searches_per_move
+    assert evaluation.baseline_visits == search.searches_per_move
+    assert evaluation.search_budget_blend == 0.0
     assert evaluation.exploration_constant == pytest.approx(search.resolved_exploration_constant)
     assert evaluation.forced_playout_coefficient == pytest.approx(0.0)
     assert evaluation.dirichlet_epsilon == pytest.approx(0.0)
