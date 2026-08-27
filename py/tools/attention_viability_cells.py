@@ -136,7 +136,23 @@ SCHEDULE_CELLS = (
     ),
 )
 
-ALL_CELLS = ARCHITECTURE_CELLS + SCHEDULE_CELLS
+# The architecture cells run the probe-settled protocol, which was settled on the convolutional trunk.
+# A 200-step warm-up is short by transformer standards and the peak was never varied on an attention
+# trunk, so these two cells test whether attn-A is limited by the recipe rather than by the architecture.
+SUPPLEMENTARY_CELLS = (
+    Cell(
+        'attn-A-warmup',
+        'attn-A with a transformer-length warm-up instead of the convolutional one',
+        replace(ARCHITECTURE_CELLS[1].arguments, warmup_steps=2000),
+    ),
+    Cell(
+        'attn-A-half-rate',
+        'attn-A at half the peak learning rate',
+        replace(ARCHITECTURE_CELLS[1].arguments, learning_rate=PROTOCOL_PEAK_LEARNING_RATE / 2),
+    ),
+)
+
+ALL_CELLS = ARCHITECTURE_CELLS + SCHEDULE_CELLS + SUPPLEMENTARY_CELLS
 
 
 def cell_by_name(name: str) -> Cell:
