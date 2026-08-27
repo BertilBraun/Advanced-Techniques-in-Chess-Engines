@@ -8,7 +8,7 @@ Replace both the threshold-based adaptive full-search mechanism and the fast/ful
 
 The network predicts a scalar search-difficulty quantile from the root forward pass. A fixed nonlinear allocation curve maps that quantile to a mean-preserving visit multiplier. The allocator is introduced gradually through a blend coefficient, but that coefficient is not advanced on a fixed calendar and is not chosen from training loss or correlation alone. It is calibrated continuously from the counterfactual search checkpoints produced by the deep-label job.
 
-The first live training run starts with the learned allocator completely inert. For approximately the first 30 generations:
+The first live training run starts with the learned allocator completely inert. Until approximately 30 source-generation label jobs have completed:
 
 - the head trains;
 - random positions receive deep labels;
@@ -16,7 +16,7 @@ The first live training run starts with the learned allocator completely inert. 
 - every production search still receives the flat baseline budget;
 - the published allocator blend remains zero.
 
-After the warm-up, a conservative calibrator may increase the blend only when held-out shadow evidence says that a candidate blend improves policy-target fidelity at equal mean search compute. It reduces the blend immediately when the evidence deteriorates and falls back to zero when no candidate is demonstrably safe.
+After the warm-up, a small deterministic controller may increase the blend only when fresh random shadow evidence says that a candidate blend improves policy-target fidelity at equal mean search compute. It reduces the blend immediately when the evidence deteriorates and falls back to zero when no candidate has positive current and trailing utility.
 
 The earlier offline probe is no longer a production gate. It was useful as a small-data baseline, but only a representative live run can answer whether the jointly trained trunk and auxiliary head learn the signal at the scale and distribution of actual self-play.
 
@@ -62,13 +62,13 @@ The system operates as an asynchronous loop:
 2. Training completes and publishes an immutable checkpoint for generation `g`.
 3. A separate background label job samples positions uniformly from that generation's newly produced replay observations.
 4. Each normal 512-position shard evaluates the frozen generation-`g` checkpoint and persists its raw search-budget scores before any deep target is known.
-5. After all shard predictions complete, the coordinator performs one lightweight post-processing pass: it aggregates the scalars, calibrates them against the generation-wide prediction distribution, constructs every candidate's exactly mean-preserving budget vector across the complete sample, and records each position's union of required policy-checkpoint visits.
+5. After all shard predictions complete, the coordinator performs one lightweight post-processing pass: it aggregates the bounded quantile predictions, constructs every candidate's exactly mean-preserving budget vector across the complete sample, and records each position's union of required policy-checkpoint visits.
 6. The pool searches deterministic chunks of at most 512 roots to the baseline, all required counterfactual checkpoint budgets, and the configured deep limit while retaining policy snapshots.
-7. Each worker atomically writes its shard artifact and returns only a lightweight completion record. The coordinator verifies exact position coverage before publishing the generation label manifest.
-8. The job computes `KL(pi_deep || pi_baseline)` and converts it to the current quantile-normalized target.
-9. The final deep policy is written back as a replay training sample, together with the eligible `search_budget` target and source-generation metadata.
-10. The shadow evaluator scores every configured blend candidate from the recorded checkpoint policies at equal mean visit spend.
-11. The calibrator updates its persistent evidence journal and atomically publishes the blend and calibration state for a future generation.
+7. Each worker atomically writes its shard artifact and returns only a lightweight completion record. The coordinator waits for every shard and verifies exact position coverage and checksums. Failed shards are retried; a partial generation is never finalized.
+8. One generation-wide finalization pass computes every raw `KL(pi_deep || pi_baseline)`, converts the complete generation sample to quantile targets, and scores every configured blend candidate from the recorded checkpoint policies at equal mean visit spend.
+9. The finalizer writes the final deep policies back as replay training samples together with their eligible `search_budget` targets and source-generation metadata.
+10. Only after replay write-back succeeds, the controller updates its trailing candidate utilities and atomically publishes the new blend state for the next production generation that has not started.
+11. The completed manifest makes the entire finalization idempotent. Reprocessing the same source generation neither duplicates evidence nor applies the blend update twice.
 12. Training and self-play continue without waiting for the label job. A bounded queue and maximum useful lag prevent the background work from accumulating indefinitely.
 
 The labeler is generation-triggered and separate from the evaluation manager. Evaluations are wall-clock-cadenced and independently disableable; search-budget labels and allocator evidence are part of the training loop and must not inherit those semantics.
@@ -83,13 +83,13 @@ For baseline policy `pi_baseline` and final deep policy `pi_deep`, the raw targe
 raw_difficulty = KL(pi_deep || pi_baseline)
 ```
 
-Raw KL spans several orders of magnitude, with a measured median near 0.053 and maximum near 11.2. Regressing it directly would overemphasize a few extreme samples. The training target is therefore its empirical quantile in a recent, generation-aware label population:
+Raw KL spans several orders of magnitude, with a measured median near 0.053 and maximum near 11.2. Regressing it directly would overemphasize a few extreme samples. After every deep-search shard for one source generation has completed, the finalizer ranks the complete generation sample and converts it to an empirical quantile:
 
 ```text
 search_budget_target = empirical_cdf(raw_difficulty)
 ```
 
-The persisted label record retains both raw KL and the normalized target. Quantile estimation must be deterministic and robust to asynchronous completion. Its exact windowing policy remains a configuration decision; it must not leak a position's deep result into the prediction recorded for that same position.
+The empirical CDF uses deterministic mid-ranks for ties, maps the lowest and highest non-tied values to zero and one, and assigns `0.5` in the degenerate one-position case. The persisted label record retains both raw KL and the normalized target. There is no rolling label-quantile window: each source generation supplies one representative random population, and the prediction was already recorded before any deep result existed.
 
 ### Sampling rate and scale
 
@@ -145,9 +145,9 @@ The model gains one scalar `search_budget` output read from the root forward pas
 
 The target is eligible only on deep-labelled replay samples. Training uses the same explicit mask pattern as `IneligibleNextPolicyTarget`; unlabelled positions contribute normally to all primary losses and contribute nothing to the search-budget loss.
 
-The head emits one unconstrained logit. Training applies `sigmoid` and masked Smooth L1 against the quantile target in `[0, 1]`, matching the established bounded-scalar auxiliary path. The masked reduction divides by eligible sample weight, so the 2% label rate does not implicitly shrink the loss by 50x. Because production search allocation depends directly on this head, the first live run uses auxiliary loss weight 0.2. The weight remains generation-schedulable and its gradient contribution is reported.
+The head emits one unconstrained logit. Training applies `sigmoid` and masked Smooth L1 against the quantile target in `[0, 1]`, matching the established bounded-scalar auxiliary path. The bounded output is the predicted quantile used by the allocator; there is no second empirical prediction-CDF calibration layer. The masked reduction divides by eligible sample weight, so the 2% label rate does not implicitly shrink the loss by 50x. Because production search allocation depends directly on this head, the first live run uses auxiliary loss weight 0.2. The weight remains generation-schedulable and its gradient contribution is reported.
 
-Allocator ranking may use the raw logit because sigmoid is monotone. Telemetry persists both the raw logit and bounded prediction so ordering, saturation, and calibration remain distinguishable.
+Telemetry persists both the raw logit and bounded quantile prediction so ordering, saturation, and calibration remain distinguishable.
 
 The head and trunk train jointly during the live run. This is an important difference from the frozen-feature probe: the trunk can learn features useful for ranking search difficulty while still being dominated by the primary policy and value objectives.
 
@@ -158,8 +158,7 @@ The existing `search_correction` scalar path is useful plumbing precedent but no
 Let:
 
 - `B` be the configured baseline number of **new simulations** for a position;
-- `s` be the raw network scalar;
-- `q = F_prediction(s)` be its calibrated percentile under a recent independent shadow-prediction distribution;
+- `q` be the sigmoid-bounded quantile prediction from the network head;
 - `m(q)` be a fixed nonlinear monotone multiplier curve normalized to mean one;
 - `alpha` be the published allocator blend in `[0, 1]`.
 
@@ -178,7 +177,7 @@ Consequently:
 
 The multiplier curve is configuration, with an intended floor near 0.2x and ceiling of at least 4x. It must map the median prediction below 1x: the measured oracle assigns approximately 73% of positions less than the baseline budget.
 
-The curve is normalized to mean one under the calibrated prediction-percentile distribution. Production additionally maintains a deterministic cumulative compute ledger: rounding and finite-sample residuals are carried forward and corrected in later assignments without violating the configured floor or ceiling. Each generation therefore closes with total assigned new simulations matching the flat baseline total within a stated integer tolerance. Monitoring an expected mean of one is insufficient; the realized mean must be enforced.
+The curve is normalized to mean one under a uniform quantile distribution. Production additionally maintains a deterministic cumulative compute ledger: prediction miscalibration, rounding, and finite-sample residuals are carried forward and corrected in later assignments without violating the configured floor or ceiling. Each generation therefore closes with total assigned new simulations matching the flat baseline total within a stated integer tolerance. Monitoring an expected mean of one is insufficient; the realized mean must be enforced.
 
 Budgets are defined as additional simulations, not an absolute root visit count. This keeps compute accounting stable when production retains roots with existing visits. The native limit converts the assigned additional budget to its stopping condition using the root's starting visit count.
 
@@ -188,7 +187,7 @@ Every randomly labelled position records:
 
 - stable position and source-generation identifiers;
 - the immutable model generation used for prediction and search;
-- raw prediction and calibrated prediction percentile;
+- raw logit and bounded quantile prediction;
 - baseline, candidate-budget, and final deep policies;
 - concrete visit checkpoints;
 - raw KL and quantile target;
@@ -209,43 +208,35 @@ The shadow evaluation is computationally cheap once the deep search exists becau
 
 ## Automatic blend calibration
 
-The calibrator follows the safety shape of resignation calibration: persistent evidence, configuration identity, conservative confidence bounds, an explicit production-generation boundary, and asymmetric updates.
+The controller consumes one complete source generation at a time in source-generation order. For candidate `alpha` and completed source generation `g`, it computes the paired position-level mean:
 
-Its state consists of:
+```text
+generation_gain[g, alpha] =
+    mean_i(KL(pi_deep_i || pi_flat_i)
+           - KL(pi_deep_i || pi_candidate_i(alpha)))
+```
 
-- an idempotent position-level evidence journal;
-- per-generation candidate metrics;
-- a bounded rolling evidence window;
-- a trailing EMA of candidate utility for non-stationary trend tracking;
-- the currently published blend and the generation from which it applies;
-- configuration and model-lineage hashes;
-- diagnostics explaining every selection or fallback.
+The persisted EMA is initialized to the first completed generation's gain and thereafter updated as:
 
-The EMA smooths whether a candidate continues to help as the model changes. It is not, by itself, an uncertainty estimate. Conservative confidence bounds come from the rolling position-level evidence, using a generation-aware block bootstrap or an equivalent method that does not treat repeated or same-generation positions as fully independent.
+```text
+ema_gain[g, alpha] =
+    (1 - ema_decay) * ema_gain[g - 1, alpha]
+    + ema_decay * generation_gain[g, alpha]
+```
 
-Before a nonzero candidate can be published, all of the following must hold:
+The default `ema_decay` is `0.2`. The EMA carries information across the approximately 2,400 random positions in each completed generation without introducing a second evidence window, bootstrap, confidence level, or minimum-count system.
 
-- the configured first production generation has been reached; the initial proposal is generation 30;
-- minimum counts of labelled positions and represented generations have been reached;
-- realized candidate mean compute is within tolerance of the flat baseline;
-- its conservative lower confidence bound on equal-compute gain exceeds the configured safety margin;
-- recent generation-level evidence and the trailing EMA do not indicate deterioration;
-- required prediction-distribution and calibration sanity checks pass;
-- the condition has held for the configured number of consecutive calibration updates.
+Until the configured number of completed warm-up label generations, default 30, the published blend is hard-clamped to zero. Afterwards a nonzero candidate is eligible exactly when both its current `generation_gain` and its `ema_gain` are strictly positive and its reconstructed mean compute matches the flat baseline within the allocator's integer tolerance.
 
-Among eligible candidates, the calibrator chooses the blend with the best conservative utility, subject to a maximum upward step per generation. It may tighten cautiously, for example from 0 to 0.1 to 0.2, rather than jumping to the largest passing candidate.
+For publication, consider every eligible candidate at or below the current blend and every eligible candidate no more than the configured maximum upward step above it. Select the candidate in that set with the largest EMA gain; ties select the lower blend. The default maximum upward step is `0.1`, so the default candidate grid advances at most from 0 to 0.1 to 0.2 across completed label generations, while decreases apply immediately. If no nonzero candidate is eligible, publish zero.
 
-Relaxation is asymmetric. If the current blend stops meeting the safety rule, the calibrator immediately publishes the highest lower blend that remains safe, or zero when none does. No evidence, stale evidence, incompatible configuration, a failed label job, or an unreadable state artifact all fail closed to zero.
-
-The exact candidate grid, evidence window, EMA half-life, confidence level, safety margin, minimum counts, consecutive-update requirement, and maximum upward step are deliberately unresolved. They must be selected from live shadow distributions before the first acting generation. The implementation must expose them as one canonical typed calibrator configuration and emit enough diagnostics to reproduce every choice.
-
-State publication is atomic. Reprocessing the same completed job is idempotent. A newly started worker can reconstruct the same decision from the persisted journal without relying on in-memory state.
+An unfinished background job does not change the published blend; production keeps using the latest completed state. A terminal label-job failure, incompatible configuration or model lineage, unreadable state, or invalid mean-compute reconstruction publishes zero. State publication is atomic and names the first not-yet-started production generation to which it applies. Reprocessing a completed source generation is idempotent and cannot update the EMA or blend twice.
 
 ## Warm-up and permanent audit stream
 
-During the first approximately 30 generations, `alpha` is hard-clamped to zero regardless of apparent early shadow performance. This accumulates representative labels while preserving the known flat-budget behavior.
+Until approximately 30 source-generation label jobs have completed, `alpha` is hard-clamped to zero regardless of apparent early shadow performance. This accumulates approximately 72,000 representative labels at the first-run scale while preserving the known flat-budget behavior. If background labelling falls behind, the clamp lasts longer than 30 production generations rather than activating from too little evidence.
 
-Reaching generation 30 only permits calibration; it does not force activation. If the evidence thresholds are not met, the allocator stays flat.
+Completing the warm-up only permits activation; it does not force it. If no candidate has positive current and EMA gain, the allocator stays flat.
 
 Random audit labelling continues after activation. Positions in that stream receive their prescribed deep search independently of the production-assigned budget. Without this permanent exploration stream, an acting allocator would preferentially observe positions it already believes are difficult and could no longer measure its own counterfactual errors across the full position distribution.
 
@@ -285,7 +276,6 @@ Configuration is divided by ownership without duplicating fields:
 - deep-search multiple or absolute limit derived from the generation baseline;
 - maximum concurrent jobs and GPU allocation;
 - maximum generation lag;
-- label-quantile window;
 - retained counterfactual checkpoints.
 
 ### Search-budget target
@@ -299,21 +289,16 @@ Configuration is divided by ownership without duplicating fields:
 - baseline visit schedule;
 - quantile-to-multiplier curve;
 - floor and ceiling;
-- prediction-percentile calibration window;
 - exact mean-preservation, cumulative-ledger, and rounding policy.
 
 ### Blend calibration
 
-- first permitted production generation;
-- blend candidate grid;
-- rolling evidence window and minimum represented generations;
-- EMA half-life;
-- confidence method and level;
-- safety margin;
-- minimum labelled positions;
-- consecutive-safe-update requirement;
-- maximum upward step;
-- conservative fallback.
+- completed warm-up label generations, default `30`;
+- blend candidate grid, default `[0.0, 0.1, ..., 1.0]`;
+- EMA decay, default `0.2`;
+- maximum upward step, default `0.1`.
+
+These defaults belong to the canonical typed calibrator configuration, so an ordinary run need not repeat them. The positive current-gain and EMA-gain tests, lower-blend tie break, immediate retreat, and zero fallback are controller semantics rather than additional tuning parameters.
 
 ### Parallel execution
 
@@ -344,7 +329,7 @@ The live run must make both learning and acting behavior inspectable.
 ### Head quality
 
 - eligible sample count and masked auxiliary loss;
-- raw prediction and calibrated-percentile distributions;
+- raw-logit and bounded quantile-prediction distributions;
 - Spearman rank correlation and calibration by prediction decile;
 - realized raw KL and oracle utility by prediction decile;
 - target top-1 agreement by candidate budget.
@@ -354,8 +339,8 @@ The live run must make both learning and acting behavior inspectable.
 - realized mean, variance, floor share, and ceiling share for every blend candidate;
 - candidate divergence from deep policy and gain over flat;
 - share of oracle gain when stable;
-- confidence interval, trailing EMA, represented generations, and effective sample count;
-- selected blend, prior blend, decision reason, and all failed safety conditions.
+- current-generation gain and trailing EMA for every candidate;
+- selected blend, prior blend, application generation, decision reason, and failed eligibility conditions.
 
 ### Acting allocator and runtime
 
@@ -427,11 +412,11 @@ All played positions become replay samples. There is no weighting adjustment bas
 
 1. **Target and model path.** Add the scalar head, eligibility mask, replay schema, columnar storage, materialization support, losses, metrics, and generated native bindings. Remove the `full_search` materialization filter.
 2. **Deep-label pipeline.** Add deterministic generation sampling, shard-local prediction, the scalar-aggregation barrier, exact generation-wide candidate-budget construction, fixed 512-position shards plus a final remainder, a run-lifetime spawn-based device-pinned process pool, explicit native checkpoint-visit requests, monotonic immutable-checkpoint refresh, noise-free baseline/candidate/deep policy capture from one continued fresh root, atomic shard artifacts, quantile normalization, persistent job state, and deep-policy replay write-back. Use inference batch size 512 and label-search parallelism one.
-3. **Shadow evaluator and calibrator.** Add exact candidate-budget reconstruction, equal-compute utility scoring, confidence calculation, EMA state, atomic publication, fail-closed behavior, and complete diagnostics.
+3. **Shadow evaluator and calibrator.** Add exact candidate-budget reconstruction, equal-compute generation utility scoring, EMA state, deterministic selection, atomic publication, fail-closed behavior, and complete diagnostics.
 4. **Native allocator in shadow-safe form.** Add predicted budget plumbing, mean-preserving generation allocation, retained-root accounting, and per-search parallelism. Ship with the published blend clamped to zero until calibrator conditions permit otherwise.
 5. **Remove superseded systems.** Delete threshold adaptation, `SearchCorrectionGate`, `search_correction`, fast/full admission and configuration, old filters, obsolete tools, stale telemetry, and compatibility layers. Migrate production configuration and documentation in the same phase.
 6. **Component and integration validation.** Exercise target masking, replay round trips, job retries, quantiles, exact mean preservation, checkpoint scoring, calibrator publication and fallback, retained roots, native stopping, and heterogeneous parallel searches.
-7. **Live 8-GPU training run.** Accumulate the warm-up evidence, inspect the shadow distribution, freeze the concrete calibration constants before the first acting generation, and then allow the calibrator to advance or retreat the blend automatically.
+7. **Live 8-GPU training run.** Accumulate the warm-up evidence, inspect the shadow distribution, and then allow the controller to advance or retreat the blend automatically from the documented defaults.
 
 Feature-sized commits should follow these boundaries so each stage is independently reviewable and reversible.
 
@@ -439,15 +424,15 @@ Feature-sized commits should follow these boundaries so each stage is independen
 
 The meaningful validation is an actual training run on representative self-play, not a larger frozen offline classifier exercise.
 
-The first run uses the available eight GPUs concurrently for training, self-play, and eligible label-worker devices. It starts with approximately 30 generations at `alpha = 0`, while the head trains and the shadow evaluator accumulates evidence. At 2% labelling this is approximately 72,000 new unique labelled positions before activation becomes possible.
+The first run uses the available eight GPUs concurrently for training, self-play, and eligible label-worker devices. It keeps `alpha = 0` until approximately 30 source-generation label jobs have completed while the head trains and the shadow evaluator accumulates evidence. At 2% labelling this is approximately 72,000 new unique labelled positions before activation becomes possible.
 
 Before the first acting generation, inspect:
 
 - label throughput and lag;
 - prediction and target distributions;
 - ordering by decile;
-- exact equal-compute candidate gains and uncertainty;
-- whether the proposed EMA and window react reasonably across generations;
+- exact equal-compute candidate gains;
+- whether current-generation gain and the EMA react reasonably across generations;
 - per-budget parallelism behavior;
 - label-worker memory, GPU contention, pool occupancy, and generation lag;
 - total wall-clock overhead.
@@ -467,10 +452,10 @@ The labeler overhead must be included in wall-clock comparisons, even though its
 
 - **Parallelism may not be free at fixed sequential depth.** If additional parallel selections reduce policy quality, the deepest assigned searches are harmed exactly where the allocator spends most.
 - **Target fidelity may not translate to training strength.** All current measurements optimize policy-target agreement, not downstream learning or Elo.
-- **Non-stationarity can outrun calibration.** The head, trunk, game distribution, and baseline search all evolve. Windows, EMA lag, and publication lag must be visible and conservative.
+- **Non-stationarity can outrun calibration.** The head, trunk, game distribution, and baseline search all evolve. EMA lag and publication lag must remain visible.
 - **Retained roots can break compute accounting.** Allocation must govern new simulations and report starting visits separately.
 - **The deepest policy is a reference, not truth.** Its own search noise and finite depth limit both labels and shadow utility estimates.
-- **Quantile drift can distort the curve.** Prediction percentiles and target quantiles require explicit, generation-aware calibration populations.
+- **Quantile drift can distort the curve.** The head is trained against a separately normalized source-generation population while production receives an evolving distribution. Prediction and realized multiplier distributions must remain visible, and exact spend accounting must not assume perfect calibration.
 - **Acting creates feedback.** Permanent random audit labelling is required even after the blend becomes nonzero.
 - **Asynchronous jobs can train on stale labels.** Source model generation and completion lag must be preserved and bounded.
 - **Deep replay samples change more than the scalar head.** Their stronger policy targets are desirable, but they mean the first live run measures the combined training system. The later matched-labeler A/B isolates allocator value.
@@ -489,28 +474,24 @@ The labeler overhead must be included in wall-clock comparisons, even though its
 - Write policy-heavy shard output atomically and return lightweight manifests to the coordinator.
 - Reconstruct fresh label roots, disable Dirichlet noise, and continue one tree through baseline and deep checkpoints.
 - Train the sigmoid-bounded quantile prediction with masked Smooth L1 at initial loss weight 0.2.
+- Use the bounded head output directly as the predicted quantile; do not add a second prediction-CDF calibration layer.
 - Write final deep policies back into replay.
 - Make every played position a replay sample and remove the fast/full split.
 - Use a fixed nonlinear multiplier curve with a floor near 0.2x and ceiling of at least 4x.
 - Preserve exact mean new-simulation spend by construction.
 - Scale parallel searches per assigned budget.
-- Hold the blend at zero for an initial live warm-up of approximately 30 generations.
-- Choose and continuously update the blend from conservative equal-compute shadow utility, not loss or correlation.
-- Increase blend cautiously, reduce it immediately, and fail closed to zero.
+- Hold the blend at zero until approximately 30 source-generation label jobs have completed.
+- Finalize labels and shadow evidence once per complete source generation, never per shard.
+- Choose and continuously update the blend from current and EMA-smoothed equal-compute shadow utility, not loss or correlation.
+- Use default blend candidates `[0.0, 0.1, ..., 1.0]`, EMA decay `0.2`, and maximum upward step `0.1`.
+- Increase blend by at most the configured upward step, reduce it immediately, and fail closed to zero.
 - Remove all old threshold, learned-gate, `search_correction`, and fast/full machinery.
 
 ## Decisions to make from live shadow data
 
 - exact deep limit and retained checkpoint set;
-- quantile and prediction-calibration windows;
 - multiplier-curve control points and final ceiling;
-- blend candidate grid;
-- rolling evidence window and EMA half-life;
-- confidence method, level, and safety margin;
-- minimum positions, represented generations, and consecutive safe updates;
-- maximum blend increase per generation;
 - per-budget parallelism curve and worker limits;
-- calibrator publication lag;
 - run length and matched-control schedule.
 
 ## Acceptance criteria
@@ -527,14 +508,18 @@ Implementation is ready for the live experiment when:
 - label-search root chunks contain at most 512 roots and bound host memory while sustaining measured inference occupancy;
 - spawned workers remain pinned to one CUDA device and reuse one loaded checkpoint and search engine;
 - shard artifacts survive worker or coordinator failure and the parent verifies exact coverage and checksums;
+- partial generations cannot produce labels, replay write-back, shadow evidence, or a blend update;
 - label searches disable root noise and retries reproduce checkpoint policies;
 - one native continuation returns policies at every explicitly requested visit checkpoint;
-- deep policies are written back as valid replay samples;
+- generation-wide KL values deterministically produce mid-rank quantile targets in `[0, 1]`;
+- deep policies and their finalized scalar targets are written back as valid replay samples before blend publication;
 - shadow candidate budgets preserve exact mean new-simulation spend;
 - shadow utility is reconstructed from exact policy checkpoints and reproduces known offline cases;
-- the warm-up clamp prevents nonzero production blend before the configured generation;
-- no nonzero blend is published without sufficient positive conservative evidence;
-- unsafe, stale, missing, or incompatible evidence returns the allocator to zero;
+- the warm-up clamp prevents nonzero production blend before the configured number of source-generation label jobs has completed;
+- no nonzero blend is published unless both current-generation and EMA gain are positive;
+- selection maximizes EMA gain with lower-blend tie breaking, upward changes respect the configured cap, and downward changes apply immediately;
+- an unfinished job preserves the latest completed state, while terminal failure, invalid compute, or incompatible state returns the allocator to zero;
+- each completed source generation updates EMA and blend state exactly once and publishes only for a production generation that has not started;
 - native search stops at the assigned additional-visit budget with retained roots;
 - parallelism differs correctly between simultaneous searches with different budgets;
 - old adaptive threshold, learned gate, `search_correction`, and fast/full code and configuration are gone;
