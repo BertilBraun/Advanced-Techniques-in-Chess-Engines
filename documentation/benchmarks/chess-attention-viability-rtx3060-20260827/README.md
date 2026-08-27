@@ -179,7 +179,32 @@ evaluation search path with `parallel_searches: 1` and the memory-efficient SDPA
 (so the inference batch is 64) with 64 searches per move. `cnn-A` is the reference in every pair and is
 therefore measured once per pair.
 
-RESULTS PENDING.
+| cell | positions/s | searches/s | ratio to `cnn-A` | total MAC | MAC-implied ratio |
+| --- | --- | --- | --- | --- | --- |
+| `cnn-A` | **26,056** (25,316–26,701, n=12) | 25,655 | 1.000 | 215,048,336 | 1.000 |
+| `cnn-from-to` | 20,537 (19,798–21,311) | 20,221 | 0.788 | 245,784,864 | 0.875 |
+| `attn-A` | 20,155 (19,730–20,703) | 19,845 | 0.774 | 243,102,864 | 0.885 |
+| `attn-B` | 18,943 (18,844–19,060) | 18,651 | 0.727 | 263,945,360 | 0.815 |
+| `attn-C` | 18,532 (18,409–18,613) | 18,255 | 0.711 | 249,616,528 | 0.862 |
+
+Three repeats per cell; `cnn-A` is the reference in every pair and so has twelve, spanning 5.5%. Every
+cell is slower than the baseline, and every one is slower than its multiply-accumulate count alone
+predicts — `attn-C` runs 17% below MAC-proportional and `cnn-from-to` 10% below, which is the extra
+kernel launches the from-to head's four small matmuls cost at batch 64.
+
+**This does not reproduce the +40% figure for attention at native batch-64 inference that
+`chess-attention-sdpa-backends-rtx4070s-20260818` records.** Here attention is 23–29% *slower* than the
+convolutional baseline on the same card. The two are not measuring the same thing — that benchmark
+compared a particular attention configuration against a particular CNN, while these cells are matched at
+~3.9M total parameters, which is precisely the constraint that leaves attention carrying 13–23% more
+multiply-accumulates. Both numbers can be right; only this one answers "at matched parameters".
+
+**Equal-compute implication.** `attn-C` buys 0.0406 nats (+45 to +57 Elo) and costs 29% of the search
+rate. The distillation probe measured roughly +80 Elo for 3.6× more searches at shallow budgets, which
+puts 1.41× more searches at very roughly +25 to +30 Elo. So `attn-C` is probably still ahead at equal
+compute, but by a much narrower margin than the quality number alone suggests, and the arithmetic is soft
+enough that it must be settled by an actual equal-compute match rather than by this conversion.
+`cnn-from-to` faces the same trade at +35 to +44 Elo for 21% of the search rate.
 
 ### Peak training memory
 
