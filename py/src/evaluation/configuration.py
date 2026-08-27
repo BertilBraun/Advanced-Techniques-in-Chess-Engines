@@ -15,8 +15,8 @@ class EvaluationSearchConfiguration(FrozenModel):
 
     @model_validator(mode='after')
     def validate_searches(self) -> EvaluationSearchConfiguration:
-        if self.searches_per_move <= self.parallel_searches:
-            raise ValueError('Evaluation searches per move must exceed parallel searches.')
+        if self.searches_per_move < self.parallel_searches:
+            raise ValueError('Evaluation searches per move must be at least the parallel searches.')
         return self
 
 
@@ -233,11 +233,11 @@ class EvaluationConfiguration(FrozenModel):
         )
         if any(definition.opening_pair_count > self.openings.opening_count for definition in match_definitions):
             raise ValueError('Evaluation opening suite must cover every requested opening pair.')
-        fixed_node_counts = tuple(
-            definition.nodes
+        fixed_node_rungs = tuple(
+            (definition.nodes, definition.search.searches_per_move)
             for definition in self.definitions
             if isinstance(definition, StockfishFixedNodesEvaluationDefinition)
         )
-        if len(set(fixed_node_counts)) != len(fixed_node_counts):
-            raise ValueError('Stockfish fixed-node rungs must use unique node counts.')
+        if len(set(fixed_node_rungs)) != len(fixed_node_rungs):
+            raise ValueError('Stockfish fixed-node rungs must use unique node counts per model search budget.')
         return self

@@ -26,23 +26,23 @@
 # maximum_capacity rises 2M -> 5M. That sizes the preallocated replay file, so the resulting on-disk
 # footprint must be confirmed against minimum_disk_gib before launching.
 #
-# Evaluation. Three near-raw-policy rungs are added against Stockfish 13 at 30 / 100 / 200 nodes.
-# 200 rather than 300 because the schema requires Stockfish node counts to be unique across the whole
-# definition set and 300 is already taken by the 64-search ladder — the evaluation system assumes one
-# model search budget per rung. On the reference curve those three sit near 1,100 / 1,200 / 1,300,
-# which brackets an expected policy-only strength of roughly 1,200 better than 30/100/300 would.
-# They use two searches per move, not one: the schema requires searches_per_move to exceed
-# parallel_searches, so a true single-visit rung is not currently expressible. Two visits resolve to
-# the top-policy move with a marginal value assist, which measures what is wanted here; on the
-# reference curve the 1-node and 2-node points differ by roughly 30 Elo. A true 1-visit rung would
-# need the validator relaxed or a dedicated policy-only evaluation kind, which is a code change with
-# its own tests. Near-policy strength is the network's own contribution with search removed; tracked
-# beside the 64-search ladder it separates "the network improved" from "the search improved". The
-# rungs are the low ones the 64-search ladder has already outgrown, because on the reference curve
-# policy-only sits roughly 650 Elo below 64 searches. Rung 1000 is deliberately omitted: policy-only
-# has no prospect against it and those games would be wasted. This takes the definition count to eleven
-# against maximum_concurrent_jobs 8, so three jobs queue; the policy-only jobs are the cheapest of the
-# eleven and should drain quickly, but the cadence needs watching on the first run.
+# Evaluation. Three raw-policy rungs are added against Stockfish 13 at 30 / 100 / 300 nodes, at one
+# search per move. Policy-only strength is the network's own contribution with search removed;
+# tracked beside the 64-search ladder it separates "the network improved" from "the search improved".
+# The rungs are deliberately the ones the 64-search ladder already uses, because their Elo
+# calibration is what turns a policy-only score into a ladder Elo. Rung 1000 is omitted: policy-only
+# has no prospect against it and those games would be wasted.
+#
+# Two schema relaxations were needed and are part of this work package. EvaluationSearchConfiguration
+# previously required searches_per_move to strictly exceed parallel_searches, which made a true
+# single-visit rung inexpressible; it now requires only that it be at least parallel_searches, and
+# ResolvedSelfPlayParameters was relaxed the same way because the evaluation search is constructed
+# through it. Stockfish fixed-node rungs previously had to use globally unique node counts, which
+# stopped 30 / 100 / 300 being measured at two different model search budgets; uniqueness is now on
+# the (node count, searches per move) pair.
+#
+# maximum_concurrent_jobs rises 8 -> 16. The old value dated from out-of-memory failures that have
+# since been fixed, and eleven definitions against eight slots would have queued three.
 #
 # NOTE: hardware.offer_id is inherited from v9 and must be updated to the node actually rented.
 game: chess
@@ -196,7 +196,7 @@ evaluation:
   bootstrap_samples: 10000
   # Eight, matching the eight-device cycle: one evaluation job per GPU. Ten over a four-device
   # cycle stacked two to three jobs on a device and exhausted its memory.
-  maximum_concurrent_jobs: 8
+  maximum_concurrent_jobs: 16
   dataset:
     path: /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v1.bin
     source:
@@ -287,7 +287,7 @@ evaluation:
       opening_pair_count: 50
       maximum_game_plies: 300
       search: &policy_only_search
-        searches_per_move: 2
+        searches_per_move: 1
         parallel_searches: 1
         exploration_constant: 1.0
         inference:
@@ -303,8 +303,8 @@ evaluation:
       maximum_game_plies: 300
       search: *policy_only_search
     - kind: stockfish_fixed_nodes
-      definition_id: stockfish-policy-only-200
-      nodes: 200
+      definition_id: stockfish-policy-only-300
+      nodes: 300
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
       maximum_game_plies: 300

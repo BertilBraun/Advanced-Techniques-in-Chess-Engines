@@ -6,6 +6,7 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 from src.evaluation.configuration import (
     EvaluationConfiguration,
+    EvaluationSearchConfiguration,
     StockfishEngineConfiguration,
     StockfishFixedNodesEvaluationDefinition,
 )
@@ -155,6 +156,60 @@ def test_stockfish_fixed_nodes_engine_override_reaches_opponent_and_executable(t
     assert stockfish_fixed_nodes_executable_path(evaluation.engine, default_opponent) == PROJECT_ROOT / Path(
         evaluation.engine.executable_path
     )
+
+
+def test_stockfish_fixed_node_rungs_allow_a_shared_node_count_at_different_search_budgets() -> None:
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    skill_definition = next(
+        definition for definition in experiment.evaluation.definitions if definition.kind == 'stockfish'
+    )
+    evaluation_payload = experiment.evaluation.model_dump(mode='json')
+    for definition_id, searches_per_move in (('rung-search-64', 64), ('rung-policy-only', 1)):
+        definition_payload = skill_definition.model_dump(mode='json')
+        definition_payload['kind'] = 'stockfish_fixed_nodes'
+        definition_payload['definition_id'] = definition_id
+        definition_payload['nodes'] = 100
+        definition_payload['search']['searches_per_move'] = searches_per_move
+        definition_payload['search']['parallel_searches'] = 1
+        del definition_payload['skill_level']
+        evaluation_payload['definitions'].append(definition_payload)
+
+    configuration = EvaluationConfiguration.model_validate(evaluation_payload)
+
+    rungs = {
+        definition.definition_id: definition.search.searches_per_move
+        for definition in configuration.definitions
+        if definition.kind == 'stockfish_fixed_nodes'
+    }
+    assert rungs['rung-search-64'] == 64
+    assert rungs['rung-policy-only'] == 1
+
+
+def test_evaluation_search_allows_one_search_per_move_with_one_parallel_search() -> None:
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    definition = next(
+        candidate for candidate in experiment.evaluation.definitions if candidate.kind == 'previous_checkpoint'
+    )
+    search_payload = definition.search.model_dump(mode='json')
+    search_payload['searches_per_move'] = 1
+    search_payload['parallel_searches'] = 1
+
+    search = EvaluationSearchConfiguration.model_validate(search_payload)
+
+    assert search.searches_per_move == 1
+
+
+def test_evaluation_search_rejects_fewer_searches_than_parallel_searches() -> None:
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    definition = next(
+        candidate for candidate in experiment.evaluation.definitions if candidate.kind == 'previous_checkpoint'
+    )
+    search_payload = definition.search.model_dump(mode='json')
+    search_payload['searches_per_move'] = 1
+    search_payload['parallel_searches'] = 2
+
+    with pytest.raises(ValidationError, match='at least the parallel searches'):
+        EvaluationSearchConfiguration.model_validate(search_payload)
 
 
 def test_stockfish_fixed_node_rungs_require_unique_node_counts() -> None:

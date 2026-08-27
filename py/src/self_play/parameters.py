@@ -154,8 +154,8 @@ class ResolvedSelfPlayParameters:
             raise ValueError('Full-search probability must lie in (0, 1].')
         if self.parallel_searches <= 0:
             raise ValueError('Parallel searches must be positive.')
-        if self.maximum_full_searches <= self.parallel_searches:
-            raise ValueError('Full-search budget must exceed parallel searches.')
+        if self.maximum_full_searches < self.parallel_searches:
+            raise ValueError('Full-search budget must be at least the parallel searches.')
         if self.fast_searches <= 0:
             raise ValueError('Fast-search budget must be positive.')
         if not isfinite(self.forced_playout_coefficient) or self.forced_playout_coefficient < 0.0:
