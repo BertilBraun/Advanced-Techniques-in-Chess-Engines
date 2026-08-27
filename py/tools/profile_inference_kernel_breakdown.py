@@ -97,18 +97,30 @@ def operation_path(event: FunctionEvent) -> tuple[str, ...]:
 
 def classify_kernel(name: str, operations: tuple[str, ...]) -> KernelClass:
     description = ' '.join((*operations, name)).lower()
-    if 'memcpy' in description or 'memset' in description or 'aten::copy_' in description:
+    if any(operation in description for operation in ('memcpy', 'memset', 'aten::copy_', 'nchwtonhwc', 'nhwctonchw')):
         return KernelClass.MEMORY_COPY
     if 'batch_norm' in description or 'batchnorm' in description:
         return KernelClass.BATCH_NORM
     if 'convolution' in description or 'conv2d' in description or 'cudnn' in description:
         return KernelClass.CONVOLUTION
+    if 'fused_add_relu' in description or 'aten::add' in description:
+        return KernelClass.RESIDUAL_ADD
+    if any(
+        operation in description
+        for operation in (
+            'aten::mean',
+            'aten::sum',
+            'adaptive_avg_pool',
+            'global_pool',
+            'meanops',
+            'maxnanfunctor',
+            'fused_unsqueeze_unsqueeze_add',
+            'catarraybatchedcopy',
+        )
+    ):
+        return KernelClass.GLOBAL_POOLING
     if 'relu' in description or 'threshold' in description or 'clamp' in description:
         return KernelClass.ACTIVATION
-    if 'aten::add' in description:
-        return KernelClass.RESIDUAL_ADD
-    if any(operation in description for operation in ('aten::mean', 'aten::sum', 'adaptive_avg_pool', 'global_pool')):
-        return KernelClass.GLOBAL_POOLING
     return KernelClass.OTHER
 
 

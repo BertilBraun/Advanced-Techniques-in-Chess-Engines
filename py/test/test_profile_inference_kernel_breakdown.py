@@ -9,8 +9,11 @@ from tools.profile_inference_kernel_breakdown import KernelClass, classify_kerne
     (
         ('cudnn::conv', ('aten::conv2d',), KernelClass.CONVOLUTION),
         ('elementwise_kernel', ('aten::relu',), KernelClass.ACTIVATION),
+        ('fused_add_relu', (), KernelClass.RESIDUAL_ADD),
         ('elementwise_kernel', ('aten::add',), KernelClass.RESIDUAL_ADD),
         ('reduce_kernel', ('aten::mean',), KernelClass.GLOBAL_POOLING),
+        ('reduce_kernel<MeanOps>', (), KernelClass.GLOBAL_POOLING),
+        ('cudnn::nchwToNhwcKernel', (), KernelClass.MEMORY_COPY),
         ('Memcpy DtoD', ('aten::copy_',), KernelClass.MEMORY_COPY),
         ('batch_norm_kernel', ('aten::batch_norm',), KernelClass.BATCH_NORM),
         ('softmax_kernel', ('aten::softmax',), KernelClass.OTHER),
