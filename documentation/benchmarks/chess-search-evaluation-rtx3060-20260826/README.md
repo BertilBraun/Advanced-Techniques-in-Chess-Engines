@@ -206,66 +206,108 @@ catastrophic (−189 Elo), so the early generations of the v9 schedule are searc
 This agrees with Family B, which found target fidelity still improving steeply at 10,000 visits. Both instruments
 point the same way, which is the strongest signal in the study.
 
-### 6.3 Parallelism and virtual loss — strength-neutral, and the throughput claim was an artefact
+### 6.3 Parallelism and virtual loss — the first two measurements were void
 
-**Corrected.** The first write-up reported that `parallel-8` and `parallel-16` ran 28% faster at no strength cost
-and recommended raising `parallel_searches` to 8. The strength half stands; **the throughput half was a
-measurement artefact and is withdrawn.**
+This section was wrong twice. Both errors are recorded because each was caught by a different method and the
+second one matters for the production configuration.
 
-What survives: every virtual-loss × parallel-searches arm lands within ±0.013 of the baseline (about 9 Elo) with
-paired intervals spanning zero. Parallelism from 1 to 16, and virtual loss from 0.25 to 1.0, are **strength-neutral
-at 600 visits**.
-
-These arms carry far tighter paired intervals (±0.015) than the FPU and cpuct arms (±0.09), which is the pairing
-working as intended: changing parallelism perturbs few moves, so per-opening differences correlate strongly and the
-bootstrap tightens.
-
-#### Why the throughput claim was wrong
-
-Arms ran six at a time in a thread pool. As the pool drains at the end of the matrix, the last arms run against
-less GPU contention and therefore appear faster. Ranking arms by completion order against their apparent
-throughput shows exactly that, and nothing else:
+**Error 1, withdrawn: the throughput claim.** The overnight matrix appeared to show `parallel-8` and `parallel-16`
+running 28% faster. Arms ran six at a time in a thread pool, and as the pool drains the last arms meet less GPU
+contention. Ranking arms by completion order reproduces the effect exactly and nothing else does — total plies are
+flat (21,357–23,987), so it was not game length either.
 
 | Completion order | Arms | Apparent model simulations/s |
 |---|---|---|
 | 1–17 | everything else | 2,721–3,387 |
-| 18–21 | `parallel-8-vlw-1.0`, `parallel-16-vlw-1.0`, `parallel-16-vlw-0.5`, `visits-1600` | 4,464–4,593 |
+| 18–21 | the four last to finish | 4,464–4,593 |
 
-The four "fast" arms are precisely the last four to finish. Total plies are flat across all arms (21,357–23,987),
-so game length is not the explanation either.
+Per-arm wall-clock from a concurrently-scheduled matrix is not a throughput measurement.
 
-`tools.benchmark_search_collisions` measures the same question properly — same process, back to back, identical
-conditions:
+**Error 2, withdrawn: the strength claim.** `schedulableTask` hands out at most one in-flight descent per tree per
+pass and then advances to the next tree (`cpp/src/search/SearchExecutor.hpp:507`). So the effective number of
+concurrent descents in a tree is `min(parallel_searches, inference_capacity / active_trees)`, and **when trees
+outnumber capacity the parameter is inert.** The arm matrices ran ~100 active trees against a 64-slot batch, so
+every arm from `parallel-1` to `parallel-128` ran one descent at a time. They were the same engine.
 
-| Trees | Batch | Parallel searches | Virtual loss | Batch occupancy | Simulations/s |
+That is exactly what the scores showed, and it should have been the tell: 0.578–0.593 across a 128× range at 600
+visits, and 0.775–0.790 at 150 visits. Nineteen arms, one configuration, replicated. The tight paired intervals
+(±0.015) that §6.3 originally credited to the pairing design had the same cause.
+
+Measured directly, batch occupancy scales with `parallel_searches` only while `trees × parallel ≤ batch`:
+
+| Trees | Batch | parallel 1 | parallel 4 | parallel 16 |
+|---|---|---|---|---|
+| 100 | 64 | 64.0 | 64.0 | 64.0 — inert |
+| 8 | 64 | 7.96 | 31.7 | 62.9 — binds |
+| 100 | 1024 | 98.8 | 390.6 | 990.0 — binds |
+
+#### The real strength result
+
+Re-run at batch 1024 against ~100 active trees, so a tree can hold up to ten descents in flight. 600 visits,
+Stockfish 3,500, 100 opening pairs, same seeds. Raw: `results-binding/arm-matrix-result.json`.
+
+| Arm | Score | Paired diff vs parallel 1 | 95% CI | Elo |
+|---|---|---|---|---|
+| `bind-parallel-1` | 0.613 | — | — | — |
+| `bind-parallel-2` | 0.585 | −0.028 | [−0.115, +0.058] | −20 |
+| `bind-parallel-4` | 0.562 | −0.050 | [−0.133, +0.033] | −36 |
+| `bind-parallel-8` | 0.550 | −0.062 | [−0.140, +0.015] | −45 |
+| `bind-parallel-8-vlw-0.5` | 0.560 | −0.052 | [−0.138, +0.035] | −38 |
+| `bind-parallel-8-vlw-0.25` | 0.555 | −0.058 | [−0.142, +0.025] | −41 |
+
+**Parallelism costs strength once it binds, monotonically.** No single contrast clears 95% at 200 games, but the
+ordering is monotone across four arms (about a 1-in-24 coincidence) and it agrees with an independent prior
+observation of 100–200 Elo lost at `parallel_searches` 64 in a single-game evaluation, where parallelism binds
+fully. Virtual loss makes no material difference at parallel 8 (0.550–0.560 across weights 0.25–1.0).
+
+Translating through the visit-scaling law of §6.2 (~81 Elo per doubling of visits) gives a rough equivalence:
+600 visits at parallel 2, 4 and 8 buy about the search quality of **505, 442 and 407 visits** at parallel 1. That
+translation assumes the two mechanisms degrade quality alike, which is an assumption, not a measurement.
+
+#### Throughput map — the games/parallelism trade
+
+Measured on an idle GPU at the production inference configuration (batch 320, 1 worker, 2 outstanding batches, so
+an in-flight capacity of 640), 600 visits. Raw: `results-throughput/`.
+
+| Games | Parallel | games × parallel | Achieved batch | Simulations/s | Seconds per move per game |
 |---|---|---|---|---|---|
-| 100 | 64 | 1 → 16 | 0.25 → 1.0 | **1.000 throughout** | **17,211–17,855, flat** |
-| 1 | 256 | 1 | — | 1.000 | 723 |
-| 1 | 256 | 4 | 0.25 / 0.5 / 1.0 | 0.995 | 2,852 / 2,920 / 2,943 |
-| 1 | 256 | 8 | 0.25 / 0.5 / 1.0 | 0.988 | 5,729 / 5,676 / 5,624 |
-| 1 | 256 | 16 | 0.25 / 0.5 / 1.0 | 0.963 | 11,073 / 10,438 / 10,203 |
+| 512 | 4 (**today**) | 2048 | 319.7 | 31,075 | 9.9 |
+| 320 | 2 | 640 | 313.8 | 29,855 | 6.4 |
+| 160 | 4 | 640 | 312.6 | 30,175 | **3.2** |
+| 80 | 8 | 640 | 309.7 | 30,072 | **1.6** |
+| 40 | 16 | 640 | 300.0 | 31,065 | 0.8 |
+| 160 | 1 | 160 | 157.1 | 18,703 | 5.1 |
+| 320 | 1 | 320 | 313.8 | 22,073 | 8.7 |
+| 80 | 4 | 320 | 311.5 | 21,954 | 2.2 |
 
-Two things follow.
+The rule is clean: **full throughput needs `games × parallel_searches` at or above the in-flight capacity of 640.**
+Every configuration at exactly 640 reaches 30,000 simulations/s, and every configuration at 320 or below falls to
+15,000–24,000.
 
-**Virtual loss does not affect throughput at all.** Batch occupancy is 0.96–1.00 at every weight and the
-simulation rate is identical across weights at fixed parallelism. Leaf collisions — a descent reaching a node
-another in-flight descent already claimed, which `selectAvailableLeaf` rejects by returning `nullopt`
-(`cpp/src/search/SearchTree.hpp:242`) and which `appendInferenceLeaf` turns into a skipped task
-(`cpp/src/search/SearchExecutor.hpp:572`) — are real machinery but essentially never bind at these settings.
-The earlier "the speedup tracks parallel × virtual loss" reading was fitted to contention noise.
+#### What this means for the production configuration
 
-**Parallelism only buys throughput when trees are scarce.** With one tree it is close to linear (723 → 11,073
-simulations/s from 1 to 16 in-flight descents, because the inference batch is otherwise nearly empty). With 100
-trees the batch is already saturated by cross-tree batching and parallelism buys exactly nothing. Production
-self-play runs `parallel_games_per_process: 512`, so it is firmly in the second regime: **raising
-`parallel_searches` there should be expected to do nothing for throughput.** Where it does pay is few-tree work —
-interactive analysis, small evaluation matches, the tail of a match as games finish.
+At `parallel_games_per_process: 512` with capacity 640 there are 1.25 in-flight descents per game, so the
+configured `parallel_searches: 4` and `virtual_loss_weight: 1.0` **do almost nothing today**. Self-play is
+effectively running single-descent search — which, per the table above, is the *best* setting for search quality.
 
-#### Method note
+Cutting games to shorten game latency is therefore not free: it is precisely what makes `parallel_searches` start
+to bind, and the strength cost arrives with it.
 
-Per-arm wall-clock from a concurrently-scheduled matrix is not a throughput measurement, and
-`run_search_arm_matrix` records `duration_seconds` per arm in a way that invites exactly this mistake. Any future
-throughput comparison must either run arms sequentially or hold concurrency fixed across the whole comparison.
+| Configuration | Throughput | Game latency | Effective parallelism | Search-quality cost |
+|---|---|---|---|---|
+| 512 × 4 (today) | 31,075 | 9.9 s/move | ~1.25 | none |
+| 320 × 2 | 29,855 | 6.4 s/move (1.5× faster) | 2 | ≈ −20 Elo |
+| 160 × 4 | 30,175 | 3.2 s/move (3.1× faster) | 4 | ≈ −36 Elo |
+| 80 × 8 | 30,072 | 1.6 s/move (6.2× faster) | 8 | ≈ −45 Elo |
+
+Throughput, game latency and search quality form a three-way trade with no free corner. Keeping games low *and*
+parallelism low collapses throughput (160 × 1 gives 18,703 simulations/s, a 38% loss, and is still slower per game
+than 160 × 4).
+
+**The missing measurement.** Elo against Stockfish is not the quantity self-play cares about; policy-target
+fidelity is. The right next step is to compute targets at 600 visits under parallel 1 versus parallel 8 against a
+common parallel-1 10,000-visit reference, and read the cost directly in KL on the §7.1 frontier instead of
+translating through an Elo assumption. The tooling exists; the comparison does not yet.
 
 ### 6.4 Nulls, and what they bound
 
@@ -462,10 +504,12 @@ position itself and could do better or worse. And the whole measurement is targe
    of forcing zero (§6.1). This is a correctness fix worth about 76 Elo of measurement bias.
 2. **Raise the visit schedule.** Both instruments agree the current 600 is well short (§6.2, §7.1). The strength
    gain is large and the target-fidelity gain is steep; the cost is linear wall-clock, partly offset by (3).
-3. **Do not change `parallel_searches` for self-play throughput.** Withdrawn: the 28% figure was a
-   GPU-contention artefact (§6.3). Parallelism is strength-neutral at 600 visits, and with 512 games per process
-   it buys no throughput either. It is worth raising only for few-tree work such as interactive analysis. Whether
-   it stays strength-neutral at the 150-visit fast searches is untested.
+3. **Treat games, parallelism and quality as one three-way trade (§6.3).** `parallel_searches: 4` is inert at
+   512 games per process, so self-play already runs at the best quality setting. Reducing games to shorten game
+   latency forces parallelism to bind and costs roughly 20, 36 or 45 Elo of search quality at 2, 4 or 8. Full
+   throughput needs `games × parallel_searches` at or above the in-flight capacity of 640. If fresher replay data
+   is worth a third of the effective search budget, 80 games × parallel 8 is the strong latency option; if not,
+   leave it alone.
 4. **Drop the adaptive full-search budget as configured**, but not the idea behind it. Its thresholds sit in the
    band where they select worse than random (§7.5), and it is a wash at the production cap for eight parameters.
    Either raise the top-share threshold to ≥0.85 for a small honest gain, or drop the rule and pursue the learned

@@ -30,12 +30,15 @@ class Arguments:
     parallel_searches: tuple[int, ...]
     virtual_loss_weights: tuple[float, ...]
     inference_batch_size: int
+    inference_workers: int
+    outstanding_batches_per_worker: int
 
 
 class CollisionMeasurement(FrozenModel):
     parallel_searches: int = Field(gt=0)
     virtual_loss_weight: float = Field(ge=0.0, le=1.0)
     trees: int = Field(gt=0)
+    inference_capacity: int = Field(gt=0)
     simulations: int = Field(gt=0)
     elapsed_seconds: float = Field(gt=0.0)
     simulations_per_second: float = Field(gt=0.0)
@@ -90,6 +93,7 @@ def measure_collisions(arguments: Arguments) -> CollisionReport:
     game = ChessImplementation(configuration)
     measurements: list[CollisionMeasurement] = []
     reference = game.self_play_parameters_at(arguments.generation)
+    capacity = arguments.inference_workers * arguments.inference_batch_size * arguments.outstanding_batches_per_worker
 
     for parallel_searches in arguments.parallel_searches:
         for virtual_loss_weight in arguments.virtual_loss_weights:
@@ -100,9 +104,9 @@ def measure_collisions(arguments: Arguments) -> CollisionReport:
                 game.native_inference_configuration(arguments.device, arguments.model),
                 game.native_search_parameters(_parameters(game, arguments, parallel_searches, virtual_loss_weight)),
                 BatchedInferenceParameters(
-                    workers=1,
+                    workers=arguments.inference_workers,
                     batch_size=arguments.inference_batch_size,
-                    outstanding_batches_per_worker=1,
+                    outstanding_batches_per_worker=arguments.outstanding_batches_per_worker,
                 ),
                 arguments.generation,
             )
@@ -118,6 +122,7 @@ def measure_collisions(arguments: Arguments) -> CollisionReport:
                     parallel_searches=parallel_searches,
                     virtual_loss_weight=virtual_loss_weight,
                     trees=len(roots),
+                    inference_capacity=capacity,
                     simulations=simulations,
                     elapsed_seconds=elapsed,
                     simulations_per_second=simulations / elapsed,
@@ -128,7 +133,7 @@ def measure_collisions(arguments: Arguments) -> CollisionReport:
                 )
             )
             print(
-                f'parallel {parallel_searches:3d}  vlw {virtual_loss_weight:.2f}  '
+                f'trees {len(roots):4d}  parallel {parallel_searches:3d}  vlw {virtual_loss_weight:.2f}  '
                 f'batch {average_batch_size:7.2f}  occupancy {measurements[-1].batch_occupancy:.3f}  '
                 f'{measurements[-1].simulations_per_second:8.0f} sims/s',
                 flush=True,
@@ -160,6 +165,8 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--parallel-searches', type=int, nargs='+', default=(1, 2, 4, 8, 16))
     parser.add_argument('--virtual-loss-weights', type=float, nargs='+', default=(0.25, 0.5, 1.0))
     parser.add_argument('--inference-batch-size', type=int, default=256)
+    parser.add_argument('--inference-workers', type=int, default=1)
+    parser.add_argument('--outstanding-batches', type=int, default=1)
     parsed = parser.parse_args()
     if min(parsed.generation, parsed.device) < 0:
         parser.error('--generation and --device must be nonnegative')
@@ -183,6 +190,8 @@ def parse_arguments() -> Arguments:
         parallel_searches=tuple(parsed.parallel_searches),
         virtual_loss_weights=tuple(parsed.virtual_loss_weights),
         inference_batch_size=parsed.inference_batch_size,
+        inference_workers=parsed.inference_workers,
+        outstanding_batches_per_worker=parsed.outstanding_batches,
     )
 
 
