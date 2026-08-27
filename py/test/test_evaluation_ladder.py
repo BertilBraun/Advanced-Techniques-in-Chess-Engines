@@ -43,8 +43,15 @@ def _synthetic_observations(rating: float) -> tuple[LadderRungObservation, ...]:
     )
 
 
-def test_agreed_anchor_curve_covers_the_four_plan_rungs() -> None:
-    assert dict(STOCKFISH_FIXED_NODES_ANCHOR_ELO) == {30: 1100.0, 100: 1200.0, 300: 1400.0, 1000: 1700.0}
+def test_agreed_anchor_curve_covers_only_calibrated_rungs() -> None:
+    assert dict(STOCKFISH_FIXED_NODES_ANCHOR_ELO) == {
+        30: 1100.0,
+        100: 1200.0,
+        300: 1400.0,
+        1000: 1700.0,
+        2000: 1890.0,
+        3000: 2040.0,
+    }
 
 
 def test_logistic_fit_recovers_the_generating_rating() -> None:

@@ -15,6 +15,11 @@ STOCKFISH_FIXED_NODES_ANCHOR_ELO = MappingProxyType(
         100: 1200.0,
         300: 1400.0,
         1000: 1700.0,
+        # Log-interpolated from the same Melonimarco curve: 2000 sits on a plotted point at 1890,
+        # 3000 falls between the plotted (2000, 1890) and (5000, 2220) at roughly 2040. The four
+        # anchors above reproduce from that curve to within 70 Elo, three of them within 20.
+        2000: 1890.0,
+        3000: 2040.0,
     }
 )
 
