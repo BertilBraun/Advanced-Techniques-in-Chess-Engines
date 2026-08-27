@@ -284,11 +284,36 @@ The rule is clean: **full throughput needs `games × parallel_searches` at or ab
 Every configuration at exactly 640 reaches 30,000 simulations/s, and every configuration at 320 or below falls to
 15,000–24,000.
 
-#### What this means for the production configuration
+#### What this means for the production configuration — corrected by the real workload
 
-At `parallel_games_per_process: 512` with capacity 640 there are 1.25 in-flight descents per game, so the
-configured `parallel_searches: 4` and `virtual_loss_weight: 1.0` **do almost nothing today**. Self-play is
-effectively running single-descent search — which, per the table above, is the *best* setting for search quality.
+The uniform-600-visit map above suggested `parallel_searches: 4` does almost nothing at 512 games. **Measured
+against the real fast/full mix, that is wrong.** Self-play runs 25% full searches at 600 visits and 75% fast
+searches at 150; the fast ones finish first and leave a quarter of the trees to carry the remaining 450 visits, so
+the active-tree count collapses mid-step and parallelism binds in that tail. `initialFastSearchAdmissionCount`
+would stagger the fast searches to prevent exactly this, but its ratio-based value of 96 is overridden by the
+capacity-based value of 384, so all games start together.
+
+`tools.benchmark_self_play_search`, production inference settings, 40 s per cell (`results-selfplay/`):
+
+| Games | parallel 1 | parallel 2 | parallel 4 | parallel 8 |
+|---|---|---|---|---|
+| **512** | 22,553 (batch 86.1) | 24,475 (165.4) | **27,013 (267.9)** | 28,690 (315.4) |
+| 320 | 15,135 | 22,772 | 24,794 | 27,032 |
+| 160 | 12,653 | 14,861 | 22,257 | 24,910 |
+| 80 | 10,516 | 13,084 | 14,441 | 21,959 |
+| 40 | 7,275 | 11,047 | 14,352 | 16,677 |
+
+At 512 games and parallel 1 the average inference batch is **86.1** against a batch size of 320. Parallel 4 lifts
+it to 267.9 for **+20% throughput**, parallel 8 to 315.4 for +27%. The same comparison under uniform 600-visit
+searches is worth only +3.6%.
+
+**So `parallel_searches: 4` is not wasted — it exists for the fast/full tail and earns its keep.** The corollary is
+unwelcome: the tail is where the *full* searches live, so about 75% of every full search — the ones that produce
+training targets — runs at parallel 4 and pays the quality cost above.
+
+Seconds per move per game at a mean of 262.5 visits: 512×4 = 4.98, 320×4 = 3.39, 320×2 = 3.69, 160×4 = 1.89,
+80×8 = 0.96. Note **320×4 dominates 320×2** on both throughput and latency at equal quality cost, because the tail
+rewards parallel headroom.
 
 Cutting games to shorten game latency is therefore not free: it is precisely what makes `parallel_searches` start
 to bind, and the strength cost arrives with it.
@@ -504,12 +529,11 @@ position itself and could do better or worse. And the whole measurement is targe
    of forcing zero (§6.1). This is a correctness fix worth about 76 Elo of measurement bias.
 2. **Raise the visit schedule.** Both instruments agree the current 600 is well short (§6.2, §7.1). The strength
    gain is large and the target-fidelity gain is steep; the cost is linear wall-clock, partly offset by (3).
-3. **Treat games, parallelism and quality as one three-way trade (§6.3).** `parallel_searches: 4` is inert at
-   512 games per process, so self-play already runs at the best quality setting. Reducing games to shorten game
-   latency forces parallelism to bind and costs roughly 20, 36 or 45 Elo of search quality at 2, 4 or 8. Full
-   throughput needs `games × parallel_searches` at or above the in-flight capacity of 640. If fresher replay data
-   is worth a third of the effective search budget, 80 games × parallel 8 is the strong latency option; if not,
-   leave it alone.
+3. **Keep `parallel_searches: 4`; treat games against parallelism as a three-way trade (§6.3).** Under the real
+   fast/full mix it is worth +20% throughput by filling the tail batch, not wasted as the uniform map suggested.
+   The cost is that about 75% of every full search runs at parallel 4 and pays roughly 36 Elo of search quality.
+   For fresher replay data, 320 × 4 is the low-risk step (1.47× fresher, −8% throughput, same quality cost);
+   prefer it over 320 × 2, which loses on both. Leave `virtual_loss_weight` at 1.0.
 4. **Drop the adaptive full-search budget as configured**, but not the idea behind it. Its thresholds sit in the
    band where they select worse than random (§7.5), and it is a wash at the production cap for eight parameters.
    Either raise the top-share threshold to ≥0.85 for a small honest gain, or drop the rule and pursue the learned
