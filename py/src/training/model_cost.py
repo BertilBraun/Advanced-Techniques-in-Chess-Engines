@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import torch
 from src.training.network import Network
+from torch.nn.attention import SDPBackend, sdpa_kernel
 from torch.utils.flop_counter import FlopCounterMode
 
 
@@ -48,9 +50,11 @@ def _count_parameters(*modules: torch.nn.Module) -> int:
     return sum(seen.values())
 
 
-def _count_multiply_accumulates(callable_under_test, batch_size: int) -> int:
+def _count_multiply_accumulates(callable_under_test: Callable[[], object], batch_size: int) -> int:
     counter = FlopCounterMode(display=False)
-    with counter, torch.no_grad():
+    # The fused attention backends are opaque to the counter on some devices, so the measurement forces the
+    # decomposed one; otherwise the same model reports different attention costs on CPU and on CUDA.
+    with sdpa_kernel(SDPBackend.MATH), counter, torch.no_grad():
         callable_under_test()
     # FlopCounterMode reports two floating-point operations per multiply-accumulate.
     return counter.get_total_flops() // (2 * batch_size)

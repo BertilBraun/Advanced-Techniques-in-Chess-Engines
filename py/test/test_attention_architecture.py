@@ -314,36 +314,44 @@ def test_the_reported_multiply_accumulates_do_not_depend_on_the_probe_batch_size
     )
 
 
-@pytest.mark.parametrize(
-    'architecture',
-    (
+def test_the_convolutional_trunk_spends_at_most_sixty_four_mac_per_trunk_parameter() -> None:
+    model = Network(
         NetworkParams(
             num_layers=4,
             hidden_size=64,
             residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
             policy_head=DENSE_HEAD,
         ),
-        AttentionNetworkParams(
-            num_layers=4,
-            embedding_size=64,
-            num_heads=4,
-            feedforward_size=128,
-            policy_head=DENSE_HEAD,
-        ),
-    ),
-    ids=('convolutional', 'attention'),
-)
-def test_both_trunks_spend_about_one_hundred_and_twenty_eight_mac_per_trunk_parameter(
-    architecture: NetworkParams | AttentionNetworkParams,
-) -> None:
-    model = Network(architecture, DEVICE, CHESS_NETWORK_DIMENSIONS)
+        DEVICE,
+        CHESS_NETWORK_DIMENSIONS,
+    )
 
     cost = measure_model_cost(model)
 
-    # Every trunk parameter is applied once per square, so 64 multiply-accumulates (128 floating-point
-    # operations) per parameter is the ceiling; normalization scales and biases carry no multiply.
-    per_parameter = cost.multiply_accumulates_per_position.trunk / cost.parameters.trunk
-    assert 55.0 <= per_parameter <= 64.0
+    # Every trunk parameter is applied once per square, so 64 multiply-accumulates per parameter is the
+    # ceiling; normalization scales and biases carry no multiply at all.
+    assert 55.0 <= cost.multiply_accumulates_per_position.trunk / cost.parameters.trunk <= 64.0
+
+
+def test_the_attention_trunk_spends_more_than_sixty_four_mac_per_trunk_parameter() -> None:
+    model = Network(attention_parameters(num_layers=4, embedding_size=64), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    cost = measure_model_cost(model)
+
+    assert cost.multiply_accumulates_per_position.trunk / cost.parameters.trunk > 64.0
+
+
+def test_the_attention_score_matrix_is_the_whole_excess_over_sixty_four_mac_per_parameter() -> None:
+    layers, embedding = 4, 64
+    model = Network(attention_parameters(num_layers=layers, embedding_size=embedding), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    cost = measure_model_cost(model)
+
+    # Scoring 64 queries against 64 keys and mixing the values costs two square-count-squared matmuls per
+    # layer, and no parameter pays for them.
+    score_matrix = layers * 2 * BOARD_SQUARE_COUNT * BOARD_SQUARE_COUNT * embedding
+    parameter_bound = cost.multiply_accumulates_per_position.trunk - score_matrix
+    assert 55.0 <= parameter_bound / cost.parameters.trunk <= 64.0
 
 
 def test_the_attention_student_architecture_carries_the_configured_head_and_bias() -> None:
