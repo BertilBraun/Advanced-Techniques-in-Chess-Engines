@@ -197,10 +197,22 @@ positions/s at 32 roots and ~12,573 at 200. Depth costs launch latency only at s
 4. **Spend the schedule at high learning rate.** In both 80,000-step runs the final quarter moved the gap
    by 0.004 and 0.003 — nearly free of return, worth about 5 Elo. A longer high-rate phase with the
    anneal compressed into the last ~20% should dominate a full-length cosine.
-5. **Fix the throughput ratio once, on an idle GPU, at the root count the match will use.**
-6. **Report gap above floor, not raw cross-entropy**, and re-measure the floor whenever the generator
+5. **Student training is bound by batch assembly, not by the GPU.** On this node 0.48M parameters trained
+   at ~8.2 steps/s and 1.33M at ~6.8 — 2.8× the parameters for 1.18× the time, where a compute-bound loop
+   would have cost ~2.8×. The GPU process held under 1 GiB and `sys` time matched `user` time. The cost is
+   in `build_training_batch`: per batch it decodes the packed payloads and scatters a dense
+   `(batch, 1880)` policy target in single-threaded numpy.
+
+   Two consequences for a multi-GPU node. Data-parallel training would scale poorly until the input
+   pipeline is fixed, so a prefetching loader with worker processes is the first optimisation, not DDP —
+   `distill_train_student.py` is single-device and has no distributed support. And because each run
+   under-uses its device, **the efficient use of N GPUs is N concurrent students** — different sizes,
+   schedules and sampling rates — rather than one student trained N times faster. That needs no code
+   changes, and with the dataset resident in page cache the concurrent readers do not contend.
+6. **Fix the throughput ratio once, on an idle GPU, at the root count the match will use.**
+7. **Report gap above floor, not raw cross-entropy**, and re-measure the floor whenever the generator
    changes.
-7. Evaluate at the search depth you actually intend to play at. Shallow-search results flatter the
+8. Evaluate at the search depth you actually intend to play at. Shallow-search results flatter the
    student substantially.
 
 ## Sharded generation on a multi-GPU node
