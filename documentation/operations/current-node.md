@@ -13,8 +13,8 @@ Exactly one node is described here. When it is released, replace the body with
 | GPU | 1× RTX 4070 SUPER 12 GiB, driver 580.159.03, compute capability 8.9 |
 | CPU / RAM / disk | 80 visible CPUs (2× Xeon E5-2673 v4), 9.6 effective CPU quota · 188 GiB · 32 GiB overlay |
 | `/workspace` volume-backed | **no** — nothing survives recycle/destroy; fetch evidence before release |
-| Environment | Not provisioned yet; locked runtime will be recorded after bootstrap |
-| Engines | Not installed yet; setup must smoke Stockfish and CUDA KataGo |
+| Environment | PyTorch 2.12.1+cu126 · CUDA runtime 12.6 · cuDNN 9.10.2 · system toolkit 12.8.93 |
+| Engines | Stockfish 18 and 13; KataGo 1.17.1 `cuda12.8-cudnn9.8.0`; 7×7 and 9×9 CUDA smokes passed |
 
 ## Purpose and limits
 

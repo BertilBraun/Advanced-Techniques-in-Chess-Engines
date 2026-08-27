@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/workspace/alphazero-engine/py/tools/prepare_benchmark_model.py", line 7, in <module>
+    from src.experiment.configuration import load_experiment_configuration
+ModuleNotFoundError: No module named 'src'
+parameters=4369162
+bytes=15588570
