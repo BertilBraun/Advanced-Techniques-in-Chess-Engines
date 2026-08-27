@@ -24,9 +24,9 @@ per-generation yardstick carries an explicit note about which side of the change
 
 ## WP-S2 — Difficulty head, phase 1: is it learnable at all?
 
-The oracle says perfect per-position budgeting is worth 4.4× effective compute, and perfect fast/full assignment
-alone is worth 2.2× at zero extra cost. Neither is reachable, but the gap to the hand-made signals (ρ ≈ 0.21, and
-in the wrong shape) is wide enough that this deserves a real attempt.
+The oracle says perfect per-position budgeting of the full searches is worth up to 4.4× effective compute. That
+is not reachable, but the gap to the hand-made signals (ρ ≈ 0.21, and in the wrong shape) is wide enough that this
+deserves a real attempt.
 
 Do the cheap offline experiment before touching the trainer.
 
@@ -35,11 +35,10 @@ Do the cheap offline experiment before touching the trainer.
    3,000 positions in ~45 minutes; scale to 30,000–100,000 positions over a few hours.
 2. **Fit an offline predictor** on the existing network's own features — start from the trunk activations of the
    frozen checkpoint, predicting `benefit` as a scalar. This is a probe, not a head: no training changes yet.
-3. **Score it the way it will be used**, not by regression loss:
-   - Ranking quality — what fraction of the oracle's fast/full gain does a top-25%-by-prediction assignment
-     capture? The oracle moves 261 → 580 equivalent visits; capturing even a third of that is large.
-   - Because the top 10% of positions carry 76.7% of the benefit, precision at the head of the ranking is what
-     matters. Report precision@10% and precision@25%, not R².
+3. **Score it the way it will be used**, not by regression loss. Replay the predicted budgets through the
+   per-position fidelity curves the labels came from and report where the predictor's frontier sits between the
+   flat frontier and the oracle frontier at equal mean compute. "Captures X% of the available oracle gain at 600
+   mean visits" is the number that decides this; R² is not.
 
 **Decision gate.** If a probe on frozen features captures a useful share of the oracle gain, proceed to WP-S3. If
 it captures nearly nothing, the difficulty signal is not present in the trunk and a trained head is unlikely to
@@ -69,14 +68,15 @@ Design notes that follow from the measurements:
 - **Predict benefit, not convergence.** The inverted-U result is the whole point: "the search looks decided" is
   the wrong target and is what the current adaptive rule gets wrong. Positions where two or three moves are
   genuinely contested are the ones worth searching.
-- **The two uses reinforce.** A position predicted difficult is both worth a longer search *and* worth having as
-  a full-search training target, which is the argument for driving the fast/full decision from the same head.
+- **The two uses do not simply reinforce.** A position predicted difficult is worth a longer search, but at a
+  *fixed* budget it also yields a less reliable target (findings §1.3). One head can drive both decisions, but
+  selecting a position for a full search and lengthening that search have to move together.
 - **Guard against feedback.** The head is trained on labels produced by searches whose budgets the head itself
   chose. Positions it starves are never labelled at high budget again. Retain a random control fraction of
   full searches so the label distribution stays covered.
 
-**Acceptance:** a training run where the head drives fast/full assignment matches or beats the per-generation
-yardstick at equal wall-clock, with target top-1 agreement improved at the same visit spend.
+**Acceptance:** a training run where the head scales full-search budgets matches or beats the per-generation
+yardstick at equal wall-clock, with mean target top-1 agreement improved at the same mean visit spend.
 
 ## WP-S4 — Retire the current adaptive budget
 
