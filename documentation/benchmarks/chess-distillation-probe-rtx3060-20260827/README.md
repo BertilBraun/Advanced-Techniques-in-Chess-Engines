@@ -203,6 +203,52 @@ positions/s at 32 roots and ~12,573 at 200. Depth costs launch latency only at s
 7. Evaluate at the search depth you actually intend to play at. Shallow-search results flatter the
    student substantially.
 
+## Sharded generation on a multi-GPU node
+
+`distill_build_dataset.py` drives one device. To use a node with several, run one process per device and
+merge the shards afterwards. No additional code is needed — `distill_merge_datasets.py` accepts `--input`
+repeatedly and validates that every shard shares a teacher and record layout before concatenating.
+
+**Every shard must get a different `--random-seed`.** The seed drives opening selection, move sampling and
+perturbation, so eight processes sharing a seed produce eight byte-identical shards and a dataset with an
+eighth of its apparent content. The merge tool checks compatibility, not novelty, and will not catch this.
+
+```
+cd /workspace/alphazero-engine/py
+for device in 0 1 2 3 4 5 6 7; do
+  nohup /workspace/alphazero-engine-venv/bin/python -m tools.distill_build_dataset \
+    --teacher-run-state <run> --teacher-generation <N> \
+    --teacher-layers <L> --teacher-hidden-size <H> \
+    --output /workspace/distill/shard-${device}.bin --positions <count_per_shard> \
+    --parallel-games 1024 --recorded-ply-interval <N> \
+    --random-perturbation-probability 0.10 \
+    --random-seed $((20260827 + device)) --device-id ${device} \
+    > /workspace/distill/shard-${device}.log 2>&1 &
+done
+wait
+```
+
+Verify the shards actually differ before spending training time on them:
+
+```
+sha256sum /workspace/distill/shard-*.bin        # eight distinct digests, or the seeds did not vary
+python -m tools.distill_merge_datasets $(printf -- '--input /workspace/distill/shard-%d.bin ' 0 1 2 3 4 5 6 7) \
+  --output /workspace/distill/chess-distill-merged.bin
+```
+
+The merged manifest keeps the last shard's generator settings, because its rows form the held-out tail.
+Order the inputs so the shard you want the held-out split drawn from comes last.
+
+Two node caveats. `setup_remote.sh` **exited 0 on a node where the engine install had failed** (the KataGo
+download died with `curl: (56)` and Stockfish was never installed), so check `engines/` explicitly rather
+than trusting the exit status — it is needed by `build_chess_opening_manifest.py`, though not by
+generation or by checkpoint-versus-checkpoint matches. And confirm the GPUs are otherwise idle
+(`nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader`); a foreign workload silently
+distorted throughput measurements during this probe.
+
+Note `pgrep -f <pattern>` matches the polling shell's own command line and will never report the job gone.
+Poll on a sentinel line in the log, or on `nvidia-smi`, instead.
+
 ## Reproduction
 
 ```
