@@ -194,13 +194,8 @@ def run_variant(
 ) -> ModelOutputs:
     torch.backends.cudnn.benchmark = cudnn_benchmark
     model = torch.jit.load(str(model_path), map_location=device)
-    model.to(precision.torch_dtype)
+    model.to(dtype=precision.torch_dtype, memory_format=memory_format.torch_memory_format)
     model.eval()
-    if memory_format is MemoryFormat.CHANNELS_LAST:
-        with torch.no_grad():
-            for parameter in model.parameters():
-                if parameter.dim() == 4:
-                    parameter.set_data(parameter.data.contiguous(memory_format=torch.channels_last))
     frozen = torch.jit.freeze(model)
 
     policy_batches: list[Tensor] = []
