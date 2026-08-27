@@ -151,6 +151,17 @@ SUPPLEMENTARY_CELLS = (
         'attn-B at twice the peak learning rate',
         replace(ARCHITECTURE_CELLS[2].arguments, learning_rate=2 * PROTOCOL_PEAK_LEARNING_RATE),
     ),
+    # Raising the rate on one trunk only would stop the comparison being matched, so both get it.
+    Cell(
+        'cnn-from-to-double-rate',
+        'the head control at twice the peak learning rate',
+        replace(
+            BASE,
+            hidden_size=136,
+            policy_head_kind=PolicyHeadKind.FROM_TO_ATTENTION,
+            learning_rate=2 * PROTOCOL_PEAK_LEARNING_RATE,
+        ),
+    ),
 )
 
 ALL_CELLS = ARCHITECTURE_CELLS + SCHEDULE_CELLS + SUPPLEMENTARY_CELLS
