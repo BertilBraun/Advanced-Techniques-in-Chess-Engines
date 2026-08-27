@@ -12,13 +12,13 @@ struct InferenceConfiguration {
     int device_id;
     std::string model_path;
     InferenceDevice device;
-    SdpaBackend sdpa_backend;
+    InferenceExecutionOptions execution_options;
 
     InferenceConfiguration(int deviceId, std::string modelPath,
                            InferenceDevice inferenceDevice = InferenceDevice::Auto,
-                           SdpaBackend sdpaBackend = SdpaBackend::Automatic)
+                           InferenceExecutionOptions executionOptions = {})
         : device_id(deviceId), model_path(std::move(modelPath)), device(inferenceDevice),
-          sdpa_backend(sdpaBackend) {
+          execution_options(executionOptions) {
         if (model_path.empty()) {
             throw std::invalid_argument("Inference model path must not be empty");
         }

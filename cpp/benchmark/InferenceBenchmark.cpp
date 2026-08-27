@@ -22,6 +22,9 @@ struct Arguments {
     size_t slots = 3;
     uint32_t seed = 0;
     std::string sdpaBackend = "automatic";
+    std::string precision = "bfloat16";
+    std::string memoryFormat = "contiguous";
+    bool cudnnBenchmark = false;
 };
 
 Arguments parseArguments(const int argumentCount, char **argumentValues) {
@@ -56,6 +59,12 @@ Arguments parseArguments(const int argumentCount, char **argumentValues) {
             arguments.seed = static_cast<uint32_t>(std::stoul(value));
         } else if (option == "--sdpa-backend") {
             arguments.sdpaBackend = value;
+        } else if (option == "--precision") {
+            arguments.precision = value;
+        } else if (option == "--memory-format") {
+            arguments.memoryFormat = value;
+        } else if (option == "--cudnn-benchmark") {
+            arguments.cudnnBenchmark = value == "1" || value == "true";
         } else {
             throw std::invalid_argument("Unknown benchmark option: " + option);
         }
@@ -86,6 +95,36 @@ SdpaBackend resolveSdpaBackend(const Arguments &arguments) {
     }
     throw std::invalid_argument(
         "SDPA backend must be automatic, flash, memory_efficient, math, or cudnn");
+}
+
+InferencePrecision resolvePrecision(const Arguments &arguments) {
+    if (arguments.precision == "bfloat16") {
+        return InferencePrecision::BFloat16;
+    }
+    if (arguments.precision == "float16") {
+        return InferencePrecision::Float16;
+    }
+    if (arguments.precision == "float32") {
+        return InferencePrecision::Float32;
+    }
+    throw std::invalid_argument("Precision must be bfloat16, float16, or float32");
+}
+
+InferenceMemoryFormat resolveMemoryFormat(const Arguments &arguments) {
+    if (arguments.memoryFormat == "contiguous") {
+        return InferenceMemoryFormat::Contiguous;
+    }
+    if (arguments.memoryFormat == "channels_last") {
+        return InferenceMemoryFormat::ChannelsLast;
+    }
+    throw std::invalid_argument("Memory format must be contiguous or channels_last");
+}
+
+InferenceExecutionOptions resolveExecutionOptions(const Arguments &arguments) {
+    return {.sdpa_backend = resolveSdpaBackend(arguments),
+            .precision = resolvePrecision(arguments),
+            .memory_format = resolveMemoryFormat(arguments),
+            .cudnn_benchmark = arguments.cudnnBenchmark};
 }
 
 std::vector<Board> generateBoards(const size_t count, const uint32_t seed) {
@@ -141,7 +180,7 @@ nlohmann::json runDirect(const Arguments &arguments,
                          const std::vector<CompressedEncodedBoard> &encodings) {
     InferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize, true,
                            ChessGame::Encoding::inferenceDimensions(),
-                           resolveSdpaBackend(arguments));
+                           resolveExecutionOptions(arguments));
     torch::Tensor input = runner.createInputBuffer();
     InferenceOutput output = runner.createOutputBuffer();
     fillInput(input, encodings, 0, arguments.batchSize);
@@ -163,7 +202,7 @@ nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<
                                   const std::vector<CompressedEncodedBoard> &encodings) {
     InferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize, true,
                            ChessGame::Encoding::inferenceDimensions(),
-                           resolveSdpaBackend(arguments));
+                           resolveExecutionOptions(arguments));
     torch::Tensor input = runner.createInputBuffer();
     InferenceOutput output = runner.createOutputBuffer();
     fillInput(input, encodings, 0, arguments.batchSize);
@@ -196,7 +235,7 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
                            const std::vector<CompressedEncodedBoard> &encodings) {
     InferencePipeline pipeline(arguments.modelPath, arguments.device, 0, arguments.batchSize,
                                arguments.slots, true, ChessGame::Encoding::inferenceDimensions(),
-                               resolveSdpaBackend(arguments));
+                               resolveExecutionOptions(arguments));
     std::vector<std::pair<size_t, size_t>> pendingBatches;
     pendingBatches.reserve(arguments.slots);
     constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channelCount *
@@ -405,6 +444,9 @@ int main(const int argumentCount, char **argumentValues) {
         result["workers"] = arguments.workers;
         result["iterations_per_worker"] = arguments.iterations;
         result["sdpa_backend"] = arguments.sdpaBackend;
+        result["precision"] = arguments.precision;
+        result["memory_format"] = arguments.memoryFormat;
+        result["cudnn_benchmark"] = arguments.cudnnBenchmark;
         result["positions"] = positions;
         result["positions_per_second"] = static_cast<double>(positions) / elapsedSeconds;
         result["state_generation_seed"] = arguments.seed;

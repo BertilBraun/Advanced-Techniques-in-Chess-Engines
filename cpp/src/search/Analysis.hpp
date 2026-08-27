@@ -75,7 +75,7 @@ public:
                                             FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
                                             0.0F, 1.0F),
                        1.0F, 0.0F, 1'024),
-                   0, false, runtimeParameters.sdpa_backend) {}
+                   0, false, runtimeParameters.execution_options) {}
 
     [[nodiscard]] Root newRoot(Position position) {
         return m_search.newRoot(std::move(position), std::numeric_limits<std::uint32_t>::max());

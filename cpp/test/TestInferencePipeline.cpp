@@ -233,13 +233,34 @@ int runInferencePipelineTests() {
 
         bool rejectedCudaBackendOnCpu = false;
         try {
-            InferenceRunner explicitCudaRunner(modelPath.string(), InferenceDevice::Cpu, 0, 4,
-                                               false, ChessGame::Encoding::inferenceDimensions(),
-                                               SdpaBackend::MemoryEfficient);
+            InferenceRunner explicitCudaRunner(
+                modelPath.string(), InferenceDevice::Cpu, 0, 4, false,
+                ChessGame::Encoding::inferenceDimensions(),
+                InferenceExecutionOptions{.sdpa_backend = SdpaBackend::MemoryEfficient});
         } catch (const std::invalid_argument &) {
             rejectedCudaBackendOnCpu = true;
         }
         require(rejectedCudaBackendOnCpu, "runner accepted an explicit CUDA SDPA backend on CPU");
+
+        bool rejectedChannelsLastOnCpu = false;
+        try {
+            InferenceRunner channelsLastRunner(
+                modelPath.string(), InferenceDevice::Cpu, 0, 4, false,
+                ChessGame::Encoding::inferenceDimensions(),
+                InferenceExecutionOptions{.memory_format = InferenceMemoryFormat::ChannelsLast});
+        } catch (const std::invalid_argument &) {
+            rejectedChannelsLastOnCpu = true;
+        }
+        require(rejectedChannelsLastOnCpu, "runner accepted a channels-last memory format on CPU");
+
+        // The default options must stay byte-for-byte the shipped path, or an unconfigured run
+        // would silently change precision.
+        require(InferenceExecutionOptions{} ==
+                    InferenceExecutionOptions{.sdpa_backend = SdpaBackend::Automatic,
+                                              .precision = InferencePrecision::BFloat16,
+                                              .memory_format = InferenceMemoryFormat::Contiguous,
+                                              .cudnn_benchmark = false},
+                "default inference execution options changed");
 
         testTwoOutstandingBatches(modelPath, InferenceDevice::Cpu, false);
         testFailureReleasesSlot(modelPath);

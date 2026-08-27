@@ -13,9 +13,29 @@
 #include <mutex>
 
 namespace {
+// Convolution weights must carry the activation layout: a channels-last activation against a
+// contiguous weight makes cuDNN transpose the weight on every call instead of once here.
+void adoptMemoryFormat(torch::jit::script::Module &model, const at::MemoryFormat memoryFormat) {
+    if (memoryFormat == at::MemoryFormat::Contiguous) {
+        return;
+    }
+    torch::NoGradGuard noGrad;
+    for (const auto &parameter : model.named_parameters(true)) {
+        if (parameter.value.dim() == 4) {
+            parameter.value.set_data(parameter.value.data().contiguous(memoryFormat));
+        }
+    }
+    for (const auto &buffer : model.named_buffers(true)) {
+        if (buffer.value.dim() == 4) {
+            buffer.value.set_data(buffer.value.data().contiguous(memoryFormat));
+        }
+    }
+}
+
 torch::jit::script::Module loadInferenceModel(const std::string &modelPath,
                                               const torch::Device &device,
-                                              const torch::Dtype dataType) {
+                                              const torch::Dtype dataType,
+                                              const at::MemoryFormat memoryFormat) {
     std::string modelPathToLoad = modelPath;
     if (!modelPathToLoad.ends_with(".jit.pt") && !modelPathToLoad.ends_with(".pt")) {
         throw std::invalid_argument("Model path must end with '.jit.pt' or '.pt'");
@@ -29,6 +49,7 @@ torch::jit::script::Module loadInferenceModel(const std::string &modelPath,
 
     torch::jit::script::Module model = torch::jit::load(modelPathToLoad, device);
     model.to(dataType);
+    adoptMemoryFormat(model, memoryFormat);
     model.eval();
     return model;
 }
@@ -64,10 +85,11 @@ PreparedInferenceModel
 prepareInferenceModelUpdate(const std::vector<ModelTensorSignature> &parameterSignature,
                             const std::vector<ModelTensorSignature> &bufferSignature,
                             const std::string &modelPath, const torch::Device &device,
-                            const torch::Dtype dataType, const torch::Tensor &validationInput,
-                            const std::int64_t actionCount, const std::int64_t outcomeCount) {
+                            const torch::Dtype dataType, const at::MemoryFormat memoryFormat,
+                            const torch::Tensor &validationInput, const std::int64_t actionCount,
+                            const std::int64_t outcomeCount) {
     auto loadedModel = std::make_unique<torch::jit::script::Module>(
-        loadInferenceModel(modelPath, device, dataType));
+        loadInferenceModel(modelPath, device, dataType, memoryFormat));
     requireMatchingSignature(parameterSignature, tensorSignature(loadedModel->named_parameters()),
                              "parameter");
     requireMatchingSignature(bufferSignature, tensorSignature(loadedModel->named_buffers()),
@@ -157,14 +179,45 @@ torch::Device resolveDevice(const InferenceDevice requestedDevice, const int dev
     return torch::Device(torch::kCUDA, deviceId);
 }
 
-torch::Dtype dtypeForDevice(const torch::Device &device) {
-    return device.is_cuda() ? torch::kBFloat16 : torch::kFloat32;
+// CPU inference has no reduced-precision kernels for this graph, so it stays float32 whatever the
+// configuration asks for; only CUDA honours the requested precision.
+torch::Dtype resolveDtype(const torch::Device &device, const InferencePrecision precision) {
+    if (!device.is_cuda()) {
+        return torch::kFloat32;
+    }
+    switch (precision) {
+    case InferencePrecision::Float16:
+        return torch::kHalf;
+    case InferencePrecision::Float32:
+        return torch::kFloat32;
+    case InferencePrecision::BFloat16:
+        break;
+    }
+    return torch::kBFloat16;
 }
 
-void configureSdpaBackend(const torch::Device &device, const SdpaBackend backend) {
+at::MemoryFormat resolveMemoryFormat(const torch::Device &device,
+                                     const InferenceMemoryFormat memoryFormat) {
+    if (!device.is_cuda() || memoryFormat == InferenceMemoryFormat::Contiguous) {
+        return at::MemoryFormat::Contiguous;
+    }
+    return at::MemoryFormat::ChannelsLast;
+}
+
+void configureExecution(const torch::Device &device, const InferenceExecutionOptions &options) {
+    const SdpaBackend backend = options.sdpa_backend;
     if (!device.is_cuda() && backend != SdpaBackend::Automatic) {
         throw std::invalid_argument("An explicit SDPA backend requires CUDA inference");
     }
+    if (!device.is_cuda() &&
+        (options.precision != InferencePrecision::BFloat16 ||
+         options.memory_format != InferenceMemoryFormat::Contiguous || options.cudnn_benchmark)) {
+        throw std::invalid_argument(
+            "Inference precision, memory format and cuDNN benchmarking require CUDA inference");
+    }
+    // Exhaustive algorithm selection costs host time once per captured shape during warm-up and
+    // nothing afterwards, because the graph replays the algorithm the warm-up chose.
+    at::globalContext().setBenchmarkCuDNN(options.cudnn_benchmark);
     at::globalContext().setSDPUseFlash(backend == SdpaBackend::Automatic ||
                                        backend == SdpaBackend::Flash);
     at::globalContext().setSDPUseMemEfficient(backend == SdpaBackend::Automatic ||
@@ -251,12 +304,14 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
                                  const int deviceId, const size_t maximumBatchSize,
                                  const bool useDedicatedCudaStream,
                                  const InferenceDimensions dimensions,
-                                 const SdpaBackend sdpaBackend)
-    : m_device(resolveDevice(device, deviceId)), m_torchDtype(dtypeForDevice(m_device)),
+                                 const InferenceExecutionOptions executionOptions)
+    : m_device(resolveDevice(device, deviceId)), m_executionOptions(executionOptions),
+      m_torchDtype(resolveDtype(m_device, executionOptions.precision)),
+      m_memoryFormat(resolveMemoryFormat(m_device, executionOptions.memory_format)),
       m_maximumBatchSize(maximumBatchSize), m_dimensions(dimensions),
       m_model(std::make_unique<torch::jit::script::Module>(
-          loadInferenceModel(modelPath, m_device, m_torchDtype))) {
-    configureSdpaBackend(m_device, sdpaBackend);
+          loadInferenceModel(modelPath, m_device, m_torchDtype, m_memoryFormat))) {
+    configureExecution(m_device, executionOptions);
     if (maximumBatchSize == 0) {
         throw std::invalid_argument("Maximum inference batch size must be positive");
     }
@@ -277,10 +332,10 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
     m_bufferSignature = tensorSignature(m_model->named_buffers());
     *m_model = torch::jit::freeze(*m_model);
     m_deviceInput = createDeviceInputBuffer();
-    m_deviceTypedInput =
-        torch::empty({tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.channels),
-                      tensorSize(m_dimensions.rows), tensorSize(m_dimensions.columns)},
-                     torch::TensorOptions().device(m_device).dtype(m_torchDtype));
+    m_deviceTypedInput = torch::empty(
+        {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.channels),
+         tensorSize(m_dimensions.rows), tensorSize(m_dimensions.columns)},
+        torch::TensorOptions().device(m_device).dtype(m_torchDtype).memory_format(m_memoryFormat));
     const torch::TensorOptions stagingOptions =
         torch::TensorOptions().device(m_device).dtype(torch::kFloat32);
     m_deviceOutputStaging = {
@@ -563,14 +618,13 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size
 }
 
 PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
-    const torch::Tensor validationInput =
-        torch::zeros({1, tensorSize(m_dimensions.channels), tensorSize(m_dimensions.rows),
-                      tensorSize(m_dimensions.columns)},
-                     torch::TensorOptions().device(m_device).dtype(m_torchDtype));
-    return prepareInferenceModelUpdate(m_parameterSignature, m_bufferSignature, modelPath, m_device,
-                                       m_torchDtype, validationInput,
-                                       tensorSize(m_dimensions.actions),
-                                       tensorSize(m_dimensions.outcomes));
+    const torch::Tensor validationInput = torch::zeros(
+        {1, tensorSize(m_dimensions.channels), tensorSize(m_dimensions.rows),
+         tensorSize(m_dimensions.columns)},
+        torch::TensorOptions().device(m_device).dtype(m_torchDtype).memory_format(m_memoryFormat));
+    return prepareInferenceModelUpdate(
+        m_parameterSignature, m_bufferSignature, modelPath, m_device, m_torchDtype, m_memoryFormat,
+        validationInput, tensorSize(m_dimensions.actions), tensorSize(m_dimensions.outcomes));
 }
 
 #ifdef USE_CUDA
@@ -622,9 +676,9 @@ InferencePipeline::InferencePipeline(const std::string &modelPath, const Inferen
                                      const int deviceId, const size_t maximumBatchSize,
                                      const size_t slotCount, const bool useDedicatedCudaStream,
                                      const InferenceDimensions dimensions,
-                                     const SdpaBackend sdpaBackend)
+                                     const InferenceExecutionOptions executionOptions)
     : m_runner(modelPath, device, deviceId, maximumBatchSize, useDedicatedCudaStream, dimensions,
-               sdpaBackend) {
+               executionOptions) {
     if (slotCount < 2) {
         throw std::invalid_argument("Inference pipeline requires at least two slots");
     }
