@@ -58,6 +58,24 @@ def build(layers: int, hidden_size: int, device: torch.device, channels_last: bo
     return torch.jit.freeze(scripted.eval())
 
 
+def trunk_parameter_count(layers: int, hidden_size: int) -> int:
+    # Freezing inlines the parameters as constants, so the count has to come from an unfrozen model.
+    architecture = NetworkParams(
+        num_layers=layers,
+        hidden_size=hidden_size,
+        residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
+        policy_head=DensePolicyHeadConfiguration(channels=4),
+        num_value_channels=2,
+        value_fc_size=48,
+    )
+    model = Network(architecture, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS)
+    return sum(
+        parameter.numel()
+        for module in (model.start_block, model.backbone, model.finish_block)
+        for parameter in module.parameters()
+    )
+
+
 def measure(
     model: torch.jit.ScriptModule,
     batch_size: int,
@@ -92,8 +110,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description='Convolutional trunk throughput against channel count, to expose kernel alignment cliffs.'
     )
-    parser.add_argument('--hidden-sizes', required=True, nargs='+', type=int)
+    parser.add_argument('--hidden-sizes', nargs='+', type=int, help='Widths to sweep at a single depth.')
     parser.add_argument('--layers', default=12, type=int)
+    parser.add_argument(
+        '--shapes',
+        nargs='+',
+        help='LAYERSxWIDTH shapes to measure in the given order, for comparing whole rungs.',
+    )
     parser.add_argument('--batch-size', default=512, type=int)
     parser.add_argument('--repeats', default=5, type=int)
     parser.add_argument('--output', required=True, type=Path)
@@ -109,23 +132,27 @@ def main() -> None:
     torch.backends.cudnn.benchmark = namespace.cudnn_benchmark
     device = torch.device('cuda', namespace.device_id) if torch.cuda.is_available() else torch.device('cpu')
     torch.manual_seed(20260827)
+    if not namespace.hidden_sizes and not namespace.shapes:
+        raise ValueError('Give either --hidden-sizes or --shapes.')
+    shapes = (
+        [(int(shape.split('x')[0]), int(shape.split('x')[1])) for shape in namespace.shapes]
+        if namespace.shapes
+        else [(namespace.layers, hidden) for hidden in namespace.hidden_sizes]
+    )
+
     results: list[ChannelThroughput] = []
     first_rate: float | None = None
     first_hidden: int | None = None
-    for hidden_size in namespace.hidden_sizes:
-        model = build(namespace.layers, hidden_size, device, namespace.channels_last)
+    for layers, hidden_size in shapes:
+        model = build(layers, hidden_size, device, namespace.channels_last)
         rate = measure(model, namespace.batch_size, device, namespace.repeats, namespace.channels_last)
         first_rate = rate if first_rate is None else first_rate
         first_hidden = hidden_size if first_hidden is None else first_hidden
-        trunk_parameters = sum(
-            parameter.numel()
-            for name, parameter in model.named_parameters()
-            if 'policy_head' not in name and 'value_head' not in name
-        )
+        trunk_parameters = trunk_parameter_count(layers, hidden_size)
         results.append(
             ChannelThroughput(
                 hidden_size=hidden_size,
-                layers=namespace.layers,
+                layers=layers,
                 batch_size=namespace.batch_size,
                 trunk_parameters=trunk_parameters,
                 positions_per_second=rate,
@@ -136,9 +163,8 @@ def main() -> None:
             )
         )
         log(
-            f'{hidden_size:4d} channels ({hidden_size % 32:2d} mod 32)  {rate:9.0f} positions/s  '
-            f'measured {rate / first_rate:.3f} of {first_hidden}, width-squared predicts '
-            f'{(first_hidden / hidden_size) ** 2:.3f}'
+            f'{layers:3d}x{hidden_size:<4d} ({hidden_size % 32:2d} mod 32)  {rate:9.0f} positions/s  '
+            f'{rate / first_rate:.3f} of the first shape  trunk {trunk_parameters:,}'
         )
         del model
         if device.type == 'cuda':

@@ -18,6 +18,27 @@
 # benchmarking. It passed the trained-checkpoint agreement gate and improved end-to-end searches/s
 # by 1.168x. Evaluation keeps v9's inference layout because its batch size 64 path was not measured.
 #
+# Progressive sizing is restated in full because lists replace wholesale. Two changes against v9.
+#
+# Rung 2 moves from 14x152 to 14x160. 152 channels sits in a measured throughput trough on the RTX
+# 4070 SUPER: at matched depth it delivers 0.72 of what its own arithmetic implies, where 128 and 160
+# deliver 1.00 and 0.92. 14x160 is 9.9% more parameters and still faster than 14x152. Rungs 1 and 3
+# keep 128 and 176, both of which measured efficient. See
+# documentation/benchmarks/chess-attention-viability-rtx3060-20260827.
+#
+# All three rungs take the from-to policy head instead of the dense one. It scores every action as the
+# attention logit from its origin square's query to its target square's key, which the 1,880-way
+# (from, to, promotion) encoding is already an enumeration of. Measured supervised on 6M distilled
+# positions at matched trunk: 0.0298 nats better held-out policy cross-entropy [0.0285, 0.0311],
+# roughly +33 to +42 Elo, for 51,072 head parameters against 483,680 and 1.9% of forward throughput.
+# The auxiliary next-policy head shrinks with it, so a rung's training parameter count drops about 20%.
+#
+# The head has never run a self-play generation. The supervised evidence is 8,000 steps against the
+# specified 80,000, and the convolutional head gain was still shrinking with training length at that
+# point, so treat the per-generation yardstick as the gate: generation 20 prev-20m >= 0.65 and
+# generation 50 fixed top-1 >= 0.27 with Stockfish level 0 >= 0.5 would catch a bad head in about
+# three hours.
+#
 # Replay capacity. v9 ramped linearly 300k -> 2M over generations 0-100 and then held 2M flat for the
 # remaining ~95% of the run: a fixed window of ~15.6 generations of history against ~128k positions
 # generated per generation. v10 keeps generations 0-100 within a few percent of v9's ramp and lands
@@ -83,6 +104,42 @@ training:
       maximum_capacity: 5000000
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v10.stop
+  progressive_model_sizing:
+    models:
+      - model_id: chess-cnn-12x128-fromto
+        training_start_days: 0.0
+        network:
+          kind: convolutional
+          num_layers: 12
+          hidden_size: 128
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+          num_value_channels: 2
+          value_fc_size: 48
+      - model_id: chess-cnn-14x160-fromto
+        training_start_days: 0.667
+        network:
+          kind: convolutional
+          num_layers: 14
+          hidden_size: 160
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+          num_value_channels: 2
+          value_fc_size: 48
+      - model_id: chess-cnn-18x176-fromto
+        training_start_days: 2.0
+        network:
+          kind: convolutional
+          num_layers: 18
+          hidden_size: 176
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+          num_value_channels: 2
+          value_fc_size: 48
+    promotion:
+      decay: 0.8
+      warmup_quanta: 10
+      maximum_relative_loss: 1.01
 chess:
   self_play:
     inference:
