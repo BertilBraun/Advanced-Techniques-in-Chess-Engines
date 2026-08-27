@@ -122,6 +122,10 @@ class TrainerGroup:
             ),
             total_loss=_mean(tuple(result.total_loss for result in results)),
             gradient_norm=_mean(tuple(result.gradient_norm for result in results)),
+            term_trunk_gradients=tuple(
+                _mean(tuple(result.term_trunk_gradients[index] for result in results))
+                for index in range(len(results[0].term_trunk_gradients))
+            ),
             training_samples_per_second=(
                 self.configuration.training.trainer.global_batch_size
                 * self.configuration.training.lifecycle.credit.optimizer_steps_per_quantum

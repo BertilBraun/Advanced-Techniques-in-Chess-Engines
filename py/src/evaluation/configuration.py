@@ -1,23 +1,41 @@
 from __future__ import annotations
 
+import math
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 from src.self_play.configuration import BatchedInferenceParams
 from src.util.frozen_model import FrozenModel
 
+# AlphaZero scales its PUCT constant with the visit count rather than fixing it; see the pseudocode
+# accompanying Silver et al. (2018). Evaluation runs at a fixed search budget, so the formula is
+# evaluated once at that budget instead of per visit.
+_ALPHAZERO_EXPLORATION_BASE = 19652.0
+_ALPHAZERO_EXPLORATION_INIT = 1.25
+
+
+def alphazero_exploration_constant(searches_per_move: int) -> float:
+    numerator = searches_per_move + _ALPHAZERO_EXPLORATION_BASE + 1.0
+    return math.log(numerator / _ALPHAZERO_EXPLORATION_BASE) + _ALPHAZERO_EXPLORATION_INIT
+
 
 class EvaluationSearchConfiguration(FrozenModel):
     searches_per_move: int = Field(gt=0)
     parallel_searches: int = Field(gt=0)
-    exploration_constant: float = Field(gt=0.0)
+    exploration_constant: Annotated[float, Field(gt=0.0)] | Literal['auto'] = 'auto'
     inference: BatchedInferenceParams
 
     @model_validator(mode='after')
     def validate_searches(self) -> EvaluationSearchConfiguration:
-        if self.searches_per_move <= self.parallel_searches:
-            raise ValueError('Evaluation searches per move must exceed parallel searches.')
+        if self.searches_per_move < self.parallel_searches:
+            raise ValueError('Evaluation searches per move must be at least the parallel searches.')
         return self
+
+    @property
+    def resolved_exploration_constant(self) -> float:
+        if self.exploration_constant == 'auto':
+            return alphazero_exploration_constant(self.searches_per_move)
+        return self.exploration_constant
 
 
 class EngineSelfPlayDatasetSource(FrozenModel):
@@ -233,11 +251,11 @@ class EvaluationConfiguration(FrozenModel):
         )
         if any(definition.opening_pair_count > self.openings.opening_count for definition in match_definitions):
             raise ValueError('Evaluation opening suite must cover every requested opening pair.')
-        fixed_node_counts = tuple(
-            definition.nodes
+        fixed_node_rungs = tuple(
+            (definition.nodes, definition.search.searches_per_move)
             for definition in self.definitions
             if isinstance(definition, StockfishFixedNodesEvaluationDefinition)
         )
-        if len(set(fixed_node_counts)) != len(fixed_node_counts):
-            raise ValueError('Stockfish fixed-node rungs must use unique node counts.')
+        if len(set(fixed_node_rungs)) != len(fixed_node_rungs):
+            raise ValueError('Stockfish fixed-node rungs must use unique node counts per model search budget.')
         return self

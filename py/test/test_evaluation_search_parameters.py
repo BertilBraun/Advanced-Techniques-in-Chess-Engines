@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import pytest
+from src.evaluation.configuration import EvaluationSearchConfiguration
+from src.experiment.configuration import EXPERIMENT_CONFIGURATION_ADAPTER, load_experiment_configuration
+from src.games.chess.training import ChessImplementation
+from src.self_play.parameters import ReducedParentValueFirstPlayUrgencyParameters
+from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
+
+
+def _experiment():
+    return load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+
+
+def _evaluation_search(experiment) -> EvaluationSearchConfiguration:
+    definition = next(
+        candidate for candidate in experiment.evaluation.definitions if candidate.kind == 'previous_checkpoint'
+    )
+    return definition.search
+
+
+def test_evaluation_inherits_the_self_play_first_play_urgency() -> None:
+    experiment = _experiment()
+    implementation = ChessImplementation(experiment)
+
+    self_play = implementation.self_play_parameters_at(0)
+    evaluation = implementation.evaluation_parameters_at(0, _evaluation_search(experiment))
+
+    assert evaluation.first_play_urgency == self_play.first_play_urgency
+
+
+def test_evaluation_overrides_only_the_search_shaping_fields() -> None:
+    experiment = _experiment()
+    implementation = ChessImplementation(experiment)
+    search = _evaluation_search(experiment)
+
+    evaluation = implementation.evaluation_parameters_at(0, search)
+
+    assert evaluation.parallel_searches == search.parallel_searches
+    assert evaluation.fast_searches == search.searches_per_move
+    assert evaluation.exploration_constant == pytest.approx(search.exploration_constant)
+    assert evaluation.forced_playout_coefficient == pytest.approx(0.0)
+    assert evaluation.dirichlet_epsilon == pytest.approx(0.0)
+
+
+def test_a_reduced_parent_value_self_play_urgency_reaches_evaluation() -> None:
+    experiment = _experiment()
+    payload = experiment.model_dump(mode='json')
+    payload['chess']['self_play']['search']['first_play_urgency'] = {
+        'kind': 'reduced_parent_value',
+        'reduction': 0.2,
+    }
+    implementation = ChessImplementation(EXPERIMENT_CONFIGURATION_ADAPTER.validate_python(payload))
+
+    evaluation = implementation.evaluation_parameters_at(0, _evaluation_search(experiment))
+
+    assert evaluation.first_play_urgency == ReducedParentValueFirstPlayUrgencyParameters(reduction=0.2)

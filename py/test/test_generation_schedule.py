@@ -6,6 +6,7 @@ from src.util.generation_schedule import (
     ConstantSchedule,
     FloatGenerationSchedule,
     GenerationStage,
+    GeometricSchedule,
     IntegerGenerationSchedule,
     LinearSchedule,
     ScheduleRounding,
@@ -102,6 +103,72 @@ def test_linear_float_schedule_interpolates_and_clamps() -> None:
         (1.0, 1.0, 0.75, 0.5, 0.25, 0.0, 0.0)
     )
     assert all(isinstance(schedule.value_at(generation), float) for generation in range(7))
+
+
+def test_geometric_float_schedule_holds_a_constant_ratio() -> None:
+    schedule = GeometricSchedule[float](
+        start_generation=0,
+        end_generation=1500,
+        start_value=0.005,
+        end_value=0.0005,
+        rounding=ScheduleRounding.NONE,
+    )
+
+    assert schedule.value_at(0) == pytest.approx(0.005)
+    assert schedule.value_at(1500) == pytest.approx(0.0005)
+    assert schedule.value_at(2000) == pytest.approx(0.0005)
+    quarters = tuple(schedule.value_at(generation) for generation in (0, 375, 750, 1125, 1500))
+    ratios = tuple(before / after for before, after in zip(quarters, quarters[1:]))
+    assert ratios == pytest.approx((ratios[0],) * len(ratios))
+
+
+def test_geometric_schedule_differs_from_linear_between_the_same_endpoints() -> None:
+    endpoints = dict(start_generation=0, end_generation=100, rounding=ScheduleRounding.NONE)
+    geometric = GeometricSchedule[float](start_value=1.0, end_value=0.01, **endpoints)
+    linear = LinearSchedule[float](start_value=1.0, end_value=0.01, **endpoints)
+
+    assert geometric.value_at(50) == pytest.approx(0.1)
+    assert linear.value_at(50) == pytest.approx(0.505)
+
+
+def test_geometric_integer_schedule_rounds() -> None:
+    schedule = GeometricSchedule[int](
+        start_generation=0,
+        end_generation=4,
+        start_value=100,
+        end_value=10000,
+        rounding=ScheduleRounding.NEAREST,
+    )
+
+    assert tuple(schedule.value_at(generation) for generation in range(5)) == (100, 316, 1000, 3162, 10000)
+
+
+@pytest.mark.parametrize('start_value, end_value', ((0.0, 0.001), (0.001, 0.0), (-1.0, 0.001)))
+def test_geometric_schedule_rejects_nonpositive_endpoints(start_value: float, end_value: float) -> None:
+    with pytest.raises(ValidationError, match='endpoints must be positive'):
+        GeometricSchedule[float](
+            start_generation=0,
+            end_generation=10,
+            start_value=start_value,
+            end_value=end_value,
+            rounding=ScheduleRounding.NONE,
+        )
+
+
+def test_geometric_schedule_parses_through_the_float_discriminator() -> None:
+    schedule = TypeAdapter(FloatGenerationSchedule).validate_python(
+        {
+            'kind': 'geometric',
+            'start_generation': 0,
+            'end_generation': 1500,
+            'start_value': 0.005,
+            'end_value': 0.0005,
+            'rounding': 'none',
+        }
+    )
+
+    assert isinstance(schedule, GeometricSchedule)
+    assert schedule.value_at(1500) == pytest.approx(0.0005)
 
 
 def test_nearest_rounding_is_symmetric_around_zero() -> None:

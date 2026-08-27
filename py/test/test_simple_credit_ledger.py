@@ -63,6 +63,7 @@ def test_credit_ledger_persists_only_approximate_counters_and_active_checkpoint(
             auxiliary_losses=(),
             total_loss=2.0,
             gradient_norm=0.5,
+            term_trunk_gradients=(),
             training_samples_per_second=1.0,
             elapsed_seconds=1.0,
             distributions=_empty_distributions(),

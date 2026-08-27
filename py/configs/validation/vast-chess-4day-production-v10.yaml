@@ -1,0 +1,189 @@
+# Four-day production v10 (2026-08-27) — schedule and evaluation deltas on top of v9.
+#
+# Extends v9, so the diff is the whole content of this file. Architecture, search, targets,
+# resignation and early termination are inherited unchanged, so any difference against v9 is
+# attributable to what appears below. hardware.offer_id is inherited and must be updated to the node
+# actually rented.
+#
+# Learning rate — a geometric schedule from 0.005 at generation 0 to 0.0005 at generation 1500: a
+# clean 10x drop at a constant ratio per generation, replacing v9's hand-computed 0.85-per-100 stage
+# list. Reference point: AlphaZero dropped 0.2 -> 0.02 -> 0.002 -> 0.0002 at 0 / 100k / 300k / 500k
+# steps of 700k. Generation here is 500 optimizer steps, so those boundaries fall at generations
+# 200 / 600 / 1000 of roughly 1400, and its total decay is 1000x. The magnitude is deliberately not
+# copied: AdamW normalises per parameter, so the conventional analogue is 10-30x and 10x sits at the
+# conservative end. At v9's observed ~18.5 generations/hour, generation 1500 falls at ~81 h, inside a
+# four-day run; the schedule holds 0.0005 as a floor beyond it.
+#
+# Replay capacity. v9 ramped linearly 300k -> 2M over generations 0-100 and then held 2M flat for the
+# remaining ~95% of the run: a fixed window of ~15.6 generations of history against ~128k positions
+# generated per generation. v10 keeps generations 0-100 within a few percent of v9's ramp and lands
+# on exactly 2.0M at generation 100 — so the v9 yardstick comparison stays valid through the entire
+# region for which data exists — except for a tighter first ten generations, which flushes random
+# play faster. Past generation 100 the window grows stepwise and sublinearly to 5M, deliberately
+# slowly, because a larger window admits older and weaker games. maximum_capacity rises 2M -> 5M,
+# which sizes the preallocated replay file: confirm the on-disk footprint against minimum_disk_gib
+# before launching.
+#
+# Auxiliary policy weight 0.1 -> 0.15, matching KataGo's w_opp for the same opponent-reply target
+# (arXiv:1902.10565 section 3.4). remaining_game_length stays at 0.1; KataGo publishes no comparable
+# number for it.
+#
+# Evaluation. Definitions are a list, so they replace wholesale and are restated in full. Two changes
+# against v9: a Stockfish rung at 100 nodes against the standard 64 model searches, and three
+# raw-policy rungs at 30 / 100 / 300 nodes with one search per move. Policy-only strength is the
+# network's own contribution with search removed; tracked beside the 64-search ladder it separates a
+# network improvement from a search improvement, and it reuses the already-calibrated low rungs
+# because that calibration is what turns a policy-only score into a ladder Elo. Rung 1000 is omitted
+# for policy-only: it has no prospect there and those games would be wasted.
+#
+# The evaluation exploration constant is `auto`, which evaluates AlphaZero's visit-scaled PUCT
+# formula once at each rung's configured search budget: 1.2501 at one search, 1.2533 at 64. The
+# constants 19652 and 1.25 live in code, not here.
+#
+# NOTE ON COMPARABILITY: v10 changes the measuring instrument in two ways. Evaluation now inherits
+# the self-play first-play urgency instead of the hardcoded zero it used through v9, and the
+# exploration constant moves from a flat 1.0 to AlphaZero's formula. Both are justified separately —
+# offline evidence for the first, removing a magic number for the second — but they compound, so
+# every number in the per-generation yardstick shifts and its generation-20 and generation-50
+# thresholds must be re-baselined against this run before they are applied again.
+extends: vast-chess-4day-production-v9.yaml
+run:
+  run_name: vast-chess-4day-production-v10
+  tensorboard_run_directory: vast-chess-4day-production-v10
+training:
+  save_path: py/training_data/validation/vast-chess-4day-production-v10
+  trainer:
+    learning_rate:
+      kind: geometric
+      start_generation: 0
+      end_generation: 1500
+      start_value: 0.005
+      end_value: 0.0005
+      rounding: none
+  lifecycle:
+    replay:
+      capacity:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 150000}
+          - {start_generation: 5, value: 300000}
+          - {start_generation: 10, value: 500000}
+          - {start_generation: 20, value: 700000}
+          - {start_generation: 40, value: 1000000}
+          - {start_generation: 70, value: 1500000}
+          - {start_generation: 100, value: 2000000}
+          - {start_generation: 400, value: 2600000}
+          - {start_generation: 700, value: 3200000}
+          - {start_generation: 1000, value: 4000000}
+          - {start_generation: 1300, value: 5000000}
+      maximum_capacity: 5000000
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v10.stop
+chess:
+  objective:
+    auxiliary_targets:
+      - kind: next_policy
+        ply_offset: 1
+        loss_weight: 0.15
+      - kind: remaining_game_length
+        loss_weight: 0.1
+        normalization_scale: 400.0
+evaluation:
+  maximum_concurrent_jobs: 16
+  definitions:
+    - kind: fixed_dataset
+      definition_id: fixed-dataset
+    - kind: previous_checkpoint
+      definition_id: previous-20m
+      boundary_offset: 1
+      boundary_parity: every
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: &evaluation_search
+        searches_per_move: 64
+        parallel_searches: 1
+        exploration_constant: auto
+        inference:
+          inference_workers: 1
+          inference_batch_size: 64
+          outstanding_batches_per_worker: 1
+          sdpa_backend: memory_efficient
+    - kind: previous_checkpoint
+      definition_id: previous-40m
+      boundary_offset: 2
+      boundary_parity: every
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: previous_checkpoint
+      definition_id: previous-60m
+      boundary_offset: 3
+      boundary_parity: every
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-100
+      nodes: 100
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-300
+      nodes: 300
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-1000
+      nodes: 1000
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-2000
+      nodes: 2000
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-3000
+      nodes: 3000
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    # Raw-policy rungs: one search per move, so the reported strength is the network alone.
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-policy-only-30
+      nodes: 30
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: &policy_only_search
+        searches_per_move: 1
+        parallel_searches: 1
+        exploration_constant: auto
+        inference:
+          inference_workers: 1
+          inference_batch_size: 64
+          outstanding_batches_per_worker: 1
+          sdpa_backend: memory_efficient
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-policy-only-100
+      nodes: 100
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *policy_only_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-policy-only-300
+      nodes: 300
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *policy_only_search

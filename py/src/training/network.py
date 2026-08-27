@@ -290,6 +290,7 @@ class Network(nn.Module):
             policy_logits=self.policy_head(features),
             wdl_logits=self.value_head(features),
             auxiliary_logits=tuple(head(features) for head in self.auxiliary_head_modules),
+            features=features,
         )
 
     def fuse_model(self) -> None:
