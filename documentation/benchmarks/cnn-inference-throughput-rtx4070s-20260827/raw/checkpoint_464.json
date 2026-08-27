@@ -1,0 +1,48 @@
+{
+  "generation": 464,
+  "network": {
+    "architecture": {
+      "policy_head": {
+        "kind": "dense",
+        "channels": 4,
+        "spatial_reductions": 0,
+        "bottleneck_rank": null
+      },
+      "num_value_channels": 2,
+      "value_fc_size": 48,
+      "kind": "convolutional",
+      "num_layers": 14,
+      "hidden_size": 152,
+      "residual_context": {
+        "kind": "global_pooling",
+        "placement": "every_second_block"
+      }
+    },
+    "dimensions": {
+      "channels": 29,
+      "rows": 8,
+      "columns": 8,
+      "actions": 1880,
+      "outcomes": 3
+    },
+    "auxiliary_heads": [
+      {
+        "kind": "next_policy",
+        "action_size": 1880,
+        "ply_offset": 1
+      },
+      {
+        "kind": "remaining_game_length",
+        "normalization_scale": 400.0,
+        "output_size": 1
+      }
+    ]
+  },
+  "model_path": "model_464.pt",
+  "model_sha256": "f3ba3bb6af29844b6725e3558dd2bf88b0a0c17b3c8940dbdc730883b9faa04a",
+  "optimizer_path": "optimizer_464.pt",
+  "optimizer_sha256": "3240f8c25e9222324f8b93834b0c8da830d36f6ae2c877146f3a6e15ffeac719",
+  "inference_model_path": "model_464.jit.pt",
+  "inference_model_sha256": "9d9af18c6070bd11de30f0a54054c6ee18b4438ff43e4c07fd32425f39896174",
+  "policy_prior_calibration": null
+}

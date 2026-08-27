@@ -1,0 +1,673 @@
+{
+  "manifest": {
+    "timestamp_utc": "20260827T181205Z",
+    "source_revision": "b20deeb5a44698ca3aee25fbcc44f9e9a74ba08f",
+    "game": "chess",
+    "model": {
+      "path": "/workspace/benchmark-inputs/v9-zero-12x128.jit.pt",
+      "sha256": "dc555d1b09bffc7f6489c6bdc4cfcdfb4c3e55040c5fd3747be27dbc0937e214"
+    },
+    "run_config": "/workspace/alphazero-engine/py/configs/validation/vast-chess-4day-production-v9.yaml",
+    "topology": {
+      "gpu_count": 1,
+      "processes_per_gpu": 4,
+      "parallel_games_per_process": 512,
+      "total_parallel_games": 2048,
+      "pin_workers_to_cpus": false,
+      "cpus_per_process": 4
+    },
+    "workload": {
+      "generation": 0,
+      "warmup_batches": 2,
+      "duration_seconds": 30
+    },
+    "inference_overrides": {
+      "precision": null,
+      "memory_format": null,
+      "cudnn_benchmark": null
+    }
+  },
+  "measurement": {
+    "makespan_seconds": 31.500673945993185,
+    "searches_completed": 2883716,
+    "searches_per_second": 91544.58107607574,
+    "completed_games": 9,
+    "search_batches": 29
+  },
+  "inference": {
+    "evaluations": 2865986,
+    "model_calls": 7548,
+    "model_positions": 2865986,
+    "average_batch_size": 379.70137784843666
+  },
+  "resources": {
+    "aggregate_process_cpu_percent": 195.39011931680602,
+    "summed_peak_rss_mib": 5948.65625
+  },
+  "workers": [
+    {
+      "completed_games": 3,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 30.57178227044642,
+      "experiment_configuration_sha256": "a3fbe177dc092caeafe8ee56def552a6ea5aaf772b9d1ec2fae7cc111c72dedc",
+      "game": "chess",
+      "inference_average_batch_size": 379.54854635216674,
+      "inference_batch_size": 384,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 3
+        },
+        {
+          "batch_size": 2,
+          "calls": 3
+        },
+        {
+          "batch_size": 4,
+          "calls": 3
+        },
+        {
+          "batch_size": 6,
+          "calls": 1
+        },
+        {
+          "batch_size": 8,
+          "calls": 1
+        },
+        {
+          "batch_size": 11,
+          "calls": 1
+        },
+        {
+          "batch_size": 33,
+          "calls": 1
+        },
+        {
+          "batch_size": 61,
+          "calls": 1
+        },
+        {
+          "batch_size": 74,
+          "calls": 1
+        },
+        {
+          "batch_size": 81,
+          "calls": 1
+        },
+        {
+          "batch_size": 89,
+          "calls": 1
+        },
+        {
+          "batch_size": 99,
+          "calls": 1
+        },
+        {
+          "batch_size": 145,
+          "calls": 1
+        },
+        {
+          "batch_size": 174,
+          "calls": 1
+        },
+        {
+          "batch_size": 234,
+          "calls": 1
+        },
+        {
+          "batch_size": 251,
+          "calls": 1
+        },
+        {
+          "batch_size": 252,
+          "calls": 1
+        },
+        {
+          "batch_size": 272,
+          "calls": 1
+        },
+        {
+          "batch_size": 277,
+          "calls": 1
+        },
+        {
+          "batch_size": 284,
+          "calls": 1
+        },
+        {
+          "batch_size": 292,
+          "calls": 1
+        },
+        {
+          "batch_size": 300,
+          "calls": 1
+        },
+        {
+          "batch_size": 302,
+          "calls": 1
+        },
+        {
+          "batch_size": 308,
+          "calls": 1
+        },
+        {
+          "batch_size": 330,
+          "calls": 1
+        },
+        {
+          "batch_size": 338,
+          "calls": 1
+        },
+        {
+          "batch_size": 344,
+          "calls": 1
+        },
+        {
+          "batch_size": 357,
+          "calls": 1
+        },
+        {
+          "batch_size": 382,
+          "calls": 1
+        },
+        {
+          "batch_size": 384,
+          "calls": 1788
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 691917,
+      "inference_model_calls": 1823,
+      "inference_model_positions": 691917,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1485.83203125,
+      "precision": "bfloat16",
+      "process_cpu_percent": 45.84834862751796,
+      "process_id": 16885,
+      "search_batches": 7,
+      "searches_completed": 696467,
+      "searches_per_second": 22781.367269950464,
+      "warmup_batches": 2,
+      "worker_id": 0
+    },
+    {
+      "completed_games": 0,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 30.623132751323283,
+      "experiment_configuration_sha256": "a3fbe177dc092caeafe8ee56def552a6ea5aaf772b9d1ec2fae7cc111c72dedc",
+      "game": "chess",
+      "inference_average_batch_size": 380.8036303630363,
+      "inference_batch_size": 384,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 2
+        },
+        {
+          "batch_size": 4,
+          "calls": 1
+        },
+        {
+          "batch_size": 6,
+          "calls": 1
+        },
+        {
+          "batch_size": 7,
+          "calls": 1
+        },
+        {
+          "batch_size": 13,
+          "calls": 1
+        },
+        {
+          "batch_size": 32,
+          "calls": 2
+        },
+        {
+          "batch_size": 81,
+          "calls": 1
+        },
+        {
+          "batch_size": 100,
+          "calls": 1
+        },
+        {
+          "batch_size": 101,
+          "calls": 1
+        },
+        {
+          "batch_size": 106,
+          "calls": 1
+        },
+        {
+          "batch_size": 148,
+          "calls": 1
+        },
+        {
+          "batch_size": 203,
+          "calls": 1
+        },
+        {
+          "batch_size": 210,
+          "calls": 1
+        },
+        {
+          "batch_size": 257,
+          "calls": 1
+        },
+        {
+          "batch_size": 258,
+          "calls": 1
+        },
+        {
+          "batch_size": 262,
+          "calls": 1
+        },
+        {
+          "batch_size": 265,
+          "calls": 1
+        },
+        {
+          "batch_size": 279,
+          "calls": 1
+        },
+        {
+          "batch_size": 282,
+          "calls": 1
+        },
+        {
+          "batch_size": 295,
+          "calls": 1
+        },
+        {
+          "batch_size": 305,
+          "calls": 2
+        },
+        {
+          "batch_size": 306,
+          "calls": 1
+        },
+        {
+          "batch_size": 363,
+          "calls": 1
+        },
+        {
+          "batch_size": 365,
+          "calls": 2
+        },
+        {
+          "batch_size": 376,
+          "calls": 1
+        },
+        {
+          "batch_size": 381,
+          "calls": 1
+        },
+        {
+          "batch_size": 384,
+          "calls": 1788
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 692301,
+      "inference_model_calls": 1818,
+      "inference_model_positions": 692301,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1484.85546875,
+      "precision": "bfloat16",
+      "process_cpu_percent": 50.33153973880733,
+      "process_id": 16886,
+      "search_batches": 7,
+      "searches_completed": 696047,
+      "searches_per_second": 22729.451152247722,
+      "warmup_batches": 2,
+      "worker_id": 1
+    },
+    {
+      "completed_games": 5,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 31.500673945993185,
+      "experiment_configuration_sha256": "a3fbe177dc092caeafe8ee56def552a6ea5aaf772b9d1ec2fae7cc111c72dedc",
+      "game": "chess",
+      "inference_average_batch_size": 378.7196933397221,
+      "inference_batch_size": 384,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 8
+        },
+        {
+          "batch_size": 2,
+          "calls": 3
+        },
+        {
+          "batch_size": 3,
+          "calls": 2
+        },
+        {
+          "batch_size": 4,
+          "calls": 1
+        },
+        {
+          "batch_size": 5,
+          "calls": 1
+        },
+        {
+          "batch_size": 6,
+          "calls": 1
+        },
+        {
+          "batch_size": 16,
+          "calls": 1
+        },
+        {
+          "batch_size": 17,
+          "calls": 1
+        },
+        {
+          "batch_size": 21,
+          "calls": 1
+        },
+        {
+          "batch_size": 42,
+          "calls": 1
+        },
+        {
+          "batch_size": 50,
+          "calls": 1
+        },
+        {
+          "batch_size": 63,
+          "calls": 1
+        },
+        {
+          "batch_size": 65,
+          "calls": 1
+        },
+        {
+          "batch_size": 104,
+          "calls": 1
+        },
+        {
+          "batch_size": 108,
+          "calls": 1
+        },
+        {
+          "batch_size": 158,
+          "calls": 1
+        },
+        {
+          "batch_size": 200,
+          "calls": 1
+        },
+        {
+          "batch_size": 209,
+          "calls": 1
+        },
+        {
+          "batch_size": 236,
+          "calls": 1
+        },
+        {
+          "batch_size": 238,
+          "calls": 1
+        },
+        {
+          "batch_size": 240,
+          "calls": 1
+        },
+        {
+          "batch_size": 264,
+          "calls": 1
+        },
+        {
+          "batch_size": 274,
+          "calls": 1
+        },
+        {
+          "batch_size": 284,
+          "calls": 1
+        },
+        {
+          "batch_size": 286,
+          "calls": 1
+        },
+        {
+          "batch_size": 301,
+          "calls": 1
+        },
+        {
+          "batch_size": 302,
+          "calls": 1
+        },
+        {
+          "batch_size": 308,
+          "calls": 1
+        },
+        {
+          "batch_size": 315,
+          "calls": 1
+        },
+        {
+          "batch_size": 324,
+          "calls": 1
+        },
+        {
+          "batch_size": 330,
+          "calls": 1
+        },
+        {
+          "batch_size": 364,
+          "calls": 1
+        },
+        {
+          "batch_size": 367,
+          "calls": 2
+        },
+        {
+          "batch_size": 374,
+          "calls": 1
+        },
+        {
+          "batch_size": 382,
+          "calls": 1
+        },
+        {
+          "batch_size": 384,
+          "calls": 2041
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 790388,
+      "inference_model_calls": 2087,
+      "inference_model_positions": 790388,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1490.5703125,
+      "precision": "bfloat16",
+      "process_cpu_percent": 47.19991167963953,
+      "process_id": 16887,
+      "search_batches": 8,
+      "searches_completed": 795276,
+      "searches_per_second": 25246.31699510535,
+      "warmup_batches": 2,
+      "worker_id": 2
+    },
+    {
+      "completed_games": 1,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 30.66914113704115,
+      "experiment_configuration_sha256": "a3fbe177dc092caeafe8ee56def552a6ea5aaf772b9d1ec2fae7cc111c72dedc",
+      "game": "chess",
+      "inference_average_batch_size": 379.8791208791209,
+      "inference_batch_size": 384,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 5
+        },
+        {
+          "batch_size": 3,
+          "calls": 1
+        },
+        {
+          "batch_size": 5,
+          "calls": 1
+        },
+        {
+          "batch_size": 6,
+          "calls": 1
+        },
+        {
+          "batch_size": 16,
+          "calls": 1
+        },
+        {
+          "batch_size": 17,
+          "calls": 1
+        },
+        {
+          "batch_size": 20,
+          "calls": 1
+        },
+        {
+          "batch_size": 41,
+          "calls": 1
+        },
+        {
+          "batch_size": 44,
+          "calls": 1
+        },
+        {
+          "batch_size": 47,
+          "calls": 1
+        },
+        {
+          "batch_size": 63,
+          "calls": 1
+        },
+        {
+          "batch_size": 146,
+          "calls": 1
+        },
+        {
+          "batch_size": 159,
+          "calls": 1
+        },
+        {
+          "batch_size": 161,
+          "calls": 1
+        },
+        {
+          "batch_size": 195,
+          "calls": 1
+        },
+        {
+          "batch_size": 233,
+          "calls": 1
+        },
+        {
+          "batch_size": 247,
+          "calls": 1
+        },
+        {
+          "batch_size": 265,
+          "calls": 1
+        },
+        {
+          "batch_size": 280,
+          "calls": 1
+        },
+        {
+          "batch_size": 289,
+          "calls": 1
+        },
+        {
+          "batch_size": 293,
+          "calls": 1
+        },
+        {
+          "batch_size": 295,
+          "calls": 1
+        },
+        {
+          "batch_size": 296,
+          "calls": 1
+        },
+        {
+          "batch_size": 306,
+          "calls": 1
+        },
+        {
+          "batch_size": 326,
+          "calls": 1
+        },
+        {
+          "batch_size": 356,
+          "calls": 1
+        },
+        {
+          "batch_size": 358,
+          "calls": 1
+        },
+        {
+          "batch_size": 360,
+          "calls": 1
+        },
+        {
+          "batch_size": 364,
+          "calls": 1
+        },
+        {
+          "batch_size": 370,
+          "calls": 1
+        },
+        {
+          "batch_size": 374,
+          "calls": 1
+        },
+        {
+          "batch_size": 384,
+          "calls": 1785
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 691380,
+      "inference_model_calls": 1820,
+      "inference_model_positions": 691380,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1487.3984375,
+      "precision": "bfloat16",
+      "process_cpu_percent": 52.0103192708412,
+      "process_id": 16888,
+      "search_batches": 7,
+      "searches_completed": 695926,
+      "searches_per_second": 22691.40817769703,
+      "warmup_batches": 2,
+      "worker_id": 3
+    }
+  ]
+}

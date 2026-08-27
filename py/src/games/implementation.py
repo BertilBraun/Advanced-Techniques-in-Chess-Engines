@@ -8,7 +8,7 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
-from src.self_play.native_configuration import native_sdpa_backend
+from src.self_play.native_configuration import native_execution_options
 from src.self_play.parameters import (
     AdaptiveFullSearchBudget,
     FixedFullSearchBudget,
@@ -116,7 +116,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
             device_id=device_id,
             model_path=str(model_path),
             device=InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA,
-            sdpa_backend=native_sdpa_backend(effective.sdpa_backend),
+            execution_options=native_execution_options(effective),
         )
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:

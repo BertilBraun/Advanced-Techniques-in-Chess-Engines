@@ -54,6 +54,9 @@ __all__: list[str] = [
     'InferenceConfiguration',
     'InferenceDevice',
     'InferenceDimensions',
+    'InferenceExecutionOptions',
+    'InferenceMemoryFormat',
+    'InferencePrecision',
     'InferenceStatistics',
     'OutcomeProbabilities',
     'SdpaBackend',
@@ -874,10 +877,15 @@ class GoTerminationReason:
 class InferenceConfiguration:
     device: InferenceDevice
     device_id: int
+    execution_options: InferenceExecutionOptions
     model_path: str
     sdpa_backend: SdpaBackend
     def __init__(
-        self, device_id: int, model_path: str, device: InferenceDevice = ..., sdpa_backend: SdpaBackend = ...
+        self,
+        device_id: int,
+        model_path: str,
+        device: InferenceDevice = ...,
+        execution_options: InferenceExecutionOptions = ...,
     ) -> None: ...
 
 class InferenceDevice:
@@ -926,6 +934,80 @@ class InferenceDimensions:
     def outcomes(self) -> int: ...
     @property
     def rows(self) -> int: ...
+
+class InferenceExecutionOptions:
+    cudnn_benchmark: bool
+    memory_format: InferenceMemoryFormat
+    precision: InferencePrecision
+    sdpa_backend: SdpaBackend
+    def __init__(
+        self,
+        sdpa_backend: SdpaBackend = ...,
+        precision: InferencePrecision = ...,
+        memory_format: InferenceMemoryFormat = ...,
+        cudnn_benchmark: bool = False,
+    ) -> None: ...
+
+class InferenceMemoryFormat:
+    """
+    Members:
+
+      CONTIGUOUS
+
+      CHANNELS_LAST
+    """
+
+    CHANNELS_LAST: typing.ClassVar[InferenceMemoryFormat]  # value = <InferenceMemoryFormat.CHANNELS_LAST: 1>
+    CONTIGUOUS: typing.ClassVar[InferenceMemoryFormat]  # value = <InferenceMemoryFormat.CONTIGUOUS: 0>
+    __members__: typing.ClassVar[
+        dict[str, InferenceMemoryFormat]
+    ]  # value = {'CONTIGUOUS': <InferenceMemoryFormat.CONTIGUOUS: 0>, 'CHANNELS_LAST': <InferenceMemoryFormat.CHANNELS_LAST: 1>}
+    def __eq__(self, other: typing.Any) -> bool: ...
+    def __getstate__(self) -> int: ...
+    def __hash__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __init__(self, value: int) -> None: ...
+    def __int__(self) -> int: ...
+    def __ne__(self, other: typing.Any) -> bool: ...
+    def __repr__(self) -> str: ...
+    def __setstate__(self, state: int) -> None: ...
+    def __str__(self) -> str: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def value(self) -> int: ...
+
+class InferencePrecision:
+    """
+    Members:
+
+      BFLOAT16
+
+      FLOAT16
+
+      FLOAT32
+    """
+
+    BFLOAT16: typing.ClassVar[InferencePrecision]  # value = <InferencePrecision.BFLOAT16: 0>
+    FLOAT16: typing.ClassVar[InferencePrecision]  # value = <InferencePrecision.FLOAT16: 1>
+    FLOAT32: typing.ClassVar[InferencePrecision]  # value = <InferencePrecision.FLOAT32: 2>
+    __members__: typing.ClassVar[
+        dict[str, InferencePrecision]
+    ]  # value = {'BFLOAT16': <InferencePrecision.BFLOAT16: 0>, 'FLOAT16': <InferencePrecision.FLOAT16: 1>, 'FLOAT32': <InferencePrecision.FLOAT32: 2>}
+    def __eq__(self, other: typing.Any) -> bool: ...
+    def __getstate__(self) -> int: ...
+    def __hash__(self) -> int: ...
+    def __index__(self) -> int: ...
+    def __init__(self, value: int) -> None: ...
+    def __int__(self) -> int: ...
+    def __ne__(self, other: typing.Any) -> bool: ...
+    def __repr__(self) -> str: ...
+    def __setstate__(self, state: int) -> None: ...
+    def __str__(self) -> str: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def value(self) -> int: ...
 
 class InferenceStatistics:
     def __init__(self) -> None: ...

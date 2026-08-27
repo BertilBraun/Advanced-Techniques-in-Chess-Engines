@@ -4,7 +4,8 @@ from enum import Enum
 from math import isfinite
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import Field, JsonValue, model_validator
+from pydantic import Field, JsonValue, model_serializer, model_validator
+from pydantic.functional_serializers import SerializerFunctionWrapHandler
 from src.self_play.parameters import (
     AdaptiveFullSearchBudget,
     FixedFullSearchBudget,
@@ -30,6 +31,17 @@ class SdpaBackend(str, Enum):
     MEMORY_EFFICIENT = 'memory_efficient'
     MATH = 'math'
     CUDNN = 'cudnn'
+
+
+class InferencePrecision(str, Enum):
+    BFLOAT16 = 'bfloat16'
+    FLOAT16 = 'float16'
+    FLOAT32 = 'float32'
+
+
+class InferenceMemoryFormat(str, Enum):
+    CONTIGUOUS = 'contiguous'
+    CHANNELS_LAST = 'channels_last'
 
 
 class DisabledForcedPlayoutConfiguration(FrozenModel):
@@ -208,6 +220,9 @@ class BatchedInferenceParams(FrozenModel):
     inference_batch_size: int = Field(gt=0)
     outstanding_batches_per_worker: int = Field(ge=1, le=2)
     sdpa_backend: SdpaBackend = SdpaBackend.AUTOMATIC
+    precision: InferencePrecision = InferencePrecision.BFLOAT16
+    memory_format: InferenceMemoryFormat = InferenceMemoryFormat.CONTIGUOUS
+    cudnn_benchmark: bool = False
 
     @model_validator(mode='before')
     @classmethod
@@ -216,10 +231,32 @@ class BatchedInferenceParams(FrozenModel):
         configuration: BatchedInferenceParams | dict[str, JsonValue],
     ) -> BatchedInferenceParams | dict[str, JsonValue]:
         match configuration:
-            case dict() if 'sdpa_backend' not in configuration:
-                return {**configuration, 'sdpa_backend': SdpaBackend.AUTOMATIC.value}
-            case BatchedInferenceParams() | dict():
+            case dict():
+                # Every omitted key resolves to the shipped path, so a configuration written before
+                # these knobs existed keeps running unchanged.
+                return {
+                    'sdpa_backend': SdpaBackend.AUTOMATIC.value,
+                    'precision': InferencePrecision.BFLOAT16.value,
+                    'memory_format': InferenceMemoryFormat.CONTIGUOUS.value,
+                    'cudnn_benchmark': False,
+                    **configuration,
+                }
+            case BatchedInferenceParams():
                 return configuration
+
+    @model_serializer(mode='wrap')
+    def omit_unset_execution_knobs(self, serialize: SerializerFunctionWrapHandler) -> dict[str, JsonValue]:
+        # A configuration that does not opt in must serialise, and therefore hash, exactly as it did
+        # before these knobs existed, so no recorded experiment_configuration_sha256 moves.
+        payload = serialize(self)
+        if (
+            self.precision is InferencePrecision.BFLOAT16
+            and self.memory_format is InferenceMemoryFormat.CONTIGUOUS
+            and not self.cudnn_benchmark
+        ):
+            for key in ('precision', 'memory_format', 'cudnn_benchmark'):
+                payload.pop(key, None)
+        return payload
 
 
 class RandomOpeningStartConfiguration(FrozenModel):

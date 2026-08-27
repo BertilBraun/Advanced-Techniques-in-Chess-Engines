@@ -1,0 +1,34 @@
+/workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/profiler/profiler.py:272: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+USDT:2026-08-27 17:25:19 5001:5001 ActivityProfilerController.cpp:415] profiler_start
+USDT:2026-08-27 17:25:19 5001:5001 ActivityProfilerController.cpp:455] profiler_stop
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/workspace/alphazero-engine/py/tools/profile_inference_kernel_breakdown.py", line 285, in <module>
+    main()
+  File "/workspace/alphazero-engine/py/tools/profile_inference_kernel_breakdown.py", line 269, in main
+    report = run_profile(arguments)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/alphazero-engine/py/tools/profile_inference_kernel_breakdown.py", line 235, in run_profile
+    return _build_report(arguments, _cuda_events(profiler))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/alphazero-engine/py/tools/profile_inference_kernel_breakdown.py", line 136, in _build_report
+    raise ValueError('The profiler did not record any CUDA kernel or memory-copy events.')
+ValueError: The profiler did not record any CUDA kernel or memory-copy events.
+/workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/profiler/profiler.py:272: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+USDT:2026-08-27 17:26:21 5108:5108 ActivityProfilerController.cpp:415] profiler_start
+USDT:2026-08-27 17:26:21 5108:5108 ActivityProfilerController.cpp:455] profiler_stop
+{
+  "kernel_count": 195,
+  "gpu_span_microseconds": 6946.704
+}
+convolution       100 kernels    2330.0 us  33.54%
+batch_norm          0 kernels       0.0 us   0.00%
+activation         29 kernels     207.2 us   2.98%
+residual_add        0 kernels       0.0 us   0.00%
+global_pooling      0 kernels       0.0 us   0.00%
+memory_copy         2 kernels       2.6 us   0.04%
+other              64 kernels     489.0 us   7.04%
+launch_gap          3918.0 us  56.40%

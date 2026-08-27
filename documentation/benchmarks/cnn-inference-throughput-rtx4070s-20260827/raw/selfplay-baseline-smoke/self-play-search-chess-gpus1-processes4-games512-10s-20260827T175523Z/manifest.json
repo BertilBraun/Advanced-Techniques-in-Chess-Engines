@@ -1,0 +1,28 @@
+{
+  "timestamp_utc": "20260827T175523Z",
+  "source_revision": "b20deeb5a44698ca3aee25fbcc44f9e9a74ba08f",
+  "game": "chess",
+  "model": {
+    "path": "/workspace/benchmark-inputs/v9-zero-12x128.jit.pt",
+    "sha256": "dc555d1b09bffc7f6489c6bdc4cfcdfb4c3e55040c5fd3747be27dbc0937e214"
+  },
+  "run_config": "/workspace/alphazero-engine/py/configs/validation/vast-chess-4day-production-v9.yaml",
+  "topology": {
+    "gpu_count": 1,
+    "processes_per_gpu": 4,
+    "parallel_games_per_process": 512,
+    "total_parallel_games": 2048,
+    "pin_workers_to_cpus": false,
+    "cpus_per_process": 4
+  },
+  "workload": {
+    "generation": 0,
+    "warmup_batches": 2,
+    "duration_seconds": 10
+  },
+  "inference_overrides": {
+    "precision": null,
+    "memory_format": null,
+    "cudnn_benchmark": null
+  }
+}

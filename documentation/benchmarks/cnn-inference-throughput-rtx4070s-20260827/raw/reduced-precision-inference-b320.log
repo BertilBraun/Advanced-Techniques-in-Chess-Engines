@@ -1,0 +1,53 @@
+{
+  "device": "NVIDIA GeForce RTX 4070 SUPER",
+  "bfloat16_tensor_peak_tflops": 141.9,
+  "int8_tensor_peak_tops": 283.9
+}
+chess-cnn-12x128-dense4 b320 bfloat16/contiguous benchmark=0: 96,671 pos/s, 41.6 TFLOPS, 29.3% of bf16 peak
+chess-cnn-12x128-dense4 b320 bfloat16/contiguous benchmark=1: 97,080 pos/s, 41.8 TFLOPS, 29.4% of bf16 peak
+chess-cnn-12x128-dense4 b320 bfloat16/channels_last benchmark=0: 101,414 pos/s, 43.6 TFLOPS, 30.7% of bf16 peak
+chess-cnn-12x128-dense4 b320 bfloat16/channels_last benchmark=1: 100,970 pos/s, 43.4 TFLOPS, 30.6% of bf16 peak
+chess-cnn-12x128-dense4 b320 float16/contiguous benchmark=0: 98,717 pos/s, 42.5 TFLOPS, 29.9% of bf16 peak
+chess-cnn-12x128-dense4 b320 float16/contiguous benchmark=1: 98,664 pos/s, 42.4 TFLOPS, 29.9% of bf16 peak
+chess-cnn-12x128-dense4 b320 float16/channels_last benchmark=0: 101,791 pos/s, 43.8 TFLOPS, 30.8% of bf16 peak
+chess-cnn-12x128-dense4 b320 float16/channels_last benchmark=1: 102,589 pos/s, 44.1 TFLOPS, 31.1% of bf16 peak
+chess-cnn-12x128-dense4 b320 float32/contiguous benchmark=0: 62,780 pos/s, 27.0 TFLOPS, 19.0% of bf16 peak
+chess-cnn-12x128-dense4 b320 float32/contiguous benchmark=1: 62,776 pos/s, 27.0 TFLOPS, 19.0% of bf16 peak
+chess-cnn-12x128-dense4 b320 float32/channels_last benchmark=0: 62,390 pos/s, 26.8 TFLOPS, 18.9% of bf16 peak
+chess-cnn-12x128-dense4 b320 float32/channels_last benchmark=1: 62,393 pos/s, 26.8 TFLOPS, 18.9% of bf16 peak
+chess-cnn-14x152-dense4 b320 bfloat16/contiguous benchmark=0: 46,762 pos/s, 33.0 TFLOPS, 23.2% of bf16 peak
+chess-cnn-14x152-dense4 b320 bfloat16/contiguous benchmark=1: 46,592 pos/s, 32.8 TFLOPS, 23.1% of bf16 peak
+chess-cnn-14x152-dense4 b320 bfloat16/channels_last benchmark=0: 50,920 pos/s, 35.9 TFLOPS, 25.3% of bf16 peak
+chess-cnn-14x152-dense4 b320 bfloat16/channels_last benchmark=1: 51,282 pos/s, 36.2 TFLOPS, 25.5% of bf16 peak
+chess-cnn-14x152-dense4 b320 float16/contiguous benchmark=0: 53,861 pos/s, 38.0 TFLOPS, 26.8% of bf16 peak
+chess-cnn-14x152-dense4 b320 float16/contiguous benchmark=1: 53,053 pos/s, 37.4 TFLOPS, 26.4% of bf16 peak
+chess-cnn-14x152-dense4 b320 float16/channels_last benchmark=0: 60,237 pos/s, 42.5 TFLOPS, 29.9% of bf16 peak
+chess-cnn-14x152-dense4 b320 float16/channels_last benchmark=1: 59,839 pos/s, 42.2 TFLOPS, 29.7% of bf16 peak
+chess-cnn-14x152-dense4 b320 float32/contiguous benchmark=0: 24,314 pos/s, 17.1 TFLOPS, 12.1% of bf16 peak
+chess-cnn-14x152-dense4 b320 float32/contiguous benchmark=1: 24,317 pos/s, 17.1 TFLOPS, 12.1% of bf16 peak
+chess-cnn-14x152-dense4 b320 float32/channels_last benchmark=0: 30,989 pos/s, 21.8 TFLOPS, 15.4% of bf16 peak
+chess-cnn-14x152-dense4 b320 float32/channels_last benchmark=1: 31,018 pos/s, 21.9 TFLOPS, 15.4% of bf16 peak
+chess-cnn-18x176-dense4 b320 bfloat16/contiguous benchmark=0: 32,291 pos/s, 39.1 TFLOPS, 27.6% of bf16 peak
+chess-cnn-18x176-dense4 b320 bfloat16/contiguous benchmark=1: 32,224 pos/s, 39.0 TFLOPS, 27.5% of bf16 peak
+chess-cnn-18x176-dense4 b320 bfloat16/channels_last benchmark=0: 36,238 pos/s, 43.9 TFLOPS, 30.9% of bf16 peak
+chess-cnn-18x176-dense4 b320 bfloat16/channels_last benchmark=1: 36,183 pos/s, 43.8 TFLOPS, 30.9% of bf16 peak
+chess-cnn-18x176-dense4 b320 float16/contiguous benchmark=0: 32,331 pos/s, 39.2 TFLOPS, 27.6% of bf16 peak
+chess-cnn-18x176-dense4 b320 float16/contiguous benchmark=1: 32,334 pos/s, 39.2 TFLOPS, 27.6% of bf16 peak
+chess-cnn-18x176-dense4 b320 float16/channels_last benchmark=0: 36,321 pos/s, 44.0 TFLOPS, 31.0% of bf16 peak
+chess-cnn-18x176-dense4 b320 float16/channels_last benchmark=1: 36,379 pos/s, 44.1 TFLOPS, 31.1% of bf16 peak
+chess-cnn-18x176-dense4 b320 float32/contiguous benchmark=0: 19,364 pos/s, 23.5 TFLOPS, 16.5% of bf16 peak
+chess-cnn-18x176-dense4 b320 float32/contiguous benchmark=1: 19,389 pos/s, 23.5 TFLOPS, 16.6% of bf16 peak
+chess-cnn-18x176-dense4 b320 float32/channels_last benchmark=0: 21,544 pos/s, 26.1 TFLOPS, 18.4% of bf16 peak
+chess-cnn-18x176-dense4 b320 float32/channels_last benchmark=1: 21,541 pos/s, 26.1 TFLOPS, 18.4% of bf16 peak
+chess-cnn-12x128-dense4 b320 GEMM bfloat16: 64.3 TOPS
+chess-cnn-12x128-dense4 b320 GEMM float16: 62.5 TOPS, 0.97x bf16
+chess-cnn-12x128-dense4 b320 GEMM int8: 63.1 TOPS, 0.98x bf16
+chess-cnn-12x128-dense4 b320 GEMM float8_e4m3: 122.2 TOPS, 1.90x bf16
+chess-cnn-14x152-dense4 b320 GEMM bfloat16: 43.3 TOPS
+chess-cnn-14x152-dense4 b320 GEMM float16: 39.5 TOPS, 0.91x bf16
+chess-cnn-14x152-dense4 b320 int8: unavailable
+chess-cnn-14x152-dense4 b320 float8_e4m3: unavailable
+chess-cnn-18x176-dense4 b320 GEMM bfloat16: 52.4 TOPS
+chess-cnn-18x176-dense4 b320 GEMM float16: 51.4 TOPS, 0.98x bf16
+chess-cnn-18x176-dense4 b320 GEMM int8: 44.9 TOPS, 0.86x bf16
+chess-cnn-18x176-dense4 b320 GEMM float8_e4m3: 106.8 TOPS, 2.04x bf16

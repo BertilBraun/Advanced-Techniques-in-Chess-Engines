@@ -1,0 +1,16 @@
+/workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/profiler/profiler.py:272: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+USDT:2026-08-27 17:54:21 8211:8211 ActivityProfilerController.cpp:415] profiler_start
+USDT:2026-08-27 17:54:21 8211:8211 ActivityProfilerController.cpp:455] profiler_stop
+{
+  "kernel_count": 195,
+  "gpu_span_microseconds": 3388.879
+}
+convolution        25 kernels    2155.3 us  63.60%
+batch_norm          0 kernels       0.0 us   0.00%
+activation         17 kernels      80.1 us   2.36%
+residual_add       12 kernels     149.6 us   4.41%
+global_pooling     24 kernels     175.7 us   5.18%
+memory_copy        77 kernels     463.4 us  13.67%
+other              40 kernels     356.8 us  10.53%
+launch_gap             8.1 us   0.24%

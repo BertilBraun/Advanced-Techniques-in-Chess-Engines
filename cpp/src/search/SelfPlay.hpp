@@ -109,7 +109,7 @@ public:
               m_runtimeParameters.model_path, m_runtimeParameters.device,
               m_runtimeParameters.device_id, m_inferenceParameters,
               engineParameters(m_searchParameters), initialModelGeneration, true,
-              m_runtimeParameters.sdpa_backend)) {}
+              m_runtimeParameters.execution_options)) {}
 
     [[nodiscard]] Root newRoot(Position position) const {
         const std::shared_lock lock(m_operationMutex);

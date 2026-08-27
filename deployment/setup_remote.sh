@@ -4,6 +4,7 @@ set -euo pipefail
 
 repository_url="${ENGINE_REPOSITORY_URL:-https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines.git}"
 repository_ref="${ENGINE_REPOSITORY_REF:-master}"
+repository_depth="${ENGINE_REPOSITORY_DEPTH:-}"
 repository_directory="${ENGINE_REPOSITORY_DIRECTORY:-/workspace/alphazero-engine}"
 virtual_environment="${ENGINE_VIRTUAL_ENVIRONMENT:-${repository_directory}-venv}"
 python_command="${ENGINE_PYTHON:-python3}"
@@ -25,6 +26,10 @@ for required_command in git cmake curl "${python_command}"; do
 done
 if [[ "${install_ccache}" != 0 && "${install_ccache}" != 1 ]]; then
     echo "ENGINE_INSTALL_CCACHE must be 0 or 1." >&2
+    exit 1
+fi
+if [[ -n "${repository_depth}" && ! "${repository_depth}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ENGINE_REPOSITORY_DEPTH must be a positive integer when set." >&2
     exit 1
 fi
 if [[ "${install_ccache}" == 1 ]] && ! command -v ccache >/dev/null 2>&1; then
@@ -55,7 +60,11 @@ if [[ -e "${virtual_environment}" ]]; then
 fi
 
 mkdir -p "$(dirname "${repository_directory}")"
-git clone --branch "${repository_ref}" --single-branch "${repository_url}" "${repository_directory}"
+clone_arguments=(--branch "${repository_ref}" --single-branch)
+if [[ -n "${repository_depth}" ]]; then
+    clone_arguments+=(--depth "${repository_depth}")
+fi
+git clone "${clone_arguments[@]}" "${repository_url}" "${repository_directory}"
 
 "${python_command}" -m venv "${virtual_environment}"
 virtual_environment_python="${virtual_environment}/bin/python"

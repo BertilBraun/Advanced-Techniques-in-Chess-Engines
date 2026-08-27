@@ -10,10 +10,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-from src.experiment.configuration import load_experiment_configuration
+from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.composition import create_game_implementation
 from src.games.go.configuration import GoExperimentConfiguration
+from src.self_play.configuration import InferenceMemoryFormat, InferencePrecision
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 from src.util.hashing import file_sha256
@@ -36,6 +37,9 @@ class Arguments:
     inference_workers: int | None
     inference_batch_size: int | None
     outstanding_batches_per_worker: int | None
+    precision: InferencePrecision | None
+    memory_format: InferenceMemoryFormat | None
+    cudnn_benchmark: bool | None
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,7 @@ class BatchSizeCount:
 
 @dataclass(frozen=True)
 class BenchmarkResult:
+    experiment_configuration_sha256: str
     process_id: int
     worker_id: int
     game: str
@@ -57,6 +62,9 @@ class BenchmarkResult:
     inference_workers: int
     inference_batch_size: int
     outstanding_batches_per_worker: int
+    precision: InferencePrecision
+    memory_format: InferenceMemoryFormat
+    cudnn_benchmark: bool
     warmup_batches: int
     elapsed_seconds: float
     search_batches: int
@@ -116,6 +124,9 @@ def _apply_self_play_overrides(
             ('inference_workers', arguments.inference_workers),
             ('inference_batch_size', arguments.inference_batch_size),
             ('outstanding_batches_per_worker', arguments.outstanding_batches_per_worker),
+            ('precision', arguments.precision),
+            ('memory_format', arguments.memory_format),
+            ('cudnn_benchmark', arguments.cudnn_benchmark),
         )
         if value is not None
     }
@@ -134,6 +145,7 @@ def _apply_self_play_overrides(
 def run_benchmark(arguments: Arguments) -> BenchmarkResult:
     experiment = load_experiment_configuration(arguments.run_config)
     experiment = _apply_self_play_overrides(experiment, arguments)
+    configuration_sha256 = experiment_configuration_sha256(experiment)
     configured_trainer = experiment.training.topology.trainer
     trainer = configured_trainer.validated_copy(
         update={
@@ -198,6 +210,7 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         if calls > initial.inference.modelBatchSizeHistogram[batch_size]
     )
     return BenchmarkResult(
+        experiment_configuration_sha256=configuration_sha256,
         process_id=os.getpid(),
         worker_id=arguments.worker_id,
         game=experiment.game,
@@ -209,6 +222,9 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         inference_workers=game.self_play_configuration.inference.inference_workers,
         inference_batch_size=game.self_play_configuration.inference.inference_batch_size,
         outstanding_batches_per_worker=game.self_play_configuration.inference.outstanding_batches_per_worker,
+        precision=game.self_play_configuration.inference.precision,
+        memory_format=game.self_play_configuration.inference.memory_format,
+        cudnn_benchmark=game.self_play_configuration.inference.cudnn_benchmark,
         warmup_batches=arguments.warmup_batches,
         elapsed_seconds=elapsed_seconds,
         search_batches=search_batches,
@@ -242,6 +258,9 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--inference-workers', type=int)
     parser.add_argument('--inference-batch-size', type=int)
     parser.add_argument('--outstanding-batches-per-worker', type=int)
+    parser.add_argument('--precision', type=InferencePrecision, choices=tuple(InferencePrecision))
+    parser.add_argument('--memory-format', type=InferenceMemoryFormat, choices=tuple(InferenceMemoryFormat))
+    parser.add_argument('--cudnn-benchmark', action=argparse.BooleanOptionalAction, default=None)
     namespace = parser.parse_args()
     arguments = Arguments(
         run_config=namespace.run_config,
@@ -259,6 +278,9 @@ def parse_arguments() -> Arguments:
         inference_workers=namespace.inference_workers,
         inference_batch_size=namespace.inference_batch_size,
         outstanding_batches_per_worker=namespace.outstanding_batches_per_worker,
+        precision=namespace.precision,
+        memory_format=namespace.memory_format,
+        cudnn_benchmark=namespace.cudnn_benchmark,
     )
     if not arguments.model.is_file():
         raise ValueError(f'Benchmark model does not exist: {arguments.model}')

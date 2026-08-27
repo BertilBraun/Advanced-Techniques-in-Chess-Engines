@@ -26,6 +26,32 @@ void bind_search(py::module_ &module) {
         .value("MATH", SdpaBackend::Math)
         .value("CUDNN", SdpaBackend::CuDNN);
 
+    py::enum_<InferencePrecision>(module, "InferencePrecision")
+        .value("BFLOAT16", InferencePrecision::BFloat16)
+        .value("FLOAT16", InferencePrecision::Float16)
+        .value("FLOAT32", InferencePrecision::Float32);
+
+    py::enum_<InferenceMemoryFormat>(module, "InferenceMemoryFormat")
+        .value("CONTIGUOUS", InferenceMemoryFormat::Contiguous)
+        .value("CHANNELS_LAST", InferenceMemoryFormat::ChannelsLast);
+
+    py::class_<InferenceExecutionOptions>(module, "InferenceExecutionOptions")
+        .def(py::init([](const SdpaBackend sdpaBackend, const InferencePrecision precision,
+                         const InferenceMemoryFormat memoryFormat, const bool cudnnBenchmark) {
+                 return InferenceExecutionOptions{.sdpa_backend = sdpaBackend,
+                                                  .precision = precision,
+                                                  .memory_format = memoryFormat,
+                                                  .cudnn_benchmark = cudnnBenchmark};
+             }),
+             py::arg("sdpa_backend") = SdpaBackend::Automatic,
+             py::arg("precision") = InferencePrecision::BFloat16,
+             py::arg("memory_format") = InferenceMemoryFormat::Contiguous,
+             py::arg("cudnn_benchmark") = false)
+        .def_readwrite("sdpa_backend", &InferenceExecutionOptions::sdpa_backend)
+        .def_readwrite("precision", &InferenceExecutionOptions::precision)
+        .def_readwrite("memory_format", &InferenceExecutionOptions::memory_format)
+        .def_readwrite("cudnn_benchmark", &InferenceExecutionOptions::cudnn_benchmark);
+
     py::enum_<FirstPlayUrgencyKind>(module, "FirstPlayUrgencyKind")
         .value("ZERO", FirstPlayUrgencyKind::Zero)
         .value("PARENT_VALUE", FirstPlayUrgencyKind::ParentValue)
@@ -48,13 +74,19 @@ void bind_search(py::module_ &module) {
         .def_readonly("virtual_loss_weight", &TreeSearchParameters::virtual_loss_weight);
 
     py::class_<InferenceConfiguration>(module, "InferenceConfiguration")
-        .def(py::init<int, std::string, InferenceDevice, SdpaBackend>(), py::arg("device_id"),
-             py::arg("model_path"), py::arg("device") = InferenceDevice::Auto,
-             py::arg("sdpa_backend") = SdpaBackend::Automatic)
+        .def(py::init<int, std::string, InferenceDevice, InferenceExecutionOptions>(),
+             py::arg("device_id"), py::arg("model_path"), py::arg("device") = InferenceDevice::Auto,
+             py::arg("execution_options") = InferenceExecutionOptions{})
         .def_readwrite("device_id", &InferenceConfiguration::device_id)
         .def_readwrite("model_path", &InferenceConfiguration::model_path)
         .def_readwrite("device", &InferenceConfiguration::device)
-        .def_readwrite("sdpa_backend", &InferenceConfiguration::sdpa_backend);
+        .def_readwrite("execution_options", &InferenceConfiguration::execution_options)
+        .def_property(
+            "sdpa_backend",
+            [](const InferenceConfiguration &self) { return self.execution_options.sdpa_backend; },
+            [](InferenceConfiguration &self, const SdpaBackend backend) {
+                self.execution_options.sdpa_backend = backend;
+            });
 
     py::class_<InferenceDimensions>(module, "InferenceDimensions")
         .def(py::init<std::size_t, std::size_t, std::size_t, std::size_t, std::size_t>(),

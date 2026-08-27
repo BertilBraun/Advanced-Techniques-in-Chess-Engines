@@ -44,6 +44,23 @@ template <SearchGame Game> struct SearchInferenceResult {
 enum class InferenceDevice { Auto, Cpu, Cuda };
 enum class SdpaBackend { Automatic, Flash, MemoryEfficient, Math, CuDNN };
 
+// CUDA inference precision. CPU inference stays float32 whatever is requested here.
+enum class InferencePrecision { BFloat16, Float16, Float32 };
+
+// cuDNN reaches its tensor-core convolution kernels only through channels-last activations, so the
+// layout is switchable independently of the precision.
+enum class InferenceMemoryFormat { Contiguous, ChannelsLast };
+
+// Every default reproduces the shipped bfloat16, contiguous, heuristic-cuDNN path exactly.
+struct InferenceExecutionOptions {
+    SdpaBackend sdpa_backend = SdpaBackend::Automatic;
+    InferencePrecision precision = InferencePrecision::BFloat16;
+    InferenceMemoryFormat memory_format = InferenceMemoryFormat::Contiguous;
+    bool cudnn_benchmark = false;
+
+    [[nodiscard]] bool operator==(const InferenceExecutionOptions &) const noexcept = default;
+};
+
 struct InferenceStatistics {
     std::size_t evaluations = 0;
     std::size_t modelInferenceCalls = 0;

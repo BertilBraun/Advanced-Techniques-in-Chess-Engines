@@ -1,0 +1,93 @@
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Build type: Release
+-- Native architecture optimization: ON
+-- Adding release flags (-O3 -DNDEBUG)
+-- Looking for a CUDA compiler
+-- Looking for a CUDA compiler - /usr/local/cuda/bin/nvcc
+-- The CUDA compiler identification is NVIDIA 12.8.93
+-- Detecting CUDA compiler ABI info
+-- Detecting CUDA compiler ABI info - done
+-- Check for working CUDA compiler: /usr/local/cuda/bin/nvcc - skipped
+-- Detecting CUDA compile features
+-- Detecting CUDA compile features - done
+-- Using ccache
+-- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'torch'
+CMake Error at CMakeLists.txt:118 (message):
+  Failed to discover the Torch CMake prefix with /usr/bin/python3
+
+
+-- Configuring incomplete, errors occurred!
+-- Build type: Release
+-- Native architecture optimization: ON
+-- Adding release flags (-O3 -DNDEBUG)
+-- Using ccache
+-- Found Python3: /workspace/alphazero-engine-venv/bin/python (found version "3.12.3") found components: Interpreter
+-- Setting CMAKE_PREFIX_PATH to: /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake
+-- Found CUDA: /usr/local/cuda (found version "12.8")
+-- Found CUDAToolkit: /usr/local/cuda/include (found version "12.8.93")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- PyTorch: CUDA detected: 12.8
+-- PyTorch: CUDA nvcc is: /usr/local/cuda/bin/nvcc
+-- PyTorch: CUDA toolkit directory: /usr/local/cuda
+-- PyTorch: Header version is: 12.8
+-- Found Python: /usr/bin/python3 (found version "3.12.3") found components: Interpreter
+-- /usr/local/cuda/lib64/libnvrtc.so shorthash is 2bb82d1a
+-- USE_CUDNN is set to 0. Compiling without cuDNN support
+-- USE_CUSPARSELT is set to 0. Compiling without cuSPARSELt support
+-- USE_CUDSS is set to 0. Compiling without cuDSS support
+-- USE_CUFILE is set to 0. Compiling without cuFile support
+-- Autodetected CUDA architecture(s):  8.9
+CMake Warning at /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake/Caffe2/public/cuda.cmake:340 (message):
+  pytorch is not compatible with `CMAKE_CUDA_ARCHITECTURES` and will ignore
+  its value.  Please configure `TORCH_CUDA_ARCH_LIST` instead.
+Call Stack (most recent call first):
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake/Caffe2/Caffe2Config.cmake:86 (include)
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake/Torch/TorchConfig.cmake:62 (find_package)
+  CMakeLists.txt:123 (find_package)
+
+
+-- Added CUDA NVCC flags for: -gencode;arch=compute_89,code=sm_89
+CMake Warning at /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake/Torch/TorchConfig.cmake:22 (message):
+  library kineto not found.
+Call Stack (most recent call first):
+  /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/share/cmake/Torch/TorchConfig.cmake:119 (append_torchlib_if_found)
+  CMakeLists.txt:123 (find_package)
+
+
+-- Found Torch: /workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/lib/libtorch.so
+-- Torch reports _GLIBCXX_USE_CXX11_ABI as: True
+-- Setting _GLIBCXX_USE_CXX11_ABI to: 1
+-- pybind11 v2.13.6
+-- Found PythonInterp: /usr/bin/python3 (found suitable version "3.12.3", minimum required is "3.7")
+-- Found PythonLibs: /usr/lib/x86_64-linux-gnu/libpython3.12.so
+-- Performing Test HAS_FLTO
+-- Performing Test HAS_FLTO - Success
+-- Using the multi-header code from /workspace/alphazero-engine/cpp/build-benchmarks/_deps/nlohmann_json-src/include/
+-- Configuring done (56.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /workspace/alphazero-engine/cpp/build-benchmarks
+[ 25%] Building CXX object CMakeFiles/InferenceBenchmark.dir/src/search/InferencePipeline.cpp.o
+[ 25%] Building CXX object CMakeFiles/InferenceBenchmark.dir/benchmark/InferenceBenchmark.cpp.o
+[ 25%] Building CXX object CMakeFiles/InferenceBenchmark.dir/src/games/chess/encoding/ChessEncoding.cpp.o
+[ 33%] Building CXX object CMakeFiles/InferenceBenchmark.dir/src/games/chess/implementation/ChessAction.cpp.o
+[ 58%] Building CXX object CMakeFiles/InferenceBenchmark.dir/src/games/chess/encoding/ChessPolicyEncoding.cpp.o
+[ 58%] Building CXX object CMakeFiles/InferenceBenchmark.dir/_deps/stockfish-src/src/bitboard.cpp.o
+[ 58%] Building CXX object CMakeFiles/InferenceBenchmark.dir/src/games/chess/implementation/ChessBoard.cpp.o
+[ 66%] Building CXX object CMakeFiles/InferenceBenchmark.dir/_deps/stockfish-src/src/memory.cpp.o
+[ 75%] Building CXX object CMakeFiles/InferenceBenchmark.dir/_deps/stockfish-src/src/misc.cpp.o
+[ 83%] Building CXX object CMakeFiles/InferenceBenchmark.dir/_deps/stockfish-src/src/movegen.cpp.o
+[ 91%] Building CXX object CMakeFiles/InferenceBenchmark.dir/_deps/stockfish-src/src/position.cpp.o
+[100%] Linking CXX executable InferenceBenchmark
+lto-wrapper: warning: using serial compilation of 3 LTRANS jobs
+lto-wrapper: note: see the ‘-flto’ option documentation for more information
+[100%] Built target InferenceBenchmark

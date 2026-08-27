@@ -1,0 +1,529 @@
+{
+  "manifest": {
+    "timestamp_utc": "20260827T175927Z",
+    "source_revision": "b20deeb5a44698ca3aee25fbcc44f9e9a74ba08f",
+    "game": "chess",
+    "model": {
+      "path": "/workspace/benchmark-inputs/v9-zero-12x128.jit.pt",
+      "sha256": "dc555d1b09bffc7f6489c6bdc4cfcdfb4c3e55040c5fd3747be27dbc0937e214"
+    },
+    "run_config": "/workspace/alphazero-engine/py/configs/validation/vast-chess-4day-production-v9.yaml",
+    "topology": {
+      "gpu_count": 1,
+      "processes_per_gpu": 4,
+      "parallel_games_per_process": 512,
+      "total_parallel_games": 2048,
+      "pin_workers_to_cpus": false,
+      "cpus_per_process": 4
+    },
+    "workload": {
+      "generation": 0,
+      "warmup_batches": 2,
+      "duration_seconds": 30
+    },
+    "inference_overrides": {
+      "precision": null,
+      "memory_format": null,
+      "cudnn_benchmark": null
+    }
+  },
+  "measurement": {
+    "makespan_seconds": 33.72848040610552,
+    "searches_completed": 3183917,
+    "searches_per_second": 94398.47160809678,
+    "completed_games": 7,
+    "search_batches": 32
+  },
+  "inference": {
+    "evaluations": 3162950,
+    "model_calls": 9961,
+    "model_positions": 3162950,
+    "average_batch_size": 317.53338018271256
+  },
+  "resources": {
+    "aggregate_process_cpu_percent": 215.83047536050037,
+    "summed_peak_rss_mib": 5976.90234375
+  },
+  "workers": [
+    {
+      "completed_games": 2,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 33.72848040610552,
+      "experiment_configuration_sha256": "37a17001b1d26811732b73f114e9bfae729653f6968c56cd4160bdedb705a09f",
+      "game": "chess",
+      "inference_average_batch_size": 317.72679791080753,
+      "inference_batch_size": 320,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 2
+        },
+        {
+          "batch_size": 2,
+          "calls": 2
+        },
+        {
+          "batch_size": 4,
+          "calls": 2
+        },
+        {
+          "batch_size": 6,
+          "calls": 1
+        },
+        {
+          "batch_size": 8,
+          "calls": 1
+        },
+        {
+          "batch_size": 10,
+          "calls": 1
+        },
+        {
+          "batch_size": 34,
+          "calls": 1
+        },
+        {
+          "batch_size": 35,
+          "calls": 1
+        },
+        {
+          "batch_size": 41,
+          "calls": 2
+        },
+        {
+          "batch_size": 45,
+          "calls": 1
+        },
+        {
+          "batch_size": 97,
+          "calls": 1
+        },
+        {
+          "batch_size": 103,
+          "calls": 1
+        },
+        {
+          "batch_size": 107,
+          "calls": 1
+        },
+        {
+          "batch_size": 164,
+          "calls": 1
+        },
+        {
+          "batch_size": 179,
+          "calls": 1
+        },
+        {
+          "batch_size": 198,
+          "calls": 1
+        },
+        {
+          "batch_size": 206,
+          "calls": 1
+        },
+        {
+          "batch_size": 262,
+          "calls": 1
+        },
+        {
+          "batch_size": 263,
+          "calls": 1
+        },
+        {
+          "batch_size": 276,
+          "calls": 1
+        },
+        {
+          "batch_size": 277,
+          "calls": 1
+        },
+        {
+          "batch_size": 301,
+          "calls": 1
+        },
+        {
+          "batch_size": 315,
+          "calls": 1
+        },
+        {
+          "batch_size": 320,
+          "calls": 2462
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 790822,
+      "inference_model_calls": 2489,
+      "inference_model_positions": 790822,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1493.74609375,
+      "precision": "bfloat16",
+      "process_cpu_percent": 53.88068182493719,
+      "process_id": 10725,
+      "search_batches": 8,
+      "searches_completed": 796092,
+      "searches_per_second": 23602.96077423908,
+      "warmup_batches": 2,
+      "worker_id": 0
+    },
+    {
+      "completed_games": 2,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 33.379683398641646,
+      "experiment_configuration_sha256": "37a17001b1d26811732b73f114e9bfae729653f6968c56cd4160bdedb705a09f",
+      "game": "chess",
+      "inference_average_batch_size": 317.2056936647955,
+      "inference_batch_size": 320,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 6
+        },
+        {
+          "batch_size": 2,
+          "calls": 4
+        },
+        {
+          "batch_size": 3,
+          "calls": 1
+        },
+        {
+          "batch_size": 15,
+          "calls": 1
+        },
+        {
+          "batch_size": 17,
+          "calls": 1
+        },
+        {
+          "batch_size": 18,
+          "calls": 2
+        },
+        {
+          "batch_size": 46,
+          "calls": 1
+        },
+        {
+          "batch_size": 55,
+          "calls": 1
+        },
+        {
+          "batch_size": 77,
+          "calls": 1
+        },
+        {
+          "batch_size": 85,
+          "calls": 2
+        },
+        {
+          "batch_size": 118,
+          "calls": 1
+        },
+        {
+          "batch_size": 135,
+          "calls": 1
+        },
+        {
+          "batch_size": 158,
+          "calls": 1
+        },
+        {
+          "batch_size": 207,
+          "calls": 1
+        },
+        {
+          "batch_size": 217,
+          "calls": 1
+        },
+        {
+          "batch_size": 220,
+          "calls": 1
+        },
+        {
+          "batch_size": 265,
+          "calls": 1
+        },
+        {
+          "batch_size": 277,
+          "calls": 1
+        },
+        {
+          "batch_size": 296,
+          "calls": 1
+        },
+        {
+          "batch_size": 305,
+          "calls": 1
+        },
+        {
+          "batch_size": 320,
+          "calls": 2464
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 791111,
+      "inference_model_calls": 2494,
+      "inference_model_positions": 791111,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1496.1796875,
+      "precision": "bfloat16",
+      "process_cpu_percent": 55.510180653043655,
+      "process_id": 10726,
+      "search_batches": 8,
+      "searches_completed": 795812,
+      "searches_per_second": 23841.20875251875,
+      "warmup_batches": 2,
+      "worker_id": 1
+    },
+    {
+      "completed_games": 1,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 32.37162954732776,
+      "experiment_configuration_sha256": "37a17001b1d26811732b73f114e9bfae729653f6968c56cd4160bdedb705a09f",
+      "game": "chess",
+      "inference_average_batch_size": 317.5755020080321,
+      "inference_batch_size": 320,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 3
+        },
+        {
+          "batch_size": 2,
+          "calls": 1
+        },
+        {
+          "batch_size": 3,
+          "calls": 3
+        },
+        {
+          "batch_size": 6,
+          "calls": 2
+        },
+        {
+          "batch_size": 20,
+          "calls": 1
+        },
+        {
+          "batch_size": 25,
+          "calls": 1
+        },
+        {
+          "batch_size": 26,
+          "calls": 1
+        },
+        {
+          "batch_size": 29,
+          "calls": 1
+        },
+        {
+          "batch_size": 32,
+          "calls": 1
+        },
+        {
+          "batch_size": 60,
+          "calls": 1
+        },
+        {
+          "batch_size": 72,
+          "calls": 1
+        },
+        {
+          "batch_size": 78,
+          "calls": 1
+        },
+        {
+          "batch_size": 158,
+          "calls": 1
+        },
+        {
+          "batch_size": 170,
+          "calls": 1
+        },
+        {
+          "batch_size": 188,
+          "calls": 1
+        },
+        {
+          "batch_size": 206,
+          "calls": 1
+        },
+        {
+          "batch_size": 215,
+          "calls": 1
+        },
+        {
+          "batch_size": 219,
+          "calls": 1
+        },
+        {
+          "batch_size": 221,
+          "calls": 1
+        },
+        {
+          "batch_size": 235,
+          "calls": 1
+        },
+        {
+          "batch_size": 303,
+          "calls": 1
+        },
+        {
+          "batch_size": 320,
+          "calls": 2464
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 790763,
+      "inference_model_calls": 2490,
+      "inference_model_positions": 790763,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1491.6875,
+      "precision": "bfloat16",
+      "process_cpu_percent": 58.13291618355819,
+      "process_id": 10727,
+      "search_batches": 8,
+      "searches_completed": 795742,
+      "searches_per_second": 24581.46256853133,
+      "warmup_batches": 2,
+      "worker_id": 2
+    },
+    {
+      "completed_games": 2,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 32.818523737601936,
+      "experiment_configuration_sha256": "37a17001b1d26811732b73f114e9bfae729653f6968c56cd4160bdedb705a09f",
+      "game": "chess",
+      "inference_average_batch_size": 317.6262057877814,
+      "inference_batch_size": 320,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 3
+        },
+        {
+          "batch_size": 2,
+          "calls": 1
+        },
+        {
+          "batch_size": 3,
+          "calls": 1
+        },
+        {
+          "batch_size": 5,
+          "calls": 3
+        },
+        {
+          "batch_size": 9,
+          "calls": 1
+        },
+        {
+          "batch_size": 15,
+          "calls": 1
+        },
+        {
+          "batch_size": 27,
+          "calls": 1
+        },
+        {
+          "batch_size": 35,
+          "calls": 2
+        },
+        {
+          "batch_size": 54,
+          "calls": 1
+        },
+        {
+          "batch_size": 77,
+          "calls": 1
+        },
+        {
+          "batch_size": 95,
+          "calls": 1
+        },
+        {
+          "batch_size": 123,
+          "calls": 1
+        },
+        {
+          "batch_size": 124,
+          "calls": 2
+        },
+        {
+          "batch_size": 183,
+          "calls": 1
+        },
+        {
+          "batch_size": 200,
+          "calls": 1
+        },
+        {
+          "batch_size": 223,
+          "calls": 1
+        },
+        {
+          "batch_size": 263,
+          "calls": 1
+        },
+        {
+          "batch_size": 266,
+          "calls": 1
+        },
+        {
+          "batch_size": 277,
+          "calls": 1
+        },
+        {
+          "batch_size": 286,
+          "calls": 1
+        },
+        {
+          "batch_size": 295,
+          "calls": 1
+        },
+        {
+          "batch_size": 320,
+          "calls": 2461
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 790254,
+      "inference_model_calls": 2488,
+      "inference_model_positions": 790254,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1495.2890625,
+      "precision": "bfloat16",
+      "process_cpu_percent": 48.306696698961346,
+      "process_id": 10728,
+      "search_batches": 8,
+      "searches_completed": 796271,
+      "searches_per_second": 24262.852478268844,
+      "warmup_batches": 2,
+      "worker_id": 3
+    }
+  ]
+}

@@ -1,0 +1,1025 @@
+{
+  "manifest": {
+    "timestamp_utc": "20260827T181330Z",
+    "source_revision": "b20deeb5a44698ca3aee25fbcc44f9e9a74ba08f",
+    "game": "chess",
+    "model": {
+      "path": "/workspace/benchmark-inputs/v9-zero-12x128.jit.pt",
+      "sha256": "dc555d1b09bffc7f6489c6bdc4cfcdfb4c3e55040c5fd3747be27dbc0937e214"
+    },
+    "run_config": "/workspace/alphazero-engine/py/configs/validation/vast-chess-4day-production-v9.yaml",
+    "topology": {
+      "gpu_count": 1,
+      "processes_per_gpu": 4,
+      "parallel_games_per_process": 512,
+      "total_parallel_games": 2048,
+      "pin_workers_to_cpus": false,
+      "cpus_per_process": 4
+    },
+    "workload": {
+      "generation": 0,
+      "warmup_batches": 2,
+      "duration_seconds": 30
+    },
+    "inference_overrides": {
+      "precision": null,
+      "memory_format": null,
+      "cudnn_benchmark": null
+    }
+  },
+  "measurement": {
+    "makespan_seconds": 32.084913487546146,
+    "searches_completed": 3182985,
+    "searches_per_second": 99205.03607514744,
+    "completed_games": 8,
+    "search_batches": 32
+  },
+  "inference": {
+    "evaluations": 3164573,
+    "model_calls": 7172,
+    "model_positions": 3164573,
+    "average_batch_size": 441.2399609592861
+  },
+  "resources": {
+    "aggregate_process_cpu_percent": 205.33728718749455,
+    "summed_peak_rss_mib": 5979.171875
+  },
+  "workers": [
+    {
+      "completed_games": 1,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 32.02630874607712,
+      "experiment_configuration_sha256": "cf83b87e2d9870e536799e5f36a5b07da1b638d1d636ed401f919dc24418227b",
+      "game": "chess",
+      "inference_average_batch_size": 441.05125348189415,
+      "inference_batch_size": 448,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 4
+        },
+        {
+          "batch_size": 2,
+          "calls": 3
+        },
+        {
+          "batch_size": 3,
+          "calls": 1
+        },
+        {
+          "batch_size": 9,
+          "calls": 1
+        },
+        {
+          "batch_size": 11,
+          "calls": 1
+        },
+        {
+          "batch_size": 12,
+          "calls": 1
+        },
+        {
+          "batch_size": 17,
+          "calls": 1
+        },
+        {
+          "batch_size": 20,
+          "calls": 1
+        },
+        {
+          "batch_size": 55,
+          "calls": 1
+        },
+        {
+          "batch_size": 56,
+          "calls": 2
+        },
+        {
+          "batch_size": 60,
+          "calls": 1
+        },
+        {
+          "batch_size": 68,
+          "calls": 1
+        },
+        {
+          "batch_size": 82,
+          "calls": 1
+        },
+        {
+          "batch_size": 116,
+          "calls": 1
+        },
+        {
+          "batch_size": 189,
+          "calls": 1
+        },
+        {
+          "batch_size": 206,
+          "calls": 1
+        },
+        {
+          "batch_size": 221,
+          "calls": 1
+        },
+        {
+          "batch_size": 227,
+          "calls": 1
+        },
+        {
+          "batch_size": 231,
+          "calls": 1
+        },
+        {
+          "batch_size": 255,
+          "calls": 1
+        },
+        {
+          "batch_size": 259,
+          "calls": 1
+        },
+        {
+          "batch_size": 275,
+          "calls": 1
+        },
+        {
+          "batch_size": 290,
+          "calls": 2
+        },
+        {
+          "batch_size": 306,
+          "calls": 1
+        },
+        {
+          "batch_size": 309,
+          "calls": 1
+        },
+        {
+          "batch_size": 320,
+          "calls": 2
+        },
+        {
+          "batch_size": 323,
+          "calls": 1
+        },
+        {
+          "batch_size": 324,
+          "calls": 1
+        },
+        {
+          "batch_size": 330,
+          "calls": 1
+        },
+        {
+          "batch_size": 351,
+          "calls": 1
+        },
+        {
+          "batch_size": 361,
+          "calls": 2
+        },
+        {
+          "batch_size": 362,
+          "calls": 1
+        },
+        {
+          "batch_size": 371,
+          "calls": 1
+        },
+        {
+          "batch_size": 374,
+          "calls": 1
+        },
+        {
+          "batch_size": 381,
+          "calls": 2
+        },
+        {
+          "batch_size": 397,
+          "calls": 1
+        },
+        {
+          "batch_size": 398,
+          "calls": 1
+        },
+        {
+          "batch_size": 401,
+          "calls": 1
+        },
+        {
+          "batch_size": 405,
+          "calls": 1
+        },
+        {
+          "batch_size": 407,
+          "calls": 1
+        },
+        {
+          "batch_size": 410,
+          "calls": 1
+        },
+        {
+          "batch_size": 413,
+          "calls": 1
+        },
+        {
+          "batch_size": 414,
+          "calls": 1
+        },
+        {
+          "batch_size": 415,
+          "calls": 1
+        },
+        {
+          "batch_size": 417,
+          "calls": 1
+        },
+        {
+          "batch_size": 424,
+          "calls": 2
+        },
+        {
+          "batch_size": 429,
+          "calls": 1
+        },
+        {
+          "batch_size": 435,
+          "calls": 1
+        },
+        {
+          "batch_size": 439,
+          "calls": 2
+        },
+        {
+          "batch_size": 444,
+          "calls": 1
+        },
+        {
+          "batch_size": 448,
+          "calls": 1733
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 791687,
+      "inference_model_calls": 1795,
+      "inference_model_positions": 791687,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1495.05859375,
+      "precision": "bfloat16",
+      "process_cpu_percent": 53.19700183083652,
+      "process_id": 17650,
+      "search_batches": 8,
+      "searches_completed": 795510,
+      "searches_per_second": 24839.26593936435,
+      "warmup_batches": 2,
+      "worker_id": 0
+    },
+    {
+      "completed_games": 1,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 32.084913487546146,
+      "experiment_configuration_sha256": "cf83b87e2d9870e536799e5f36a5b07da1b638d1d636ed401f919dc24418227b",
+      "game": "chess",
+      "inference_average_batch_size": 440.99108138238574,
+      "inference_batch_size": 448,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 3
+        },
+        {
+          "batch_size": 2,
+          "calls": 3
+        },
+        {
+          "batch_size": 3,
+          "calls": 2
+        },
+        {
+          "batch_size": 4,
+          "calls": 1
+        },
+        {
+          "batch_size": 8,
+          "calls": 1
+        },
+        {
+          "batch_size": 11,
+          "calls": 1
+        },
+        {
+          "batch_size": 26,
+          "calls": 1
+        },
+        {
+          "batch_size": 28,
+          "calls": 1
+        },
+        {
+          "batch_size": 29,
+          "calls": 1
+        },
+        {
+          "batch_size": 51,
+          "calls": 1
+        },
+        {
+          "batch_size": 60,
+          "calls": 1
+        },
+        {
+          "batch_size": 66,
+          "calls": 1
+        },
+        {
+          "batch_size": 69,
+          "calls": 1
+        },
+        {
+          "batch_size": 95,
+          "calls": 1
+        },
+        {
+          "batch_size": 133,
+          "calls": 1
+        },
+        {
+          "batch_size": 157,
+          "calls": 1
+        },
+        {
+          "batch_size": 180,
+          "calls": 1
+        },
+        {
+          "batch_size": 198,
+          "calls": 1
+        },
+        {
+          "batch_size": 208,
+          "calls": 1
+        },
+        {
+          "batch_size": 209,
+          "calls": 1
+        },
+        {
+          "batch_size": 231,
+          "calls": 1
+        },
+        {
+          "batch_size": 238,
+          "calls": 1
+        },
+        {
+          "batch_size": 270,
+          "calls": 1
+        },
+        {
+          "batch_size": 289,
+          "calls": 1
+        },
+        {
+          "batch_size": 292,
+          "calls": 1
+        },
+        {
+          "batch_size": 307,
+          "calls": 1
+        },
+        {
+          "batch_size": 314,
+          "calls": 1
+        },
+        {
+          "batch_size": 319,
+          "calls": 1
+        },
+        {
+          "batch_size": 326,
+          "calls": 1
+        },
+        {
+          "batch_size": 330,
+          "calls": 2
+        },
+        {
+          "batch_size": 337,
+          "calls": 1
+        },
+        {
+          "batch_size": 351,
+          "calls": 1
+        },
+        {
+          "batch_size": 352,
+          "calls": 1
+        },
+        {
+          "batch_size": 355,
+          "calls": 1
+        },
+        {
+          "batch_size": 364,
+          "calls": 1
+        },
+        {
+          "batch_size": 366,
+          "calls": 1
+        },
+        {
+          "batch_size": 368,
+          "calls": 1
+        },
+        {
+          "batch_size": 384,
+          "calls": 1
+        },
+        {
+          "batch_size": 391,
+          "calls": 1
+        },
+        {
+          "batch_size": 399,
+          "calls": 1
+        },
+        {
+          "batch_size": 403,
+          "calls": 2
+        },
+        {
+          "batch_size": 406,
+          "calls": 1
+        },
+        {
+          "batch_size": 408,
+          "calls": 1
+        },
+        {
+          "batch_size": 409,
+          "calls": 1
+        },
+        {
+          "batch_size": 410,
+          "calls": 1
+        },
+        {
+          "batch_size": 413,
+          "calls": 1
+        },
+        {
+          "batch_size": 421,
+          "calls": 1
+        },
+        {
+          "batch_size": 425,
+          "calls": 1
+        },
+        {
+          "batch_size": 426,
+          "calls": 1
+        },
+        {
+          "batch_size": 427,
+          "calls": 1
+        },
+        {
+          "batch_size": 428,
+          "calls": 1
+        },
+        {
+          "batch_size": 431,
+          "calls": 1
+        },
+        {
+          "batch_size": 441,
+          "calls": 1
+        },
+        {
+          "batch_size": 443,
+          "calls": 1
+        },
+        {
+          "batch_size": 448,
+          "calls": 1733
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 791138,
+      "inference_model_calls": 1794,
+      "inference_model_positions": 791138,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1494.765625,
+      "precision": "bfloat16",
+      "process_cpu_percent": 53.28842281166338,
+      "process_id": 17651,
+      "search_batches": 8,
+      "searches_completed": 795846,
+      "searches_per_second": 24804.367956575916,
+      "warmup_batches": 2,
+      "worker_id": 1
+    },
+    {
+      "completed_games": 2,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 32.05964777432382,
+      "experiment_configuration_sha256": "cf83b87e2d9870e536799e5f36a5b07da1b638d1d636ed401f919dc24418227b",
+      "game": "chess",
+      "inference_average_batch_size": 441.2638036809816,
+      "inference_batch_size": 448,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 1
+        },
+        {
+          "batch_size": 2,
+          "calls": 7
+        },
+        {
+          "batch_size": 15,
+          "calls": 1
+        },
+        {
+          "batch_size": 17,
+          "calls": 2
+        },
+        {
+          "batch_size": 27,
+          "calls": 1
+        },
+        {
+          "batch_size": 32,
+          "calls": 1
+        },
+        {
+          "batch_size": 36,
+          "calls": 1
+        },
+        {
+          "batch_size": 48,
+          "calls": 1
+        },
+        {
+          "batch_size": 58,
+          "calls": 1
+        },
+        {
+          "batch_size": 103,
+          "calls": 1
+        },
+        {
+          "batch_size": 139,
+          "calls": 1
+        },
+        {
+          "batch_size": 141,
+          "calls": 1
+        },
+        {
+          "batch_size": 149,
+          "calls": 1
+        },
+        {
+          "batch_size": 151,
+          "calls": 1
+        },
+        {
+          "batch_size": 197,
+          "calls": 1
+        },
+        {
+          "batch_size": 199,
+          "calls": 1
+        },
+        {
+          "batch_size": 215,
+          "calls": 1
+        },
+        {
+          "batch_size": 243,
+          "calls": 1
+        },
+        {
+          "batch_size": 272,
+          "calls": 1
+        },
+        {
+          "batch_size": 278,
+          "calls": 1
+        },
+        {
+          "batch_size": 290,
+          "calls": 1
+        },
+        {
+          "batch_size": 292,
+          "calls": 1
+        },
+        {
+          "batch_size": 300,
+          "calls": 1
+        },
+        {
+          "batch_size": 305,
+          "calls": 1
+        },
+        {
+          "batch_size": 312,
+          "calls": 1
+        },
+        {
+          "batch_size": 324,
+          "calls": 1
+        },
+        {
+          "batch_size": 325,
+          "calls": 1
+        },
+        {
+          "batch_size": 337,
+          "calls": 1
+        },
+        {
+          "batch_size": 342,
+          "calls": 1
+        },
+        {
+          "batch_size": 349,
+          "calls": 1
+        },
+        {
+          "batch_size": 352,
+          "calls": 1
+        },
+        {
+          "batch_size": 355,
+          "calls": 1
+        },
+        {
+          "batch_size": 360,
+          "calls": 1
+        },
+        {
+          "batch_size": 383,
+          "calls": 1
+        },
+        {
+          "batch_size": 387,
+          "calls": 1
+        },
+        {
+          "batch_size": 388,
+          "calls": 1
+        },
+        {
+          "batch_size": 395,
+          "calls": 1
+        },
+        {
+          "batch_size": 396,
+          "calls": 2
+        },
+        {
+          "batch_size": 397,
+          "calls": 1
+        },
+        {
+          "batch_size": 400,
+          "calls": 1
+        },
+        {
+          "batch_size": 410,
+          "calls": 1
+        },
+        {
+          "batch_size": 411,
+          "calls": 1
+        },
+        {
+          "batch_size": 412,
+          "calls": 1
+        },
+        {
+          "batch_size": 414,
+          "calls": 2
+        },
+        {
+          "batch_size": 416,
+          "calls": 1
+        },
+        {
+          "batch_size": 417,
+          "calls": 1
+        },
+        {
+          "batch_size": 430,
+          "calls": 1
+        },
+        {
+          "batch_size": 432,
+          "calls": 1
+        },
+        {
+          "batch_size": 433,
+          "calls": 1
+        },
+        {
+          "batch_size": 435,
+          "calls": 1
+        },
+        {
+          "batch_size": 442,
+          "calls": 1
+        },
+        {
+          "batch_size": 447,
+          "calls": 1
+        },
+        {
+          "batch_size": 448,
+          "calls": 1732
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 791186,
+      "inference_model_calls": 1793,
+      "inference_model_positions": 791186,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1496.73828125,
+      "precision": "bfloat16",
+      "process_cpu_percent": 49.25792515614458,
+      "process_id": 17652,
+      "search_batches": 8,
+      "searches_completed": 795702,
+      "searches_per_second": 24819.424268200102,
+      "warmup_batches": 2,
+      "worker_id": 2
+    },
+    {
+      "completed_games": 4,
+      "cudnn_benchmark": false,
+      "device_id": 0,
+      "elapsed_seconds": 32.07523097284138,
+      "experiment_configuration_sha256": "cf83b87e2d9870e536799e5f36a5b07da1b638d1d636ed401f919dc24418227b",
+      "game": "chess",
+      "inference_average_batch_size": 441.65474860335195,
+      "inference_batch_size": 448,
+      "inference_batch_size_distribution": [
+        {
+          "batch_size": 1,
+          "calls": 4
+        },
+        {
+          "batch_size": 3,
+          "calls": 1
+        },
+        {
+          "batch_size": 5,
+          "calls": 2
+        },
+        {
+          "batch_size": 7,
+          "calls": 1
+        },
+        {
+          "batch_size": 10,
+          "calls": 2
+        },
+        {
+          "batch_size": 18,
+          "calls": 1
+        },
+        {
+          "batch_size": 33,
+          "calls": 1
+        },
+        {
+          "batch_size": 38,
+          "calls": 1
+        },
+        {
+          "batch_size": 50,
+          "calls": 1
+        },
+        {
+          "batch_size": 54,
+          "calls": 1
+        },
+        {
+          "batch_size": 118,
+          "calls": 1
+        },
+        {
+          "batch_size": 132,
+          "calls": 1
+        },
+        {
+          "batch_size": 142,
+          "calls": 1
+        },
+        {
+          "batch_size": 195,
+          "calls": 1
+        },
+        {
+          "batch_size": 199,
+          "calls": 1
+        },
+        {
+          "batch_size": 202,
+          "calls": 1
+        },
+        {
+          "batch_size": 204,
+          "calls": 1
+        },
+        {
+          "batch_size": 225,
+          "calls": 1
+        },
+        {
+          "batch_size": 268,
+          "calls": 1
+        },
+        {
+          "batch_size": 280,
+          "calls": 1
+        },
+        {
+          "batch_size": 282,
+          "calls": 1
+        },
+        {
+          "batch_size": 292,
+          "calls": 1
+        },
+        {
+          "batch_size": 299,
+          "calls": 1
+        },
+        {
+          "batch_size": 312,
+          "calls": 1
+        },
+        {
+          "batch_size": 315,
+          "calls": 1
+        },
+        {
+          "batch_size": 317,
+          "calls": 1
+        },
+        {
+          "batch_size": 338,
+          "calls": 1
+        },
+        {
+          "batch_size": 343,
+          "calls": 1
+        },
+        {
+          "batch_size": 346,
+          "calls": 1
+        },
+        {
+          "batch_size": 347,
+          "calls": 1
+        },
+        {
+          "batch_size": 349,
+          "calls": 1
+        },
+        {
+          "batch_size": 350,
+          "calls": 1
+        },
+        {
+          "batch_size": 352,
+          "calls": 1
+        },
+        {
+          "batch_size": 367,
+          "calls": 1
+        },
+        {
+          "batch_size": 386,
+          "calls": 1
+        },
+        {
+          "batch_size": 392,
+          "calls": 1
+        },
+        {
+          "batch_size": 394,
+          "calls": 2
+        },
+        {
+          "batch_size": 396,
+          "calls": 1
+        },
+        {
+          "batch_size": 397,
+          "calls": 1
+        },
+        {
+          "batch_size": 401,
+          "calls": 1
+        },
+        {
+          "batch_size": 404,
+          "calls": 1
+        },
+        {
+          "batch_size": 406,
+          "calls": 1
+        },
+        {
+          "batch_size": 408,
+          "calls": 1
+        },
+        {
+          "batch_size": 413,
+          "calls": 1
+        },
+        {
+          "batch_size": 417,
+          "calls": 1
+        },
+        {
+          "batch_size": 424,
+          "calls": 1
+        },
+        {
+          "batch_size": 425,
+          "calls": 1
+        },
+        {
+          "batch_size": 426,
+          "calls": 1
+        },
+        {
+          "batch_size": 429,
+          "calls": 1
+        },
+        {
+          "batch_size": 435,
+          "calls": 1
+        },
+        {
+          "batch_size": 436,
+          "calls": 1
+        },
+        {
+          "batch_size": 438,
+          "calls": 1
+        },
+        {
+          "batch_size": 442,
+          "calls": 1
+        },
+        {
+          "batch_size": 448,
+          "calls": 1731
+        }
+      ],
+      "inference_device": "cuda",
+      "inference_evaluations": 790562,
+      "inference_model_calls": 1790,
+      "inference_model_positions": 790562,
+      "inference_workers": 1,
+      "memory_format": "contiguous",
+      "model_generation": 0,
+      "outstanding_batches_per_worker": 2,
+      "parallel_games": 512,
+      "parallel_searches": 2,
+      "peak_rss_mib": 1492.609375,
+      "precision": "bfloat16",
+      "process_cpu_percent": 49.593937388850065,
+      "process_id": 17653,
+      "search_batches": 8,
+      "searches_completed": 795927,
+      "searches_per_second": 24814.380936926824,
+      "warmup_batches": 2,
+      "worker_id": 3
+    }
+  ]
+}

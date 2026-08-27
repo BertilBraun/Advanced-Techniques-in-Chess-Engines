@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "source_revision": {
+    "commit": "b20deeb5a44698ca3aee25fbcc44f9e9a74ba08f",
+    "dirty": false
+  },
+  "device_name": "NVIDIA GeForce RTX 4070 SUPER",
+  "batch_size": 320,
+  "block_count": 12,
+  "hidden_size": 128,
+  "precision": "bfloat16",
+  "memory_format": "contiguous",
+  "cudnn_benchmark": false,
+  "graph_captured": true,
+  "kernel_count": 195,
+  "gpu_span_microseconds": 3388.879,
+  "gpu_busy_microseconds": 3380.7819999999992,
+  "launch_gap_microseconds": 8.097000000000662,
+  "launch_gap_fraction": 0.0023892856605386803,
+  "classes": [
+    {
+      "kernel_class": "convolution",
+      "count": 25,
+      "total_microseconds": 2155.2750000000015,
+      "fraction_of_gpu_span": 0.6359846427092857
+    },
+    {
+      "kernel_class": "batch_norm",
+      "count": 0,
+      "total_microseconds": 0.0,
+      "fraction_of_gpu_span": 0.0
+    },
+    {
+      "kernel_class": "activation",
+      "count": 17,
+      "total_microseconds": 80.09499999999935,
+      "fraction_of_gpu_span": 0.023634659130644484
+    },
+    {
+      "kernel_class": "residual_add",
+      "count": 12,
+      "total_microseconds": 149.5689999999986,
+      "fraction_of_gpu_span": 0.04413524354218566
+    },
+    {
+      "kernel_class": "global_pooling",
+      "count": 24,
+      "total_microseconds": 175.65099999999802,
+      "fraction_of_gpu_span": 0.05183159386924054
+    },
+    {
+      "kernel_class": "memory_copy",
+      "count": 77,
+      "total_microseconds": 463.4270000000042,
+      "fraction_of_gpu_span": 0.13674934985875986
+    },
+    {
+      "kernel_class": "other",
+      "count": 40,
+      "total_microseconds": 356.7649999999985,
+      "fraction_of_gpu_span": 0.10527522522934532
+    }
+  ],
+  "kernels": [
+    {
+      "kernel_class": "convolution",
+      "name": "void cutlass__5x_cudnn::Kernel<cutlass_tensorop_bf16_s16816fprop_optimized_bf16_128x128_32x3_nhwc_align8>(cutlass_tensorop_bf16_s16816fprop_optimized_bf16_128x128_32x3_nhwc_align8::Params)",
+      "operation_path": [],
+      "count": 24,
+      "total_microseconds": 2121.8990000000013,
+      "fraction_of_gpu_span": 0.6261359582327966
+    },
+    {
+      "kernel_class": "other",
+      "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<c10::BFloat16> >(at::TensorIteratorBase&, at::native::CUDAFunctor_add<c10::BFloat16> const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<c10::BFloat16> >(at::TensorIteratorBase&, at::native::CUDAFunctor_add<c10::BFloat16> const&)::{lambda(int)#1})",
+      "operation_path": [],
+      "count": 27,
+      "total_microseconds": 321.72799999999916,
+      "fraction_of_gpu_span": 0.09493640817509245
+    },
+    {
+      "kernel_class": "memory_copy",
+      "name": "void cudnn::engines_precompiled::nchwToNhwcKernel<__nv_bfloat16, __nv_bfloat16, float, false, true, (cudnnKernelDataType_t)0>(cudnn::engines_precompiled::nchw2nhwc_params_t<float>, __nv_bfloat16 const*, __nv_bfloat16*)",
+      "operation_path": [],
+      "count": 50,
+      "total_microseconds": 245.53800000000228,
+      "fraction_of_gpu_span": 0.07245404748886056
+    },
+    {
+      "kernel_class": "memory_copy",
+      "name": "void cudnn::engines_precompiled::nhwcToNchwKernel<__nv_bfloat16, __nv_bfloat16, float, true, false, (cudnnKernelDataType_t)0>(cudnn::engines_precompiled::nhwc2nchw_params_t<float>, __nv_bfloat16 const*, __nv_bfloat16*)",
+      "operation_path": [],
+      "count": 25,
+      "total_microseconds": 214.88100000000122,
+      "fraction_of_gpu_span": 0.06340769322244943
+    },
+    {
+      "kernel_class": "residual_add",
+      "name": "fused_add_relu",
+      "operation_path": [],
+      "count": 12,
+      "total_microseconds": 149.5689999999986,
+      "fraction_of_gpu_span": 0.04413524354218566
+    },
+    {
+      "kernel_class": "global_pooling",
+      "name": "fused_unsqueeze_unsqueeze_add",
+      "operation_path": [],
+      "count": 6,
+      "total_microseconds": 85.31200000000081,
+      "fraction_of_gpu_span": 0.025174106245752892
+    },
+    {
+      "kernel_class": "activation",
+      "name": "void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::launch_clamp_scalar(at::TensorIteratorBase&, c10::Scalar, c10::Scalar, at::native::detail::ClampLimits)::{lambda()#1}::operator()() const::{lambda()#9}::operator()() const::{lambda(c10::BFloat16)#1}, std::array<char*, 2ul> >(int, at::native::(anonymous namespace)::launch_clamp_scalar(at::TensorIteratorBase&, c10::Scalar, c10::Scalar, at::native::detail::ClampLimits)::{lambda()#1}::operator()() const::{lambda()#9}::operator()() const::{lambda(c10::BFloat16)#1}, std::array<char*, 2ul>)",
+      "operation_path": [],
+      "count": 16,
+      "total_microseconds": 69.79099999999926,
+      "fraction_of_gpu_span": 0.02059412566810419
+    },
+    {
+      "kernel_class": "global_pooling",
+      "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<c10::BFloat16, at::native::func_wrapper_t<c10::BFloat16, at::native::MaxNanFunctor<c10::BFloat16> >, unsigned int, c10::BFloat16, 4, 4> >(at::native::ReduceOp<c10::BFloat16, at::native::func_wrapper_t<c10::BFloat16, at::native::MaxNanFunctor<c10::BFloat16> >, unsigned int, c10::BFloat16, 4, 4>)",
+      "operation_path": [],
+      "count": 6,
+      "total_microseconds": 47.841999999998734,
+      "fraction_of_gpu_span": 0.014117352670307419
+    },
+    {
+      "kernel_class": "global_pooling",
+      "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<c10::BFloat16, at::native::MeanOps<c10::BFloat16, float, float, c10::BFloat16>, unsigned int, c10::BFloat16, 4, 8> >(at::native::ReduceOp<c10::BFloat16, at::native::MeanOps<c10::BFloat16, float, float, c10::BFloat16>, unsigned int, c10::BFloat16, 4, 8>)",
+      "operation_path": [],
+      "count": 6,
+      "total_microseconds": 36.03299999999945,
+      "fraction_of_gpu_span": 0.010632719551214266
+    },
+    {
+      "kernel_class": "convolution",
+      "name": "sm80_xmma_fprop_implicit_gemm_indexed_bf16bf16_bf16f32_f32_nhwckrsc_nhwc_tilesize256x64x32_stage3_warpsize4x1x1_g1_tensor16x8x16_execute_kernel__5x_cudnn",
+      "operation_path": [],
+      "count": 1,
+      "total_microseconds": 33.376000000000204,
+      "fraction_of_gpu_span": 0.009848684476489188
+    },
+    {
+      "kernel_class": "other",
+      "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_64x1_nn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_64x1_nn_align8::Params)",
+      "operation_path": [],
+      "count": 2,
+      "total_microseconds": 15.422999999999774,
+      "fraction_of_gpu_span": 0.004551062460477278
+    },
+    {
+      "kernel_class": "other",
+      "name": "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_128x2_tn_align8>(cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_128x2_tn_align8::Params)",
+      "operation_path": [],
+      "count": 7,
+      "total_microseconds": 14.49499999999989,
+      "fraction_of_gpu_span": 0.004277225595838592
+    },
+    {
+      "kernel_class": "activation",
+      "name": "ampere_bf16_s1688gemm_bf16_128x128_ldg8_relu_f2f_stages_32x1_tn",
+      "operation_path": [],
+      "count": 1,
+      "total_microseconds": 10.304000000000087,
+      "fraction_of_gpu_span": 0.0030405334625402936
+    },
+    {
+      "kernel_class": "global_pooling",
+      "name": "void at::native::(anonymous namespace)::CatArrayBatchedCopy_vectorized<at::native::(anonymous namespace)::OpaqueType<2u>, unsigned int, 2, 128, 1, 16, 8>(char*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<2u>, unsigned int, 128, 1>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int)",
+      "operation_path": [],
+      "count": 6,
+      "total_microseconds": 6.463999999999032,
+      "fraction_of_gpu_span": 0.0019074154019659694
+    },
+    {
+      "kernel_class": "memory_copy",
+      "name": "memset32",
+      "operation_path": [],
+      "count": 2,
+      "total_microseconds": 3.0080000000007203,
+      "fraction_of_gpu_span": 0.000887609147449856
+    },
+    {
+      "kernel_class": "other",
+      "name": "void cutlass::Kernel2<cutlass_75_wmma_tensorop_bf16_s161616gemm_bf16_32x32_32x1_tn_align1>(cutlass_75_wmma_tensorop_bf16_s161616gemm_bf16_32x32_32x1_tn_align1::Params)",
+      "operation_path": [],
+      "count": 1,
+      "total_microseconds": 1.9510000000000218,
+      "fraction_of_gpu_span": 0.0005757065979635218
+    },
+    {
+      "kernel_class": "other",
+      "name": "void at::native::vectorized_elementwise_kernel<4, at::native::sigmoid_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#4}::operator()() const::{lambda(c10::BFloat16)#1}, std::array<char*, 2ul> >(int, at::native::sigmoid_kernel_cuda(at::TensorIteratorBase&)::{lambda()#2}::operator()() const::{lambda()#4}::operator()() const::{lambda(c10::BFloat16)#1}, std::array<char*, 2ul>)",
+      "operation_path": [],
+      "count": 1,
+      "total_microseconds": 1.2479999999995925,
+      "fraction_of_gpu_span": 0.00036826336968643394
+    },
+    {
+      "kernel_class": "other",
+      "name": "void (anonymous namespace)::softmax_warp_forward<c10::BFloat16, c10::BFloat16, float, 2, false, false, 32>(c10::BFloat16*, c10::BFloat16 const*, int, int, int, bool const*, int, bool)",
+      "operation_path": [],
+      "count": 1,
+      "total_microseconds": 1.087999999999738,
+      "fraction_of_gpu_span": 0.0003210501171625597
+    },
+    {
+      "kernel_class": "other",
+      "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<c10::BFloat16>, std::array<char*, 1ul> >(int, at::native::FillFunctor<c10::BFloat16>, std::array<char*, 1ul>)",
+      "operation_path": [],
+      "count": 1,
+      "total_microseconds": 0.8320000000003347,
+      "fraction_of_gpu_span": 0.0002455089131244682
+    }
+  ]
+}
