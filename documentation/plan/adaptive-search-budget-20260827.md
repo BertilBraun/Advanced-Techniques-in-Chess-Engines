@@ -10,6 +10,11 @@ larger baselines but the exact percentages are from that operating point.
 
 Nothing here is started without an explicit instruction.
 
+**Status — stopped at Gate 1.** The frozen-trunk predictor scored -13.95% of oracle gain at equal mean compute,
+with a wholly negative 95% bootstrap interval. The allocator and training integration must not proceed from this
+design without a new measured gate that beats flat. See the
+[`RTX 4070 SUPER probe`](../benchmarks/adaptive-search-budget-probe-rtx4070super-20260827/README.md).
+
 ## 1. Why
 
 Allocating search per position is worth up to **3.6× effective compute** at fixed total spend (noise-corrected
