@@ -230,36 +230,6 @@ evaluation:
       opening_pair_count: 50
       maximum_game_plies: 300
       search: *evaluation_search
-    - kind: stockfish
-      definition_id: stockfish-level-0
-      skill_level: 0
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
-    - kind: stockfish
-      definition_id: stockfish-level-1
-      skill_level: 1
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
-    - kind: stockfish
-      definition_id: stockfish-level-2
-      skill_level: 2
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
-    - kind: stockfish
-      definition_id: stockfish-level-3
-      skill_level: 3
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
-    - kind: stockfish
-      definition_id: stockfish-level-4
-      skill_level: 4
-      opening_pair_count: 50
-      maximum_game_plies: 300
-      search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-300
       nodes: 300
