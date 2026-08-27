@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | `experiment_configuration_sha256` | `37a17001b1d26811732b73f114e9bfae729653f6968c56cd4160bdedb705a09f` for the hash-neutral baseline; candidate hashes are recorded with their self-play results |
-| Source revision | `b20deeb5a44698ca3aee25fbcc44f9e9a74ba08f` (`clean`) |
+| Source revision | `b20deeb5a44698ca3aee25fbcc44f9e9a74ba08f` for performance; `a06d60793857488b9201a7027fab3fbff7626d6e` for agreement (both `clean`) |
 | Node | Vast.ai `48910449`; 1× RTX 4070 SUPER 12 GiB; driver 580.159.03; 9.6 effective CPUs; 188 GiB RAM |
 | Date | 2026-08-27 |
 
@@ -103,11 +103,12 @@ outstanding batches per worker, batch cap 320, 512 games per process, and two pa
 | Configuration | Searches/s, three runs | Mean | CV | Average batch | vs baseline |
 | --- | --- | ---: | ---: | ---: | ---: |
 | BF16 / contiguous / cuDNN search off | 95,750; 94,398; 96,226 | 95,458 | 0.99% | 317.10 | 1.000× |
+| **BF16 / channels-last / cuDNN search on** | **109,785; 111,349; 113,231** | **111,455** | **1.55%** | **317.23** | **1.168×** |
 | FP16 / channels-last / cuDNN search on | 114,360; 112,596; 114,709 | 113,888 | 0.99% | 317.05 | **1.193×** |
 
-A single BF16 / channels-last / cuDNN-search run reached 109,785 searches/s (1.150×). FP16 is
-therefore a real part of the integrated win even though it adds little in an isolated single-context
-pipeline. The short 10-second smoke was consistent at 1.203× but is not used for the decision.
+The trained-model gate below rejects FP16 on value error, but BF16 channels-last with cuDNN search
+passes both acceptance gates. The short FP16 10-second smoke was consistent at 1.203× but is not
+used for the decision.
 
 ## Interpretation
 
@@ -150,36 +151,32 @@ Extra workers split batches and add contexts without improving throughput on thi
 
 ## Acceptance-gate status
 
-The throughput half of the gate passes for FP16 + channels-last + cuDNN search: 1.193× with
-0.99% CV, against a 0.99% baseline CV. The quality half is **blocked and was not run**. No trained
-checkpoint compatible with the current v9 interface could be obtained:
+The quality gate used generation 464 from the active v9 production run, then at its trained 14×152
+rung. The inference checkpoint SHA-256 was
+`9d9af18c6070bd11de30f0a54054c6ee18b4438ff43e4c07fd32425f39896174`. It was copied read-only
+without signaling or reconfiguring the production process. Agreement was measured on 480 positions
+from the generated Stockfish 18 evaluation corpus against BF16 contiguous inference.
 
-- the `four-day-baseline` release and the local archived baseline are trained 12×112 models with
-  29 input planes and two outputs;
-- the current v9 runtime expects 12×128, 35 input planes, and three outputs;
-- an exhaustive search of the local `.codex-diagnostics` archives found no trained v9 TorchScript
-  checkpoint.
+| Candidate | Legal top-1 | Mean policy KL | Mean value error | Quality verdict |
+| --- | ---: | ---: | ---: | --- |
+| **BF16 channels-last + cuDNN search** | **100.000%** | **2.243e-6** | **1.176e-4** | **Pass** |
+| FP16 channels-last + cuDNN search | 99.167% | 7.858e-5 | 2.705e-3 | **Fail: value error** |
 
-Running the agreement tool on random or zero weights would make the policy outputs near-uniform
-and provide a meaningless pass, so it was deliberately not done. A real evaluation corpus was
-generated successfully with Stockfish 18: `chess-stockfish-evaluation-v1.bin` has SHA-256
-`40722feac84a2c44859d8f47bfab6a3540881d577b7879e35f95d94ef42ce54f`. Once a compatible trained
-v9 checkpoint is supplied, run `measure_inference_precision_agreement.py` against the BF16
-contiguous reference and require legal-move top-1 agreement above 99%, policy KL below 1e-3, and
-value error below 1e-3.
-
-Accordingly, the candidate is **not approved to ship yet**, despite passing the throughput gate.
+Both candidates pass legal top-1 above 99% and mean policy KL below 1e-3. FP16 fails the required
+mean value error below 1e-3 by 2.7×. BF16 passes all quality thresholds and its repeated 1.168×
+self-play result passes the throughput threshold. **Ship BF16 channels-last with cuDNN search; do
+not ship FP16.**
 
 ## Lever verdicts
 
 | Lever | Best end-to-end multiplier | Variance | Quality gate | Verdict |
 | --- | ---: | ---: | --- | --- |
 | BF16 contiguous baseline | 1.000× | 0.99% CV, 3 runs | Reference | Baseline |
-| Channels-last alone | 1.057× native pipeline | 0.42% CV, 3 runs | Blocked | Inside noise; do not ship |
-| cuDNN search alone | 0.997× native pipeline | 0.56% CV, 3 runs | Blocked | No benefit |
-| BF16 channels-last + cuDNN search | 1.150× self-play | One run | Blocked | Borderline and unreplicated; do not ship |
-| FP16 contiguous | 1.021× network harness | One harness run | Blocked | Inside noise; do not ship alone |
-| **FP16 channels-last + cuDNN search** | **1.193× self-play** | **0.99% CV, 3 runs** | **Blocked** | **Throughput passes; do not ship until quality passes** |
+| Channels-last alone | 1.057× native pipeline | 0.42% CV, 3 runs | Pass | Inside noise; do not ship alone |
+| cuDNN search alone | 0.997× native pipeline | 0.56% CV, 3 runs | Pass | No benefit alone |
+| **BF16 channels-last + cuDNN search** | **1.168× self-play** | **1.55% CV, 3 runs** | **Pass** | **Ship** |
+| FP16 contiguous | 1.021× network harness | One harness run | Fail: value error | Do not ship |
+| FP16 channels-last + cuDNN search | 1.193× self-play | 0.99% CV, 3 runs | Fail: value error | Do not ship |
 | Batch cap 448 | 1.039× self-play | One run | Output-identical config | Inside noise; keep 320 |
 | Alternate topology | 0.934× best alternative | One run each | Output-identical config | Keep 4×1×2 |
 | Conv-BN folding | Already applied | — | Mathematically equivalent in eval | Keep existing export fold |
@@ -189,8 +186,9 @@ Accordingly, the candidate is **not approved to ship yet**, despite passing the 
 The 2026-08-24 blanket rejections are stale. Channels-last alone now helps modestly because CUDA
 graphs removed the host-submission penalty; cuDNN search alone does not. Their combination is the
 important interaction: BF16 reaches 1.156× in the isolated pipeline and 1.150× in its single
-self-play run, while adding FP16 produces the repeated 1.193× result. The combined candidate is
-worth gating, but neither switch alone meets the ship threshold.
+self-play run. After two additional runs it averages 1.168× with 1.55% CV and passes the quality
+gate. Adding FP16 produces 1.193×, but its trained-model value error is unacceptable. Neither
+channels-last nor cuDNN search alone meets the ship threshold; their BF16 combination does.
 
 ## Export-time graph optimization
 
@@ -249,7 +247,9 @@ Validation run for the code supporting these measurements:
 - `uv run ruff format .` — 259 files unchanged;
 - `uv run ruff check --fix .` — passed;
 - `uv run python -m pytest --import-mode=importlib .\test -q` from `py` — 686 passed,
-  52 skipped, 83 warnings in 47.04 seconds;
+  52 skipped, 83 warnings in 43.31 seconds;
+- the exhaustive agreement harness on Torch 2.12.1 CUDA — passed operationally on all 12
+  precision/layout/algorithm variants and produced the candidate verdicts above;
 - Release C++ extension, benchmark build, engine smokes, and measured executables on the node —
   passed.
 
@@ -260,5 +260,6 @@ No C++ source was changed, so clang-format and CompileCheck were not applicable.
 
 All results were copied off the ephemeral node. `raw/` contains the original profiler JSON/logs,
 native benchmark logs, and complete self-play manifests, worker results, CPU samples, and GPU
-samples. `evaluation-artifacts/` contains the generated real-position dataset, its manifest, and
-the deterministic opening corpus. `SHA256SUMS` inventories every exported artifact.
+samples. It also contains the trained checkpoint metadata, precision-agreement report, and repeated
+BF16 candidate runs. `evaluation-artifacts/` contains the generated real-position dataset, its
+manifest, and the deterministic opening corpus. `SHA256SUMS` inventories every exported artifact.
