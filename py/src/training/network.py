@@ -8,6 +8,11 @@ from typing import Annotated, Literal, TypeAlias
 
 import torch
 from pydantic import BeforeValidator, Field, JsonValue, model_validator
+from src.games.chess.policy_encoding import (
+    CHESS_FROM_TO_ACTION_TABLE,
+    KNIGHT_PROMOTION_INDEX,
+    PROMOTION_PIECE_COUNT,
+)
 from src.games.representation import NetworkDimensions
 from src.training.batch import TrainingModelOutput
 from src.training.targets import (
@@ -68,12 +73,20 @@ class DensePolicyHeadConfiguration(FrozenModel):
     bottleneck_rank: int | None = Field(default=None, gt=0)
 
 
+class ChessFromToAttentionPolicyHeadConfiguration(FrozenModel):
+    kind: Literal['chess_from_to_attention_v1'] = 'chess_from_to_attention_v1'
+    key_size: int = Field(gt=0)
+
+
 class GoPointPassPolicyHeadConfiguration(FrozenModel):
     kind: Literal['go_point_pass_v1'] = 'go_point_pass_v1'
 
 
 PolicyHeadConfiguration: TypeAlias = Annotated[
-    Chess76PlaneDirectPolicyHeadConfiguration | DensePolicyHeadConfiguration | GoPointPassPolicyHeadConfiguration,
+    Chess76PlaneDirectPolicyHeadConfiguration
+    | ChessFromToAttentionPolicyHeadConfiguration
+    | DensePolicyHeadConfiguration
+    | GoPointPassPolicyHeadConfiguration,
     Field(discriminator='kind'),
 ]
 
@@ -104,6 +117,27 @@ class NetworkParams(NetworkHeadParams):
         return self
 
 
+class DisabledAttentionBiasConfiguration(FrozenModel):
+    kind: Literal['disabled'] = 'disabled'
+
+
+class RelativeAttentionBiasConfiguration(FrozenModel):
+    kind: Literal['relative'] = 'relative'
+
+
+class SmolgenAttentionBiasConfiguration(FrozenModel):
+    kind: Literal['smolgen'] = 'smolgen'
+    compressed_size: int = Field(gt=0)
+    hidden_size: int = Field(gt=0)
+    generated_size: int = Field(gt=0)
+
+
+AttentionBiasConfiguration: TypeAlias = Annotated[
+    DisabledAttentionBiasConfiguration | RelativeAttentionBiasConfiguration | SmolgenAttentionBiasConfiguration,
+    Field(discriminator='kind'),
+]
+
+
 class AttentionNetworkParams(NetworkHeadParams):
     kind: Literal['attention'] = 'attention'
     num_layers: int = Field(gt=0)
@@ -111,6 +145,7 @@ class AttentionNetworkParams(NetworkHeadParams):
     num_heads: int = Field(gt=0)
     feedforward_size: int = Field(gt=0)
     dropout: float = Field(default=0.0, ge=0.0, lt=1.0)
+    attention_bias: AttentionBiasConfiguration = DisabledAttentionBiasConfiguration()
 
     @model_validator(mode='after')
     def validate_attention_dimensions(self) -> AttentionNetworkParams:
@@ -188,6 +223,9 @@ class Network(nn.Module):
                     column_count,
                     hidden_size,
                 )
+                # One template bank is shared by every layer, which is what makes the generated bias
+                # affordable: the per-layer cost is only the compression that selects from it.
+                template_bank = _build_smolgen_template_bank(args.attention_bias, row_count * column_count)
                 self.backbone = nn.ModuleList(
                     [
                         AttentionEncoderBlock(
@@ -195,6 +233,14 @@ class Network(nn.Module):
                             args.num_heads,
                             args.feedforward_size,
                             args.dropout,
+                            _build_attention_bias(
+                                args.attention_bias,
+                                hidden_size,
+                                args.num_heads,
+                                row_count,
+                                column_count,
+                                template_bank,
+                            ),
                         )
                         for _ in range(args.num_layers)
                     ]
@@ -271,21 +317,21 @@ class Network(nn.Module):
         policy_logits, value_logits = self.logit_forward(x)
         return policy_logits, torch.softmax(value_logits, dim=1)
 
-    def _features(self, x: Tensor) -> Tensor:
+    def trunk_features(self, x: Tensor) -> Tensor:
         x = self.start_block(x)
         for block in self.backbone:
             x = block(x)
         return self.finish_block(x)
 
     def logit_forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
-        x = self._features(x)
+        x = self.trunk_features(x)
         policy_logits = self.policy_head(x)
         value_logits = self.value_head(x)
 
         return policy_logits, value_logits
 
     def training_output(self, x: Tensor) -> TrainingModelOutput:
-        features = self._features(x)
+        features = self.trunk_features(x)
         return TrainingModelOutput(
             policy_logits=self.policy_head(features),
             wdl_logits=self.value_head(features),
@@ -445,6 +491,12 @@ def _final_policy_projections(policy_head: nn.Module) -> tuple[nn.Conv2d | nn.Li
     match policy_head:
         case PolicyPlaneHead(output_projection=output_projection):
             return (output_projection,)
+        case ChessFromToAttentionPolicyHead(
+            query_projection=query_projection, promotion_projection=promotion_projection
+        ):
+            # Scaling the queries scales every square-pair logit, and scaling the promotion projection
+            # scales the offsets added on top, so together they scale the exported logits exactly.
+            return (query_projection, promotion_projection)
         case GoPointPassPolicyHead(point_projection=point_projection, pass_projection=pass_projection):
             return (point_projection, pass_projection)
         case nn.Sequential():
@@ -507,6 +559,144 @@ class PolicyPlaneHead(nn.Module):
         return self.output_projection(self.spatial_block(self.input_block(features))).flatten(start_dim=1)
 
 
+class RelativeSquareAttentionBias(nn.Module):
+    """One learned logit per (row offset, column offset) pair and head, shared by every square pair."""
+
+    def __init__(self, num_heads: int, rows: int, columns: int) -> None:
+        super().__init__()
+        self.num_heads = num_heads
+        self.square_count = rows * columns
+        offset_count = (2 * rows - 1) * (2 * columns - 1)
+        row_indices = torch.arange(rows).repeat_interleave(columns)
+        column_indices = torch.arange(columns).repeat(rows)
+        row_offsets = row_indices[:, None] - row_indices[None, :] + rows - 1
+        column_offsets = column_indices[:, None] - column_indices[None, :] + columns - 1
+        offsets = (row_offsets * (2 * columns - 1) + column_offsets).reshape(-1)
+        self.register_buffer('offset_indices', offsets, persistent=False)
+        self.bias_table = nn.Parameter(torch.zeros(num_heads, offset_count))
+
+    def forward(self, tokens: Tensor) -> Tensor:
+        bias = self.bias_table.index_select(1, self.offset_indices)
+        return bias.reshape(1, self.num_heads, self.square_count, self.square_count)
+
+
+class SmolgenTemplateBank(nn.Module):
+    """The model-global template bank every layer's generated attention bias is expressed in."""
+
+    def __init__(self, generated_size: int, square_count: int) -> None:
+        super().__init__()
+        self.square_count = square_count
+        self.projection = nn.Linear(generated_size, square_count * square_count, bias=False)
+
+    def forward(self, generated: Tensor) -> Tensor:
+        batch_size, head_count, _ = generated.shape
+        return self.projection(generated).reshape(batch_size, head_count, self.square_count, self.square_count)
+
+
+class SmolgenAttentionBias(nn.Module):
+    def __init__(
+        self,
+        embedding_size: int,
+        num_heads: int,
+        square_count: int,
+        configuration: SmolgenAttentionBiasConfiguration,
+        template_bank: SmolgenTemplateBank,
+    ) -> None:
+        super().__init__()
+        self.num_heads = num_heads
+        self.generated_size = configuration.generated_size
+        self.compression = nn.Linear(embedding_size, configuration.compressed_size, bias=False)
+        self.hidden = nn.Sequential(
+            nn.Linear(square_count * configuration.compressed_size, configuration.hidden_size),
+            nn.GELU(),
+            nn.LayerNorm(configuration.hidden_size),
+        )
+        self.generator = nn.Sequential(
+            nn.Linear(configuration.hidden_size, num_heads * configuration.generated_size),
+            nn.GELU(),
+            nn.LayerNorm(num_heads * configuration.generated_size),
+        )
+        self.template_bank = template_bank
+
+    def forward(self, tokens: Tensor) -> Tensor:
+        batch_size = tokens.shape[0]
+        compressed = self.compression(tokens).reshape(batch_size, -1)
+        generated = self.generator(self.hidden(compressed)).reshape(batch_size, self.num_heads, self.generated_size)
+        return self.template_bank(generated)
+
+
+def _build_smolgen_template_bank(
+    configuration: AttentionBiasConfiguration,
+    square_count: int,
+) -> SmolgenTemplateBank | None:
+    match configuration:
+        case SmolgenAttentionBiasConfiguration(generated_size=generated_size):
+            return SmolgenTemplateBank(generated_size, square_count)
+        case _:
+            return None
+
+
+def _build_attention_bias(
+    configuration: AttentionBiasConfiguration,
+    embedding_size: int,
+    num_heads: int,
+    rows: int,
+    columns: int,
+    template_bank: SmolgenTemplateBank | None,
+) -> nn.Module | None:
+    match configuration:
+        case DisabledAttentionBiasConfiguration():
+            return None
+        case RelativeAttentionBiasConfiguration():
+            return RelativeSquareAttentionBias(num_heads, rows, columns)
+        case SmolgenAttentionBiasConfiguration():
+            assert template_bank is not None, 'A generated attention bias needs its shared template bank.'
+            return SmolgenAttentionBias(embedding_size, num_heads, rows * columns, configuration, template_bank)
+
+
+class ChessFromToAttentionPolicyHead(nn.Module):
+    """Scores every action as an attention logit from its origin square's query to its target square's key.
+
+    The reduced chess encoding is already an enumeration of (from, to, promotion) triples, and castling and
+    en passant are ordinary square pairs inside it, so a 64x64 score matrix plus a promotion offset covers
+    the whole action space with one gather.
+    """
+
+    def __init__(self, input_channels: int, key_size: int, rows: int, columns: int) -> None:
+        super().__init__()
+        self.key_size = key_size
+        self.square_count = rows * columns
+        self.last_rank_start = self.square_count - columns
+        self.knight_promotion_index = KNIGHT_PROMOTION_INDEX
+        self.token_projection = nn.Linear(input_channels, key_size)
+        self.activation = nn.GELU()
+        self.query_projection = nn.Linear(key_size, key_size)
+        self.key_projection = nn.Linear(key_size, key_size)
+        self.promotion_projection = nn.Linear(key_size, PROMOTION_PIECE_COUNT, bias=False)
+        table = CHESS_FROM_TO_ACTION_TABLE
+        self.register_buffer('from_to_indices', torch.from_numpy(table.from_to_indices), persistent=False)
+        self.register_buffer('promotion_action_ids', torch.from_numpy(table.promotion_action_ids), persistent=False)
+        self.register_buffer(
+            'promotion_offset_indices', torch.from_numpy(table.promotion_offset_indices), persistent=False
+        )
+
+    def forward(self, features: Tensor) -> Tensor:
+        batch_size = features.shape[0]
+        tokens = features.flatten(2).transpose(1, 2)
+        projected = self.activation(self.token_projection(tokens))
+        queries = self.query_projection(projected)
+        keys = self.key_projection(projected)
+        scores = torch.matmul(queries, keys.transpose(1, 2)) / math.sqrt(self.key_size)
+        logits = scores.reshape(batch_size, self.square_count * self.square_count).index_select(1, self.from_to_indices)
+        promotion_scores = self.promotion_projection(keys[:, self.last_rank_start :, :])
+        # Knight promotion carries no offset, so the plain square-pair logit is its logit and the three
+        # remaining pieces are scored relative to it.
+        knight_scores = promotion_scores[:, :, self.knight_promotion_index : self.knight_promotion_index + 1]
+        promotion_offsets = promotion_scores - knight_scores
+        gathered = promotion_offsets.reshape(batch_size, -1).index_select(1, self.promotion_offset_indices)
+        return logits.index_add(1, self.promotion_action_ids, gathered)
+
+
 class GoPointPassPolicyHead(nn.Module):
     def __init__(self, input_channels: int) -> None:
         super().__init__()
@@ -537,6 +727,14 @@ def _build_policy_head(
                     f'the reduced chess action encoding needs a dense policy head.'
                 )
             return PolicyPlaneHead(input_channels, plane_hidden_channels, CHESS_POLICY_PLANE_COUNT)
+        case ChessFromToAttentionPolicyHeadConfiguration(key_size=key_size):
+            if row_count != 8 or column_count != 8 or action_size != CHESS_FROM_TO_ACTION_TABLE.action_count:
+                raise ValueError(
+                    f'The chess from-to attention policy head requires an 8x8 board and '
+                    f'{CHESS_FROM_TO_ACTION_TABLE.action_count} actions, not {action_size} over '
+                    f'{row_count}x{column_count}.'
+                )
+            return ChessFromToAttentionPolicyHead(input_channels, key_size, row_count, column_count)
         case DensePolicyHeadConfiguration():
             return _build_dense_policy_head(input_channels, row_count, column_count, action_size, configuration)
         case GoPointPassPolicyHeadConfiguration():
@@ -637,6 +835,12 @@ def _initialize_attention_trunk(
                 for residual_projection in (block.attention_output_projection, block.feedforward[3]):
                     nn.init.normal_(residual_projection.weight, std=residual_output_std)
                     nn.init.zeros_(residual_projection.bias)
+                # A Kaiming-initialized template bank would swamp the attention logits it is added to.
+                match block.attention_bias:
+                    case SmolgenAttentionBias(template_bank=template_bank):
+                        _initialize_small_projection(template_bank.projection)
+                    case _:
+                        pass
 
 
 def _initialize_small_policy_output(module: nn.Module, configuration: PolicyHeadConfiguration) -> None:
@@ -644,6 +848,11 @@ def _initialize_small_policy_output(module: nn.Module, configuration: PolicyHead
         case Chess76PlaneDirectPolicyHeadConfiguration():
             assert isinstance(module, PolicyPlaneHead), 'The 76-plane policy configuration must build a plane head.'
             projections: tuple[nn.Module, ...] = (module.output_projection,)
+        case ChessFromToAttentionPolicyHeadConfiguration():
+            assert isinstance(module, ChessFromToAttentionPolicyHead), (
+                'The from-to attention policy configuration must build a from-to attention head.'
+            )
+            projections = (module.query_projection, module.promotion_projection)
         case DensePolicyHeadConfiguration(bottleneck_rank=bottleneck_rank):
             assert isinstance(module, nn.Sequential), 'The dense policy configuration must build a sequential head.'
             projections = (module[-1],) if bottleneck_rank is None else (module[-2], module[-1])
@@ -662,7 +871,8 @@ def _initialize_small_linear_output(module: nn.Module) -> None:
 def _initialize_small_projection(module: nn.Module) -> None:
     assert isinstance(module, nn.Conv2d | nn.Linear), 'Small initialization expects a convolution or a linear layer.'
     nn.init.normal_(module.weight, std=SMALL_OUTPUT_INITIALIZATION_STD)
-    nn.init.zeros_(module.bias)
+    if module.bias is not None:
+        nn.init.zeros_(module.bias)
 
 
 def _build_scalar_auxiliary_head(
@@ -747,8 +957,13 @@ class AttentionEncoderBlock(nn.Module):
         num_heads: int,
         feedforward_size: int,
         dropout: float,
+        attention_bias: nn.Module | None = None,
     ) -> None:
         super().__init__()
+        # Without a bias the block must not pass an attn_mask at all: a mask, even an all-zero one,
+        # disqualifies the flash-attention backend.
+        self.uses_attention_bias = attention_bias is not None
+        self.attention_bias = attention_bias if attention_bias is not None else nn.Identity()
         self.embedding_size = embedding_size
         self.num_heads = num_heads
         self.head_size = embedding_size // num_heads
@@ -777,12 +992,21 @@ class AttentionEncoderBlock(nn.Module):
             self.head_size,
         )
         query, key, value = query_key_value.permute(2, 0, 3, 1, 4).unbind(0)
-        attended = functional.scaled_dot_product_attention(
-            query,
-            key,
-            value,
-            dropout_p=self.attention_dropout_probability if self.training else 0.0,
-        )
+        if self.uses_attention_bias:
+            attended = functional.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                attn_mask=self.attention_bias(normalized).to(query.dtype),
+                dropout_p=self.attention_dropout_probability if self.training else 0.0,
+            )
+        else:
+            attended = functional.scaled_dot_product_attention(
+                query,
+                key,
+                value,
+                dropout_p=self.attention_dropout_probability if self.training else 0.0,
+            )
         attended = attended.transpose(1, 2).reshape(batch_size, square_count, self.embedding_size)
         attended = self.attention_output_projection(attended)
         residual = inputs + self.attention_dropout(attended)

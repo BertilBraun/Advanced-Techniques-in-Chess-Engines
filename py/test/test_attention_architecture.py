@@ -1,0 +1,331 @@
+from __future__ import annotations
+
+import pytest
+import torch
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.games.chess.policy_encoding import (
+    BOARD_SQUARE_COUNT,
+    CHESS_FROM_TO_ACTION_TABLE,
+    KNIGHT_PROMOTION_INDEX,
+    PROMOTION_PIECES,
+)
+from src.training.model_cost import measure_model_cost
+from src.training.network import (
+    BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
+    AttentionNetworkParams,
+    ChessFromToAttentionPolicyHead,
+    ChessFromToAttentionPolicyHeadConfiguration,
+    DensePolicyHeadConfiguration,
+    DisabledAttentionBiasConfiguration,
+    GlobalPoolingResidualContext,
+    InferenceNetwork,
+    Network,
+    NetworkParams,
+    RelativeAttentionBiasConfiguration,
+    ResidualContextPlacement,
+    SmolgenAttentionBias,
+    SmolgenAttentionBiasConfiguration,
+    calibrate_bootstrap_policy_prior,
+    measure_policy_prior_shape,
+)
+
+DEVICE = torch.device('cpu')
+SMOLGEN = SmolgenAttentionBiasConfiguration(compressed_size=8, hidden_size=32, generated_size=32)
+FROM_TO_HEAD = ChessFromToAttentionPolicyHeadConfiguration(key_size=64)
+DENSE_HEAD = DensePolicyHeadConfiguration(channels=4)
+
+
+def attention_parameters(**overrides: object) -> AttentionNetworkParams:
+    return AttentionNetworkParams(
+        num_layers=overrides.pop('num_layers', 2),
+        embedding_size=overrides.pop('embedding_size', 32),
+        num_heads=overrides.pop('num_heads', 4),
+        feedforward_size=overrides.pop('feedforward_size', 64),
+        policy_head=overrides.pop('policy_head', FROM_TO_HEAD),
+        **overrides,
+    )
+
+
+def chess_states(count: int) -> torch.Tensor:
+    generator = torch.Generator().manual_seed(20260827)
+    return torch.rand((count, CHESS_NETWORK_DIMENSIONS.channels, 8, 8), generator=generator)
+
+
+def fused_export(model: Network) -> InferenceNetwork:
+    export = InferenceNetwork(model)
+    export.eval()
+    export.fuse_model()
+    return export
+
+
+def test_the_action_table_covers_the_whole_reduced_action_space() -> None:
+    table = CHESS_FROM_TO_ACTION_TABLE
+
+    assert table.action_count == CHESS_NETWORK_DIMENSIONS.actions
+    assert len(table.promotion_action_ids) == 88
+    assert set(table.from_squares.tolist()) == set(range(BOARD_SQUARE_COUNT))
+
+
+def test_every_non_promotion_action_owns_a_distinct_square_pair() -> None:
+    table = CHESS_FROM_TO_ACTION_TABLE
+    plain = table.from_to_indices[table.promotion_indices < 0]
+
+    assert len(set(plain.tolist())) == len(plain)
+
+
+def test_every_promotion_action_shares_its_square_pair_with_a_plain_move() -> None:
+    table = CHESS_FROM_TO_ACTION_TABLE
+    plain = set(table.from_to_indices[table.promotion_indices < 0].tolist())
+    promoting = set(table.from_to_indices[table.promotion_indices >= 0].tolist())
+
+    assert promoting <= plain
+
+
+@pytest.mark.native
+def test_the_python_action_table_matches_the_native_chess_encoding() -> None:
+    native = pytest.importorskip('AlphaZeroCpp')
+    table = CHESS_FROM_TO_ACTION_TABLE
+    position = native.ChessPosition()
+
+    for action_id in position.legal_actions():
+        uci = position.action_uci(action_id)
+        from_square = (int(uci[1]) - 1) * 8 + (ord(uci[0]) - ord('a'))
+        to_square = (int(uci[3]) - 1) * 8 + (ord(uci[2]) - ord('a'))
+        promotion = PROMOTION_PIECES.index(uci[4]) if len(uci) > 4 else -1
+        assert int(table.from_squares[action_id]) == from_square
+        assert int(table.to_squares[action_id]) == to_square
+        assert int(table.promotion_indices[action_id]) == promotion
+
+
+@pytest.mark.native
+def test_the_python_action_table_matches_the_native_encoding_after_a_promotion_opening() -> None:
+    native = pytest.importorskip('AlphaZeroCpp')
+    table = CHESS_FROM_TO_ACTION_TABLE
+    position = native.ChessPosition('4k3/P7/8/8/8/8/8/4K3 w - - 0 1')
+    promotions = 0
+
+    for action_id in position.legal_actions():
+        uci = position.action_uci(action_id)
+        from_square = (int(uci[1]) - 1) * 8 + (ord(uci[0]) - ord('a'))
+        to_square = (int(uci[3]) - 1) * 8 + (ord(uci[2]) - ord('a'))
+        promotion = PROMOTION_PIECES.index(uci[4]) if len(uci) > 4 else -1
+        promotions += promotion >= 0
+        assert int(table.from_squares[action_id]) == from_square
+        assert int(table.to_squares[action_id]) == to_square
+        assert int(table.promotion_indices[action_id]) == promotion
+
+    assert promotions == 4
+
+
+def test_the_from_to_head_is_an_order_of_magnitude_smaller_than_the_dense_head() -> None:
+    from_to = Network(attention_parameters(embedding_size=176, num_heads=11), DEVICE, CHESS_NETWORK_DIMENSIONS)
+    dense = Network(
+        attention_parameters(embedding_size=176, num_heads=11, policy_head=DENSE_HEAD),
+        DEVICE,
+        CHESS_NETWORK_DIMENSIONS,
+    )
+
+    from_to_head = sum(parameter.numel() for parameter in from_to.policy_head.parameters())
+    dense_head = sum(parameter.numel() for parameter in dense.policy_head.parameters())
+
+    assert from_to_head * 10 < dense_head
+
+
+def test_the_from_to_head_scores_knight_promotion_at_the_plain_square_pair_logit() -> None:
+    torch.manual_seed(13)
+    head = ChessFromToAttentionPolicyHead(32, 16, 8, 8)
+    table = CHESS_FROM_TO_ACTION_TABLE
+    features = torch.rand((3, 32, 8, 8))
+
+    logits = head(features)
+
+    knights = [
+        action_id
+        for action_id in table.promotion_action_ids.tolist()
+        if int(table.promotion_indices[action_id]) == KNIGHT_PROMOTION_INDEX
+    ]
+    for action_id in knights:
+        square_pair = int(table.from_to_indices[action_id])
+        plain = int((table.from_to_indices == square_pair).nonzero()[0][0])
+        torch.testing.assert_close(logits[:, action_id], logits[:, plain])
+
+
+def test_the_from_to_head_gives_the_other_promotions_their_own_logits() -> None:
+    torch.manual_seed(17)
+    head = ChessFromToAttentionPolicyHead(32, 16, 8, 8)
+    table = CHESS_FROM_TO_ACTION_TABLE
+    features = torch.rand((2, 32, 8, 8))
+
+    logits = head(features)
+
+    queens = [
+        action_id for action_id in table.promotion_action_ids.tolist() if int(table.promotion_indices[action_id]) == 0
+    ]
+    knights = [action_id + KNIGHT_PROMOTION_INDEX for action_id in queens]
+
+    assert not torch.allclose(logits[:, queens], logits[:, knights])
+
+
+@pytest.mark.parametrize(
+    'attention_bias',
+    (DisabledAttentionBiasConfiguration(), RelativeAttentionBiasConfiguration(), SMOLGEN),
+    ids=('disabled', 'relative', 'smolgen'),
+)
+@pytest.mark.parametrize('policy_head', (FROM_TO_HEAD, DENSE_HEAD), ids=('from_to', 'dense'))
+def test_the_exported_inference_model_scripts_and_matches_eager(attention_bias: object, policy_head: object) -> None:
+    torch.manual_seed(19)
+    model = Network(
+        attention_parameters(attention_bias=attention_bias, policy_head=policy_head),
+        DEVICE,
+        CHESS_NETWORK_DIMENSIONS,
+    )
+    export = fused_export(model)
+    states = chess_states(4)
+
+    scripted = torch.jit.script(export)
+
+    torch.testing.assert_close(scripted(states)[0], export(states)[0])
+    torch.testing.assert_close(scripted(states)[1], export(states)[1])
+
+
+@pytest.mark.parametrize(
+    'attention_bias',
+    (DisabledAttentionBiasConfiguration(), RelativeAttentionBiasConfiguration(), SMOLGEN),
+    ids=('disabled', 'relative', 'smolgen'),
+)
+def test_generation_zero_calibration_reaches_the_target_on_a_from_to_attention_export(
+    attention_bias: object,
+) -> None:
+    torch.manual_seed(23)
+    model = Network(attention_parameters(attention_bias=attention_bias), DEVICE, CHESS_NETWORK_DIMENSIONS)
+    export = fused_export(model)
+    probe_states = chess_states(64)
+
+    calibrate_bootstrap_policy_prior(export, probe_states)
+
+    shape = measure_policy_prior_shape(export, probe_states)
+    assert shape.top3_mass == pytest.approx(BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=0.01)
+
+
+def test_an_uncalibrated_attention_export_is_almost_uniform() -> None:
+    torch.manual_seed(29)
+    model = Network(attention_parameters(), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    shape = measure_policy_prior_shape(fused_export(model), chess_states(64))
+
+    assert shape.top3_mass < 0.2
+
+
+def test_every_layer_shares_one_generated_bias_template_bank() -> None:
+    model = Network(attention_parameters(num_layers=4, attention_bias=SMOLGEN), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    banks = {id(block.attention_bias.template_bank) for block in model.backbone}
+
+    assert len(banks) == 1
+
+
+def test_the_generated_bias_costs_one_template_bank_plus_a_per_layer_compression() -> None:
+    two_layers = Network(attention_parameters(num_layers=2, attention_bias=SMOLGEN), DEVICE, CHESS_NETWORK_DIMENSIONS)
+    four_layers = Network(attention_parameters(num_layers=4, attention_bias=SMOLGEN), DEVICE, CHESS_NETWORK_DIMENSIONS)
+    plain_two = Network(attention_parameters(num_layers=2), DEVICE, CHESS_NETWORK_DIMENSIONS)
+    plain_four = Network(attention_parameters(num_layers=4), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    def total(model: Network) -> int:
+        return sum(parameter.numel() for parameter in model.parameters())
+
+    bank = SMOLGEN.generated_size * BOARD_SQUARE_COUNT * BOARD_SQUARE_COUNT
+    per_layer = (total(four_layers) - total(plain_four) - bank) // 4
+
+    assert total(two_layers) - total(plain_two) == bank + 2 * per_layer
+
+
+def test_the_relative_bias_costs_two_hundred_and_twenty_five_parameters_per_head() -> None:
+    biased = Network(
+        attention_parameters(num_layers=3, attention_bias=RelativeAttentionBiasConfiguration()),
+        DEVICE,
+        CHESS_NETWORK_DIMENSIONS,
+    )
+    plain = Network(attention_parameters(num_layers=3), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    def total(model: Network) -> int:
+        return sum(parameter.numel() for parameter in model.parameters())
+
+    assert total(biased) - total(plain) == 3 * 4 * 225
+
+
+def test_a_disabled_bias_leaves_the_attention_call_without_a_mask() -> None:
+    model = Network(attention_parameters(), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    assert not any(block.uses_attention_bias for block in model.backbone)
+
+
+def test_a_generated_bias_reaches_the_attention_call() -> None:
+    model = Network(attention_parameters(attention_bias=SMOLGEN), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    assert all(block.uses_attention_bias for block in model.backbone)
+    assert all(isinstance(block.attention_bias, SmolgenAttentionBias) for block in model.backbone)
+
+
+def test_the_generated_bias_changes_the_trunk_output() -> None:
+    torch.manual_seed(31)
+    biased = Network(attention_parameters(attention_bias=SMOLGEN), DEVICE, CHESS_NETWORK_DIMENSIONS)
+    torch.manual_seed(31)
+    plain = Network(attention_parameters(), DEVICE, CHESS_NETWORK_DIMENSIONS)
+    states = chess_states(2)
+
+    with torch.no_grad():
+        torch.nn.init.normal_(next(iter(biased.backbone)).attention_bias.template_bank.projection.weight, std=0.5)
+
+    assert not torch.allclose(biased.trunk_features(states), plain.trunk_features(states))
+
+
+def test_model_cost_splits_the_parameters_and_the_multiply_accumulates() -> None:
+    model = Network(attention_parameters(), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    cost = measure_model_cost(model, batch_size=4)
+
+    assert cost.parameters.total == sum(parameter.numel() for parameter in model.parameters())
+    assert cost.multiply_accumulates_per_position.trunk > 0
+    assert cost.multiply_accumulates_per_position.policy_head > 0
+    assert cost.multiply_accumulates_per_position.value_head > 0
+
+
+def test_the_reported_multiply_accumulates_do_not_depend_on_the_probe_batch_size() -> None:
+    model = Network(attention_parameters(), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    assert (
+        measure_model_cost(model, batch_size=2).multiply_accumulates_per_position.total
+        == measure_model_cost(model, batch_size=8).multiply_accumulates_per_position.total
+    )
+
+
+@pytest.mark.parametrize(
+    'architecture',
+    (
+        NetworkParams(
+            num_layers=4,
+            hidden_size=64,
+            residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
+            policy_head=DENSE_HEAD,
+        ),
+        AttentionNetworkParams(
+            num_layers=4,
+            embedding_size=64,
+            num_heads=4,
+            feedforward_size=128,
+            policy_head=DENSE_HEAD,
+        ),
+    ),
+    ids=('convolutional', 'attention'),
+)
+def test_both_trunks_spend_about_one_hundred_and_twenty_eight_mac_per_trunk_parameter(
+    architecture: NetworkParams | AttentionNetworkParams,
+) -> None:
+    model = Network(architecture, DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    cost = measure_model_cost(model)
+
+    # Every trunk parameter is applied once per square, so 64 multiply-accumulates (128 floating-point
+    # operations) per parameter is the ceiling; normalization scales and biases carry no multiply.
+    per_parameter = cost.multiply_accumulates_per_position.trunk / cost.parameters.trunk
+    assert 55.0 <= per_parameter <= 64.0
