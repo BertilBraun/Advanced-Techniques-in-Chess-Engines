@@ -21,7 +21,7 @@ from src.training.checkpoint.persistence import load_model_and_optimizer, save_m
 from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
 from src.training.distributions import TrainingDistributionSnapshot, capture_training_distributions
 from src.training.network import POLICY_PRIOR_PROBE_POSITIONS, Network
-from src.training.objective import ResolvedTrainingObjective
+from src.training.objective import ObjectiveLoss, ResolvedTrainingObjective
 from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
@@ -61,6 +61,7 @@ class _LossTotals:
     auxiliary: tuple[float, ...]
     total: float
     gradient_norm: float
+    term_trunk_gradients: tuple[float, ...]
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,8 @@ class _DeviceLossTotals:
     auxiliary: torch.Tensor
     total: torch.Tensor
     gradient_norm: torch.Tensor
+    term_trunk_gradients: torch.Tensor
+    term_trunk_gradient_probes: torch.Tensor
 
 
 @dataclass(frozen=True)
@@ -235,6 +238,7 @@ def _train_batches(
     warmup_optimizer_steps: int,
     completed_optimizer_steps: int,
     replay_prefetch_depth: int,
+    gradient_probe_interval_steps: int,
 ) -> _TrainingBatchResult:
     totals = _DeviceLossTotals(
         policy=torch.zeros((), device=device),
@@ -242,6 +246,8 @@ def _train_batches(
         auxiliary=torch.zeros(len(objective.auxiliary_losses), device=device),
         total=torch.zeros((), device=device),
         gradient_norm=torch.zeros((), device=device),
+        term_trunk_gradients=torch.zeros(2 + len(objective.auxiliary_losses), device=device),
+        term_trunk_gradient_probes=torch.zeros((), device=device),
     )
     distributions = None
     with loader.prefetch(device, uses_cuda, replay_prefetch_depth) as prefetched_batches:
@@ -269,6 +275,9 @@ def _train_batches(
                     source_generation,
                     time.time(),
                 )
+            if gradient_probe_interval_steps > 0 and batch_index % gradient_probe_interval_steps == 0:
+                totals.term_trunk_gradients.add_(_term_trunk_gradients(objective, loss, output.features))
+                totals.term_trunk_gradient_probes.add_(1.0)
             loss.total.backward()
             gradient_norm = torch.nn.utils.clip_grad_norm_(distributed_model.parameters(), maximum_gradient_norm)
             optimizer.step()
@@ -281,19 +290,47 @@ def _train_batches(
     return _TrainingBatchResult(totals, distributions)
 
 
+def _term_trunk_gradients(
+    objective: ResolvedTrainingObjective,
+    loss: ObjectiveLoss,
+    features: torch.Tensor,
+) -> torch.Tensor:
+    """Norm of each weighted term's gradient at the shared trunk, so terms are comparable across heads."""
+    weighted = (
+        objective.policy_loss_weight * loss.policy,
+        objective.value_loss_weight * loss.wdl,
+        *(
+            configuration.weight * value
+            for configuration, value in zip(objective.auxiliary_losses, loss.auxiliary, strict=True)
+        ),
+    )
+    norms = []
+    for term in weighted:
+        (gradient,) = torch.autograd.grad(term, features, retain_graph=True, allow_unused=True)
+        norms.append(torch.zeros((), device=features.device) if gradient is None else gradient.detach().norm())
+    return torch.stack(norms)
+
+
 def _resolve_loss_totals(totals: _DeviceLossTotals) -> _LossTotals:
     host_totals = torch.cat(
         (
             torch.stack((totals.policy, totals.wdl, totals.total, totals.gradient_norm)),
             totals.auxiliary,
+            totals.term_trunk_gradients,
+            torch.stack((totals.term_trunk_gradient_probes,)),
         )
     ).cpu()
+    term_start = 4 + totals.auxiliary.shape[0]
+    term_end = term_start + totals.term_trunk_gradients.shape[0]
+    probes = float(host_totals[term_end])
+    divisor = probes if probes > 0.0 else 1.0
     return _LossTotals(
         policy=float(host_totals[0]),
         wdl=float(host_totals[1]),
-        auxiliary=tuple(float(value) for value in host_totals[4:]),
+        auxiliary=tuple(float(value) for value in host_totals[4:term_start]),
         total=float(host_totals[2]),
         gradient_norm=float(host_totals[3]),
+        term_trunk_gradients=tuple(float(value) / divisor for value in host_totals[term_start:term_end]),
     )
 
 
@@ -354,6 +391,7 @@ def train_rank_quantum(
         warmup_optimizer_steps=configuration.training.trainer.warmup_optimizer_steps,
         completed_optimizer_steps=command.source_progress.completed_optimizer_steps,
         replay_prefetch_depth=configuration.training.trainer.replay_prefetch_depth,
+        gradient_probe_interval_steps=configuration.training.trainer.gradient_probe_interval_steps,
     )
     totals = _resolve_loss_totals(training_result.totals)
     checkpoint = _save_rank_checkpoint(rank, model, optimizer, command, save_path)
@@ -367,6 +405,7 @@ def train_rank_quantum(
         auxiliary_losses=tuple(value / divisor for value in totals.auxiliary),
         total_loss=totals.total / divisor,
         gradient_norm=totals.gradient_norm / divisor,
+        term_trunk_gradients=totals.term_trunk_gradients,
         elapsed_seconds=time.perf_counter() - started_at,
         checkpoint=checkpoint,
         distributions=training_result.distributions,

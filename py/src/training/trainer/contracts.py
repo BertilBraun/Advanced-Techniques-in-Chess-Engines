@@ -57,6 +57,7 @@ class RankTrainingResult(FrozenModel):
     auxiliary_losses: tuple[float, ...]
     total_loss: float
     gradient_norm: float
+    term_trunk_gradients: tuple[float, ...]
     elapsed_seconds: float
     checkpoint: CheckpointReference | None
     distributions: TrainingDistributionSnapshot | None
@@ -83,6 +84,7 @@ class TrainingStatistics:
     auxiliary_losses: tuple[float, ...]
     total_loss: float
     gradient_norm: float
+    term_trunk_gradients: tuple[float, ...]
     training_samples_per_second: float
     elapsed_seconds: float
     distributions: TrainingDistributionSnapshot

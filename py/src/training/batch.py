@@ -10,6 +10,7 @@ class TrainingModelOutput:
     policy_logits: torch.Tensor
     wdl_logits: torch.Tensor
     auxiliary_logits: tuple[torch.Tensor, ...]
+    features: torch.Tensor
 
 
 @dataclass(frozen=True)

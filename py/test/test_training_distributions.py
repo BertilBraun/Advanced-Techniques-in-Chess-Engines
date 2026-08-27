@@ -25,6 +25,7 @@ def test_training_distributions_capture_targets_predictions_losses_and_replay_ag
         policy_logits=torch.log(torch.tensor(((0.5, 0.3, 0.2), (0.4, 0.4, 0.2)))),
         wdl_logits=torch.log(torch.tensor(((0.8, 0.1, 0.1), (0.1, 0.2, 0.7)))),
         auxiliary_logits=(torch.tensor(((0.5,), (100.0,))),),
+        features=torch.zeros((1, 1)),
     )
     objective = ResolvedTrainingObjective(
         policy_loss_weight=1.0,
@@ -73,6 +74,7 @@ def test_training_distribution_capture_is_bounded() -> None:
         policy_logits=torch.zeros((3, 2)),
         wdl_logits=torch.zeros((3, 3)),
         auxiliary_logits=(),
+        features=torch.zeros((1, 1)),
     )
     objective = ResolvedTrainingObjective(
         policy_loss_weight=1.0,
@@ -105,6 +107,7 @@ def test_training_distribution_capture_promotes_mixed_precision_predictions() ->
         policy_logits=torch.zeros((1, 2), dtype=torch.bfloat16),
         wdl_logits=torch.zeros((1, 3), dtype=torch.bfloat16),
         auxiliary_logits=(),
+        features=torch.zeros((1, 1)),
     )
     objective = ResolvedTrainingObjective(
         policy_loss_weight=1.0,

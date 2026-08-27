@@ -162,6 +162,22 @@ class TrainingReporter:
             zip(self.auxiliary_heads, statistics.auxiliary_losses, strict=True)
         ):
             log_scalar(f'training_auxiliary/{_auxiliary_name(index, head)}/loss', auxiliary_loss, generation)
+        if statistics.term_trunk_gradients:
+            policy_gradient, wdl_gradient, *auxiliary_gradients = statistics.term_trunk_gradients
+            log_scalar('training_trunk_gradient/policy', policy_gradient, generation)
+            log_scalar('training_trunk_gradient/wdl', wdl_gradient, generation)
+            main_gradient = max(policy_gradient, wdl_gradient)
+            for index, (head, auxiliary_gradient) in enumerate(
+                zip(self.auxiliary_heads, auxiliary_gradients, strict=True)
+            ):
+                name = _auxiliary_name(index, head)
+                log_scalar(f'training_trunk_gradient/{name}', auxiliary_gradient, generation)
+                if main_gradient > 0.0:
+                    log_scalar(
+                        f'training_trunk_gradient/{name}_share_of_main',
+                        auxiliary_gradient / main_gradient,
+                        generation,
+                    )
         _record_training_distributions(statistics.distributions, self.auxiliary_heads, generation)
         log_scalar('throughput/training_samples_per_second', statistics.training_samples_per_second, generation)
         log_scalar('training/optimizer_steps', publication.completed_optimizer_steps, generation)

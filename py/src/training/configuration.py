@@ -133,6 +133,8 @@ class TrainingParams(FrozenModel):
     compilation: TrainingCompilation
     learning_rate: FloatGenerationSchedule
     warmup_optimizer_steps: int = Field(default=0, ge=0)
+    # Every Nth optimizer step, measure how hard each loss term pulls on the shared trunk. Zero disables.
+    gradient_probe_interval_steps: int = Field(default=100, ge=0)
     max_grad_norm: float = Field(default=0.5, gt=0.0)
     duplicate_multiplicity_weight_cap: float | None = Field(default=None, ge=1.0)
 

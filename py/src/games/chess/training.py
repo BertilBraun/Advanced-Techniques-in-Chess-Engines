@@ -120,7 +120,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             full_search_budget=FixedFullSearchBudget(kind='fixed', visits=configuration.searches_per_move),
             fast_searches=configuration.searches_per_move,
             forced_playout_coefficient=0.0,
-            exploration_constant=configuration.exploration_constant,
+            exploration_constant=configuration.resolved_exploration_constant,
             dirichlet_alpha=1.0,
             dirichlet_epsilon=0.0,
         )

@@ -9,6 +9,7 @@ from src.evaluation.configuration import (
     EvaluationSearchConfiguration,
     StockfishEngineConfiguration,
     StockfishFixedNodesEvaluationDefinition,
+    alphazero_exploration_constant,
 )
 from src.evaluation.contracts import (
     EvaluationJob,
@@ -156,6 +157,53 @@ def test_stockfish_fixed_nodes_engine_override_reaches_opponent_and_executable(t
     assert stockfish_fixed_nodes_executable_path(evaluation.engine, default_opponent) == PROJECT_ROOT / Path(
         evaluation.engine.executable_path
     )
+
+
+def test_auto_exploration_constant_follows_alphazero_at_the_configured_budget() -> None:
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    definition = next(
+        candidate for candidate in experiment.evaluation.definitions if candidate.kind == 'previous_checkpoint'
+    )
+    payload = definition.search.model_dump(mode='json')
+    payload['exploration_constant'] = 'auto'
+    payload['searches_per_move'] = 64
+
+    search = EvaluationSearchConfiguration.model_validate(payload)
+
+    assert search.resolved_exploration_constant == pytest.approx(alphazero_exploration_constant(64))
+    assert search.resolved_exploration_constant == pytest.approx(1.2533, abs=1e-4)
+
+
+def test_auto_exploration_constant_grows_with_the_search_budget() -> None:
+    assert alphazero_exploration_constant(1) < alphazero_exploration_constant(64)
+    assert alphazero_exploration_constant(64) < alphazero_exploration_constant(10000)
+    assert alphazero_exploration_constant(10000) == pytest.approx(1.6614, abs=1e-4)
+
+
+def test_an_explicit_exploration_constant_is_used_verbatim() -> None:
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    definition = next(
+        candidate for candidate in experiment.evaluation.definitions if candidate.kind == 'previous_checkpoint'
+    )
+    payload = definition.search.model_dump(mode='json')
+    payload['exploration_constant'] = 1.4
+
+    search = EvaluationSearchConfiguration.model_validate(payload)
+
+    assert search.resolved_exploration_constant == pytest.approx(1.4)
+
+
+def test_an_omitted_exploration_constant_defaults_to_auto() -> None:
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    definition = next(
+        candidate for candidate in experiment.evaluation.definitions if candidate.kind == 'previous_checkpoint'
+    )
+    payload = definition.search.model_dump(mode='json')
+    del payload['exploration_constant']
+
+    search = EvaluationSearchConfiguration.model_validate(payload)
+
+    assert search.exploration_constant == 'auto'
 
 
 def test_stockfish_fixed_node_rungs_allow_a_shared_node_count_at_different_search_budgets() -> None:

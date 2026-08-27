@@ -36,10 +36,16 @@
 # because that calibration is what turns a policy-only score into a ladder Elo. Rung 1000 is omitted
 # for policy-only: it has no prospect there and those games would be wasted.
 #
-# NOTE ON COMPARABILITY: evaluation now inherits the self-play first-play urgency instead of the
-# hardcoded zero it used through v9. That changes the measuring instrument, so every number in the
-# per-generation yardstick shifts, and its generation-20 and generation-50 thresholds must be
-# re-baselined against this run before they are applied again.
+# The evaluation exploration constant is `auto`, which evaluates AlphaZero's visit-scaled PUCT
+# formula once at each rung's configured search budget: 1.2501 at one search, 1.2533 at 64. The
+# constants 19652 and 1.25 live in code, not here.
+#
+# NOTE ON COMPARABILITY: v10 changes the measuring instrument in two ways. Evaluation now inherits
+# the self-play first-play urgency instead of the hardcoded zero it used through v9, and the
+# exploration constant moves from a flat 1.0 to AlphaZero's formula. Both are justified separately —
+# offline evidence for the first, removing a magic number for the second — but they compound, so
+# every number in the per-generation yardstick shifts and its generation-20 and generation-50
+# thresholds must be re-baselined against this run before they are applied again.
 extends: vast-chess-4day-production-v9.yaml
 run:
   run_name: vast-chess-4day-production-v10
@@ -96,7 +102,7 @@ evaluation:
       search: &evaluation_search
         searches_per_move: 64
         parallel_searches: 1
-        exploration_constant: 1.0
+        exploration_constant: auto
         inference:
           inference_workers: 1
           inference_batch_size: 64
@@ -161,7 +167,7 @@ evaluation:
       search: &policy_only_search
         searches_per_move: 1
         parallel_searches: 1
-        exploration_constant: 1.0
+        exploration_constant: auto
         inference:
           inference_workers: 1
           inference_batch_size: 64
