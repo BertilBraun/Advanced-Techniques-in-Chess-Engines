@@ -1,179 +1,491 @@
-# Adaptive search budget from a learned difficulty head — design of 2026-08-27
+# Learned adaptive search budget with continuous shadow calibration
 
-Replaces the threshold-based `AdaptiveFullSearchBudgetConfiguration` and the fast/full search split with a single
-per-position budget predicted by an auxiliary network head.
+**Status:** implementation plan, revised 2026-08-27
 
-Evidence: [`analysis/chess-search-findings-20260827.md`](../analysis/chess-search-findings-20260827.md) and
-[`benchmarks/chess-search-evaluation-rtx3060-20260826/`](../benchmarks/chess-search-evaluation-rtx3060-20260826/README.md).
-Measured on generation 162 of `vast-chess-4day-production-v9` at a 600-visit baseline; the shapes should carry to
-larger baselines but the exact percentages are from that operating point.
+## Decision
 
-Nothing here is started without an explicit instruction.
+Replace both the threshold-based adaptive full-search mechanism and the fast/full search split with one learned per-position search budget.
 
-**Status — stopped at Gate 1.** The frozen-trunk predictor scored -13.95% of oracle gain at equal mean compute,
-with a wholly negative 95% bootstrap interval. The allocator and training integration must not proceed from this
-design without a new measured gate that beats flat. See the
-[`RTX 4070 SUPER probe`](../benchmarks/adaptive-search-budget-probe-rtx4070super-20260827/README.md).
+The network predicts a scalar search-difficulty quantile from the root forward pass. A fixed nonlinear allocation curve maps that quantile to a mean-preserving visit multiplier. The allocator is introduced gradually through a blend coefficient, but that coefficient is not advanced on a fixed calendar and is not chosen from training loss or correlation alone. It is calibrated continuously from the counterfactual search checkpoints produced by the deep-label job.
 
-## 1. Why
+The first live training run starts with the learned allocator completely inert. For approximately the first 30 generations:
 
-Allocating search per position is worth up to **3.6× effective compute** at fixed total spend (noise-corrected
-oracle at a mean of 600 visits). The existing adaptive rule captures none of it — its stopping signal is
-inverted-U in the quantity it needs to predict, so a monotone threshold cannot work at any parameter setting, and
-at the production thresholds it selects *worse than random*. The mechanism is sound; the criteria are not.
+- the head trains;
+- random positions receive deep labels;
+- the allocator is evaluated in shadow mode;
+- every production search still receives the flat baseline budget;
+- the published allocator blend remains zero.
 
-A learned head can express the shape a threshold cannot. The ceiling is bounded and known (§6), which is why this
-is a bounded bet rather than an open-ended one.
+After the warm-up, a conservative calibrator may increase the blend only when held-out shadow evidence says that a candidate blend improves policy-target fidelity at equal mean search compute. It reduces the blend immediately when the evidence deteriorates and falls back to zero when no candidate is demonstrably safe.
 
-## 2. The label
+The earlier offline probe is no longer a production gate. It was useful as a small-data baseline, but only a representative live run can answer whether the jointly trained trunk and auxiliary head learn the signal at the scale and distribution of actual self-play.
 
-For a position sampled from the replay buffer, the offline job runs two searches and compares their policy
-targets.
+## Why the existing mechanism must be removed
 
+The current adaptive rule has the wrong functional form. The marginal benefit of searching longer is inverted-U-shaped in the top-visit share read by that rule:
+
+- diffuse positions gain about 0.16 times the population mean;
+- genuinely contested positions gain about 1.71 times the population mean;
+- already-decided positions gain about 0.30 times the population mean.
+
+The production thresholds, decaying from 0.7 to 0.5, sit in a region where selection is worse than random. No monotone threshold on that signal can solve the problem, and the seven-parameter tuning grid consequently changed nothing.
+
+The learned `search_correction` gate is not a rescue path. The v9 run trains only `next_policy` and `remaining_game_length`; `search_correction` was never enabled, so `SearchCorrectionGate` has always consumed an untrained output.
+
+The fast/full split also wastes training value. Replay materialization currently drops every observation whose `full_search` flag is false, although fast searches consume roughly 36-43% of self-play search compute. In the replacement design every played position becomes a training sample. The allocator floor takes the role of a cheap search without making that sample ineligible.
+
+## What the measurements establish
+
+Perfect per-position allocation is worth approximately 3.6 times effective compute at fixed total visit spend. A practical learned allocator cannot capture all of that value: even perfect labels at finite search depth capture only part of the oracle ranking.
+
+KL divergence between the deep and baseline policies is materially more informative than total variation. Approximate label-depth results are:
+
+| Deep-search visits | Share of oracle allocation gain captured by a perfect label |
+| ---: | ---: |
+| 2,400 | 41.4% |
+| 3,200 | 48.7% |
+| 5,000 | 52.2% |
+| 8,000 | 55.7% |
+| 10,000 | 56.7% |
+
+Around eight times the baseline is the intended operating point: it captures about 92% of what a sixteen-times label provides, whereas four times captures about 73%. Going deeper on fewer randomly selected positions is more useful than going shallower on more positions because label cost scales approximately linearly with visits.
+
+Non-uniform allocation has a serious convexity penalty before ordering quality is considered. Randomly dispersing the measured good budget distribution scored approximately 74% worse than a flat budget. The ceiling carries most of the available value, while a 2x ceiling retains only about 38% of the gain. The production curve therefore needs a floor near 0.2x and a ceiling of at least 4x, but it must not be activated at full strength until the head has demonstrated useful ordering.
+
+The frozen-trunk probe trained fresh scalar predictors on 2,400 positions per fold and evaluated 3,000 out-of-fold predictions. It found a Spearman correlation of 0.592, but applying the complete oracle-shaped budget distribution captured -13.95% of oracle gain. This means that signal is visible in the frozen features while that small-data predictor is not good enough to drive a full-strength allocator. It does **not** show that a jointly trained head exposed to tens of thousands of new labels cannot work, and it does not justify vetoing the live experiment.
+
+## Per-generation lifecycle
+
+The system operates as an asynchronous loop:
+
+1. Self-play for generation `g` uses the allocator policy published before that generation. During warm-up this is a flat budget because the blend is zero.
+2. Training completes and publishes an immutable checkpoint for generation `g`.
+3. A separate background label job samples positions uniformly from that generation's newly produced replay observations.
+4. The frozen generation-`g` checkpoint predicts a raw search-budget score for each selected position before its deep target is known.
+5. The same checkpoint searches each sampled position to the baseline, all required counterfactual checkpoint budgets, and the configured deep limit while retaining policy snapshots.
+6. The job computes `KL(pi_deep || pi_baseline)` and converts it to the current quantile-normalized target.
+7. The final deep policy is written back as a replay training sample, together with the eligible `search_budget` target and source-generation metadata.
+8. The shadow evaluator scores every configured blend candidate from the recorded checkpoint policies at equal mean visit spend.
+9. The calibrator updates its persistent evidence journal and atomically publishes the blend and calibration state for a future generation.
+10. Training and self-play continue without waiting for the label job. A bounded queue and maximum useful lag prevent the background work from accumulating indefinitely.
+
+The labeler is generation-triggered and separate from the evaluation manager. Evaluations are wall-clock-cadenced and independently disableable; search-budget labels and allocator evidence are part of the training loop and must not inherit those semantics.
+
+## Label generation
+
+### Target
+
+For baseline policy `pi_baseline` and final deep policy `pi_deep`, the raw target is:
+
+```text
+raw_difficulty = KL(pi_deep || pi_baseline)
 ```
-label_raw = KL( policy_target @ deep  ||  policy_target @ baseline )
-label     = quantile rank of label_raw among the labelled batch      # in [0, 1]
+
+Raw KL spans several orders of magnitude, with a measured median near 0.053 and maximum near 11.2. Regressing it directly would overemphasize a few extreme samples. The training target is therefore its empirical quantile in a recent, generation-aware label population:
+
+```text
+search_budget_target = empirical_cdf(raw_difficulty)
 ```
 
-**Metric: KL, not total variation.** Measured across five truth depths, KL ranks positions about ten points
-better than TV at every depth — worth roughly a doubling of search depth, for free.
+The persisted label record retains both raw KL and the normalized target. Quantile estimation must be deterministic and robust to asynchronous completion. Its exact windowing policy remains a configuration decision; it must not leak a position's deep result into the prediction recorded for that same position.
 
-| Truth depth | ×baseline | TV label | KL label |
-|---|---|---|---|
-| 2,400 | 4.0× | 31.5% | 41.4% |
-| 3,200 | 5.3× | 37.6% | 48.7% |
-| **5,000** | **8.3×** | 40.4% | **52.2%** |
-| 8,000 | 13.3× | 46.0% | 55.7% |
-| 10,000 | 16.7× | 46.4% | 56.7% |
+### Sampling rate and scale
 
-(Share of the ideal allocation gain a perfectly predicted label would capture.)
+Sampling remains random and independent of the predicted budget. Prediction-dependent labelling would create a feedback loop and remove counterfactual evidence exactly where the allocator is uncertain.
 
-**Depth: about 8× baseline.** Returns flatten after that — 8.3× captures 92% of what 16.7× does, while 4×
-captures only 73%. Beyond 13× there is nothing left to buy.
+The measurements favor approximately 1% of positions at about 8x depth, costing roughly 7% additional self-play compute. A first live run may deliberately use 2% to shorten head warm-up if the available 4-8 GPU allocation can sustain the roughly 14-16% labelling overhead.
 
-**Sample fraction: about 1%.** Cost scales linearly with depth, so prefer deeper labels on fewer positions: 1% at
-8× costs about the same as 2% at 4× (~7% of self-play search compute) and captures 52% instead of 41%. For a
-single scalar head, label quality matters more than label count.
+At 120,000 new positions per generation, a 2% sample produces about 2,400 new unique deep labels per generation and about 72,000 after 30 generations. Replay sampling can expose those labels many more times during training, but repeated draws are not counted as new positional coverage.
 
-**Normalisation: quantile rank, not raw KL.** The raw label spans four orders of magnitude — median 0.053, 90th
-percentile 0.47, 99th 2.46, maximum 11.2 — so a plain regression would be dominated by a handful of extreme
-positions and ignore the ordering in the bulk, which is where nearly all the decisions are. The quantile rank is
-uniform on [0, 1], has mean 0.5 by construction without the loss enforcing it, and loses nothing measurable
-because every capture number above is rank-based. Maintain the quantile map as a running estimate over recent
-labelled batches so it tracks the model as it improves.
+The final choice between 1% and 2% belongs in the run configuration and capacity plan, not in the architecture.
 
-## 3. The head
+### Deep-policy write-back
 
-- One scalar auxiliary output alongside policy and value, read at the same root forward pass that already
-  produces the prior. With tree reuse the root was expanded during the previous move, so the prediction is
-  available before the search starts.
-- Trained **only** on deep-labelled positions; masked everywhere else. `IneligibleNextPolicyTarget` is the
-  existing precedent for a masked auxiliary target.
-- One head, not two. A continuous budget subsumes the fast/full decision — "fast search" is simply the bottom of
-  the range — and two heads would need reconciling when they disagree.
+Deep searches are the highest-fidelity policy targets produced by the system. Their final search observations are written back into replay as ordinary training samples rather than discarded after producing the scalar label. Duplicate positions are acceptable; self-play already revisits positions with different noise and targets.
 
-## 4. The allocator
+No sample is downweighted because it received a low assigned budget. A low budget means the policy target was predicted to settle cheaply, not that its resulting target is untrustworthy.
 
+### Counterfactual checkpoints
+
+One deep search can cheaply retain policy snapshots at the baseline and at the visit limits needed to evaluate candidate allocator blends. `SearchCheckpointDetail::Policies` must remain available.
+
+For each label batch, prediction scores are collected first. Candidate blends are then converted into concrete per-position visit budgets with exact batch-mean normalization. The deep searches retain the union of those visit limits, plus the baseline and final deep limit. This permits exact shadow evaluation of all configured blend candidates without running a separate search for each candidate.
+
+## Network head and training target
+
+The model gains one scalar `search_budget` output read from the root forward pass that already produces the policy prior. The output predicts relative search difficulty, not a raw visit count.
+
+The target is eligible only on deep-labelled replay samples. Training uses the same explicit mask pattern as `IneligibleNextPolicyTarget`; unlabelled positions contribute normally to all primary losses and contribute nothing to the search-budget loss.
+
+The head and trunk train jointly during the live run. This is an important difference from the frozen-feature probe: the trunk can learn features useful for ranking search difficulty while still being dominated by the primary policy and value objectives.
+
+The existing `search_correction` scalar path is useful plumbing precedent but not a semantic interface to preserve. It is replaced end to end by the precisely named `search_budget` output, prediction, replay target, eligibility flag, metrics, and native root field.
+
+## Allocation rule
+
+Let:
+
+- `B` be the configured baseline number of **new simulations** for a position;
+- `s` be the raw network scalar;
+- `q = F_prediction(s)` be its calibrated percentile under a recent independent shadow-prediction distribution;
+- `m(q)` be a fixed nonlinear monotone multiplier curve normalized to mean one;
+- `alpha` be the published allocator blend in `[0, 1]`.
+
+The unrounded assigned budget is:
+
+```text
+budget = B * ((1 - alpha) + alpha * m(q))
 ```
-budget(s) = B · m(s)
+
+Consequently:
+
+- `alpha = 0` is exactly the flat baseline;
+- `alpha = 1` is the full learned allocation curve;
+- intermediate values continuously reduce the variance and risk of the allocation;
+- the ordering comes from the head, while the amount of dispersion comes from the calibrated blend.
+
+The multiplier curve is configuration, with an intended floor near 0.2x and ceiling of at least 4x. It must map the median prediction below 1x: the measured oracle assigns approximately 73% of positions less than the baseline budget.
+
+The curve is normalized to mean one under the calibrated prediction-percentile distribution. Production additionally maintains a deterministic cumulative compute ledger: rounding and finite-sample residuals are carried forward and corrected in later assignments without violating the configured floor or ceiling. Each generation therefore closes with total assigned new simulations matching the flat baseline total within a stated integer tolerance. Monitoring an expected mean of one is insufficient; the realized mean must be enforced.
+
+Budgets are defined as additional simulations, not an absolute root visit count. This keeps compute accounting stable when production retains roots with existing visits. The native limit converts the assigned additional budget to its stopping condition using the root's starting visit count.
+
+## Continuous shadow evaluation
+
+Every randomly labelled position records:
+
+- stable position and source-generation identifiers;
+- the immutable model generation used for prediction and search;
+- raw prediction and calibrated prediction percentile;
+- baseline, candidate-budget, and final deep policies;
+- concrete visit checkpoints;
+- raw KL and quantile target;
+- allocator-curve and calibrator configuration identity.
+
+The evaluator considers a configured grid of blend candidates including zero and one. For every candidate it reconstructs the exact, mean-preserving vector of position budgets and reads the corresponding policy checkpoints. Its primary utility metric is improvement over the flat baseline in divergence from the deep policy:
+
+```text
+gain(alpha) = mean KL(pi_deep || pi_flat)
+              - mean KL(pi_deep || pi_candidate(alpha))
 ```
 
-where `s` is the predicted quantile, `B` the generation's scheduled budget, and `m` a fixed monotone curve from
-quantile to multiplier, shaped like the oracle's own allocation and normalised so the mean lands on `B`.
+Positive gain means that candidate produced better policy targets at equal mean search spend. The report also expresses this as a share of the deep-label oracle gain when the denominator is stable.
 
-- **Floor 0.2×, ceiling at least 4×.** The ceiling carries the value: capping at 2× costs about 38% of the
-  available gain, 4× keeps 85%, 8× keeps 97%. The floor barely matters — 0.17× against 0.33× is worth 2.4 points.
-- **`m` is not linear.** The noise-corrected oracle sends **73% of positions below baseline** and 22% above, so
-  the median prediction must map well below 1×, not to 1×. A linear map from a mean-0.5 output would pile budget
-  into the middle, where the oracle spends almost nothing.
-- **Mean preservation is a property of `m`, not of the loss.** Total compute per generation is unchanged by
-  construction; the head only redistributes it.
-- **Blend in gradually.** A generation-scheduled weight from 0 toward 1, mirroring `learned_gate_start_generation`.
-  This is not optional politeness: randomly dispersing a good budget distribution scores **−74%** against flat,
-  far worse than doing nothing, because a non-uniform allocation starts in a convexity hole and must order
-  positions well simply to break even. **A weak head is actively harmful.**
+Rank correlation, calibration plots, regression loss, decile ordering, and target top-1 agreement are diagnostics. They help explain behavior but do not authorize allocation: a head can correlate with the target and still lose after the convexity cost of non-uniform budgets.
 
-## 5. Parallelism follows the budget
+The shadow evaluation is computationally cheap once the deep search exists because it reuses its policy checkpoints. The deep search itself is not free and remains explicit training overhead.
 
-Scale `parallel_searches` with the position's budget so sequential depth stays roughly constant — about 150
-rounds: 100 visits → 1, 300 → 2, 600 → 4, 1,600 → 8, 2,400 → 16. This keeps the inference batch full when only a
-handful of positions in a step are searching deeply, which is otherwise the same tail starvation measured for the
-fast/full split.
+## Automatic blend calibration
 
-**Untested assumption.** Parallelism was measured at *fixed* 600 visits, so "more parallel" was confounded with
-"fewer rounds"; whether holding rounds constant makes parallelism free was never checked. If it is false, deep
-searches quietly degrade exactly where most of the budget goes. Worth one measurement before relying on it.
+The calibrator follows the safety shape of resignation calibration: persistent evidence, configuration identity, conservative confidence bounds, an explicit production-generation boundary, and asymmetric updates.
 
-`SelfPlaySearchParameters` currently has a single `parallel_searches` for all searches, so this needs a contained
-native change.
+Its state consists of:
 
-## 6. What this cannot exceed
+- an idempotent position-level evidence journal;
+- per-generation candidate metrics;
+- a bounded rolling evidence window;
+- a trailing EMA of candidate utility for non-stationary trend tracking;
+- the currently published blend and the generation from which it applies;
+- configuration and model-lineage hashes;
+- diagnostics explaining every selection or fallback.
 
-- A perfect label at 16.7× depth captures **56.7%** of ideal allocation; at the recommended 8× it is **52.2%**.
-  The head's own prediction error then comes off the top of that. The realistic target is a fraction of 52%, not
-  of 100%.
-- Everything is measured as policy-target fidelity, not training outcome. Better targets are assumed to train
-  better; that assumption is not tested here.
-- Measured at generation 162 with a 600-visit baseline and `parallel_searches` 1, from fresh roots. Production
-  runs a larger baseline, parallelism 4, and 60% root retention.
+The EMA smooths whether a candidate continues to help as the model changes. It is not, by itself, an uncertainty estimate. Conservative confidence bounds come from the rolling position-level evidence, using a generation-aware block bootstrap or an equivalent method that does not treat repeated or same-generation positions as fully independent.
 
-## 7. The offline labelling job
+Before a nonzero candidate can be published, all of the following must hold:
 
-- **Cadence: per generation**, triggered after each training run, on positions from the newest generation. Labels
-  must reflect the current model's search behaviour, and the replay buffer is already generation-indexed.
-- **Separate from the evaluation manager.** That runs on wall-clock cadence and can be disabled independently;
-  neither is right for this. Same access pattern, different lifecycle.
-- **Runs in the background** and writes results back when finished, so it never stalls training — which is the
-  bottleneck early on.
-- **Deep searches are not overhead.** They produce the best policy targets in the system, so write them into the
-  replay buffer as training samples in their own right. The label falls out of compute that was already worth
-  spending. Because the sample is drawn at random, the label distribution stays covered whatever the head does
-  with everything else — no bootstrapping, no feedback loop.
-- **Duplicates are fine.** The same position already recurs across games with different noise and targets;
-  `duplicate_multiplicity_weight_cap` is `null` in v9 and unused.
+- the configured first production generation has been reached; the initial proposal is generation 30;
+- minimum counts of labelled positions and represented generations have been reached;
+- realized candidate mean compute is within tolerance of the flat baseline;
+- its conservative lower confidence bound on equal-compute gain exceeds the configured safety margin;
+- recent generation-level evidence and the trailing EMA do not indicate deterioration;
+- required prediction-distribution and calibration sanity checks pass;
+- the condition has held for the configured number of consecutive calibration updates.
 
-The write-back into materialization is the messiest part of the implementation and where cost will concentrate.
+Among eligible candidates, the calibrator chooses the blend with the best conservative utility, subject to a maximum upward step per generation. It may tighten cautiously, for example from 0 to 0.1 to 0.2, rather than jumping to the largest passing candidate.
 
-## 8. What is removed
+Relaxation is asymmetric. If the current blend stops meeting the safety rule, the calibrator immediately publishes the highest lower blend that remains safe, or zero when none does. No evidence, stale evidence, incompatible configuration, a failed label job, or an unreadable state artifact all fail closed to zero.
 
-- `AdaptiveFullSearchBudgetConfiguration` and its eight parameters: `minimum_visits`, `observation_interval`,
-  `leader_stability_window`, `root_value_tolerance`, both threshold schedules, `threshold_relaxation_visits`, and
-  the learned gate.
-- `SearchCorrectionGate` and `minimum_search_correction_to_unlock_tail`. Note the `search_correction` head was
-  **never enabled** in any run — v9 configures only `next_policy` and `remaining_game_length` — so the gate has
-  always been reading an untrained output.
-- The fast/full split. Every position becomes a training sample; the floor budget replaces the fast search.
-- **No downweighting by budget.** Under head-driven allocation a position gets the floor *because* its target has
-  settled, so its label is good. Downweighting would discard signal and adds a parameter for no measured benefit.
+The exact candidate grid, evidence window, EMA half-life, confidence level, safety margin, minimum counts, consecutive-update requirement, and maximum upward step are deliberately unresolved. They must be selected from live shadow distributions before the first acting generation. The implementation must expose them as one canonical typed calibrator configuration and emit enough diagnostics to reproduce every choice.
 
-Keep the checkpoint-trace machinery (`SearchCheckpointDetail::Policies`): it is what makes label generation and
-the fidelity analyses cheap.
+State publication is atomic. Reprocessing the same completed job is idempotent. A newly started worker can reconstruct the same decision from the persisted journal without relying on in-memory state.
 
-## 9. Implementation surface
+## Warm-up and permanent audit stream
 
-**Native**
-- A `SearchLimit` variant that reads the predicted budget at root expansion and sets the visit limit, alongside
-  `FixedSearchLimit` and the retired adaptive limit. The root node already carries a network scalar
-  (`search_correction`), so there is precedent for the plumbing.
-- Per-search `parallel_searches` derived from the assigned budget (§5).
+During the first approximately 30 generations, `alpha` is hard-clamped to zero regardless of apparent early shadow performance. This accumulates representative labels while preserving the known flat-budget behavior.
 
-**Python**
-- A `search_budget` auxiliary target kind through `targets.py`, `materialization.py`, `columnar.py` and `store.py`,
-  with eligibility masking — following the `search_correction` scalar rails, which already run end to end.
-- The offline labelling tool and its write-back.
-- Configuration: depth multiple, sample fraction, floor and ceiling, the quantile-to-multiplier curve, and the
-  blend schedule.
-- Materialization stops filtering on `full_search`.
+Reaching generation 30 only permits calibration; it does not force activation. If the evidence thresholds are not met, the allocator stays flat.
 
-## 10. Gates
+Random audit labelling continues after activation. Positions in that stream receive their prescribed deep search independently of the production-assigned budget. Without this permanent exploration stream, an acting allocator would preferentially observe positions it already believes are difficult and could no longer measure its own counterfactual errors across the full position distribution.
 
-1. **Offline probe.** Fit a predictor of the label on the frozen checkpoint's own trunk features. Score by the
-   share of oracle gain captured at equal mean compute, not by regression loss. **Stop if it captures almost
-   nothing** — the signal is then not in the trunk and a trained head is unlikely to find it. Cost: a few
-   GPU-hours, no training changes.
-2. **Shadow mode.** Run the head in a live run without acting on it. Check that predicted budgets would preserve
-   the mean and that calibration holds as the model improves.
-3. **A/B.** A run where the head drives budgets matches or beats the per-generation yardstick at equal
-   wall-clock, with mean target top-1 agreement improved at the same mean visit spend.
+Published decisions apply only to later generations, with an explicit lag that prevents a generation from calibrating itself using targets unavailable when its searches ran.
 
-Gate 1 is cheap and decisive; nothing downstream should start before it clears.
+## Parallelism follows the assigned budget
+
+Per-search parallelism scales with the assigned visit budget so the number of sequential inference rounds stays approximately bounded. An initial mapping to validate is:
+
+| Assigned new visits | Parallel searches |
+| ---: | ---: |
+| 100 | 1 |
+| 300 | 2 |
+| 600 | 4 |
+| 1,600 | 8 |
+| 2,400 | 16 |
+
+This mapping is per search task, not one global value shared by every active root.
+
+The assumption remains unverified. Previous measurements changed parallelism at fixed total visits and therefore confounded more parallel work with fewer sequential rounds. The shadow evaluator can validate target fidelity at the intended checkpoint budgets, but only a live run can establish GPU utilization, inference-batch health, latency, and any quality loss caused by parallel selection. The parallelism curve is consequently configuration and must be instrumented independently from allocator quality.
+
+## Background execution and replay ownership
+
+The generation labeler must not stall training. It uses immutable checkpoint and replay references, bounded concurrency, and a persistent job record with explicit states. A maximum generation lag determines when stale unstarted work is skipped rather than allowed to grow without bound.
+
+Completed label and replay writes are transactional or otherwise idempotent. A retry must not create duplicate journal evidence accidentally; deliberate duplicate deep replay samples remain acceptable because they are identified as separate training observations.
+
+Each deep replay sample preserves the normal game and position context required by the canonical replay schema, replaces the policy target with the final deep policy, and adds the eligible scalar target. Materialization no longer filters observations on `full_search`.
+
+## Configuration model
+
+Configuration is divided by ownership without duplicating fields:
+
+### Deep labelling
+
+- random sample fraction;
+- deep-search multiple or absolute limit derived from the generation baseline;
+- maximum concurrent jobs and GPU allocation;
+- maximum generation lag;
+- label-quantile window;
+- retained counterfactual checkpoints.
+
+### Allocation
+
+- baseline visit schedule;
+- quantile-to-multiplier curve;
+- floor and ceiling;
+- prediction-percentile calibration window;
+- exact mean-preservation, cumulative-ledger, and rounding policy.
+
+### Blend calibration
+
+- first permitted production generation;
+- blend candidate grid;
+- rolling evidence window and minimum represented generations;
+- EMA half-life;
+- confidence method and level;
+- safety margin;
+- minimum labelled positions;
+- consecutive-safe-update requirement;
+- maximum upward step;
+- conservative fallback.
+
+### Parallel execution
+
+- assigned-budget-to-parallel-searches curve;
+- implementation limits imposed by inference batching and worker capacity.
+
+## Required telemetry
+
+The live run must make both learning and acting behavior inspectable.
+
+### Label pipeline
+
+- selected, started, completed, failed, retried, and skipped jobs;
+- source generation, completion lag, queue depth, and GPU time;
+- deep-labelled positions and fraction by generation;
+- raw KL and quantile-target distributions;
+- deep replay write counts and idempotency conflicts.
+
+### Head quality
+
+- eligible sample count and masked auxiliary loss;
+- raw prediction and calibrated-percentile distributions;
+- Spearman rank correlation and calibration by prediction decile;
+- realized raw KL and oracle utility by prediction decile;
+- target top-1 agreement by candidate budget.
+
+### Shadow allocator
+
+- realized mean, variance, floor share, and ceiling share for every blend candidate;
+- candidate divergence from deep policy and gain over flat;
+- share of oracle gain when stable;
+- confidence interval, trailing EMA, represented generations, and effective sample count;
+- selected blend, prior blend, decision reason, and all failed safety conditions.
+
+### Acting allocator and runtime
+
+- assigned visits and parallel searches per position;
+- exact generation mean-spend residual;
+- retained-root starting visits versus assigned new visits;
+- inference batch size, sequential rounds, search latency, and GPU utilization by budget band;
+- self-play positions per second and wall-clock generation time;
+- total deep-label overhead;
+- target-fidelity yardsticks and Elo trend.
+
+## Removal and migration scope
+
+The replacement is complete only when the superseded mechanisms are removed rather than left dormant.
+
+### Native code
+
+Remove:
+
+- the threshold-driven adaptive search limit and its deterministic stop machinery;
+- `SearchCorrectionGate` and learned-gate stop paths;
+- the disabled/adaptive limit variants that exist only for the old design;
+- stop reasons and telemetry used only by threshold relaxation or the learned gate;
+- fast/full admission staging, admission counts, request flags, and separate fast/full limits;
+- the assumption that one `parallel_searches` value applies to every search.
+
+Add:
+
+- a predicted-budget search-limit variant that reads the root scalar once the root is expanded;
+- an assigned-additional-visits field with explicit retained-root semantics;
+- per-search parallelism derived from the assigned budget;
+- policy checkpoints at the exact visits requested by the shadow label job.
+
+Retain `SearchCheckpointDetail::Policies`.
+
+### Python code
+
+Remove `AdaptiveFullSearchBudgetConfiguration` and all eight old adaptive controls:
+
+- `minimum_visits`;
+- `observation_interval`;
+- `leader_stability_window`;
+- `root_value_tolerance`;
+- both top-visit-share threshold schedules;
+- `threshold_relaxation_visits`;
+- the learned-gate control.
+
+Also remove:
+
+- `minimum_search_correction_to_unlock_tail`;
+- the `search_correction` target, head, output, result fields, and telemetry;
+- `full_search_probability`, fast-search limits, forced-fast-after-ply controls, and `full_search` booleans;
+- materialization and archive/restart filters based on `full_search`;
+- full-search-only sample and performance telemetry;
+- obsolete adaptive calibration commands and reports whose concepts no longer exist.
+
+Replace them with:
+
+- the eligible `search_budget` target through `targets.py`, `materialization.py`, `columnar.py`, and `store.py`;
+- the generation-triggered deep-label and replay-write-back job;
+- persistent shadow evidence and blend-calibration state;
+- one production allocator configuration;
+- updated analysis, validation, configuration, generated bindings, and tests.
+
+All played positions become replay samples. There is no weighting adjustment based on assigned budget.
+
+## Implementation sequence
+
+1. **Target and model path.** Add the scalar head, eligibility mask, replay schema, columnar storage, materialization support, losses, metrics, and generated native bindings. Remove the `full_search` materialization filter.
+2. **Deep-label pipeline.** Add deterministic generation sampling, immutable-checkpoint execution, baseline/candidate/deep policy capture, quantile normalization, persistent job state, and deep-policy replay write-back.
+3. **Shadow evaluator and calibrator.** Add exact candidate-budget reconstruction, equal-compute utility scoring, confidence calculation, EMA state, atomic publication, fail-closed behavior, and complete diagnostics.
+4. **Native allocator in shadow-safe form.** Add predicted budget plumbing, mean-preserving generation allocation, retained-root accounting, and per-search parallelism. Ship with the published blend clamped to zero until calibrator conditions permit otherwise.
+5. **Remove superseded systems.** Delete threshold adaptation, `SearchCorrectionGate`, `search_correction`, fast/full admission and configuration, old filters, obsolete tools, stale telemetry, and compatibility layers. Migrate production configuration and documentation in the same phase.
+6. **Component and integration validation.** Exercise target masking, replay round trips, job retries, quantiles, exact mean preservation, checkpoint scoring, calibrator publication and fallback, retained roots, native stopping, and heterogeneous parallel searches.
+7. **Live 4-8 GPU training run.** Accumulate the warm-up evidence, inspect the shadow distribution, freeze the concrete calibration constants before the first acting generation, and then allow the calibrator to advance or retreat the blend automatically.
+
+Feature-sized commits should follow these boundaries so each stage is independently reviewable and reversible.
+
+## Live experiment
+
+The meaningful validation is an actual training run on representative self-play, not a larger frozen offline classifier exercise.
+
+The first run should allocate 4-8 GPUs according to measured labeler and self-play throughput. It starts with approximately 30 generations at `alpha = 0`, while the head trains and the shadow evaluator accumulates evidence. At 2% labelling this is approximately 72,000 new unique labelled positions before activation becomes possible.
+
+Before the first acting generation, inspect:
+
+- label throughput and lag;
+- prediction and target distributions;
+- ordering by decile;
+- exact equal-compute candidate gains and uncertainty;
+- whether the proposed EMA and window react reasonably across generations;
+- per-budget parallelism behavior;
+- total wall-clock overhead.
+
+The run then continues with automatic blend calibration. The central operational questions are:
+
+- Does the blend leave zero and remain safely above it?
+- Does it rise as label coverage and model quality improve?
+- Does realized mean search spend remain equal to the baseline?
+- Does target top-1 agreement improve at equal mean visits?
+- Does self-play throughput remain acceptable when deep-budget searches receive more parallel work?
+- Does the per-generation strength yardstick and eventual Elo trend match or beat the flat-budget control at equal wall-clock time?
+
+The labeler overhead must be included in wall-clock comparisons, even though its deep policies also improve the replay targets. A clean later A/B should compare the acting allocator against a control that runs the same deep-label pipeline with `alpha = 0`, isolating allocation value from the value and cost of deep-policy write-back.
+
+## Risks to watch
+
+- **Parallelism may not be free at fixed sequential depth.** If additional parallel selections reduce policy quality, the deepest assigned searches are harmed exactly where the allocator spends most.
+- **Target fidelity may not translate to training strength.** All current measurements optimize policy-target agreement, not downstream learning or Elo.
+- **Non-stationarity can outrun calibration.** The head, trunk, game distribution, and baseline search all evolve. Windows, EMA lag, and publication lag must be visible and conservative.
+- **Retained roots can break compute accounting.** Allocation must govern new simulations and report starting visits separately.
+- **The deepest policy is a reference, not truth.** Its own search noise and finite depth limit both labels and shadow utility estimates.
+- **Quantile drift can distort the curve.** Prediction percentiles and target quantiles require explicit, generation-aware calibration populations.
+- **Acting creates feedback.** Permanent random audit labelling is required even after the blend becomes nonzero.
+- **Asynchronous jobs can train on stale labels.** Source model generation and completion lag must be preserved and bounded.
+- **Deep replay samples change more than the scalar head.** Their stronger policy targets are desirable, but they mean the first live run measures the combined training system. The later matched-labeler A/B isolates allocator value.
+
+## Settled decisions
+
+- Use `KL(pi_deep || pi_baseline)` rather than total variation.
+- Quantile-normalize the scalar target.
+- Generate labels at approximately 8x baseline depth on a small random fraction of positions.
+- Train one scalar auxiliary head jointly with the trunk and mask its loss to labelled samples.
+- Keep an independent random audit stream permanently.
+- Write final deep policies back into replay.
+- Make every played position a replay sample and remove the fast/full split.
+- Use a fixed nonlinear multiplier curve with a floor near 0.2x and ceiling of at least 4x.
+- Preserve exact mean new-simulation spend by construction.
+- Scale parallel searches per assigned budget.
+- Hold the blend at zero for an initial live warm-up of approximately 30 generations.
+- Choose and continuously update the blend from conservative equal-compute shadow utility, not loss or correlation.
+- Increase blend cautiously, reduce it immediately, and fail closed to zero.
+- Remove all old threshold, learned-gate, `search_correction`, and fast/full machinery.
+
+## Decisions to make from live shadow data
+
+- 1% versus 2% deep-label sampling for the first run;
+- exact deep limit and retained checkpoint set;
+- quantile and prediction-calibration windows;
+- multiplier-curve control points and final ceiling;
+- blend candidate grid;
+- rolling evidence window and EMA half-life;
+- confidence method, level, and safety margin;
+- minimum positions, represented generations, and consecutive safe updates;
+- maximum blend increase per generation;
+- per-budget parallelism curve and worker limits;
+- calibrator publication lag;
+- GPU division, run length, and matched-control schedule.
+
+## Acceptance criteria
+
+Implementation is ready for the live experiment when:
+
+- eligible and ineligible `search_budget` targets round-trip through replay and train with the correct mask;
+- every self-play position materializes regardless of its assigned budget;
+- deep-label jobs are generation-triggered, asynchronous, bounded, retryable, and idempotent;
+- prediction is recorded before the deep target and remains attributable to an immutable source checkpoint;
+- deep policies are written back as valid replay samples;
+- shadow candidate budgets preserve exact mean new-simulation spend;
+- shadow utility is reconstructed from exact policy checkpoints and reproduces known offline cases;
+- the warm-up clamp prevents nonzero production blend before the configured generation;
+- no nonzero blend is published without sufficient positive conservative evidence;
+- unsafe, stale, missing, or incompatible evidence returns the allocator to zero;
+- native search stops at the assigned additional-visit budget with retained roots;
+- parallelism differs correctly between simultaneous searches with different budgets;
+- old adaptive threshold, learned gate, `search_correction`, and fast/full code and configuration are gone;
+- telemetry can explain every label, candidate score, blend transition, spend residual, and fallback;
+- a 4-8 GPU live run completes warm-up and demonstrates whether the allocator can safely capture positive oracle gain.
+
+Success after activation means matching or beating the flat-budget, matched-labeler control at equal wall-clock time while preserving mean search spend and improving mean policy-target agreement. The blend need not reach 1.0; a stable partial blend that captures reliable value is a successful outcome.
+
+## Evidence and related artifacts
+
+- [Chess search findings](../analysis/chess-search-findings-20260827.md)
+- [RTX 3060 chess search evaluation](../benchmarks/chess-search-evaluation-rtx3060-20260826/README.md)
+- [Frozen-trunk adaptive budget probe](../benchmarks/adaptive-search-budget-probe-rtx4070super-20260827/README.md)
+- `measure_policy_target_fidelity --per-position-output`
+- `analyse_budget_allocation`
+- `sample_chess_search_positions`
+- `validate_adaptive_replay` (to be replaced or repurposed as part of the migration)
