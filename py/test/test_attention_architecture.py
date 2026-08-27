@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 import torch
@@ -11,7 +12,8 @@ from src.games.chess.policy_encoding import (
     KNIGHT_PROMOTION_INDEX,
     PROMOTION_PIECES,
 )
-from src.training.checkpoint.persistence import create_model
+from src.training.checkpoint.paths import model_save_path
+from src.training.checkpoint.persistence import create_model, create_optimizer, load_model, save_model_and_optimizer
 from src.training.model_cost import measure_model_cost
 from src.training.network import (
     BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
@@ -334,6 +336,39 @@ def test_the_generated_bias_changes_the_trunk_output() -> None:
         torch.nn.init.normal_(next(iter(biased.backbone)).attention_bias.template_bank.projection.weight, std=0.5)
 
     assert not torch.allclose(biased.trunk_features(states), plain.trunk_features(states))
+
+
+@pytest.mark.parametrize(
+    'attention_bias',
+    (DisabledAttentionBiasConfiguration(), RelativeAttentionBiasConfiguration(), SMOLGEN),
+    ids=('disabled', 'relative', 'smolgen'),
+)
+def test_a_saved_cell_reloads_to_the_same_policy_logits(attention_bias: object, tmp_path: Path) -> None:
+    torch.manual_seed(41)
+    architecture = attention_parameters(num_layers=3, attention_bias=attention_bias)
+    model = Network(architecture, DEVICE, CHESS_NETWORK_DIMENSIONS)
+    states = chess_states(3)
+    with torch.no_grad():
+        expected, _ = model.logit_forward(states)
+
+    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 7, tmp_path)
+    reloaded = load_model(model_save_path(7, tmp_path), architecture, DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    with torch.no_grad():
+        actual, _ = reloaded.logit_forward(states)
+    torch.testing.assert_close(actual, expected)
+
+
+def test_the_shared_template_bank_stays_shared_after_a_reload(tmp_path: Path) -> None:
+    torch.manual_seed(43)
+    architecture = attention_parameters(num_layers=3, attention_bias=SMOLGEN)
+    model = Network(architecture, DEVICE, CHESS_NETWORK_DIMENSIONS)
+    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 7, tmp_path)
+
+    reloaded = load_model(model_save_path(7, tmp_path), architecture, DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    banks = {id(block.attention_bias.template_bank) for block in reloaded.backbone}
+    assert len(banks) == 1
 
 
 def test_model_cost_splits_the_parameters_and_the_multiply_accumulates() -> None:
