@@ -239,6 +239,24 @@ int32/int64 for index`. Every existing test missed it because CPU inference runs
 indices round-trip exactly. Fixed by converting only floating-point state; regression-tested by exporting
 the from-to head on both trunks through the native pipeline, plus a CUDA-gated case on the bfloat16 path.
 
+## Validation
+
+`ruff format` and `ruff check` are clean on every touched Python file. The suite runs from `py/`:
+
+- Workstation, CPU only: `python -m pytest --import-mode=importlib ./test -q` → **806 passed, 56 skipped**.
+- RTX 4070 SUPER, native extension and CUDA present: **967 passed, 4 skipped, 13 failed**.
+
+The 13 failures are pre-existing and unrelated: `test_experiment_queue_process` (5),
+`test_trainer_group` (4), `test_game_contracts` (2), `test_interactive_engine` (1) and
+`test_experiment_configuration` (1). The identical 13 were reproduced on a detached worktree at the base
+commit `6c62e605` before any change on this branch, and `documentation/CURRENT-STATE.md` already lists
+them as a known open item.
+
+The native from-to head is exercised on both trunks through the real inference pipeline, plus a
+CUDA-gated case on the bfloat16 path. That case is the regression test for the integer-buffer defect
+below; the defect's empirical proof is that the same five checkpoints failed the throughput measurement
+before the fix and completed after it, on the same card and the same binary otherwise.
+
 ## Reproduce
 
 From `py/` on the node, with the locked virtual environment:
