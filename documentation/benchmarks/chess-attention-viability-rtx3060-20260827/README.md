@@ -3,11 +3,16 @@
 Can an attention trunk be made competitive with the convolutional one in this engine, now that the
 generation-0 bootstrap defect that invalidated the two earlier attention runs is fixed?
 
-**Yes, but almost none of the win is the trunk.** The best cell is an attention trunk with a generated
-attention bias and a from-to policy head, at 0.0406 nats better held-out policy cross-entropy than the
-convolutional baseline — comfortably past the 0.03-nat bar. But a *convolutional* trunk carrying the same
-from-to head recovers 0.0316 of that 0.0406 on its own, and a bare attention trunk is 0.0060 nats
-**worse** than convolution. The policy head is the finding; the trunk is close to a tie.
+**Yes, but the win is the policy head, not the trunk.** The best cell is an attention trunk with a
+generated attention bias and a from-to policy head, 0.0406 nats better than the convolutional baseline and
+comfortably past the 0.03-nat bar. But putting the same head on the *unchanged* convolutional trunk
+recovers 0.0298 of that 0.0406 — with 11% fewer parameters than the baseline and 1.9% of its forward
+throughput — while a bare attention trunk is 0.0060 nats **worse** than convolution at matched head.
+
+**The actionable result is a policy head, not an architecture change.** `cnn-from-to-narrow` is production's
+own 12x128 trunk with the dense head replaced: 0.0298 nats (+33 to +42 Elo), 3,451,655 parameters against
+3,885,287, 51,072 head parameters against 483,680. Attention costs 64% of the forward throughput to add a
+further 0.0108 nats on top, which is a much harder trade.
 
 | | |
 | --- | --- |
@@ -172,6 +177,22 @@ its first tenfold drop at step 1,143, before the model has learned much. The arm
 AlphaZero's schedule *shape* at a horizon it was never designed for, and its 0.5134 should be read as
 "this shape does not survive compression", not as "SGD cannot train this network".
 
+### The head against the trunk it was paid for with
+
+`cnn-from-to` changed two things: the head, and a trunk widened 128 → 136 to spend the head's parameter
+saving. `cnn-from-to-narrow` keeps cnn-A's exact trunk and changes only the head.
+
+| cell | trunk | head | trunk params | total params | gap (paired) | vs `cnn-A` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `cnn-A` | 12x128 | dense | 3,395,008 | 3,885,287 | 0.1069 | — |
+| `cnn-from-to-narrow` | **12x128** | from-to | **3,395,008** | 3,451,655 | 0.0771 | **−0.0298** [−0.0311, −0.0285] |
+| `cnn-from-to` | 12x136 | from-to | 3,829,964 | 3,887,651 | 0.0753 | −0.0316 [−0.0328, −0.0303] |
+
+**The head is 94% of the effect.** Holding the trunk at cnn-A's exact 12x128, the head alone is worth
+0.0298 nats; widening to 136 adds only 0.0018 more, for 42% of the forward throughput. The head is not
+buying its gain with the 435,000 parameters it freed — `cnn-from-to-narrow` is 11% *smaller* than cnn-A
+in total and still 0.0298 ahead.
+
 ### Native inference and search throughput — RTX 4070 SUPER
 
 **These are the production card, so unlike everything above they transfer.** Measured through the
@@ -199,12 +220,53 @@ compared a particular attention configuration against a particular CNN, while th
 ~3.9M total parameters, which is precisely the constraint that leaves attention carrying 13–23% more
 multiply-accumulates. Both numbers can be right; only this one answers "at matched parameters".
 
-**Equal-compute implication.** `attn-C` buys 0.0406 nats (+45 to +57 Elo) and costs 29% of the search
-rate. The distillation probe measured roughly +80 Elo for 3.6× more searches at shallow budgets, which
-puts 1.41× more searches at very roughly +25 to +30 Elo. So `attn-C` is probably still ahead at equal
-compute, but by a much narrower margin than the quality number alone suggests, and the arithmetic is soft
-enough that it must be settled by an actual equal-compute match rather than by this conversion.
-`cnn-from-to` faces the same trade at +35 to +44 Elo for 21% of the search rate.
+**The search-path harness cannot price an architecture on its own.** It measures the whole search, and the
+number of network evaluations per search depends on the policy the weights produce. Every trained cell
+sits at 1.016 positions per search, so the trained comparisons above are sound — but an *untrained* model
+of the same architecture reported 0.41 positions per search, a 2.4× different workload. Architecture-only
+questions therefore need a forward-pass measurement.
+
+#### Forward-pass throughput, no search
+
+Batch 512 bf16, models interleaved with the reference so that ordering, clock drift and kernel autotuning
+cannot favour one, seven timed repeats per entry, two passes.
+
+| model | batch 512 | vs `cnn-A` | batch 64 | vs `cnn-A` |
+| --- | --- | --- | --- | --- |
+| `cnn-A` (12x128 + dense) | 103,150 | 1.000 | 17,575 | 1.000 |
+| `cnn-from-to-narrow` (12x128 + from-to) | 101,210 | **0.981** | 15,947 | 0.907 |
+| `cnn-from-to` (12x136 + from-to) | 57,130 | 0.554 | 16,444 | 0.936 |
+| `attn-C` | 37,240 | 0.361 | 8,044 | 0.458 |
+
+**The from-to head costs 1.9% at the production trunk width**, not the 21% the search harness suggested
+for `cnn-from-to`. That 21% was the trunk widening, not the head.
+
+#### A throughput discontinuity at 128 channels
+
+12-layer global-pooling trunks, dense head, batch 512 bf16, widths interleaved, two passes:
+
+| channels | positions/s | measured, relative to 128 | width-squared predicts |
+| --- | --- | --- | --- |
+| 128 | 104,877 | 1.000 | 1.000 |
+| 136 | 59,997 | 0.566 | 0.886 |
+| 160 | 61,858 | 0.583 | 0.640 |
+
+**136 channels is slower than 160 channels** despite 28% less arithmetic, and 128 is roughly 1.7× faster
+than either. The effect reproduces across forward, reversed and interleaved orderings. It is *not* a
+multiple-of-32 rule — 160 and 192 are multiples of 32 and sit with the slow group. The mechanism is
+unconfirmed and most plausibly a cuDNN kernel-selection boundary; it deserves its own investigation,
+because production's progressive sizing runs 96 → 160 → 192 channel trunks and this measurement says the
+step off 128 is far more expensive than its arithmetic.
+
+Two measurement warnings come with it. Sweeping many distinct widths in one process depressed every entry
+after the first by up to 40%, which looks like autotune-cache thrashing; only interleaved measurement with
+few distinct shapes was reproducible. And an earlier reading of this same effect as "a 2× cliff at 128
+versus everything else" was an artifact of exactly that — 160 read 52k in a sweep and 62k interleaved.
+
+**Equal-compute implication.** The recommendation below costs 1.9% of forward throughput at batch 512 and
+9% at batch 64, against 0.0298 nats (+33 to +42 Elo). That trade needs no equal-compute arithmetic to
+justify. `attn-C`'s does: it buys 0.0406 nats at 0.361 of the forward rate, and must be settled by an
+actual equal-compute match rather than by a conversion.
 
 ### Peak training memory
 
@@ -295,7 +357,11 @@ python -m tools.distill_match --mode throughput-only --throughput-position-count
 | `cells.json` | every cell's full evaluation curve joined to its parameter and multiply-accumulate split |
 | `paired-cross-entropy.json` | paired held-out differences against `cnn-A`, 32,768 positions |
 | `paired-vs-control.json` | the same against `cnn-from-to`, the head control |
-| `throughput-4070super.json` | native inference and search throughput on the production card |
+| `throughput-4070super.json` | native search throughput on the production card |
+| `paired-final.json` | the paired differences including the head control, 32,768 positions |
+| `forward-interleaved.json` | forward-pass throughput, models interleaved with the reference |
+| `channel-136-vs-160.json` | the 128 / 136 / 160 channel comparison, interleaved |
+| `channel-alignment-interleaved.json` | the 128 / 160 alternation that ruled out ordering effects |
 
 Training logs for all nine cells were fetched off the ephemeral node to
 `.codex-diagnostics/chess-attention-viability-20260827/logs/`.

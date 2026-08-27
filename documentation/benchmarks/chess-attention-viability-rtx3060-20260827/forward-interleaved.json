@@ -1,0 +1,130 @@
+[
+  {
+    "cell": "cnn-A",
+    "batch_size": 512,
+    "repeats": 7,
+    "mean_positions_per_second": 104694.65499962126,
+    "minimum_positions_per_second": 104420.25722031969,
+    "maximum_positions_per_second": 104835.24296783259
+  },
+  {
+    "cell": "probe-cnn-12x128-from-to",
+    "batch_size": 512,
+    "repeats": 7,
+    "mean_positions_per_second": 101332.97927892592,
+    "minimum_positions_per_second": 99393.30469209875,
+    "maximum_positions_per_second": 101760.7886835107
+  },
+  {
+    "cell": "cnn-from-to",
+    "batch_size": 512,
+    "repeats": 7,
+    "mean_positions_per_second": 57426.91481830636,
+    "minimum_positions_per_second": 57280.47946076861,
+    "maximum_positions_per_second": 57651.93759986169
+  },
+  {
+    "cell": "attn-C",
+    "batch_size": 512,
+    "repeats": 7,
+    "mean_positions_per_second": 37342.713325798424,
+    "minimum_positions_per_second": 37292.93410682897,
+    "maximum_positions_per_second": 37440.70886414926
+  },
+  {
+    "cell": "cnn-A",
+    "batch_size": 512,
+    "repeats": 7,
+    "mean_positions_per_second": 101612.1984033793,
+    "minimum_positions_per_second": 101445.63836700821,
+    "maximum_positions_per_second": 101998.33523927661
+  },
+  {
+    "cell": "probe-cnn-12x128-from-to",
+    "batch_size": 512,
+    "repeats": 7,
+    "mean_positions_per_second": 101084.90352803175,
+    "minimum_positions_per_second": 100823.77358321183,
+    "maximum_positions_per_second": 101239.32480255453
+  },
+  {
+    "cell": "cnn-from-to",
+    "batch_size": 512,
+    "repeats": 7,
+    "mean_positions_per_second": 56824.5353671007,
+    "minimum_positions_per_second": 56751.77769933125,
+    "maximum_positions_per_second": 56957.73391001841
+  },
+  {
+    "cell": "attn-C",
+    "batch_size": 512,
+    "repeats": 7,
+    "mean_positions_per_second": 37127.923980894426,
+    "minimum_positions_per_second": 37086.67883025135,
+    "maximum_positions_per_second": 37217.75275600807
+  },
+  {
+    "cell": "cnn-A",
+    "batch_size": 64,
+    "repeats": 7,
+    "mean_positions_per_second": 17587.89575364426,
+    "minimum_positions_per_second": 17488.04021524567,
+    "maximum_positions_per_second": 17663.914265657746
+  },
+  {
+    "cell": "probe-cnn-12x128-from-to",
+    "batch_size": 64,
+    "repeats": 7,
+    "mean_positions_per_second": 16062.677333462736,
+    "minimum_positions_per_second": 15444.341015516125,
+    "maximum_positions_per_second": 16290.396395180916
+  },
+  {
+    "cell": "cnn-from-to",
+    "batch_size": 64,
+    "repeats": 7,
+    "mean_positions_per_second": 16586.213157145045,
+    "minimum_positions_per_second": 16431.943321262297,
+    "maximum_positions_per_second": 16634.516056753488
+  },
+  {
+    "cell": "attn-C",
+    "batch_size": 64,
+    "repeats": 7,
+    "mean_positions_per_second": 8069.436340535197,
+    "minimum_positions_per_second": 7811.957313796531,
+    "maximum_positions_per_second": 8187.000855311022
+  },
+  {
+    "cell": "cnn-A",
+    "batch_size": 64,
+    "repeats": 7,
+    "mean_positions_per_second": 17560.98874195195,
+    "minimum_positions_per_second": 17426.468968058372,
+    "maximum_positions_per_second": 17651.009555984383
+  },
+  {
+    "cell": "probe-cnn-12x128-from-to",
+    "batch_size": 64,
+    "repeats": 7,
+    "mean_positions_per_second": 15830.659120366552,
+    "minimum_positions_per_second": 15263.22561095829,
+    "maximum_positions_per_second": 16057.636440479384
+  },
+  {
+    "cell": "cnn-from-to",
+    "batch_size": 64,
+    "repeats": 7,
+    "mean_positions_per_second": 16302.017027367345,
+    "minimum_positions_per_second": 15439.942801676245,
+    "maximum_positions_per_second": 16534.02873408466
+  },
+  {
+    "cell": "attn-C",
+    "batch_size": 64,
+    "repeats": 7,
+    "mean_positions_per_second": 8019.297687875731,
+    "minimum_positions_per_second": 7879.2327157140035,
+    "maximum_positions_per_second": 8109.174871615367
+  }
+]
