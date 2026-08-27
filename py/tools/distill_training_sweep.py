@@ -182,11 +182,11 @@ def parse_arguments() -> SweepArguments:
     parser.add_argument('--generation', required=True, type=int)
     parser.add_argument('--steps', default=100000, type=int)
     parser.add_argument('--batch-size', default=1024, type=int)
-    # Production self-play runs 0.004-0.005 at batch 2048; keep the two in step when changing either.
-    parser.add_argument('--learning-rate', default=0.004, type=float)
+    # Production self-play runs 0.004 at batch 2048; this is the same noise scale at half the batch.
+    parser.add_argument('--learning-rate', default=0.002, type=float)
     parser.add_argument('--warmup-steps', default=1000, type=int)
     parser.add_argument('--evaluate-every', default=4000, type=int)
-    parser.add_argument('--checkpoint-every', default=0, type=int)
+    parser.add_argument('--checkpoint-every', default=10000, type=int)
     parser.add_argument('--policy-bottleneck-rank', default=16, type=int)
     parser.add_argument('--device-ids', default='0,1,2,3,4,5,6,7')
     parser.add_argument('--random-seed', default=20260827, type=int)

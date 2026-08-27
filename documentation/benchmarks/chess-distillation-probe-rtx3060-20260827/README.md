@@ -275,10 +275,15 @@ pull in opposite directions for distillation specifically: a smaller batch argue
 targets carrying neither game-outcome noise nor Dirichlet noise argue for a higher one. Which dominates is
 unmeasured.
 
-The sweep therefore defaults to a peak of **0.004**, and should be run at batch 2048 to match production
-rather than at 1024, where 0.004 would sit at roughly twice production's noise scale. Because every arm
-shares the peak, a rate that is too high does not merely lose one arm — it invalidates the whole sweep, so
-the peak is the one parameter worth being conservative about.
+The sweep therefore keeps **0.002 at batch 1024**, which is production's noise scale at half its batch.
+Doubling both was considered and rejected: training is bound by batch assembly rather than by the GPU, so
+batch 2048 roughly halves steps per second and at a fixed step count doubles wall time for twice the
+samples — a poor trade when the targets are already low variance. Because every arm shares the peak, a rate
+that is too high does not merely lose one arm, it invalidates the whole sweep, so the peak is the one
+parameter worth being conservative about.
+
+`--checkpoint-every 10000` is on by default. It costs almost nothing, gives the learning curve that says
+whether 100,000 steps was the right horizon, and surfaces a diverging run within minutes instead of hours.
 
 The `plateau` schedule changes the shape, not the peak. Warmup, then hold the peak, then anneal over the
 final `--anneal-fraction` of the run. Its integrated learning rate is `0.9 × peak` against cosine's
