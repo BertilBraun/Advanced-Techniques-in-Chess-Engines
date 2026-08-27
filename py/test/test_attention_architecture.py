@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 import torch
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
@@ -9,6 +11,7 @@ from src.games.chess.policy_encoding import (
     KNIGHT_PROMOTION_INDEX,
     PROMOTION_PIECES,
 )
+from src.training.checkpoint.persistence import create_model
 from src.training.model_cost import measure_model_cost
 from src.training.network import (
     BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
@@ -27,6 +30,18 @@ from src.training.network import (
     SmolgenAttentionBiasConfiguration,
     calibrate_bootstrap_policy_prior,
     measure_policy_prior_shape,
+)
+from test.test_distillation import STUDENT_ARGUMENTS
+from tools.distill_train_student import (
+    ALPHAZERO_SGD_STAGES,
+    AttentionBiasKind,
+    LearningRateSchedule,
+    NetworkKind,
+    OptimizerKind,
+    PolicyHeadKind,
+    create_student_optimizer,
+    learning_rate_at,
+    student_architecture,
 )
 
 DEVICE = torch.device('cpu')
@@ -329,3 +344,131 @@ def test_both_trunks_spend_about_one_hundred_and_twenty_eight_mac_per_trunk_para
     # operations) per parameter is the ceiling; normalization scales and biases carry no multiply.
     per_parameter = cost.multiply_accumulates_per_position.trunk / cost.parameters.trunk
     assert 55.0 <= per_parameter <= 64.0
+
+
+def test_the_attention_student_architecture_carries_the_configured_head_and_bias() -> None:
+    arguments = replace(
+        STUDENT_ARGUMENTS,
+        network_kind=NetworkKind.ATTENTION,
+        layers=3,
+        hidden_size=64,
+        heads=4,
+        feedforward=96,
+        policy_head_kind=PolicyHeadKind.FROM_TO_ATTENTION,
+        attention_bias_kind=AttentionBiasKind.SMOLGEN,
+    )
+
+    architecture = student_architecture(arguments)
+
+    assert isinstance(architecture, AttentionNetworkParams)
+    assert architecture.feedforward_size == 96
+    assert isinstance(architecture.policy_head, ChessFromToAttentionPolicyHeadConfiguration)
+    assert isinstance(architecture.attention_bias, SmolgenAttentionBiasConfiguration)
+
+
+def test_the_convolutional_student_architecture_is_unchanged_by_the_attention_knobs() -> None:
+    architecture = student_architecture(replace(STUDENT_ARGUMENTS, heads=7, feedforward=999))
+
+    assert isinstance(architecture, NetworkParams)
+    assert architecture.hidden_size == STUDENT_ARGUMENTS.hidden_size
+
+
+def test_the_student_builds_from_its_own_architecture_on_both_trunks() -> None:
+    attention = student_architecture(
+        replace(
+            STUDENT_ARGUMENTS,
+            network_kind=NetworkKind.ATTENTION,
+            layers=2,
+            hidden_size=32,
+            heads=4,
+            feedforward=64,
+            policy_head_kind=PolicyHeadKind.FROM_TO_ATTENTION,
+        )
+    )
+    model = create_model(attention, DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    policy_logits, _ = model(chess_states(2))
+
+    assert policy_logits.shape == (2, CHESS_NETWORK_DIMENSIONS.actions)
+
+
+@pytest.mark.parametrize(
+    ('step', 'expected'),
+    ((200, 0.005), (8_000, 0.005), (9_000, 0.004), (80_000, 0.004), (90_000, 0.003)),
+)
+def test_the_production_flat_schedule_decays_by_a_factor_of_one_point_six_seven(step: int, expected: float) -> None:
+    rate = learning_rate_at(
+        step,
+        total_steps=100_000,
+        peak_learning_rate=0.005,
+        warmup_steps=200,
+        schedule=LearningRateSchedule.PRODUCTION_FLAT,
+    )
+
+    assert rate == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ('step', 'expected'),
+    (
+        (200, 0.005),
+        (16_000, 0.005),
+        (20_000, 0.005 * 0.1 ** (1 / 3)),
+        (60_000, 0.005 * 0.1 ** (2 / 3)),
+        (90_000, 0.0005),
+    ),
+)
+def test_the_staged_decay_schedule_drops_the_peak_tenfold(step: int, expected: float) -> None:
+    rate = learning_rate_at(
+        step,
+        total_steps=100_000,
+        peak_learning_rate=0.005,
+        warmup_steps=200,
+        schedule=LearningRateSchedule.STAGED_DECAY,
+    )
+
+    assert rate == pytest.approx(expected)
+
+
+def test_the_cosine_floor_schedule_stops_at_the_floor_instead_of_zero() -> None:
+    rate = learning_rate_at(
+        100_000,
+        total_steps=100_000,
+        peak_learning_rate=0.005,
+        warmup_steps=200,
+        schedule=LearningRateSchedule.COSINE_FLOOR,
+        floor_fraction=0.1,
+    )
+
+    assert rate == pytest.approx(0.0005)
+
+
+def test_the_staged_decay_schedule_follows_alphazero_when_the_optimizer_is_sgd() -> None:
+    rate = learning_rate_at(
+        99_000,
+        total_steps=100_000,
+        peak_learning_rate=0.2,
+        warmup_steps=200,
+        schedule=LearningRateSchedule.STAGED_DECAY,
+        optimizer_kind=OptimizerKind.SGD_MOMENTUM,
+    )
+
+    assert rate == pytest.approx(0.2 * ALPHAZERO_SGD_STAGES[-1][1])
+
+
+@pytest.mark.parametrize(
+    ('kind', 'expected'),
+    ((OptimizerKind.ADAMW, torch.optim.AdamW), (OptimizerKind.SGD_MOMENTUM, torch.optim.SGD)),
+)
+def test_the_student_optimizer_starts_at_the_peak_learning_rate(kind: OptimizerKind, expected: type) -> None:
+    model = Network(attention_parameters(), DEVICE, CHESS_NETWORK_DIMENSIONS)
+
+    optimizer = create_student_optimizer(model, kind, 0.004)
+
+    assert isinstance(optimizer, expected)
+    assert optimizer.param_groups[0]['lr'] == pytest.approx(0.004)
+
+
+def test_the_from_to_head_rejects_a_board_that_is_not_chess() -> None:
+    with pytest.raises(ValueError, match='from-to attention policy head'):
+        Network(attention_parameters(), DEVICE, replace(CHESS_NETWORK_DIMENSIONS, actions=64))
