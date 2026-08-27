@@ -9,6 +9,7 @@ from AlphaZeroCpp import (
     BatchedInferenceParameters,
     InferenceConfiguration,
     InferenceDevice,
+    InferenceExecutionOptions,
 )
 from AlphaZeroCpp import (
     ChessAnalysis as BoundChessAnalysis,
@@ -56,7 +57,7 @@ class InteractiveEngine:
             device_id=configuration.device_id,
             model_path=configuration.model_path,
             device=target_mapping[configuration.inference_target],
-            sdpa_backend=native_sdpa_backend(configuration.sdpa_backend),
+            execution_options=InferenceExecutionOptions(sdpa_backend=native_sdpa_backend(configuration.sdpa_backend)),
         )
         self._bound_analysis = BoundChessAnalysis(
             runtime_parameters,
