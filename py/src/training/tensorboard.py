@@ -19,7 +19,7 @@ from src.training.targets import (
     LegalMovesTargetConfiguration,
     NextPolicyTargetConfiguration,
     RemainingGameLengthTargetConfiguration,
-    SearchCorrectionTargetConfiguration,
+    SearchBudgetTargetConfiguration,
 )
 
 
@@ -160,7 +160,7 @@ def _objective_settings_at(
                 name = f'{index}-irreversible-progress-{horizon_plies}'
             case LegalMovesTargetConfiguration(loss_weight=loss_weight):
                 name = f'{index}-legal-moves'
-            case SearchCorrectionTargetConfiguration(loss_weight=loss_weight):
+            case SearchBudgetTargetConfiguration(loss_weight=loss_weight):
                 name = f'{index}-search-correction'
         settings.append(
             ScheduledSetting(

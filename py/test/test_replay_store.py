@@ -15,6 +15,7 @@ from src.replay.columnar import (
     ReplayColumnViews,
     ReplayNextPolicyColumnViews,
     ReplayScalarColumnViews,
+    ReplaySearchBudgetColumnViews,
     build_column_views,
     flatten_column_views,
 )
@@ -23,9 +24,11 @@ from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
+    EligibleSearchBudgetTarget,
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
+    IneligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -48,7 +51,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
     TrainingTargetLayout,
 )
 
@@ -194,7 +197,7 @@ def _all_auxiliary_layout() -> ReplayLayout:
                 FutureSearchValueHeadLayout(kind='future_search_value', ply_offset=2, smooth_l1_beta=0.1),
                 IrreversibleProgressHeadLayout(kind='irreversible_progress', horizon_plies=4),
                 LegalMovesHeadLayout(kind='legal_moves', action_size=10),
-                SearchCorrectionHeadLayout(kind='search_correction'),
+                SearchBudgetHeadLayout(kind='search_budget'),
             ),
         ),
         maximum_policy_entries=4,
@@ -230,7 +233,19 @@ def _all_auxiliary_sample(layout: ReplayLayout, generation: int, eligible: bool)
                 else IneligibleScalarAuxiliaryTarget(kind='irreversible_progress')
             ),
             EligibleLegalMovesTarget(),
-            EligibleScalarAuxiliaryTarget(kind='search_correction', value=0.25),
+            (
+                EligibleSearchBudgetTarget(
+                    normalized_target=0.25,
+                    raw_kl=0.125,
+                    prediction_logit=-0.5,
+                    predicted_quantile=0.25,
+                    source_generation=generation,
+                    model_generation=generation,
+                    inference_model_sha256='a' * 64,
+                )
+                if eligible
+                else IneligibleSearchBudgetTarget()
+            ),
         ),
         sample_weight=1.5,
         source_model_generation=generation,
@@ -288,7 +303,7 @@ def test_direct_column_encoding_matches_transitional_rows_and_zeroes_inactive_pa
     encoded_rows = encode_replay_rows(layout, samples)
 
     assert hashlib.sha256(encoded_rows.tobytes()).hexdigest() == (
-        '241dd39eb9a985add6a52282c37e73056c2fd3e53665047b2fe9ffc70c326b58'
+        'acdf128988bc454800a2c582fc3afdc32576877f827f3764aec295c94d7bf91e'
     )
     for column in flatten_column_views(layout, columns):
         np.testing.assert_array_equal(column.values, encoded_rows[column.descriptor.key.name])
@@ -447,8 +462,8 @@ def _column_views(layout: ReplayLayout, samples: tuple[ReplaySample, ...]) -> Re
         'future_value_nonfinite',
         'irreversible_progress_out_of_range',
         'irreversible_progress_nonfinite',
-        'search_correction_out_of_range',
-        'search_correction_nonfinite',
+        'search_budget_out_of_range',
+        'search_budget_nonfinite',
     ),
 )
 def test_append_columns_rejects_invalid_semantics(tmp_path: Path, invalid_case: str) -> None:
@@ -458,11 +473,12 @@ def test_append_columns_rejects_invalid_semantics(tmp_path: Path, invalid_case: 
     remaining_length = columns.auxiliary[1]
     future_value = columns.auxiliary[2]
     irreversible_progress = columns.auxiliary[3]
-    search_correction = columns.auxiliary[5]
+    search_budget = columns.auxiliary[5]
     assert isinstance(next_policy, ReplayNextPolicyColumnViews)
     assert isinstance(remaining_length, ReplayScalarColumnViews)
     assert isinstance(future_value, ReplayScalarColumnViews)
     assert isinstance(irreversible_progress, ReplayScalarColumnViews)
+    assert isinstance(search_budget, ReplaySearchBudgetColumnViews)
     match invalid_case:
         case 'empty_visits':
             columns.policy.entry_count[0] = 0
@@ -518,10 +534,10 @@ def test_append_columns_rejects_invalid_semantics(tmp_path: Path, invalid_case: 
             irreversible_progress.value[0] = 1.25
         case 'irreversible_progress_nonfinite':
             irreversible_progress.value[0] = np.nan
-        case 'search_correction_out_of_range':
-            search_correction.value[0] = -0.25
-        case 'search_correction_nonfinite':
-            search_correction.value[0] = np.inf
+        case 'search_budget_out_of_range':
+            search_budget.value[0] = -0.25
+        case 'search_budget_nonfinite':
+            search_budget.value[0] = np.inf
         case _:
             raise AssertionError(f'Unhandled invalid replay case: {invalid_case}')
     store = ReplayStore.create(tmp_path / 'replay.bin', layout, maximum_capacity=2, logical_capacity=2)

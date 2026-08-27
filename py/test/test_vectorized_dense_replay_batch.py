@@ -13,7 +13,7 @@ from src.replay.columnar import (
     ReplayNextPolicyColumnViews,
     ReplayPolicyColumnViews,
     ReplayScalarColumnViews,
-    ReplaySearchCorrectionColumnViews,
+    ReplaySearchBudgetColumnViews,
 )
 from src.replay.layout import ReplayLayout
 from src.training.targets import (
@@ -22,7 +22,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
     TrainingTargetLayout,
 )
 
@@ -61,7 +61,7 @@ def test_vectorized_dense_batch_preserves_every_auxiliary_variant() -> None:
         FutureSearchValueHeadLayout(kind='future_search_value', ply_offset=1, smooth_l1_beta=0.1),
         IrreversibleProgressHeadLayout(kind='irreversible_progress', horizon_plies=8),
         LegalMovesHeadLayout(kind='legal_moves', action_size=state.action_size),
-        SearchCorrectionHeadLayout(kind='search_correction'),
+        SearchBudgetHeadLayout(kind='search_budget'),
     )
     layout = ReplayLayout(
         packed_planes=state.packed_plane_layout,
@@ -113,7 +113,20 @@ def test_vectorized_dense_batch_preserves_every_auxiliary_variant() -> None:
                 eligible=np.asarray((1, 1), dtype=np.uint8),
             ),
             ReplayLegalMovesColumnViews(kind='legal_moves'),
-            ReplaySearchCorrectionColumnViews(kind='search_correction', value=np.asarray((0.2, 0.3), dtype=np.float32)),
+            ReplaySearchBudgetColumnViews(
+                kind='search_budget',
+                value=np.asarray((0.2, 0.3), dtype=np.float32),
+                eligible=np.asarray((1, 0), dtype=np.uint8),
+                raw_kl=np.asarray((0.1, 0.0), dtype=np.float32),
+                prediction_logit=np.asarray((-0.5, 0.0), dtype=np.float32),
+                predicted_quantile=np.asarray((0.25, 0.0), dtype=np.float32),
+                source_generation=np.asarray((7, 0), dtype=np.uint32),
+                model_generation=np.asarray((8, 0), dtype=np.uint32),
+                inference_model_sha256=np.asarray(
+                    (tuple(b'a' * 64), tuple(bytes(64))),
+                    dtype=np.uint8,
+                ),
+            ),
         ),
         sample_weight=np.asarray((1.0, 2.0), dtype=np.float32),
         source_model_generation=np.asarray((7, 8), dtype=np.uint32),
@@ -144,12 +157,13 @@ def test_vectorized_dense_batch_preserves_every_auxiliary_variant() -> None:
         [False, True],
         [True, True],
         [True, True],
-        [True, True],
+        [True, False],
     )
     assert batch.auxiliary_targets[0][1].sum() == 0.0
     assert batch.auxiliary_targets[1][1, 0] == 0.0
     assert batch.auxiliary_targets[4][0, 4] == 1.0
     assert batch.auxiliary_targets[4][1, state.action_size - 1 - 5] == 1.0
+    assert batch.auxiliary_targets[5][1, 0] == 0.0
     assert batch.source_model_generations.dtype is torch.int64
     assert batch.source_created_at_seconds.dtype is torch.float64
     with pytest.raises(ValueError, match='outside the game contract'):

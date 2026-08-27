@@ -9,7 +9,7 @@ from src.replay.columnar import (
     ReplayNextPolicyColumnViews,
     ReplayPolicyColumnViews,
     ReplayScalarColumnViews,
-    ReplaySearchCorrectionColumnViews,
+    ReplaySearchBudgetColumnViews,
     build_column_views,
     flatten_column_views,
 )
@@ -18,9 +18,11 @@ from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
+    EligibleSearchBudgetTarget,
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
+    IneligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -31,7 +33,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
 )
 
 
@@ -114,11 +116,30 @@ def _encode_sample(
             ):
                 destination.eligible[row_index] = 0
             case (
-                SearchCorrectionHeadLayout(),
-                EligibleScalarAuxiliaryTarget(value=value),
-                ReplaySearchCorrectionColumnViews(),
+                SearchBudgetHeadLayout(),
+                EligibleSearchBudgetTarget(
+                    normalized_target=normalized_target,
+                    raw_kl=raw_kl,
+                    prediction_logit=prediction_logit,
+                    predicted_quantile=predicted_quantile,
+                    source_generation=source_generation,
+                    model_generation=model_generation,
+                    inference_model_sha256=inference_model_sha256,
+                ),
+                ReplaySearchBudgetColumnViews(),
             ):
-                destination.value[row_index] = value
+                destination.value[row_index] = normalized_target
+                destination.eligible[row_index] = 1
+                destination.raw_kl[row_index] = raw_kl
+                destination.prediction_logit[row_index] = prediction_logit
+                destination.predicted_quantile[row_index] = predicted_quantile
+                destination.source_generation[row_index] = source_generation
+                destination.model_generation[row_index] = model_generation
+                destination.inference_model_sha256[row_index] = np.frombuffer(
+                    inference_model_sha256.encode('ascii'), dtype=np.uint8
+                )
+            case SearchBudgetHeadLayout(), IneligibleSearchBudgetTarget(), ReplaySearchBudgetColumnViews():
+                destination.eligible[row_index] = 0
             case LegalMovesHeadLayout(), EligibleLegalMovesTarget(), ReplayLegalMovesColumnViews():
                 pass
             case _:

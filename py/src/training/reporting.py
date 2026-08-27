@@ -30,7 +30,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
 )
 from src.training.telemetry import (
     adaptive_search_telemetry,
@@ -395,5 +395,5 @@ def _auxiliary_name(index: int, head: AuxiliaryHeadLayout) -> str:
             return f'{index}-irreversible-progress-{horizon_plies}'
         case LegalMovesHeadLayout():
             return f'{index}-legal-moves'
-        case SearchCorrectionHeadLayout():
-            return f'{index}-search-correction'
+        case SearchBudgetHeadLayout():
+            return f'{index}-search-budget'

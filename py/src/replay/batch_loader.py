@@ -19,7 +19,7 @@ from src.replay.columnar import (
     ReplayNextPolicyColumnViews,
     ReplayPolicyColumnViews,
     ReplayScalarColumnViews,
-    ReplaySearchCorrectionColumnViews,
+    ReplaySearchBudgetColumnViews,
 )
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
@@ -412,10 +412,11 @@ def build_dense_targets(
                 auxiliary_targets.append(np.where(eligible_rows, value, np.float32(0.0)).reshape(-1, 1))
                 auxiliary_legal_action_ids.append(empty_legal)
                 auxiliary_eligibility.append(eligible_rows)
-            case ReplaySearchCorrectionColumnViews(value=value):
-                auxiliary_targets.append(value.reshape(-1, 1))
+            case ReplaySearchBudgetColumnViews(value=value, eligible=eligible):
+                eligible_rows = eligible.astype(np.bool_, copy=False)
+                auxiliary_targets.append(np.where(eligible_rows, value, np.float32(0.0)).reshape(-1, 1))
                 auxiliary_legal_action_ids.append(empty_legal)
-                auxiliary_eligibility.append(np.ones(columns.row_count, dtype=np.bool_))
+                auxiliary_eligibility.append(eligible_rows)
             case ReplayLegalMovesColumnViews():
                 legal_moves = np.zeros((columns.row_count, state.action_size), dtype=np.float32)
                 valid = policy_legal_action_ids >= 0

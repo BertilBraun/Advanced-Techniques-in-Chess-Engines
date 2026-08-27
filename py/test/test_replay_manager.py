@@ -17,6 +17,7 @@ from src.replay.contracts import (
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
+    IneligibleSearchBudgetTarget,
 )
 from src.replay.dispatch import parse_worker_source_file_name, worker_source_file_names
 from src.replay.layout import ReplayLayout
@@ -38,7 +39,7 @@ from src.training.targets import (
     IrreversibleProgressHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
     TrainingTargetLayout,
 )
 from src.util.generation_schedule import ConstantSchedule
@@ -188,10 +189,10 @@ def test_shared_materialization_reconstructs_perspective_and_trajectory_targets(
         UNDISCOUNTED_VALUES,
     )
 
-    assert len(materialized.samples) == 3
-    assert materialized.policies_truncated == 5
-    assert materialized.retained_visit_mass == 50
-    assert materialized.discarded_visit_mass == 15
+    assert len(materialized.samples) == 4
+    assert materialized.policies_truncated == 7
+    assert materialized.retained_visit_mass == 70
+    assert materialized.discarded_visit_mass == 21
     assert materialized.samples[0].wdl_target == WdlTarget(win=0.0, draw=0.0, loss=1.0)
     assert isinstance(materialized.samples[0].auxiliary_targets[0], EligibleNextPolicyTarget)
     assert isinstance(materialized.samples[-1].auxiliary_targets[0], IneligibleNextPolicyTarget)
@@ -300,7 +301,7 @@ def test_remaining_game_length_uses_exact_completed_trajectory_boundary() -> Non
         for sample in materialized.samples
         for target in sample.auxiliary_targets
         if isinstance(target, EligibleRemainingGameLengthTarget)
-    ) == pytest.approx((1.0, 0.5, 0.25))
+    ) == pytest.approx((1.0, 0.75, 0.5, 0.25))
 
 
 def test_four_ply_future_value_uses_terminal_fallback_with_current_perspective() -> None:
@@ -350,7 +351,7 @@ def test_irreversible_progress_records_event_distance_and_terminal_censoring() -
         UNDISCOUNTED_VALUES,
     )
     event_targets = tuple(sample.auxiliary_targets[0] for sample in materialized.samples)
-    assert event_targets[1:] == (
+    assert event_targets[2:] == (
         EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=2 / 3),
         EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=1 / 3),
     )
@@ -379,27 +380,16 @@ def test_irreversible_progress_records_event_distance_and_terminal_censoring() -
         3,
         UNDISCOUNTED_VALUES,
     )
-    assert isinstance(censored.samples[1].auxiliary_targets[0], IneligibleScalarAuxiliaryTarget)
+    assert isinstance(censored.samples[2].auxiliary_targets[0], IneligibleScalarAuxiliaryTarget)
 
 
-def test_search_correction_materializes_final_larger_correction() -> None:
+def test_ordinary_observations_materialize_ineligible_search_budget_targets() -> None:
     targets = TrainingTargetLayout(
         action_size=3,
         wdl_size=3,
-        auxiliary_heads=(SearchCorrectionHeadLayout(kind='search_correction'),),
+        auxiliary_heads=(SearchBudgetHeadLayout(kind='search_budget'),),
     )
-    observation = (
-        _completed_game()
-        .observations[0]
-        .model_copy(
-            update={
-                'policy_correction': 0.1,
-                'value_correction': 0.3,
-                'search_correction_target': 0.3,
-            }
-        )
-    )
-    game = _completed_game().model_copy(update={'observations': (observation, *_completed_game().observations[1:])})
+    game = _completed_game()
 
     materialized = materialize_completed_game(
         game,
@@ -410,10 +400,7 @@ def test_search_correction_materializes_final_larger_correction() -> None:
         UNDISCOUNTED_VALUES,
     )
 
-    assert materialized.samples[0].auxiliary_targets[0] == EligibleScalarAuxiliaryTarget(
-        kind='search_correction',
-        value=0.3,
-    )
+    assert materialized.samples[0].auxiliary_targets[0] == IneligibleSearchBudgetTarget()
 
 
 def test_materialization_uniformly_blurs_wdl_by_actual_remaining_game_plies() -> None:
@@ -427,8 +414,13 @@ def test_materialization_uniformly_blurs_wdl_by_actual_remaining_game_plies() ->
     )
 
     assert materialized.samples[0].wdl_target == WdlTarget(win=0.3125, draw=0.3125, loss=0.375)
-    assert materialized.samples[1].wdl_target == WdlTarget(win=0.25, draw=0.25, loss=0.5)
-    assert materialized.samples[2].wdl_target == WdlTarget(
+    assert materialized.samples[1].wdl_target == WdlTarget(
+        win=5.0 / 12.0,
+        draw=7.0 / 24.0,
+        loss=7.0 / 24.0,
+    )
+    assert materialized.samples[2].wdl_target == WdlTarget(win=0.25, draw=0.25, loss=0.5)
+    assert materialized.samples[3].wdl_target == WdlTarget(
         win=2.0 / 3.0,
         draw=1.0 / 6.0,
         loss=1.0 / 6.0,
@@ -624,7 +616,7 @@ def _worker_source_paths(manager: ReplayManager[LinearPosition]) -> tuple[Path, 
     )
 
 
-SAMPLES_PER_GAME = 3
+SAMPLES_PER_GAME = 4
 
 
 def test_game_identity_file_name_parser_requires_canonical_name() -> None:
@@ -672,9 +664,9 @@ def test_replay_manager_materializes_appends_and_reopens(tmp_path: Path) -> None
     ingestion = manager.append_staged_games(2)
 
     assert ingestion.games_ingested == 2
-    assert ingestion.samples_added == 6
+    assert ingestion.samples_added == 8
     assert ingestion.live_samples == 4
-    assert ingestion.evicted_samples == 2
+    assert ingestion.evicted_samples == 4
     assert ingestion.samples_per_second > 0.0
     assert tuple(game.length_plies for game in ingestion.completed_games) == (4, 4)
     assert tuple(game.termination_reason for game in ingestion.completed_games) == (
@@ -964,7 +956,7 @@ def test_append_flushes_before_removing_staged_shards(tmp_path: Path) -> None:
     manager.close()
 
 
-def test_zero_row_shard_reports_its_game_without_adding_samples(tmp_path: Path) -> None:
+def test_former_fast_search_game_materializes_every_observation(tmp_path: Path) -> None:
     game = _completed_game().validated_copy(
         update={
             'observations': tuple(
@@ -980,8 +972,8 @@ def test_zero_row_shard_reports_its_game_without_adding_samples(tmp_path: Path) 
     ingestion = manager.append_staged_games(2)
 
     assert ingestion.games_ingested == 1
-    assert ingestion.samples_added == 0
-    assert manager.store.total_appended_rows == 0
+    assert ingestion.samples_added == SAMPLES_PER_GAME
+    assert manager.store.total_appended_rows == SAMPLES_PER_GAME
     manager.close()
 
 

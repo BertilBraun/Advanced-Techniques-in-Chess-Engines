@@ -18,6 +18,7 @@ from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
+    EligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -49,7 +50,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
     TrainingTargetLayout,
 )
 
@@ -78,7 +79,7 @@ def _layout(game: str) -> ReplayLayout:
                 FutureSearchValueHeadLayout(kind='future_search_value', ply_offset=2, smooth_l1_beta=0.1),
                 IrreversibleProgressHeadLayout(kind='irreversible_progress', horizon_plies=4),
                 LegalMovesHeadLayout(kind='legal_moves', action_size=state.action_size),
-                SearchCorrectionHeadLayout(kind='search_correction'),
+                SearchBudgetHeadLayout(kind='search_budget'),
             ),
         ),
         maximum_policy_entries=8,
@@ -104,8 +105,18 @@ def _sample(layout: ReplayLayout, generation: int) -> ReplaySample:
                 auxiliary.append(EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=0.75))
             case LegalMovesHeadLayout():
                 auxiliary.append(EligibleLegalMovesTarget())
-            case SearchCorrectionHeadLayout():
-                auxiliary.append(EligibleScalarAuxiliaryTarget(kind='search_correction', value=0.4))
+            case SearchBudgetHeadLayout():
+                auxiliary.append(
+                    EligibleSearchBudgetTarget(
+                        normalized_target=0.4,
+                        raw_kl=0.2,
+                        prediction_logit=-0.25,
+                        predicted_quantile=0.4,
+                        source_generation=generation,
+                        model_generation=generation,
+                        inference_model_sha256='b' * 64,
+                    )
+                )
     return ReplaySample(
         encoded_state=layout.packed_planes.value(bytes([generation + 1]) * layout.packed_planes.payload_bytes),
         policy=policy,

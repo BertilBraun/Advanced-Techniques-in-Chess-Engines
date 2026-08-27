@@ -12,7 +12,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
 )
 
 ReplayArray: TypeAlias = (
@@ -54,9 +54,16 @@ class ReplayScalarColumnViews:
 
 
 @dataclass(frozen=True)
-class ReplaySearchCorrectionColumnViews:
-    kind: Literal['search_correction']
+class ReplaySearchBudgetColumnViews:
+    kind: Literal['search_budget']
     value: npt.NDArray[np.float32]
+    eligible: npt.NDArray[np.uint8]
+    raw_kl: npt.NDArray[np.float32]
+    prediction_logit: npt.NDArray[np.float32]
+    predicted_quantile: npt.NDArray[np.float32]
+    source_generation: npt.NDArray[np.uint32]
+    model_generation: npt.NDArray[np.uint32]
+    inference_model_sha256: npt.NDArray[np.uint8]
 
 
 @dataclass(frozen=True)
@@ -65,10 +72,7 @@ class ReplayLegalMovesColumnViews:
 
 
 ReplayAuxiliaryColumnViews: TypeAlias = (
-    ReplayNextPolicyColumnViews
-    | ReplayScalarColumnViews
-    | ReplaySearchCorrectionColumnViews
-    | ReplayLegalMovesColumnViews
+    ReplayNextPolicyColumnViews | ReplayScalarColumnViews | ReplaySearchBudgetColumnViews | ReplayLegalMovesColumnViews
 )
 
 
@@ -128,11 +132,20 @@ def build_column_views(
                         eligible=_uint8_array(arrays, ReplayColumnKind.AUXILIARY_ELIGIBLE, index),
                     )
                 )
-            case SearchCorrectionHeadLayout():
+            case SearchBudgetHeadLayout():
                 auxiliary.append(
-                    ReplaySearchCorrectionColumnViews(
-                        kind='search_correction',
+                    ReplaySearchBudgetColumnViews(
+                        kind='search_budget',
                         value=_float32_array(arrays, ReplayColumnKind.AUXILIARY_VALUE, index),
+                        eligible=_uint8_array(arrays, ReplayColumnKind.AUXILIARY_ELIGIBLE, index),
+                        raw_kl=_float32_array(arrays, ReplayColumnKind.AUXILIARY_RAW_KL, index),
+                        prediction_logit=_float32_array(arrays, ReplayColumnKind.AUXILIARY_PREDICTION_LOGIT, index),
+                        predicted_quantile=_float32_array(arrays, ReplayColumnKind.AUXILIARY_PREDICTED_QUANTILE, index),
+                        source_generation=_uint32_array(arrays, ReplayColumnKind.AUXILIARY_SOURCE_GENERATION, index),
+                        model_generation=_uint32_array(arrays, ReplayColumnKind.AUXILIARY_MODEL_GENERATION, index),
+                        inference_model_sha256=_uint8_array(
+                            arrays, ReplayColumnKind.AUXILIARY_INFERENCE_MODEL_SHA256, index
+                        ),
                     )
                 )
             case LegalMovesHeadLayout():
@@ -230,8 +243,32 @@ def _values_for_descriptor(
             return value
         case ReplayScalarColumnViews(eligible=eligible), ReplayColumnKind.AUXILIARY_ELIGIBLE:
             return eligible
-        case ReplaySearchCorrectionColumnViews(value=value), ReplayColumnKind.AUXILIARY_VALUE:
+        case ReplaySearchBudgetColumnViews(value=value), ReplayColumnKind.AUXILIARY_VALUE:
             return value
+        case ReplaySearchBudgetColumnViews(eligible=eligible), ReplayColumnKind.AUXILIARY_ELIGIBLE:
+            return eligible
+        case ReplaySearchBudgetColumnViews(raw_kl=raw_kl), ReplayColumnKind.AUXILIARY_RAW_KL:
+            return raw_kl
+        case ReplaySearchBudgetColumnViews(
+            prediction_logit=prediction_logit
+        ), ReplayColumnKind.AUXILIARY_PREDICTION_LOGIT:
+            return prediction_logit
+        case ReplaySearchBudgetColumnViews(
+            predicted_quantile=predicted_quantile
+        ), ReplayColumnKind.AUXILIARY_PREDICTED_QUANTILE:
+            return predicted_quantile
+        case ReplaySearchBudgetColumnViews(
+            source_generation=source_generation
+        ), ReplayColumnKind.AUXILIARY_SOURCE_GENERATION:
+            return source_generation
+        case ReplaySearchBudgetColumnViews(
+            model_generation=model_generation
+        ), ReplayColumnKind.AUXILIARY_MODEL_GENERATION:
+            return model_generation
+        case ReplaySearchBudgetColumnViews(
+            inference_model_sha256=inference_model_sha256
+        ), ReplayColumnKind.AUXILIARY_INFERENCE_MODEL_SHA256:
+            return inference_model_sha256
         case _:
             raise ValueError(f'Replay column {key.name} does not match its auxiliary target.')
 

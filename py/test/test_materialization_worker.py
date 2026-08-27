@@ -224,7 +224,7 @@ def _expected_samples(games: tuple[CompletedSelfPlayGame, ...]) -> tuple[ReplayS
     )
 
 
-def test_sealed_shard_matches_independent_materialization_and_preserves_counter_order(tmp_path: Path) -> None:
+def test_sealed_shard_materializes_every_game_and_preserves_counter_order(tmp_path: Path) -> None:
     worker = _worker(tmp_path)
     games = (_game(0), _game(1, full_search=False), _game(2))
     for counter, game in enumerate(games):
@@ -250,8 +250,8 @@ def test_sealed_shard_matches_independent_materialization_and_preserves_counter_
         )
         assert tuple((metadata.row_start, metadata.row_count) for metadata in reader.manifest.games) == (
             (0, 4),
-            (4, 0),
             (4, 4),
+            (8, 4),
         )
 
 
