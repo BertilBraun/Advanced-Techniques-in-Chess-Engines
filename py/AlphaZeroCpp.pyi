@@ -8,7 +8,7 @@ import typing
 
 import pybind11_stubgen.typing_ext
 
-__all__ = [
+__all__: list[str] = [
     'ActionAnalysisCandidate',
     'AdditionalSearchLimit',
     'AnalysisMode',
