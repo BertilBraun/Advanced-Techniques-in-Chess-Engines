@@ -169,7 +169,7 @@ class PersistedReplayLabelSourceCohort(FrozenModel):
 
 
 class PersistedReplayLabelCohortJournal(FrozenModel):
-    schema_version: int = Field(default=2, ge=2, le=2)
+    schema_version: int = Field(default=3, ge=3, le=3)
     cohorts: tuple[PersistedReplayLabelSourceCohort, ...] = ()
 
     def model_post_init(self, __context: object) -> None:
@@ -342,6 +342,8 @@ class ReplayManager(Generic[PositionT]):
         self._lock = threading.RLock()
         self._labelled_writebacks = self._load_labelled_writebacks()
         self._label_cohorts = self._load_label_cohorts()
+        self._remove_unreferenced_label_cohort_shards()
+        self._save_label_cohorts()
         self._fatal_materialization_error: RuntimeError | None = None
         self._rejection_alarm = _RejectionRateAlarm(
             configuration.materialization_rejection_window_games,
@@ -603,6 +605,11 @@ class ReplayManager(Generic[PositionT]):
             if cohort.status is ReplayLabelCohortStatus.ENQUEUED:
                 return
             self._replace_label_cohort(cohort.model_copy(update={'status': ReplayLabelCohortStatus.ENQUEUED}))
+            for shard in cohort.shards:
+                self._label_cohort_shard_path(shard.shard_identity).unlink(missing_ok=True)
+            self._replace_label_cohort(
+                cohort.model_copy(update={'status': ReplayLabelCohortStatus.ENQUEUED, 'shards': ()})
+            )
 
     def _recover_prepared_label_writeback(
         self,
@@ -713,16 +720,33 @@ class ReplayManager(Generic[PositionT]):
         path = self._label_cohort_shard_path(shard.shard_identity)
         if path.exists():
             try:
-                existing = ReplayLabelCohortShard.model_validate_json(path.read_text(encoding='utf-8'))
+                manifest = SealedReplayShardManifest.model_validate_json(path.read_text(encoding='utf-8'))
             except (OSError, UnicodeError, ValueError) as error:
                 raise ValueError(f'Replay label source cohort shard is unreadable: {path}') from error
+            existing = ReplayLabelCohortShard(shard_identity=manifest.shard_identity, games=manifest.games)
             if existing != shard:
                 raise ValueError('A persisted replay label source cohort shard conflicts with staged metadata.')
             return
-        write_text_atomically(path, shard.model_dump_json() + '\n')
+        source_path = replay_shard_manifest_path(self.staging_path, shard.shard_identity)
+        try:
+            os.link(source_path, path)
+        except OSError as error:
+            raise ValueError(f'Could not retain replay label source cohort shard: {source_path}') from error
 
     def _label_cohort_shard_path(self, shard_identity: str) -> Path:
-        return self._label_cohort_shards_path / f'{shard_identity}.json'
+        return self._label_cohort_shards_path / f'{shard_identity}{MANIFEST_SUFFIX}'
+
+    def _remove_unreferenced_label_cohort_shards(self) -> None:
+        referenced = {
+            shard.shard_identity
+            for cohort in self._label_cohorts.cohorts
+            if cohort.status is not ReplayLabelCohortStatus.ENQUEUED
+            for shard in cohort.shards
+        }
+        for path in self._label_cohort_shards_path.glob(f'*{MANIFEST_SUFFIX}'):
+            identity = path.name.removesuffix(MANIFEST_SUFFIX)
+            if identity not in referenced:
+                path.unlink()
 
     def raise_if_materialization_failed(self) -> None:
         with self._lock:
@@ -796,12 +820,13 @@ class ReplayManager(Generic[PositionT]):
             cohorts = []
             for cohort in persisted.cohorts:
                 shards = []
-                for shard_identity in cohort.shard_identities:
-                    path = self._label_cohort_shard_path(shard_identity)
-                    shard = ReplayLabelCohortShard.model_validate_json(path.read_text(encoding='utf-8'))
-                    if shard.shard_identity != shard_identity:
-                        raise ValueError('Replay label source cohort shard identity does not match its journal.')
-                    shards.append(shard)
+                if cohort.status is not ReplayLabelCohortStatus.ENQUEUED:
+                    for shard_identity in cohort.shard_identities:
+                        path = self._label_cohort_shard_path(shard_identity)
+                        manifest = SealedReplayShardManifest.model_validate_json(path.read_text(encoding='utf-8'))
+                        if manifest.shard_identity != shard_identity:
+                            raise ValueError('Replay label source cohort shard identity does not match its journal.')
+                        shards.append(ReplayLabelCohortShard(shard_identity=shard_identity, games=manifest.games))
                 cohorts.append(
                     ReplayLabelSourceCohort(
                         source_generation=cohort.source_generation,

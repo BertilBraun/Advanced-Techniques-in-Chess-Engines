@@ -31,7 +31,7 @@ from src.replay.manager import (
     ReplayManager,
 )
 from src.replay.materialization import materialize_completed_game
-from src.replay.shard import SealedReplayShardManifest, replay_shard_manifest_path
+from src.replay.shard import MANIFEST_SUFFIX, SealedReplayShardManifest, replay_shard_manifest_path
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
@@ -692,16 +692,21 @@ def test_label_source_cohort_survives_shard_deletion_and_restart(tmp_path: Path)
     _publish_games(inbox, 2)
     manager = _open_manager(tmp_path, capacity=16, maximum_capacity=16)
     manager.materialize_available_games()
+    staged_manifest_path = next((tmp_path / 'completed-games' / 'staging').glob(f'*{MANIFEST_SUFFIX}'))
+    staged_manifest_bytes = staged_manifest_path.read_bytes()
+    staged_manifest_file_index = staged_manifest_path.stat().st_ino
 
     ingestion = manager.append_staged_games(2)
     cohort = manager.finalize_label_source_cohort(2)
     journal_text = (tmp_path / 'completed-games' / 'label-source-cohorts.json').read_text(encoding='utf-8')
-    shard_paths = tuple((tmp_path / 'completed-games' / 'label-source-cohort-shards').glob('*.json'))
+    shard_paths = tuple((tmp_path / 'completed-games' / 'label-source-cohort-shards').glob(f'*{MANIFEST_SUFFIX}'))
 
     assert cohort.games == ingestion.label_source_games
-    assert '"schema_version": 2' in journal_text
+    assert '"schema_version": 3' in journal_text
     assert '"games"' not in journal_text
     assert len(shard_paths) == 1
+    assert shard_paths[0].read_bytes() == staged_manifest_bytes
+    assert shard_paths[0].stat().st_ino == staged_manifest_file_index
     assert manager.pending_label_source_generations == (2,)
     assert manager.staging_depth == 0
     manager.close()
@@ -712,7 +717,12 @@ def test_label_source_cohort_survives_shard_deletion_and_restart(tmp_path: Path)
     restarted.acknowledge_label_source_cohort(2)
     restarted.acknowledge_label_source_cohort(2)
     assert restarted.pending_label_source_generations == ()
+    assert not tuple((tmp_path / 'completed-games' / 'label-source-cohort-shards').iterdir())
     restarted.close()
+
+    acknowledged = _open_manager(tmp_path, capacity=16, maximum_capacity=16)
+    assert acknowledged.pending_label_source_generations == ()
+    acknowledged.close()
 
 
 def test_empty_label_source_cohort_is_finalized_for_generation_accounting(tmp_path: Path) -> None:
