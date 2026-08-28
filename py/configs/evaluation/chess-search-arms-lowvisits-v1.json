@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Parallelism at the production fast-search budget of 150 visits, generation 162. Baseline is the production parallel_searches of 4. Tests whether parallelism that is strength-neutral at 600 visits stays neutral when only 150 visits are available, where high parallelism leaves very few sequential expansion rounds.",
+  "description": "Parallelism at a low budget of 150 visits, generation 162. Baseline is parallel_searches 4. Tests whether parallelism that is strength-neutral at 600 visits stays neutral when only 150 visits are available, where high parallelism leaves very few sequential expansion rounds.",
   "baseline_label": "lowvis-parallel-4",
   "arms": [
     {

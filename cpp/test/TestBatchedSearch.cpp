@@ -182,19 +182,19 @@ int runBatchedSearchTests() {
                     retainedResult.final_visits == 32,
                 "retained root treated the assigned budget as an absolute visit limit");
 
-        const SelfPlaySearchParameters adaptiveParameters(101, 1.0F, treeSearchParameters(), 0.3F,
-                                                          0.0F);
-        ChessSelfPlaySearch adaptiveSearch(runtimeParameters, adaptiveParameters,
-                                           inferenceParameters);
-        const auto adaptiveResult =
-            adaptiveSearch.search({productionRequest(adaptiveSearch, 600)}).results.front();
-        require(adaptiveResult.spend_residual == adaptiveSearch.spendResidual(),
+        const SelfPlaySearchParameters blendedParameters(101, 1.0F, treeSearchParameters(), 0.3F,
+                                                         0.0F);
+        ChessSelfPlaySearch blendedSearch(runtimeParameters, blendedParameters,
+                                          inferenceParameters);
+        const auto blendedResult =
+            blendedSearch.search({productionRequest(blendedSearch, 600)}).results.front();
+        require(blendedResult.spend_residual == blendedSearch.spendResidual(),
                 "predicted request did not expose its exact post-assignment spend residual");
-        const std::int64_t residualBeforeExplicit = adaptiveSearch.spendResidual();
+        const std::int64_t residualBeforeExplicit = blendedSearch.spendResidual();
         const auto explicitResult =
-            adaptiveSearch.search({fixedRequest(adaptiveSearch, 50, {}, 1)}).results.front();
+            blendedSearch.search({fixedRequest(blendedSearch, 50, {}, 1)}).results.front();
         require(explicitResult.spend_residual == residualBeforeExplicit &&
-                    adaptiveSearch.spendResidual() == residualBeforeExplicit,
+                    blendedSearch.spendResidual() == residualBeforeExplicit,
                 "explicit deep-label budget mutated the production spend ledger");
 
         std::vector<ChessSelfPlaySearchRequest> heterogeneous;
