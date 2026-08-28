@@ -9,7 +9,7 @@ from src.experiment.configuration import load_experiment_configuration
 from src.games.composition import create_game_implementation
 from src.games.contracts import WdlTarget
 from src.games.representation import encode_packed_planes
-from src.replay.contracts import ReplaySample, SparsePolicyTarget
+from src.replay.contracts import IneligibleSearchBudgetTarget, ReplaySample, SparsePolicyTarget
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import SearchVisitCounts
 from tools.benchmark_policy_head_variants import (
@@ -59,7 +59,7 @@ def _synthetic_store(path: Path) -> None:
                     policy=policy,
                     wdl_target=WdlTarget(win=0.5, draw=0.25, loss=0.25),
                     root_value=0.0,
-                    auxiliary_targets=(),
+                    auxiliary_targets=(IneligibleSearchBudgetTarget(),),
                     sample_weight=1.0,
                     source_model_generation=row,
                     source_created_at_seconds=float(row),
