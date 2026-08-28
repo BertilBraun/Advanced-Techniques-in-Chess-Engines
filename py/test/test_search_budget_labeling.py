@@ -16,6 +16,7 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
+from src.search_budget.allocation import CurveAllocationIdentity, CurveAllocationPurpose
 from src.search_budget.artifacts import load_persisted_model, write_persisted_model
 from src.search_budget.calibration import initial_calibration_state
 from src.search_budget.labeling import (
@@ -284,6 +285,34 @@ def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_
     assert finalized.bucket_diagnostics[5].generation_marginal_utility == 0.0
     assert finalized.target_distribution.variance > 0.0
     assert sum(finalized.target_distribution.histogram_counts) == 3
+
+    lower_identity = CurveAllocationIdentity(CurveAllocationPurpose.PROBE_LOWER, 5)
+    upper_identity = CurveAllocationIdentity(CurveAllocationPurpose.PROBE_UPPER, 5)
+    lower = next(allocation for allocation in allocations if allocation.identity == lower_identity)
+    upper = next(allocation for allocation in allocations if allocation.identity == upper_identity)
+    inverted_upper = replace(
+        upper,
+        budgets=(
+            replace(
+                upper.budgets[0],
+                assigned_new_visits=lower.budgets[0].assigned_new_visits - 1,
+            ),
+            *upper.budgets[1:],
+        ),
+    )
+    inverted_allocations = tuple(
+        inverted_upper if allocation.identity == upper_identity else allocation for allocation in allocations
+    )
+    rounded = finalize_generation(
+        source,
+        predictions,
+        inverted_allocations,
+        (artifact,),
+        action_size=2,
+        maximum_policy_entries=2,
+    )
+    assert rounded.bucket_diagnostics[5].checkpoint_deduplication_count == 3
+    assert rounded.bucket_diagnostics[5].sample_count == 2
 
     invalid_positions = tuple(
         position.model_copy(

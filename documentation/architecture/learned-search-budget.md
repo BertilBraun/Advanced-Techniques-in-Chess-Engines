@@ -58,7 +58,9 @@ budgets bypass the production allocator and cannot mutate its spend ledger.
 Replay ingestion atomically journals immutable sealed-shard metadata into one source-generation cohort before the
 source files are deleted. A committed training quantum finalizes that cohort and enqueues it using the checkpoint
 that generated the positions. Restart recovery replays every finalized or still-open unacknowledged cohort older than
-the active checkpoint. Enqueue and acknowledgement are idempotent.
+the active checkpoint. Cohort retention hard-links the already-written sealed manifest instead of serializing or
+copying its game metadata. Once the compact generation source is durably acknowledged, the retained links are
+removed and the identity journal is compacted. Enqueue and acknowledgement are idempotent.
 
 The deterministic sample contains exactly `floor(0.02 * population_positions)` stable position identities, chosen
 uniformly without replacement from the run seed and source generation. One logical source generation runs at a time
@@ -79,7 +81,10 @@ Generation finalization uses the documented `1e-6` policy-probability floor for 
 `KL(pi_deep || pi_baseline)` for every sampled position, assigns deterministic generation-wide mid-rank quantiles,
 updates all observed bucket statistics, scores the previously prepared publication candidate at exact flat mean
 spend, and writes every deep-labelled sample to replay. Replay write-back uses a prepared transaction receipt so a
-retry cannot duplicate one generation's evidence. Curve state changes only after that receipt commits.
+retry cannot duplicate one generation's evidence. Independent exact-spend rounding can occasionally give one local
+upper-probe position fewer visits than its lower probe; that unusable pair is counted as deduplicated evidence and
+omitted from the bucket utility instead of failing the complete generation. Curve state changes only after the
+receipt commits.
 
 ## Validation and publication
 
