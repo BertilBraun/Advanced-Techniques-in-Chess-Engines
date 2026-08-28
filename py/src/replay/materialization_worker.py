@@ -215,11 +215,15 @@ class MaterializationWorker(Generic[PositionT]):
             )
             metadata = ReplayShardGameMetadata(
                 source=ReplayShardSourceGame(identity=candidate.identity, counter=candidate.counter),
+                created_at_seconds=game.created_at_seconds,
+                generation_seconds=game.generation_seconds,
+                action_ids=game.action_ids,
                 row_start=row_start,
                 row_count=len(materialized.samples),
                 length_plies=len(game.action_ids),
                 termination_reason=game.termination_reason,
                 is_resignation_continuation=game.is_resignation_continuation,
+                resignation_threshold=game.resignation_threshold,
                 final_wdl=game.final_wdl,
                 observations=game.observations,
                 policies_truncated=materialized.policies_truncated,

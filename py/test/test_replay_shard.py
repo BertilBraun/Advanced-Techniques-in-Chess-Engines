@@ -180,13 +180,17 @@ def _observation() -> SearchObservation:
 def _game_metadata(source: ReplayShardSourceGame, row_start: int, row_count: int) -> ReplayShardGameMetadata:
     return ReplayShardGameMetadata(
         source=source,
+        created_at_seconds=10.0,
+        generation_seconds=2.0,
+        action_ids=(1,),
         row_start=row_start,
         row_count=row_count,
         length_plies=max(1, row_count),
         termination_reason=TerminationReason.NATURAL,
         is_resignation_continuation=False,
+        resignation_threshold=None,
         final_wdl=WdlTarget(win=1.0, draw=0.0, loss=0.0),
-        observations=(_observation(),),
+        observations=(_observation(),) if row_count else (),
         policies_truncated=0,
         retained_visit_mass=10 * row_count,
         discarded_visit_mass=0,
@@ -218,6 +222,11 @@ def test_shard_round_trip_matches_old_rows_and_canonical_columns(tmp_path: Path,
     assert sealed_replay_shard_manifest_paths(tmp_path) == (manifest_path,)
     with ReplayShardReader.open(manifest_path, layout) as reader:
         assert reader.manifest == manifest
+        reconstructed = reader.manifest.games[0].completed_game()
+        assert reconstructed.identity == reader.manifest.games[0].source.identity
+        assert reconstructed.created_at_seconds == 10.0
+        assert reconstructed.generation_seconds == 2.0
+        assert reconstructed.action_ids == (1,)
         columns = reader.columns
         for column in flatten_column_views(layout, columns):
             np.testing.assert_array_equal(column.values, old_rows[column.descriptor.key.name])
