@@ -200,11 +200,15 @@ class ResolvedTrainingObjective(FrozenModel):
             case ResolvedSearchBudgetLoss():
                 eligible_rows = eligibility.to(dtype=torch.bool)
                 rows = torch.zeros(prediction.shape[0], dtype=prediction.dtype, device=prediction.device)
-                rows[eligible_rows] = functional.l1_loss(
-                    torch.sigmoid(prediction[eligible_rows]),
-                    target[eligible_rows],
-                    reduction='none',
-                ).squeeze(1)
+                rows[eligible_rows] = (
+                    functional.l1_loss(
+                        torch.sigmoid(prediction[eligible_rows]),
+                        target[eligible_rows],
+                        reduction='none',
+                    )
+                    .squeeze(1)
+                    .to(dtype=rows.dtype)
+                )
             case ResolvedLegalMovesLoss():
                 element_loss = functional.binary_cross_entropy_with_logits(
                     prediction,

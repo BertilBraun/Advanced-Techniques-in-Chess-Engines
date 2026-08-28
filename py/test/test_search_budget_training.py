@@ -101,6 +101,17 @@ def test_search_budget_batch_without_eligible_labels_has_finite_zero_loss() -> N
     assert loss.total.isfinite()
 
 
+def test_search_budget_masked_l1_supports_bfloat16_predictions() -> None:
+    batch = _training_batch(torch.tensor((True, False)), torch.tensor((1.0, 10.0)))
+    probabilities = torch.tensor((0.25, 0.75), dtype=torch.bfloat16)
+    output = _model_output(torch.logit(probabilities))
+
+    loss = _objective().calculate_loss(output, batch)
+
+    assert loss.auxiliary[0].isfinite()
+    assert loss.auxiliary[0].item() == pytest.approx(0.25, abs=0.002)
+
+
 def test_eligible_and_ineligible_search_budget_targets_round_trip_with_provenance(tmp_path: Path) -> None:
     packed_planes = PackedPlaneLayout(board_size=3, binary_plane_count=1, scalar_count=1)
     layout = ReplayLayout(
