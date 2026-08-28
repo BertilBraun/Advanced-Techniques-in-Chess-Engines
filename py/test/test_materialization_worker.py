@@ -127,7 +127,7 @@ LAYOUT = ReplayLayout(
 )
 
 
-def _game(game_number: int, *, full_search: bool = True) -> CompletedSelfPlayGame:
+def _game(game_number: int, *, assigned_additional_visits: int = 13) -> CompletedSelfPlayGame:
     actions = (0, 1, 0, 2)
     observations = tuple(
         SearchObservation(
@@ -142,18 +142,19 @@ def _game(game_number: int, *, full_search: bool = True) -> CompletedSelfPlayGam
             highest_visited_child_visit_count=10,
             highest_visited_child_q=0.2,
             selected_action_id=selected_action,
-            full_search=full_search,
             sample_weight=1.0,
-            search_budget=13,
+            baseline_visits=13,
             network_root_value=0.1,
             policy_correction=0.2,
             value_correction=0.075,
-            search_correction_target=0.2,
-            predicted_search_correction=0.15,
+            search_budget_logit=-0.4,
+            predicted_search_budget=0.4,
+            assigned_additional_visits=assigned_additional_visits,
+            parallel_searches=1,
+            spend_residual=0,
             starting_visits=0,
-            final_visits=13,
-            stop_reason=SearchStopReason.FIXED_LIMIT,
-            learned_gate_evaluated=False,
+            final_visits=assigned_additional_visits,
+            stop_reason=SearchStopReason.PREDICTED_BUDGET,
         )
         for ply, selected_action in enumerate(actions)
     )
@@ -226,7 +227,7 @@ def _expected_samples(games: tuple[CompletedSelfPlayGame, ...]) -> tuple[ReplayS
 
 def test_sealed_shard_materializes_every_game_and_preserves_counter_order(tmp_path: Path) -> None:
     worker = _worker(tmp_path)
-    games = (_game(0), _game(1, full_search=False), _game(2))
+    games = (_game(0), _game(1, assigned_additional_visits=3), _game(2))
     for counter, game in enumerate(games):
         _place(worker, counter, game)
     expected_samples = _expected_samples(games)

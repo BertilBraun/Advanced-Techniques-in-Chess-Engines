@@ -16,12 +16,10 @@ def test_scheduled_settings_include_every_generation_schedule() -> None:
     assert set(settings) == {
         'settings/training/learning_rate',
         'settings/replay/capacity',
-        'settings/self_play/full_searches',
-        'settings/self_play/fast_searches',
+        'settings/self_play/baseline_visits',
         'settings/self_play/dirichlet_epsilon',
         'settings/self_play/dirichlet_alpha',
         'settings/self_play/exploration_constant',
-        'settings/self_play/full_search_probability',
         'settings/self_play/retained_root_visit_fraction',
         'settings/self_play/greedy_after_ply',
         'settings/self_play/starting_temperature',
@@ -34,8 +32,9 @@ def test_scheduled_settings_include_every_generation_schedule() -> None:
         'settings/training/value_discount_per_ply',
         'settings/training/auxiliary/0-next-policy-ply-1/loss_weight',
         'settings/training/auxiliary/1-remaining-game-length/loss_weight',
+        'settings/training/auxiliary/2-search-budget/loss_weight',
     }
     assert settings['settings/training/learning_rate'] == pytest.approx(0.0085)
     assert settings['settings/replay/capacity'] == 500_000
-    assert settings['settings/self_play/full_searches'] == 160
-    assert settings['settings/self_play/full_search_probability'] == pytest.approx(0.25)
+    assert settings['settings/self_play/baseline_visits'] == 160
+    assert settings['settings/training/auxiliary/2-search-budget/loss_weight'] == pytest.approx(0.2)

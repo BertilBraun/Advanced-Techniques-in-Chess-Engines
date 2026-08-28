@@ -38,7 +38,6 @@ from src.replay.shard import (
 from src.replay.store import encode_replay_rows
 from src.self_play.completed_game import (
     GameIdentity,
-    SearchCheckpointObservation,
     SearchObservation,
     SearchStopReason,
     SearchVisitCounts,
@@ -162,30 +161,19 @@ def _observation() -> SearchObservation:
         highest_visited_child_visit_count=7,
         highest_visited_child_q=0.1,
         selected_action_id=1,
-        full_search=True,
         sample_weight=1.0,
-        search_budget=16,
+        baseline_visits=14,
         network_root_value=0.15,
         policy_correction=0.1,
         value_correction=0.2,
-        search_correction_target=0.2,
-        predicted_search_correction=0.25,
+        search_budget_logit=0.25,
+        predicted_search_budget=0.56,
+        assigned_additional_visits=14,
+        parallel_searches=1,
+        spend_residual=0,
         starting_visits=2,
         final_visits=16,
-        stop_reason=SearchStopReason.MAXIMUM,
-        learned_gate_evaluated=True,
-        checkpoints=(
-            SearchCheckpointObservation(
-                visits=8,
-                leader_action_id=1,
-                most_visited_action_id=1,
-                top_visit_share=0.7,
-                top_two_margin=0.4,
-                root_value=0.2,
-                root_value_delta=0.05,
-                leader_stable=True,
-            ),
-        ),
+        stop_reason=SearchStopReason.PREDICTED_BUDGET,
     )
 
 

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 from typing import cast
 
 import pytest
 import src.training.coordinator as coordinator_module
 from src.replay.manager import ReplayIngestion
+from src.search_budget.calibration import BlendDecisionReason, BlendPublication
 from src.self_play.protocol import (
     RunningSelfPlayState,
     RunningSelfPlayStateApplied,
@@ -101,6 +103,30 @@ class _EvaluationManager:
 
 
 @dataclass
+class _SearchBudgetLabelManager:
+    closed: bool = False
+    poll_calls: int = 0
+
+    def publication_for_generation(self, production_generation: int) -> BlendPublication:
+        return _publication(production_generation)
+
+    def poll(self) -> tuple[()]:
+        self.poll_calls += 1
+        return ()
+
+    def close(self) -> None:
+        self.closed = True
+
+
+@dataclass
+class _LabelSampleProvider:
+    closed: bool = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
+@dataclass
 class _RunLimitMonitor:
     reason: str | None = None
 
@@ -125,8 +151,10 @@ class _SelfPlayGroup:
     def supervise(
         self,
         checkpoint: CheckpointReference,
+        search_budget: BlendPublication,
         resignation_policy: PublishedResignationPolicy,
     ) -> SelfPlaySupervision:
+        assert search_budget == _publication(checkpoint.generation)
         del checkpoint, resignation_policy
         index = min(self.supervise_calls, len(self.supervisions) - 1)
         self.supervise_calls += 1
@@ -136,6 +164,9 @@ class _SelfPlayGroup:
         self,
         desired_states: tuple[RunningSelfPlayState | StoppedSelfPlayState, ...],
     ) -> tuple[SelfPlayStateApplied, ...]:
+        for desired_state in desired_states:
+            if isinstance(desired_state, RunningSelfPlayState):
+                assert desired_state.search_budget == _publication(desired_state.checkpoint.generation)
         return tuple(
             cast(
                 SelfPlayStateApplied,
@@ -143,6 +174,7 @@ class _SelfPlayGroup:
                     worker_id=worker_id,
                     loaded_generation=self.checkpoint.generation,
                     loaded_inference_model_sha256=self.checkpoint.inference_model_sha256,
+                    search_budget=_publication(self.checkpoint.generation),
                     completed_generation_statistics=None,
                 ),
             )
@@ -203,6 +235,14 @@ class _Harness:
     self_play_group: _SelfPlayGroup
 
 
+def _publication(generation: int) -> BlendPublication:
+    return BlendPublication(
+        blend=Decimal(0),
+        application_generation=generation,
+        decision_reason=BlendDecisionReason.INITIAL,
+    )
+
+
 def _harness(
     tmp_path: Path,
     live_worker_counts: list[int],
@@ -223,6 +263,8 @@ def _harness(
     coordinator.self_play_group = self_play_group  # type: ignore[assignment]
     coordinator.self_play_health = SelfPlayHealthMonitor(WORKER_COUNT, grace_seconds=grace_seconds)
     coordinator.evaluation_manager = _EvaluationManager()  # type: ignore[assignment]
+    coordinator.search_budget_label_manager = _SearchBudgetLabelManager()  # type: ignore[assignment]
+    coordinator.label_sample_provider = _LabelSampleProvider()  # type: ignore[assignment]
     coordinator.training_session = _TrainingSession()  # type: ignore[assignment]
     coordinator.run_limit_monitor = _RunLimitMonitor(run_limit_reason)  # type: ignore[assignment]
     coordinator.resignation_calibrator = None
@@ -230,6 +272,7 @@ def _harness(
     coordinator._backpressure_pause_requested = False
     coordinator._credit_wait_started_at = 0.0
     coordinator._completed_games_since_last_quantum = []
+    coordinator._label_source_games_since_last_quantum = []
     coordinator._ingest_seconds_since_last_quantum = 0.0
     return _Harness(coordinator, replay_manager, self_play_group)
 

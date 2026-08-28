@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip('AlphaZeroCpp')
-from AlphaZeroCpp import GameSearchVisit, SearchCheckpoint
+from AlphaZeroCpp import GameSearchVisit
 from AlphaZeroCpp import SearchStopReason as NativeSearchStopReason
 from src.games.contracts import TerminalOracle, WdlTarget
 from src.games.implementation import GameImplementation
@@ -22,7 +22,6 @@ from src.self_play.completed_game import (
     TerminationReason,
 )
 from src.self_play.parameters import (
-    FixedFullSearchBudget,
     RandomOpeningStartParameters,
     ResolvedSelfPlayParameters,
     RestartStateStartParameters,
@@ -63,7 +62,9 @@ class FakeRoot:
 @dataclass(frozen=True)
 class FakeRequest:
     root: FakeRoot
-    full_search: bool
+    assigned_additional_visits: int | None = None
+    policy_checkpoint_visits: list[int] | None = None
+    parallel_searches: int | None = None
 
 
 @dataclass(frozen=True)
@@ -77,13 +78,14 @@ class FakeResult:
     network_root_value: float
     policy_correction: float
     value_correction: float
-    search_correction_target: float
-    predicted_search_correction: float
+    search_budget_logit: float
+    predicted_search_budget: float
+    assigned_additional_visits: int
+    parallel_searches: int
+    spend_residual: int
     starting_visits: int
     final_visits: int
     stop_reason: NativeSearchStopReason
-    learned_gate_evaluated: bool
-    checkpoints: list[SearchCheckpoint]
     root: FakeRoot
 
     @property
@@ -120,12 +122,19 @@ class FakeSearch:
         self.policy_target_visits = [GameSearchVisit(0, 3)]
         self.root_value = 0.25
         self.highest_visited_child_q = 0.2
+        self._spend_residual = 0
 
     def new_root(self, position: FakePosition) -> FakeRoot:
         return FakeRoot(position)
 
-    def request(self, root: FakeRoot, full_search: bool) -> FakeRequest:
-        return FakeRequest(root, full_search)
+    def request(
+        self,
+        root: FakeRoot,
+        assigned_additional_visits: int | None = None,
+        policy_checkpoint_visits: list[int] | None = None,
+        parallel_searches: int | None = None,
+    ) -> FakeRequest:
+        return FakeRequest(root, assigned_additional_visits, policy_checkpoint_visits, parallel_searches)
 
     def search(self, requests: list[FakeRequest], collect_statistics: bool = False) -> FakeBatch:
         assert not collect_statistics
@@ -133,23 +142,24 @@ class FakeSearch:
         return FakeBatch(
             [
                 FakeResult(
-                    self.root_value,
-                    self.search_visits[0].action_id,
-                    self.search_visits[0].visit_count,
-                    self.highest_visited_child_q,
-                    self.search_visits,
-                    self.policy_target_visits,
-                    self.root_value,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0,
-                    3,
-                    NativeSearchStopReason.FIXED_LIMIT,
-                    False,
-                    [],
-                    request.root,
+                    root_value=self.root_value,
+                    highest_visited_child_action_id=self.search_visits[0].action_id,
+                    highest_visited_child_visit_count=self.search_visits[0].visit_count,
+                    highest_visited_child_q=self.highest_visited_child_q,
+                    search_visits=self.search_visits,
+                    policy_target_visits=self.policy_target_visits,
+                    network_root_value=self.root_value,
+                    policy_correction=0.0,
+                    value_correction=0.0,
+                    search_budget_logit=0.0,
+                    predicted_search_budget=0.5,
+                    assigned_additional_visits=3,
+                    parallel_searches=1,
+                    spend_residual=self._spend_residual,
+                    starting_visits=0,
+                    final_visits=3,
+                    stop_reason=NativeSearchStopReason.FIXED_LIMIT,
+                    root=request.root,
                 )
                 for request in requests
             ],
@@ -163,6 +173,13 @@ class FakeSearch:
     def update_search_schedule(self, search_parameters: ResolvedSelfPlayParameters) -> bool:
         del search_parameters
         return self.capacity_changed
+
+    def reset_spend_residual(self) -> None:
+        self._spend_residual = 0
+
+    @property
+    def spend_residual(self) -> int:
+        return self._spend_residual
 
     def inference_statistics(self) -> FakeInferenceStatistics:
         return FakeInferenceStatistics()
@@ -202,7 +219,6 @@ class FakeGame:
         self,
         maximum_random_opening_plies: int = 0,
         restart_parameters: RestartStateStartParameters | None = None,
-        force_fast_search_after_ply: int | None = None,
         resignation_configuration: CalibratedResignationConfiguration | None = None,
         maximum_game_plies: int | None = None,
         bootstrap_cut_game_value: bool = False,
@@ -211,13 +227,17 @@ class FakeGame:
         self.search = FakeSearch()
         self.maximum_random_opening_plies = maximum_random_opening_plies
         self.restart_parameters = restart_parameters
-        self.force_fast_search_after_ply = force_fast_search_after_ply
         self.resignation_configuration = resignation_configuration
         self.maximum_game_plies = maximum_game_plies
         self.bootstrap_cut_game_value = bootstrap_cut_game_value
         self.terminal_oracle = terminal_oracle
 
-    def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
+    def self_play_parameters_at(
+        self,
+        model_generation: int,
+        search_budget_blend: float,
+    ) -> ResolvedSelfPlayParameters:
+        del model_generation
         start_position = self.restart_parameters
         if start_position is None:
             start_position = RandomOpeningStartParameters(
@@ -225,10 +245,8 @@ class FakeGame:
             )
         return ResolvedSelfPlayParameters(
             start_position=start_position,
-            full_search_probability=1.0,
-            parallel_searches=1,
-            full_search_budget=FixedFullSearchBudget(kind='fixed', visits=3),
-            fast_searches=1,
+            baseline_visits=3,
+            search_budget_blend=search_budget_blend,
             forced_playout_coefficient=0.0,
             exploration_constant=1.0,
             first_play_urgency=ZeroFirstPlayUrgencyParameters(),
@@ -241,7 +259,6 @@ class FakeGame:
             maximum_game_plies=self.maximum_game_plies,
             primary_sample_weight=1.0,
             value_discount_per_ply=1.0,
-            force_fast_search_after_ply=self.force_fast_search_after_ply,
             bootstrap_cut_game_value=self.bootstrap_cut_game_value,
         )
 
@@ -304,9 +321,9 @@ def test_worker_owns_shared_search_move_selection_and_generation_transition(tmp_
     with pytest.raises(RuntimeError, match='model must be loaded'):
         worker.run_batch()
 
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
     worker.run_batch()
-    worker.refresh_published_model(checkpoint(tmp_path, 1))
+    worker.refresh_published_model(checkpoint(tmp_path, 1), 0.4)
     statistics = worker.snapshot_statistics()
 
     assert [game.root.position.ply for game in worker.active_games] == [1, 1, 1]
@@ -332,7 +349,7 @@ def test_terminal_oracle_is_probed_only_at_maximum_ply(tmp_path: Path) -> None:
         device_id=0,
         inbox_path=tmp_path,
     )
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     worker.run_batch()
     assert oracle.probed_positions == []
@@ -354,7 +371,7 @@ def test_uncovered_maximum_ply_position_uses_game_adjudication(tmp_path: Path) -
         device_id=0,
         inbox_path=tmp_path,
     )
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     worker.run_batch()
 
@@ -372,12 +389,12 @@ def test_worker_replaces_roots_when_search_arena_capacity_changes(tmp_path: Path
         device_id=0,
         inbox_path=tmp_path,
     )
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
     worker.run_batch()
     original_roots = tuple(active_game.root for active_game in worker.active_games)
 
     game.search.capacity_changed = True
-    worker.refresh_published_model(checkpoint(tmp_path, 1))
+    worker.refresh_published_model(checkpoint(tmp_path, 1), 0.5)
 
     assert all(active_game.root is not original for active_game, original in zip(worker.active_games, original_roots))
     assert [active_game.root.position.ply for active_game in worker.active_games] == [1, 1]
@@ -385,8 +402,8 @@ def test_worker_replaces_roots_when_search_arena_capacity_changes(tmp_path: Path
     assert [active_game.root.reset_count for active_game in worker.active_games] == [0, 0]
 
 
-def test_worker_forces_fast_searches_after_configured_ply(tmp_path: Path) -> None:
-    game = FakeGame(force_fast_search_after_ply=1)
+def test_worker_uses_learned_budget_search_for_every_position(tmp_path: Path) -> None:
+    game = FakeGame()
     worker = SelfPlayWorker(
         cast(GameImplementation, game),
         parallel_game_count=1,
@@ -394,14 +411,14 @@ def test_worker_forces_fast_searches_after_configured_ply(tmp_path: Path) -> Non
         device_id=0,
         inbox_path=tmp_path,
     )
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     worker.run_batch()
     worker.run_batch()
 
-    assert game.search.request_batches[0][0].full_search
-    assert not game.search.request_batches[1][0].full_search
-    assert [observation.full_search for observation in worker.active_games[0].observations] == [True, False]
+    assert all(batch[0].assigned_additional_visits is None for batch in game.search.request_batches)
+    assert [observation.assigned_additional_visits for observation in worker.active_games[0].observations] == [3, 3]
+    assert [observation.predicted_search_budget for observation in worker.active_games[0].observations] == [0.5, 0.5]
 
 
 def test_worker_selects_from_actual_visits_and_records_pruned_target_visits(tmp_path: Path) -> None:
@@ -415,7 +432,7 @@ def test_worker_selects_from_actual_visits_and_records_pruned_target_visits(tmp_
         device_id=0,
         inbox_path=tmp_path,
     )
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     worker.run_batch()
 
@@ -437,7 +454,7 @@ def test_worker_resigns_with_frozen_published_threshold(tmp_path: Path) -> None:
         inbox_path=tmp_path,
     )
     worker.update_resignation_policy(PublishedResignationPolicy(threshold=-0.85))
-    worker.refresh_published_model(checkpoint(tmp_path, 50))
+    worker.refresh_published_model(checkpoint(tmp_path, 50), 0.3)
     worker.active_games[0].is_resignation_continuation = False
 
     worker.run_batch()
@@ -461,7 +478,7 @@ def test_continuation_game_never_resigns_and_keeps_creation_threshold(tmp_path: 
         inbox_path=tmp_path,
     )
     worker.update_resignation_policy(PublishedResignationPolicy(threshold=-0.85))
-    worker.refresh_published_model(checkpoint(tmp_path, 50))
+    worker.refresh_published_model(checkpoint(tmp_path, 50), 0.3)
     active = worker.active_games[0]
     worker.update_resignation_policy(PublishedResignationPolicy(threshold=-0.80))
 
@@ -496,7 +513,7 @@ def test_worker_samples_random_opening_length_from_zero_through_configured_maxim
     )
     worker.random = cast(np.random.Generator, FakeOpeningRandom((0, 12)))
 
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     assert [active_game.root.position.ply for active_game in worker.active_games] == [0, 12]
     assert [active_game.action_ids for active_game in worker.active_games] == [[], [0] * 12]
@@ -547,18 +564,19 @@ def restart_source_game() -> CompletedSelfPlayGame:
                 highest_visited_child_visit_count=45,
                 highest_visited_child_q=0.0,
                 selected_action_id=0,
-                full_search=True,
                 sample_weight=1.0,
-                search_budget=256,
+                baseline_visits=256,
                 network_root_value=0.0,
                 policy_correction=0.0,
                 value_correction=0.0,
-                search_correction_target=0.0,
-                predicted_search_correction=0.0,
+                search_budget_logit=0.0,
+                predicted_search_budget=0.5,
+                assigned_additional_visits=256,
+                parallel_searches=2,
+                spend_residual=0,
                 starting_visits=0,
                 final_visits=256,
                 stop_reason=SearchStopReason.FIXED_LIMIT,
-                learned_gate_evaluated=False,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=1.0, loss=0.0),
@@ -576,7 +594,7 @@ def test_restart_policy_uses_exact_initial_states_without_random_openings(tmp_pa
     )
     worker.random = cast(np.random.Generator, FakeRestartRandom(0.0))
 
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     assert worker.active_games[0].action_ids == []
     assert worker.active_games[0].root.position == FakePosition(0)
@@ -594,14 +612,14 @@ def test_restart_policy_falls_back_to_exact_start_when_archive_is_empty(tmp_path
     )
     worker.random = cast(np.random.Generator, FakeRestartRandom(0.9))
 
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     assert worker.active_games[0].action_ids == []
     assert worker.empty_restart_fallbacks == 1
     worker.close()
 
 
-def test_restart_root_runs_full_search_and_plays_reserved_candidate(tmp_path: Path) -> None:
+def test_restart_root_uses_learned_budget_and_plays_reserved_candidate(tmp_path: Path) -> None:
     parameters = restart_parameters()
     completed_games_path = tmp_path / 'completed-games'
     archive = RestartStateArchive(worker_restart_archive_path(completed_games_path, 0))
@@ -616,13 +634,13 @@ def test_restart_root_runs_full_search_and_plays_reserved_candidate(tmp_path: Pa
         inbox_path=completed_games_path / 'inbox',
     )
     worker.random = cast(np.random.Generator, FakeRestartRandom(0.9))
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     worker.run_batch()
 
     active_game = worker.active_games[0]
     assert active_game.action_ids == [1]
-    assert active_game.observations[0].full_search
+    assert active_game.observations[0].assigned_additional_visits == 3
     assert active_game.observations[0].selected_action_id == 1
     assert worker.restart_starts == 1
     worker.close()
@@ -653,8 +671,8 @@ def test_restart_archives_are_private_to_each_worker_and_survive_replacement(tmp
     first_worker.random = cast(np.random.Generator, FakeRestartRandom(0.9))
     other_worker.random = cast(np.random.Generator, FakeRestartRandom(0.9))
 
-    first_worker.refresh_published_model(checkpoint(tmp_path, 0))
-    other_worker.refresh_published_model(checkpoint(tmp_path, 0))
+    first_worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
+    other_worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     assert first_worker.restart_archive_path == first_path
     assert first_worker.restart_starts == 1
@@ -672,7 +690,7 @@ def test_restart_archives_are_private_to_each_worker_and_survive_replacement(tmp
         inbox_path=completed_games_path / 'inbox',
     )
     replacement.random = cast(np.random.Generator, FakeRestartRandom(0.9))
-    replacement.refresh_published_model(checkpoint(tmp_path, 0))
+    replacement.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     assert replacement.restart_archive_path == first_path
     assert replacement.restart_starts == 1
@@ -689,7 +707,7 @@ def test_cut_game_bootstraps_its_value_from_the_last_search_root_value(tmp_path:
         device_id=0,
         inbox_path=tmp_path,
     )
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     # The first batch reaches the cut and defers; the second searches the cut position itself.
     worker.run_batch()
@@ -701,7 +719,7 @@ def test_cut_game_bootstraps_its_value_from_the_last_search_root_value(tmp_path:
     trailing = completed.observations[-1]
     assert trailing.ply == len(completed.action_ids)
     assert trailing.selected_action_id is None
-    assert trailing.full_search
+    assert trailing.assigned_additional_visits == 3
     assert completed.final_wdl == WdlTarget.from_scalar(trailing.root_value)
 
 
@@ -714,7 +732,7 @@ def test_cut_game_falls_back_to_adjudication_when_bootstrapping_is_disabled(tmp_
         device_id=0,
         inbox_path=tmp_path,
     )
-    worker.refresh_published_model(checkpoint(tmp_path, 0))
+    worker.refresh_published_model(checkpoint(tmp_path, 0), 0.0)
 
     worker.run_batch()
 

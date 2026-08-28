@@ -140,18 +140,19 @@ def _completed_game() -> CompletedSelfPlayGame:
                 highest_visited_child_visit_count=10,
                 highest_visited_child_q=0.2,
                 selected_action_id=selected_action,
-                full_search=ply != 1,
                 sample_weight=1.0,
-                search_budget=13,
+                baseline_visits=13,
                 network_root_value=0.1,
                 policy_correction=0.2,
                 value_correction=0.075,
-                search_correction_target=0.2,
-                predicted_search_correction=0.15,
+                search_budget_logit=-0.4,
+                predicted_search_budget=0.4,
+                assigned_additional_visits=3 if ply == 1 else 13,
+                parallel_searches=1,
+                spend_residual=0,
                 starting_visits=0,
-                final_visits=13,
-                stop_reason=SearchStopReason.FIXED_LIMIT,
-                learned_gate_evaluated=False,
+                final_visits=3 if ply == 1 else 13,
+                stop_reason=SearchStopReason.PREDICTED_BUDGET,
             )
         )
     return CompletedSelfPlayGame(
@@ -243,18 +244,19 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
                 highest_visited_child_visit_count=8,
                 highest_visited_child_q=0.0,
                 selected_action_id=2,
-                full_search=True,
                 sample_weight=1.0,
-                search_budget=8,
+                baseline_visits=8,
                 network_root_value=0.0,
                 policy_correction=0.0,
                 value_correction=0.0,
-                search_correction_target=0.0,
-                predicted_search_correction=0.0,
+                search_budget_logit=0.0,
+                predicted_search_budget=0.5,
+                assigned_additional_visits=8,
+                parallel_searches=1,
+                spend_residual=0,
                 starting_visits=0,
                 final_visits=8,
                 stop_reason=SearchStopReason.FIXED_LIMIT,
-                learned_gate_evaluated=False,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=0.0, loss=1.0),
@@ -311,13 +313,7 @@ def test_four_ply_future_value_uses_terminal_fallback_with_current_perspective()
         auxiliary_heads=(FutureSearchValueHeadLayout(kind='future_search_value', ply_offset=4, smooth_l1_beta=0.1),),
     )
 
-    game = _completed_game().model_copy(
-        update={
-            'observations': tuple(
-                observation.model_copy(update={'full_search': True}) for observation in _completed_game().observations
-            )
-        }
-    )
+    game = _completed_game()
     materialized = materialize_completed_game(
         game,
         LINEAR_STATE_CONTRACT,
@@ -956,11 +952,16 @@ def test_append_flushes_before_removing_staged_shards(tmp_path: Path) -> None:
     manager.close()
 
 
-def test_former_fast_search_game_materializes_every_observation(tmp_path: Path) -> None:
+def test_low_budget_game_materializes_every_observation(tmp_path: Path) -> None:
     game = _completed_game().validated_copy(
         update={
             'observations': tuple(
-                observation.validated_copy(update={'full_search': False})
+                observation.validated_copy(
+                    update={
+                        'assigned_additional_visits': 1,
+                        'final_visits': observation.starting_visits + 1,
+                    }
+                )
                 for observation in _completed_game().observations
             )
         }
@@ -1094,7 +1095,6 @@ def _cut_game_with_trailing_observation() -> CompletedSelfPlayGame:
         update={
             'ply': len(game.action_ids),
             'selected_action_id': None,
-            'full_search': True,
             'root_value': 0.6,
             'policy_target_visits': SearchVisitCounts(action_ids=(legal[0],), visit_counts=(11,)),
             'highest_visited_child_action_id': legal[0],

@@ -44,5 +44,5 @@ def test_policy_kl_and_shadow_gain_use_deep_to_approximate_direction() -> None:
     assert shadow_gain(deep, flat, candidate) > 0.0
 
 
-def test_policy_kl_returns_infinity_when_candidate_omits_deep_mass() -> None:
-    assert math.isinf(policy_kl(policy(1.0, 0.0), policy(0.0, 1.0)))
+def test_policy_kl_applies_documented_floor_when_candidate_omits_deep_mass() -> None:
+    assert policy_kl(policy(1.0, 0.0), policy(0.0, 1.0)) == pytest.approx(math.log(1_000_000))

@@ -101,9 +101,7 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
     )
     common_self_play = {
         'search': {
-            'full_search_budget': {'kind': 'fixed', 'visits': 2},
-            'fast_searches': 1,
-            'parallel_searches': 1,
+            'baseline_visits': 2,
             'dirichlet_epsilon': 0.0,
             'dirichlet_alpha': 0.3,
             'exploration_constant': 1.0,
@@ -116,7 +114,6 @@ def _tiny_configuration(path: Path, output_path: Path) -> ExperimentConfiguratio
             'outstanding_batches_per_worker': 1,
         },
         'start_position': {'kind': 'random_opening', 'maximum_plies': 0},
-        'full_search_probability': 1.0,
         'retained_root_visit_fraction': 0.0,
         'greedy_after_ply': 1,
         'starting_temperature': 1.0,
