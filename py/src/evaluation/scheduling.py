@@ -10,6 +10,7 @@ from src.evaluation.configuration import (
     EvaluationDefinition,
     FixedDatasetEvaluationDefinition,
     KataGoEvaluationDefinition,
+    PairedMatchEvaluationDefinition,
     PolicyRandomOpponentEvaluationDefinition,
     PreviousCheckpointEvaluationDefinition,
     RandomOpponentEvaluationDefinition,
@@ -205,6 +206,10 @@ def jobs_for_suite(
     device_cycle = experiment.training.topology.evaluation.device_cycle
     device_index = next_device_index
     for definition in configuration.definitions:
+        if isinstance(definition, PairedMatchEvaluationDefinition) and not definition.is_active_at(
+            suite.checkpoint.generation
+        ):
+            continue
         device_id = device_cycle[device_index % len(device_cycle)]
         job_id = f'{suite.boundary_seconds:010d}-{definition.definition_id}-g{suite.checkpoint.generation}'
         context = _EvaluationJobContext(

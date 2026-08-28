@@ -154,6 +154,19 @@ class FixedDatasetEvaluationDefinition(FrozenModel):
 class PairedMatchEvaluationDefinition(FrozenModel):
     opening_pair_count: int = Field(default=50, gt=0)
     maximum_game_plies: int = Field(gt=0)
+    first_generation: int = Field(default=0, ge=0)
+    final_generation: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode='after')
+    def validate_generation_window(self) -> PairedMatchEvaluationDefinition:
+        if self.final_generation is not None and self.final_generation < self.first_generation:
+            raise ValueError('Evaluation final generation cannot precede its first generation.')
+        return self
+
+    def is_active_at(self, generation: int) -> bool:
+        return generation >= self.first_generation and (
+            self.final_generation is None or generation <= self.final_generation
+        )
 
 
 class RandomOpponentEvaluationDefinition(PairedMatchEvaluationDefinition):

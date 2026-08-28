@@ -20,6 +20,9 @@ STOCKFISH_FIXED_NODES_ANCHOR_ELO = MappingProxyType(
         # anchors above reproduce from that curve to within 70 Elo, three of them within 20.
         2000: 1890.0,
         3000: 2040.0,
+        # Plotted points on the same curve: 5000 sits at 2220 and 10000 at 2470.
+        5000: 2220.0,
+        10000: 2470.0,
     }
 )
 

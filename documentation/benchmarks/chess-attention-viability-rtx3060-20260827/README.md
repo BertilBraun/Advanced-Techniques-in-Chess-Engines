@@ -293,6 +293,54 @@ Two consequences beyond this experiment, both needing their own validation befor
    here. The `cnn-inference-throughput` work stream is already measuring `bf16-channels-last` on this same
    node, so this corroborates that line rather than duplicating it.
 
+#### Rung shapes at the batch sizes production runs
+
+> **Provenance: transcribed from run output, raw JSON not preserved.** These measurements were made on
+> the RTX 4070 SUPER on 2026-08-27 and the node was released before they were fetched. Every other table
+> in this note is backed by a file in this directory; this one is not. The figures are two interleaved
+> passes per shape against the reference, the reference reproduced within 0.5% across every process, and
+> the `C(width)/layers` model below reproduced all seven shortlist shapes to within 1.4% — but they are
+> transcriptions and should be re-measured before anything depends on them alone.
+
+Self-play runs `inference_batch_size: 320` and evaluation runs 64. Batch 512, which the width study
+above uses, is neither, and the ranking is not the same at all three.
+
+| shape | vs reference | batch 512 | batch 320 | batch 64 |
+| --- | --- | --- | --- | --- |
+| `20x128` | vs `14x152` | 1.356 | 1.203 | **0.730** |
+| `10x176` | vs `14x152` | 1.352 | 1.237 | 1.339 |
+| `13x160` | vs `14x152` | 1.234 | 1.128 | 1.100 |
+| `14x160` | vs `14x152` | — | **1.048** | **1.013** |
+| `15x160` | vs `14x152` | — | 0.980 | 0.930 |
+| `16x160` | vs `14x152` | — | 0.918 | 0.960 |
+| `14x176` | vs `14x152` | — | 0.888 | 0.956 |
+| `11x224` | vs `18x176` | 1.099 | 1.241 | **1.660** |
+| `34x128` | vs `18x176` | 1.057 | 1.161 | **0.556** |
+| `19x176` | vs `18x176` | — | 0.948 | 0.970 |
+| `20x176` | vs `18x176` | — | 0.899 | 0.912 |
+| `22x160` | vs `18x176` | — | 0.995 | 0.838 |
+| `4x224` | vs `12x128` | 0.978 | 1.087 | **2.356** |
+| `6x176` | vs `12x128` | 0.977 | 1.010 | **1.741** |
+
+**Depth is the expensive axis at production batch sizes, and the ranking inverts against batch 512.**
+`20x128` is 1.36 of `14x152` at batch 512 and 0.73 at 64; `34x128` goes 1.06 to 0.56. At batch 64 an 8x8
+board makes every convolution tiny, so time tracks kernel launches: throughput is close to
+**213,000 / layers positions per second regardless of width**, which is why `4x224` beats `12x128` by
+2.36 there. Any future rung change must be measured at 320 and 64. Measuring at 512 alone would have
+put a rung into v10 that is 27% slower in self-play.
+
+A `C(width) / layers` model fits the measurements: C is about 1,150,000 at width 128, 690,000 at 160,
+575,000 at 176 and 428,000 at 224 for batch 320, and 213,000 at any width for batch 64. It reproduced
+`14x160`, `15x160`, `16x160`, `14x176`, `19x176`, `20x176` and `22x160` to within 1.4%.
+
+**Open question.** `16x192` and `19x176` are the same model to within 28 training parameters
+(10,251,274 against 10,251,246) and 0.4M multiply-accumulates. At batch 512, both measured, `16x192` is
+0.940 of `19x176`; at batch 64 it should be 1.19 on the layer-count rule. Batch 320 was never measured
+for width 192, and extrapolating the measured C320/C512 ratios of neighbouring widths puts `16x192` at
+about 0.98. `19x176` was chosen because its 320 and 64 figures are measured rather than extrapolated and
+because self-play dominates the time budget, but if evaluation throughput ever becomes the constraint,
+`16x192` is the shape to measure first.
+
 #### The earlier reading of this effect was wrong twice
 
 Sweeping many distinct widths in one process depressed every entry after the first by up to 40%, which
@@ -405,5 +453,11 @@ python -m tools.distill_match --mode throughput-only --throughput-position-count
 | `widths/w<N>.json` | one process per trunk width, each interleaved against 128 |
 | `widths/cudnn-benchmark.json`, `widths/channels-last.json` | the two candidate mechanisms, neither of which explains the 136 deficit |
 
-Training logs for all nine cells were fetched off the ephemeral node to
+Training logs for all ten cells were fetched off the ephemeral node to
 `.codex-diagnostics/chess-attention-viability-20260827/logs/`.
+
+**One set of measurements was not preserved.** The batch-320 and batch-64 rung comparisons in "Rung
+shapes at the batch sizes production runs" were made on the RTX 4070 SUPER and the node was released
+before their JSON was fetched; that table is transcribed from run output and is labelled as such. Every
+other table here is backed by a file in this directory. The lesson is the one the repository already
+states: fetch each result as it completes, not at the end of the session.

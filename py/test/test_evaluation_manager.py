@@ -670,3 +670,52 @@ def test_manager_relaunches_unfinished_jobs_after_restart(tmp_path: Path) -> Non
 
     assert {job.boundary_seconds for job in resumed_jobs} == {40}
     assert {job.candidate.generation for job in resumed_jobs} == {1}
+
+
+def _experiment_with_two_search_budgets(run_path: Path) -> ChessExperimentConfiguration:
+    experiment = experiment_configuration(run_path)
+    skill_definition = next(
+        definition for definition in experiment.evaluation.definitions if definition.kind == 'stockfish'
+    )
+    evaluation_payload = experiment.evaluation.model_dump(mode='json')
+    evaluation_payload['maximum_concurrent_jobs'] = 16
+    for nodes in (30, 100):
+        for budget, suffix in ((64, 'fixed-nodes'), (1, 'policy-only')):
+            rung_payload = skill_definition.model_dump(mode='json')
+            rung_payload['kind'] = 'stockfish_fixed_nodes'
+            rung_payload['definition_id'] = f'stockfish-{suffix}-{nodes}'
+            rung_payload['nodes'] = nodes
+            rung_payload['search'] = {**rung_payload['search'], 'searches_per_move': budget}
+            del rung_payload['skill_level']
+            evaluation_payload['definitions'].append(rung_payload)
+    return experiment.model_copy(update={'evaluation': EvaluationConfiguration.model_validate(evaluation_payload)})
+
+
+def test_manager_fits_one_ladder_per_search_budget(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    experiment = _experiment_with_two_search_budgets(tmp_path)
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
+    rung_jobs = _scheduled_rung_jobs(manager, clock, tmp_path)
+
+    scalar_events: list[tuple[str, float, int]] = []
+    monkeypatch.setattr(
+        'src.evaluation.manager.log_scalar',
+        lambda name, value, step: scalar_events.append((name, value, step)),
+    )
+    strong = (CandidateOutcome.WIN,) * 18 + (CandidateOutcome.LOSS,) * 2
+    weak = (CandidateOutcome.WIN,) * 2 + (CandidateOutcome.LOSS,) * 18
+    for job in rung_jobs:
+        searched = 'policy-only' not in job.definition.definition_id
+        _write_rung_result(job, _rung_games(strong if searched else weak))
+    for process in context.processes:
+        process.exitcode = 0
+    manager.collect_completed_jobs()
+
+    named = {name: value for name, value, _ in scalar_events if name.startswith('evaluation/ladder_elo')}
+    assert 'evaluation/ladder_elo_64' in named
+    assert 'evaluation/ladder_elo_1' in named
+    # The policy-only ladder must not drag the searched one down.
+    assert named['evaluation/ladder_elo_64'] > named['evaluation/ladder_elo_1']
+    # The unsuffixed series stays the highest-budget ladder, so it remains comparable across runs.
+    assert named['evaluation/ladder_elo'] == pytest.approx(named['evaluation/ladder_elo_64'])
