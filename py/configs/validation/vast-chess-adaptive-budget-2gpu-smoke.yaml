@@ -5,8 +5,8 @@
 # positions; the fixed 2% label sample is therefore 522 positions and spans two execution shards.
 extends: vast-chess-4day-production-v10.yaml
 run:
-  run_name: vast-chess-adaptive-budget-2gpu-smoke-r2
-  tensorboard_run_directory: vast-chess-adaptive-budget-2gpu-smoke-r2
+  run_name: vast-chess-adaptive-budget-2gpu-smoke-r3
+  tensorboard_run_directory: vast-chess-adaptive-budget-2gpu-smoke-r3
   hardware:
     provider_name: vast.ai
     offer_id: instance-49004012-machine-147602
@@ -16,7 +16,7 @@ run:
     minimum_ram_gib: 55
     minimum_disk_gib: 25
 training:
-  save_path: py/training_data/validation/vast-chess-adaptive-budget-2gpu-smoke-r2
+  save_path: py/training_data/validation/vast-chess-adaptive-budget-2gpu-smoke-r3
   progressive_model_sizing:
     models:
       - model_id: chess-cnn-12x128-fromto
@@ -72,7 +72,7 @@ training:
     hourly_price: 0.14833333333333326
     maximum_cost: 0.5
     maximum_wall_time_seconds: 10800
-    manual_stop_file: /workspace/run-control/stop/vast-chess-adaptive-budget-2gpu-smoke-r2.stop
+    manual_stop_file: /workspace/run-control/stop/vast-chess-adaptive-budget-2gpu-smoke-r3.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
     minimum_free_disk_gib: 10.0
