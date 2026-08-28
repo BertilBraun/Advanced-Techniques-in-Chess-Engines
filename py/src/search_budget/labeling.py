@@ -485,6 +485,8 @@ def finalize_generation(
             if upper_visits == lower_visits:
                 deduplicated += 1
             if upper_visits < lower_visits:
+                if lower_visits - upper_visits > 1:
+                    raise ValueError('Upper local probe is materially below its lower probe.')
                 deduplicated += 1
                 continue
             deep_policy = _policy_distribution(deep_by_identity[identity].final_policy_target_visits, action_size)

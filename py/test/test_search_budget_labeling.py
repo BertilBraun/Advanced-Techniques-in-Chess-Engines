@@ -314,6 +314,29 @@ def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_
     assert rounded.bucket_diagnostics[5].checkpoint_deduplication_count == 3
     assert rounded.bucket_diagnostics[5].sample_count == 2
 
+    materially_inverted_upper = replace(
+        upper,
+        budgets=(
+            replace(
+                upper.budgets[0],
+                assigned_new_visits=lower.budgets[0].assigned_new_visits - 2,
+            ),
+            *upper.budgets[1:],
+        ),
+    )
+    with pytest.raises(ValueError, match='materially below'):
+        finalize_generation(
+            source,
+            predictions,
+            tuple(
+                materially_inverted_upper if allocation.identity == upper_identity else allocation
+                for allocation in allocations
+            ),
+            (artifact,),
+            action_size=2,
+            maximum_policy_entries=2,
+        )
+
     invalid_positions = tuple(
         position.model_copy(
             update={
