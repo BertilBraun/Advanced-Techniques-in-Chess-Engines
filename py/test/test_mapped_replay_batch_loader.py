@@ -276,7 +276,12 @@ def test_vectorized_batch_exactly_matches_object_reference_across_wrap_and_dupli
 
     def loss_and_gradients(batch: TrainingBatch) -> tuple[torch.Tensor, tuple[torch.Tensor, ...]]:
         parameters = tuple(torch.nn.Parameter(values.clone()) for values in initial_logits)
-        output = TrainingModelOutput(parameters[0], parameters[1], (parameters[2], parameters[3]))
+        output = TrainingModelOutput(
+            policy_logits=parameters[0],
+            wdl_logits=parameters[1],
+            auxiliary_logits=(parameters[2], parameters[3]),
+            features=torch.empty((4, 0)),
+        )
         loss = objective.calculate_loss(output, batch).total
         loss.backward()
         return loss.detach(), tuple(

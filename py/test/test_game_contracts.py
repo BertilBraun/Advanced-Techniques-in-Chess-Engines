@@ -99,7 +99,7 @@ def test_go_adjudication_area_scores_nonterminal_positions(
 
 @pytest.mark.parametrize(
     ('path', 'expected_action_size', 'expected_augmentations'),
-    ((TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml', 4_864, 2),),
+    ((TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml', 1_880, 2),),
 )
 def test_root_game_implementation_owns_state_and_fixed_target_layout(
     path: Path,
@@ -203,7 +203,7 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
     layout = build_training_target_layout(CHESS_STATE_CONTRACT.action_size, objective.auxiliary_targets)
 
     assert tuple(head.ply_offset for head in layout.auxiliary_heads) == (1, 3)
-    assert all(head.action_size == 4_864 for head in layout.auxiliary_heads)
+    assert all(head.action_size == 1_880 for head in layout.auxiliary_heads)
 
     chess_configuration = configuration.chess.validated_copy(update={'objective': objective.model_dump(mode='json')})
     resolved = configuration.validated_copy(update={'chess': chess_configuration.model_dump(mode='json')})
@@ -282,6 +282,7 @@ def test_canonical_batch_and_model_output_are_the_objective_boundary() -> None:
         policy_logits=torch.tensor(((2.0, 0.0), (0.0, 2.0))),
         wdl_logits=torch.tensor(((2.0, 0.0, 0.0), (0.0, 2.0, 0.0))),
         auxiliary_logits=(),
+        features=torch.empty((2, 0)),
     )
 
     loss = objective.calculate_loss(output, batch)
@@ -305,6 +306,7 @@ def test_policy_loss_normalizes_only_over_legal_actions() -> None:
         policy_logits=torch.tensor(((0.0, 0.0, 100.0),)),
         wdl_logits=torch.zeros((1, 3)),
         auxiliary_logits=(),
+        features=torch.empty((1, 0)),
     )
 
     loss = objective.calculate_loss(output, batch)
@@ -330,6 +332,7 @@ def test_remaining_game_length_uses_masked_smooth_l1_loss() -> None:
         policy_logits=torch.zeros((2, 2)),
         wdl_logits=torch.zeros((2, 3)),
         auxiliary_logits=(torch.tensor(((0.0,), (100.0,))),),
+        features=torch.empty((2, 0)),
     )
 
     loss = objective.calculate_loss(output, batch)
@@ -357,6 +360,7 @@ def test_next_policy_auxiliary_still_uses_masked_cross_entropy(prediction_dtype:
         policy_logits=torch.zeros((2, 2)),
         wdl_logits=torch.zeros((2, 3)),
         auxiliary_logits=(torch.tensor(((2.0, 0.0), (100.0, -100.0)), dtype=prediction_dtype),),
+        features=torch.empty((2, 0)),
     )
 
     loss = objective.calculate_loss(output, batch)
@@ -387,6 +391,7 @@ def test_legal_move_loss_balances_legal_and_illegal_classes_per_position() -> No
         policy_logits=torch.zeros((1, 2)),
         wdl_logits=torch.zeros((1, 3)),
         auxiliary_logits=(prediction,),
+        features=torch.empty((1, 0)),
     )
     element_loss = torch.nn.functional.binary_cross_entropy_with_logits(prediction, target, reduction='none')
     expected = 0.5 * (element_loss[0, :1].mean() + element_loss[0, 1:].mean())
