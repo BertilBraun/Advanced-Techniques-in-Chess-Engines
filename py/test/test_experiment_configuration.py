@@ -11,6 +11,7 @@ from src.experiment.configuration import (
     experiment_configuration_sha256,
     load_chess_experiment_configuration,
     load_experiment_configuration,
+    load_experiment_configuration_json,
     validate_experiment_queue,
     write_resolved_chess_experiment,
 )
@@ -350,6 +351,10 @@ def test_resolved_experiment_round_trips_as_canonical_json(tmp_path: Path) -> No
     write_resolved_chess_experiment(resolved_path, configuration)
 
     assert load_chess_experiment_configuration(resolved_path) == configuration
+
+
+def test_experiment_configuration_round_trips_directly_through_json_validation() -> None:
+    assert load_experiment_configuration_json(CHESS_EXPERIMENT.model_dump_json()) == CHESS_EXPERIMENT
 
 
 def test_experiment_configuration_extends_and_deeply_overrides_a_base(tmp_path: Path) -> None:

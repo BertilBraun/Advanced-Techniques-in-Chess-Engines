@@ -10,8 +10,8 @@ from typing_extensions import Self
 JsonValue: TypeAlias = str | int | float | bool | None | list['JsonValue'] | dict[str, 'JsonValue']
 
 
-def _normalize_configuration_path(path: str | Path) -> Path:
-    return Path(str(path).replace('\\', '/'))
+def _normalize_configuration_path(path: str | Path) -> str:
+    return str(path).replace('\\', '/')
 
 
 # Configuration hashes must be stable across host operating systems, so paths accept either separator and serialize
