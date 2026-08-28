@@ -34,11 +34,26 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scalars: dict[str, tuple[float, int | None]] = {}
+    histograms: dict[str, tuple[int, int | None]] = {}
 
     def record_scalar(name: str, value: float, step: int | None = None) -> None:
         scalars[name] = (value, step)
 
+    def record_histogram(
+        name: str,
+        minimum: float,
+        maximum: float,
+        count: int,
+        mean: float,
+        variance: float,
+        bucket_counts: tuple[int, ...],
+        step: int | None = None,
+    ) -> None:
+        del minimum, maximum, mean, variance, bucket_counts
+        histograms[name] = (count, step)
+
     monkeypatch.setattr(reporting_module, 'log_scalar', record_scalar)
+    monkeypatch.setattr(reporting_module, 'log_equal_width_histogram_summary', record_histogram)
     report = GenerationLabelReport(
         source_generation=12,
         model_generation=12,
@@ -109,6 +124,10 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
     assert scalars['search_budget/calibration/ceiling_share'] == (0.1, 12)
     assert scalars['search_budget/calibration/current_validation_gain'] == (0.03, 12)
     assert scalars['search_budget/calibration/ema_validation_gain'] == (0.02, 12)
+    assert scalars['search_budget/calibration/current_relative_validation_gain_percent'] == pytest.approx(
+        (100.0 / 6.0, 12)
+    )
+    assert scalars['search_budget/calibration/ema_relative_validation_gain_percent'] == pytest.approx((100.0 / 9.0, 12))
     assert scalars['search_budget/calibration/candidate_exact_spend_residual'] == (0, 12)
     assert scalars['search_budget/calibration/application_generation'] == (14, 12)
     assert scalars['search_budget/calibration/decision_reason/warmup'] == (1, 12)
@@ -119,6 +138,14 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
     assert scalars[f'{prefix}/previous_published_multiplier'] == (1.0, 12)
     assert scalars[f'{prefix}/published_multiplier'] == (1.0, 12)
     assert scalars['search_budget/calibration/failed_eligibility/warmup'] == (1, 12)
+    assert scalars['search_budget/calibration/minimum_shadow_multiplier'] == (1.0, 12)
+    assert scalars['search_budget/calibration/maximum_pending_multiplier'] == (1.0, 12)
+    assert scalars['search_budget/calibration/minimum_validated_multiplier'] == (1.0, 12)
+    assert histograms == {
+        'search_budget/label/prediction_quantile': (10, 12),
+        'search_budget/label/target_quantile': (10, 12),
+        'search_budget/label/raw_kl': (10, 12),
+    }
 
 
 def test_failed_and_skipped_label_reports_publish_health_metrics(monkeypatch: pytest.MonkeyPatch) -> None:

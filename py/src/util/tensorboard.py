@@ -163,6 +163,47 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, step: int | None
     summary.add_histogram(name, values, step)
 
 
+def log_equal_width_histogram_summary(
+    name: str,
+    minimum: float,
+    maximum: float,
+    count: int,
+    mean: float,
+    variance: float,
+    bucket_counts: tuple[int, ...],
+    step: int | None = None,
+) -> None:
+    if not LOG_HISTOGRAMS or not _tb_check_active():
+        return
+    assert count > 0
+    assert maximum >= minimum
+    assert variance >= 0.0
+    assert bucket_counts
+    assert sum(bucket_counts) == count
+    if minimum == maximum:
+        bucket_limits = (maximum,)
+        resolved_bucket_counts = (count,)
+    else:
+        bucket_width = (maximum - minimum) / len(bucket_counts)
+        bucket_limits = tuple(minimum + bucket_width * (index + 1) for index in range(len(bucket_counts)))
+        resolved_bucket_counts = bucket_counts
+    summary = _TB_SUMMARY.get()
+    assert summary is not None, 'No tensorboard writer active'
+    if step is None:
+        step = int(time.time() * 1000)
+    summary.add_histogram_raw(
+        name,
+        min=minimum,
+        max=maximum,
+        num=count,
+        sum=mean * count,
+        sum_squares=(variance + mean * mean) * count,
+        bucket_limits=bucket_limits,
+        bucket_counts=resolved_bucket_counts,
+        global_step=step,
+    )
+
+
 class TensorboardWriter:
     def __init__(
         self,

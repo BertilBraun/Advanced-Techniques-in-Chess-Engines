@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from src.evaluation.tensorboard import evaluation_tensorboard_categories
 from src.experiment.configuration import ExperimentConfiguration
 from src.replay.description import ReplayDescription
 from src.replay.manager import IngestedCompletedGame
@@ -23,6 +24,7 @@ from src.training.distributions import (
     ScalarAuxiliaryTrainingDistribution,
     TrainingDistributionSnapshot,
 )
+from src.training.search_budget_tensorboard import search_budget_tensorboard_categories
 from src.training.session import (
     FixedTrainingSessionResult,
     ModelTrainingResult,
@@ -47,7 +49,7 @@ from src.training.telemetry import (
 from src.training.tensorboard import scheduled_settings_at
 from src.training.trainer import TrainingStatistics
 from src.util.log import log
-from src.util.tensorboard import log_histogram, log_scalar
+from src.util.tensorboard import log_custom_scalar_layout, log_equal_width_histogram_summary, log_histogram, log_scalar
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,12 @@ class TrainingReporter:
         self.auxiliary_heads = auxiliary_heads
 
     def record_initial_settings(self, generation: int) -> None:
+        log_custom_scalar_layout(
+            (
+                *search_budget_tensorboard_categories(self.auxiliary_heads),
+                *evaluation_tensorboard_categories(self.configuration.evaluation),
+            )
+        )
         self._record_scheduled_settings(generation)
 
     def record_training_outcome(
@@ -175,6 +183,7 @@ class TrainingReporter:
                     )
                 if event.ema_validation_gain is not None:
                     log_scalar('search_budget/calibration/ema_validation_gain', event.ema_validation_gain, generation)
+                _record_relative_validation_gain(event, generation)
                 if event.candidate_mean_assigned_new_visits is not None:
                     log_scalar(
                         'search_budget/calibration/candidate_mean_assigned_new_visits',
@@ -224,18 +233,21 @@ class TrainingReporter:
                     sum(event.shadow_curve) / len(event.shadow_curve),
                     generation,
                 )
+                _record_curve_range('shadow', event.shadow_curve, generation)
                 if event.pending_curve is not None:
                     log_scalar(
                         'search_budget/calibration/pending_mean_multiplier',
                         sum(event.pending_curve) / len(event.pending_curve),
                         generation,
                     )
+                    _record_curve_range('pending', event.pending_curve, generation)
                 if event.validated_curve is not None:
                     log_scalar(
                         'search_budget/calibration/validated_mean_multiplier',
                         sum(event.validated_curve) / len(event.validated_curve),
                         generation,
                     )
+                    _record_curve_range('validated', event.validated_curve, generation)
                 log_scalar(
                     f'search_budget/calibration/decision_reason/{_metric_tag(event.decision_reason)}', 1, generation
                 )
@@ -543,6 +555,16 @@ def _log_values(name: str, values: tuple[float, ...], generation: int, log_mean:
 
 
 def _record_search_budget_distribution(prefix: str, distribution: DistributionSummary, generation: int) -> None:
+    log_equal_width_histogram_summary(
+        prefix,
+        distribution.minimum,
+        distribution.maximum,
+        distribution.count,
+        distribution.mean,
+        distribution.variance,
+        distribution.histogram_counts,
+        generation,
+    )
     log_scalar(f'{prefix}/count', distribution.count, generation)
     log_scalar(f'{prefix}/minimum', distribution.minimum, generation)
     log_scalar(f'{prefix}/maximum', distribution.maximum, generation)
@@ -555,6 +577,30 @@ def _record_search_budget_distribution(prefix: str, distribution: DistributionSu
     log_scalar(f'{prefix}/p90', distribution.p90, generation)
     for index, count in enumerate(distribution.histogram_counts):
         log_scalar(f'{prefix}/histogram_bin_{index}', count, generation)
+
+
+def _record_relative_validation_gain(event: GenerationLabelReport, generation: int) -> None:
+    if event.current_validation_gain is None or event.candidate_mean_kl_from_deep is None:
+        return
+    flat_mean_kl = event.candidate_mean_kl_from_deep + event.current_validation_gain
+    if flat_mean_kl <= 0.0:
+        return
+    log_scalar(
+        'search_budget/calibration/current_relative_validation_gain_percent',
+        100.0 * event.current_validation_gain / flat_mean_kl,
+        generation,
+    )
+    if event.ema_validation_gain is not None:
+        log_scalar(
+            'search_budget/calibration/ema_relative_validation_gain_percent',
+            100.0 * event.ema_validation_gain / flat_mean_kl,
+            generation,
+        )
+
+
+def _record_curve_range(name: str, curve: tuple[float, ...], generation: int) -> None:
+    log_scalar(f'search_budget/calibration/minimum_{name}_multiplier', min(curve), generation)
+    log_scalar(f'search_budget/calibration/maximum_{name}_multiplier', max(curve), generation)
 
 
 def _metric_tag(value: str) -> str:
