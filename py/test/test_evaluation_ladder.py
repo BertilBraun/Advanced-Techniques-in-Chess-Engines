@@ -51,6 +51,8 @@ def test_agreed_anchor_curve_covers_only_calibrated_rungs() -> None:
         1000: 1700.0,
         2000: 1890.0,
         3000: 2040.0,
+        5000: 2220.0,
+        10000: 2470.0,
     }
 
 
