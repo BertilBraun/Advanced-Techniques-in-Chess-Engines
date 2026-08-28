@@ -1,9 +1,9 @@
 # Four-day production v10 (2026-08-27) — schedule, inference and evaluation deltas on top of v9.
 #
-# Extends v9, so the diff is the whole content of this file. Architecture, search, targets,
-# resignation and early termination are inherited unchanged, so any difference against v9 is
-# attributable to what appears below. hardware.offer_id is inherited and must be updated to the node
-# actually rented.
+# Extends v9, so the diff is the whole content of this file. The v9 baseline-visit schedule and the
+# settled learned-budget lifecycle defaults are inherited. This file adds the scalar target at weight
+# 0.2 while preserving the newer v10 model, replay, inference, and evaluation changes. hardware.offer_id
+# is inherited and must be updated to the node actually rented.
 #
 # Learning rate — a geometric schedule from 0.005 at generation 0 to 0.0005 at generation 1500: a
 # clean 10x drop at a constant ratio per generation, replacing v9's hand-computed 0.85-per-100 stage
