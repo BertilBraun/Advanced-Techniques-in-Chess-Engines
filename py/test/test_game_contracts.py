@@ -35,7 +35,12 @@ from src.training.objective import (
     ResolvedRemainingGameLengthLoss,
     ResolvedTrainingObjective,
 )
-from src.training.targets import RemainingGameLengthHeadLayout, build_training_target_layout
+from src.training.targets import (
+    NextPolicyHeadLayout,
+    RemainingGameLengthHeadLayout,
+    SearchBudgetHeadLayout,
+    build_training_target_layout,
+)
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 from test_helpers.training_batches import training_batch
 
@@ -114,7 +119,7 @@ def test_root_game_implementation_owns_state_and_fixed_target_layout(
     assert implementation.state.augmentation_count == expected_augmentations
     assert implementation.target_layout.action_size == expected_action_size
     assert implementation.target_layout.wdl_size == 3
-    assert implementation.target_layout.auxiliary_heads == ()
+    assert implementation.target_layout.auxiliary_heads == (SearchBudgetHeadLayout(kind='search_budget'),)
 
 
 def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> None:
@@ -197,13 +202,20 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
                     'ply_offset': 3,
                     'loss_weight': 0.1,
                 },
+                {
+                    'kind': 'search_budget',
+                    'loss_weight': 0.2,
+                },
             ]
         }
     )
     layout = build_training_target_layout(CHESS_STATE_CONTRACT.action_size, objective.auxiliary_targets)
 
-    assert tuple(head.ply_offset for head in layout.auxiliary_heads) == (1, 3)
-    assert all(head.action_size == 1_880 for head in layout.auxiliary_heads)
+    assert layout.auxiliary_heads == (
+        NextPolicyHeadLayout(kind='next_policy', action_size=1_880, ply_offset=1),
+        NextPolicyHeadLayout(kind='next_policy', action_size=1_880, ply_offset=3),
+        SearchBudgetHeadLayout(kind='search_budget'),
+    )
 
     chess_configuration = configuration.chess.validated_copy(update={'objective': objective.model_dump(mode='json')})
     resolved = configuration.validated_copy(update={'chess': chess_configuration.model_dump(mode='json')})
@@ -277,18 +289,21 @@ def test_canonical_batch_and_model_output_are_the_objective_boundary() -> None:
         policy_targets=torch.tensor(((1.0, 0.0), (0.0, 1.0))),
         wdl_targets=torch.tensor(((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))),
         root_values=torch.tensor((0.5, -0.5)),
+        auxiliary_targets=(torch.zeros((2, 1)),),
+        auxiliary_legal_action_ids=(torch.empty((2, 0), dtype=torch.int64),),
+        auxiliary_eligibility=(torch.tensor((False, False)),),
     )
     output = TrainingModelOutput(
         policy_logits=torch.tensor(((2.0, 0.0), (0.0, 2.0))),
         wdl_logits=torch.tensor(((2.0, 0.0, 0.0), (0.0, 2.0, 0.0))),
-        auxiliary_logits=(),
+        auxiliary_logits=(torch.zeros((2, 1)),),
         features=torch.empty((2, 0)),
     )
 
     loss = objective.calculate_loss(output, batch)
 
     assert loss.total.isfinite()
-    assert loss.auxiliary == ()
+    assert loss.auxiliary[0].item() == 0.0
 
 
 def test_policy_loss_normalizes_only_over_legal_actions() -> None:
