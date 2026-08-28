@@ -12,8 +12,8 @@ from typing import Literal, Protocol, TypeAlias
 
 from pydantic import Field, model_validator
 from src.replay.contracts import ReplaySample
+from src.replay.label_source import ReplayLabelGameLocator
 from src.replay.manager import LabelledReplayWritebackState
-from src.replay.shard import ReplayShardGameMetadata
 from src.search_budget.artifacts import (
     LabelShardManifest,
     LabelShardPhase,
@@ -343,12 +343,12 @@ class SearchBudgetLabelManager:
     def enqueue_replay_generation(
         self,
         source_generation: int,
-        label_source_games: tuple[ReplayShardGameMetadata, ...],
+        label_source_games: tuple[ReplayLabelGameLocator, ...],
         checkpoint: CheckpointReference,
         baseline_new_visits: int,
         run_seed: int,
     ) -> LabelEnqueueResult:
-        population = sum(len(game.observations) for game in label_source_games)
+        population = sum(len(game.observation_plies) for game in label_source_games)
         if population == 0:
             return self._enqueue_skipped_generation(
                 source_generation,
@@ -356,18 +356,15 @@ class SearchBudgetLabelManager:
                 0,
                 'generation population is empty',
             )
-        try:
-            source = build_generation_source(
-                source_generation,
-                label_source_games,
-                checkpoint,
-                baseline_new_visits,
-                run_seed,
-                self.configuration.labeling.sample_fraction,
-                self.sample_provider,
-            )
-        finally:
-            self.sample_provider.clear()
+        source = build_generation_source(
+            source_generation,
+            label_source_games,
+            checkpoint,
+            baseline_new_visits,
+            run_seed,
+            self.configuration.labeling.sample_fraction,
+            self.sample_provider,
+        )
         if source is None:
             return self._enqueue_skipped_generation(
                 source_generation,
@@ -452,7 +449,6 @@ class SearchBudgetLabelManager:
         finally:
             if self._device_claims is not None:
                 self._device_claims.close()
-            self.sample_provider.close()
 
     def _run(self) -> None:
         while True:

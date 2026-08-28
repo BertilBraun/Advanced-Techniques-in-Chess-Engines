@@ -55,16 +55,25 @@ budgets bypass the production allocator and cannot mutate its spend ledger.
 
 ## Deep-label lifecycle
 
-Replay ingestion atomically journals immutable sealed-shard metadata into one source-generation cohort before the
-source files are deleted. A committed training quantum finalizes that cohort and enqueues it using the checkpoint
-that generated the positions. Restart recovery replays every finalized or still-open unacknowledged cohort older than
-the active checkpoint. Cohort retention hard-links the already-written sealed manifest instead of serializing or
-copying its game metadata. Once the compact generation source is durably acknowledged, the retained links are
-removed and the identity journal is compacted. Enqueue and acknowledgement are idempotent.
+Replay ingestion atomically journals one compact locator for every newly appended game before deleting its sealed
+source shard. A locator contains only the stable game identity, action trajectory, observation plies, and absolute
+replay-row start; it does not retain policies, search observations, or another replay payload. A committed training
+quantum finalizes the ingestion cohort owned by its source checkpoint. Persistent self-play games can span several
+checkpoints, so a row's `source_model_generation` may be older than this logical cohort generation. Prediction and
+deep search deliberately use the cohort checkpoint on the selected replay states; the original producing generation
+remains explicit in each replay sample and is not rewritten.
 
-The deterministic sample contains exactly `floor(0.02 * population_positions)` stable position identities, chosen
-uniformly without replacement from the run seed and source generation. One logical source generation runs at a time
-in source order. A queued generation more than two production generations behind is skipped. One run-lifetime
+Selected replay samples are read directly from the live columnar store by absolute row. The resulting compact
+`source.json` contains only selected positions and is durable before the locator cohort is acknowledged and removed.
+Restart recovery replays every finalized or still-open unacknowledged cohort older than the active checkpoint.
+Enqueue and acknowledgement are idempotent. If a configured replay capacity cannot retain one ingestion cohort until
+its immediately following checkpoint commit, source construction fails explicitly instead of silently changing the
+sample population.
+
+The deterministic sample contains exactly `floor(sample_fraction * population_positions)` stable position
+identities, chosen uniformly without replacement from the run seed and logical cohort generation. Production uses a
+sample fraction of `0.005`. One logical source generation runs at a time in source order. A queued generation more
+than two production generations behind is skipped. One run-lifetime
 spawned process pool uses every unique trainer GPU ID; each persistent process is pinned to one GPU, owns one
 inference worker, uses inference batches of 512 with two outstanding batches, and refreshes immutable checkpoints
 monotonically.

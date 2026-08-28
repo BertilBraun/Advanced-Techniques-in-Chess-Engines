@@ -15,6 +15,7 @@ from src.replay.contracts import (
     ReplaySample,
     SparsePolicyTarget,
 )
+from src.replay.label_source import ReplayLabelGameLocator
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
 from src.search_budget.allocation import CurveAllocationIdentity, CurveAllocationPurpose
 from src.search_budget.artifacts import load_persisted_model, write_persisted_model
@@ -108,11 +109,37 @@ def _game(game_number: int, observation_generations: tuple[int, ...]) -> ReplayS
     )
 
 
+def _label_games(
+    games: tuple[ReplayShardGameMetadata, ...],
+) -> tuple[tuple[ReplayLabelGameLocator, ...], dict[int, ReplaySample]]:
+    locators = []
+    samples: dict[int, ReplaySample] = {}
+    first_absolute_row = 100
+    for game in games:
+        locators.append(
+            ReplayLabelGameLocator(
+                identity=game.source.identity,
+                action_ids=game.action_ids,
+                observation_plies=tuple(observation.ply for observation in game.observations),
+                first_absolute_replay_row=first_absolute_row,
+            )
+        )
+        for observation_index in range(len(game.observations)):
+            samples[first_absolute_row + observation_index] = _sample(game, observation_index)
+        first_absolute_row += len(game.observations)
+    return tuple(locators), samples
+
+
 def test_generation_source_samples_exact_floor_two_percent_deterministically(tmp_path: Path) -> None:
     games = (_game(1, (4,) * 51), _game(2, (4,) * 98))
+    label_games, samples = _label_games(games)
 
-    first = build_generation_source(4, games, _checkpoint(tmp_path, 4), 600, 123, Decimal('0.02'), _sample)
-    second = build_generation_source(4, games, _checkpoint(tmp_path, 4), 600, 123, Decimal('0.02'), _sample)
+    first = build_generation_source(
+        4, label_games, _checkpoint(tmp_path, 4), 600, 123, Decimal('0.02'), samples.__getitem__
+    )
+    second = build_generation_source(
+        4, label_games, _checkpoint(tmp_path, 4), 600, 123, Decimal('0.02'), samples.__getitem__
+    )
 
     assert first is not None
     assert second is not None
@@ -124,8 +151,9 @@ def test_generation_source_samples_exact_floor_two_percent_deterministically(tmp
 
 def test_cross_checkpoint_game_keeps_every_cohort_observation(tmp_path: Path) -> None:
     game = _game(7, (3, 3, 4, 4, 5))
+    label_games, samples = _label_games((game,))
 
-    source = build_generation_source(4, (game,), _checkpoint(tmp_path, 4), 300, 9, Decimal(1), _sample)
+    source = build_generation_source(4, label_games, _checkpoint(tmp_path, 4), 300, 9, Decimal(1), samples.__getitem__)
 
     assert source is not None
     assert source.population_position_count == 5
@@ -140,19 +168,16 @@ def test_cross_checkpoint_game_keeps_every_cohort_observation(tmp_path: Path) ->
 
 def test_generation_source_is_compact_durable_and_materializes_only_selected_positions(tmp_path: Path) -> None:
     game = _game(9, (4,) * 50)
-    materialized_indices: list[int] = []
+    label_games, samples = _label_games((game,))
+    materialized_rows: list[int] = []
 
-    def recording_sample_provider(
-        source_game: ReplayShardGameMetadata,
-        observation_index: int,
-    ) -> ReplaySample:
-        assert source_game is game
-        materialized_indices.append(observation_index)
-        return _sample(source_game, observation_index)
+    def recording_sample_provider(absolute_replay_row: int) -> ReplaySample:
+        materialized_rows.append(absolute_replay_row)
+        return samples[absolute_replay_row]
 
     source = build_generation_source(
         4,
-        (game,),
+        label_games,
         _checkpoint(tmp_path, 4),
         600,
         123,
@@ -162,8 +187,10 @@ def test_generation_source_is_compact_durable_and_materializes_only_selected_pos
 
     assert source is not None
     assert len(source.selected_positions) == 20
-    assert len(materialized_indices) == 20
-    assert sorted(materialized_indices) == sorted(position.identity.ply for position in source.selected_positions)
+    assert len(materialized_rows) == 20
+    assert sorted(row - 100 for row in materialized_rows) == sorted(
+        position.identity.ply for position in source.selected_positions
+    )
     path = tmp_path / 'source.json'
     write_persisted_model(path, source)
     restored = load_persisted_model(path, LabelGenerationSource)

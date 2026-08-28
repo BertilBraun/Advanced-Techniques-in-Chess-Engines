@@ -17,7 +17,7 @@ from src.replay.contracts import (
     ReplaySample,
     SparsePolicyTarget,
 )
-from src.replay.shard import ReplayShardGameMetadata
+from src.replay.label_source import ReplayLabelGameLocator
 from src.search_budget.allocation import (
     AllocationPosition,
     CandidateBudgetSet,
@@ -224,54 +224,12 @@ class GenerationFinalization:
 
 
 class ReplaySampleProvider(Protocol):
-    def __call__(self, game: ReplayShardGameMetadata, observation_index: int) -> ReplaySample: ...
-
-    def clear(self) -> None: ...
-
-    def close(self) -> None: ...
-
-
-class ExperimentReplaySampleProvider:
-    def __init__(self, configuration_json: str) -> None:
-        from src.experiment.configuration import load_experiment_configuration_json
-        from src.games.composition import create_game_implementation
-
-        configuration = load_experiment_configuration_json(configuration_json)
-        self._game = create_game_implementation(configuration)
-        self._maximum_policy_entries = configuration.training.lifecycle.replay.maximum_policy_entries
-        self._cache: dict[str, tuple[ReplaySample, ...]] = {}
-
-    def __call__(self, game: ReplayShardGameMetadata, observation_index: int) -> ReplaySample:
-        from src.replay.materialization import materialize_completed_game
-
-        game_key = game.source.identity.archive_key
-        samples = self._cache.get(game_key)
-        if samples is None:
-            samples = tuple(
-                materialize_completed_game(
-                    game.completed_game(),
-                    self._game.state,
-                    self._game.terminal_oracle,
-                    self._game.target_layout,
-                    self._maximum_policy_entries,
-                    self._game.value_discount_per_ply,
-                    censor_remaining_game_length_on_cut_games=self._game.censor_remaining_game_length_on_cut_games,
-                ).samples
-            )
-            self._cache[game_key] = samples
-        return samples[observation_index]
-
-    def close(self) -> None:
-        self._cache.clear()
-        self._game.close()
-
-    def clear(self) -> None:
-        self._cache.clear()
+    def __call__(self, absolute_replay_row: int) -> ReplaySample: ...
 
 
 def build_generation_source(
     source_generation: int,
-    games: tuple[ReplayShardGameMetadata, ...],
+    games: tuple[ReplayLabelGameLocator, ...],
     checkpoint: CheckpointReference,
     baseline_new_visits: int,
     run_seed: int,
@@ -284,14 +242,14 @@ def build_generation_source(
         (
             LabelPositionIdentity(
                 source_generation=source_generation,
-                game_identity=game.source.identity.archive_key,
-                ply=observation.ply,
+                game_identity=game.identity.archive_key,
+                ply=ply,
             ),
             game,
             observation_index,
         )
         for game in games
-        for observation_index, observation in enumerate(game.observations)
+        for observation_index, ply in enumerate(game.observation_plies)
     )
     if not candidates:
         raise ValueError('A source generation must contain at least one played position.')
@@ -312,7 +270,7 @@ def build_generation_source(
                 identity=identity,
                 action_prefix=by_identity[identity][0].action_ids[: identity.ply],
                 replay=LabelReplaySampleSource.from_replay_sample(
-                    sample_provider(by_identity[identity][0], by_identity[identity][1])
+                    sample_provider(by_identity[identity][0].first_absolute_replay_row + by_identity[identity][1])
                 ),
             )
             for identity in selected_identities

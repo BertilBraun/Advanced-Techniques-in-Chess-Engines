@@ -13,7 +13,6 @@ from src.replay.batch_loader import build_training_batch
 from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame, ReplayManager
 from src.replay.store import ReplayStore
-from src.search_budget.labeling import ExperimentReplaySampleProvider
 from src.search_budget.manager import (
     FailedLabelJobReport,
     GenerationLabelReport,
@@ -104,7 +103,6 @@ class Coordinator:
         )
         # Durable replay state is the credit ground truth across callbacks and restarts.
         self.ledger.reconcile_materialized_samples(self.replay_manager.total_materialized_samples())
-        label_sample_provider = ExperimentReplaySampleProvider(self.configuration.model_dump_json())
         self.search_budget_label_manager = SearchBudgetLabelManager(
             run_path=run_path,
             configuration_sha256=experiment_configuration_sha256(self.configuration),
@@ -112,7 +110,7 @@ class Coordinator:
             runtime_factory=ConfiguredLabelWorkerRuntimeFactory(self.configuration.model_dump_json()),
             action_size=game.state.action_size,
             maximum_policy_entries=training.lifecycle.replay.maximum_policy_entries,
-            sample_provider=label_sample_provider,
+            sample_provider=self.replay_manager.label_sample_at_absolute_row,
             replay_writer=self.replay_manager.append_labelled_samples,
             initial_first_unstarted_production_generation=self.ledger.model_generation + 1,
             configuration=training.lifecycle.search_budget,

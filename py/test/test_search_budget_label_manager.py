@@ -12,6 +12,7 @@ import src.search_budget.manager as search_budget_manager_module
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlanePayload
 from src.replay.contracts import IneligibleSearchBudgetTarget, ReplaySample, SparsePolicyTarget
+from src.replay.label_source import ReplayLabelGameLocator
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
 from src.search_budget.artifacts import LabelShardManifest, LabelShardPhase
 from src.search_budget.calibration import CurveDecisionReason
@@ -136,21 +137,23 @@ def _position() -> LabelPositionSource:
     )
 
 
+def _label_game() -> ReplayLabelGameLocator:
+    game = _game()
+    return ReplayLabelGameLocator(
+        identity=game.source.identity,
+        action_ids=game.action_ids,
+        observation_plies=tuple(observation.ply for observation in game.observations),
+        first_absolute_replay_row=0,
+    )
+
+
 def _unused_runtime_factory(device_id: int) -> LabelWorkerRuntime:
     raise AssertionError(f'Injected executor must not initialize GPU {device_id}.')
 
 
 class _UnusedSampleProvider:
-    def __call__(self, game: ReplayShardGameMetadata, observation_index: int) -> ReplaySample:
-        raise AssertionError(
-            f'No sample should be requested for {game.source.identity.archive_key} at {observation_index}.'
-        )
-
-    def close(self) -> None:
-        return None
-
-    def clear(self) -> None:
-        return None
+    def __call__(self, absolute_replay_row: int) -> ReplaySample:
+        raise AssertionError(f'No sample should be requested for replay row {absolute_replay_row}.')
 
 
 def _unused_replay_writer(source_generation: int, samples: tuple[ReplaySample, ...]) -> _Writeback:
@@ -260,10 +263,10 @@ def test_shard_retry_fails_terminally_after_three_attempts(tmp_path: Path) -> No
     manager.close()
 
 
-@pytest.mark.parametrize('games', ((), (_game(),)))
+@pytest.mark.parametrize('games', ((), (_label_game(),)))
 def test_zero_or_under_fifty_position_cohort_is_durably_skipped(
     tmp_path: Path,
-    games: tuple[ReplayShardGameMetadata, ...],
+    games: tuple[ReplayLabelGameLocator, ...],
 ) -> None:
     executor = ThreadPoolExecutor(max_workers=1)
     manager = _manager(tmp_path, executor)

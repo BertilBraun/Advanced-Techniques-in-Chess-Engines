@@ -701,19 +701,26 @@ def test_label_source_cohort_survives_shard_deletion_and_restart(tmp_path: Path)
     journal_text = (tmp_path / 'completed-games' / 'label-source-cohorts.json').read_text(encoding='utf-8')
     shard_paths = tuple((tmp_path / 'completed-games' / 'label-source-cohort-shards').glob(f'*{MANIFEST_SUFFIX}'))
 
-    assert cohort.games == ingestion.label_source_games
-    assert '"schema_version": 3' in journal_text
+    assert tuple(game.identity for game in cohort.games) == tuple(
+        game.source.identity for game in ingestion.label_source_games
+    )
+    assert tuple(game.observation_plies for game in cohort.games) == tuple(
+        tuple(observation.ply for observation in game.observations) for game in ingestion.label_source_games
+    )
+    assert tuple(game.first_absolute_replay_row for game in cohort.games) == (0, 4)
+    assert '"schema_version": 4' in journal_text
     assert '"games"' not in journal_text
     assert len(shard_paths) == 1
-    assert shard_paths[0].read_bytes() == staged_manifest_bytes
-    assert shard_paths[0].stat().st_ino == staged_manifest_file_index
+    assert shard_paths[0].stat().st_size < len(staged_manifest_bytes) // 10
+    assert shard_paths[0].stat().st_ino != staged_manifest_file_index
+    assert manager.label_sample_at_absolute_row(0) == manager.store.sample_at(0)
     assert manager.pending_label_source_generations == (2,)
     assert manager.staging_depth == 0
     manager.close()
 
     restarted = _open_manager(tmp_path, capacity=16, maximum_capacity=16)
     recovered = restarted.finalize_label_source_cohort(2)
-    assert recovered.games == ingestion.label_source_games
+    assert recovered == cohort
     restarted.acknowledge_label_source_cohort(2)
     restarted.acknowledge_label_source_cohort(2)
     assert restarted.pending_label_source_generations == ()
