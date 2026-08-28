@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from enum import Enum
 from typing import Literal
 
 from pydantic import Field, model_validator
 from src.util.frozen_model import FrozenModel
+
+
+class LabelArtifactRetention(str, Enum):
+    RETAIN_ALL = 'retain_all'
+    REMOVE_BULKY_AFTER_FINALIZATION = 'remove_bulky_after_finalization'
 
 
 class DeepLabelingConfiguration(FrozenModel):
@@ -16,6 +22,7 @@ class DeepLabelingConfiguration(FrozenModel):
     inference_batch_size: int = Field(default=512, gt=0, le=512)
     outstanding_inference_batches: int = Field(default=2, ge=1, le=2)
     parallel_searches: int = Field(default=2, gt=0)
+    artifact_retention: LabelArtifactRetention = LabelArtifactRetention.RETAIN_ALL
 
     @model_validator(mode='after')
     def validate_first_run_defaults(self) -> DeepLabelingConfiguration:

@@ -111,9 +111,13 @@ calibration plots, regression loss, top-1 agreement, and oracle-gain share remai
 
 Run state is under `search-budget-labels/` in the configured training save path. Replay cohort and write-back journals
 are under `completed-games/`. Persisted curve calibration contains only generation aggregates and state lineage, not
-a cross-generation collection of labelled positions. The initial integration smoke intentionally retains every
-prediction and policy-checkpoint artifact so their contents, checksums, and disk cost can be inspected.
+a cross-generation collection of labelled positions.
 
-Before a multi-day production run, add terminal-generation cleanup that removes only the bulky shard artifacts after
-replay write-back, calibration publication, the final report, and completed manager state are all durable. Retain
-failed-job artifacts and all compact reports, manifests, TensorBoard events, curve evidence, and replay receipts.
+Artifact retention is an explicit run policy. `retain_all` keeps the complete generation source plus every prediction
+and policy-checkpoint shard for diagnostic smokes. Production uses `remove_bulky_after_finalization`. Cleanup starts
+only after the replay write-back receipt is committed, calibration state and final report are atomic, and the manager
+state durably marks the generation complete. It removes `source.json` and shard `artifact-attempt-*.json` payloads,
+but retains every shard manifest, final report, calibration state, manager state, replay write-back journal,
+TensorBoard event, log, failed-job artifact, and a compact `artifact-cleanup-receipt.json` recording exact removed
+paths and bytes plus the preserved evidence references. A prepared receipt makes partial deletion retryable and a
+cleanup failure never reclassifies or re-finalizes an already completed generation.

@@ -12,6 +12,7 @@ from typing import Literal, Protocol, TypeAlias
 
 from pydantic import Field, model_validator
 from src.replay.contracts import ReplaySample
+from src.replay.manager import LabelledReplayWritebackState
 from src.replay.shard import ReplayShardGameMetadata
 from src.search_budget.artifacts import (
     LabelShardManifest,
@@ -32,7 +33,7 @@ from src.search_budget.calibration import (
     save_calibration_state,
     update_calibration,
 )
-from src.search_budget.configuration import SearchBudgetConfiguration
+from src.search_budget.configuration import LabelArtifactRetention, SearchBudgetConfiguration
 from src.search_budget.labeling import (
     BucketGenerationDiagnostics,
     DeepSearchShardArtifact,
@@ -48,6 +49,11 @@ from src.search_budget.labeling import (
     finalize_generation,
     prediction_map,
 )
+from src.search_budget.retention import (
+    FailedLabelArtifactCleanupReceipt,
+    LabelArtifactCleanupEvidence,
+    cleanup_completed_generation_artifacts,
+)
 from src.search_budget.sampling import LabelPositionIdentity, partition_generation_sample
 from src.search_budget.worker import (
     DeepSearchShardTask,
@@ -60,6 +66,7 @@ from src.search_budget.worker import (
 from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_bytes_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.log import warn
 
 
 class LabelJobStatus(str, Enum):
@@ -281,6 +288,7 @@ class SearchBudgetLabelManager:
         self._condition = threading.Condition()
         self._closing = False
         self._reported_generations: set[int] = set()
+        self._cleanup_completed_jobs()
         self._device_claims: multiprocessing.queues.Queue[int] | None = None
         if executor is None:
             context = multiprocessing.get_context('spawn')
@@ -533,6 +541,7 @@ class SearchBudgetLabelManager:
         )
         write_persisted_model(self._report_path(source.source_generation), report)
         self._set_status(job.source_generation, LabelJobStatus.COMPLETED)
+        self._cleanup_completed_jobs()
 
     def _run_prediction_phase(
         self,
@@ -697,6 +706,63 @@ class SearchBudgetLabelManager:
             lower_mean_visits=diagnostic.lower_mean_visits,
             upper_mean_visits=diagnostic.upper_mean_visits,
             checkpoint_deduplication_count=diagnostic.checkpoint_deduplication_count,
+        )
+
+    def _cleanup_completed_jobs(self) -> None:
+        if self.configuration.labeling.artifact_retention is LabelArtifactRetention.RETAIN_ALL:
+            return
+        for job in self._state.jobs:
+            if job.status is LabelJobStatus.COMPLETED:
+                self._cleanup_completed_job(job.source_generation)
+
+    def _cleanup_completed_job(self, source_generation: int) -> None:
+        if self.configuration.labeling.artifact_retention is LabelArtifactRetention.RETAIN_ALL:
+            return
+        try:
+            evidence = self._validate_cleanup_preconditions(source_generation)
+            receipt = cleanup_completed_generation_artifacts(
+                self._job_path(source_generation),
+                source_generation,
+                evidence,
+            )
+        except (OSError, ValueError) as error:
+            warn(
+                f'Search-budget artifact cleanup for source generation {source_generation} was not applied: '
+                f'{type(error).__name__}: {error}'
+            )
+            return
+        if isinstance(receipt, FailedLabelArtifactCleanupReceipt):
+            warn(
+                f'Search-budget artifact cleanup for source generation {source_generation} was not applied: '
+                f'{receipt.failure}'
+            )
+
+    def _validate_cleanup_preconditions(self, source_generation: int) -> LabelArtifactCleanupEvidence:
+        persisted_state = load_persisted_model(self.state_path, LabelManagerState)
+        job = next(
+            (candidate for candidate in persisted_state.jobs if candidate.source_generation == source_generation),
+            None,
+        )
+        if job is None or job.status is not LabelJobStatus.COMPLETED:
+            raise ValueError('Artifact cleanup requires a durably completed label manager job.')
+        report_path = self._report_path(source_generation)
+        report = load_persisted_model(report_path, GenerationLabelReport)
+        load_persisted_model(self.calibration_path, CurveCalibrationState)
+        writeback_path = self.run_path / 'completed-games' / 'labelled-replay-writebacks.json'
+        writebacks = load_persisted_model(writeback_path, LabelledReplayWritebackState)
+        writeback = next(
+            (receipt for receipt in writebacks.receipts if receipt.source_generation == source_generation),
+            None,
+        )
+        if writeback is None or not writeback.committed:
+            raise ValueError('Artifact cleanup requires a committed replay write-back receipt.')
+        if writeback.row_count != report.replay_samples_written:
+            raise ValueError('Replay write-back receipt does not match the final generation report.')
+        return LabelArtifactCleanupEvidence(
+            final_report_path=report_path.relative_to(self.run_path),
+            manager_state_path=self.state_path.relative_to(self.run_path),
+            calibration_state_path=self.calibration_path.relative_to(self.run_path),
+            replay_writeback_state_path=writeback_path.relative_to(self.run_path),
         )
 
     def _fail_job(self, source_generation: int, error: BaseException) -> None:

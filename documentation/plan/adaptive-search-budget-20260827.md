@@ -62,7 +62,11 @@ The system operates asynchronously:
 10. Only after replay write-back commits does the controller update EMA state, prepare the next pending curve, and
     atomically publish the validated state for the next production generation that has not started.
 11. A completed manifest makes replay write-back, EMA updates, proposal construction, and publication idempotent.
-12. Training and self-play never wait for labelling. One logical source generation runs at a time in source order,
+12. With production retention, only after the final report and completed manager state are also durable, delete the
+    bulky source, prediction, and policy-checkpoint shard payloads. Retain compact manifests, reports, calibration,
+    replay receipts, TensorBoard, logs, and a typed cleanup receipt. Cleanup is independently idempotent and cannot
+    turn an already finalized generation into a failed label job.
+13. Training and self-play never wait for labelling. One logical source generation runs at a time in source order,
     and an unstarted job more than two production generations late is skipped.
 
 The labeler is generation-triggered and separate from the wall-clock evaluation manager.
@@ -272,6 +276,8 @@ Canonical typed configuration owns these resolved defaults:
 - all unique trainer GPU IDs eligible for labelling;
 - shard size and inference batch size `512`;
 - two outstanding inference batches and label `parallel_searches = 2`;
+- explicit label artifact retention: `retain_all` for diagnostic smokes and
+  `remove_bulky_after_finalization` for production;
 - masked L1 auxiliary weight `0.2`;
 - ten equal-width quantile buckets;
 - analytic initializer `0.2 + 4.8 * q^5`, stored by semantic version rather than historical table name;
@@ -357,6 +363,8 @@ Implementation is ready for the live experiment when tests demonstrate:
 - 30-generation flat warm-up, strictly positive current and EMA gain, immediate flat retreat, zero fallback, and
   next-unstarted-generation publication;
 - TensorBoard coverage for pipeline, per-bucket learning, validation, publication, residual, and failure state;
+- production cleanup begins only after durable replay, calibration, report, and completed-manager evidence; removes
+  only bulky completed-job payloads; preserves compact evidence; is retryable and cannot reclassify finalization;
 - retained-root additional-visit accounting and strict integer residual bounds;
 - simultaneous heterogeneous budgets and the documented production parallelism mapping with cap 16;
 - configuration default resolution and migration from fixed-curve/blend state;

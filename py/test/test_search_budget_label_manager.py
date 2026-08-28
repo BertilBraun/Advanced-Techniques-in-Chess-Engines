@@ -8,12 +8,17 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+import src.search_budget.manager as search_budget_manager_module
 from src.games.contracts import WdlTarget
 from src.replay.contracts import ReplaySample
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
 from src.search_budget.artifacts import LabelShardManifest, LabelShardPhase
 from src.search_budget.calibration import CurveDecisionReason
-from src.search_budget.configuration import DeepLabelingConfiguration, SearchBudgetConfiguration
+from src.search_budget.configuration import (
+    DeepLabelingConfiguration,
+    LabelArtifactRetention,
+    SearchBudgetConfiguration,
+)
 from src.search_budget.curve import analytic_initial_curve, flat_curve
 from src.search_budget.labeling import LabelGenerationSource, LabelPositionSource
 from src.search_budget.manager import (
@@ -25,6 +30,7 @@ from src.search_budget.manager import (
     SkippedLabelJobReport,
     _failure_decision_reason,
 )
+from src.search_budget.retention import CompletedLabelArtifactCleanupReceipt, LabelArtifactCleanupEvidence
 from src.search_budget.sampling import LabelPositionIdentity
 from src.search_budget.worker import DeepSearchShardTask, LabelWorkerRuntime, PredictionShardTask
 from src.self_play.completed_game import (
@@ -373,3 +379,70 @@ def test_starting_generation_boundary_is_monotonic_durable_and_prevents_late_pub
 def test_invalid_reconstructed_compute_is_distinct_from_terminal_worker_failure() -> None:
     assert _failure_decision_reason(InvalidLabelComputeError('bad checksum')) is CurveDecisionReason.INVALID_COMPUTE
     assert _failure_decision_reason(RuntimeError('worker died')) is CurveDecisionReason.TERMINAL_FAILURE
+
+
+def test_cleanup_failure_after_durable_completion_does_not_reclassify_job(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executor = ThreadPoolExecutor(max_workers=1)
+    source_path = tmp_path / 'search-budget-labels' / 'generation-00000001' / 'source.json'
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text('{}', encoding='utf-8')
+    manager = SearchBudgetLabelManager(
+        run_path=tmp_path,
+        configuration_sha256='1' * 64,
+        device_ids=(0,),
+        runtime_factory=_unused_runtime_factory,
+        action_size=2,
+        maximum_policy_entries=2,
+        sample_provider=_UnusedSampleProvider(),
+        replay_writer=_unused_replay_writer,
+        initial_first_unstarted_production_generation=2,
+        configuration=SearchBudgetConfiguration(
+            labeling=DeepLabelingConfiguration(
+                artifact_retention=LabelArtifactRetention.REMOVE_BULKY_AFTER_FINALIZATION
+            )
+        ),
+        executor=executor,
+    )
+    manager._replace_state(
+        (
+            LabelGenerationJob(
+                source_generation=1,
+                source_path=source_path,
+                status=LabelJobStatus.COMPLETED,
+            ),
+        )
+    )
+    calibration_before = manager._calibration
+    evidence = LabelArtifactCleanupEvidence(
+        final_report_path=Path('search-budget-labels/generation-00000001/final-report.json'),
+        manager_state_path=Path('search-budget-labels/manager-state.json'),
+        calibration_state_path=Path('search-budget-labels/calibration-state.json'),
+        replay_writeback_state_path=Path('completed-games/labelled-replay-writebacks.json'),
+    )
+
+    def validated_evidence(source_generation: int) -> LabelArtifactCleanupEvidence:
+        assert source_generation == 1
+        return evidence
+
+    def failed_cleanup(
+        job_path: Path,
+        source_generation: int,
+        cleanup_evidence: LabelArtifactCleanupEvidence,
+    ) -> CompletedLabelArtifactCleanupReceipt:
+        assert job_path == source_path.parent
+        assert source_generation == 1
+        assert cleanup_evidence == evidence
+        raise OSError('simulated deletion failure')
+
+    monkeypatch.setattr(manager, '_validate_cleanup_preconditions', validated_evidence)
+    monkeypatch.setattr(search_budget_manager_module, 'cleanup_completed_generation_artifacts', failed_cleanup)
+
+    manager._cleanup_completed_job(1)
+
+    assert manager._state.jobs[0].status is LabelJobStatus.COMPLETED
+    assert manager._calibration == calibration_before
+    assert not manager._report_path(1).exists()
+    manager.close()
