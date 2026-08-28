@@ -70,6 +70,7 @@ public:
     [[nodiscard]] std::size_t rootIndex() const noexcept { return m_rootIndex; }
     [[nodiscard]] std::size_t liveNodeCount() const noexcept { return m_liveNodeCount; }
     [[nodiscard]] std::size_t capacity() const noexcept { return m_nodes.size(); }
+    [[nodiscard]] std::size_t maximumCapacity() const noexcept { return m_maximumCapacity; }
 
     [[nodiscard]] std::size_t totalChildCount() const noexcept {
         std::size_t count = 0;

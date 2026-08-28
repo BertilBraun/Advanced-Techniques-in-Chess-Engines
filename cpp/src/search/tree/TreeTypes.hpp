@@ -19,8 +19,8 @@ template <typename Action> struct GameSearchEdge {
     std::optional<std::size_t> child_index;
 };
 
-// Positions live in a parallel arena under the same indices: a chess position is over a kilobyte and
-// only leaf handling reads it, while selection and backup touch every node on the path.
+// Positions live in a parallel arena under the same indices: a chess position is over a kilobyte
+// and only leaf handling reads it, while selection and backup touch every node on the path.
 template <SearchGame Game> struct GameSearchNode {
     using Action = typename Game::Action;
 
@@ -31,7 +31,8 @@ template <SearchGame Game> struct GameSearchNode {
     float value_sum = 0.0F;
     float virtual_loss = 0.0F;
     bool inference_pending = false;
-    float search_correction = 0.0F;
+    float search_budget_logit = 0.0F;
+    float search_budget = 0.5F;
     std::optional<WdlPrediction> network_outcome;
 
     [[nodiscard]] bool expanded() const noexcept { return !children.empty(); }

@@ -10,18 +10,17 @@ std::filesystem::path createTestModel(const bool assertNonNegativeInput = true) 
     model.define(R"JIT(
         def forward(self, boards):
             batch_size = boards.size(0))JIT" +
-                 std::string(assertNonNegativeInput
-                                 ? R"JIT(
+                 std::string(assertNonNegativeInput ? R"JIT(
             torch._assert(torch.all(boards >= 0), "negative test input"))JIT"
-                                 : "") +
+                                                    : "") +
                  R"JIT(
             policies = torch.zeros((batch_size, )JIT" +
                  std::to_string(ChessEncoding::actionCount) + R"JIT(), device=boards.device)
             wins = torch.clamp(boards[:, 0, 0, 0].float(), 0.0, 1.0)
             draws = torch.zeros_like(wins)
             outcomes = torch.stack((wins, draws, 1.0 - wins), 1)
-            search_correction = torch.full((batch_size, 1), 0.5, device=boards.device)
-            return policies, outcomes, search_correction
+            search_budget = torch.zeros((batch_size, 1), device=boards.device)
+            return policies, outcomes, search_budget
     )JIT");
     const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path path =
@@ -44,8 +43,8 @@ std::filesystem::path createWeightedTestModel(const float winScale) {
             wins = torch.clamp(boards[:, 0, 0, 0].float() * self.win_scale, 0.0, 1.0)
             draws = torch.zeros_like(wins)
             outcomes = torch.stack((wins, draws, 1.0 - wins), 1)
-            search_correction = torch.full((batch_size, 1), 0.5, device=boards.device)
-            return policies, outcomes, search_correction
+            search_budget = torch.zeros((batch_size, 1), device=boards.device)
+            return policies, outcomes, search_budget
     )JIT");
     const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path path =

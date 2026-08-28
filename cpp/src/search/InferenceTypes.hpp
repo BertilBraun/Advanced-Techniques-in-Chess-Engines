@@ -36,7 +36,8 @@ template <SearchGame Game> struct SearchInferenceResult {
 
     std::vector<ScoredAction<Action>> actions;
     WdlPrediction outcome;
-    float search_correction;
+    float search_budget_logit;
+    float search_budget;
 
     [[nodiscard]] float value() const noexcept { return outcome.expectedValue(); }
 };

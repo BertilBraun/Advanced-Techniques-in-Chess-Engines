@@ -124,18 +124,17 @@ prepareInferenceModelUpdate(const std::vector<ModelTensorSignature> &parameterSi
     if (outputTuple->elements().size() != 3 || !outputTuple->elements()[0].isTensor() ||
         !outputTuple->elements()[1].isTensor() || !outputTuple->elements()[2].isTensor()) {
         throw std::invalid_argument(
-            "Updated inference model must return policy, WDL, and search-correction tensors");
+            "Updated inference model must return policy, WDL, and search-budget tensors");
     }
     const torch::Tensor policy = outputTuple->elements()[0].toTensor();
     const torch::Tensor outcome = outputTuple->elements()[1].toTensor();
-    const torch::Tensor searchCorrection = outputTuple->elements()[2].toTensor();
+    const torch::Tensor searchBudget = outputTuple->elements()[2].toTensor();
     if (policy.dim() != 2 || policy.size(0) != 1 || policy.size(1) != actionCount ||
         outcome.dim() != 2 || outcome.size(0) != 1 || outcome.size(1) != outcomeCount ||
         !torch::isfinite(policy).all().item<bool>() ||
         !torch::isfinite(outcome).all().item<bool>() || (outcome < 0).any().item<bool>() ||
-        searchCorrection.dim() != 2 || searchCorrection.size(0) != 1 ||
-        searchCorrection.size(1) != 1 || !torch::isfinite(searchCorrection).all().item<bool>() ||
-        (searchCorrection < 0).any().item<bool>() || (searchCorrection > 1).any().item<bool>() ||
+        searchBudget.dim() != 2 || searchBudget.size(0) != 1 || searchBudget.size(1) != 1 ||
+        !torch::isfinite(searchBudget).all().item<bool>() ||
         std::abs(outcome.sum().item<float>() - 1.0F) > 1e-2F) {
         throw std::invalid_argument("Updated inference model returned invalid output");
     }
@@ -356,12 +355,11 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
     const torch::TensorOptions stagingOptions =
         torch::TensorOptions().device(m_device).dtype(torch::kFloat32);
     m_deviceOutputStaging = {
-        .policies = torch::empty(
-            {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.actions)}, stagingOptions),
+        .policies = torch::empty({tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.actions)},
+                                 stagingOptions),
         .outcomes = torch::empty(
             {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.outcomes)}, stagingOptions),
-        .search_corrections =
-            torch::empty({tensorSize(m_maximumBatchSize), 1}, stagingOptions),
+        .search_budgets = torch::empty({tensorSize(m_maximumBatchSize), 1}, stagingOptions),
     };
     captureBatchGraphs();
 }
@@ -387,43 +385,40 @@ void InferenceRunner::runModelToStaging(const size_t batchSize) {
     const auto outputTuple = m_model->forward(m_modelInputs).toTuple();
     if (outputTuple->elements().size() != 3) {
         throw std::runtime_error(
-            "Inference model must return policy, WDL, and search-correction tensors");
+            "Inference model must return policy, WDL, and search-budget tensors");
     }
-    m_deviceOutputStaging.policies.narrow(0, 0, rows)
-        .copy_(outputTuple->elements()[0].toTensor());
-    m_deviceOutputStaging.outcomes.narrow(0, 0, rows)
-        .copy_(outputTuple->elements()[1].toTensor());
-    m_deviceOutputStaging.search_corrections.narrow(0, 0, rows)
+    m_deviceOutputStaging.policies.narrow(0, 0, rows).copy_(outputTuple->elements()[0].toTensor());
+    m_deviceOutputStaging.outcomes.narrow(0, 0, rows).copy_(outputTuple->elements()[1].toTensor());
+    m_deviceOutputStaging.search_budgets.narrow(0, 0, rows)
         .copy_(outputTuple->elements()[2].toTensor());
 }
 
 void InferenceRunner::runEagerModel(const size_t batchSize, InferenceOutput &output) {
-    const torch::Tensor typedInput =
-        m_deviceTypedInput.narrow(0, 0, tensorSize(batchSize));
+    const torch::Tensor typedInput = m_deviceTypedInput.narrow(0, 0, tensorSize(batchSize));
     typedInput.copy_(m_deviceInput.narrow(0, 0, tensorSize(batchSize)));
     m_modelInputs[0] = typedInput;
     const torch::jit::IValue modelOutput = m_model->forward(m_modelInputs);
     const auto outputTuple = modelOutput.toTuple();
     if (outputTuple->elements().size() != 3) {
         throw std::runtime_error(
-            "Inference model must return policy, WDL, and search-correction tensors");
+            "Inference model must return policy, WDL, and search-budget tensors");
     }
     stageOutput(outputTuple->elements()[0].toTensor(), m_deviceOutputStaging.policies,
                 output.policies, batchSize);
     stageOutput(outputTuple->elements()[1].toTensor(), m_deviceOutputStaging.outcomes,
                 output.outcomes, batchSize);
-    stageOutput(outputTuple->elements()[2].toTensor(), m_deviceOutputStaging.search_corrections,
-                output.search_corrections, batchSize);
+    stageOutput(outputTuple->elements()[2].toTensor(), m_deviceOutputStaging.search_budgets,
+                output.search_budgets, batchSize);
 }
 
 void InferenceRunner::copyStagedOutput(const size_t batchSize, InferenceOutput &output) {
     const std::int64_t rows = tensorSize(batchSize);
-    output.policies.narrow(0, 0, rows).copy_(m_deviceOutputStaging.policies.narrow(0, 0, rows),
-                                             usesCuda());
-    output.outcomes.narrow(0, 0, rows).copy_(m_deviceOutputStaging.outcomes.narrow(0, 0, rows),
-                                             usesCuda());
-    output.search_corrections.narrow(0, 0, rows)
-        .copy_(m_deviceOutputStaging.search_corrections.narrow(0, 0, rows), usesCuda());
+    output.policies.narrow(0, 0, rows)
+        .copy_(m_deviceOutputStaging.policies.narrow(0, 0, rows), usesCuda());
+    output.outcomes.narrow(0, 0, rows)
+        .copy_(m_deviceOutputStaging.outcomes.narrow(0, 0, rows), usesCuda());
+    output.search_budgets.narrow(0, 0, rows)
+        .copy_(m_deviceOutputStaging.search_budgets.narrow(0, 0, rows), usesCuda());
 }
 
 void InferenceRunner::releaseBatchGraphs() noexcept {
@@ -485,8 +480,7 @@ void InferenceRunner::captureBatchGraphsSerialized() {
         const at::cuda::MempoolId_t pool =
             m_graphPool.has_value() ? *m_graphPool : at::cuda::graph_pool_handle();
         for (const auto bucket : range<size_t>(1, bucketCount + 1)) {
-            const size_t batchSize =
-                std::max<size_t>(1, m_maximumBatchSize * bucket / bucketCount);
+            const size_t batchSize = std::max<size_t>(1, m_maximumBatchSize * bucket / bucketCount);
             if (!replacement.empty() && replacement.back().batch_size >= batchSize) {
                 continue;
             }
@@ -563,7 +557,7 @@ InferenceOutput InferenceRunner::createOutputBuffer() const {
                                  options),
         .outcomes = torch::empty(
             {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.outcomes)}, options),
-        .search_corrections = torch::empty({tensorSize(m_maximumBatchSize), 1}, options),
+        .search_budgets = torch::empty({tensorSize(m_maximumBatchSize), 1}, options),
     };
 }
 
@@ -585,11 +579,11 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size
         output.outcomes.device().is_cuda() || output.outcomes.scalar_type() != torch::kFloat32 ||
         output.outcomes.dim() != 2 || output.outcomes.size(0) < static_cast<int64_t>(batchSize) ||
         output.outcomes.size(1) != tensorSize(m_dimensions.outcomes) ||
-        output.search_corrections.device().is_cuda() ||
-        output.search_corrections.scalar_type() != torch::kFloat32 ||
-        output.search_corrections.dim() != 2 ||
-        output.search_corrections.size(0) < static_cast<int64_t>(batchSize) ||
-        output.search_corrections.size(1) != 1) {
+        output.search_budgets.device().is_cuda() ||
+        output.search_budgets.scalar_type() != torch::kFloat32 ||
+        output.search_budgets.dim() != 2 ||
+        output.search_budgets.size(0) < static_cast<int64_t>(batchSize) ||
+        output.search_budgets.size(1) != 1) {
         throw std::invalid_argument("Inference output buffers have invalid shapes or types");
     }
 
@@ -801,8 +795,8 @@ InferenceOutput InferencePipeline::waitCompletedOutput(const size_t slotIndex) {
     return {
         .policies = slot.output.policies.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
         .outcomes = slot.output.outcomes.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
-        .search_corrections =
-            slot.output.search_corrections.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
+        .search_budgets =
+            slot.output.search_budgets.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
     };
 }
 

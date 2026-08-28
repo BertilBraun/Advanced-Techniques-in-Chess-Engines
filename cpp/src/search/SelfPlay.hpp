@@ -11,37 +11,33 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <shared_mutex>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
-// Applies training search schedules and root noise across games through the shared engine.
-
 struct SelfPlaySearchParameters {
-    std::uint32_t parallel_searches;
-    SearchLimit full_search_budget;
-    std::uint32_t fast_searches;
+    std::uint32_t baseline_visits;
+    float search_budget_blend;
     TreeSearchParameters tree_search;
     float dirichlet_alpha;
     float dirichlet_epsilon;
 
-    SelfPlaySearchParameters(std::uint32_t parallelSearches, SearchLimit fullSearchBudget,
-                             std::uint32_t fastSearches, TreeSearchParameters treeSearch,
-                             float dirichletAlpha, float dirichletEpsilon)
-        : parallel_searches(parallelSearches), full_search_budget(std::move(fullSearchBudget)),
-          fast_searches(fastSearches), tree_search(treeSearch), dirichlet_alpha(dirichletAlpha),
+    SelfPlaySearchParameters(const std::uint32_t baselineVisits, const float searchBudgetBlend,
+                             TreeSearchParameters treeSearch, const float dirichletAlpha,
+                             const float dirichletEpsilon)
+        : baseline_visits(baselineVisits), search_budget_blend(searchBudgetBlend),
+          tree_search(treeSearch), dirichlet_alpha(dirichletAlpha),
           dirichlet_epsilon(dirichletEpsilon) {
-        if (parallel_searches == 0 || fast_searches == 0) {
-            throw std::invalid_argument("Self-play search counts must be positive");
-        }
+        static_cast<void>(PredictedSearchBudgetLimit(baseline_visits, search_budget_blend));
     }
 
     [[nodiscard]] std::uint32_t arenaCapacity() const {
-        const std::uint64_t maximumSearches =
-            std::max(maximumVisits(full_search_budget), fast_searches);
-        const std::uint64_t capacity = maximumSearches + parallel_searches + 1U;
+        const std::uint64_t maximumSearches = maximumAdditionalVisits(
+            PredictedSearchBudgetLimit(baseline_visits, search_budget_blend));
+        const std::uint64_t capacity = maximumSearches + 16U + 1U;
         if (capacity > std::numeric_limits<std::uint32_t>::max()) {
             throw std::overflow_error("Search parameters exceed the node index capacity");
         }
@@ -60,7 +56,11 @@ struct SelfPlaySearchStatistics {
 
 template <SearchGame Game> struct SelfPlaySearchRequest {
     GameSearchRoot<Game> root;
-    bool full_search;
+    std::optional<std::uint32_t> assigned_additional_visits;
+    std::vector<std::uint32_t> policy_checkpoint_visits;
+    std::optional<std::uint32_t> parallel_searches;
+    bool add_root_noise;
+    bool force_root_playouts;
     SearchCheckpointDetail checkpoint_detail = SearchCheckpointDetail::Scalars;
 };
 
@@ -74,12 +74,14 @@ template <SearchGame Game> struct SelfPlaySearchResult {
     float network_root_value;
     float policy_correction;
     float value_correction;
-    float search_correction_target;
-    float predicted_search_correction;
+    float search_budget_logit;
+    float predicted_search_budget;
+    std::uint32_t assigned_additional_visits;
+    std::uint32_t parallel_searches;
+    std::int64_t spend_residual;
     std::uint32_t starting_visits;
     std::uint32_t final_visits;
     SearchStopReason stop_reason;
-    bool learned_gate_evaluated;
     std::vector<SearchCheckpoint> checkpoints;
     GameSearchRoot<Game> root;
 };
@@ -111,60 +113,38 @@ public:
               engineParameters(m_searchParameters), initialModelGeneration, true,
               m_runtimeParameters.execution_options)) {}
 
-    [[nodiscard]] Root newRoot(Position position) const {
+    [[nodiscard]] Root newRoot(Position position, const std::size_t maximumCapacity = 0) const {
         const std::shared_lock lock(m_operationMutex);
-        return m_search->newRoot(std::move(position));
+        return m_search->newRoot(std::move(position), maximumCapacity);
     }
 
     [[nodiscard]] Batch search(const std::vector<Request> &requests,
                                const bool collectStatistics = false) {
         const std::shared_lock lock(m_operationMutex);
         if (requests.empty()) {
-            return {
-                .results = {},
-                .statistics = {},
-                .simulations_completed = 0,
-            };
+            return {.results = {}, .statistics = {}, .simulations_completed = 0};
         }
-        const std::size_t fullSearchCount =
-            static_cast<std::size_t>(std::ranges::count(requests, true, &Request::full_search));
-        const std::size_t fastSearchCount = requests.size() - fullSearchCount;
-        const std::size_t inferenceCapacity = m_inferenceParameters.workers *
-                                              m_inferenceParameters.batch_size *
-                                              m_inferenceParameters.outstanding_batches_per_worker;
-        const std::size_t initiallyAdmittedFastSearches = initialFastSearchAdmissionCount(
-            fastSearchCount, fullSearchCount,
-            maximumVisits(m_searchParameters.full_search_budget),
-            m_searchParameters.fast_searches, inferenceCapacity);
-        std::size_t admittedFastSearches = 0;
         std::vector<GameSearchRequest<Game>> engineRequests;
         engineRequests.reserve(requests.size());
         for (const Request &request : requests) {
-            if (request.root.tree().capacity() != m_arenaCapacity) {
-                throw std::invalid_argument(
-                    "Root arena capacity does not match self-play search parameters");
-            }
-            SearchAdmission admission = SearchAdmission::Immediate;
-            if (!request.full_search && initiallyAdmittedFastSearches < fastSearchCount) {
-                admission = admittedFastSearches < initiallyAdmittedFastSearches
-                                ? SearchAdmission::InitialFast
-                                : SearchAdmission::WaitingFast;
-                ++admittedFastSearches;
-            }
+            const SearchLimit limit =
+                request.assigned_additional_visits.has_value()
+                    ? SearchLimit{AdditionalSearchLimit(*request.assigned_additional_visits)}
+                    : SearchLimit{
+                          PredictedSearchBudgetLimit(m_searchParameters.baseline_visits,
+                                                     m_searchParameters.search_budget_blend)};
             engineRequests.push_back({
                 .root = request.root,
-                .limit = request.full_search
-                             ? m_searchParameters.full_search_budget
-                             : SearchLimit{FixedSearchLimit(m_searchParameters.fast_searches)},
-                .add_root_noise = request.full_search,
-                .force_root_playouts =
-                    request.full_search &&
-                    m_searchParameters.tree_search.forced_playout_coefficient > 0.0F,
+                .limit = limit,
+                .add_root_noise = request.add_root_noise,
+                .force_root_playouts = request.force_root_playouts,
                 .checkpoint_detail = request.checkpoint_detail,
-                .admission = admission,
+                .policy_checkpoint_visits = request.policy_checkpoint_visits,
+                .parallel_searches = request.parallel_searches,
             });
         }
-        GameSearchBatchResult searched = m_search->searchDetailed(engineRequests);
+        GameSearchBatchResult searched =
+            m_search->searchDetailed(engineRequests, &m_budgetAllocator);
         std::vector<Result> results;
         results.reserve(requests.size());
         for (const auto index : range(requests.size())) {
@@ -180,19 +160,18 @@ public:
                 .network_root_value = searched.results[index].network_root_value,
                 .policy_correction = searched.results[index].policy_correction,
                 .value_correction = searched.results[index].value_correction,
-                .search_correction_target = searched.results[index].search_correction_target,
-                .predicted_search_correction =
-                    searched.results[index].predicted_search_correction,
+                .search_budget_logit = searched.results[index].search_budget_logit,
+                .predicted_search_budget = searched.results[index].predicted_search_budget,
+                .assigned_additional_visits = searched.results[index].assigned_additional_visits,
+                .parallel_searches = searched.results[index].parallel_searches,
+                .spend_residual = searched.results[index].spend_residual,
                 .starting_visits = searched.results[index].starting_visits,
                 .final_visits = searched.results[index].final_visits,
                 .stop_reason = searched.results[index].stop_reason,
-                .learned_gate_evaluated = searched.results[index].learned_gate_evaluated,
                 .checkpoints = std::move(searched.results[index].checkpoints),
                 .root = requests[index].root,
             });
         }
-        // Deliberately sampled from one root per batch: aggregating all roots costs tree walks per search,
-        // and across many workers the sampled series converges to the batch average anyway.
         const SelfPlaySearchStatistics collected =
             collectStatistics ? treeStatistics(results.front().root) : SelfPlaySearchStatistics{};
         return {
@@ -205,6 +184,16 @@ public:
     [[nodiscard]] std::uint32_t arenaCapacity() const {
         const std::shared_lock lock(m_operationMutex);
         return m_arenaCapacity;
+    }
+
+    [[nodiscard]] std::int64_t spendResidual() const {
+        const std::shared_lock lock(m_operationMutex);
+        return m_budgetAllocator.spendError();
+    }
+
+    void resetSpendResidual() {
+        const std::unique_lock lock(m_operationMutex);
+        m_budgetAllocator.reset();
     }
 
     [[nodiscard]] std::uint64_t modelGeneration() const {
@@ -247,12 +236,13 @@ private:
     std::uint32_t m_arenaCapacity;
     BatchedInferenceParameters m_inferenceParameters;
     std::unique_ptr<BatchedGameSearch<Game>> m_search;
+    SearchBudgetAllocator m_budgetAllocator;
     mutable std::shared_mutex m_operationMutex;
 
     [[nodiscard]] static BatchedSearchParameters
     engineParameters(const SelfPlaySearchParameters &parameters) {
-        return {parameters.parallel_searches, parameters.tree_search, parameters.dirichlet_alpha,
-                parameters.dirichlet_epsilon, parameters.arenaCapacity()};
+        return {parameters.tree_search, parameters.dirichlet_alpha, parameters.dirichlet_epsilon,
+                parameters.arenaCapacity()};
     }
 
     [[nodiscard]] static SelfPlaySearchStatistics treeStatistics(const Root &root) {

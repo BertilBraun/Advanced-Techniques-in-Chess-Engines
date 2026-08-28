@@ -31,7 +31,8 @@ public:
 
     [[nodiscard]] Root newRoot(typename Game::State position,
                                const std::size_t maximumCapacity = 0) {
-        // Without compaction the registry grows one expired entry per game for the engine's lifetime.
+        // Without compaction the registry grows one expired entry per game for the engine's
+        // lifetime.
         std::erase_if(m_trees, [](const std::weak_ptr<Tree> &tree) { return tree.expired(); });
         Root root(std::move(position), m_searchParameters.tree_capacity, maximumCapacity,
                   m_valueDiscountPerPly);
@@ -40,8 +41,9 @@ public:
     }
 
     [[nodiscard]] GameSearchBatchResult
-    searchDetailed(const std::vector<GameSearchRequest<Game>> &requests) {
-        return m_executor.searchDetailed(requests);
+    searchDetailed(const std::vector<GameSearchRequest<Game>> &requests,
+                   SearchBudgetAllocator *budgetAllocator = nullptr) {
+        return m_executor.searchDetailed(requests, budgetAllocator);
     }
 
     [[nodiscard]] std::vector<SearchInferenceResult<Game>>
