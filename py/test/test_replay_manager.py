@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
@@ -17,10 +19,17 @@ from src.replay.contracts import (
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
+    IneligibleSearchBudgetTarget,
+    ReplaySample,
 )
 from src.replay.dispatch import parse_worker_source_file_name, worker_source_file_names
+from src.replay.encoding import encode_replay_rows
 from src.replay.layout import ReplayLayout
-from src.replay.manager import ReplayManager
+from src.replay.manager import (
+    LabelledReplayWritebackReceipt,
+    LabelledReplayWritebackState,
+    ReplayManager,
+)
 from src.replay.materialization import materialize_completed_game
 from src.replay.shard import SealedReplayShardManifest, replay_shard_manifest_path
 from src.self_play.completed_game import (
@@ -38,9 +47,10 @@ from src.training.targets import (
     IrreversibleProgressHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
     TrainingTargetLayout,
 )
+from src.util.atomic_file import write_text_atomically
 from src.util.generation_schedule import ConstantSchedule
 
 
@@ -139,18 +149,19 @@ def _completed_game() -> CompletedSelfPlayGame:
                 highest_visited_child_visit_count=10,
                 highest_visited_child_q=0.2,
                 selected_action_id=selected_action,
-                full_search=ply != 1,
                 sample_weight=1.0,
-                search_budget=13,
+                baseline_visits=13,
                 network_root_value=0.1,
                 policy_correction=0.2,
                 value_correction=0.075,
-                search_correction_target=0.2,
-                predicted_search_correction=0.15,
+                search_budget_logit=-0.4,
+                predicted_search_budget=0.4,
+                assigned_additional_visits=3 if ply == 1 else 13,
+                parallel_searches=1,
+                spend_residual=0,
                 starting_visits=0,
-                final_visits=13,
-                stop_reason=SearchStopReason.FIXED_LIMIT,
-                learned_gate_evaluated=False,
+                final_visits=3 if ply == 1 else 13,
+                stop_reason=SearchStopReason.PREDICTED_BUDGET,
             )
         )
     return CompletedSelfPlayGame(
@@ -188,10 +199,10 @@ def test_shared_materialization_reconstructs_perspective_and_trajectory_targets(
         UNDISCOUNTED_VALUES,
     )
 
-    assert len(materialized.samples) == 3
-    assert materialized.policies_truncated == 5
-    assert materialized.retained_visit_mass == 50
-    assert materialized.discarded_visit_mass == 15
+    assert len(materialized.samples) == 4
+    assert materialized.policies_truncated == 7
+    assert materialized.retained_visit_mass == 70
+    assert materialized.discarded_visit_mass == 21
     assert materialized.samples[0].wdl_target == WdlTarget(win=0.0, draw=0.0, loss=1.0)
     assert isinstance(materialized.samples[0].auxiliary_targets[0], EligibleNextPolicyTarget)
     assert isinstance(materialized.samples[-1].auxiliary_targets[0], IneligibleNextPolicyTarget)
@@ -242,18 +253,19 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
                 highest_visited_child_visit_count=8,
                 highest_visited_child_q=0.0,
                 selected_action_id=2,
-                full_search=True,
                 sample_weight=1.0,
-                search_budget=8,
+                baseline_visits=8,
                 network_root_value=0.0,
                 policy_correction=0.0,
                 value_correction=0.0,
-                search_correction_target=0.0,
-                predicted_search_correction=0.0,
+                search_budget_logit=0.0,
+                predicted_search_budget=0.5,
+                assigned_additional_visits=8,
+                parallel_searches=1,
+                spend_residual=0,
                 starting_visits=0,
                 final_visits=8,
                 stop_reason=SearchStopReason.FIXED_LIMIT,
-                learned_gate_evaluated=False,
             ),
         ),
         final_wdl=WdlTarget(win=0.0, draw=0.0, loss=1.0),
@@ -300,7 +312,7 @@ def test_remaining_game_length_uses_exact_completed_trajectory_boundary() -> Non
         for sample in materialized.samples
         for target in sample.auxiliary_targets
         if isinstance(target, EligibleRemainingGameLengthTarget)
-    ) == pytest.approx((1.0, 0.5, 0.25))
+    ) == pytest.approx((1.0, 0.75, 0.5, 0.25))
 
 
 def test_four_ply_future_value_uses_terminal_fallback_with_current_perspective() -> None:
@@ -310,13 +322,7 @@ def test_four_ply_future_value_uses_terminal_fallback_with_current_perspective()
         auxiliary_heads=(FutureSearchValueHeadLayout(kind='future_search_value', ply_offset=4, smooth_l1_beta=0.1),),
     )
 
-    game = _completed_game().model_copy(
-        update={
-            'observations': tuple(
-                observation.model_copy(update={'full_search': True}) for observation in _completed_game().observations
-            )
-        }
-    )
+    game = _completed_game()
     materialized = materialize_completed_game(
         game,
         LINEAR_STATE_CONTRACT,
@@ -350,7 +356,7 @@ def test_irreversible_progress_records_event_distance_and_terminal_censoring() -
         UNDISCOUNTED_VALUES,
     )
     event_targets = tuple(sample.auxiliary_targets[0] for sample in materialized.samples)
-    assert event_targets[1:] == (
+    assert event_targets[2:] == (
         EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=2 / 3),
         EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=1 / 3),
     )
@@ -379,27 +385,16 @@ def test_irreversible_progress_records_event_distance_and_terminal_censoring() -
         3,
         UNDISCOUNTED_VALUES,
     )
-    assert isinstance(censored.samples[1].auxiliary_targets[0], IneligibleScalarAuxiliaryTarget)
+    assert isinstance(censored.samples[2].auxiliary_targets[0], IneligibleScalarAuxiliaryTarget)
 
 
-def test_search_correction_materializes_final_larger_correction() -> None:
+def test_ordinary_observations_materialize_ineligible_search_budget_targets() -> None:
     targets = TrainingTargetLayout(
         action_size=3,
         wdl_size=3,
-        auxiliary_heads=(SearchCorrectionHeadLayout(kind='search_correction'),),
+        auxiliary_heads=(SearchBudgetHeadLayout(kind='search_budget'),),
     )
-    observation = (
-        _completed_game()
-        .observations[0]
-        .model_copy(
-            update={
-                'policy_correction': 0.1,
-                'value_correction': 0.3,
-                'search_correction_target': 0.3,
-            }
-        )
-    )
-    game = _completed_game().model_copy(update={'observations': (observation, *_completed_game().observations[1:])})
+    game = _completed_game()
 
     materialized = materialize_completed_game(
         game,
@@ -410,10 +405,7 @@ def test_search_correction_materializes_final_larger_correction() -> None:
         UNDISCOUNTED_VALUES,
     )
 
-    assert materialized.samples[0].auxiliary_targets[0] == EligibleScalarAuxiliaryTarget(
-        kind='search_correction',
-        value=0.3,
-    )
+    assert materialized.samples[0].auxiliary_targets[0] == IneligibleSearchBudgetTarget()
 
 
 def test_materialization_uniformly_blurs_wdl_by_actual_remaining_game_plies() -> None:
@@ -427,8 +419,13 @@ def test_materialization_uniformly_blurs_wdl_by_actual_remaining_game_plies() ->
     )
 
     assert materialized.samples[0].wdl_target == WdlTarget(win=0.3125, draw=0.3125, loss=0.375)
-    assert materialized.samples[1].wdl_target == WdlTarget(win=0.25, draw=0.25, loss=0.5)
-    assert materialized.samples[2].wdl_target == WdlTarget(
+    assert materialized.samples[1].wdl_target == WdlTarget(
+        win=5.0 / 12.0,
+        draw=7.0 / 24.0,
+        loss=7.0 / 24.0,
+    )
+    assert materialized.samples[2].wdl_target == WdlTarget(win=0.25, draw=0.25, loss=0.5)
+    assert materialized.samples[3].wdl_target == WdlTarget(
         win=2.0 / 3.0,
         draw=1.0 / 6.0,
         loss=1.0 / 6.0,
@@ -624,7 +621,7 @@ def _worker_source_paths(manager: ReplayManager[LinearPosition]) -> tuple[Path, 
     )
 
 
-SAMPLES_PER_GAME = 3
+SAMPLES_PER_GAME = 4
 
 
 def test_game_identity_file_name_parser_requires_canonical_name() -> None:
@@ -672,9 +669,9 @@ def test_replay_manager_materializes_appends_and_reopens(tmp_path: Path) -> None
     ingestion = manager.append_staged_games(2)
 
     assert ingestion.games_ingested == 2
-    assert ingestion.samples_added == 6
+    assert ingestion.samples_added == 8
     assert ingestion.live_samples == 4
-    assert ingestion.evicted_samples == 2
+    assert ingestion.evicted_samples == 4
     assert ingestion.samples_per_second > 0.0
     assert tuple(game.length_plies for game in ingestion.completed_games) == (4, 4)
     assert tuple(game.termination_reason for game in ingestion.completed_games) == (
@@ -688,6 +685,57 @@ def test_replay_manager_materializes_appends_and_reopens(tmp_path: Path) -> None
     reopened = _open_manager(tmp_path, capacity=4, maximum_capacity=6)
     assert reopened.live_samples == 4
     reopened.close()
+
+
+def test_label_source_cohort_survives_shard_deletion_and_restart(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 2)
+    manager = _open_manager(tmp_path, capacity=16, maximum_capacity=16)
+    manager.materialize_available_games()
+
+    ingestion = manager.append_staged_games(2)
+    cohort = manager.finalize_label_source_cohort(2)
+
+    assert cohort.games == ingestion.label_source_games
+    assert manager.pending_label_source_generations == (2,)
+    assert manager.staging_depth == 0
+    manager.close()
+
+    restarted = _open_manager(tmp_path, capacity=16, maximum_capacity=16)
+    recovered = restarted.finalize_label_source_cohort(2)
+    assert recovered.games == ingestion.label_source_games
+    restarted.acknowledge_label_source_cohort(2)
+    restarted.acknowledge_label_source_cohort(2)
+    assert restarted.pending_label_source_generations == ()
+    restarted.close()
+
+
+def test_empty_label_source_cohort_is_finalized_for_generation_accounting(tmp_path: Path) -> None:
+    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
+
+    cohort = manager.finalize_label_source_cohort(7)
+
+    assert cohort.games == ()
+    assert manager.pending_label_source_generations == (7,)
+    manager.acknowledge_label_source_cohort(7)
+    assert manager.pending_label_source_generations == ()
+    manager.close()
+
+
+def test_open_empty_label_source_cohort_survives_pre_training_crash(tmp_path: Path) -> None:
+    manager = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
+
+    cohort = manager.ensure_label_source_cohort(9)
+
+    assert cohort.games == ()
+    assert manager.pending_label_source_generations == (9,)
+    manager.close()
+
+    restarted = _open_manager(tmp_path, capacity=8, maximum_capacity=8)
+    recovered = restarted.finalize_label_source_cohort(9)
+    assert recovered.games == ()
+    assert restarted.pending_label_source_generations == (9,)
+    restarted.close()
 
 
 def test_dispatch_moves_every_inbox_game_into_worker_directories_round_robin(tmp_path: Path) -> None:
@@ -964,11 +1012,16 @@ def test_append_flushes_before_removing_staged_shards(tmp_path: Path) -> None:
     manager.close()
 
 
-def test_zero_row_shard_reports_its_game_without_adding_samples(tmp_path: Path) -> None:
+def test_low_budget_game_materializes_every_observation(tmp_path: Path) -> None:
     game = _completed_game().validated_copy(
         update={
             'observations': tuple(
-                observation.validated_copy(update={'full_search': False})
+                observation.validated_copy(
+                    update={
+                        'assigned_additional_visits': 1,
+                        'final_visits': observation.starting_visits + 1,
+                    }
+                )
                 for observation in _completed_game().observations
             )
         }
@@ -980,8 +1033,8 @@ def test_zero_row_shard_reports_its_game_without_adding_samples(tmp_path: Path) 
     ingestion = manager.append_staged_games(2)
 
     assert ingestion.games_ingested == 1
-    assert ingestion.samples_added == 0
-    assert manager.store.total_appended_rows == 0
+    assert ingestion.samples_added == SAMPLES_PER_GAME
+    assert manager.store.total_appended_rows == SAMPLES_PER_GAME
     manager.close()
 
 
@@ -1102,7 +1155,6 @@ def _cut_game_with_trailing_observation() -> CompletedSelfPlayGame:
         update={
             'ply': len(game.action_ids),
             'selected_action_id': None,
-            'full_search': True,
             'root_value': 0.6,
             'policy_target_visits': SearchVisitCounts(action_ids=(legal[0],), visit_counts=(11,)),
             'highest_visited_child_action_id': legal[0],
@@ -1138,3 +1190,171 @@ def test_cut_position_search_becomes_its_own_training_sample() -> None:
     assert materialized.samples[-1].root_value == 0.6
     # It has no successor, so the next-policy target cannot be eligible for it.
     assert isinstance(materialized.samples[-1].auxiliary_targets[0], IneligibleNextPolicyTarget)
+
+
+def _label_writeback_samples() -> tuple[ReplaySample, ...]:
+    return tuple(
+        materialize_completed_game(
+            _completed_game(),
+            LINEAR_STATE_CONTRACT,
+            None,
+            _target_layout(),
+            1,
+            UNDISCOUNTED_VALUES,
+        ).samples
+    )
+
+
+def _prepared_label_writeback(
+    manager: ReplayManager[LinearPosition],
+    source_generation: int,
+    samples: tuple[ReplaySample, ...],
+) -> LabelledReplayWritebackReceipt:
+    rows = encode_replay_rows(manager.store.layout, samples)
+    state = manager.store.state
+    return LabelledReplayWritebackReceipt(
+        source_generation=source_generation,
+        row_count=len(samples),
+        rows_sha256=hashlib.sha256(rows.tobytes()).hexdigest(),
+        pre_append_total_rows=state.total_appended_rows,
+        pre_append_head=state.head,
+        pre_append_size=state.size,
+        pre_append_sequence=state.append_sequence,
+        committed=False,
+    )
+
+
+def _persist_prepared_writeback(
+    manager: ReplayManager[LinearPosition],
+    receipt: LabelledReplayWritebackReceipt,
+) -> None:
+    state = LabelledReplayWritebackState(receipts=(receipt,))
+    write_text_atomically(manager._labelled_writeback_path, state.model_dump_json(indent=2) + '\n')
+
+
+def test_labelled_replay_writeback_is_idempotent_after_commit(tmp_path: Path) -> None:
+    manager = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+    samples = _label_writeback_samples()
+
+    first = manager.append_labelled_samples(2, samples)
+    second = manager.append_labelled_samples(2, samples)
+
+    assert first.applied
+    assert not second.applied
+    assert manager.store.total_appended_rows == len(samples)
+    manager.close()
+
+
+def test_labelled_replay_writeback_does_not_count_as_new_materialized_data(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 2)
+    manager = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+    manager.materialize_available_games()
+    manager.append_staged_games(2)
+    materialized_samples = manager.total_materialized_samples()
+
+    samples = _label_writeback_samples()
+    manager.append_labelled_samples(2, samples)
+
+    assert manager.store.total_appended_rows == materialized_samples + len(samples)
+    assert manager.total_materialized_samples() == materialized_samples
+    manager.close()
+
+
+def test_prepared_label_writeback_recovers_before_store_append(tmp_path: Path) -> None:
+    manager = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+    samples = _label_writeback_samples()
+    receipt = _prepared_label_writeback(manager, 2, samples)
+    _persist_prepared_writeback(manager, receipt)
+    manager.close()
+    restarted = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+
+    recovered = restarted.append_labelled_samples(2, samples)
+
+    assert recovered.applied
+    assert restarted.store.total_appended_rows == len(samples)
+    assert (
+        LabelledReplayWritebackState.model_validate_json(restarted._labelled_writeback_path.read_text(encoding='utf-8'))
+        .receipts[0]
+        .committed
+    )
+    restarted.close()
+
+
+def test_prepared_label_writeback_recovers_after_store_append(tmp_path: Path) -> None:
+    manager = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+    samples = _label_writeback_samples()
+    receipt = _prepared_label_writeback(manager, 2, samples)
+    _persist_prepared_writeback(manager, receipt)
+    rows = encode_replay_rows(manager.store.layout, samples)
+    manager.store.extend_rows(rows, transaction_identity='search-budget-labels-2')
+    manager.store.flush()
+    manager.close()
+    restarted = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+
+    recovered = restarted.append_labelled_samples(2, samples)
+
+    assert not recovered.applied
+    assert restarted.store.total_appended_rows == len(samples)
+    restarted.close()
+
+
+def test_prepared_label_writeback_fails_closed_after_intervening_append(tmp_path: Path) -> None:
+    manager = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+    samples = _label_writeback_samples()
+    receipt = _prepared_label_writeback(manager, 2, samples)
+    _persist_prepared_writeback(manager, receipt)
+    rows = encode_replay_rows(manager.store.layout, samples)
+    manager.store.extend_rows(rows, transaction_identity='ordinary-materialization')
+    manager.store.flush()
+    manager.close()
+    restarted = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+
+    with pytest.raises(ValueError, match='ambiguous'):
+        restarted.append_labelled_samples(2, samples)
+
+    assert restarted.store.total_appended_rows == len(samples)
+    restarted.close()
+
+
+def test_prepared_label_writeback_never_duplicates_after_label_then_ordinary_append(tmp_path: Path) -> None:
+    manager = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+    samples = _label_writeback_samples()
+    receipt = _prepared_label_writeback(manager, 2, samples)
+    _persist_prepared_writeback(manager, receipt)
+    rows = encode_replay_rows(manager.store.layout, samples)
+    manager.store.extend_rows(rows, transaction_identity='search-budget-labels-2')
+    manager.store.extend_rows(rows, transaction_identity='ordinary-materialization')
+    manager.store.flush()
+    manager.close()
+    restarted = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+
+    with pytest.raises(ValueError, match='ambiguous'):
+        restarted.append_labelled_samples(2, samples)
+
+    assert restarted.store.total_appended_rows == 2 * len(samples)
+    restarted.close()
+
+
+def test_training_snapshot_lease_blocks_labelled_replay_append(tmp_path: Path) -> None:
+    manager = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+    samples = _label_writeback_samples()
+    started = threading.Event()
+    finished = threading.Event()
+
+    def append_labels() -> None:
+        started.set()
+        manager.append_labelled_samples(2, samples)
+        finished.set()
+
+    with manager.training_snapshot() as description:
+        thread = threading.Thread(target=append_labels)
+        thread.start()
+        assert started.wait(timeout=1.0)
+        assert not finished.wait(timeout=0.05)
+        assert description == manager.description()
+
+    thread.join(timeout=1.0)
+    assert finished.is_set()
+    assert manager.store.total_appended_rows == len(samples)
+    manager.close()

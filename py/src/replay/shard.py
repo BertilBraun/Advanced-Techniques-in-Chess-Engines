@@ -15,7 +15,7 @@ from pydantic import Field, model_validator
 from src.games.contracts import WdlTarget
 from src.replay.columnar import ReplayColumnArray, ReplayColumnViews, build_column_views, flatten_column_views
 from src.replay.layout import ReplayColumnDescriptor, ReplayLayout
-from src.self_play.completed_game import GameIdentity, SearchObservation, TerminationReason
+from src.self_play.completed_game import CompletedSelfPlayGame, GameIdentity, SearchObservation, TerminationReason
 from src.util.atomic_file import fsync_directory, write_text_atomically
 from src.util.frozen_model import FrozenModel
 
@@ -37,11 +37,15 @@ class ReplayShardSourceGame(FrozenModel):
 
 class ReplayShardGameMetadata(FrozenModel):
     source: ReplayShardSourceGame
+    created_at_seconds: float = Field(ge=0.0)
+    generation_seconds: float = Field(ge=0.0)
+    action_ids: tuple[int, ...]
     row_start: int = Field(ge=0)
     row_count: int = Field(ge=0)
     length_plies: int = Field(ge=0)
     termination_reason: TerminationReason
     is_resignation_continuation: bool
+    resignation_threshold: float | None = Field(default=None, ge=-1.0, lt=0.0)
     final_wdl: WdlTarget
     observations: tuple[SearchObservation, ...]
     policies_truncated: int = Field(ge=0)
@@ -49,6 +53,10 @@ class ReplayShardGameMetadata(FrozenModel):
     discarded_visit_mass: int = Field(ge=0)
 
     def model_post_init(self, __context: object) -> None:
+        if len(self.action_ids) != self.length_plies:
+            raise ValueError('Replay shard action trajectory must match its recorded game length.')
+        if self.row_count != len(self.observations):
+            raise ValueError('Replay shards must materialize every recorded search observation.')
         plies = tuple(observation.ply for observation in self.observations)
         if plies != tuple(sorted(set(plies))) or any(ply > self.length_plies for ply in plies):
             raise ValueError('Replay shard search observations must use unique ordered game plies.')
@@ -61,9 +69,22 @@ class ReplayShardGameMetadata(FrozenModel):
         if self.termination_reason is TerminationReason.RESIGNATION and self.is_resignation_continuation:
             raise ValueError('Replay shard continuation games cannot terminate by resignation.')
 
+    def completed_game(self) -> CompletedSelfPlayGame:
+        return CompletedSelfPlayGame(
+            identity=self.source.identity,
+            created_at_seconds=self.created_at_seconds,
+            generation_seconds=self.generation_seconds,
+            action_ids=self.action_ids,
+            observations=self.observations,
+            final_wdl=self.final_wdl,
+            termination_reason=self.termination_reason,
+            is_resignation_continuation=self.is_resignation_continuation,
+            resignation_threshold=self.resignation_threshold,
+        )
+
 
 class SealedReplayShardManifest(FrozenModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     shard_identity: str = Field(pattern=_SHA256_PATTERN)
     layout_digest: str = Field(pattern=_SHA256_PATTERN)
     worker_index: int = Field(ge=0)

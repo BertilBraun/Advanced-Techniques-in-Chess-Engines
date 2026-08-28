@@ -18,6 +18,7 @@ from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
+    EligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -37,7 +38,6 @@ from src.replay.shard import (
 from src.replay.store import encode_replay_rows
 from src.self_play.completed_game import (
     GameIdentity,
-    SearchCheckpointObservation,
     SearchObservation,
     SearchStopReason,
     SearchVisitCounts,
@@ -49,7 +49,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
     TrainingTargetLayout,
 )
 
@@ -78,7 +78,7 @@ def _layout(game: str) -> ReplayLayout:
                 FutureSearchValueHeadLayout(kind='future_search_value', ply_offset=2, smooth_l1_beta=0.1),
                 IrreversibleProgressHeadLayout(kind='irreversible_progress', horizon_plies=4),
                 LegalMovesHeadLayout(kind='legal_moves', action_size=state.action_size),
-                SearchCorrectionHeadLayout(kind='search_correction'),
+                SearchBudgetHeadLayout(kind='search_budget'),
             ),
         ),
         maximum_policy_entries=8,
@@ -104,8 +104,18 @@ def _sample(layout: ReplayLayout, generation: int) -> ReplaySample:
                 auxiliary.append(EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=0.75))
             case LegalMovesHeadLayout():
                 auxiliary.append(EligibleLegalMovesTarget())
-            case SearchCorrectionHeadLayout():
-                auxiliary.append(EligibleScalarAuxiliaryTarget(kind='search_correction', value=0.4))
+            case SearchBudgetHeadLayout():
+                auxiliary.append(
+                    EligibleSearchBudgetTarget(
+                        normalized_target=0.4,
+                        raw_kl=0.2,
+                        prediction_logit=-0.25,
+                        predicted_quantile=0.4,
+                        source_generation=generation,
+                        model_generation=generation,
+                        inference_model_sha256='b' * 64,
+                    )
+                )
     return ReplaySample(
         encoded_state=layout.packed_planes.value(bytes([generation + 1]) * layout.packed_planes.payload_bytes),
         policy=policy,
@@ -151,43 +161,36 @@ def _observation() -> SearchObservation:
         highest_visited_child_visit_count=7,
         highest_visited_child_q=0.1,
         selected_action_id=1,
-        full_search=True,
         sample_weight=1.0,
-        search_budget=16,
+        baseline_visits=14,
         network_root_value=0.15,
         policy_correction=0.1,
         value_correction=0.2,
-        search_correction_target=0.2,
-        predicted_search_correction=0.25,
+        search_budget_logit=0.25,
+        predicted_search_budget=0.56,
+        assigned_additional_visits=14,
+        parallel_searches=1,
+        spend_residual=0,
         starting_visits=2,
         final_visits=16,
-        stop_reason=SearchStopReason.MAXIMUM,
-        learned_gate_evaluated=True,
-        checkpoints=(
-            SearchCheckpointObservation(
-                visits=8,
-                leader_action_id=1,
-                most_visited_action_id=1,
-                top_visit_share=0.7,
-                top_two_margin=0.4,
-                root_value=0.2,
-                root_value_delta=0.05,
-                leader_stable=True,
-            ),
-        ),
+        stop_reason=SearchStopReason.PREDICTED_BUDGET,
     )
 
 
 def _game_metadata(source: ReplayShardSourceGame, row_start: int, row_count: int) -> ReplayShardGameMetadata:
     return ReplayShardGameMetadata(
         source=source,
+        created_at_seconds=10.0,
+        generation_seconds=2.0,
+        action_ids=(1,),
         row_start=row_start,
         row_count=row_count,
         length_plies=max(1, row_count),
         termination_reason=TerminationReason.NATURAL,
         is_resignation_continuation=False,
+        resignation_threshold=None,
         final_wdl=WdlTarget(win=1.0, draw=0.0, loss=0.0),
-        observations=(_observation(),),
+        observations=(_observation(),) if row_count else (),
         policies_truncated=0,
         retained_visit_mass=10 * row_count,
         discarded_visit_mass=0,
@@ -219,6 +222,11 @@ def test_shard_round_trip_matches_old_rows_and_canonical_columns(tmp_path: Path,
     assert sealed_replay_shard_manifest_paths(tmp_path) == (manifest_path,)
     with ReplayShardReader.open(manifest_path, layout) as reader:
         assert reader.manifest == manifest
+        reconstructed = reader.manifest.games[0].completed_game()
+        assert reconstructed.identity == reader.manifest.games[0].source.identity
+        assert reconstructed.created_at_seconds == 10.0
+        assert reconstructed.generation_seconds == 2.0
+        assert reconstructed.action_ids == (1,)
         columns = reader.columns
         for column in flatten_column_views(layout, columns):
             np.testing.assert_array_equal(column.values, old_rows[column.descriptor.key.name])

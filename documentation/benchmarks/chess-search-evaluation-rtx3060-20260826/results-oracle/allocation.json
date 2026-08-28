@@ -1,0 +1,606 @@
+{
+  "schema_version": 1,
+  "source_revision": "584fa684ab6f9206cfea66deec1ce2dfb1a9db34",
+  "per_position_path": "/workspace/search-eval/output/oracle/per-position.json",
+  "per_position_sha256": "1cd820ebfe2f66376b23854812e70e76e2def1cac886b729a48c76a83933c983",
+  "positions": 3000,
+  "reference_visits": 10000,
+  "budgets": [
+    100,
+    200,
+    300,
+    400,
+    500,
+    600,
+    800,
+    1200,
+    1600,
+    2400,
+    3200,
+    5000,
+    8000,
+    10000
+  ],
+  "flat_frontier": [
+    {
+      "mean_visits": 100.0,
+      "mean_kullback_leibler": 0.6501346455733746
+    },
+    {
+      "mean_visits": 200.0,
+      "mean_kullback_leibler": 0.45605741522895105
+    },
+    {
+      "mean_visits": 300.0,
+      "mean_kullback_leibler": 0.3904029331206724
+    },
+    {
+      "mean_visits": 400.0,
+      "mean_kullback_leibler": 0.34730157996239486
+    },
+    {
+      "mean_visits": 500.0,
+      "mean_kullback_leibler": 0.3193824641477519
+    },
+    {
+      "mean_visits": 600.0,
+      "mean_kullback_leibler": 0.2971195808819804
+    },
+    {
+      "mean_visits": 800.0,
+      "mean_kullback_leibler": 0.26492342409529296
+    },
+    {
+      "mean_visits": 1200.0,
+      "mean_kullback_leibler": 0.21394852133234835
+    },
+    {
+      "mean_visits": 1600.0,
+      "mean_kullback_leibler": 0.18149393339322334
+    },
+    {
+      "mean_visits": 2400.0,
+      "mean_kullback_leibler": 0.1343043090440435
+    },
+    {
+      "mean_visits": 3200.0,
+      "mean_kullback_leibler": 0.10049736954832156
+    },
+    {
+      "mean_visits": 5000.0,
+      "mean_kullback_leibler": 0.052474350215447885
+    },
+    {
+      "mean_visits": 8000.0,
+      "mean_kullback_leibler": 0.010578794080315531
+    },
+    {
+      "mean_visits": 10000.0,
+      "mean_kullback_leibler": 0.0
+    }
+  ],
+  "oracle_frontier": [
+    {
+      "mean_visits": 100.0,
+      "mean_kullback_leibler": 0.6501346455733749
+    },
+    {
+      "mean_visits": 100.03333333333333,
+      "mean_kullback_leibler": 0.6463646473017697
+    },
+    {
+      "mean_visits": 100.06666666666666,
+      "mean_kullback_leibler": 0.6433146054786931
+    },
+    {
+      "mean_visits": 100.23333333333333,
+      "mean_kullback_leibler": 0.6293977503286139
+    },
+    {
+      "mean_visits": 100.63333333333334,
+      "mean_kullback_leibler": 0.5996374190224939
+    },
+    {
+      "mean_visits": 100.76666666666667,
+      "mean_kullback_leibler": 0.5907004844298095
+    },
+    {
+      "mean_visits": 100.83333333333333,
+      "mean_kullback_leibler": 0.58668987771724
+    },
+    {
+      "mean_visits": 100.86666666666666,
+      "mean_kullback_leibler": 0.584860870491522
+    },
+    {
+      "mean_visits": 101.03333333333333,
+      "mean_kullback_leibler": 0.5777638172650612
+    },
+    {
+      "mean_visits": 101.53333333333333,
+      "mean_kullback_leibler": 0.5588431328268657
+    },
+    {
+      "mean_visits": 101.76666666666667,
+      "mean_kullback_leibler": 0.550953001133774
+    },
+    {
+      "mean_visits": 101.86666666666666,
+      "mean_kullback_leibler": 0.5479460727356255
+    },
+    {
+      "mean_visits": 102.13333333333334,
+      "mean_kullback_leibler": 0.5408007527301643
+    },
+    {
+      "mean_visits": 102.26666666666667,
+      "mean_kullback_leibler": 0.5376761206223732
+    },
+    {
+      "mean_visits": 102.6,
+      "mean_kullback_leibler": 0.5306443903523496
+    },
+    {
+      "mean_visits": 103.06666666666666,
+      "mean_kullback_leibler": 0.5217014413599492
+    },
+    {
+      "mean_visits": 103.46666666666667,
+      "mean_kullback_leibler": 0.5149516948965907
+    },
+    {
+      "mean_visits": 104.03333333333333,
+      "mean_kullback_leibler": 0.5064516283159608
+    },
+    {
+      "mean_visits": 104.56666666666666,
+      "mean_kullback_leibler": 0.49937940157815996
+    },
+    {
+      "mean_visits": 105.23333333333333,
+      "mean_kullback_leibler": 0.49148351023191506
+    },
+    {
+      "mean_visits": 105.6,
+      "mean_kullback_leibler": 0.4875835804840875
+    },
+    {
+      "mean_visits": 106.4,
+      "mean_kullback_leibler": 0.48002829976962125
+    },
+    {
+      "mean_visits": 107.36666666666666,
+      "mean_kullback_leibler": 0.47189824367327077
+    },
+    {
+      "mean_visits": 108.06666666666666,
+      "mean_kullback_leibler": 0.4666872023835737
+    },
+    {
+      "mean_visits": 109.83333333333333,
+      "mean_kullback_leibler": 0.4549838567539499
+    },
+    {
+      "mean_visits": 111.3,
+      "mean_kullback_leibler": 0.4463461982525215
+    },
+    {
+      "mean_visits": 113.0,
+      "mean_kullback_leibler": 0.4373018941136163
+    },
+    {
+      "mean_visits": 115.03333333333333,
+      "mean_kullback_leibler": 0.42776729863063995
+    },
+    {
+      "mean_visits": 118.3,
+      "mean_kullback_leibler": 0.41380841934125995
+    },
+    {
+      "mean_visits": 121.66666666666667,
+      "mean_kullback_leibler": 0.40123086620842296
+    },
+    {
+      "mean_visits": 124.93333333333334,
+      "mean_kullback_leibler": 0.39037237555921556
+    },
+    {
+      "mean_visits": 128.83333333333334,
+      "mean_kullback_leibler": 0.37873282098852934
+    },
+    {
+      "mean_visits": 133.4,
+      "mean_kullback_leibler": 0.3665922576086109
+    },
+    {
+      "mean_visits": 138.93333333333334,
+      "mean_kullback_leibler": 0.35353672009987774
+    },
+    {
+      "mean_visits": 143.33333333333334,
+      "mean_kullback_leibler": 0.3441958099233105
+    },
+    {
+      "mean_visits": 148.56666666666666,
+      "mean_kullback_leibler": 0.3342978105026666
+    },
+    {
+      "mean_visits": 153.6,
+      "mean_kullback_leibler": 0.32585881953794044
+    },
+    {
+      "mean_visits": 160.33333333333334,
+      "mean_kullback_leibler": 0.315833716136932
+    },
+    {
+      "mean_visits": 170.73333333333332,
+      "mean_kullback_leibler": 0.30200819761014863
+    },
+    {
+      "mean_visits": 185.1,
+      "mean_kullback_leibler": 0.28502612861426857
+    },
+    {
+      "mean_visits": 196.2,
+      "mean_kullback_leibler": 0.27322853593831536
+    },
+    {
+      "mean_visits": 206.93333333333334,
+      "mean_kullback_leibler": 0.2631262124787796
+    },
+    {
+      "mean_visits": 218.3,
+      "mean_kullback_leibler": 0.2535602691056916
+    },
+    {
+      "mean_visits": 230.86666666666667,
+      "mean_kullback_leibler": 0.24411259374748526
+    },
+    {
+      "mean_visits": 245.13333333333333,
+      "mean_kullback_leibler": 0.2345741914009448
+    },
+    {
+      "mean_visits": 263.7,
+      "mean_kullback_leibler": 0.22346203001839876
+    },
+    {
+      "mean_visits": 282.1,
+      "mean_kullback_leibler": 0.21374546505271
+    },
+    {
+      "mean_visits": 306.26666666666665,
+      "mean_kullback_leibler": 0.20227687670405664
+    },
+    {
+      "mean_visits": 327.26666666666665,
+      "mean_kullback_leibler": 0.19340573371585792
+    },
+    {
+      "mean_visits": 358.9,
+      "mean_kullback_leibler": 0.18148742555038763
+    },
+    {
+      "mean_visits": 378.0,
+      "mean_kullback_leibler": 0.1750773378616055
+    },
+    {
+      "mean_visits": 410.3,
+      "mean_kullback_leibler": 0.16539266273018938
+    },
+    {
+      "mean_visits": 446.53333333333336,
+      "mean_kullback_leibler": 0.15576719782754514
+    },
+    {
+      "mean_visits": 483.7,
+      "mean_kullback_leibler": 0.1469027515442649
+    },
+    {
+      "mean_visits": 522.8,
+      "mean_kullback_leibler": 0.1386548992968397
+    },
+    {
+      "mean_visits": 561.4333333333333,
+      "mean_kullback_leibler": 0.1313578207916375
+    },
+    {
+      "mean_visits": 610.9,
+      "mean_kullback_leibler": 0.1230322653889098
+    },
+    {
+      "mean_visits": 655.9333333333333,
+      "mean_kullback_leibler": 0.11630962462910167
+    },
+    {
+      "mean_visits": 719.3333333333334,
+      "mean_kullback_leibler": 0.10782759023749748
+    },
+    {
+      "mean_visits": 781.3,
+      "mean_kullback_leibler": 0.1004560658441818
+    },
+    {
+      "mean_visits": 839.0666666666667,
+      "mean_kullback_leibler": 0.0943670470368612
+    },
+    {
+      "mean_visits": 913.8333333333334,
+      "mean_kullback_leibler": 0.08732879358288581
+    },
+    {
+      "mean_visits": 980.8333333333334,
+      "mean_kullback_leibler": 0.0816643752121808
+    },
+    {
+      "mean_visits": 1072.0333333333333,
+      "mean_kullback_leibler": 0.07482048192187045
+    },
+    {
+      "mean_visits": 1154.7666666666667,
+      "mean_kullback_leibler": 0.0692975406881089
+    },
+    {
+      "mean_visits": 1252.7666666666667,
+      "mean_kullback_leibler": 0.06345883027280827
+    },
+    {
+      "mean_visits": 1341.9666666666667,
+      "mean_kullback_leibler": 0.05871162284339739
+    },
+    {
+      "mean_visits": 1433.4666666666667,
+      "mean_kullback_leibler": 0.054404773723858275
+    },
+    {
+      "mean_visits": 1525.7666666666667,
+      "mean_kullback_leibler": 0.05052069477602731
+    },
+    {
+      "mean_visits": 1613.8,
+      "mean_kullback_leibler": 0.04721504450672866
+    },
+    {
+      "mean_visits": 1727.7333333333333,
+      "mean_kullback_leibler": 0.043393664893819205
+    },
+    {
+      "mean_visits": 1840.2333333333333,
+      "mean_kullback_leibler": 0.0400319887118127
+    },
+    {
+      "mean_visits": 1965.0666666666666,
+      "mean_kullback_leibler": 0.036711878611533216
+    },
+    {
+      "mean_visits": 2124.1666666666665,
+      "mean_kullback_leibler": 0.032916673174424045
+    },
+    {
+      "mean_visits": 2256.6,
+      "mean_kullback_leibler": 0.03012518979791016
+    },
+    {
+      "mean_visits": 2398.4333333333334,
+      "mean_kullback_leibler": 0.027442506681903556
+    },
+    {
+      "mean_visits": 2551.9333333333334,
+      "mean_kullback_leibler": 0.024857427857653762
+    },
+    {
+      "mean_visits": 2709.6666666666665,
+      "mean_kullback_leibler": 0.022507603435360058
+    },
+    {
+      "mean_visits": 2861.9,
+      "mean_kullback_leibler": 0.020478541004733883
+    },
+    {
+      "mean_visits": 3047.266666666667,
+      "mean_kullback_leibler": 0.018268180386300997
+    },
+    {
+      "mean_visits": 3230.9333333333334,
+      "mean_kullback_leibler": 0.016319997594396164
+    },
+    {
+      "mean_visits": 3376.8,
+      "mean_kullback_leibler": 0.014942756965647218
+    },
+    {
+      "mean_visits": 3545.5,
+      "mean_kullback_leibler": 0.013522051317410636
+    },
+    {
+      "mean_visits": 3728.2,
+      "mean_kullback_leibler": 0.012146980774766785
+    },
+    {
+      "mean_visits": 3939.9,
+      "mean_kullback_leibler": 0.01073346368534835
+    },
+    {
+      "mean_visits": 4139.133333333333,
+      "mean_kullback_leibler": 0.009549021818299969
+    },
+    {
+      "mean_visits": 4349.4,
+      "mean_kullback_leibler": 0.008435356784234531
+    },
+    {
+      "mean_visits": 4562.633333333333,
+      "mean_kullback_leibler": 0.007429101543782781
+    },
+    {
+      "mean_visits": 4762.966666666666,
+      "mean_kullback_leibler": 0.006582170303717846
+    },
+    {
+      "mean_visits": 4983.533333333334,
+      "mean_kullback_leibler": 0.0057532051041852056
+    },
+    {
+      "mean_visits": 5205.533333333334,
+      "mean_kullback_leibler": 0.005008662343192584
+    },
+    {
+      "mean_visits": 5396.233333333334,
+      "mean_kullback_leibler": 0.004440787031921472
+    },
+    {
+      "mean_visits": 5614.766666666666,
+      "mean_kullback_leibler": 0.0038588043162531096
+    },
+    {
+      "mean_visits": 5826.433333333333,
+      "mean_kullback_leibler": 0.0033567116154142934
+    },
+    {
+      "mean_visits": 6024.366666666667,
+      "mean_kullback_leibler": 0.002937550085878601
+    },
+    {
+      "mean_visits": 6265.833333333333,
+      "mean_kullback_leibler": 0.002483174770812029
+    },
+    {
+      "mean_visits": 6465.966666666666,
+      "mean_kullback_leibler": 0.0021474735655501245
+    },
+    {
+      "mean_visits": 6678.433333333333,
+      "mean_kullback_leibler": 0.0018284867096098527
+    },
+    {
+      "mean_visits": 6884.233333333334,
+      "mean_kullback_leibler": 0.0015533178449043806
+    },
+    {
+      "mean_visits": 7096.2,
+      "mean_kullback_leibler": 0.0013008360678426142
+    },
+    {
+      "mean_visits": 7287.2,
+      "mean_kullback_leibler": 0.0010983729575747504
+    }
+  ],
+  "comparisons": [
+    {
+      "mean_visits": 100.0,
+      "flat_kullback_leibler": 0.6501346455733746,
+      "oracle_kullback_leibler": 0.6501346455733749,
+      "oracle_gain": -2.220446049250313e-16,
+      "oracle_gain_as_visit_saving": null
+    },
+    {
+      "mean_visits": 200.0,
+      "flat_kullback_leibler": 0.45605741522895105,
+      "oracle_kullback_leibler": 0.2696519369495356,
+      "oracle_gain": 0.18640547827941545,
+      "oracle_gain_as_visit_saving": 570.6268491263045
+    },
+    {
+      "mean_visits": 300.0,
+      "flat_kullback_leibler": 0.3904029331206724,
+      "oracle_kullback_leibler": 0.20525080030343157,
+      "oracle_gain": 0.18515213281724086,
+      "oracle_gain_as_visit_saving": 1007.1986622690274
+    },
+    {
+      "mean_visits": 400.0,
+      "flat_kullback_leibler": 0.34730157996239486,
+      "oracle_kullback_leibler": 0.1684809647070806,
+      "oracle_gain": 0.17882061525531426,
+      "oracle_gain_as_visit_saving": 1420.607285870355
+    },
+    {
+      "mean_visits": 500.0,
+      "flat_kullback_leibler": 0.3193824641477519,
+      "oracle_kullback_leibler": 0.1434643885868984,
+      "oracle_gain": 0.1759180755608535,
+      "oracle_gain_as_visit_saving": 1744.7102782582065
+    },
+    {
+      "mean_visits": 600.0,
+      "flat_kullback_leibler": 0.2971195808819804,
+      "oracle_kullback_leibler": 0.12486680488802836,
+      "oracle_gain": 0.17225277599395206,
+      "oracle_gain_as_visit_saving": 2023.3270280430893
+    },
+    {
+      "mean_visits": 800.0,
+      "flat_kullback_leibler": 0.26492342409529296,
+      "oracle_kullback_leibler": 0.09848495242761697,
+      "oracle_gain": 0.166438471667676,
+      "oracle_gain_as_visit_saving": 2475.4294683589087
+    },
+    {
+      "mean_visits": 1200.0,
+      "flat_kullback_leibler": 0.21394852133234835,
+      "oracle_kullback_leibler": 0.06660259849982218,
+      "oracle_gain": 0.14734592283252618,
+      "oracle_gain_as_visit_saving": 3270.444647896903
+    },
+    {
+      "mean_visits": 1600.0,
+      "flat_kullback_leibler": 0.18149393339322334,
+      "oracle_kullback_leibler": 0.047733234287678915,
+      "oracle_gain": 0.13376069910554442,
+      "oracle_gain_as_visit_saving": 3739.495380785258
+    },
+    {
+      "mean_visits": 2400.0,
+      "flat_kullback_leibler": 0.1343043090440435,
+      "oracle_kullback_leibler": 0.027416122598355297,
+      "oracle_gain": 0.1068881864456882,
+      "oracle_gain_as_visit_saving": 4394.33548056517
+    },
+    {
+      "mean_visits": 3200.0,
+      "flat_kullback_leibler": 0.10049736954832156,
+      "oracle_kullback_leibler": 0.016648112590927504,
+      "oracle_gain": 0.08384925695739405,
+      "oracle_gain_as_visit_saving": 4365.396495200901
+    },
+    {
+      "mean_visits": 5000.0,
+      "flat_kullback_leibler": 0.052474350215447885,
+      "oracle_kullback_leibler": 0.005697979259751219,
+      "oracle_gain": 0.046776370955696665,
+      "oracle_gain_as_visit_saving": 3922.754480994441
+    }
+  ],
+  "signals": [
+    {
+      "signal_visits": 200,
+      "target_visits": 600,
+      "positions": 3000,
+      "feature": "top_visit_share",
+      "spearman_with_benefit": 0.20581918379762768,
+      "top_decile_mean_benefit": 0.04827696635262617,
+      "bottom_decile_mean_benefit": 0.025292425825226884,
+      "population_mean_benefit": 0.15893783434697062
+    },
+    {
+      "signal_visits": 200,
+      "target_visits": 600,
+      "positions": 3000,
+      "feature": "top_two_margin",
+      "spearman_with_benefit": 0.20969170191731643,
+      "top_decile_mean_benefit": 0.04985167493734129,
+      "bottom_decile_mean_benefit": 0.05786324751427596,
+      "population_mean_benefit": 0.15893783434697062
+    },
+    {
+      "signal_visits": 200,
+      "target_visits": 600,
+      "positions": 3000,
+      "feature": "kullback_leibler_at_signal",
+      "spearman_with_benefit": 0.6078889706630956,
+      "top_decile_mean_benefit": 0.9589070260300016,
+      "bottom_decile_mean_benefit": 0.0003102117276720766,
+      "population_mean_benefit": 0.15893783434697062
+    }
+  ]
+}

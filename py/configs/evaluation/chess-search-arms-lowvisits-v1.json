@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "description": "Parallelism at a low budget of 150 visits, generation 162. Baseline is parallel_searches 4. Tests whether parallelism that is strength-neutral at 600 visits stays neutral when only 150 visits are available, where high parallelism leaves very few sequential expansion rounds.",
+  "baseline_label": "lowvis-parallel-4",
+  "arms": [
+    {
+      "label": "lowvis-parallel-1",
+      "searches_per_move": 150,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 1,
+      "virtual_loss_weight": 1.0
+    },
+    {
+      "label": "lowvis-parallel-2",
+      "searches_per_move": 150,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 2,
+      "virtual_loss_weight": 1.0
+    },
+    {
+      "label": "lowvis-parallel-4",
+      "searches_per_move": 150,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 4,
+      "virtual_loss_weight": 1.0
+    },
+    {
+      "label": "lowvis-parallel-8",
+      "searches_per_move": 150,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 8,
+      "virtual_loss_weight": 1.0
+    },
+    {
+      "label": "lowvis-parallel-8-vlw-05",
+      "searches_per_move": 150,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 8,
+      "virtual_loss_weight": 0.5
+    },
+    {
+      "label": "lowvis-parallel-4-vlw-05",
+      "searches_per_move": 150,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 4,
+      "virtual_loss_weight": 0.5
+    }
+  ]
+}

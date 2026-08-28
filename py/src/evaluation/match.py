@@ -50,14 +50,31 @@ class MatchActionSelector(Protocol, Generic[PositionT]):
 
 
 class SearchActionSelector(Generic[PositionT]):
-    def __init__(self, search: NativeSelfPlaySearch) -> None:
+    def __init__(
+        self,
+        search: NativeSelfPlaySearch,
+        searches_per_move: int,
+        parallel_searches: int,
+    ) -> None:
         self.search = search
+        self.searches_per_move = searches_per_move
+        self.parallel_searches = parallel_searches
 
     def choose_actions(self, positions: tuple[PositionT, ...]) -> tuple[int, ...]:
         if not positions:
             return ()
         roots = tuple(self.search.new_root(position) for position in positions)
-        batch = self.search.search([self.search.request(root, True) for root in roots])
+        batch = self.search.search(
+            [
+                self.search.request(
+                    root,
+                    assigned_additional_visits=self.searches_per_move,
+                    parallel_searches=self.parallel_searches,
+                    add_root_noise=False,
+                )
+                for root in roots
+            ]
+        )
         selected = []
         for result in batch.results:
             if not result.search_visits:
@@ -178,11 +195,15 @@ def _create_match_selectors(
         )
     search_configuration = _definition_search(job)
     candidate = candidate_selector or SearchActionSelector(
-        game.create_evaluation_search(job.device_id, job.candidate, search_configuration)
+        game.create_evaluation_search(job.device_id, job.candidate, search_configuration),
+        search_configuration.searches_per_move,
+        search_configuration.parallel_searches,
     )
     opponent = (
         SearchActionSelector(
-            game.create_evaluation_search(job.device_id, job.opponent.checkpoint, search_configuration)
+            game.create_evaluation_search(job.device_id, job.opponent.checkpoint, search_configuration),
+            search_configuration.searches_per_move,
+            search_configuration.parallel_searches,
         )
         if job.opponent.kind == 'checkpoint'
         else None

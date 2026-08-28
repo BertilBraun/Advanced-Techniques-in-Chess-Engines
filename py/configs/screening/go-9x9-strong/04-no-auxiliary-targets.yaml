@@ -6,4 +6,6 @@ training:
   save_path: py/training_data/screening/go9-strong/04-no-auxiliary-targets
 go:
   objective:
-    auxiliary_targets: []
+    auxiliary_targets:
+      - kind: search_budget
+        loss_weight: 0.2

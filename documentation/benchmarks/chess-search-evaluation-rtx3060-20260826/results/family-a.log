@@ -1,0 +1,22 @@
+cpuct-10: score 0.600 in 1930 s
+baseline: score 0.580 in 2011 s
+fpu-zero: score 0.472 in 2038 s
+fpu-reduced-04: score 0.575 in 2047 s
+cpuct-125: score 0.540 in 2060 s
+fpu-parent-value: score 0.598 in 2149 s
+visits-200: score 0.318 in 712 s
+visits-400: score 0.537 in 1497 s
+cpuct-20: score 0.552 in 2121 s
+cpuct-30: score 0.445 in 2063 s
+discount-098: score 0.532 in 2069 s
+discount-10: score 0.640 in 2070 s
+parallel-4-vlw-025: score 0.593 in 2050 s
+parallel-8-vlw-05: score 0.580 in 2041 s
+parallel-4-vlw-05: score 0.578 in 2060 s
+visits-1000: score 0.662 in 3581 s
+parallel-1: score 0.580 in 2504 s
+parallel-8-vlw-10: score 0.585 in 1455 s
+parallel-16-vlw-10: score 0.585 in 1450 s
+parallel-16-vlw-05: score 0.583 in 1461 s
+visits-1600: score 0.748 in 4253 s
+/workspace/search-eval/output/night-20260826T224742Z/arm-matrix/arm-matrix-result.json

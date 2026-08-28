@@ -3,9 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from src.evaluation.tensorboard import evaluation_tensorboard_categories
 from src.experiment.configuration import ExperimentConfiguration
 from src.replay.description import ReplayDescription
 from src.replay.manager import IngestedCompletedGame
+from src.search_budget.labeling import DistributionSummary
+from src.search_budget.manager import (
+    FailedLabelJobReport,
+    GenerationLabelReport,
+    LabelManagerEvent,
+    SkippedLabelJobReport,
+)
 from src.self_play.resignation import ResignationDiagnostics
 from src.training.credit_ledger import CreditLedgerState
 from src.training.distributions import (
@@ -16,6 +24,7 @@ from src.training.distributions import (
     ScalarAuxiliaryTrainingDistribution,
     TrainingDistributionSnapshot,
 )
+from src.training.search_budget_tensorboard import search_budget_tensorboard_categories
 from src.training.session import (
     FixedTrainingSessionResult,
     ModelTrainingResult,
@@ -30,17 +39,17 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
 )
 from src.training.telemetry import (
-    adaptive_search_telemetry,
     completed_game_length_telemetry,
+    search_budget_telemetry,
     training_lifecycle_telemetry,
 )
 from src.training.tensorboard import scheduled_settings_at
 from src.training.trainer import TrainingStatistics
 from src.util.log import log
-from src.util.tensorboard import log_histogram, log_scalar
+from src.util.tensorboard import log_custom_scalar_layout, log_equal_width_histogram_summary, log_histogram, log_scalar
 
 
 @dataclass(frozen=True)
@@ -62,6 +71,12 @@ class TrainingReporter:
         self.auxiliary_heads = auxiliary_heads
 
     def record_initial_settings(self, generation: int) -> None:
+        log_custom_scalar_layout(
+            (
+                *search_budget_tensorboard_categories(self.auxiliary_heads),
+                *evaluation_tensorboard_categories(self.configuration.evaluation),
+            )
+        )
         self._record_scheduled_settings(generation)
 
     def record_training_outcome(
@@ -112,7 +127,7 @@ class TrainingReporter:
                 )
         self._record_ingestion(ingestion, outcome.publication.checkpoint.generation)
         self._record_completed_game_lengths(completed_games, outcome.publication.checkpoint.generation)
-        self._record_adaptive_search(completed_games, outcome.publication.checkpoint.generation)
+        self._record_search_budget(completed_games, outcome.publication.checkpoint.generation)
         self._record_scheduled_settings(outcome.publication.checkpoint.generation)
 
     @staticmethod
@@ -137,6 +152,180 @@ class TrainingReporter:
             log_scalar('resignation/average_trigger_ply', diagnostics.average_trigger_ply, generation)
         if diagnostics.average_saved_plies is not None:
             log_scalar('resignation/average_saved_plies', diagnostics.average_saved_plies, generation)
+
+    @staticmethod
+    def record_search_budget_label_event(event: LabelManagerEvent) -> None:
+        generation = event.source_generation
+        match event:
+            case GenerationLabelReport():
+                log_scalar('search_budget/label/status/completed', 1, generation)
+                log_scalar('search_budget/label/model_generation', event.model_generation, generation)
+                log_scalar('search_budget/label/population_positions', event.population_position_count, generation)
+                log_scalar('search_budget/label/selected_positions', event.selected_position_count, generation)
+                log_scalar(
+                    'search_budget/label/sample_fraction',
+                    event.selected_position_count / event.population_position_count,
+                    generation,
+                )
+                log_scalar('search_budget/label/replay_samples_written', event.replay_samples_written, generation)
+                log_scalar('search_budget/label/replay_write_applied', int(event.replay_write_applied), generation)
+                log_scalar('search_budget/label/prediction_shard_seconds', event.prediction_shard_seconds, generation)
+                log_scalar('search_budget/label/deep_search_shard_seconds', event.deep_search_shard_seconds, generation)
+                log_scalar('search_budget/label/total_gpu_seconds', event.total_gpu_seconds, generation)
+                log_scalar('search_budget/label/prediction_retries', event.prediction_retry_count, generation)
+                log_scalar('search_budget/label/deep_search_retries', event.deep_search_retry_count, generation)
+                log_scalar('search_budget/label/completion_generation_lag', event.completion_generation_lag, generation)
+                log_scalar('search_budget/label/queued_generations', event.queued_generation_count, generation)
+                log_scalar('search_budget/calibration/application_generation', event.application_generation, generation)
+                if event.current_validation_gain is not None:
+                    log_scalar(
+                        'search_budget/calibration/current_validation_gain', event.current_validation_gain, generation
+                    )
+                if event.ema_validation_gain is not None:
+                    log_scalar('search_budget/calibration/ema_validation_gain', event.ema_validation_gain, generation)
+                _record_relative_validation_gain(event, generation)
+                if event.candidate_mean_assigned_new_visits is not None:
+                    log_scalar(
+                        'search_budget/calibration/candidate_mean_assigned_new_visits',
+                        event.candidate_mean_assigned_new_visits,
+                        generation,
+                    )
+                if event.candidate_assigned_new_visits_variance is not None:
+                    log_scalar(
+                        'search_budget/calibration/candidate_assigned_new_visits_variance',
+                        event.candidate_assigned_new_visits_variance,
+                        generation,
+                    )
+                if event.candidate_mean_kl_from_deep is not None:
+                    log_scalar(
+                        'search_budget/calibration/candidate_mean_kl_from_deep',
+                        event.candidate_mean_kl_from_deep,
+                        generation,
+                    )
+                if event.candidate_exact_spend_residual is not None:
+                    log_scalar(
+                        'search_budget/calibration/candidate_exact_spend_residual',
+                        event.candidate_exact_spend_residual,
+                        generation,
+                    )
+                log_scalar(
+                    'search_budget/calibration/minimum_published_multiplier',
+                    event.minimum_published_multiplier,
+                    generation,
+                )
+                log_scalar(
+                    'search_budget/calibration/maximum_published_multiplier',
+                    event.maximum_published_multiplier,
+                    generation,
+                )
+                log_scalar(
+                    'search_budget/calibration/published_mean_multiplier',
+                    sum(event.published_curve) / len(event.published_curve),
+                    generation,
+                )
+                log_scalar(
+                    'search_budget/calibration/previous_published_mean_multiplier',
+                    sum(event.previous_published_curve) / len(event.previous_published_curve),
+                    generation,
+                )
+                log_scalar(
+                    'search_budget/calibration/shadow_mean_multiplier',
+                    sum(event.shadow_curve) / len(event.shadow_curve),
+                    generation,
+                )
+                _record_curve_range('shadow', event.shadow_curve, generation)
+                if event.pending_curve is not None:
+                    log_scalar(
+                        'search_budget/calibration/pending_mean_multiplier',
+                        sum(event.pending_curve) / len(event.pending_curve),
+                        generation,
+                    )
+                    _record_curve_range('pending', event.pending_curve, generation)
+                if event.validated_curve is not None:
+                    log_scalar(
+                        'search_budget/calibration/validated_mean_multiplier',
+                        sum(event.validated_curve) / len(event.validated_curve),
+                        generation,
+                    )
+                    _record_curve_range('validated', event.validated_curve, generation)
+                log_scalar(
+                    f'search_budget/calibration/decision_reason/{_metric_tag(event.decision_reason)}', 1, generation
+                )
+                _record_search_budget_distribution(
+                    'search_budget/label/prediction_quantile', event.prediction_distribution, generation
+                )
+                _record_search_budget_distribution(
+                    'search_budget/label/target_quantile', event.target_distribution, generation
+                )
+                _record_search_budget_distribution('search_budget/label/raw_kl', event.raw_kl_distribution, generation)
+                for bucket in event.buckets:
+                    prefix = f'search_budget/calibration/bucket_{bucket.bucket_index}'
+                    log_scalar(f'{prefix}/sample_count', bucket.sample_count, generation)
+                    log_scalar(f'{prefix}/empty', int(bucket.sample_count == 0), generation)
+                    if bucket.current_generation_utility is not None:
+                        log_scalar(
+                            f'{prefix}/generation_marginal_utility', bucket.current_generation_utility, generation
+                        )
+                    if bucket.ema_utility is not None:
+                        log_scalar(f'{prefix}/ema_marginal_utility', bucket.ema_utility, generation)
+                    log_scalar(f'{prefix}/shadow_multiplier', bucket.shadow_multiplier, generation)
+                    if bucket.pending_multiplier is not None:
+                        log_scalar(f'{prefix}/pending_multiplier', bucket.pending_multiplier, generation)
+                    if event.validated_curve is not None:
+                        log_scalar(
+                            f'{prefix}/validated_multiplier', event.validated_curve[bucket.bucket_index], generation
+                        )
+                    log_scalar(
+                        f'{prefix}/previous_published_multiplier',
+                        event.previous_published_curve[bucket.bucket_index],
+                        generation,
+                    )
+                    log_scalar(f'{prefix}/published_multiplier', bucket.published_multiplier, generation)
+                    log_scalar(f'{prefix}/raw_log_update', bucket.raw_log_update, generation)
+                    log_scalar(f'{prefix}/projection_adjustment', bucket.projection_adjustment, generation)
+                    if bucket.lower_mean_visits is not None:
+                        log_scalar(f'{prefix}/lower_mean_visits', bucket.lower_mean_visits, generation)
+                    if bucket.upper_mean_visits is not None:
+                        log_scalar(f'{prefix}/upper_mean_visits', bucket.upper_mean_visits, generation)
+                    log_scalar(
+                        f'{prefix}/checkpoint_deduplication_count',
+                        bucket.checkpoint_deduplication_count,
+                        generation,
+                    )
+                log_scalar(
+                    'search_budget/calibration/floor_share',
+                    event.prediction_distribution.histogram_counts[0] / event.prediction_distribution.count,
+                    generation,
+                )
+                log_scalar(
+                    'search_budget/calibration/ceiling_share',
+                    event.prediction_distribution.histogram_counts[-1] / event.prediction_distribution.count,
+                    generation,
+                )
+                for condition in event.failed_eligibility_conditions:
+                    log_scalar(f'search_budget/calibration/failed_eligibility/{_metric_tag(condition)}', 1, generation)
+            case FailedLabelJobReport():
+                log_scalar('search_budget/label/status/failed', 1, generation)
+                log_scalar(
+                    'search_budget/calibration/published_mean_multiplier',
+                    sum(event.published_curve) / len(event.published_curve),
+                    generation,
+                )
+                log_scalar('search_budget/calibration/application_generation', event.application_generation, generation)
+                log_scalar(
+                    f'search_budget/calibration/decision_reason/{_metric_tag(event.decision_reason)}', 1, generation
+                )
+            case SkippedLabelJobReport():
+                log_scalar('search_budget/label/status/skipped', 1, generation)
+                log_scalar('search_budget/label/population_positions', event.population_position_count, generation)
+                log_scalar('search_budget/label/selected_positions', event.selected_position_count, generation)
+                sample_fraction = (
+                    event.selected_position_count / event.population_position_count
+                    if event.population_position_count > 0
+                    else 0.0
+                )
+                log_scalar('search_budget/label/sample_fraction', sample_fraction, generation)
+                log_scalar(f'search_budget/label/skip_reason/{_skip_reason_tag(event.reason)}', 1, generation)
 
     def _record_training_statistics(
         self,
@@ -246,66 +435,48 @@ class TrainingReporter:
                 log_scalar(f'{prefix}/game_length_plies_mean', termination.mean_plies, generation)
 
     @staticmethod
-    def _record_adaptive_search(
+    def _record_search_budget(
         games: tuple[IngestedCompletedGame, ...],
         generation: int,
     ) -> None:
-        telemetry = adaptive_search_telemetry(games)
+        telemetry = search_budget_telemetry(games)
         if telemetry is None:
             return
-        log_scalar('adaptive_search/full_searches', len(telemetry.final_visits), generation)
-        _log_values('adaptive_search/final_visits', telemetry.final_visits, generation, log_mean=True)
-        _log_values('adaptive_search/new_simulations', telemetry.new_simulations, generation, log_mean=True)
+        log_scalar('search_budget/production/positions', len(telemetry.final_visits), generation)
+        _log_values('search_budget/production/baseline_visits', telemetry.baseline_visits, generation, log_mean=True)
+        _log_values('search_budget/production/final_visits', telemetry.final_visits, generation, log_mean=True)
         _log_values(
-            'adaptive_search/search_correction_target',
-            telemetry.search_correction_targets,
+            'search_budget/production/assigned_additional_visits',
+            telemetry.assigned_additional_visits,
+            generation,
+            log_mean=True,
+        )
+        _log_values('search_budget/production/prediction_logit', telemetry.search_budget_logits, generation)
+        _log_values(
+            'search_budget/production/predicted_quantile',
+            telemetry.predicted_search_budgets,
             generation,
             log_mean=True,
         )
         _log_values(
-            'adaptive_search/search_correction_prediction',
-            telemetry.search_correction_predictions,
-            generation,
-            log_mean=True,
+            'search_budget/production/parallel_searches', telemetry.parallel_searches, generation, log_mean=True
         )
+        _log_values('search_budget/production/spend_residual', telemetry.spend_residuals, generation)
+        _log_values('search_budget/production/starting_visits', telemetry.starting_visits, generation, log_mean=True)
         _log_values(
-            'adaptive_search/policy_correction',
+            'search_budget/production/policy_correction',
             telemetry.policy_corrections,
             generation,
             log_mean=True,
         )
         _log_values(
-            'adaptive_search/value_correction',
+            'search_budget/production/value_correction',
             telemetry.value_corrections,
             generation,
             log_mean=True,
         )
-        if telemetry.checkpoint_visits:
-            _log_values('adaptive_search/checkpoint_visits', telemetry.checkpoint_visits, generation, log_mean=True)
-            _log_values(
-                'adaptive_search/checkpoint_top_visit_share',
-                telemetry.checkpoint_top_visit_shares,
-                generation,
-                log_mean=True,
-            )
-            _log_values(
-                'adaptive_search/checkpoint_top_two_margin',
-                telemetry.checkpoint_top_two_margins,
-                generation,
-                log_mean=True,
-            )
-            _log_values(
-                'adaptive_search/checkpoint_root_value_delta',
-                telemetry.checkpoint_root_value_deltas,
-                generation,
-                log_mean=True,
-            )
-        log_scalar('adaptive_search/leader_changes', telemetry.leader_changes, generation)
-        log_scalar('adaptive_search/learned_gate/evaluations', telemetry.learned_gate_evaluations, generation)
-        log_scalar('adaptive_search/learned_gate/denials', telemetry.learned_gate_denials, generation)
-        log_scalar('adaptive_search/learned_gate/unlocks', telemetry.learned_gate_unlocks, generation)
         for reason, count in telemetry.stop_reasons:
-            log_scalar(f'adaptive_search/stop_reason/{reason.value}', count, generation)
+            log_scalar(f'search_budget/production/stop_reason/{reason.value}', count, generation)
 
     def _record_scheduled_settings(self, generation: int) -> None:
         for setting in scheduled_settings_at(self.configuration, generation):
@@ -383,6 +554,67 @@ def _log_values(name: str, values: tuple[float, ...], generation: int, log_mean:
         log_scalar(f'{name}_mean', float(array.mean()), generation)
 
 
+def _record_search_budget_distribution(prefix: str, distribution: DistributionSummary, generation: int) -> None:
+    log_equal_width_histogram_summary(
+        prefix,
+        distribution.minimum,
+        distribution.maximum,
+        distribution.count,
+        distribution.mean,
+        distribution.variance,
+        distribution.histogram_counts,
+        generation,
+    )
+    log_scalar(f'{prefix}/count', distribution.count, generation)
+    log_scalar(f'{prefix}/minimum', distribution.minimum, generation)
+    log_scalar(f'{prefix}/maximum', distribution.maximum, generation)
+    log_scalar(f'{prefix}/mean', distribution.mean, generation)
+    log_scalar(f'{prefix}/variance', distribution.variance, generation)
+    log_scalar(f'{prefix}/p10', distribution.p10, generation)
+    log_scalar(f'{prefix}/p25', distribution.p25, generation)
+    log_scalar(f'{prefix}/median', distribution.median, generation)
+    log_scalar(f'{prefix}/p75', distribution.p75, generation)
+    log_scalar(f'{prefix}/p90', distribution.p90, generation)
+    for index, count in enumerate(distribution.histogram_counts):
+        log_scalar(f'{prefix}/histogram_bin_{index}', count, generation)
+
+
+def _record_relative_validation_gain(event: GenerationLabelReport, generation: int) -> None:
+    if event.current_validation_gain is None or event.candidate_mean_kl_from_deep is None:
+        return
+    flat_mean_kl = event.candidate_mean_kl_from_deep + event.current_validation_gain
+    if flat_mean_kl <= 0.0:
+        return
+    log_scalar(
+        'search_budget/calibration/current_relative_validation_gain_percent',
+        100.0 * event.current_validation_gain / flat_mean_kl,
+        generation,
+    )
+    if event.ema_validation_gain is not None:
+        log_scalar(
+            'search_budget/calibration/ema_relative_validation_gain_percent',
+            100.0 * event.ema_validation_gain / flat_mean_kl,
+            generation,
+        )
+
+
+def _record_curve_range(name: str, curve: tuple[float, ...], generation: int) -> None:
+    log_scalar(f'search_budget/calibration/minimum_{name}_multiplier', min(curve), generation)
+    log_scalar(f'search_budget/calibration/maximum_{name}_multiplier', max(curve), generation)
+
+
+def _metric_tag(value: str) -> str:
+    return ''.join(character if character.isalnum() else '_' for character in value).strip('_')
+
+
+def _skip_reason_tag(reason: str) -> str:
+    if reason.startswith('unstarted source-generation lag'):
+        return 'unstarted_generation_lag'
+    if reason == 'generation population produces zero positions at the configured sample fraction':
+        return 'zero_position_sample'
+    return 'other'
+
+
 def _auxiliary_name(index: int, head: AuxiliaryHeadLayout) -> str:
     match head:
         case NextPolicyHeadLayout(ply_offset=ply_offset):
@@ -395,5 +627,5 @@ def _auxiliary_name(index: int, head: AuxiliaryHeadLayout) -> str:
             return f'{index}-irreversible-progress-{horizon_plies}'
         case LegalMovesHeadLayout():
             return f'{index}-legal-moves'
-        case SearchCorrectionHeadLayout():
-            return f'{index}-search-correction'
+        case SearchBudgetHeadLayout():
+            return f'{index}-search-budget'

@@ -13,14 +13,14 @@ from AlphaZeroCpp import (
     BatchedInferenceParameters,
     ChessSearchRoot,
     ChessSelfPlaySearch,
-    ChessSelfPlaySearchRequest,
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
-    FixedSearchLimit,
     InferenceConfiguration,
+    SearchBudgetCurve,
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )
+from src.search_budget.curve import flat_curve
 from src.self_play.configuration import SdpaBackend
 from src.self_play.native_configuration import native_sdpa_backend
 from src.util.atomic_file import write_text_atomically
@@ -218,9 +218,8 @@ def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
         sdpa_backend=native_sdpa_backend(arguments.sdpa_backend),
     )
     search_parameters = SelfPlaySearchParameters(
-        parallel_searches=arguments.parallel_searches,
-        full_search_budget=FixedSearchLimit(arguments.searches),
-        fast_searches=arguments.searches,
+        baseline_visits=arguments.searches,
+        search_budget_curve=SearchBudgetCurve(list(flat_curve().multipliers)),
         tree_search=TreeSearchParameters(
             exploration_constant=2.0,
             first_play_urgency=FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO),
@@ -243,9 +242,24 @@ def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
     )
 
 
-def populate_roots(search: ChessSelfPlaySearch, root_count: int) -> list[ChessSearchRoot]:
+def populate_roots(
+    search: ChessSelfPlaySearch,
+    root_count: int,
+    searches: int,
+    parallel_searches: int,
+) -> list[ChessSearchRoot]:
     roots = [search.new_root(INITIAL_FEN) for _ in range(root_count)]
-    results = search.search([ChessSelfPlaySearchRequest(root, False) for root in roots])
+    results = search.search(
+        [
+            search.request(
+                root,
+                assigned_additional_visits=searches,
+                parallel_searches=parallel_searches,
+                add_root_noise=False,
+            )
+            for root in roots
+        ]
+    )
     return [result.root for result in results.results]
 
 
@@ -265,7 +279,7 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
     device = torch.device('cuda', arguments.device_id)
     torch.cuda.set_device(device)
     search = create_search(arguments)
-    roots = populate_roots(search, arguments.roots)
+    roots = populate_roots(search, arguments.roots, arguments.searches, arguments.parallel_searches)
     next_version = 1
 
     for _ in range(arguments.warmup_refreshes):

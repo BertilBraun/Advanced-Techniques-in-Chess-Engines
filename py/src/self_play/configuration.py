@@ -6,9 +6,8 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, JsonValue, model_serializer, model_validator
 from pydantic.functional_serializers import SerializerFunctionWrapHandler
+from src.search_budget.curve import SearchBudgetCurve
 from src.self_play.parameters import (
-    AdaptiveFullSearchBudget,
-    FixedFullSearchBudget,
     ParentValueFirstPlayUrgencyParameters,
     RandomOpeningStartParameters,
     ReducedParentValueFirstPlayUrgencyParameters,
@@ -21,7 +20,6 @@ from src.util.generation_schedule import (
     FloatGenerationSchedule,
     IntegerGenerationSchedule,
     defined_schedule_values,
-    schedule_change_generations,
 )
 
 
@@ -109,74 +107,8 @@ FirstPlayUrgencyConfiguration: TypeAlias = Annotated[
 ]
 
 
-class FixedFullSearchBudgetConfiguration(FrozenModel):
-    kind: Literal['fixed'] = 'fixed'
-    visits: IntegerGenerationSchedule
-
-    def resolve(self, model_generation: int) -> FixedFullSearchBudget:
-        return FixedFullSearchBudget(kind=self.kind, visits=self.visits.value_at(model_generation))
-
-
-class AdaptiveFullSearchBudgetConfiguration(FrozenModel):
-    kind: Literal['adaptive'] = 'adaptive'
-    minimum_visits: int = Field(gt=0)
-    maximum_visits: IntegerGenerationSchedule
-    observation_interval: int = Field(gt=0)
-    leader_stability_window: int = Field(gt=0)
-    root_value_tolerance: float = Field(ge=0.0, le=1.0)
-    initial_top_visit_share: float = Field(ge=0.0, le=1.0)
-    final_top_visit_share: float = Field(ge=0.0, le=1.0)
-    initial_top_two_margin: float = Field(ge=0.0, le=1.0)
-    final_top_two_margin: float = Field(ge=0.0, le=1.0)
-    threshold_relaxation_visits: int = Field(gt=0)
-    learned_gate_start_generation: int = Field(ge=0)
-    minimum_search_correction_to_unlock_tail: float = Field(ge=0.0, le=1.0)
-
-    @model_validator(mode='after')
-    def validate_search_range(self) -> AdaptiveFullSearchBudgetConfiguration:
-        if any(value < self.minimum_visits for value in defined_schedule_values(self.maximum_visits)):
-            raise ValueError('Adaptive maximum visits must remain at least the minimum.')
-        if self.leader_stability_window < self.observation_interval:
-            raise ValueError('Leader-stability window must cover at least one observation interval.')
-        if self.leader_stability_window % self.observation_interval:
-            raise ValueError('Leader-stability window must divide into complete observation intervals.')
-        if self.final_top_visit_share > self.initial_top_visit_share:
-            raise ValueError('Final top-visit threshold cannot exceed its initial threshold.')
-        if self.final_top_two_margin > self.initial_top_two_margin:
-            raise ValueError('Final top-two margin cannot exceed its initial threshold.')
-        return self
-
-    def resolve(self, model_generation: int) -> AdaptiveFullSearchBudget:
-        maximum_visits = self.maximum_visits.value_at(model_generation)
-        gate_enabled = model_generation >= self.learned_gate_start_generation and maximum_visits > self.minimum_visits
-        return AdaptiveFullSearchBudget(
-            kind=self.kind,
-            minimum_visits=self.minimum_visits,
-            maximum_visits=maximum_visits,
-            observation_interval=self.observation_interval,
-            leader_stability_window=self.leader_stability_window,
-            root_value_tolerance=self.root_value_tolerance,
-            initial_top_visit_share=self.initial_top_visit_share,
-            final_top_visit_share=self.final_top_visit_share,
-            initial_top_two_margin=self.initial_top_two_margin,
-            final_top_two_margin=self.final_top_two_margin,
-            threshold_relaxation_visits=self.threshold_relaxation_visits,
-            minimum_search_correction_to_unlock_tail=(
-                self.minimum_search_correction_to_unlock_tail if gate_enabled else None
-            ),
-        )
-
-
-FullSearchBudgetConfiguration: TypeAlias = Annotated[
-    FixedFullSearchBudgetConfiguration | AdaptiveFullSearchBudgetConfiguration,
-    Field(discriminator='kind'),
-]
-
-
 class SelfPlaySearchParams(FrozenModel):
-    full_search_budget: FullSearchBudgetConfiguration
-    fast_searches: IntegerGenerationSchedule
-    parallel_searches: IntegerGenerationSchedule
+    baseline_visits: IntegerGenerationSchedule
     virtual_loss_weight: float = Field(default=1.0, ge=0.0, le=1.0)
     dirichlet_epsilon: FloatGenerationSchedule
     dirichlet_alpha: FloatGenerationSchedule
@@ -186,26 +118,8 @@ class SelfPlaySearchParams(FrozenModel):
 
     @model_validator(mode='after')
     def validate_scheduled_values(self) -> SelfPlaySearchParams:
-        match self.full_search_budget:
-            case FixedFullSearchBudgetConfiguration(visits=visits):
-                maximum_visits_schedule = visits
-            case AdaptiveFullSearchBudgetConfiguration(maximum_visits=maximum_visits_schedule):
-                pass
-        if any(value <= 0 for value in defined_schedule_values(self.parallel_searches)):
-            raise ValueError('Every parallel-search count must be positive.')
-        comparison_generations = sorted(
-            {
-                *schedule_change_generations(maximum_visits_schedule),
-                *schedule_change_generations(self.parallel_searches),
-            }
-        )
-        if any(
-            maximum_visits_schedule.value_at(generation) <= self.parallel_searches.value_at(generation)
-            for generation in comparison_generations
-        ):
-            raise ValueError('Every full-search budget must exceed the parallel-search count.')
-        if any(value <= 0 for value in defined_schedule_values(self.fast_searches)):
-            raise ValueError('Every fast-search budget must be positive.')
+        if any(value <= 0 for value in defined_schedule_values(self.baseline_visits)):
+            raise ValueError('Every baseline visit budget must be positive.')
         if any(not 0.0 <= value <= 1.0 for value in defined_schedule_values(self.dirichlet_epsilon)):
             raise ValueError('Dirichlet epsilon must remain in [0, 1].')
         if any(value <= 0.0 for value in defined_schedule_values(self.dirichlet_alpha)):
@@ -315,13 +229,11 @@ class SelfPlayConfiguration(FrozenModel):
     search: SelfPlaySearchParams
     inference: BatchedInferenceParams
     start_position: StartPositionConfiguration
-    full_search_probability: FloatGenerationSchedule
     retained_root_visit_fraction: FloatGenerationSchedule
     greedy_after_ply: IntegerGenerationSchedule
     starting_temperature: FloatGenerationSchedule
     final_temperature: FloatGenerationSchedule
     primary_sample_weight: FloatGenerationSchedule
-    force_fast_search_after_ply: IntegerGenerationSchedule | None = None
     detailed_statistics_workers: int = Field(default=1, ge=0)
 
     @model_validator(mode='after')
@@ -334,12 +246,6 @@ class SelfPlayConfiguration(FrozenModel):
                 raise ValueError(f'{name} must remain positive.')
         if any(value <= 0 for value in defined_schedule_values(self.greedy_after_ply)):
             raise ValueError('Greedy ply must remain positive.')
-        if self.force_fast_search_after_ply is not None and any(
-            value <= 0 for value in defined_schedule_values(self.force_fast_search_after_ply)
-        ):
-            raise ValueError('Forced-fast-search ply must remain positive.')
-        if any(not 0.0 < value <= 1.0 for value in defined_schedule_values(self.full_search_probability)):
-            raise ValueError('Full-search probability must remain in (0, 1].')
         if any(not 0.0 <= value <= 1.0 for value in defined_schedule_values(self.retained_root_visit_fraction)):
             raise ValueError('Retained-root fraction must remain in [0, 1].')
         if any(value <= 0.0 for value in defined_schedule_values(self.primary_sample_weight)):
@@ -349,17 +255,16 @@ class SelfPlayConfiguration(FrozenModel):
     def resolve(
         self,
         model_generation: int,
+        search_budget_curve: SearchBudgetCurve,
         maximum_game_plies: int | None,
         value_discount_per_ply: float,
     ) -> ResolvedSelfPlayParameters:
         search = self.search
         return ResolvedSelfPlayParameters(
             start_position=self.start_position.resolve(model_generation),
-            full_search_probability=self.full_search_probability.value_at(model_generation),
-            parallel_searches=search.parallel_searches.value_at(model_generation),
+            baseline_visits=search.baseline_visits.value_at(model_generation),
+            search_budget_curve=search_budget_curve,
             virtual_loss_weight=search.virtual_loss_weight,
-            full_search_budget=search.full_search_budget.resolve(model_generation),
-            fast_searches=search.fast_searches.value_at(model_generation),
             forced_playout_coefficient=search.forced_playouts.resolved_coefficient(),
             exploration_constant=search.exploration_constant.value_at(model_generation),
             first_play_urgency=search.first_play_urgency.resolve(model_generation),
@@ -372,9 +277,4 @@ class SelfPlayConfiguration(FrozenModel):
             maximum_game_plies=maximum_game_plies,
             primary_sample_weight=self.primary_sample_weight.value_at(model_generation),
             value_discount_per_ply=value_discount_per_ply,
-            force_fast_search_after_ply=(
-                None
-                if self.force_fast_search_after_ply is None
-                else self.force_fast_search_after_ply.value_at(model_generation)
-            ),
         )

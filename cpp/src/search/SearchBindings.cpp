@@ -143,44 +143,33 @@ void bind_search(py::module_ &module) {
         });
     py::enum_<SearchStopReason>(module, "SearchStopReason")
         .value("FIXED_LIMIT", SearchStopReason::FixedLimit)
-        .value("DETERMINISTIC", SearchStopReason::Deterministic)
-        .value("LEARNED_GATE", SearchStopReason::LearnedGate)
-        .value("MAXIMUM", SearchStopReason::Maximum);
+        .value("ADDITIONAL_VISITS", SearchStopReason::AdditionalVisits)
+        .value("PREDICTED_BUDGET", SearchStopReason::PredictedBudget);
     py::enum_<SearchCheckpointDetail>(module, "SearchCheckpointDetail")
         .value("SCALARS", SearchCheckpointDetail::Scalars)
         .value("POLICIES", SearchCheckpointDetail::Policies);
     py::class_<SearchCheckpoint>(module, "SearchCheckpoint")
         .def_readonly("visits", &SearchCheckpoint::visits)
-        .def_readonly("leader_action_id", &SearchCheckpoint::leader_action_id)
-        .def_readonly("most_visited_action_id", &SearchCheckpoint::most_visited_action_id)
-        .def_readonly("policy_target_visits", &SearchCheckpoint::policy_target_visits)
-        .def_readonly("top_visit_share", &SearchCheckpoint::top_visit_share)
-        .def_readonly("top_two_margin", &SearchCheckpoint::top_two_margin)
-        .def_readonly("root_value", &SearchCheckpoint::root_value)
-        .def_readonly("root_value_delta", &SearchCheckpoint::root_value_delta)
-        .def_readonly("leader_stable", &SearchCheckpoint::leader_stable);
+        .def_readonly("policy_target_visits", &SearchCheckpoint::policy_target_visits);
     py::class_<FixedSearchLimit>(module, "FixedSearchLimit")
         .def(py::init<std::uint32_t>(), py::arg("visits"))
         .def_readonly("visits", &FixedSearchLimit::visits);
-    py::class_<DisabledSearchCorrectionGate>(module, "DisabledSearchCorrectionGate")
-        .def(py::init<>());
-    py::class_<SearchCorrectionGate>(module, "SearchCorrectionGate")
-        .def(py::init<std::uint32_t, float>(), py::arg("visit"),
-             py::arg("minimum_prediction"))
-        .def_readonly("visit", &SearchCorrectionGate::visit)
-        .def_readonly("minimum_prediction", &SearchCorrectionGate::minimum_prediction);
-    py::class_<AdaptiveSearchLimit>(module, "AdaptiveSearchLimit")
-        .def(py::init<std::uint32_t, std::uint32_t, std::uint32_t, std::uint32_t, float,
-                      float, float, float, float, std::uint32_t,
-                      SearchCorrectionGateConfiguration>(),
-             py::arg("minimum_visits"), py::arg("maximum_visits"),
-             py::arg("observation_interval"), py::arg("leader_stability_window"),
-             py::arg("root_value_tolerance"), py::arg("initial_top_visit_share"),
-             py::arg("final_top_visit_share"), py::arg("initial_top_two_margin"),
-             py::arg("final_top_two_margin"), py::arg("threshold_relaxation_visits"),
-             py::arg("search_correction_gate"))
-        .def_readonly("minimum_visits", &AdaptiveSearchLimit::minimum_visits)
-        .def_readonly("maximum_visits", &AdaptiveSearchLimit::maximum_visits);
+    py::class_<AdditionalSearchLimit>(module, "AdditionalSearchLimit")
+        .def(py::init<std::uint32_t>(), py::arg("additional_visits"))
+        .def_readonly("additional_visits", &AdditionalSearchLimit::additional_visits);
+    py::class_<SearchBudgetCurve>(module, "SearchBudgetCurve")
+        .def(py::init<std::array<double, SearchBudgetCurve::BUCKET_COUNT>>(),
+             py::arg("multipliers"))
+        .def_readonly("multipliers", &SearchBudgetCurve::multipliers)
+        .def("multiplier", &SearchBudgetCurve::multiplier, py::arg("quantile"));
+    py::class_<PredictedSearchBudgetLimit>(module, "PredictedSearchBudgetLimit")
+        .def(py::init<std::uint32_t, SearchBudgetCurve>(), py::arg("baseline_visits"),
+             py::arg("curve"))
+        .def_readonly("baseline_visits", &PredictedSearchBudgetLimit::baseline_visits)
+        .def_readonly("curve", &PredictedSearchBudgetLimit::curve);
+    module.def("search_budget_multiplier", &searchBudgetMultiplier, py::arg("curve"),
+               py::arg("quantile"));
+    module.def("search_parallelism", &searchParallelism, py::arg("additional_visits"));
     py::class_<GameSearchResult>(module, "GameSearchResult")
         .def_readonly("root_value", &GameSearchResult::root_value)
         .def_readonly("highest_visited_child_action_id",
@@ -193,17 +182,18 @@ void bind_search(py::module_ &module) {
         .def_readonly("network_root_value", &GameSearchResult::network_root_value)
         .def_readonly("policy_correction", &GameSearchResult::policy_correction)
         .def_readonly("value_correction", &GameSearchResult::value_correction)
-        .def_readonly("search_correction_target", &GameSearchResult::search_correction_target)
-        .def_readonly("predicted_search_correction", &GameSearchResult::predicted_search_correction)
+        .def_readonly("search_budget_logit", &GameSearchResult::search_budget_logit)
+        .def_readonly("predicted_search_budget", &GameSearchResult::predicted_search_budget)
+        .def_readonly("assigned_additional_visits", &GameSearchResult::assigned_additional_visits)
+        .def_readonly("parallel_searches", &GameSearchResult::parallel_searches)
+        .def_readonly("spend_residual", &GameSearchResult::spend_residual)
         .def_readonly("starting_visits", &GameSearchResult::starting_visits)
         .def_readonly("final_visits", &GameSearchResult::final_visits)
         .def_readonly("stop_reason", &GameSearchResult::stop_reason)
-        .def_readonly("learned_gate_evaluated", &GameSearchResult::learned_gate_evaluated)
         .def_readonly("checkpoints", &GameSearchResult::checkpoints);
     py::class_<BatchedSearchParameters>(module, "BatchedSearchParameters")
-        .def(py::init<std::uint32_t, TreeSearchParameters, float, float, std::size_t>(),
-             py::arg("parallel_searches"), py::arg("tree_search"), py::arg("dirichlet_alpha"),
-             py::arg("dirichlet_epsilon"), py::arg("tree_capacity"));
+        .def(py::init<TreeSearchParameters, float, float, std::size_t>(), py::arg("tree_search"),
+             py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"), py::arg("tree_capacity"));
     py::class_<BatchedInferenceParameters>(module, "BatchedInferenceParameters")
         .def(py::init<std::size_t, std::size_t, std::size_t>(), py::arg("workers"),
              py::arg("batch_size"), py::arg("outstanding_batches_per_worker"))
@@ -218,14 +208,11 @@ void bind_search(py::module_ &module) {
         .def_readonly("exploration_constant", &AnalysisParameters::exploration_constant)
         .def_readonly("inference", &AnalysisParameters::inference);
     py::class_<SelfPlaySearchParameters>(module, "SelfPlaySearchParameters")
-        .def(py::init<std::uint32_t, SearchLimit, std::uint32_t, TreeSearchParameters, float,
-                      float>(),
-             py::arg("parallel_searches"), py::arg("full_search_budget"),
-             py::arg("fast_searches"),
-             py::arg("tree_search"), py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"))
-        .def_readwrite("parallel_searches", &SelfPlaySearchParameters::parallel_searches)
-        .def_readwrite("full_search_budget", &SelfPlaySearchParameters::full_search_budget)
-        .def_readwrite("fast_searches", &SelfPlaySearchParameters::fast_searches)
+        .def(py::init<std::uint32_t, SearchBudgetCurve, TreeSearchParameters, float, float>(),
+             py::arg("baseline_visits"), py::arg("search_budget_curve"), py::arg("tree_search"),
+             py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"))
+        .def_readwrite("baseline_visits", &SelfPlaySearchParameters::baseline_visits)
+        .def_readwrite("search_budget_curve", &SelfPlaySearchParameters::search_budget_curve)
         .def_readwrite("tree_search", &SelfPlaySearchParameters::tree_search)
         .def_readwrite("dirichlet_alpha", &SelfPlaySearchParameters::dirichlet_alpha)
         .def_readwrite("dirichlet_epsilon", &SelfPlaySearchParameters::dirichlet_epsilon);

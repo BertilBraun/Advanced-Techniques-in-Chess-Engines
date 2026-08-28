@@ -70,7 +70,6 @@ public:
           m_search(runtimeParameters.model_path, runtimeParameters.device,
                    runtimeParameters.device_id, parameters.inference,
                    BatchedSearchParameters(
-                       parameters.parallel_searches,
                        TreeSearchParameters(parameters.exploration_constant,
                                             FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
                                             0.0F, 1.0F),
@@ -196,8 +195,8 @@ private:
             if (!node.expanded()) {
                 break;
             }
-            const auto best = std::ranges::max_element(
-                node.children, [](const Edge &left, const Edge &right) {
+            const auto best =
+                std::ranges::max_element(node.children, [](const Edge &left, const Edge &right) {
                     if (left.visits != right.visits) {
                         return left.visits < right.visits;
                     }
@@ -232,6 +231,7 @@ private:
                 .limit = FixedSearchLimit(root.visits() + chunk),
                 .add_root_noise = false,
                 .count_root_initialization = true,
+                .parallel_searches = m_parameters.parallel_searches,
             }});
             completedSearches += batch.simulations_completed;
         } while ((!searchLimit.has_value() || completedSearches < *searchLimit) &&

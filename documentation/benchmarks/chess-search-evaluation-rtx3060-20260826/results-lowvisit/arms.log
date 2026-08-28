@@ -1,0 +1,7 @@
+lowvis-parallel-8: score 0.785 in 421 s
+lowvis-parallel-8-vlw-05: score 0.775 in 422 s
+lowvis-parallel-4: score 0.790 in 426 s
+lowvis-parallel-4-vlw-05: score 0.780 in 426 s
+lowvis-parallel-2: score 0.785 in 428 s
+lowvis-parallel-1: score 0.775 in 432 s
+/workspace/search-eval/output/lowvisit-20260827T081239Z/arm-matrix/arm-matrix-result.json

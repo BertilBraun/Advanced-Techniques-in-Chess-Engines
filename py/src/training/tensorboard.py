@@ -6,8 +6,6 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.configuration import (
-    AdaptiveFullSearchBudgetConfiguration,
-    FixedFullSearchBudgetConfiguration,
     RandomOpeningStartConfiguration,
     ReducedParentValueFirstPlayUrgencyConfiguration,
     SelfPlayConfiguration,
@@ -19,7 +17,7 @@ from src.training.targets import (
     LegalMovesTargetConfiguration,
     NextPolicyTargetConfiguration,
     RemainingGameLengthTargetConfiguration,
-    SearchCorrectionTargetConfiguration,
+    SearchBudgetTargetConfiguration,
 )
 
 
@@ -65,22 +63,12 @@ def _self_play_settings_at(
     model_generation: int,
 ) -> tuple[ScheduledSetting, ...]:
     search = configuration.search
-    match search.full_search_budget:
-        case FixedFullSearchBudgetConfiguration(visits=visits):
-            full_searches = visits.value_at(model_generation)
-        case AdaptiveFullSearchBudgetConfiguration(maximum_visits=maximum_visits):
-            full_searches = maximum_visits.value_at(model_generation)
     settings = [
-        ScheduledSetting('settings/self_play/full_searches', full_searches),
-        ScheduledSetting('settings/self_play/fast_searches', search.fast_searches.value_at(model_generation)),
+        ScheduledSetting('settings/self_play/baseline_visits', search.baseline_visits.value_at(model_generation)),
         ScheduledSetting('settings/self_play/dirichlet_epsilon', search.dirichlet_epsilon.value_at(model_generation)),
         ScheduledSetting('settings/self_play/dirichlet_alpha', search.dirichlet_alpha.value_at(model_generation)),
         ScheduledSetting(
             'settings/self_play/exploration_constant', search.exploration_constant.value_at(model_generation)
-        ),
-        ScheduledSetting(
-            'settings/self_play/full_search_probability',
-            configuration.full_search_probability.value_at(model_generation),
         ),
         ScheduledSetting(
             'settings/self_play/retained_root_visit_fraction',
@@ -100,13 +88,6 @@ def _self_play_settings_at(
             configuration.primary_sample_weight.value_at(model_generation),
         ),
     ]
-    if configuration.force_fast_search_after_ply is not None:
-        settings.append(
-            ScheduledSetting(
-                'settings/self_play/force_fast_search_after_ply',
-                configuration.force_fast_search_after_ply.value_at(model_generation),
-            )
-        )
     match search.first_play_urgency:
         case ReducedParentValueFirstPlayUrgencyConfiguration(reduction=reduction):
             settings.append(
@@ -160,8 +141,8 @@ def _objective_settings_at(
                 name = f'{index}-irreversible-progress-{horizon_plies}'
             case LegalMovesTargetConfiguration(loss_weight=loss_weight):
                 name = f'{index}-legal-moves'
-            case SearchCorrectionTargetConfiguration(loss_weight=loss_weight):
-                name = f'{index}-search-correction'
+            case SearchBudgetTargetConfiguration(loss_weight=loss_weight):
+                name = f'{index}-search-budget'
         settings.append(
             ScheduledSetting(
                 f'settings/training/auxiliary/{name}/loss_weight',

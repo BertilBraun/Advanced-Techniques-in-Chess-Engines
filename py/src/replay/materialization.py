@@ -13,6 +13,7 @@ from src.replay.contracts import (
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
+    IneligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -29,7 +30,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
     TrainingTargetLayout,
 )
 from src.util.generation_schedule import FloatGenerationSchedule
@@ -109,8 +110,6 @@ def materialize_completed_game(
     final_player = trajectory.players[-1]
     reversed_final_wdl = game.final_wdl.reversed()
     for observation in game.observations:
-        if not observation.full_search:
-            continue
         primary = _retained_policy(
             observation,
             trajectory.legal_action_ids,
@@ -168,13 +167,8 @@ def materialize_completed_game(
                     )
                 case LegalMovesHeadLayout():
                     auxiliary_targets.append(EligibleLegalMovesTarget())
-                case SearchCorrectionHeadLayout():
-                    auxiliary_targets.append(
-                        EligibleScalarAuxiliaryTarget(
-                            kind='search_correction',
-                            value=observation.search_correction_target,
-                        )
-                    )
+                case SearchBudgetHeadLayout():
+                    auxiliary_targets.append(IneligibleSearchBudgetTarget())
 
         position = positions[observation.ply]
         position_wdl = game.final_wdl if trajectory.players[observation.ply] == final_player else reversed_final_wdl

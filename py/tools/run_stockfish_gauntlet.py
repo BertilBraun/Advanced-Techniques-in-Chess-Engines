@@ -25,7 +25,7 @@ from src.evaluation.contracts import (
     MatchEvaluationJob,
     StockfishFixedNodesOpponent,
 )
-from src.evaluation.match import MatchActionSelector, run_match
+from src.evaluation.match import MatchActionSelector, SearchActionSelector, run_match
 from src.evaluation.statistics import aggregate_match
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
@@ -181,7 +181,7 @@ class _TimedSearchActionSelector(MatchActionSelector[ChessPosition]):
                 model_path=str(checkpoint.inference_model_path),
                 device_id=device_id,
                 parallel_searches=budget.parallel_searches,
-                exploration_constant=1.0,
+                exploration_constant=budget.exploration_constant,
                 inference_workers=budget.inference_workers,
                 outstanding_batches_per_worker=budget.outstanding_batches_per_worker,
                 maximum_batch_size=budget.inference_batch_size,
@@ -282,7 +282,7 @@ def _search_configuration(
     return EvaluationSearchConfiguration(
         searches_per_move=searches_per_move,
         parallel_searches=budget.parallel_searches,
-        exploration_constant=1.0,
+        exploration_constant=budget.exploration_constant,
         inference=BatchedInferenceParams(
             inference_workers=budget.inference_workers,
             inference_batch_size=budget.inference_batch_size,
@@ -410,11 +410,22 @@ def _run_shard(request: _ShardRequest) -> GauntletShardResult:
     stockfish_identity = client.engine_identity
     external_engine = StockfishFixedNodesMatchEngine(client, request.stockfish_nodes)
     timed_selector: _TimedSearchActionSelector | None = None
+    candidate_selector: MatchActionSelector[ChessPosition] | None = None
     if isinstance(request.model_search_budget, TimedModelSearchBudget):
         timed_selector = _TimedSearchActionSelector(
             checkpoint,
             request.device_id,
             request.model_search_budget,
+        )
+        candidate_selector = timed_selector
+    elif request.model_search_budget.tree_search is not None:
+        candidate_selector = SearchActionSelector(
+            game.create_evaluation_search(
+                request.device_id,
+                checkpoint,
+                definition.search,
+                request.model_search_budget.tree_search,
+            )
         )
     try:
         match = run_match(
@@ -424,7 +435,7 @@ def _run_shard(request: _ShardRequest) -> GauntletShardResult:
             1,
             external_engine,
             loaded.training.topology.trainer.device_type,
-            candidate_selector=timed_selector,
+            candidate_selector=candidate_selector,
         )
     finally:
         external_engine.close()

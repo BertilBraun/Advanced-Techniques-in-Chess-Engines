@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from itertools import pairwise
 from statistics import fmean, median
 
 from src.replay.description import ReplayDescription
 from src.replay.manager import IngestedCompletedGame
-from src.self_play.completed_game import SearchObservation, SearchStopReason, TerminationReason
+from src.self_play.completed_game import SearchStopReason, TerminationReason
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedgerState
 
@@ -46,62 +45,42 @@ class CompletedGameLengthTelemetry:
 
 
 @dataclass(frozen=True)
-class AdaptiveSearchTelemetry:
+class SearchBudgetTelemetry:
+    baseline_visits: tuple[int, ...]
     final_visits: tuple[int, ...]
-    new_simulations: tuple[int, ...]
-    search_correction_targets: tuple[float, ...]
-    search_correction_predictions: tuple[float, ...]
+    assigned_additional_visits: tuple[int, ...]
+    search_budget_logits: tuple[float, ...]
+    predicted_search_budgets: tuple[float, ...]
+    parallel_searches: tuple[int, ...]
+    spend_residuals: tuple[int, ...]
+    starting_visits: tuple[int, ...]
     policy_corrections: tuple[float, ...]
     value_corrections: tuple[float, ...]
-    checkpoint_visits: tuple[int, ...]
-    checkpoint_top_visit_shares: tuple[float, ...]
-    checkpoint_top_two_margins: tuple[float, ...]
-    checkpoint_root_value_deltas: tuple[float, ...]
-    leader_changes: int
-    learned_gate_evaluations: int
-    learned_gate_denials: int
-    learned_gate_unlocks: int
     stop_reasons: tuple[tuple[SearchStopReason, int], ...]
 
 
-def adaptive_search_telemetry(
+def search_budget_telemetry(
     games: tuple[IngestedCompletedGame, ...],
-) -> AdaptiveSearchTelemetry | None:
-    observations = tuple(observation for game in games for observation in game.observations if observation.full_search)
+) -> SearchBudgetTelemetry | None:
+    observations = tuple(observation for game in games for observation in game.observations)
     if not observations:
         return None
-    checkpoints = tuple(checkpoint for observation in observations for checkpoint in observation.checkpoints)
-    learned_gate_evaluations = sum(observation.learned_gate_evaluated for observation in observations)
-    learned_gate_denials = sum(observation.stop_reason is SearchStopReason.LEARNED_GATE for observation in observations)
-    return AdaptiveSearchTelemetry(
+    return SearchBudgetTelemetry(
+        baseline_visits=tuple(observation.baseline_visits for observation in observations),
         final_visits=tuple(observation.final_visits for observation in observations),
-        new_simulations=tuple(_new_simulations(observation) for observation in observations),
-        search_correction_targets=tuple(observation.search_correction_target for observation in observations),
-        search_correction_predictions=tuple(observation.predicted_search_correction for observation in observations),
+        assigned_additional_visits=tuple(observation.assigned_additional_visits for observation in observations),
+        search_budget_logits=tuple(observation.search_budget_logit for observation in observations),
+        predicted_search_budgets=tuple(observation.predicted_search_budget for observation in observations),
+        parallel_searches=tuple(observation.parallel_searches for observation in observations),
+        spend_residuals=tuple(observation.spend_residual for observation in observations),
+        starting_visits=tuple(observation.starting_visits for observation in observations),
         policy_corrections=tuple(observation.policy_correction for observation in observations),
         value_corrections=tuple(observation.value_correction for observation in observations),
-        checkpoint_visits=tuple(checkpoint.visits for checkpoint in checkpoints),
-        checkpoint_top_visit_shares=tuple(checkpoint.top_visit_share for checkpoint in checkpoints),
-        checkpoint_top_two_margins=tuple(checkpoint.top_two_margin for checkpoint in checkpoints),
-        checkpoint_root_value_deltas=tuple(checkpoint.root_value_delta for checkpoint in checkpoints),
-        leader_changes=sum(_leader_changes(observation) for observation in observations),
-        learned_gate_evaluations=learned_gate_evaluations,
-        learned_gate_denials=learned_gate_denials,
-        learned_gate_unlocks=learned_gate_evaluations - learned_gate_denials,
         stop_reasons=tuple(
             (reason, sum(observation.stop_reason is reason for observation in observations))
             for reason in SearchStopReason
         ),
     )
-
-
-def _leader_changes(observation: SearchObservation) -> int:
-    leaders = tuple(checkpoint.leader_action_id for checkpoint in observation.checkpoints)
-    return sum(left != right for left, right in pairwise(leaders))
-
-
-def _new_simulations(observation: SearchObservation) -> int:
-    return observation.final_visits - observation.starting_visits
 
 
 def completed_game_length_telemetry(

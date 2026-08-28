@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "description": "Chess search arms for the 2026-08-26 offline strength study. Baseline is the vast-chess-4day-production-v9 self-play search resolved at generation 162 (cpuct 1.5, reduced-parent FPU 0.2, virtual loss 1.0, search value discount 0.99, 600 visits, 4 parallel searches). Virtual loss is gridded only jointly with parallel searches because a single descent in flight makes it inert.",
+  "baseline_label": "baseline",
+  "arms": [
+    {
+      "label": "baseline",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "fpu-zero",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "zero",
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "fpu-parent-value",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "parent_value",
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "fpu-reduced-04",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.4,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "cpuct-10",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.0,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "cpuct-125",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.25,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "cpuct-20",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 2.0,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "cpuct-30",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 3.0,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "discount-098",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.98
+    },
+    {
+      "label": "discount-10",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 1.0
+    },
+    {
+      "label": "visits-200",
+      "searches_per_move": 200,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "visits-400",
+      "searches_per_move": 400,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "visits-1000",
+      "searches_per_move": 1000,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "visits-1600",
+      "searches_per_move": 1600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "parallel-1",
+      "searches_per_move": 600,
+      "parallel_searches": 1,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "parallel-4-vlw-025",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 0.25,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "parallel-4-vlw-05",
+      "searches_per_move": 600,
+      "parallel_searches": 4,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 0.5,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "parallel-8-vlw-05",
+      "searches_per_move": 600,
+      "parallel_searches": 8,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 0.5,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "parallel-8-vlw-10",
+      "searches_per_move": 600,
+      "parallel_searches": 8,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "parallel-16-vlw-05",
+      "searches_per_move": 600,
+      "parallel_searches": 16,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 0.5,
+      "search_value_discount_per_ply": 0.99
+    },
+    {
+      "label": "parallel-16-vlw-10",
+      "searches_per_move": 600,
+      "parallel_searches": 16,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "virtual_loss_weight": 1.0,
+      "search_value_discount_per_ply": 0.99
+    }
+  ]
+}

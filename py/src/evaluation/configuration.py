@@ -4,7 +4,7 @@ import math
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
-from src.self_play.configuration import BatchedInferenceParams
+from src.self_play.configuration import BatchedInferenceParams, FirstPlayUrgencyConfiguration
 from src.util.frozen_model import FrozenModel
 
 # AlphaZero scales its PUCT constant with the visit count rather than fixing it; see the pseudocode
@@ -17,6 +17,12 @@ _ALPHAZERO_EXPLORATION_INIT = 1.25
 def alphazero_exploration_constant(searches_per_move: int) -> float:
     numerator = searches_per_move + _ALPHAZERO_EXPLORATION_BASE + 1.0
     return math.log(numerator / _ALPHAZERO_EXPLORATION_BASE) + _ALPHAZERO_EXPLORATION_INIT
+
+
+class EvaluationTreeSearchOverrides(FrozenModel):
+    first_play_urgency: FirstPlayUrgencyConfiguration
+    virtual_loss_weight: float = Field(ge=0.0, le=1.0)
+    value_discount_per_ply: float = Field(gt=0.0, le=1.0)
 
 
 class EvaluationSearchConfiguration(FrozenModel):

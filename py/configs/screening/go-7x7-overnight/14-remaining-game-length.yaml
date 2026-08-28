@@ -10,3 +10,5 @@ go:
       - kind: remaining_game_length
         normalization_scale: 196
         loss_weight: 0.15
+      - kind: search_budget
+        loss_weight: 0.2

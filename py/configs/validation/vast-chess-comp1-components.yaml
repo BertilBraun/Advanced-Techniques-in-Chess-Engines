@@ -42,5 +42,5 @@ chess:
         loss_weight: 0.0125
       - kind: legal_moves
         loss_weight: 0.0125
-      - kind: search_correction
-        loss_weight: 0.05
+      - kind: search_budget
+        loss_weight: 0.2

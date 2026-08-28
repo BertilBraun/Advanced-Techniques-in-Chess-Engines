@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "source_revision": "584fa684ab6f9206cfea66deec1ce2dfb1a9db34",
+  "tool_sha256": "6b8236e926dfbb51d1e4969dd874a3488b040b29e5eef1df70961e595e8dc682",
+  "model_sha256": "a61e850264c71c9c4fd38f0f9660b64b6737052b0516245a34b4e79f3f098571",
+  "generation": 162,
+  "visits": 600,
+  "inference_batch_size": 256,
+  "exploration_constant": 1.5,
+  "forced_playout_coefficient": 1.5,
+  "measurements": [
+    {
+      "parallel_searches": 1,
+      "virtual_loss_weight": 0.25,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.829689146950841,
+      "simulations_per_second": 723.1624063120955,
+      "average_batch_size": 1.0,
+      "batch_occupancy": 1.0,
+      "inference_calls": 601
+    },
+    {
+      "parallel_searches": 2,
+      "virtual_loss_weight": 0.25,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.40316314599476755,
+      "simulations_per_second": 1488.231268062848,
+      "average_batch_size": 1.9966777563095093,
+      "batch_occupancy": 0.9983388781547546,
+      "inference_calls": 301
+    },
+    {
+      "parallel_searches": 2,
+      "virtual_loss_weight": 0.5,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.41433388087898493,
+      "simulations_per_second": 1448.1074990226127,
+      "average_batch_size": 1.9966777563095093,
+      "batch_occupancy": 0.9983388781547546,
+      "inference_calls": 301
+    },
+    {
+      "parallel_searches": 2,
+      "virtual_loss_weight": 1.0,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.4150403100065887,
+      "simulations_per_second": 1445.6427135727492,
+      "average_batch_size": 1.9966777563095093,
+      "batch_occupancy": 0.9983388781547546,
+      "inference_calls": 301
+    },
+    {
+      "parallel_searches": 4,
+      "virtual_loss_weight": 0.25,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.21041032089851797,
+      "simulations_per_second": 2851.571146499906,
+      "average_batch_size": 3.9801323413848877,
+      "batch_occupancy": 0.9950330853462219,
+      "inference_calls": 151
+    },
+    {
+      "parallel_searches": 4,
+      "virtual_loss_weight": 0.5,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.20545635581947863,
+      "simulations_per_second": 2920.3282497971572,
+      "average_batch_size": 3.9801323413848877,
+      "batch_occupancy": 0.9950330853462219,
+      "inference_calls": 151
+    },
+    {
+      "parallel_searches": 4,
+      "virtual_loss_weight": 1.0,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.20389770017936826,
+      "simulations_per_second": 2942.6521214912264,
+      "average_batch_size": 3.9801323413848877,
+      "batch_occupancy": 0.9950330853462219,
+      "inference_calls": 151
+    },
+    {
+      "parallel_searches": 8,
+      "virtual_loss_weight": 0.25,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.10472495993599296,
+      "simulations_per_second": 5729.293192059611,
+      "average_batch_size": 7.907894611358643,
+      "batch_occupancy": 0.9884868264198303,
+      "inference_calls": 76
+    },
+    {
+      "parallel_searches": 8,
+      "virtual_loss_weight": 0.5,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.10571120982058346,
+      "simulations_per_second": 5675.840821596306,
+      "average_batch_size": 7.907894611358643,
+      "batch_occupancy": 0.9884868264198303,
+      "inference_calls": 76
+    },
+    {
+      "parallel_searches": 8,
+      "virtual_loss_weight": 1.0,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.10668275691568851,
+      "simulations_per_second": 5624.151618749228,
+      "average_batch_size": 7.907894611358643,
+      "batch_occupancy": 0.9884868264198303,
+      "inference_calls": 76
+    },
+    {
+      "parallel_searches": 16,
+      "virtual_loss_weight": 0.25,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.05418713390827179,
+      "simulations_per_second": 11072.739167487296,
+      "average_batch_size": 15.410256385803223,
+      "batch_occupancy": 0.9631410241127014,
+      "inference_calls": 39
+    },
+    {
+      "parallel_searches": 16,
+      "virtual_loss_weight": 0.5,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.057480393908917904,
+      "simulations_per_second": 10438.34182748897,
+      "average_batch_size": 15.410256385803223,
+      "batch_occupancy": 0.9631410241127014,
+      "inference_calls": 39
+    },
+    {
+      "parallel_searches": 16,
+      "virtual_loss_weight": 1.0,
+      "trees": 1,
+      "simulations": 600,
+      "elapsed_seconds": 0.05880445893853903,
+      "simulations_per_second": 10203.307892469604,
+      "average_batch_size": 15.410256385803223,
+      "batch_occupancy": 0.9631410241127014,
+      "inference_calls": 39
+    }
+  ]
+}

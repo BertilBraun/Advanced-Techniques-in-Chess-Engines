@@ -1,0 +1,87 @@
+{
+  "schema_version": 2,
+  "source_revision": "584fa684ab6f9206cfea66deec1ce2dfb1a9db34",
+  "tool_sha256": "0f0a84f1bdf865cd6c6edd54a347904fff51ce4db1f873d0888fb2205424d844",
+  "checkpoint_generation": 162,
+  "opening_manifest_path": "/workspace/evaluation-artifacts/chess/chess-elite-2025-11-balanced-4moves-200-v1-openings.json",
+  "opening_manifest_sha256": "ab15a513135c7aec3e19c0ce3b845e03c2f47a9a73f07a72f5a9ab4842470c1e",
+  "stockfish_executable_path": "/workspace/alphazero-engine/engines/upstream/stockfish-13/stockfish_13_linux_x64_bmi2",
+  "stockfish_executable_sha256": "ec56cd6ad04eecd38885912321ee2dfc76aee68415668ba433fa76eb7180ac5a",
+  "stockfish_identity": "Stockfish 13",
+  "probe_game_count": 10,
+  "opening_pair_count": 5,
+  "opening_selection_seed": 20260827,
+  "match_random_seed": 20260828,
+  "model_search_budget": {
+    "kind": "fixed_searches",
+    "searches_per_move": 150,
+    "parallel_searches": 4,
+    "inference_workers": 1,
+    "inference_batch_size": 64,
+    "outstanding_batches_per_worker": 1,
+    "exploration_constant": 1.5,
+    "tree_search": {
+      "first_play_urgency": {
+        "kind": "reduced_parent_value",
+        "reduction": 0.2
+      },
+      "virtual_loss_weight": 1.0,
+      "value_discount_per_ply": 0.99
+    }
+  },
+  "probes": [
+    {
+      "stockfish_nodes": 100,
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/calibration/stockfish-nodes-100/result.json",
+      "wins": 8,
+      "draws": 0,
+      "losses": 2,
+      "score": 0.8,
+      "score_confidence_low": 0.6,
+      "score_confidence_high": 1.0
+    },
+    {
+      "stockfish_nodes": 300,
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/calibration/stockfish-nodes-300/result.json",
+      "wins": 8,
+      "draws": 1,
+      "losses": 1,
+      "score": 0.85,
+      "score_confidence_low": 0.65,
+      "score_confidence_high": 1.0
+    },
+    {
+      "stockfish_nodes": 600,
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/calibration/stockfish-nodes-600/result.json",
+      "wins": 10,
+      "draws": 0,
+      "losses": 0,
+      "score": 1.0,
+      "score_confidence_low": 1.0,
+      "score_confidence_high": 1.0
+    },
+    {
+      "stockfish_nodes": 1000,
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/calibration/stockfish-nodes-1000/result.json",
+      "wins": 4,
+      "draws": 4,
+      "losses": 2,
+      "score": 0.6,
+      "score_confidence_low": 0.4,
+      "score_confidence_high": 0.75
+    },
+    {
+      "stockfish_nodes": 2100,
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/calibration/stockfish-nodes-2100/result.json",
+      "wins": 6,
+      "draws": 2,
+      "losses": 2,
+      "score": 0.7,
+      "score_confidence_low": 0.55,
+      "score_confidence_high": 0.85
+    }
+  ],
+  "closest_stockfish_nodes": 1000,
+  "score_bracket": null,
+  "ladder_elo_fit": null
+}

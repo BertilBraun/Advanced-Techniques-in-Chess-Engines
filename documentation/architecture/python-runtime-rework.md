@@ -1572,14 +1572,40 @@ NativeRoot
 
 NativeSearchRequest
     root
-    full_search
+    assigned_additional_visits: int | None
+    policy_checkpoint_visits: list[int]
+    parallel_searches: int | None
+    add_root_noise: bool
+    force_root_playouts: bool
+    checkpoint_detail
 
 NativeSearchResult
     root_value
+    network_root_value
     search_visits
     policy_target_visits
+    search_budget_logit
+    predicted_search_budget
+    assigned_additional_visits
+    parallel_searches
+    spend_residual
+    starting_visits
+    final_visits
+    checkpoints
     root
 ```
+
+An omitted additional-visit budget is the production path. After root expansion it reads the sigmoid-bounded
+`search_budget` scalar, applies the run's fixed measured-oracle curve and published blend, and assigns a deterministic
+integer budget. The per-search parallelism is
+`min(16, next_power_of_two(ceil(assigned_additional_visits / 200)))`. A signed cumulative residual corrects later
+assignments so finite prediction distributions and rounding cannot move cumulative production spend away from the
+flat baseline by more than the allocator's documented integer bound. Explicit budgets are used for evaluation and
+deep labels and do not mutate that production ledger.
+
+Policy checkpoint visits are unique and sorted. A request with policy detail continues one root through every
+checkpoint and returns the exact sparse policy snapshot at each visit limit. Retained roots interpret every assigned
+budget as additional simulations: `final_visits = starting_visits + assigned_additional_visits`.
 
 The current C++ search algorithm does not require duplication or a new abstraction. The binding presentation does
 require normalization: chess currently creates roots from FEN/history and reroots by child index, while Go exposes
@@ -1604,10 +1630,15 @@ class SearchObservation(FrozenModel):
     visits: tuple[SparseSearchVisit, ...]
     root_value: float
     selected_action_id: int
-    full_search: bool
     sample_weight: float
-    search_budget: int
-    minimum_root_visits: int
+    baseline_visits: int
+    search_budget_logit: float
+    predicted_search_budget: float
+    assigned_additional_visits: int
+    parallel_searches: int
+    spend_residual: int
+    starting_visits: int
+    final_visits: int
 
 
 @dataclass
@@ -1619,9 +1650,9 @@ class ActiveSelfPlayGame(Generic[NativeRootT]):
 ```
 
 The same frozen `SearchObservation` value is retained in memory and serialized at completion; there is no duplicate
-transport model with renamed fields. Every played search ply is recorded. `full_search` directly determines primary
-sample eligibility; fast-search observations remain available to configured trajectory targets. The oldest and
-newest model generations are derived from observations rather than stored separately.
+transport model with renamed fields. Every played search ply is materialized with its configured sample weight.
+Budget size does not alter replay eligibility or sample weight. The oldest and newest model generations are derived
+from observations rather than stored separately.
 
 The worker resolves one immutable parameter value when it loads a model generation. It contains:
 
@@ -1629,11 +1660,8 @@ The worker resolves one immutable parameter value when it loads a model generati
 @dataclass(frozen=True)
 class ResolvedSelfPlayParameters:
     maximum_random_opening_plies: int
-    full_search_probability: float
-    parallel_searches: int
-    full_searches: int
-    fast_searches: int
-    minimum_root_visits: int
+    baseline_visits: int
+    search_budget_blend: float
     exploration_constant: float
     dirichlet_alpha: float
     dirichlet_epsilon: float
@@ -1645,25 +1673,23 @@ class ResolvedSelfPlayParameters:
     primary_sample_weight: float
 ```
 
-Every corresponding authored field is either static or a generation schedule in self-play configuration. Resolution
-validates counts, positive temperatures and weights, full-search probability in `(0, 1]`, other probability/fraction
-ranges, and that full and fast budgets are
-compatible with parallel search. When a maximum ply cap exists, maximum random opening plies must be below it. Values
-remain fixed until the next model load.
+Every corresponding authored field is either static or a generation schedule in self-play configuration, except the
+blend, which is an atomic calibration publication fixed before that production generation starts. Resolution
+validates positive budgets, temperatures and weights and all probability/fraction ranges. When a maximum ply cap
+exists, maximum random opening plies must be below it. Values remain fixed until the next model load.
 
 The shared worker:
 
 1. owns the fixed-size active-game slots and native search instance;
 2. constructs one shared request per root and performs one batched native search;
 3. records every search observation required by the configured primary and auxiliary targets;
-4. marks primary-sample eligibility independently from observation retention;
-5. applies the common visit-based temperature or greedy move-selection policy;
-6. advances the retained native root by the selected action ID, leaving `root.position` as the sole live position;
-7. detects completion by applying the state contract to `root.position` and constructs the typed completed
+4. applies the common visit-based temperature or greedy move-selection policy;
+5. advances the retained native root by the selected action ID, leaving `root.position` as the sole live position;
+6. detects completion by applying the state contract to `root.position` and constructs the typed completed
    trajectory;
-8. publishes completed records and replaces finished slots;
-9. owns cheap game/process counters and asks only selected workers for expensive native statistics;
-10. applies the shared desired-state transition order around statistics, model refresh, schedules, and tree reset.
+7. publishes completed records and replaces finished slots;
+8. owns cheap game/process counters and asks only selected workers for expensive native statistics;
+9. applies the shared desired-state transition order around statistics, model refresh, schedules, and tree reset.
 
 The ordinary turn algorithm is fully specified:
 
@@ -1673,31 +1699,29 @@ The ordinary turn algorithm is fully specified:
    valid and is the default, and a terminal random opening is
    discarded and restarted because it contains no training observation;
 3. the native search root is created from the resulting position;
-4. each ply independently selects a full search with the configured randomized-playout-cap probability and a fast
-   search otherwise;
-5. a full-search position is primary-sample eligible; a fast-search position is not, but its observation is retained;
-6. before a full search, retained root visits are discounted by the configured retained fraction; fast searches may
-   reuse their retained root unchanged;
-7. the native batch returns positive sparse `search_visits`, used for action selection, and
+4. before every search, retained root visits are discounted by the configured retained fraction;
+5. the native allocator predicts and assigns one additional-visit budget independently for every position while
+   preserving cumulative flat-baseline spend;
+6. the native batch returns positive sparse `search_visits`, used for action selection, and
    `policy_target_visits`, with unsupported forced-playout exploration removed for training, plus a scalar root
    value for every nonterminal root;
-8. before the configured greedy ply, the action is sampled from raw visit counts raised to inverse temperature; the
+7. before the configured greedy ply, the action is sampled from raw visit counts raised to inverse temperature; the
    temperature interpolates from the resolved starting value to the resolved final value over that ply range;
-9. at and after the greedy ply, the greatest visit count wins with ascending action ID as the deterministic tie
+8. at and after the greedy ply, the greatest visit count wins with ascending action ID as the deterministic tie
    break;
-10. repeated-move penalties and other chess-only sampling modifications are not part of the base algorithm;
-11. the selected action advances the retained root through `root.play(action_id)`;
-12. a natural terminal position uses `state.terminal_wdl()`; a configured maximum-ply ending uses
+9. repeated-move penalties and other chess-only sampling modifications are not part of the base algorithm;
+10. the selected action advances the retained root through `root.play(action_id)`;
+11. a natural terminal position uses `state.terminal_wdl()`; a configured maximum-ply ending uses
     the optional game terminal oracle once at the cap, falls back to `state.adjudicated_wdl()` when the oracle is
     absent or does not cover the position, and records that termination reason;
-13. a nonterminal search result without a positive visit is an invariant failure, not a silently discarded game;
-14. loading a new generation keeps action and observation history but resets every retained tree before play resumes.
+12. a nonterminal search result without a positive visit is an invariant failure, not a silently discarded game;
+13. loading a new generation keeps action and observation history but resets every retained tree and production
+    spend residual before play resumes.
 
 All random choices use one worker-local generator seeded from the run seed and worker ID. Search observations record
-the actual model generation, budget, and minimum-root-visit setting used at that ply, so a game spanning a model
-transition remains unambiguous during materialization. Visit-count preprocessing subtracts that observation's
-minimum root visits, removes nonpositive results, and applies deterministic top-N retention independently to every
-primary or auxiliary sparse policy.
+the actual model generation, baseline, predicted quantile, assigned additional budget, retained starting visits, and
+final visits, so a game spanning a model transition remains unambiguous during materialization. Visit-count
+preprocessing applies deterministic top-N retention independently to every primary or auxiliary sparse policy.
 
 Chess resignation is an explicit calibrated self-play policy around this shared turn algorithm. Each completed
 search records the root value and the highest-visited child's exact Q converted to the root-player perspective.
@@ -1963,7 +1987,7 @@ The phase ends with current runtime behavior intact but configuration, progress,
 - replace file mailboxes with duplex multiprocessing connections;
 - implement desired running, paused, and stopped states;
 - replace both concrete active-game loops and game-specific self-play policies with the shared action-ID worker;
-- implement the specified opening, full/fast search, eligibility, temperature, greedy, root-reuse, terminal, and
+- implement the specified opening, learned-budget search, temperature, greedy, root-reuse, terminal, and
   generation-transition decisions in that worker;
 - make the shared worker publish completed records and replace finished slots;
 - combine generation statistics, model loading, tree reset, and acknowledgement into one transition;

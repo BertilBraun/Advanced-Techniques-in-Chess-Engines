@@ -177,9 +177,23 @@ def _measurement_positions(
     return tuple(positions)
 
 
-def _run_search_batch(search: NativeSelfPlaySearch, positions: tuple[ChessPosition, ...]) -> None:
+def _run_search_batch(
+    search: NativeSelfPlaySearch,
+    positions: tuple[ChessPosition, ...],
+    configuration: EvaluationSearchConfiguration,
+) -> None:
     roots = tuple(search.new_root(position) for position in positions)
-    search.search([search.request(root, True) for root in roots])
+    search.search(
+        [
+            search.request(
+                root,
+                assigned_additional_visits=configuration.searches_per_move,
+                parallel_searches=configuration.parallel_searches,
+                add_root_noise=False,
+            )
+            for root in roots
+        ]
+    )
 
 
 def _measure_throughput(
@@ -191,11 +205,11 @@ def _measure_throughput(
 ) -> ThroughputMeasurement:
     search = game.create_evaluation_search(device_id, checkpoint, configuration)
     for _ in range(THROUGHPUT_WARMUP_BATCHES):
-        _run_search_batch(search, positions)
+        _run_search_batch(search, positions, configuration)
     initial = search.inference_statistics()
     started_at = time.perf_counter()
     for _ in range(THROUGHPUT_MEASURED_BATCHES):
-        _run_search_batch(search, positions)
+        _run_search_batch(search, positions, configuration)
     elapsed_seconds = time.perf_counter() - started_at
     final = search.inference_statistics()
     inference_positions = final.modelInferencePositions - initial.modelInferencePositions

@@ -7,6 +7,7 @@ from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
 
 from src.games.implementation import GameImplementation
+from src.search_budget.calibration import CurvePublication
 from src.self_play.process_runtime import self_play_worker_main
 from src.self_play.protocol import (
     PausedSelfPlayState,
@@ -96,6 +97,7 @@ class SelfPlayGroup:
     def supervise(
         self,
         checkpoint: CheckpointReference,
+        search_budget: CurvePublication,
         resignation_policy: PublishedResignationPolicy,
     ) -> SelfPlaySupervision:
         """Reap dead workers and drive restarts forward without ever waiting on a worker."""
@@ -107,7 +109,7 @@ class SelfPlayGroup:
         for slot in self._slots:
             if slot.connection is None:
                 if now >= slot.next_restart_allowed_at:
-                    self._begin_restart(slot, checkpoint, resignation_policy, now)
+                    self._begin_restart(slot, checkpoint, search_budget, resignation_policy, now)
                 continue
             if slot.awaiting_handshake:
                 self._advance_restart(slot, now, restarted_worker_ids, failed_worker_ids)
@@ -135,6 +137,7 @@ class SelfPlayGroup:
         self,
         slot: SelfPlayWorkerSlot,
         checkpoint: CheckpointReference,
+        search_budget: CurvePublication,
         resignation_policy: PublishedResignationPolicy,
         now: float,
     ) -> None:
@@ -143,7 +146,13 @@ class SelfPlayGroup:
         slot.process = process
         slot.awaiting_handshake = True
         slot.handshake_deadline = now + RESTART_HANDSHAKE_TIMEOUT_SECONDS
-        connection.send(RunningSelfPlayState(checkpoint=checkpoint, resignation_policy=resignation_policy))
+        connection.send(
+            RunningSelfPlayState(
+                checkpoint=checkpoint,
+                search_budget=search_budget,
+                resignation_policy=resignation_policy,
+            )
+        )
 
     def _advance_restart(
         self,

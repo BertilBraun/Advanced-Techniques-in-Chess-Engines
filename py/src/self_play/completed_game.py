@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from math import isclose, isfinite
+from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
@@ -86,20 +86,8 @@ class TerminationReason(str, Enum):
 
 class SearchStopReason(str, Enum):
     FIXED_LIMIT = 'fixed_limit'
-    DETERMINISTIC = 'deterministic'
-    LEARNED_GATE = 'learned_gate'
-    MAXIMUM = 'maximum'
-
-
-class SearchCheckpointObservation(FrozenModel):
-    visits: int = Field(gt=0)
-    leader_action_id: int = Field(ge=0)
-    most_visited_action_id: int = Field(ge=0)
-    top_visit_share: float = Field(ge=0.0, le=1.0)
-    top_two_margin: float = Field(ge=0.0, le=1.0)
-    root_value: float = Field(ge=-1.0, le=1.0)
-    root_value_delta: float = Field(ge=0.0, le=2.0)
-    leader_stable: bool
+    ADDITIONAL_VISITS = 'additional_visits'
+    PREDICTED_BUDGET = 'predicted_budget'
 
 
 class SearchObservation(FrozenModel):
@@ -113,19 +101,19 @@ class SearchObservation(FrozenModel):
     highest_visited_child_visit_count: int = Field(gt=0)
     highest_visited_child_q: float
     selected_action_id: int | None = Field(default=None, ge=0)
-    full_search: bool
     sample_weight: float = Field(gt=0.0)
-    search_budget: int = Field(gt=0)
+    baseline_visits: int = Field(gt=0)
     network_root_value: float = Field(ge=-1.0, le=1.0)
     policy_correction: float = Field(ge=0.0, le=1.0)
     value_correction: float = Field(ge=0.0, le=1.0)
-    search_correction_target: float = Field(ge=0.0, le=1.0)
-    predicted_search_correction: float = Field(ge=0.0, le=1.0)
+    search_budget_logit: float
+    predicted_search_budget: float = Field(ge=0.0, le=1.0)
+    assigned_additional_visits: int = Field(gt=0)
+    parallel_searches: int = Field(gt=0, le=16)
+    spend_residual: int
     starting_visits: int = Field(ge=0)
     final_visits: int = Field(gt=0)
     stop_reason: SearchStopReason
-    learned_gate_evaluated: bool
-    checkpoints: tuple[SearchCheckpointObservation, ...] = ()
 
     def model_post_init(self, __context: object, /) -> None:
         if not isfinite(self.root_value) or not -1.0 <= self.root_value <= 1.0:
@@ -134,20 +122,14 @@ class SearchObservation(FrozenModel):
             raise ValueError('Highest-visited child Q must be finite and lie in [-1, 1].')
         if self.final_visits < self.starting_visits:
             raise ValueError('Final root visits cannot precede retained starting visits.')
-        if not isclose(
-            self.search_correction_target,
-            max(self.policy_correction, self.value_correction),
-            rel_tol=0.0,
-            abs_tol=1e-6,
-        ):
-            raise ValueError('Search-correction target must equal the larger recorded correction.')
-        checkpoint_visits = tuple(checkpoint.visits for checkpoint in self.checkpoints)
-        if checkpoint_visits != tuple(sorted(set(checkpoint_visits))):
-            raise ValueError('Adaptive search checkpoints must have unique increasing visit counts.')
+        if self.final_visits - self.starting_visits != self.assigned_additional_visits:
+            raise ValueError('Final visits must equal retained starting visits plus the assigned additional budget.')
+        if not isfinite(self.search_budget_logit):
+            raise ValueError('Search-budget logits must be finite.')
 
 
 class CompletedSelfPlayGame(FrozenModel):
-    schema_version: Literal[6] = 6
+    schema_version: Literal[7] = 7
     identity: GameIdentity
     created_at_seconds: float = Field(ge=0.0)
     generation_seconds: float = Field(ge=0.0)

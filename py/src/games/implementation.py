@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
+from src.search_budget.curve import SearchBudgetCurve, flat_curve
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
 from src.self_play.native_configuration import native_execution_options
 from src.self_play.parameters import (
-    AdaptiveFullSearchBudget,
-    FixedFullSearchBudget,
     ParentValueFirstPlayUrgencyParameters,
     ReducedParentValueFirstPlayUrgencyParameters,
     ResolvedSelfPlayParameters,
@@ -24,10 +24,37 @@ from src.util.generation_schedule import FloatGenerationSchedule
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import InferenceConfiguration, SelfPlaySearchParameters
-    from src.evaluation.configuration import EvaluationSearchConfiguration
+    from src.evaluation.configuration import EvaluationSearchConfiguration, EvaluationTreeSearchOverrides
     from src.self_play.native_search import NativeSelfPlaySearch
     from src.self_play.resignation import CalibratedResignationConfiguration
     from src.training.checkpoint import CheckpointReference
+
+
+def resolved_evaluation_parameters(
+    baseline: ResolvedSelfPlayParameters,
+    configuration: EvaluationSearchConfiguration,
+    model_generation: int,
+    overrides: EvaluationTreeSearchOverrides | None,
+) -> ResolvedSelfPlayParameters:
+    parameters = replace(
+        baseline,
+        baseline_visits=configuration.searches_per_move,
+        search_budget_curve=flat_curve(),
+        forced_playout_coefficient=0.0,
+        exploration_constant=configuration.resolved_exploration_constant,
+        first_play_urgency=(
+            baseline.first_play_urgency if overrides is None else overrides.first_play_urgency.resolve(model_generation)
+        ),
+        dirichlet_alpha=1.0,
+        dirichlet_epsilon=0.0,
+    )
+    if overrides is None:
+        return parameters
+    return replace(
+        parameters,
+        virtual_loss_weight=overrides.virtual_loss_weight,
+        value_discount_per_ply=overrides.value_discount_per_ply,
+    )
 
 
 PositionT = TypeVar('PositionT')
@@ -91,7 +118,11 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
         raise NotImplementedError
 
     @abstractmethod
-    def self_play_parameters_at(self, model_generation: int) -> ResolvedSelfPlayParameters:
+    def self_play_parameters_at(
+        self,
+        model_generation: int,
+        search_budget_curve: SearchBudgetCurve,
+    ) -> ResolvedSelfPlayParameters:
         raise NotImplementedError
 
     @property
@@ -121,14 +152,13 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:
         from AlphaZeroCpp import (
-            AdaptiveSearchLimit,
-            DisabledSearchCorrectionGate,
             FirstPlayUrgencyKind,
             FirstPlayUrgencyParameters,
-            FixedSearchLimit,
-            SearchCorrectionGate,
             SelfPlaySearchParameters,
             TreeSearchParameters,
+        )
+        from AlphaZeroCpp import (
+            SearchBudgetCurve as NativeSearchBudgetCurve,
         )
 
         match parameters.first_play_urgency:
@@ -142,37 +172,9 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
                     reduction,
                 )
 
-        match parameters.full_search_budget:
-            case FixedFullSearchBudget(visits=visits):
-                full_search_budget = FixedSearchLimit(visits)
-            case AdaptiveFullSearchBudget() as adaptive:
-                gate_visit = adaptive.minimum_visits + (adaptive.maximum_visits - adaptive.minimum_visits) // 2
-                gate = (
-                    DisabledSearchCorrectionGate()
-                    if adaptive.minimum_search_correction_to_unlock_tail is None
-                    else SearchCorrectionGate(
-                        gate_visit,
-                        adaptive.minimum_search_correction_to_unlock_tail,
-                    )
-                )
-                full_search_budget = AdaptiveSearchLimit(
-                    minimum_visits=adaptive.minimum_visits,
-                    maximum_visits=adaptive.maximum_visits,
-                    observation_interval=adaptive.observation_interval,
-                    leader_stability_window=adaptive.leader_stability_window,
-                    root_value_tolerance=adaptive.root_value_tolerance,
-                    initial_top_visit_share=adaptive.initial_top_visit_share,
-                    final_top_visit_share=adaptive.final_top_visit_share,
-                    initial_top_two_margin=adaptive.initial_top_two_margin,
-                    final_top_two_margin=adaptive.final_top_two_margin,
-                    threshold_relaxation_visits=adaptive.threshold_relaxation_visits,
-                    search_correction_gate=gate,
-                )
-
         return SelfPlaySearchParameters(
-            parallel_searches=parameters.parallel_searches,
-            full_search_budget=full_search_budget,
-            fast_searches=parameters.fast_searches,
+            baseline_visits=parameters.baseline_visits,
+            search_budget_curve=NativeSearchBudgetCurve(list(parameters.search_budget_curve.multipliers)),
             tree_search=TreeSearchParameters(
                 exploration_constant=parameters.exploration_constant,
                 first_play_urgency=first_play_urgency,
@@ -199,6 +201,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
         device_id: int,
         checkpoint: CheckpointReference,
         configuration: EvaluationSearchConfiguration,
+        tree_search: EvaluationTreeSearchOverrides | None = None,
     ) -> NativeSearchT:
         raise NotImplementedError
 

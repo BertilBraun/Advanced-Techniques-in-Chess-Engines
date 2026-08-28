@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "source_revision": "584fa684ab6f9206cfea66deec1ce2dfb1a9db34",
+  "tool_sha256": "195d399d1a711bc7105494aa405d399eb3e49a301bc556bc7af00c2b20b01935",
+  "matrix_path": "/workspace/search-eval/source/py/configs/evaluation/chess-search-arms-lowvisits-v1.json",
+  "matrix_sha256": "a20c6f7f28e7f0c8530cbd9ad0f2882f81557d1746c34dc5f5d69b6b3b541e8c",
+  "experiment_path": "/workspace/search-eval/source/py/configs/validation/vast-chess-4day-production-v9.yaml",
+  "run_directory": "/workspace/search-eval/run-state",
+  "checkpoint_generation": 162,
+  "opening_manifest_sha256": "ab15a513135c7aec3e19c0ce3b845e03c2f47a9a73f07a72f5a9ab4842470c1e",
+  "stockfish_identity": "Stockfish 13",
+  "stockfish_nodes": 1000,
+  "opening_pairs": 100,
+  "opening_selection_seed": 20260827,
+  "match_random_seed": 20260828,
+  "device": 0,
+  "concurrency": 6,
+  "bootstrap_samples": 20000,
+  "baseline_label": "lowvis-parallel-4",
+  "arms": [
+    {
+      "label": "lowvis-parallel-1",
+      "arm": {
+        "label": "lowvis-parallel-1",
+        "searches_per_move": 150,
+        "parallel_searches": 1,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 1.0,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/arm-matrix/lowvis-parallel-1/result.json",
+      "wins": 143,
+      "draws": 24,
+      "losses": 33,
+      "score": 0.775,
+      "score_confidence_low": 0.7275,
+      "score_confidence_high": 0.8225,
+      "duration_seconds": 431.7515224830713
+    },
+    {
+      "label": "lowvis-parallel-2",
+      "arm": {
+        "label": "lowvis-parallel-2",
+        "searches_per_move": 150,
+        "parallel_searches": 2,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 1.0,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/arm-matrix/lowvis-parallel-2/result.json",
+      "wins": 147,
+      "draws": 20,
+      "losses": 33,
+      "score": 0.785,
+      "score_confidence_low": 0.74,
+      "score_confidence_high": 0.83,
+      "duration_seconds": 427.70184014202096
+    },
+    {
+      "label": "lowvis-parallel-4",
+      "arm": {
+        "label": "lowvis-parallel-4",
+        "searches_per_move": 150,
+        "parallel_searches": 4,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 1.0,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/arm-matrix/lowvis-parallel-4/result.json",
+      "wins": 148,
+      "draws": 20,
+      "losses": 32,
+      "score": 0.79,
+      "score_confidence_low": 0.745,
+      "score_confidence_high": 0.835,
+      "duration_seconds": 425.9292410518974
+    },
+    {
+      "label": "lowvis-parallel-8",
+      "arm": {
+        "label": "lowvis-parallel-8",
+        "searches_per_move": 150,
+        "parallel_searches": 8,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 1.0,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/arm-matrix/lowvis-parallel-8/result.json",
+      "wins": 146,
+      "draws": 22,
+      "losses": 32,
+      "score": 0.785,
+      "score_confidence_low": 0.74,
+      "score_confidence_high": 0.83,
+      "duration_seconds": 420.7146999069955
+    },
+    {
+      "label": "lowvis-parallel-8-vlw-05",
+      "arm": {
+        "label": "lowvis-parallel-8-vlw-05",
+        "searches_per_move": 150,
+        "parallel_searches": 8,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 0.5,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/arm-matrix/lowvis-parallel-8-vlw-05/result.json",
+      "wins": 143,
+      "draws": 24,
+      "losses": 33,
+      "score": 0.775,
+      "score_confidence_low": 0.7275,
+      "score_confidence_high": 0.8225,
+      "duration_seconds": 421.59052439103834
+    },
+    {
+      "label": "lowvis-parallel-4-vlw-05",
+      "arm": {
+        "label": "lowvis-parallel-4-vlw-05",
+        "searches_per_move": 150,
+        "parallel_searches": 4,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 0.5,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/lowvisit-20260827T081239Z/arm-matrix/lowvis-parallel-4-vlw-05/result.json",
+      "wins": 145,
+      "draws": 22,
+      "losses": 33,
+      "score": 0.78,
+      "score_confidence_low": 0.7325,
+      "score_confidence_high": 0.8275,
+      "duration_seconds": 426.169824504992
+    }
+  ],
+  "paired_differences": [
+    {
+      "label": "lowvis-parallel-1",
+      "score_difference": -0.015,
+      "difference_confidence_low": -0.03,
+      "difference_confidence_high": 0.0,
+      "excludes_zero": false
+    },
+    {
+      "label": "lowvis-parallel-2",
+      "score_difference": -0.005,
+      "difference_confidence_low": -0.015,
+      "difference_confidence_high": 0.005,
+      "excludes_zero": false
+    },
+    {
+      "label": "lowvis-parallel-8",
+      "score_difference": -0.005,
+      "difference_confidence_low": -0.0125,
+      "difference_confidence_high": 0.0,
+      "excludes_zero": false
+    },
+    {
+      "label": "lowvis-parallel-8-vlw-05",
+      "score_difference": -0.015,
+      "difference_confidence_low": -0.03,
+      "difference_confidence_high": 0.0,
+      "excludes_zero": false
+    },
+    {
+      "label": "lowvis-parallel-4-vlw-05",
+      "score_difference": -0.01,
+      "difference_confidence_low": -0.0275,
+      "difference_confidence_high": 0.005,
+      "excludes_zero": false
+    }
+  ],
+  "duration_seconds": 437.1700183970388
+}

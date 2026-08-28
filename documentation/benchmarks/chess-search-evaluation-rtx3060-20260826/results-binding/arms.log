@@ -1,0 +1,7 @@
+bind-parallel-4: score 0.562 in 896 s
+bind-parallel-2: score 0.585 in 1310 s
+bind-parallel-8: score 0.550 in 762 s
+bind-parallel-1: score 0.613 in 1758 s
+bind-parallel-8-vlw-05: score 0.560 in 667 s
+bind-parallel-8-vlw-025: score 0.555 in 524 s
+/workspace/search-eval/output/binding-20260827T094006Z/arm-matrix/arm-matrix-result.json

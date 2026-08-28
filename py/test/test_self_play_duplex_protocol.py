@@ -14,6 +14,8 @@ import pytest
 import src.self_play.process_runtime as process_runtime_module
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
+from src.search_budget.calibration import CurveDecisionReason, CurvePublication
+from src.search_budget.curve import SearchBudgetCurve, analytic_initial_curve, flat_curve
 from src.self_play.process_runtime import self_play_worker_main
 from src.self_play.protocol import (
     PausedSelfPlayState,
@@ -74,7 +76,8 @@ class _Worker:
     def run_batch(self) -> None:
         pass
 
-    def refresh_published_model(self, checkpoint: CheckpointReference) -> None:
+    def refresh_published_model(self, checkpoint: CheckpointReference, search_budget_curve: SearchBudgetCurve) -> None:
+        assert search_budget_curve in {flat_curve(), analytic_initial_curve()}
         self.generation = checkpoint.generation
 
     def update_resignation_policy(self, policy: PublishedResignationPolicy) -> None:
@@ -82,6 +85,9 @@ class _Worker:
 
     def snapshot_statistics(self) -> None:
         assert self.generation == 0
+
+    def search_budget_spend_residual(self) -> int:
+        return -1
 
     def close(self) -> None:
         pass
@@ -151,6 +157,14 @@ def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:
     return checkpoint_reference(tmp_path, generation, write_inference_model=True)
 
 
+def _publication(generation: int, adaptive: bool = False) -> CurvePublication:
+    return CurvePublication(
+        curve=analytic_initial_curve() if adaptive else flat_curve(),
+        application_generation=generation,
+        decision_reason=CurveDecisionReason.VALIDATED_PENDING if adaptive else CurveDecisionReason.INITIAL,
+    )
+
+
 def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -188,7 +202,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     )
     process.start()
 
-    parent.send(RunningSelfPlayState(checkpoint=_checkpoint(tmp_path, 0)))
+    parent.send(RunningSelfPlayState(checkpoint=_checkpoint(tmp_path, 0), search_budget=_publication(0)))
     first = parent.recv()
     assert type(first) is RunningSelfPlayStateApplied
     assert first.loaded_generation == 0
@@ -198,6 +212,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     parent.send(
         RunningSelfPlayState(
             checkpoint=_checkpoint(tmp_path, 1),
+            search_budget=_publication(1, True),
             completed_generation_statistics=StatisticsLevel.DETAILED,
         )
     )
@@ -206,6 +221,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     assert transitioned.loaded_generation == 1
     assert transitioned.completed_generation_statistics is not None
     assert transitioned.completed_generation_statistics.completed_generation == 0
+    assert transitioned.completed_generation_statistics.search_budget_spend_residual == -1
 
     parent.send(StoppedSelfPlayState())
     stopped = parent.recv()
@@ -217,11 +233,16 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     assert observed_tensorboard_states == [True]
 
 
-def _applied(worker_id: int, checkpoint: CheckpointReference) -> RunningSelfPlayStateApplied:
+def _applied(
+    worker_id: int,
+    checkpoint: CheckpointReference,
+    search_budget: CurvePublication,
+) -> RunningSelfPlayStateApplied:
     return RunningSelfPlayStateApplied(
         worker_id=worker_id,
         loaded_generation=checkpoint.generation,
         loaded_inference_model_sha256=checkpoint.inference_model_sha256,
+        search_budget=search_budget,
         completed_generation_statistics=None,
     )
 
@@ -241,8 +262,9 @@ def test_group_restarts_only_exited_workers_at_active_checkpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     checkpoint = _checkpoint(tmp_path, 3)
+    search_budget = _publication(3)
     exited_connection = _Connection()
-    replacement_connection = _Connection(_applied(1, checkpoint))
+    replacement_connection = _Connection(_applied(1, checkpoint, search_budget))
     exited_process = _Process(alive=False)
     group = _group([_Connection(), exited_connection], [_Process(alive=True), exited_process])
 
@@ -253,11 +275,11 @@ def test_group_restarts_only_exited_workers_at_active_checkpoint(
     monkeypatch.setattr(group, '_start_worker', start_worker)
     policy = PublishedResignationPolicy()
 
-    assert group.supervise(checkpoint, policy) == SelfPlaySupervision((), ())
-    assert group.supervise(checkpoint, policy) == SelfPlaySupervision((), ())
-    assert group.supervise(checkpoint, policy) == SelfPlaySupervision((1,), ())
+    assert group.supervise(checkpoint, search_budget, policy) == SelfPlaySupervision((), ())
+    assert group.supervise(checkpoint, search_budget, policy) == SelfPlaySupervision((), ())
+    assert group.supervise(checkpoint, search_budget, policy) == SelfPlaySupervision((1,), ())
     assert exited_connection.closed
-    assert replacement_connection.sent == [RunningSelfPlayState(checkpoint=checkpoint)]
+    assert replacement_connection.sent == [RunningSelfPlayState(checkpoint=checkpoint, search_budget=search_budget)]
 
 
 def test_group_abandons_a_restart_whose_handshake_never_answers(
@@ -265,6 +287,7 @@ def test_group_abandons_a_restart_whose_handshake_never_answers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     checkpoint = _checkpoint(tmp_path, 3)
+    search_budget = _publication(3)
     group = _group([_Connection(), _Connection()], [_Process(alive=True), _Process(alive=False)])
     monkeypatch.setattr(
         group,
@@ -272,11 +295,11 @@ def test_group_abandons_a_restart_whose_handshake_never_answers(
         lambda worker_id, device_id: (cast(Connection, _Connection()), cast(BaseProcess, _Process(alive=True))),
     )
     policy = PublishedResignationPolicy()
-    group.supervise(checkpoint, policy)
-    group.supervise(checkpoint, policy)
+    group.supervise(checkpoint, search_budget, policy)
+    group.supervise(checkpoint, search_budget, policy)
     group._slots[1].handshake_deadline = 0.0
 
-    assert group.supervise(checkpoint, policy) == SelfPlaySupervision((), (1,))
+    assert group.supervise(checkpoint, search_budget, policy) == SelfPlaySupervision((), (1,))
     assert group.live_worker_count == 1
 
 
@@ -285,6 +308,7 @@ def test_group_backs_off_before_retrying_a_failed_restart(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     checkpoint = _checkpoint(tmp_path, 3)
+    search_budget = _publication(3)
     group = _group([_Connection()], [_Process(alive=False)])
     started_worker_ids: list[int] = []
 
@@ -296,17 +320,18 @@ def test_group_backs_off_before_retrying_a_failed_restart(
     monkeypatch.setattr(group, '_start_worker', start_worker)
     policy = PublishedResignationPolicy()
     for _ in range(4):
-        group.supervise(checkpoint, policy)
+        group.supervise(checkpoint, search_budget, policy)
 
     assert started_worker_ids == [0]
 
 
 def test_group_retires_a_worker_that_does_not_answer_an_applied_state(tmp_path: Path) -> None:
     checkpoint = _checkpoint(tmp_path, 3)
-    connections = [_Connection(_applied(0, checkpoint)), _Connection()]
+    search_budget = _publication(3)
+    connections = [_Connection(_applied(0, checkpoint, search_budget)), _Connection()]
     group = _group(connections, [_Process(alive=True), _Process(alive=True)])
 
-    responses = group.apply((RunningSelfPlayState(checkpoint=checkpoint),) * 2)
+    responses = group.apply((RunningSelfPlayState(checkpoint=checkpoint, search_budget=search_budget),) * 2)
 
     assert [response.worker_id for response in responses] == [0]
     assert group.live_worker_count == 1
@@ -314,10 +339,11 @@ def test_group_retires_a_worker_that_does_not_answer_an_applied_state(tmp_path: 
 
 def test_group_applies_state_only_to_selected_workers(tmp_path: Path) -> None:
     checkpoint = _checkpoint(tmp_path, 3)
-    connections = [_Connection(_applied(worker_id, checkpoint)) for worker_id in range(4)]
+    search_budget = _publication(3)
+    connections = [_Connection(_applied(worker_id, checkpoint, search_budget)) for worker_id in range(4)]
     group = _group(connections, [_Process(alive=True) for _ in range(4)])
 
-    desired_state = RunningSelfPlayState(checkpoint=checkpoint)
+    desired_state = RunningSelfPlayState(checkpoint=checkpoint, search_budget=search_budget)
     responses = group.apply_to_workers((1, 3), desired_state)
 
     assert [response.worker_id for response in responses] == [1, 3]

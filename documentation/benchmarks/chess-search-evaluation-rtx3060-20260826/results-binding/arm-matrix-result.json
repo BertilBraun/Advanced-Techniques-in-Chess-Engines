@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "source_revision": "584fa684ab6f9206cfea66deec1ce2dfb1a9db34",
+  "tool_sha256": "195d399d1a711bc7105494aa405d399eb3e49a301bc556bc7af00c2b20b01935",
+  "matrix_path": "/workspace/search-eval/source/py/configs/evaluation/chess-search-arms-binding-v1.json",
+  "matrix_sha256": "b565882d954b77b3baccf293a9dcb2ade64f3d7a1148bbe8bbd0997cae2f07c3",
+  "experiment_path": "/workspace/search-eval/source/py/configs/validation/vast-chess-4day-production-v9.yaml",
+  "run_directory": "/workspace/search-eval/run-state",
+  "checkpoint_generation": 162,
+  "opening_manifest_sha256": "ab15a513135c7aec3e19c0ce3b845e03c2f47a9a73f07a72f5a9ab4842470c1e",
+  "stockfish_identity": "Stockfish 13",
+  "stockfish_nodes": 3500,
+  "opening_pairs": 100,
+  "opening_selection_seed": 20260826,
+  "match_random_seed": 20260827,
+  "device": 0,
+  "concurrency": 3,
+  "bootstrap_samples": 20000,
+  "baseline_label": "bind-parallel-1",
+  "arms": [
+    {
+      "label": "bind-parallel-1",
+      "arm": {
+        "label": "bind-parallel-1",
+        "searches_per_move": 600,
+        "parallel_searches": 1,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 1.0,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/binding-20260827T094006Z/arm-matrix/bind-parallel-1/result.json",
+      "wins": 106,
+      "draws": 33,
+      "losses": 61,
+      "score": 0.6125,
+      "score_confidence_low": 0.5525,
+      "score_confidence_high": 0.6725,
+      "duration_seconds": 1758.2048467721324
+    },
+    {
+      "label": "bind-parallel-2",
+      "arm": {
+        "label": "bind-parallel-2",
+        "searches_per_move": 600,
+        "parallel_searches": 2,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 1.0,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/binding-20260827T094006Z/arm-matrix/bind-parallel-2/result.json",
+      "wins": 96,
+      "draws": 42,
+      "losses": 62,
+      "score": 0.585,
+      "score_confidence_low": 0.5225,
+      "score_confidence_high": 0.6475,
+      "duration_seconds": 1310.1232022759505
+    },
+    {
+      "label": "bind-parallel-4",
+      "arm": {
+        "label": "bind-parallel-4",
+        "searches_per_move": 600,
+        "parallel_searches": 4,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 1.0,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/binding-20260827T094006Z/arm-matrix/bind-parallel-4/result.json",
+      "wins": 89,
+      "draws": 47,
+      "losses": 64,
+      "score": 0.5625,
+      "score_confidence_low": 0.5025,
+      "score_confidence_high": 0.6225,
+      "duration_seconds": 895.7638401209842
+    },
+    {
+      "label": "bind-parallel-8",
+      "arm": {
+        "label": "bind-parallel-8",
+        "searches_per_move": 600,
+        "parallel_searches": 8,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 1.0,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/binding-20260827T094006Z/arm-matrix/bind-parallel-8/result.json",
+      "wins": 85,
+      "draws": 50,
+      "losses": 65,
+      "score": 0.55,
+      "score_confidence_low": 0.4925,
+      "score_confidence_high": 0.6075,
+      "duration_seconds": 761.6438010670245
+    },
+    {
+      "label": "bind-parallel-8-vlw-05",
+      "arm": {
+        "label": "bind-parallel-8-vlw-05",
+        "searches_per_move": 600,
+        "parallel_searches": 8,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 0.5,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/binding-20260827T094006Z/arm-matrix/bind-parallel-8-vlw-05/result.json",
+      "wins": 87,
+      "draws": 50,
+      "losses": 63,
+      "score": 0.56,
+      "score_confidence_low": 0.5025,
+      "score_confidence_high": 0.6175,
+      "duration_seconds": 667.3921348098665
+    },
+    {
+      "label": "bind-parallel-8-vlw-025",
+      "arm": {
+        "label": "bind-parallel-8-vlw-025",
+        "searches_per_move": 600,
+        "parallel_searches": 8,
+        "exploration_constant": 1.5,
+        "first_play_urgency": "reduced_parent_value",
+        "first_play_urgency_reduction": 0.2,
+        "virtual_loss_weight": 0.25,
+        "search_value_discount_per_ply": 0.99
+      },
+      "result_path": "/workspace/search-eval/output/binding-20260827T094006Z/arm-matrix/bind-parallel-8-vlw-025/result.json",
+      "wins": 92,
+      "draws": 38,
+      "losses": 70,
+      "score": 0.555,
+      "score_confidence_low": 0.49,
+      "score_confidence_high": 0.62,
+      "duration_seconds": 524.0963952380698
+    }
+  ],
+  "paired_differences": [
+    {
+      "label": "bind-parallel-2",
+      "score_difference": -0.0275,
+      "difference_confidence_low": -0.115,
+      "difference_confidence_high": 0.0575,
+      "excludes_zero": false
+    },
+    {
+      "label": "bind-parallel-4",
+      "score_difference": -0.05,
+      "difference_confidence_low": -0.1325,
+      "difference_confidence_high": 0.0325,
+      "excludes_zero": false
+    },
+    {
+      "label": "bind-parallel-8",
+      "score_difference": -0.0625,
+      "difference_confidence_low": -0.14,
+      "difference_confidence_high": 0.015,
+      "excludes_zero": false
+    },
+    {
+      "label": "bind-parallel-8-vlw-05",
+      "score_difference": -0.0525,
+      "difference_confidence_low": -0.1375,
+      "difference_confidence_high": 0.035,
+      "excludes_zero": false
+    },
+    {
+      "label": "bind-parallel-8-vlw-025",
+      "score_difference": -0.0575,
+      "difference_confidence_low": -0.1425,
+      "difference_confidence_high": 0.025,
+      "excludes_zero": false
+    }
+  ],
+  "duration_seconds": 2186.958443203941
+}

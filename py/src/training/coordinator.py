@@ -7,11 +7,20 @@ import numpy as np
 import torch
 from src.evaluation.manager import EvaluationManager
 from src.experiment.base_configuration import initial_generation
+from src.experiment.configuration import experiment_configuration_sha256
 from src.games.implementation import GameImplementation
 from src.replay.batch_loader import build_training_batch
 from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame, ReplayManager
 from src.replay.store import ReplayStore
+from src.search_budget.labeling import ExperimentReplaySampleProvider
+from src.search_budget.manager import (
+    FailedLabelJobReport,
+    GenerationLabelReport,
+    SearchBudgetLabelManager,
+    SkippedLabelJobReport,
+)
+from src.search_budget.worker import ConfiguredLabelWorkerRuntimeFactory
 from src.self_play.protocol import (
     RunningSelfPlayState,
     StatisticsLevel,
@@ -95,6 +104,20 @@ class Coordinator:
         )
         # Durable replay state is the credit ground truth across callbacks and restarts.
         self.ledger.reconcile_materialized_samples(self.replay_manager.total_materialized_samples())
+        label_sample_provider = ExperimentReplaySampleProvider(self.configuration.model_dump_json())
+        self.search_budget_label_manager = SearchBudgetLabelManager(
+            run_path=run_path,
+            configuration_sha256=experiment_configuration_sha256(self.configuration),
+            device_ids=training.topology.trainer.ddp_device_ids,
+            runtime_factory=ConfiguredLabelWorkerRuntimeFactory(self.configuration.model_dump_json()),
+            action_size=game.state.action_size,
+            maximum_policy_entries=training.lifecycle.replay.maximum_policy_entries,
+            sample_provider=label_sample_provider,
+            replay_writer=self.replay_manager.append_labelled_samples,
+            initial_first_unstarted_production_generation=self.ledger.model_generation + 1,
+            configuration=training.lifecycle.search_budget,
+        )
+        self._recover_search_budget_label_sources()
         self.self_play_group = SelfPlayGroup(game)
         self.self_play_health = SelfPlayHealthMonitor(self.self_play_group.worker_count)
         self.evaluation_manager = EvaluationManager(self.configuration, self.ledger.state.active_checkpoint)
@@ -124,6 +147,7 @@ class Coordinator:
                 self._append_staged_games()
                 self._apply_self_play_backpressure()
                 self.evaluation_manager.collect_completed_jobs()
+                self._collect_search_budget_label_jobs()
                 self._supervise_self_play()
                 self.final_stop_reason = self.run_limit_monitor.stop_reason() or self._self_play_stop_reason()
                 if self.final_stop_reason is not None:
@@ -142,15 +166,21 @@ class Coordinator:
             self.evaluation_manager.close()
             self.self_play_group.close()
             self.training_session.close()
+            self.search_budget_label_manager.close()
             self.replay_manager.close()
             self.game.close()
             self.ledger.save()
 
     def _start_self_play(self) -> None:
         checkpoint = self.ledger.state.active_checkpoint
+        search_budget = self.search_budget_label_manager.publication_for_starting_generation(checkpoint.generation)
         responses = self.self_play_group.apply(
             tuple(
-                RunningSelfPlayState(checkpoint=checkpoint, resignation_policy=self._resignation_policy())
+                RunningSelfPlayState(
+                    checkpoint=checkpoint,
+                    search_budget=search_budget,
+                    resignation_policy=self._resignation_policy(),
+                )
                 for _ in range(self.self_play_group.worker_count)
             )
         )
@@ -163,6 +193,7 @@ class Coordinator:
     def _supervise_self_play(self) -> None:
         supervision = self.self_play_group.supervise(
             self.ledger.state.active_checkpoint,
+            self.search_budget_label_manager.publication_for_generation(self.ledger.model_generation),
             self._resignation_policy(),
         )
         for worker_id in supervision.restarted_worker_ids:
@@ -223,16 +254,19 @@ class Coordinator:
             self._run_initialization_guard()
             self._initialization_guard_pending = False
         credit_wait_seconds = time.perf_counter() - self._credit_wait_started_at
+        source_checkpoint = self.ledger.state.active_checkpoint
+        self.replay_manager.ensure_label_source_cohort(source_checkpoint.generation)
         if self_play_started:
             self.self_play_group.request_pause(self._training_pause_worker_ids())
-        outcome = self.training_session.train_quantum(
-            TrainingSessionQuantum(
-                replay=self.replay_manager.description(),
-                progress=self.ledger.progress,
-                active_checkpoint=self.ledger.state.active_checkpoint,
-                elapsed_seconds=self.evaluation_manager.elapsed_seconds,
+        with self.replay_manager.training_snapshot() as replay:
+            outcome = self.training_session.train_quantum(
+                TrainingSessionQuantum(
+                    replay=replay,
+                    progress=self.ledger.progress,
+                    active_checkpoint=self.ledger.state.active_checkpoint,
+                    elapsed_seconds=self.evaluation_manager.elapsed_seconds,
+                )
             )
-        )
         publication = outcome.publication
         self.ledger.commit_checkpoint(publication.completed_optimizer_steps, publication.checkpoint)
         self.latest_completed_model_version = self.ledger.model_generation
@@ -241,9 +275,13 @@ class Coordinator:
         checkpoint_activation_started_at = time.perf_counter()
         if self_play_started:
             detailed_workers = self._detailed_statistics_workers()
+            search_budget = self.search_budget_label_manager.publication_for_starting_generation(
+                publication.checkpoint.generation
+            )
             desired_states = tuple(
                 RunningSelfPlayState(
                     checkpoint=publication.checkpoint,
+                    search_budget=search_budget,
                     resignation_policy=self._resignation_policy(),
                     completed_generation_statistics=(
                         StatisticsLevel.DETAILED if worker_id < detailed_workers else StatisticsLevel.BASIC
@@ -251,7 +289,17 @@ class Coordinator:
                 )
                 for worker_id in range(self.self_play_group.worker_count)
             )
-            self.self_play_group.apply(desired_states)
+            responses = self.self_play_group.apply(desired_states)
+            spend_residual = sum(
+                response.completed_generation_statistics.search_budget_spend_residual
+                for response in responses
+                if response.kind == 'running' and response.completed_generation_statistics is not None
+            )
+            log_scalar(
+                'search_budget/production/exact_generation_spend_residual',
+                spend_residual,
+                source_checkpoint.generation,
+            )
         checkpoint_activation_seconds = time.perf_counter() - checkpoint_activation_started_at
         if self_play_started:
             self._backpressure_pause_requested = False
@@ -266,6 +314,7 @@ class Coordinator:
             f'checkpoint-activation={checkpoint_activation_seconds:.1f}s, reporting={reporting_seconds:.1f}s.'
         )
         self._apply_checkpoint_retention()
+        self._enqueue_search_budget_label_source(source_checkpoint)
         self._credit_wait_started_at = time.perf_counter()
 
     def _report_training_outcome(self, outcome: TrainingSessionResult, credit_wait_seconds: float) -> None:
@@ -303,8 +352,10 @@ class Coordinator:
             self._resume_backpressure_paused_workers()
 
     def _resume_backpressure_paused_workers(self) -> None:
+        checkpoint = self.ledger.state.active_checkpoint
         state = RunningSelfPlayState(
-            checkpoint=self.ledger.state.active_checkpoint,
+            checkpoint=checkpoint,
+            search_budget=self.search_budget_label_manager.publication_for_generation(checkpoint.generation),
             resignation_policy=self._resignation_policy(),
         )
         self.self_play_group.apply_to_workers(self._topology_pause_worker_ids(), state)
@@ -328,10 +379,56 @@ class Coordinator:
         self.reporter.record_resignation(self.resignation_calibrator.diagnostics(), generation)
 
     def _apply_checkpoint_retention(self) -> None:
+        required_generations = tuple(
+            sorted(
+                set(self.evaluation_manager.required_checkpoint_generations)
+                | set(self.search_budget_label_manager.required_checkpoint_generations)
+            )
+        )
         self.checkpoint_retention.apply(
             self.ledger.model_generation,
-            self.evaluation_manager.required_checkpoint_generations,
+            required_generations,
         )
+
+    def _collect_search_budget_label_jobs(self) -> None:
+        for event in self.search_budget_label_manager.poll():
+            self.reporter.record_search_budget_label_event(event)
+            match event:
+                case GenerationLabelReport():
+                    log(
+                        f'Finalized search-budget label generation {event.source_generation}: '
+                        f'{event.replay_samples_written} replay samples, decision={event.decision_reason}, '
+                        f'published=[{event.minimum_published_multiplier:.4f}, '
+                        f'{event.maximum_published_multiplier:.4f}] '
+                        f'for production generation {event.application_generation}.'
+                    )
+                case FailedLabelJobReport():
+                    warn(f'Search-budget label generation {event.source_generation} failed closed: {event.failure}')
+                case SkippedLabelJobReport():
+                    log(f'Search-budget label generation {event.source_generation} skipped: {event.reason}.')
+
+    def _recover_search_budget_label_sources(self) -> None:
+        active_generation = self.ledger.model_generation
+        for source_generation in self.replay_manager.pending_label_source_generations:
+            if source_generation >= active_generation:
+                continue
+            checkpoint = CheckpointReference.load(Path(self.configuration.training.save_path), source_generation)
+            self._enqueue_search_budget_label_source(checkpoint)
+
+    def _enqueue_search_budget_label_source(self, checkpoint: CheckpointReference) -> None:
+        source_generation = checkpoint.generation
+        cohort = self.replay_manager.finalize_label_source_cohort(source_generation)
+        baseline_visits = self.game.self_play_configuration.search.baseline_visits.value_at(source_generation)
+        enqueue = self.search_budget_label_manager.enqueue_replay_generation(
+            source_generation=source_generation,
+            label_source_games=cohort.games,
+            checkpoint=checkpoint,
+            baseline_new_visits=baseline_visits,
+            run_seed=self.configuration.training.random_seed,
+        )
+        self.replay_manager.acknowledge_label_source_cohort(source_generation)
+        status = 'queued' if enqueue.accepted else 'skipped'
+        log(f'Search-budget label generation {source_generation} {status}.')
 
     def _detailed_statistics_workers(self) -> int:
         configured = self.game.self_play_configuration.detailed_statistics_workers

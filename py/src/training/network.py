@@ -22,7 +22,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
 )
 from src.util.frozen_model import FrozenModel
 from torch import Tensor, nn
@@ -343,7 +343,7 @@ class Network(nn.Module):
         fuse_conv_batchnorm(self)
 
 
-class ZeroSearchCorrectionHead(nn.Module):
+class ZeroSearchBudgetHead(nn.Module):
     def forward(self, features: Tensor) -> Tensor:
         return torch.zeros((features.shape[0], 1), dtype=features.dtype, device=features.device)
 
@@ -356,11 +356,11 @@ class InferenceNetwork(nn.Module):
         self.finish_block = copy.deepcopy(training_model.finish_block)
         self.policy_head = copy.deepcopy(training_model.policy_head)
         self.value_head = copy.deepcopy(training_model.value_head)
-        self.searchCorrectionHead = copy.deepcopy(_search_correction_head(training_model))
+        self.searchBudgetHead = copy.deepcopy(_search_budget_head(training_model))
         self.network_definition = NetworkDefinition(
             architecture=training_model.network_args,
             dimensions=training_model.dimensions,
-            auxiliary_heads=tuple(head for head in training_model.auxiliary_heads if head.kind == 'search_correction'),
+            auxiliary_heads=tuple(head for head in training_model.auxiliary_heads if head.kind == 'search_budget'),
         )
 
     def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor, Tensor]:
@@ -371,7 +371,7 @@ class InferenceNetwork(nn.Module):
         return (
             self.policy_head(features),
             torch.softmax(self.value_head(features), dim=1),
-            torch.sigmoid(self.searchCorrectionHead(features)),
+            self.searchBudgetHead(features),
         )
 
     @torch.jit.unused
@@ -533,12 +533,12 @@ def _conv_batchnorm_groups(module: nn.Sequential) -> list[list[str]]:
     return groups
 
 
-def _search_correction_head(training_model: Network) -> nn.Module:
+def _search_budget_head(training_model: Network) -> nn.Module:
     for index, head in enumerate(training_model.auxiliary_heads):
         match head:
-            case SearchCorrectionHeadLayout():
+            case SearchBudgetHeadLayout():
                 return training_model.auxiliary_head_modules[index]
-    return ZeroSearchCorrectionHead()
+    return ZeroSearchBudgetHead()
 
 
 class PolicyPlaneHead(nn.Module):
@@ -814,7 +814,7 @@ def _build_auxiliary_head(
                 policy_configuration,
                 plane_hidden_channels=POLICY_PLANE_AUXILIARY_HIDDEN_CHANNELS,
             )
-        case SearchCorrectionHeadLayout(output_size=output_size):
+        case SearchBudgetHeadLayout(output_size=output_size):
             return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
 
 

@@ -9,6 +9,7 @@ from src.util.tensorboard import (
     configure_tensorboard_run_directory,
     get_run_id,
     is_tensorboard_writer_active,
+    log_equal_width_histogram_summary,
     log_scalar,
     log_scalars,
 )
@@ -127,3 +128,34 @@ def test_tensorboard_writer_active_detection(
         assert not is_tensorboard_writer_active()
 
     assert not is_tensorboard_writer_active()
+
+
+def test_equal_width_histogram_summary_preserves_aggregate_distribution(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv('TRAINING_TENSORBOARD_LOG_PATH', str(tmp_path))
+    monkeypatch.delenv('TRAINING_TENSORBOARD_RUN_DIRECTORY', raising=False)
+
+    writer = TensorboardWriter(run=6, suffix='coordinator', postfix_pid=False)
+    with writer:
+        log_equal_width_histogram_summary(
+            'search_budget/label/target_quantile',
+            minimum=0.0,
+            maximum=1.0,
+            count=10,
+            mean=0.5,
+            variance=0.0825,
+            bucket_counts=(1,) * 10,
+            step=7,
+        )
+
+    accumulator = EventAccumulator(writer.log_folder).Reload()
+    histogram = accumulator.Histograms('search_budget/label/target_quantile')[0]
+    assert histogram.step == 7
+    assert histogram.histogram_value.min == 0.0
+    assert histogram.histogram_value.max == 1.0
+    assert histogram.histogram_value.num == 10.0
+    assert histogram.histogram_value.sum == 5.0
+    assert histogram.histogram_value.sum_squares == pytest.approx(3.325)
+    assert tuple(histogram.histogram_value.bucket) == (1.0,) * 10

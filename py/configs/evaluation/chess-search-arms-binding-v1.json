@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "description": "Parallelism and virtual loss measured where they actually bind. The scheduler hands each tree one in-flight descent per pass, so with more active trees than inference batch slots the parallel-search limit is never reached and the parameter is inert. Run with batch 1024 against about 100 active trees so a tree can hold up to ten descents in flight.",
+  "baseline_label": "bind-parallel-1",
+  "arms": [
+    {
+      "label": "bind-parallel-1",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 1,
+      "virtual_loss_weight": 1.0
+    },
+    {
+      "label": "bind-parallel-2",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 2,
+      "virtual_loss_weight": 1.0
+    },
+    {
+      "label": "bind-parallel-4",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 4,
+      "virtual_loss_weight": 1.0
+    },
+    {
+      "label": "bind-parallel-8",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 8,
+      "virtual_loss_weight": 1.0
+    },
+    {
+      "label": "bind-parallel-8-vlw-05",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 8,
+      "virtual_loss_weight": 0.5
+    },
+    {
+      "label": "bind-parallel-8-vlw-025",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "parallel_searches": 8,
+      "virtual_loss_weight": 0.25
+    }
+  ]
+}

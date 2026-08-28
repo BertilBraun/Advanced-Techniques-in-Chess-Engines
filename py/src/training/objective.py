@@ -13,7 +13,7 @@ from src.training.targets import (
     LegalMovesTargetConfiguration,
     NextPolicyTargetConfiguration,
     RemainingGameLengthTargetConfiguration,
-    SearchCorrectionTargetConfiguration,
+    SearchBudgetTargetConfiguration,
 )
 from src.util.frozen_model import FrozenModel
 from torch.nn import functional
@@ -83,8 +83,8 @@ class ResolvedLegalMovesLoss(FrozenModel):
     weight: float = Field(ge=0.0)
 
 
-class ResolvedSearchCorrectionLoss(FrozenModel):
-    kind: Literal['search_correction'] = 'search_correction'
+class ResolvedSearchBudgetLoss(FrozenModel):
+    kind: Literal['search_budget'] = 'search_budget'
     weight: float = Field(ge=0.0)
 
 
@@ -94,7 +94,7 @@ ResolvedAuxiliaryLoss: TypeAlias = Annotated[
     | ResolvedFutureSearchValueLoss
     | ResolvedIrreversibleProgressLoss
     | ResolvedLegalMovesLoss
-    | ResolvedSearchCorrectionLoss,
+    | ResolvedSearchBudgetLoss,
     Field(discriminator='kind'),
 ]
 
@@ -124,8 +124,8 @@ def resolve_auxiliary_losses(
                 losses.append(ResolvedIrreversibleProgressLoss(weight=loss_weight.value_at(model_generation)))
             case LegalMovesTargetConfiguration(loss_weight=loss_weight):
                 losses.append(ResolvedLegalMovesLoss(weight=loss_weight.value_at(model_generation)))
-            case SearchCorrectionTargetConfiguration(loss_weight=loss_weight):
-                losses.append(ResolvedSearchCorrectionLoss(weight=loss_weight.value_at(model_generation)))
+            case SearchBudgetTargetConfiguration(loss_weight=loss_weight):
+                losses.append(ResolvedSearchBudgetLoss(weight=loss_weight.value_at(model_generation)))
     return tuple(losses)
 
 
@@ -197,12 +197,18 @@ class ResolvedTrainingObjective(FrozenModel):
                     target,
                     reduction='none',
                 ).squeeze(1)
-            case ResolvedSearchCorrectionLoss():
-                rows = functional.smooth_l1_loss(
-                    torch.sigmoid(prediction),
-                    target,
-                    reduction='none',
-                ).squeeze(1)
+            case ResolvedSearchBudgetLoss():
+                eligible_rows = eligibility.to(dtype=torch.bool)
+                rows = torch.zeros(prediction.shape[0], dtype=prediction.dtype, device=prediction.device)
+                rows[eligible_rows] = (
+                    functional.l1_loss(
+                        torch.sigmoid(prediction[eligible_rows]),
+                        target[eligible_rows],
+                        reduction='none',
+                    )
+                    .squeeze(1)
+                    .to(dtype=rows.dtype)
+                )
             case ResolvedLegalMovesLoss():
                 element_loss = functional.binary_cross_entropy_with_logits(
                     prediction,
@@ -215,5 +221,5 @@ class ResolvedTrainingObjective(FrozenModel):
                 negative = (element_loss * illegal).sum(dim=1) / illegal.sum(dim=1).clamp_min(1)
                 rows = 0.5 * (positive + negative)
         eligible_weights = eligibility.to(dtype=rows.dtype) * sample_weights
-        denominator = eligible_weights.sum().clamp_min(1.0)
+        denominator = eligible_weights.sum().clamp_min(torch.finfo(rows.dtype).tiny)
         return (rows * eligible_weights).sum() / denominator

@@ -1,9 +1,10 @@
 # Four-day production v10 (2026-08-27) — schedule, inference and evaluation deltas on top of v9.
 #
-# Extends v9, so the diff is the whole content of this file. Architecture, search, targets,
-# resignation and early termination are inherited unchanged, so any difference against v9 is
-# attributable to what appears below. hardware.offer_id is inherited and must be updated to the node
-# actually rented.
+# Extends v9, so the diff is the whole content of this file. This file overrides the baseline visits,
+# replay ratio and replay capacity for all-position materialization while inheriting the settled
+# learned-budget calibration defaults. It adds the scalar target at weight 0.2 while preserving the
+# newer v10 model, inference, and evaluation changes. hardware.offer_id is inherited and must be
+# updated to the node actually rented.
 #
 # Learning rate — retain v9's observed 0.005 -> 0.004 -> 0.0034 path through generation 500, then
 # decay in measured stages to 0.0015 at generation 1500. V9's 15% drops at generations 500 and 600
@@ -51,15 +52,16 @@
 # generation 50 fixed top-1 >= 0.27 with Stockfish level 0 >= 0.5 would catch a bad head in about
 # three hours.
 #
-# Replay capacity. v9 ramped linearly 300k -> 2M over generations 0-100 and then held 2M flat for the
-# remaining ~95% of the run: a fixed window of ~15.6 generations of history against ~128k positions
-# generated per generation. v10 keeps generations 0-100 within a few percent of v9's ramp and lands
-# on exactly 2.0M at generation 100 — so the v9 yardstick comparison stays valid through the entire
-# region for which data exists — except for a tighter first ten generations, which flushes random
-# play faster. Past generation 100 the window grows stepwise and sublinearly to 5M, deliberately
-# slowly, because a larger window admits older and weaker games. maximum_capacity rises 2M -> 5M,
-# which sizes the preallocated replay file: confirm the on-disk footprint against minimum_disk_gib
-# before launching.
+# Replay and search spend. Removing fast/full admission materializes every played position, increasing
+# both row count and adjacent-position correlation. The replay ratio therefore falls from 8 to 5, and
+# the v10 capacity schedule doubles to preserve roughly the intended history horizon: 300k initially,
+# 4M at generation 100 and 10M at generation 1300. maximum_capacity preallocates a measured 15.52 GiB
+# replay file; the 50 GiB node gate leaves room for checkpoints, inbox traffic and transient label shards.
+# Baseline visits start at 400 from generation 0, then preserve v9's later 500-through-1200 schedule.
+# Learned allocation remains inactive for its first 30 complete label generations; until then every
+# position receives the generation baseline despite the live shadow calibration. Production label jobs
+# retain their final report, replay receipt and curve evidence while deleting the bulky immutable source
+# and shard payloads only after durable generation finalization.
 #
 # Auxiliary policy weight 0.1 -> 0.15, matching KataGo's w_opp for the same opponent-reply target
 # (arXiv:1902.10565 section 3.4). remaining_game_length stays at 0.1; KataGo publishes no comparable
@@ -87,6 +89,8 @@ extends: vast-chess-4day-production-v9.yaml
 run:
   run_name: vast-chess-4day-production-v10
   tensorboard_run_directory: vast-chess-4day-production-v10
+  hardware:
+    minimum_disk_gib: 50
 training:
   save_path: py/training_data/validation/vast-chess-4day-production-v10
   trainer:
@@ -106,18 +110,23 @@ training:
       capacity:
         kind: staged
         stages:
-          - {start_generation: 0, value: 150000}
-          - {start_generation: 5, value: 300000}
-          - {start_generation: 10, value: 500000}
-          - {start_generation: 20, value: 700000}
-          - {start_generation: 40, value: 1000000}
-          - {start_generation: 70, value: 1500000}
-          - {start_generation: 100, value: 2000000}
-          - {start_generation: 400, value: 2600000}
-          - {start_generation: 700, value: 3200000}
-          - {start_generation: 1000, value: 4000000}
-          - {start_generation: 1300, value: 5000000}
-      maximum_capacity: 5000000
+          - {start_generation: 0, value: 300000}
+          - {start_generation: 5, value: 600000}
+          - {start_generation: 10, value: 1000000}
+          - {start_generation: 20, value: 1400000}
+          - {start_generation: 40, value: 2000000}
+          - {start_generation: 70, value: 3000000}
+          - {start_generation: 100, value: 4000000}
+          - {start_generation: 400, value: 5200000}
+          - {start_generation: 700, value: 6400000}
+          - {start_generation: 1000, value: 8000000}
+          - {start_generation: 1300, value: 10000000}
+      maximum_capacity: 10000000
+    credit:
+      replay_ratio: 5
+    search_budget:
+      labeling:
+        artifact_retention: remove_bulky_after_finalization
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v10.stop
   progressive_model_sizing:
@@ -158,6 +167,17 @@ training:
       maximum_relative_loss: 1.01
 chess:
   self_play:
+    search:
+      baseline_visits:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 400}
+          - {start_generation: 50, value: 500}
+          - {start_generation: 90, value: 600}
+          - {start_generation: 180, value: 700}
+          - {start_generation: 250, value: 800}
+          - {start_generation: 550, value: 1000}
+          - {start_generation: 1200, value: 1200}
     inference:
       precision: bfloat16
       memory_format: channels_last
@@ -170,6 +190,8 @@ chess:
       - kind: remaining_game_length
         loss_weight: 0.1
         normalization_scale: 400.0
+      - kind: search_budget
+        loss_weight: 0.2
 evaluation:
   maximum_concurrent_jobs: 16
   definitions:

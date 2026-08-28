@@ -110,7 +110,7 @@ class BatchOneEvaluator:
             representation.scalar_channels,
         )
         inputs = torch.from_numpy(decoded).unsqueeze(0).to(self._device, dtype=torch.float32)
-        policy, wdl, _search_correction = self._model(inputs)
+        policy, wdl, _search_budget_logit = self._model(inputs)
         if self._device.type == 'cuda':
             torch.cuda.synchronize(self._device)
         self.inference_calls += 1

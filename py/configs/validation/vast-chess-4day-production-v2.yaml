@@ -4,8 +4,8 @@
 # searches/s at the best per-game pace, sweep table in .codex-diagnostics); parallel searches
 # 2 -> 3@30 -> 4@60; bottleneck head prior re-centred (logit std 13-32 across seeds).
 # Carried from v1: dense ch4+rank96 head, search discount 0.99/target 1.0, aux next_policy +
-# remaining_game_length (permanent) + search_correction, adaptive budget (caps = 1.25x the visit
-# means), virtual loss 0.5, Syzygy, compilation. Judged by wall-clock evaluation curves.
+# remaining_game_length (permanent), virtual loss 0.5, Syzygy, and compilation. The current
+# configuration uses the learned search-budget target and the former maximum-visit schedule.
 extends: vast-chess-8gpu-exp1-planehead.yaml
 
 run:
@@ -82,44 +82,17 @@ chess:
       maximum_relaxation_per_generation: 0.01
     search:
       virtual_loss_weight: 0.5
-      full_search_budget:
-        kind: adaptive
-        minimum_visits: 200
-        maximum_visits:
-          kind: staged
-          stages:
-            - {start_generation: 0, value: 250}
-            - {start_generation: 5, value: 375}
-            - {start_generation: 20, value: 500}
-            - {start_generation: 30, value: 625}
-            - {start_generation: 60, value: 750}
-            - {start_generation: 120, value: 875}
-            - {start_generation: 165, value: 1000}
-            - {start_generation: 365, value: 1250}
-        observation_interval: 100
-        leader_stability_window: 200
-        root_value_tolerance: 0.04
-        initial_top_visit_share: 0.7
-        final_top_visit_share: 0.5
-        initial_top_two_margin: 0.45
-        final_top_two_margin: 0.15
-        threshold_relaxation_visits: 1200
-        learned_gate_start_generation: 30
-        minimum_search_correction_to_unlock_tail: 0.4
-      fast_searches:
+      baseline_visits:
         kind: staged
         stages:
-          - {start_generation: 0, value: 50}
-          - {start_generation: 5, value: 75}
-          - {start_generation: 20, value: 100}
-          - {start_generation: 30, value: 125}
-          - {start_generation: 60, value: 150}
-      parallel_searches:
-        kind: staged
-        stages:
-          - {start_generation: 0, value: 2}
-          - {start_generation: 30, value: 3}
-          - {start_generation: 60, value: 4}
+          - {start_generation: 0, value: 250}
+          - {start_generation: 5, value: 375}
+          - {start_generation: 20, value: 500}
+          - {start_generation: 30, value: 625}
+          - {start_generation: 60, value: 750}
+          - {start_generation: 120, value: 875}
+          - {start_generation: 165, value: 1000}
+          - {start_generation: 365, value: 1250}
     inference:
       # One worker: submission is a graph launch now, so a second worker has nothing to overlap,
       # and two capturing workers in one process fault the device.
@@ -140,13 +113,6 @@ chess:
       minimum_remaining_plies: 15
       maximum_archive_positions: 50000
       maximum_age_generations: 25
-    full_search_probability:
-      kind: linear
-      start_generation: 0
-      end_generation: 45
-      start_value: 1.0
-      end_value: 0.25
-      rounding: none
     greedy_after_ply:
       kind: staged
       stages:
@@ -176,6 +142,6 @@ chess:
       - kind: remaining_game_length
         loss_weight: 0.1
         normalization_scale: 400.0
-      - kind: search_correction
-        loss_weight: 0.05
+      - kind: search_budget
+        loss_weight: 0.2
 

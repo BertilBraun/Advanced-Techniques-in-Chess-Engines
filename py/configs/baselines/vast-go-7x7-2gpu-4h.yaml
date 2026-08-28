@@ -82,6 +82,7 @@ training:
     inference_retention:
       recent_checkpoint_count: 11
       milestone_interval: 10
+    search_budget: {}
   limits:
     hourly_price: 0.11522222222222216
     maximum_wall_time_seconds: 14700
@@ -159,11 +160,7 @@ evaluation:
 go:
   self_play:
     search:
-      full_search_budget:
-        kind: fixed
-        visits: 256
-      fast_searches: 32
-      parallel_searches: 1
+      baseline_visits: 256
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
       exploration_constant: 1.5
@@ -178,7 +175,6 @@ go:
     start_position:
       kind: random_opening
       maximum_plies: 0
-    full_search_probability: 1.0
     retained_root_visit_fraction: 0.0
     greedy_after_ply: 40
     starting_temperature: 1.0
@@ -199,4 +195,6 @@ go:
     value_loss_weight: 1.0
     root_value_blend: 0.0
     value_discount_per_ply: 1.0
-    auxiliary_targets: []
+    auxiliary_targets:
+      - kind: search_budget
+        loss_weight: 0.2

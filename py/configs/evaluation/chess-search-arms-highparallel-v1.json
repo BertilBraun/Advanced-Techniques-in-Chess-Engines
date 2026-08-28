@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "description": "Where does parallelism start to cost strength? Extends the 600-visit grid past 16. Seeds and opening selection match the overnight matrix so every arm is paired against those results; parallel 8 and 16 are replicated as a cross-run control.",
+  "baseline_label": "hipar-parallel-8",
+  "arms": [
+    {
+      "label": "hipar-parallel-8",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "virtual_loss_weight": 1.0,
+      "parallel_searches": 8
+    },
+    {
+      "label": "hipar-parallel-16",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "virtual_loss_weight": 1.0,
+      "parallel_searches": 16
+    },
+    {
+      "label": "hipar-parallel-32",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "virtual_loss_weight": 1.0,
+      "parallel_searches": 32
+    },
+    {
+      "label": "hipar-parallel-64",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "virtual_loss_weight": 1.0,
+      "parallel_searches": 64
+    },
+    {
+      "label": "hipar-parallel-128",
+      "searches_per_move": 600,
+      "exploration_constant": 1.5,
+      "first_play_urgency": "reduced_parent_value",
+      "first_play_urgency_reduction": 0.2,
+      "search_value_discount_per_ply": 0.99,
+      "virtual_loss_weight": 1.0,
+      "parallel_searches": 128
+    }
+  ]
+}

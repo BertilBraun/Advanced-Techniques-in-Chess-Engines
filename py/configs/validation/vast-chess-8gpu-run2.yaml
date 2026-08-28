@@ -45,32 +45,17 @@ chess:
     search:
       # Adaptive budget parameters carried from the last committed adaptive configuration (61d31c45 /
       # e48b0376^) with the maximum-visit schedule matched to Run 1's fixed schedule; open decision.
-      full_search_budget:
-        kind: adaptive
-        minimum_visits: 200
-        maximum_visits:
-          kind: staged
-          stages:
-            - {start_generation: 0, value: 200}
-            - {start_generation: 10, value: 300}
-            - {start_generation: 30, value: 400}
-            - {start_generation: 50, value: 500}
-            - {start_generation: 90, value: 600}
-            - {start_generation: 180, value: 700}
-            - {start_generation: 250, value: 800}
-            - {start_generation: 550, value: 1000}
-        observation_interval: 100
-        leader_stability_window: 200
-        root_value_tolerance: 0.04
-        initial_top_visit_share: 0.7
-        final_top_visit_share: 0.5
-        initial_top_two_margin: 0.45
-        final_top_two_margin: 0.15
-        threshold_relaxation_visits: 1200
-        learned_gate_start_generation: 50
-        minimum_search_correction_to_unlock_tail: 0.4
-    # WP3 key — early termination with material-heuristic/Syzygy adjudication and censored
-    # remaining-game-length targets on cut games; ply values are a proposal, resolves after phase-a merge.
+      baseline_visits:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 200}
+          - {start_generation: 10, value: 300}
+          - {start_generation: 30, value: 400}
+          - {start_generation: 50, value: 500}
+          - {start_generation: 90, value: 600}
+          - {start_generation: 180, value: 700}
+          - {start_generation: 250, value: 800}
+          - {start_generation: 550, value: 1000}
     early_termination:
       maximum_game_plies:
         kind: staged
@@ -96,5 +81,5 @@ chess:
         loss_weight: 0.0125
       - kind: legal_moves
         loss_weight: 0.0125
-      - kind: search_correction
-        loss_weight: 0.05
+      - kind: search_budget
+        loss_weight: 0.2

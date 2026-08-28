@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from typing import Literal, TypeAlias
 
 from src.games.contracts import WdlTarget
@@ -55,7 +56,7 @@ class IneligibleRemainingGameLengthTarget:
 
 @dataclass(frozen=True)
 class EligibleScalarAuxiliaryTarget:
-    kind: Literal['future_search_value', 'irreversible_progress', 'search_correction']
+    kind: Literal['future_search_value', 'irreversible_progress']
     value: float
     eligible: Literal[True] = True
 
@@ -63,6 +64,41 @@ class EligibleScalarAuxiliaryTarget:
 @dataclass(frozen=True)
 class IneligibleScalarAuxiliaryTarget:
     kind: Literal['future_search_value', 'irreversible_progress']
+    eligible: Literal[False] = False
+
+
+@dataclass(frozen=True)
+class EligibleSearchBudgetTarget:
+    normalized_target: float
+    raw_kl: float
+    prediction_logit: float
+    predicted_quantile: float
+    source_generation: int
+    model_generation: int
+    inference_model_sha256: str
+    kind: Literal['search_budget'] = 'search_budget'
+    eligible: Literal[True] = True
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.normalized_target) or not 0.0 <= self.normalized_target <= 1.0:
+            raise ValueError('Search-budget targets must lie in [0, 1].')
+        if not isfinite(self.raw_kl) or self.raw_kl < 0.0:
+            raise ValueError('Search-budget raw KL must be finite and nonnegative.')
+        if not isfinite(self.prediction_logit):
+            raise ValueError('Search-budget prediction logits must be finite.')
+        if not isfinite(self.predicted_quantile) or not 0.0 <= self.predicted_quantile <= 1.0:
+            raise ValueError('Search-budget predicted quantiles must lie in [0, 1].')
+        if self.source_generation < 0 or self.model_generation < 0:
+            raise ValueError('Search-budget source and model generations must be nonnegative.')
+        if len(self.inference_model_sha256) != 64 or any(
+            character not in '0123456789abcdef' for character in self.inference_model_sha256
+        ):
+            raise ValueError('Search-budget model lineage must be a lowercase SHA-256 digest.')
+
+
+@dataclass(frozen=True)
+class IneligibleSearchBudgetTarget:
+    kind: Literal['search_budget'] = 'search_budget'
     eligible: Literal[False] = False
 
 
@@ -79,6 +115,8 @@ AuxiliaryReplayTarget: TypeAlias = (
     | IneligibleRemainingGameLengthTarget
     | EligibleScalarAuxiliaryTarget
     | IneligibleScalarAuxiliaryTarget
+    | EligibleSearchBudgetTarget
+    | IneligibleSearchBudgetTarget
     | EligibleLegalMovesTarget
 )
 

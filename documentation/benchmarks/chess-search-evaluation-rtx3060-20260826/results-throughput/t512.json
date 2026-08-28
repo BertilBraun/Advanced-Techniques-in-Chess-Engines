@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "source_revision": "584fa684ab6f9206cfea66deec1ce2dfb1a9db34",
+  "tool_sha256": "7a302c0ecbb619084cb989bed0356372bfcce9a255540df2a79eb79c64753c78",
+  "model_sha256": "a61e850264c71c9c4fd38f0f9660b64b6737052b0516245a34b4e79f3f098571",
+  "generation": 162,
+  "visits": 600,
+  "inference_batch_size": 320,
+  "exploration_constant": 1.5,
+  "forced_playout_coefficient": 1.5,
+  "measurements": [
+    {
+      "parallel_searches": 1,
+      "virtual_loss_weight": 1.0,
+      "trees": 512,
+      "inference_capacity": 640,
+      "simulations": 307200,
+      "elapsed_seconds": 10.241392269032076,
+      "simulations_per_second": 29995.92164132912,
+      "average_batch_size": 250.52578735351562,
+      "batch_occupancy": 0.7828930854797364,
+      "inference_calls": 1202
+    },
+    {
+      "parallel_searches": 2,
+      "virtual_loss_weight": 1.0,
+      "trees": 512,
+      "inference_capacity": 640,
+      "simulations": 307200,
+      "elapsed_seconds": 9.820332300150767,
+      "simulations_per_second": 31282.037166429054,
+      "average_batch_size": 319.6847229003906,
+      "batch_occupancy": 0.9990147590637207,
+      "inference_calls": 942
+    },
+    {
+      "parallel_searches": 4,
+      "virtual_loss_weight": 1.0,
+      "trees": 512,
+      "inference_capacity": 640,
+      "simulations": 307200,
+      "elapsed_seconds": 9.885702954838052,
+      "simulations_per_second": 31075.180126634965,
+      "average_batch_size": 319.6847229003906,
+      "batch_occupancy": 0.9990147590637207,
+      "inference_calls": 942
+    },
+    {
+      "parallel_searches": 8,
+      "virtual_loss_weight": 1.0,
+      "trees": 512,
+      "inference_capacity": 640,
+      "simulations": 307200,
+      "elapsed_seconds": 9.805247168056667,
+      "simulations_per_second": 31330.16381277872,
+      "average_batch_size": 319.6847229003906,
+      "batch_occupancy": 0.9990147590637207,
+      "inference_calls": 942
+    },
+    {
+      "parallel_searches": 16,
+      "virtual_loss_weight": 1.0,
+      "trees": 512,
+      "inference_capacity": 640,
+      "simulations": 307200,
+      "elapsed_seconds": 9.827120696892962,
+      "simulations_per_second": 31260.428102519116,
+      "average_batch_size": 319.6847229003906,
+      "batch_occupancy": 0.9990147590637207,
+      "inference_calls": 942
+    }
+  ]
+}

@@ -14,7 +14,6 @@ from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.manager import IngestedCompletedGame
 from src.self_play.completed_game import (
-    SearchCheckpointObservation,
     SearchObservation,
     SearchStopReason,
     SearchVisitCounts,
@@ -25,8 +24,8 @@ from src.training.credit_ledger import CreditLedgerState
 from src.training.reporting import TrainingReporter
 from src.training.targets import TrainingTargetLayout
 from src.training.telemetry import (
-    adaptive_search_telemetry,
     completed_game_length_telemetry,
+    search_budget_telemetry,
     training_lifecycle_telemetry,
 )
 from test_helpers.checkpoints import checkpoint_reference
@@ -105,35 +104,13 @@ def test_completed_game_length_telemetry_omits_empty_windows() -> None:
     assert completed_game_length_telemetry(()) is None
 
 
-def test_adaptive_search_telemetry_omits_windows_without_full_searches() -> None:
+def test_search_budget_telemetry_omits_windows_without_observations() -> None:
     games = (IngestedCompletedGame(length_plies=10, termination_reason=TerminationReason.NATURAL),)
 
-    assert adaptive_search_telemetry(games) is None
+    assert search_budget_telemetry(games) is None
 
 
-def test_adaptive_search_telemetry_reports_scalar_checkpoints_and_gate_outcome() -> None:
-    checkpoints = (
-        SearchCheckpointObservation(
-            visits=400,
-            leader_action_id=1,
-            most_visited_action_id=2,
-            top_visit_share=0.4,
-            top_two_margin=0.1,
-            root_value=0.2,
-            root_value_delta=2.0,
-            leader_stable=False,
-        ),
-        SearchCheckpointObservation(
-            visits=500,
-            leader_action_id=2,
-            most_visited_action_id=2,
-            top_visit_share=0.5,
-            top_two_margin=0.2,
-            root_value=0.22,
-            root_value_delta=0.02,
-            leader_stable=False,
-        ),
-    )
+def test_search_budget_telemetry_reports_prediction_allocation_and_residual() -> None:
     observation = SearchObservation(
         ply=0,
         model_generation=50,
@@ -143,19 +120,19 @@ def test_adaptive_search_telemetry_reports_scalar_checkpoints_and_gate_outcome()
         highest_visited_child_visit_count=500,
         highest_visited_child_q=0.2,
         selected_action_id=2,
-        full_search=True,
         sample_weight=1.0,
-        search_budget=800,
+        baseline_visits=800,
         network_root_value=0.1,
         policy_correction=0.3,
         value_correction=0.06,
-        search_correction_target=0.3,
-        predicted_search_correction=0.7,
-        starting_visits=0,
+        search_budget_logit=0.85,
+        predicted_search_budget=0.7,
+        assigned_additional_visits=700,
+        parallel_searches=4,
+        spend_residual=-2,
+        starting_visits=100,
         final_visits=800,
-        stop_reason=SearchStopReason.MAXIMUM,
-        learned_gate_evaluated=True,
-        checkpoints=checkpoints,
+        stop_reason=SearchStopReason.PREDICTED_BUDGET,
     )
     games = (
         IngestedCompletedGame(
@@ -165,15 +142,18 @@ def test_adaptive_search_telemetry_reports_scalar_checkpoints_and_gate_outcome()
         ),
     )
 
-    telemetry = adaptive_search_telemetry(games)
+    telemetry = search_budget_telemetry(games)
 
     assert telemetry is not None
-    assert telemetry.checkpoint_visits == (400, 500)
-    assert telemetry.checkpoint_top_visit_shares == (0.4, 0.5)
-    assert telemetry.leader_changes == 1
-    assert telemetry.learned_gate_evaluations == 1
-    assert telemetry.learned_gate_denials == 0
-    assert telemetry.learned_gate_unlocks == 1
+    assert telemetry.baseline_visits == (800,)
+    assert telemetry.assigned_additional_visits == (700,)
+    assert telemetry.search_budget_logits == (0.85,)
+    assert telemetry.predicted_search_budgets == (0.7,)
+    assert telemetry.parallel_searches == (4,)
+    assert telemetry.spend_residuals == (-2,)
+    assert telemetry.starting_visits == (100,)
+    assert telemetry.final_visits == (800,)
+    assert dict(telemetry.stop_reasons)[SearchStopReason.PREDICTED_BUDGET] == 1
 
 
 def test_training_reporter_logs_completed_game_length_window(monkeypatch: pytest.MonkeyPatch) -> None:

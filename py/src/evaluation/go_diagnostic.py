@@ -133,7 +133,9 @@ class ProjectModelDiagnosticSelector:
     ) -> None:
         self._engine = engine
         self._selector = SearchActionSelector(
-            game.create_evaluation_search(device_id, engine.checkpoint, engine.search)
+            game.create_evaluation_search(device_id, engine.checkpoint, engine.search),
+            engine.search.searches_per_move,
+            engine.search.parallel_searches,
         )
 
     @property

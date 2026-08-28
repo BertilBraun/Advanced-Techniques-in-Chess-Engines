@@ -238,8 +238,6 @@ def _eligible_positions(
     for observation in game.observations:
         if observation.ply >= len(game.action_ids):
             continue
-        if not observation.full_search:
-            continue
         if len(game.action_ids) - observation.ply < parameters.minimum_remaining_plies:
             continue
         if abs(observation.root_value) > parameters.maximum_absolute_root_value:

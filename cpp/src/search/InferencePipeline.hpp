@@ -27,7 +27,7 @@
 struct InferenceOutput {
     torch::Tensor policies;
     torch::Tensor outcomes;
-    torch::Tensor search_corrections;
+    torch::Tensor search_budgets;
 };
 
 class InferenceCompletion {
@@ -56,8 +56,7 @@ private:
 
 template <SearchGame Game>
 [[nodiscard]] SearchInferenceResult<Game>
-processInferencePosition(const float *policy, const float *outcome,
-                         const float searchCorrection,
+processInferencePosition(const float *policy, const float *outcome, const float searchBudget,
                          const typename Game::State &position);
 
 using PreparedInferenceModel = std::unique_ptr<torch::jit::script::Module>;
@@ -119,8 +118,8 @@ private:
 #endif
     void releaseBatchGraphs() noexcept;
     [[nodiscard]] size_t capturedBatchSize(size_t batchSize) const noexcept;
-    void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize,
-                     InferenceOutput &output, InferenceCompletion &completion);
+    void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize, InferenceOutput &output,
+                     InferenceCompletion &completion);
 
     const torch::Device m_device;
     const InferenceExecutionOptions m_executionOptions;
@@ -180,12 +179,12 @@ public:
             results.reserve(positions.size());
             const float *policies = output.policies.data_ptr<float>();
             const float *outcomes = output.outcomes.data_ptr<float>();
-            const float *searchCorrections = output.search_corrections.data_ptr<float>();
+            const float *searchBudgets = output.search_budgets.data_ptr<float>();
             const InferenceDimensions dimensions = Game::Encoding::inferenceDimensions();
             for (const auto row : range(positions.size())) {
                 results.push_back(processInferencePosition<Game>(
                     policies + row * dimensions.actions, outcomes + row * dimensions.outcomes,
-                    searchCorrections[row], positions[row]));
+                    searchBudgets[row], positions[row]));
             }
             release(slotIndex);
             return results;
@@ -247,8 +246,7 @@ private:
 
 template <SearchGame Game>
 [[nodiscard]] SearchInferenceResult<Game>
-processInferencePosition(const float *policy, const float *outcome,
-                         const float searchCorrection,
+processInferencePosition(const float *policy, const float *outcome, const float searchBudget,
                          const typename Game::State &position) {
     const float win = outcome[static_cast<std::size_t>(WdlIndex::Win)];
     const float draw = outcome[static_cast<std::size_t>(WdlIndex::Draw)];
@@ -257,8 +255,8 @@ processInferencePosition(const float *policy, const float *outcome,
         draw < 0.0F || loss < 0.0F || std::abs(win + draw + loss - 1.0F) > 1e-2F) {
         throw std::runtime_error("Inference model WDL output must be three probabilities");
     }
-    if (!std::isfinite(searchCorrection) || searchCorrection < 0.0F || searchCorrection > 1.0F) {
-        throw std::runtime_error("Inference model search correction must lie in [0, 1]");
+    if (!std::isfinite(searchBudget)) {
+        throw std::runtime_error("Inference model search-budget logit must be finite");
     }
 
     const std::vector<typename Game::Action> legalActions = Game::legalActions(position);
@@ -294,6 +292,9 @@ processInferencePosition(const float *policy, const float *outcome,
     return {
         .actions = std::move(actions),
         .outcome = {.win = win, .draw = draw, .loss = loss},
-        .search_correction = searchCorrection,
+        .search_budget_logit = searchBudget,
+        .search_budget = searchBudget >= 0.0F
+                             ? 1.0F / (1.0F + std::exp(-searchBudget))
+                             : std::exp(searchBudget) / (1.0F + std::exp(searchBudget)),
     };
 }

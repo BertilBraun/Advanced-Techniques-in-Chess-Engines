@@ -1,0 +1,86 @@
+# Three-hour, two-RTX-3060 integration smoke for the learned search-budget lifecycle.
+#
+# This preserves v10's model, search-budget defaults, baseline-visit schedule, and search behavior.
+# At 408 optimizer steps, global batch 512, and replay ratio 8, each generation requires 26,112 new
+# positions; the fixed 2% label sample is therefore 522 positions and spans two execution shards.
+extends: vast-chess-4day-production-v10.yaml
+run:
+  run_name: vast-chess-adaptive-budget-2gpu-smoke-r5
+  tensorboard_run_directory: vast-chess-adaptive-budget-2gpu-smoke-r5
+  hardware:
+    provider_name: vast.ai
+    offer_id: instance-49004012-machine-147602
+    gpu_model: NVIDIA GeForce RTX 3060
+    gpu_count: 2
+    logical_cpu_count: 23
+    minimum_ram_gib: 55
+    minimum_disk_gib: 25
+training:
+  save_path: py/training_data/validation/vast-chess-adaptive-budget-2gpu-smoke-r5
+  progressive_model_sizing:
+    models:
+      - model_id: chess-cnn-12x128-fromto
+        training_start_days: 0.0
+        network:
+          kind: convolutional
+          num_layers: 12
+          hidden_size: 128
+          residual_context: {kind: global_pooling, placement: every_second_block}
+          policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+          num_value_channels: 2
+          value_fc_size: 48
+    promotion:
+      decay: 0.8
+      warmup_quanta: 10
+      maximum_relative_loss: 1.01
+  trainer:
+    global_batch_size: 512
+    local_batch_size: 256
+  topology:
+    trainer:
+      device_type: cuda
+      process_group_backend: nccl
+      rank_zero_device_id: 0
+      ddp_device_ids: [0, 1]
+      cpu_threads: 4
+      interop_threads: 1
+    self_play:
+      device_ids: [0, 0, 1, 1]
+      parallel_games_per_process: 256
+      tensorboard_processes: 1
+      node_ids_to_pause_during_training: [1, 3]
+    evaluation:
+      device_cycle: [0, 1]
+  lifecycle:
+    replay:
+      capacity:
+        kind: linear
+        start_generation: 0
+        end_generation: 30
+        start_value: 200000
+        end_value: 1000000
+        rounding: nearest
+      maximum_capacity: 1000000
+      materialization_processes: 4
+    credit:
+      replay_ratio: 8
+      optimizer_steps_per_quantum: 408
+      maximum_optimizer_steps: 16320
+      retained_checkpoint_interval_generations: 1
+      self_play_backpressure_quanta: 5
+  limits:
+    hourly_price: 0.14833333333333326
+    maximum_cost: 0.5
+    maximum_wall_time_seconds: 10800
+    manual_stop_file: /workspace/run-control/stop/vast-chess-adaptive-budget-2gpu-smoke-r5.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 10.0
+    resource_telemetry_interval_seconds: 5.0
+chess:
+  self_play:
+    inference:
+      inference_batch_size: 192
+evaluation:
+  cadence_seconds: 14400
+  maximum_concurrent_jobs: 2

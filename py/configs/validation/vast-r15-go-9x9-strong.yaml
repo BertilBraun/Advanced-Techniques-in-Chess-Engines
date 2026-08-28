@@ -98,21 +98,12 @@ evaluation:
 go:
   self_play:
     search:
-      full_search_budget:
-        kind: fixed
-        visits:
-          kind: linear
-          start_generation: 0
-          end_generation: 2
-          start_value: 8
-          end_value: 16
-          rounding: nearest
-      fast_searches:
+      baseline_visits:
         kind: linear
         start_generation: 0
         end_generation: 2
-        start_value: 2
-        end_value: 4
+        start_value: 8
+        end_value: 16
         rounding: nearest
     start_position:
       kind: restart_state
@@ -124,13 +115,6 @@ go:
       minimum_remaining_plies: 5
       maximum_archive_positions: 1000
       maximum_age_generations: 8
-    full_search_probability:
-      kind: linear
-      start_generation: 0
-      end_generation: 1
-      start_value: 1.0
-      end_value: 0.25
-      rounding: none
     greedy_after_ply: 20
     detailed_statistics_workers: 1
   rules:

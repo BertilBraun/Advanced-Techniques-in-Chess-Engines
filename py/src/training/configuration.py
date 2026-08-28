@@ -6,11 +6,8 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 from src.replay.configuration import ReplayConfiguration
-from src.self_play.configuration import (
-    AdaptiveFullSearchBudgetConfiguration,
-    FixedFullSearchBudgetConfiguration,
-    SelfPlayConfiguration,
-)
+from src.search_budget.configuration import SearchBudgetConfiguration
+from src.self_play.configuration import SelfPlayConfiguration
 from src.training.progressive import (
     SECONDS_PER_DAY,
     ProgressiveModelDefinition,
@@ -180,6 +177,7 @@ class TrainingLifecycleParams(FrozenModel):
     replay: ReplayConfiguration
     credit: CreditTrainingParams
     inference_retention: InferenceRetentionParams
+    search_budget: SearchBudgetConfiguration
 
 
 class TrainingArgs(FrozenModel):
@@ -234,21 +232,12 @@ class TrainingArgs(FrozenModel):
         if self.lifecycle.replay.maximum_policy_entries > action_size:
             raise ValueError('Maximum retained policy entries cannot exceed the game action count.')
         search = self_play.search
-        match search.full_search_budget:
-            case FixedFullSearchBudgetConfiguration(visits=visits):
-                full_search_budgets = defined_schedule_values(visits)
-                learned_gate_can_enable = False
-            case AdaptiveFullSearchBudgetConfiguration(maximum_visits=maximum_visits):
-                full_search_budgets = defined_schedule_values(maximum_visits)
-                learned_gate_can_enable = any(
-                    value > search.full_search_budget.minimum_visits for value in full_search_budgets
-                )
-        search_correction_targets = sum(target.kind == 'search_correction' for target in auxiliary_targets)
-        if learned_gate_can_enable and search_correction_targets != 1:
-            raise ValueError('An enabled adaptive learned gate requires exactly one search-correction target.')
-        search_budgets = (
-            *full_search_budgets,
-            *defined_schedule_values(search.fast_searches),
-        )
-        if any(search_budget > 65_535 for search_budget in search_budgets):
-            raise ValueError('Configured search visits must fit uint16 replay storage.')
+        search_budget_targets = sum(target.kind == 'search_budget' for target in auxiliary_targets)
+        if search_budget_targets != 1:
+            raise ValueError('Learned search-budget allocation requires exactly one search-budget target.')
+        deep_search_multiple = self.lifecycle.search_budget.labeling.deep_search_multiple
+        if any(
+            baseline_visits * deep_search_multiple > 65_535
+            for baseline_visits in defined_schedule_values(search.baseline_visits)
+        ):
+            raise ValueError('Deep-label search visits must fit uint16 replay storage.')

@@ -55,6 +55,7 @@ public:
     [[nodiscard]] std::size_t rootIndex() const noexcept { return m_arena.rootIndex(); }
     [[nodiscard]] std::size_t liveNodeCount() const noexcept { return m_arena.liveNodeCount(); }
     [[nodiscard]] std::size_t capacity() const noexcept { return m_arena.capacity(); }
+    [[nodiscard]] std::size_t maximumCapacity() const noexcept { return m_arena.maximumCapacity(); }
     [[nodiscard]] std::size_t totalChildCount() const noexcept { return m_arena.totalChildCount(); }
     [[nodiscard]] float valueDiscountPerPly() const noexcept { return m_valueDiscountPerPly; }
 
@@ -106,7 +107,8 @@ public:
         }
         selected.children.reserve(inferenceResult.actions.size());
         selected.network_outcome = inferenceResult.outcome;
-        selected.search_correction = inferenceResult.search_correction;
+        selected.search_budget_logit = inferenceResult.search_budget_logit;
+        selected.search_budget = inferenceResult.search_budget;
         for (const ScoredAction<Action> &scored : inferenceResult.actions) {
             selected.children.push_back({
                 .action = scored.action,
@@ -199,11 +201,11 @@ public:
             maximumNewNodes =
                 static_cast<std::uint64_t>(visitLimit - root().visits) + parallelSearches - 1U;
         }
-        if (maximumNewNodes + 1U >= capacity()) {
+        if (maximumNewNodes + 1U >= maximumCapacity()) {
             throw std::logic_error("Game search arena cannot reserve search and reroot slots");
         }
-        m_arena.pruneToLiveNodeLimit(
-            std::max<std::size_t>(1, capacity() - static_cast<std::size_t>(maximumNewNodes) - 1));
+        m_arena.pruneToLiveNodeLimit(std::max<std::size_t>(
+            1, maximumCapacity() - static_cast<std::size_t>(maximumNewNodes) - 1));
     }
 
     void discount(const float retainedFraction) {

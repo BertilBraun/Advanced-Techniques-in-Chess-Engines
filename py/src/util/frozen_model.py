@@ -4,14 +4,23 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, PlainSerializer
+from pydantic import BaseModel, BeforeValidator, ConfigDict, PlainSerializer
 from typing_extensions import Self
 
 JsonValue: TypeAlias = str | int | float | bool | None | list['JsonValue'] | dict[str, 'JsonValue']
 
-# Configuration hashes must be stable across host operating systems, so Path fields in
-# configuration models serialise with forward slashes regardless of the host separator.
-ConfigurationPath: TypeAlias = Annotated[Path, PlainSerializer(lambda path: path.as_posix(), return_type=str)]
+
+def _normalize_configuration_path(path: str | Path) -> str:
+    return str(path).replace('\\', '/')
+
+
+# Configuration hashes must be stable across host operating systems, so paths accept either separator and serialize
+# with forward slashes.
+ConfigurationPath: TypeAlias = Annotated[
+    Path,
+    BeforeValidator(_normalize_configuration_path),
+    PlainSerializer(lambda path: path.as_posix(), return_type=str),
+]
 
 
 class FrozenModel(BaseModel):

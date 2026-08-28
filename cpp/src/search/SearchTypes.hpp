@@ -6,15 +6,19 @@
 #include "search/tree/TreeSearchParameters.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <numeric>
+#include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <type_traits>
+#include <utility>
 #include <variant>
 #include <vector>
-
-// Defines requests, results, and validated runtime parameters shared by search workloads.
 
 struct GameSearchVisit {
     int action_id;
@@ -23,19 +27,12 @@ struct GameSearchVisit {
     bool operator==(const GameSearchVisit &) const = default;
 };
 
-enum class SearchStopReason { FixedLimit, Deterministic, LearnedGate, Maximum };
+enum class SearchStopReason { FixedLimit, AdditionalVisits, PredictedBudget };
 enum class SearchCheckpointDetail { Scalars, Policies };
 
 struct SearchCheckpoint {
     std::uint32_t visits;
-    int leader_action_id;
-    int most_visited_action_id;
     std::vector<GameSearchVisit> policy_target_visits;
-    float top_visit_share;
-    float top_two_margin;
-    float root_value;
-    float root_value_delta;
-    bool leader_stable;
 };
 
 struct FixedSearchLimit {
@@ -49,87 +46,141 @@ struct FixedSearchLimit {
     }
 };
 
-struct DisabledSearchCorrectionGate {};
+struct AdditionalSearchLimit {
+    std::uint32_t additional_visits;
 
-struct SearchCorrectionGate {
-    std::uint32_t visit;
-    float minimum_prediction;
-
-    SearchCorrectionGate(const std::uint32_t gateVisit, const float minimumPrediction)
-        : visit(gateVisit), minimum_prediction(minimumPrediction) {
-        if (visit == 0 || !std::isfinite(minimum_prediction) || minimum_prediction < 0.0F ||
-            minimum_prediction > 1.0F) {
-            throw std::invalid_argument("Search-correction gate is invalid");
+    AdditionalSearchLimit() : additional_visits(1) {}
+    explicit AdditionalSearchLimit(const std::uint32_t additionalVisits)
+        : additional_visits(additionalVisits) {
+        if (additional_visits == 0) {
+            throw std::invalid_argument("Additional search limit must be positive");
         }
     }
 };
 
-using SearchCorrectionGateConfiguration =
-    std::variant<DisabledSearchCorrectionGate, SearchCorrectionGate>;
+struct SearchBudgetCurve {
+    static constexpr std::size_t BUCKET_COUNT = 10;
+    std::array<double, BUCKET_COUNT> multipliers;
 
-struct AdaptiveSearchLimit {
-    std::uint32_t minimum_visits;
-    std::uint32_t maximum_visits;
-    std::uint32_t observation_interval;
-    std::uint32_t leader_stability_window;
-    float root_value_tolerance;
-    float initial_top_visit_share;
-    float final_top_visit_share;
-    float initial_top_two_margin;
-    float final_top_two_margin;
-    std::uint32_t threshold_relaxation_visits;
-    SearchCorrectionGateConfiguration search_correction_gate;
-
-    AdaptiveSearchLimit(std::uint32_t minimumVisits, std::uint32_t maximumVisits,
-                        std::uint32_t observationInterval,
-                        std::uint32_t leaderStabilityWindow, float rootValueTolerance,
-                        float initialTopVisitShare, float finalTopVisitShare,
-                        float initialTopTwoMargin, float finalTopTwoMargin,
-                        std::uint32_t thresholdRelaxationVisits,
-                        SearchCorrectionGateConfiguration searchCorrectionGate)
-        : minimum_visits(minimumVisits), maximum_visits(maximumVisits),
-          observation_interval(observationInterval),
-          leader_stability_window(leaderStabilityWindow),
-          root_value_tolerance(rootValueTolerance),
-          initial_top_visit_share(initialTopVisitShare),
-          final_top_visit_share(finalTopVisitShare),
-          initial_top_two_margin(initialTopTwoMargin),
-          final_top_two_margin(finalTopTwoMargin),
-          threshold_relaxation_visits(thresholdRelaxationVisits),
-          search_correction_gate(std::move(searchCorrectionGate)) {
-        if (minimum_visits == 0 || maximum_visits < minimum_visits ||
-            observation_interval == 0 || leader_stability_window < observation_interval ||
-            leader_stability_window % observation_interval != 0 ||
-            threshold_relaxation_visits == 0 || !std::isfinite(root_value_tolerance) ||
-            root_value_tolerance < 0.0F || !validShare(initial_top_visit_share) ||
-            !validShare(final_top_visit_share) || !validShare(initial_top_two_margin) ||
-            !validShare(final_top_two_margin) ||
-            final_top_visit_share > initial_top_visit_share ||
-            final_top_two_margin > initial_top_two_margin) {
-            throw std::invalid_argument("Adaptive search limit is invalid");
+    SearchBudgetCurve() : multipliers{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0} {}
+    explicit SearchBudgetCurve(std::array<double, BUCKET_COUNT> curveMultipliers)
+        : multipliers(std::move(curveMultipliers)) {
+        if (std::ranges::any_of(multipliers, [](const double multiplier) {
+                return !std::isfinite(multiplier) || multiplier <= 0.0;
+            })) {
+            throw std::invalid_argument(
+                "Search-budget curve multipliers must be finite and positive");
         }
-        if (const auto *gate = std::get_if<SearchCorrectionGate>(&search_correction_gate);
-            gate != nullptr && (gate->visit <= minimum_visits || gate->visit >= maximum_visits)) {
-            throw std::invalid_argument("Search-correction gate must lie inside the adaptive range");
+        if (!std::ranges::is_sorted(multipliers)) {
+            throw std::invalid_argument(
+                "Search-budget curve multipliers must be monotone nondecreasing");
+        }
+        const double sum = std::accumulate(multipliers.begin(), multipliers.end(), 0.0);
+        if (std::abs(sum - static_cast<double>(BUCKET_COUNT)) > 1e-6) {
+            throw std::invalid_argument(
+                "Search-budget curve multipliers must have arithmetic mean one");
         }
     }
+
+    [[nodiscard]] double multiplier(const float quantile) const {
+        if (!std::isfinite(quantile) || quantile < 0.0F || quantile > 1.0F) {
+            throw std::invalid_argument("Search-budget prediction must lie in [0, 1]");
+        }
+        const std::size_t bucket =
+            std::min(static_cast<std::size_t>(quantile * static_cast<float>(BUCKET_COUNT)),
+                     BUCKET_COUNT - 1);
+        return multipliers[bucket];
+    }
+};
+
+struct PredictedSearchBudgetLimit {
+    std::uint32_t baseline_visits;
+    SearchBudgetCurve curve;
+
+    PredictedSearchBudgetLimit() : baseline_visits(1), curve() {}
+    PredictedSearchBudgetLimit(const std::uint32_t baselineVisits, SearchBudgetCurve budgetCurve)
+        : baseline_visits(baselineVisits), curve(std::move(budgetCurve)) {
+        if (baseline_visits == 0) {
+            throw std::invalid_argument("Predicted search-budget baseline must be positive");
+        }
+    }
+};
+
+using SearchLimit =
+    std::variant<FixedSearchLimit, AdditionalSearchLimit, PredictedSearchBudgetLimit>;
+
+[[nodiscard]] inline double searchBudgetMultiplier(const SearchBudgetCurve &curve,
+                                                   const float quantile) {
+    return curve.multiplier(quantile);
+}
+
+[[nodiscard]] inline std::uint32_t searchParallelism(const std::uint32_t additionalVisits) {
+    if (additionalVisits == 0) {
+        throw std::invalid_argument("Assigned additional visits must be positive");
+    }
+    const std::uint32_t targetRounds = (additionalVisits + 199U) / 200U;
+    std::uint32_t parallelSearches = 1;
+    while (parallelSearches < targetRounds && parallelSearches < 16U) {
+        parallelSearches *= 2U;
+    }
+    return std::min(parallelSearches, 16U);
+}
+
+class SearchBudgetAllocator {
+public:
+    [[nodiscard]] std::uint32_t assign(const PredictedSearchBudgetLimit &limit,
+                                       const float predictedQuantile) {
+        const double multiplier = searchBudgetMultiplier(limit.curve, predictedQuantile);
+        constexpr std::uint64_t maximumBaselineMultiple = 8;
+        const std::uint64_t maximumVisits =
+            static_cast<std::uint64_t>(limit.baseline_visits) * maximumBaselineMultiple;
+        if (maximumVisits > std::numeric_limits<std::uint32_t>::max()) {
+            throw std::overflow_error("Predicted search budget exceeds the visit range");
+        }
+        const double ideal = static_cast<double>(limit.baseline_visits) * multiplier;
+        const double corrected = ideal - static_cast<double>(m_spendError);
+        const double rounded =
+            std::clamp(std::floor(corrected + 0.5), 1.0, static_cast<double>(maximumVisits));
+        if (rounded < 1.0 || rounded > std::numeric_limits<std::uint32_t>::max()) {
+            throw std::overflow_error("Predicted search budget is outside the visit range");
+        }
+        const auto assigned = static_cast<std::uint32_t>(rounded);
+        const std::int64_t delta =
+            static_cast<std::int64_t>(assigned) - static_cast<std::int64_t>(limit.baseline_visits);
+        if ((delta > 0 && m_spendError > std::numeric_limits<std::int64_t>::max() - delta) ||
+            (delta < 0 && m_spendError < std::numeric_limits<std::int64_t>::min() - delta)) {
+            throw std::overflow_error("Search-budget spend ledger overflowed");
+        }
+        m_spendError += delta;
+        return assigned;
+    }
+
+    [[nodiscard]] std::int64_t spendError() const noexcept { return m_spendError; }
+    void reset() noexcept { m_spendError = 0; }
 
 private:
-    [[nodiscard]] static bool validShare(const float value) noexcept {
-        return std::isfinite(value) && value >= 0.0F && value <= 1.0F;
-    }
+    std::int64_t m_spendError = 0;
 };
 
-using SearchLimit = std::variant<FixedSearchLimit, AdaptiveSearchLimit>;
-
-[[nodiscard]] inline std::uint32_t maximumVisits(const SearchLimit &limit) {
-    return std::visit([](const auto &selected) {
-        if constexpr (std::is_same_v<std::decay_t<decltype(selected)>, FixedSearchLimit>) {
-            return selected.visits;
-        } else {
-            return selected.maximum_visits;
-        }
-    }, limit);
+[[nodiscard]] inline std::uint32_t maximumAdditionalVisits(const SearchLimit &limit) {
+    return std::visit(
+        [](const auto &selected) -> std::uint32_t {
+            using Limit = std::decay_t<decltype(selected)>;
+            if constexpr (std::is_same_v<Limit, FixedSearchLimit>) {
+                return selected.visits;
+            } else if constexpr (std::is_same_v<Limit, AdditionalSearchLimit>) {
+                return selected.additional_visits;
+            } else {
+                constexpr std::uint64_t maximumBaselineMultiple = 8;
+                const std::uint64_t maximum =
+                    static_cast<std::uint64_t>(selected.baseline_visits) * maximumBaselineMultiple;
+                if (maximum > std::numeric_limits<std::uint32_t>::max()) {
+                    throw std::overflow_error("Predicted search budget exceeds the visit range");
+                }
+                return static_cast<std::uint32_t>(maximum);
+            }
+        },
+        limit);
 }
 
 struct GameSearchResult {
@@ -142,38 +193,16 @@ struct GameSearchResult {
     float network_root_value;
     float policy_correction;
     float value_correction;
-    float search_correction_target;
-    float predicted_search_correction;
+    float search_budget_logit;
+    float predicted_search_budget;
+    std::uint32_t assigned_additional_visits;
+    std::uint32_t parallel_searches;
+    std::int64_t spend_residual;
     std::uint32_t starting_visits;
     std::uint32_t final_visits;
     SearchStopReason stop_reason;
-    bool learned_gate_evaluated;
     std::vector<SearchCheckpoint> checkpoints;
 };
-
-enum class SearchAdmission { Immediate, InitialFast, WaitingFast };
-
-[[nodiscard]] inline std::size_t
-initialFastSearchAdmissionCount(const std::size_t fastSearchCount,
-                                const std::size_t fullSearchCount,
-                                const std::uint32_t fullSearchBudget,
-                                const std::uint32_t fastSearchBudget,
-                                const std::size_t inferenceCapacity) {
-    if (fastSearchCount == 0 || fullSearchCount == 0 || fastSearchBudget >= fullSearchBudget) {
-        return fastSearchCount;
-    }
-    const std::size_t quotient = fastSearchCount / fullSearchBudget;
-    const std::uint64_t remainder = fastSearchCount % fullSearchBudget;
-    const std::uint64_t remainderProduct = remainder * fastSearchBudget;
-    const std::size_t roundedRemainder =
-        static_cast<std::size_t>((remainderProduct + fullSearchBudget - 1U) / fullSearchBudget);
-    const std::size_t ratioBasedFastSearches = quotient * fastSearchBudget + roundedRemainder;
-    const std::size_t capacityBasedFastSearches =
-        inferenceCapacity > fullSearchCount
-            ? std::min(fastSearchCount, inferenceCapacity - fullSearchCount)
-            : 0;
-    return std::max(ratioBasedFastSearches, capacityBasedFastSearches);
-}
 
 template <SearchGame Game> struct GameSearchRequest {
     GameSearchRoot<Game> root;
@@ -182,7 +211,8 @@ template <SearchGame Game> struct GameSearchRequest {
     bool force_root_playouts = false;
     bool count_root_initialization = false;
     SearchCheckpointDetail checkpoint_detail = SearchCheckpointDetail::Scalars;
-    SearchAdmission admission = SearchAdmission::Immediate;
+    std::vector<std::uint32_t> policy_checkpoint_visits;
+    std::optional<std::uint32_t> parallel_searches;
 };
 
 struct GameSearchBatchResult {
@@ -191,19 +221,17 @@ struct GameSearchBatchResult {
 };
 
 struct BatchedSearchParameters {
-    std::uint32_t parallel_searches;
     TreeSearchParameters tree_search;
     float dirichlet_alpha;
     float dirichlet_epsilon;
     std::size_t tree_capacity;
 
-    BatchedSearchParameters(std::uint32_t parallelSearches, TreeSearchParameters treeSearch,
-                            float dirichletAlpha, float dirichletEpsilon, std::size_t treeCapacity)
-        : parallel_searches(parallelSearches), tree_search(treeSearch),
-          dirichlet_alpha(dirichletAlpha), dirichlet_epsilon(dirichletEpsilon),
-          tree_capacity(treeCapacity) {
-        if (parallel_searches == 0 || tree_capacity == 0) {
-            throw std::invalid_argument("Batched search counts and tree capacity must be positive");
+    BatchedSearchParameters(TreeSearchParameters treeSearch, const float dirichletAlpha,
+                            const float dirichletEpsilon, const std::size_t treeCapacity)
+        : tree_search(treeSearch), dirichlet_alpha(dirichletAlpha),
+          dirichlet_epsilon(dirichletEpsilon), tree_capacity(treeCapacity) {
+        if (tree_capacity == 0) {
+            throw std::invalid_argument("Batched search tree capacity must be positive");
         }
         if (dirichlet_alpha <= 0.0F || dirichlet_epsilon < 0.0F || dirichlet_epsilon > 1.0F) {
             throw std::invalid_argument("Batched search constants are outside their valid range");
@@ -216,12 +244,11 @@ struct BatchedInferenceParameters {
     std::size_t batch_size;
     std::size_t outstanding_batches_per_worker;
 
-    BatchedInferenceParameters(std::size_t inferenceWorkers, std::size_t inferenceBatchSize,
-                               std::size_t outstandingBatchesPerWorker)
+    BatchedInferenceParameters(const std::size_t inferenceWorkers,
+                               const std::size_t inferenceBatchSize,
+                               const std::size_t outstandingBatchesPerWorker)
         : workers(inferenceWorkers), batch_size(inferenceBatchSize),
           outstanding_batches_per_worker(outstandingBatchesPerWorker) {
-        // The pipeline implements a general N-slot ring, but more than two outstanding batches has never
-        // measured faster and complicates cancellation, so the cap stays until evidence says otherwise.
         if (workers == 0 || batch_size == 0 || outstanding_batches_per_worker == 0 ||
             outstanding_batches_per_worker > 2) {
             throw std::invalid_argument(

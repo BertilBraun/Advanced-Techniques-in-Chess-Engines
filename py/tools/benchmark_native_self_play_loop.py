@@ -9,16 +9,15 @@ from pathlib import Path
 
 import AlphaZeroCpp as native
 import torch
+from src.search_budget.curve import analytic_initial_curve, flat_curve
 
 
 @dataclass(frozen=True)
 class LoopArguments:
     games: int
     parallel_searches: int
-    minimum_visits: int
-    maximum_visits: int
-    fast_searches: int
-    full_search_probability: float
+    baseline_visits: int
+    analytic_search_budget_curve: bool
     retained_root_visit_fraction: float
     inference_workers: int
     inference_batch_size: int
@@ -28,7 +27,6 @@ class LoopArguments:
     maximum_game_plies: int
     opening_plies: int
     greedy_after_ply: int
-    adaptive: bool
     inference_hidden: int
     collect_statistics: bool
     inference_device: str
@@ -61,8 +59,8 @@ class StubNetwork(torch.nn.Module):
         loss = 0.9 - win
         draw = torch.full_like(win, 0.1)
         outcomes = torch.stack((win, draw, loss), dim=1)
-        corrections = torch.full((batch, 1), 0.5, dtype=torch.float32)
-        return logits, outcomes, corrections
+        search_budget_logits = torch.zeros((batch, 1), dtype=torch.float32)
+        return logits, outcomes, search_budget_logits
 
 
 def write_stub_model(destination: Path, hidden: int) -> Path:
@@ -74,22 +72,6 @@ def write_stub_model(destination: Path, hidden: int) -> Path:
 
 
 def search_parameters(arguments: LoopArguments) -> native.SelfPlaySearchParameters:
-    if arguments.adaptive:
-        budget = native.AdaptiveSearchLimit(
-            arguments.minimum_visits,
-            arguments.maximum_visits,
-            100,
-            200,
-            0.04,
-            0.7,
-            0.5,
-            0.45,
-            0.15,
-            1200,
-            native.DisabledSearchCorrectionGate(),
-        )
-    else:
-        budget = native.FixedSearchLimit(arguments.maximum_visits)
     tree = native.TreeSearchParameters(
         1.5,
         native.FirstPlayUrgencyParameters(native.FirstPlayUrgencyKind.REDUCED_PARENT_VALUE, 0.2),
@@ -97,8 +79,13 @@ def search_parameters(arguments: LoopArguments) -> native.SelfPlaySearchParamete
         0.99,
         0.5,
     )
+    curve = analytic_initial_curve() if arguments.analytic_search_budget_curve else flat_curve()
     return native.SelfPlaySearchParameters(
-        arguments.parallel_searches, budget, arguments.fast_searches, tree, 0.3, 0.25
+        arguments.baseline_visits,
+        native.SearchBudgetCurve(list(curve.multipliers)),
+        tree,
+        0.3,
+        0.25,
     )
 
 
@@ -201,10 +188,8 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
         started = time.perf_counter()
         requests = []
         for game in games:
-            full_search = random.next_float() < arguments.full_search_probability
-            if full_search:
-                game.root.discount(arguments.retained_root_visit_fraction)
-            requests.append(search.request(game.root, full_search))
+            game.root.discount(arguments.retained_root_visit_fraction)
+            requests.append(search.request(game.root, parallel_searches=arguments.parallel_searches))
         prepared_at = time.perf_counter()
         batch = search.search(requests, arguments.collect_statistics)
         searched_at = time.perf_counter()
@@ -225,12 +210,14 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
                 result.network_root_value,
                 result.policy_correction,
                 result.value_correction,
-                result.search_correction_target,
-                result.predicted_search_correction,
+                result.search_budget_logit,
+                result.predicted_search_budget,
+                result.assigned_additional_visits,
+                result.parallel_searches,
+                result.spend_residual,
                 result.starting_visits,
                 result.final_visits,
                 result.stop_reason,
-                result.learned_gate_evaluated,
             )
             del observation
             action_id = select_action(visits, game.ply, arguments.greedy_after_ply, random)
@@ -270,11 +257,8 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
         'configuration': {
             'games': arguments.games,
             'parallel_searches': arguments.parallel_searches,
-            'minimum_visits': arguments.minimum_visits,
-            'maximum_visits': arguments.maximum_visits,
-            'fast_searches': arguments.fast_searches,
-            'adaptive': arguments.adaptive,
-            'full_search_probability': arguments.full_search_probability,
+            'baseline_visits': arguments.baseline_visits,
+            'search_budget_curve': 'analytic_q5_v1' if arguments.analytic_search_budget_curve else 'flat',
             'inference_workers': arguments.inference_workers,
             'inference_batch_size': arguments.inference_batch_size,
             'inference_hidden': arguments.inference_hidden,
@@ -324,10 +308,8 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
     )
     parser.add_argument('--games', type=int, default=128)
     parser.add_argument('--parallel-searches', type=int, default=2)
-    parser.add_argument('--minimum-visits', type=int, default=200)
-    parser.add_argument('--maximum-visits', type=int, default=250)
-    parser.add_argument('--fast-searches', type=int, default=50)
-    parser.add_argument('--full-search-probability', type=float, default=1.0)
+    parser.add_argument('--baseline-visits', type=int, default=250)
+    parser.add_argument('--analytic-search-budget-curve', action='store_true')
     parser.add_argument('--retained-root-visit-fraction', type=float, default=0.6)
     parser.add_argument('--inference-workers', type=int, default=2)
     parser.add_argument('--inference-batch-size', type=int, default=256)
@@ -337,7 +319,6 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
     parser.add_argument('--maximum-game-plies', type=int, default=150)
     parser.add_argument('--opening-plies', type=int, default=12)
     parser.add_argument('--greedy-after-ply', type=int, default=60)
-    parser.add_argument('--fixed-budget', action='store_true')
     parser.add_argument('--inference-hidden', type=int, default=0)
     parser.add_argument('--collect-statistics', action='store_true')
     parser.add_argument('--inference-device', choices=('cpu', 'cuda'), default='cpu')
@@ -354,10 +335,8 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
     arguments = LoopArguments(
         games=namespace.games,
         parallel_searches=namespace.parallel_searches,
-        minimum_visits=namespace.minimum_visits,
-        maximum_visits=namespace.maximum_visits,
-        fast_searches=namespace.fast_searches,
-        full_search_probability=namespace.full_search_probability,
+        baseline_visits=namespace.baseline_visits,
+        analytic_search_budget_curve=namespace.analytic_search_budget_curve,
         retained_root_visit_fraction=namespace.retained_root_visit_fraction,
         inference_workers=namespace.inference_workers,
         inference_batch_size=namespace.inference_batch_size,
@@ -367,7 +346,6 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
         maximum_game_plies=namespace.maximum_game_plies,
         opening_plies=namespace.opening_plies,
         greedy_after_ply=namespace.greedy_after_ply,
-        adaptive=not namespace.fixed_budget,
         inference_hidden=namespace.inference_hidden,
         collect_statistics=namespace.collect_statistics,
         inference_device=namespace.inference_device,

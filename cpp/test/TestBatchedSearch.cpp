@@ -3,31 +3,28 @@
 #include "position.h"
 #include "search/SelfPlay.hpp"
 
+#include <array>
+
 namespace {
 using ChessSelfPlaySearch = GameSelfPlaySearch<ChessGame>;
-using ChessSelfPlaySearchParameters = SelfPlaySearchParameters;
 using ChessSelfPlaySearchRequest = SelfPlaySearchRequest<ChessGame>;
-using ChessSelfPlaySearchResult = SelfPlaySearchResult<ChessGame>;
-using ChessSelfPlaySearchBatch = SelfPlaySearchBatch<ChessGame>;
-using ChessInferenceResult = SearchInferenceResult<ChessGame>;
 
-TreeSearchParameters
-treeSearchParameters(const float explorationConstant,
-                     const FirstPlayUrgencyParameters firstPlayUrgency =
-                         FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
-                     const float forcedPlayoutCoefficient = 0.0F,
-                     const float valueDiscountPerPly = 1.0F) {
-    return TreeSearchParameters(explorationConstant, firstPlayUrgency, forcedPlayoutCoefficient,
+TreeSearchParameters treeSearchParameters(const float explorationConstant = 1.5F,
+                                          const float valueDiscountPerPly = 1.0F) {
+    return TreeSearchParameters(explorationConstant,
+                                FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero), 0.0F,
                                 valueDiscountPerPly);
 }
 
 std::filesystem::path createTestModel(const std::string &name, const float win, const float draw,
-                                      const float loss, const bool validOutput = true) {
+                                      const float loss, const float searchBudgetLogit = 0.0F,
+                                      const bool validOutput = true) {
     torch::jit::script::Module model("batched_search_test");
     model.register_parameter("outcome_parameter",
                              validOutput ? torch::tensor({win, draw}) : torch::tensor({win}),
                              false);
     model.register_buffer("outcome_buffer", torch::tensor({loss}));
+    model.register_buffer("search_budget_logit", torch::tensor({searchBudgetLogit}));
     model.define(R"JIT(
         def forward(self, boards):
             batch_size = boards.size(0)
@@ -35,8 +32,8 @@ std::filesystem::path createTestModel(const std::string &name, const float win, 
                  std::to_string(ChessEncoding::actionCount) + R"JIT(), device=boards.device)
             outcome = torch.cat((self.outcome_parameter, self.outcome_buffer))
             outcomes = outcome.unsqueeze(0).repeat((batch_size, 1))
-            search_correction = torch.full((batch_size, 1), 0.5, device=boards.device)
-            return policies, outcomes, search_correction
+            search_budgets = self.search_budget_logit.unsqueeze(0).repeat((batch_size, 1))
+            return policies, outcomes, search_budgets
     )JIT");
     const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path path =
@@ -52,34 +49,32 @@ void require(const bool condition, const std::string &message) {
     }
 }
 
-float inferenceValue(ChessSelfPlaySearch &search) {
-    Board board;
-    const std::vector<Board> boards = {board};
-    return search.evaluate(boards).front().value();
+ChessSelfPlaySearchRequest productionRequest(ChessSelfPlaySearch &search,
+                                             const std::size_t maximumCapacity = 0) {
+    return {
+        .root = search.newRoot(Board{}, maximumCapacity),
+        .assigned_additional_visits = std::nullopt,
+        .policy_checkpoint_visits = {},
+        .parallel_searches = std::nullopt,
+        .add_root_noise = false,
+        .force_root_playouts = false,
+    };
 }
 
-std::uint32_t totalVisits(const std::vector<GameSearchVisit> &visits) {
-    return std::accumulate(visits.begin(), visits.end(), std::uint32_t{0},
-                           [](const std::uint32_t total, const GameSearchVisit visit) {
-                               return total + visit.visit_count;
-                           });
-}
-
-ChessSelfPlaySearchBatch searchRequests(ChessSelfPlaySearch &search,
-                                        const std::vector<bool> &fullSearches) {
-    std::vector<ChessSelfPlaySearchRequest> requests;
-    requests.reserve(fullSearches.size());
-    for (const bool fullSearch : fullSearches) {
-        requests.emplace_back(search.newRoot(Board{}), fullSearch);
-    }
-    ChessSelfPlaySearchBatch batch = search.search(requests);
-    require(batch.results.size() == requests.size(),
-            "staged search returned the wrong result count");
-    for (const std::size_t index : range(requests.size())) {
-        require(&batch.results[index].root.tree() == &requests[index].root.tree(),
-                "staged search changed deterministic result ordering");
-    }
-    return batch;
+ChessSelfPlaySearchRequest
+fixedRequest(ChessSelfPlaySearch &search, const std::uint32_t additionalVisits,
+             std::vector<std::uint32_t> checkpoints = {},
+             const std::optional<std::uint32_t> parallelSearches = std::nullopt) {
+    return {
+        .root = search.newRoot(
+            Board{}, std::max<std::uint32_t>(search.arenaCapacity(), additionalVisits + 32U)),
+        .assigned_additional_visits = additionalVisits,
+        .policy_checkpoint_visits = std::move(checkpoints),
+        .parallel_searches = parallelSearches,
+        .add_root_noise = false,
+        .force_root_playouts = false,
+        .checkpoint_detail = SearchCheckpointDetail::Policies,
+    };
 }
 
 } // namespace
@@ -89,339 +84,205 @@ int runBatchedSearchTests() {
     Stockfish::Position::init();
     const std::filesystem::path modelPath =
         createTestModel("initial", 1.0F / 3.0F, 1.0F / 3.0F, 1.0F / 3.0F);
-    const std::filesystem::path updatedModelPath = createTestModel("updated", 0.8F, 0.15F, 0.05F);
+    const std::filesystem::path updatedModelPath =
+        createTestModel("updated", 0.8F, 0.15F, 0.05F, 2.0F);
     const std::filesystem::path invalidModelPath =
-        createTestModel("invalid", 0.5F, 0.5F, 0.0F, false);
+        createTestModel("invalid", 0.5F, 0.5F, 0.0F, 0.0F, false);
     try {
+        const SearchBudgetCurve flatCurve;
+        const SearchBudgetCurve liveCurve(
+            {0.55, 0.65, 0.75, 0.85, 0.95, 1.05, 1.15, 1.25, 1.35, 1.45});
+        require(std::abs(std::accumulate(liveCurve.multipliers.begin(), liveCurve.multipliers.end(),
+                                         0.0) -
+                         10.0) < 1e-12,
+                "search-budget curve does not have uniform mean one");
+        require(searchBudgetMultiplier(liveCurve, 0.0F) == 0.55 &&
+                    searchBudgetMultiplier(liveCurve, std::nextafter(0.1F, 0.0F)) == 0.55 &&
+                    searchBudgetMultiplier(liveCurve, 0.1F) == 0.65 &&
+                    searchBudgetMultiplier(liveCurve, 1.0F) == 1.45,
+                "search-budget curve lost its equal-width bucket boundaries");
         try {
             static_cast<void>(
-                FirstPlayUrgencyParameters(FirstPlayUrgencyKind::ReducedParentValue, -0.1F));
-            throw std::runtime_error("negative FPU reduction unexpectedly validated");
-        } catch (const std::invalid_argument &) {
-        }
-        for (const float invalidDiscount : {0.0F, 1.01F, std::numeric_limits<float>::infinity()}) {
-            try {
-                static_cast<void>(treeSearchParameters(
-                    1.5F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero), 0.0F,
-                    invalidDiscount));
-                throw std::runtime_error("invalid value discount unexpectedly validated");
-            } catch (const std::invalid_argument &) {
-            }
-        }
-        try {
-            static_cast<void>(FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero, 0.1F));
-            throw std::runtime_error("zero FPU unexpectedly accepted a reduction");
+                SearchBudgetCurve({1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.1}));
+            throw std::runtime_error("non-monotone search-budget curve unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         try {
             static_cast<void>(
-                FirstPlayUrgencyParameters(FirstPlayUrgencyKind::ReducedParentValue, 0.0F));
-            throw std::runtime_error("reduced-parent FPU unexpectedly accepted zero reduction");
+                SearchBudgetCurve({0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9}));
+            throw std::runtime_error("non-unit-mean search-budget curve unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         try {
             static_cast<void>(
-                treeSearchParameters(1.5F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
-                                     std::numeric_limits<float>::infinity()));
-            throw std::runtime_error("nonfinite forced-playout coefficient unexpectedly validated");
+                SearchBudgetCurve({0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0}));
+            throw std::runtime_error("nonpositive search-budget curve unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
+
+        const std::array<std::uint32_t, 5> budgets = {100, 300, 600, 1'600, 2'400};
+        const std::array<std::uint32_t, 5> expectedParallelism = {1, 2, 4, 8, 16};
+        for (const std::size_t index : range(budgets.size())) {
+            require(searchParallelism(budgets[index]) == expectedParallelism[index],
+                    "production parallelism mapping changed");
+        }
+        require(searchParallelism(100'000) == 16, "production parallelism exceeded its cap");
+
+        SearchBudgetAllocator allocator;
+        const PredictedSearchBudgetLimit allocationLimit(101, liveCurve);
+        std::uint64_t assignedTotal = 0;
+        constexpr std::uint32_t allocationCount = 10'000;
+        for (const auto index : range(allocationCount)) {
+            static_cast<void>(index);
+            assignedTotal += allocator.assign(allocationLimit, 0.0F);
+        }
+        const auto expectedFloorError = static_cast<std::int64_t>(assignedTotal) -
+                                        static_cast<std::int64_t>(allocationCount) * 101;
+        const std::int64_t strictErrorBound =
+            std::max<std::int64_t>(101 - static_cast<std::int64_t>(std::ceil(101.0 * 0.55)),
+                                   static_cast<std::int64_t>(std::floor(101.0 * 1.45)) - 101) +
+            1;
+        require(allocator.spendError() == expectedFloorError &&
+                    std::abs(allocator.spendError()) < strictErrorBound,
+                "all-floor predictions violated cumulative mean-spend accounting");
+        const std::int64_t errorBeforeFlatCurve = allocator.spendError();
+        const PredictedSearchBudgetLimit flatLimit(101, flatCurve);
+        std::uint64_t flatAssignedTotal = 0;
+        for (const auto index : range(100)) {
+            static_cast<void>(index);
+            flatAssignedTotal += allocator.assign(flatLimit, 0.0F);
+        }
+        const std::int64_t flatCorrection =
+            static_cast<std::int64_t>(flatAssignedTotal) - 100 * 101;
+        require(allocator.spendError() == 0 && flatCorrection == -errorBeforeFlatCurve,
+                "flat curve did not repay the existing cumulative spend error");
+        for (const auto index : range(allocationCount)) {
+            static_cast<void>(index);
+            static_cast<void>(allocator.assign(allocationLimit, 1.0F));
+        }
+        require(std::abs(allocator.spendError()) < strictErrorBound,
+                "all-ceiling predictions violated cumulative mean-spend accounting");
+        const SearchBudgetCurve cappedCurve({0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 9.1});
+        SearchBudgetAllocator cappedAllocator;
+        require(cappedAllocator.assign(PredictedSearchBudgetLimit(101, cappedCurve), 1.0F) == 808,
+                "production allocation exceeded the eight-times-baseline deep reference");
+        require(maximumAdditionalVisits(PredictedSearchBudgetLimit(101, cappedCurve)) == 808,
+                "predicted search capacity did not use the eight-times-baseline cap");
+
         const InferenceConfiguration runtimeParameters(0, modelPath.string(), InferenceDevice::Cpu);
-        const ChessSelfPlaySearchParameters searchParameters(1, FixedSearchLimit(16), 8, treeSearchParameters(1.5F),
-                                                             0.3F, 0.25F);
-        const BatchedInferenceParameters inferenceParameters(2, 4, 1);
+        const SelfPlaySearchParameters searchParameters(16, flatCurve, treeSearchParameters(), 0.3F,
+                                                        0.0F);
+        const BatchedInferenceParameters inferenceParameters(2, 8, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
-        require(search.modelGeneration() == 7, "search lost its initial model generation");
-        require(std::abs(inferenceValue(search)) < 0.001F,
-                "initial model returned the wrong value");
-        const std::uint64_t evaluationsBeforeSearch = search.inferenceStatistics().evaluations;
-
-        const std::vector<ChessSelfPlaySearchRequest> boards = {
-            ChessSelfPlaySearchRequest(search.newRoot(Board{}), true),
-            ChessSelfPlaySearchRequest(search.newRoot(Board{}), false),
-        };
-        const ChessSelfPlaySearchBatch results = search.search(boards, true);
-
-        require(results.simulations_completed == 24, "scheduler completed the wrong search count");
-        require(results.results.size() == 2, "scheduler returned the wrong root count");
-        require(results.results[0].root.visits() == 16, "full root missed its exact visit limit");
-        require(results.results[1].root.visits() == 8, "fast root missed its exact visit limit");
-        require(results.results[0].root.tree().root().virtual_loss == 0.0F,
-                "full root retained virtual loss");
-        require(results.results[1].root.tree().root().virtual_loss == 0.0F,
-                "fast root retained virtual loss");
-        require(!results.results[0].search_visits.empty(), "full root did not expand legal moves");
-        require(!results.results[1].search_visits.empty(), "fast root did not expand legal moves");
-        for (const auto &result : results.results) {
-            require(std::ranges::all_of(
-                        result.search_visits,
-                        [](const GameSearchVisit &visit) { return visit.visit_count > 0; }),
-                    "search result exposed zero-visit children");
-            const auto highestVisit = std::ranges::max_element(
-                result.search_visits, {},
-                [](const GameSearchVisit &visit) { return visit.visit_count; });
-            require(highestVisit != result.search_visits.end(),
-                    "search did not expose a highest-visited child");
-            require(result.highest_visited_child_visit_count == highestVisit->visit_count,
-                    "search exposed the wrong highest-child visit count");
-            const auto &rootNode = result.root.tree().root();
-            const auto edge = std::ranges::find_if(rootNode.children, [&](const auto &candidate) {
-                return candidate.action_id == result.highest_visited_child_action_id;
-            });
-            require(edge != rootNode.children.end(),
-                    "highest-visited child action is absent from the root");
-            require(std::abs(result.highest_visited_child_q +
-                             result.root.tree().valueDiscountPerPly() * edge->value_sum /
-                                 static_cast<float>(edge->visits)) < 1e-6F,
-                    "highest-visited child Q was not oriented to the root player");
+        const auto predictionRoot = search.newRoot(Board{}, 3);
+        require(predictionRoot.tree().maximumCapacity() == 3,
+                "per-root capacity did not constrain the initial arena allocation");
+        const auto tightDeepSearch = search.search({{
+            .root = search.newRoot(Board{}, 19),
+            .assigned_additional_visits = 16,
+            .policy_checkpoint_visits = {},
+            .parallel_searches = 2,
+            .add_root_noise = false,
+            .force_root_playouts = true,
+        }});
+        require(tightDeepSearch.results.front().final_visits == 16,
+                "deep-label arena bound did not reserve parallel-search and reroot slots");
+        std::vector<ChessSelfPlaySearchRequest> productionRequests = {productionRequest(search),
+                                                                      productionRequest(search)};
+        const auto production = search.search(productionRequests, true);
+        require(production.simulations_completed == 32 && production.results.size() == 2,
+                "flat predicted allocation completed the wrong total visits");
+        for (const auto &result : production.results) {
+            require(result.assigned_additional_visits == 16 && result.starting_visits == 0 &&
+                        result.final_visits == 16,
+                    "predicted allocation did not expose additional-visit semantics");
+            require(result.parallel_searches == 1,
+                    "small predicted budget used the wrong parallelism");
+            require(result.search_budget_logit == 0.0F &&
+                        std::abs(result.predicted_search_budget - 0.5F) < 1e-7F,
+                    "native root did not preserve raw and bounded search-budget outputs");
         }
-        require(results.results[0].search_visits == results.results[0].policy_target_visits,
-                "disabled full search changed the policy target");
-        require(results.results[1].search_visits == results.results[1].policy_target_visits,
-                "disabled fast search changed the policy target");
 
-        const InferenceStatistics statistics = search.inferenceStatistics();
-        require(statistics.evaluations == evaluationsBeforeSearch + 26,
-                "scheduler did not distinguish root initialization from searches");
-        require(statistics.modelInferencePositions == statistics.evaluations,
-                "model-position accounting diverged from evaluations");
-        require(statistics.modelInferenceCalls > 0, "scheduler recorded no model calls");
-
-        const std::vector<ChessSelfPlaySearchRequest> completedBoards = {
-            ChessSelfPlaySearchRequest(results.results[0].root, true),
-            ChessSelfPlaySearchRequest(results.results[1].root, false),
+        ChessSelfPlaySearchRequest retained{
+            .root = production.results.front().root,
+            .assigned_additional_visits = std::nullopt,
+            .policy_checkpoint_visits = {},
+            .parallel_searches = std::nullopt,
+            .add_root_noise = false,
+            .force_root_playouts = false,
         };
-        const ChessSelfPlaySearchBatch completedResults = search.search(completedBoards, false);
-        require(completedResults.simulations_completed == 0,
-                "completed roots unexpectedly performed additional searches");
+        const auto retainedResult = search.search({retained}).results.front();
+        require(retainedResult.starting_visits == 16 &&
+                    retainedResult.assigned_additional_visits == 16 &&
+                    retainedResult.final_visits == 32,
+                "retained root treated the assigned budget as an absolute visit limit");
 
-        const InferenceStatistics beforeRefresh = search.inferenceStatistics();
+        const SelfPlaySearchParameters liveCurveParameters(101, liveCurve, treeSearchParameters(),
+                                                           0.3F, 0.0F);
+        ChessSelfPlaySearch liveCurveSearch(runtimeParameters, liveCurveParameters,
+                                            inferenceParameters);
+        const auto liveCurveResult =
+            liveCurveSearch.search({productionRequest(liveCurveSearch)}).results.front();
+        require(liveCurveResult.spend_residual == liveCurveSearch.spendResidual(),
+                "predicted request did not expose its exact post-assignment spend residual");
+        const std::int64_t residualBeforeExplicit = liveCurveSearch.spendResidual();
+        const auto explicitResult =
+            liveCurveSearch.search({fixedRequest(liveCurveSearch, 50, {}, 1)}).results.front();
+        require(explicitResult.spend_residual == residualBeforeExplicit &&
+                    liveCurveSearch.spendResidual() == residualBeforeExplicit,
+                "explicit deep-label budget mutated the production spend ledger");
+
+        std::vector<ChessSelfPlaySearchRequest> heterogeneous;
+        for (const std::uint32_t budget : budgets) {
+            heterogeneous.push_back(fixedRequest(search, budget));
+        }
+        const auto heterogeneousResults = search.search(heterogeneous);
+        for (const std::size_t index : range(budgets.size())) {
+            require(heterogeneousResults.results[index].assigned_additional_visits ==
+                            budgets[index] &&
+                        heterogeneousResults.results[index].parallel_searches ==
+                            expectedParallelism[index] &&
+                        heterogeneousResults.results[index].final_visits == budgets[index],
+                    "simultaneous heterogeneous search lost its per-request budget or parallelism");
+        }
+
+        const auto checkpointResult =
+            search.search({fixedRequest(search, 80, {20, 40, 80}, 1)}).results.front();
+        require(checkpointResult.checkpoints.size() == 3 &&
+                    checkpointResult.checkpoints[0].visits == 20 &&
+                    checkpointResult.checkpoints[1].visits == 40 &&
+                    checkpointResult.checkpoints[2].visits == 80,
+                "continued search did not return every requested policy checkpoint");
+        require(std::ranges::all_of(checkpointResult.checkpoints,
+                                    [](const SearchCheckpoint &checkpoint) {
+                                        return !checkpoint.policy_target_visits.empty();
+                                    }),
+                "policy checkpoint detail omitted a requested policy snapshot");
+
+        try {
+            static_cast<void>(search.search({fixedRequest(search, 80, {40, 20}, 1)}));
+            throw std::runtime_error("unsorted checkpoint request unexpectedly validated");
+        } catch (const std::invalid_argument &) {
+        }
+        try {
+            static_cast<void>(search.search({fixedRequest(search, 80, {20, 20}, 1)}));
+            throw std::runtime_error("duplicate checkpoint request unexpectedly validated");
+        } catch (const std::invalid_argument &) {
+        }
+
         search.refreshModel(8, updatedModelPath.string());
         require(search.modelGeneration() == 8, "refresh did not publish its model generation");
-        require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
-                "refresh retained old model output");
-        require(search.inferenceStatistics().evaluations > beforeRefresh.evaluations,
-                "refresh reset cumulative statistics");
-        require(completedBoards[0].root.visits() == 0 && completedBoards[1].root.visits() == 0,
-                "model refresh retained stale search trees");
-        const ChessSelfPlaySearchBatch refreshedResults = search.search(completedBoards, false);
-        require(refreshedResults.simulations_completed == 24,
-                "refreshed roots did not rebuild under the new model");
-
+        const auto updated = search.search({productionRequest(search)}).results.front();
+        require(std::abs(updated.search_budget_logit - 2.0F) < 1e-7F &&
+                    std::abs(updated.predicted_search_budget - 0.880797F) < 1e-6F,
+                "model refresh did not update the raw and bounded budget prediction");
         try {
             search.refreshModel(9, invalidModelPath.string());
             throw std::runtime_error("invalid model refresh unexpectedly succeeded");
         } catch (const std::invalid_argument &) {
         }
         require(search.modelGeneration() == 8,
-                "failed refresh published an unvalidated model version");
-        require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
-                "failed refresh changed active weights");
-
-        std::vector<Board> concurrentBoards(200);
-        std::atomic<bool> concurrentBatchStarted = false;
-        std::future<std::vector<ChessInferenceResult>> concurrentInference =
-            std::async(std::launch::async, [&] {
-                concurrentBatchStarted.store(true, std::memory_order_release);
-                return search.evaluate(concurrentBoards);
-            });
-        while (!concurrentBatchStarted.load(std::memory_order_acquire)) {
-            std::this_thread::yield();
-        }
-        search.refreshModel(9, modelPath.string());
-        const std::vector<ChessInferenceResult> concurrentResults = concurrentInference.get();
-        require(!concurrentResults.empty(), "concurrent inference returned no results");
-        const float concurrentValue = concurrentResults.front().value();
-        const bool usedInitialModel = std::abs(concurrentValue) < 0.001F;
-        const bool usedUpdatedModel = std::abs(concurrentValue - 0.75F) < 0.001F;
-        require(usedInitialModel || usedUpdatedModel,
-                "concurrent inference observed mixed model parameters and buffers");
-        for (const ChessInferenceResult &result : concurrentResults) {
-            require(std::abs(result.value() - concurrentValue) < 0.001F,
-                    "one accepted batch crossed model generations");
-        }
-
-        for (std::uint64_t version = 10; version < 29; ++version) {
-            const std::filesystem::path &refreshPath =
-                version % 2 == 0 ? updatedModelPath : modelPath;
-            search.refreshModel(version, refreshPath.string());
-        }
-        require(search.modelGeneration() == 28, "repeated refresh lost model generation");
-
-        const ChessSelfPlaySearchParameters sameCapacitySchedule(
-            1, FixedSearchLimit(16), 7, treeSearchParameters(1.25F), 0.3F, 0.25F);
-        require(!search.updateSearchSchedule(sameCapacitySchedule),
-                "equal-capacity schedule incorrectly required root replacement");
-        const ChessSelfPlaySearchParameters discountedSchedule(
-            1, FixedSearchLimit(16), 7,
-            treeSearchParameters(1.25F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
-                                 0.0F, 0.9985F),
-            0.3F, 0.25F);
-        require(search.updateSearchSchedule(discountedSchedule),
-                "value-discount change did not require root replacement");
-        try {
-            static_cast<void>(
-                search.search({ChessSelfPlaySearchRequest(results.results[0].root, true)}));
-            throw std::runtime_error("stale root unexpectedly accepted a new value discount");
-        } catch (const std::invalid_argument &) {
-        }
-        const ChessSelfPlaySearchParameters largerSchedule(1, FixedSearchLimit(24), 8, treeSearchParameters(1.25F),
-                                                           0.3F, 0.25F);
-        require(search.updateSearchSchedule(largerSchedule),
-                "larger schedule did not report an arena-capacity change");
-
-        const ChessSelfPlaySearchParameters forcedSchedule(
-            1, FixedSearchLimit(64), 16,
-            treeSearchParameters(
-                1.5F, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::ReducedParentValue, 0.2F),
-                2.0F),
-            0.3F, 0.25F);
-        ChessSelfPlaySearch forcedSearch(runtimeParameters, forcedSchedule, inferenceParameters);
-        const ChessSelfPlaySearchBatch forcedResults =
-            forcedSearch.search({ChessSelfPlaySearchRequest(forcedSearch.newRoot(Board{}), true),
-                                 ChessSelfPlaySearchRequest(forcedSearch.newRoot(Board{}), false)});
-        require(totalVisits(forcedResults.results[0].search_visits) == 64 &&
-                    totalVisits(forcedResults.results[1].search_visits) == 16,
-                "forced playouts changed authoritative actual visit totals");
-        require(totalVisits(forcedResults.results[0].policy_target_visits) <= 64,
-                "forced-playout target exceeded actual visits");
-        require(forcedResults.results[1].search_visits ==
-                    forcedResults.results[1].policy_target_visits,
-                "fast search applied forced playouts or pruning");
-
-        const ChessSelfPlaySearchResult &correctionResult = forcedResults.results[0];
-        const Board initialBoard{};
-        const std::vector<ChessAction> legalActions = ChessGame::legalActions(initialBoard);
-        const float cleanPrior = 1.0F / static_cast<float>(legalActions.size());
-        const float policyVisitTotal =
-            static_cast<float>(totalVisits(correctionResult.policy_target_visits));
-        float expectedPolicyCorrection = 0.0F;
-        for (const ChessAction action : legalActions) {
-            const int actionId = ChessEncoding::actionId(action, initialBoard);
-            const auto searched = std::ranges::find_if(
-                correctionResult.policy_target_visits,
-                [actionId](const GameSearchVisit visit) { return visit.action_id == actionId; });
-            const float searchedProbability =
-                searched == correctionResult.policy_target_visits.end()
-                    ? 0.0F
-                    : static_cast<float>(searched->visit_count) / policyVisitTotal;
-            expectedPolicyCorrection += 0.5F * std::abs(cleanPrior - searchedProbability);
-        }
-        const float expectedValueCorrection =
-            0.5F * std::abs(correctionResult.root_value - correctionResult.network_root_value);
-        require(std::abs(correctionResult.policy_correction - expectedPolicyCorrection) < 0.00001F,
-                "policy correction did not use the clean pre-noise legal prior");
-        require(std::abs(correctionResult.value_correction - expectedValueCorrection) < 0.00001F,
-                "value correction did not use root Q and the network WDL scalar");
-
-        require(initialFastSearchAdmissionCount(8, 2, 4, 1, 4) == 2,
-                "4:1 mixed admission selected the wrong initial fast count");
-        require(initialFastSearchAdmissionCount(5, 2, 4, 1, 4) == 2,
-                "non-integral mixed admission did not round up");
-        require(initialFastSearchAdmissionCount(7, 2, 4, 4, 4) == 7,
-                "equal budgets did not admit every fast search");
-        require(initialFastSearchAdmissionCount(0, 3, 4, 1, 4) == 0,
-                "all-full admission unexpectedly created fast work");
-        require(initialFastSearchAdmissionCount(7, 0, 4, 1, 4) == 7,
-                "all-fast admission did not admit every search");
-        require(initialFastSearchAdmissionCount(384, 128, 600, 150, 256) == 128,
-                "capacity-fill admission did not fill the configured inference slots");
-        require(initialFastSearchAdmissionCount(384, 256, 600, 150, 256) == 96,
-                "capacity-fill admission incorrectly displaced ratio-based work");
-
-        const ChessSelfPlaySearchParameters stagedParameters(1, FixedSearchLimit(4), 1, treeSearchParameters(1.5F),
-                                                             0.3F, 0.25F);
-        ChessSelfPlaySearch stagedSearch(runtimeParameters, stagedParameters, inferenceParameters);
-        const std::vector<bool> mixedKinds = {false, true, false, false, true, false, false};
-        const ChessSelfPlaySearchBatch mixedResults = searchRequests(stagedSearch, mixedKinds);
-        require(mixedResults.simulations_completed == 13,
-                "4:1 staged search completed the wrong simulation count");
-        for (const std::size_t index : range(mixedKinds.size())) {
-            const std::uint32_t expectedVisits = mixedKinds[index] ? 4U : 1U;
-            require(mixedResults.results[index].root.visits() == expectedVisits,
-                    "4:1 staged search missed a request budget");
-        }
-
-        ChessSelfPlaySearch allFullSearch(runtimeParameters, stagedParameters, inferenceParameters);
-        const ChessSelfPlaySearchBatch allFullResults =
-            searchRequests(allFullSearch, {true, true, true});
-        require(allFullResults.simulations_completed == 12,
-                "all-full search completed the wrong simulation count");
-
-        ChessSelfPlaySearch allFastSearch(runtimeParameters, stagedParameters, inferenceParameters);
-        const ChessSelfPlaySearchBatch allFastResults =
-            searchRequests(allFastSearch, {false, false, false, false, false});
-        require(allFastResults.simulations_completed == 5,
-                "all-fast search completed the wrong simulation count");
-
-        const ChessSelfPlaySearchParameters equalParameters(1, FixedSearchLimit(4), 4, treeSearchParameters(1.5F),
-                                                            0.3F, 0.25F);
-        ChessSelfPlaySearch equalSearch(runtimeParameters, equalParameters, inferenceParameters);
-        const ChessSelfPlaySearchBatch equalResults =
-            searchRequests(equalSearch, {false, true, false, true});
-        require(equalResults.simulations_completed == 16,
-                "equal-budget search completed the wrong simulation count");
-
-        const AdaptiveSearchLimit deterministicLimit(
-            4, 12, 2, 2, 1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 8,
-            DisabledSearchCorrectionGate{});
-        const ChessSelfPlaySearchParameters deterministicParameters(
-            1, deterministicLimit, 1, treeSearchParameters(1.5F), 0.3F, 0.0F);
-        ChessSelfPlaySearch deterministicSearch(runtimeParameters, deterministicParameters,
-                                                inferenceParameters);
-        const ChessSelfPlaySearchBatch deterministicResults = deterministicSearch.search(
-            {ChessSelfPlaySearchRequest(deterministicSearch.newRoot(Board{}), true,
-                                        SearchCheckpointDetail::Policies)});
-        require(deterministicResults.results[0].stop_reason == SearchStopReason::Deterministic &&
-                    deterministicResults.results[0].final_visits == 4,
-                "deterministic adaptive search did not stop at its first eligible checkpoint");
-        require(!deterministicResults.results[0].checkpoints[0].policy_target_visits.empty(),
-                "adaptive checkpoint omitted its policy snapshot");
-        require(deterministicResults.results[0].checkpoints.back().most_visited_action_id ==
-                    deterministicResults.results[0].highest_visited_child_action_id,
-                "adaptive checkpoint omitted the raw selected move");
-        require(deterministicResults.results[0].search_correction_target ==
-                    std::max(deterministicResults.results[0].policy_correction,
-                             deterministicResults.results[0].value_correction),
-                "search-correction label did not use the larger final correction");
-
-        const AdaptiveSearchLimit learnedLimit(
-            4, 12, 2, 2, 0.0F, 1.0F, 1.0F, 1.0F, 1.0F, 8,
-            SearchCorrectionGate(8, 0.6F));
-        const ChessSelfPlaySearchParameters learnedParameters(
-            1, learnedLimit, 1, treeSearchParameters(1.5F), 0.3F, 0.25F);
-        ChessSelfPlaySearch learnedSearch(runtimeParameters, learnedParameters,
-                                         inferenceParameters);
-        const ChessSelfPlaySearchBatch learnedResults = learnedSearch.search(
-            {ChessSelfPlaySearchRequest(learnedSearch.newRoot(Board{}), true)});
-        require(learnedResults.results[0].stop_reason == SearchStopReason::LearnedGate &&
-                    learnedResults.results[0].final_visits == 8 &&
-                    learnedResults.results[0].learned_gate_evaluated,
-                "learned adaptive gate did not stop at its midpoint");
-        require(learnedResults.results[0].checkpoints[0].policy_target_visits.empty(),
-                "ordinary self-play retained detailed checkpoint policies");
-
-        ChessSelfPlaySearch terminalSearch(runtimeParameters, stagedParameters,
-                                           inferenceParameters);
-        std::vector<ChessSelfPlaySearchRequest> terminalRequests = {
-            ChessSelfPlaySearchRequest(terminalSearch.newRoot(Board{}), true),
-            ChessSelfPlaySearchRequest(terminalSearch.newRoot(Board{}), false),
-            ChessSelfPlaySearchRequest(terminalSearch.newRoot(Board{}), false),
-            ChessSelfPlaySearchRequest(terminalSearch.newRoot(Board{}), false),
-            ChessSelfPlaySearchRequest(terminalSearch.newRoot(Board{}), false),
-            ChessSelfPlaySearchRequest(
-                terminalSearch.newRoot(Board("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1")), false),
-        };
-        try {
-            static_cast<void>(terminalSearch.search(terminalRequests));
-            throw std::runtime_error("terminal staged search unexpectedly returned a move");
-        } catch (const std::logic_error &error) {
-            require(std::string(error.what()) == "Completed search has no visited child",
-                    "terminal staged search changed its error semantics");
-        }
-        require(terminalRequests.back().root.visits() == 1,
-                "waiting terminal request was not incrementally admitted");
-
+                "failed refresh published an unvalidated model generation");
     } catch (...) {
         std::filesystem::remove(modelPath);
         std::filesystem::remove(updatedModelPath);

@@ -11,15 +11,16 @@ from src.experiment.configuration import (
     experiment_configuration_sha256,
     load_chess_experiment_configuration,
     load_experiment_configuration,
+    load_experiment_configuration_json,
     validate_experiment_queue,
     write_resolved_chess_experiment,
 )
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.training import ChessImplementation
 from src.games.go.configuration import GoExperimentConfiguration
+from src.search_budget.curve import flat_curve
 from src.self_play.configuration import (
     EnabledForcedPlayoutConfiguration,
-    FixedFullSearchBudgetConfiguration,
     SdpaBackend,
 )
 from src.self_play.parameters import (
@@ -96,26 +97,10 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
         22,
         23,
     )
-    assert configuration.chess.self_play.search.parallel_searches.value_at(0) == 4
-    full_search_budget = configuration.chess.self_play.search.full_search_budget
-    assert isinstance(full_search_budget, FixedFullSearchBudgetConfiguration)
     assert tuple(
-        full_search_budget.visits.value_at(generation) for generation in (0, 10, 30, 50, 90, 180, 250, 350, 450, 500)
+        configuration.chess.self_play.search.baseline_visits.value_at(generation)
+        for generation in (0, 10, 30, 50, 90, 180, 250, 350, 450, 500)
     ) == (200, 300, 400, 500, 600, 800, 1000, 1200, 1400, 1600)
-    full_search_probability = configuration.chess.self_play.full_search_probability
-    assert tuple(
-        full_search_probability.value_at(generation) for generation in (0, 29, 30, 49, 50, 69, 70, 249, 250)
-    ) == (
-        1.0,
-        1.0,
-        0.5,
-        0.5,
-        0.35,
-        0.35,
-        0.25,
-        0.25,
-        0.2,
-    )
     auxiliary_targets = configuration.chess.objective.auxiliary_targets
     assert tuple(target.kind for target in auxiliary_targets) == (
         'next_policy',
@@ -123,7 +108,7 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
         'future_search_value',
         'irreversible_progress',
         'legal_moves',
-        'search_correction',
+        'search_budget',
     )
     assert tuple(target.loss_weight.value_at(0) for target in auxiliary_targets) == (
         0.05,
@@ -131,7 +116,7 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
         0.025,
         0.0125,
         0.0125,
-        0.05,
+        0.2,
     )
     remaining_game_length = auxiliary_targets[1]
     assert isinstance(remaining_game_length, RemainingGameLengthTargetConfiguration)
@@ -167,35 +152,20 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
     assert configuration.training.initial_model == progressive_model_sizing.models[0]
 
 
-@pytest.mark.parametrize('search_correction_count', (0, 2))
-def test_adaptive_learned_gate_requires_exactly_one_search_correction_target(
-    search_correction_count: int,
+@pytest.mark.parametrize('search_budget_count', (0, 2))
+def test_learned_search_budget_requires_exactly_one_target(
+    search_budget_count: int,
 ) -> None:
     candidate = yaml.safe_load(OPTIMAL_CHESS_EXPERIMENT_PATH.read_text(encoding='utf-8'))
     targets = candidate['chess']['objective']['auxiliary_targets']
-    without_search_correction = tuple(target for target in targets if target['kind'] != 'search_correction')
-    search_correction = {'kind': 'search_correction', 'loss_weight': 0.1}
+    without_search_budget = tuple(target for target in targets if target['kind'] != 'search_budget')
+    search_budget = {'kind': 'search_budget', 'loss_weight': 0.2}
     candidate['chess']['objective']['auxiliary_targets'] = [
-        *without_search_correction,
-        *[search_correction] * search_correction_count,
+        *without_search_budget,
+        *[search_budget] * search_budget_count,
     ]
-    candidate['chess']['self_play']['search']['full_search_budget'] = {
-        'kind': 'adaptive',
-        'minimum_visits': 400,
-        'maximum_visits': 1200,
-        'observation_interval': 100,
-        'leader_stability_window': 200,
-        'root_value_tolerance': 0.04,
-        'initial_top_visit_share': 0.7,
-        'final_top_visit_share': 0.5,
-        'initial_top_two_margin': 0.45,
-        'final_top_two_margin': 0.15,
-        'threshold_relaxation_visits': 1200,
-        'learned_gate_start_generation': 50,
-        'minimum_search_correction_to_unlock_tail': 0.4,
-    }
 
-    with pytest.raises(ValidationError, match='requires exactly one search-correction'):
+    with pytest.raises(ValidationError, match='requires exactly one search-budget target'):
         ChessExperimentConfiguration.model_validate(candidate)
 
 
@@ -275,7 +245,7 @@ def test_first_play_urgency_modes_resolve_explicitly(
     candidate['go']['self_play']['search']['first_play_urgency'] = authored
     configuration = GoExperimentConfiguration.model_validate(candidate)
 
-    resolved = configuration.go.self_play.resolve(0, configuration.go.rules.maximum_moves, 1.0)
+    resolved = configuration.go.self_play.resolve(0, 0.0, configuration.go.rules.maximum_moves, 1.0)
 
     assert resolved.first_play_urgency == expected
 
@@ -346,8 +316,8 @@ def test_early_termination_caps_maximum_game_plies_and_censors_cut_games() -> No
     assert configuration.chess.self_play.maximum_game_plies_at(0) == 80
     assert configuration.chess.self_play.maximum_game_plies_at(10) == 160
     assert configuration.chess.self_play.maximum_game_plies_at(50) == 600
-    assert implementation.self_play_parameters_at(0).maximum_game_plies == 80
-    assert implementation.self_play_parameters_at(50).maximum_game_plies == 600
+    assert implementation.self_play_parameters_at(0, flat_curve()).maximum_game_plies == 80
+    assert implementation.self_play_parameters_at(50, flat_curve()).maximum_game_plies == 600
     assert implementation.censor_remaining_game_length_on_cut_games is True
 
 
@@ -381,6 +351,10 @@ def test_resolved_experiment_round_trips_as_canonical_json(tmp_path: Path) -> No
     write_resolved_chess_experiment(resolved_path, configuration)
 
     assert load_chess_experiment_configuration(resolved_path) == configuration
+
+
+def test_experiment_configuration_round_trips_directly_through_json_validation() -> None:
+    assert load_experiment_configuration_json(CHESS_EXPERIMENT.model_dump_json()) == CHESS_EXPERIMENT
 
 
 def test_experiment_configuration_extends_and_deeply_overrides_a_base(tmp_path: Path) -> None:
@@ -581,7 +555,7 @@ def test_experiment_configuration_hash_is_stable_across_host_path_separators() -
 def test_experiment_configuration_hash_matches_pinned_regression_value() -> None:
     assert (
         experiment_configuration_sha256(CHESS_EXPERIMENT)
-        == '6afca38d27272dee7080d01c2beee7772917e17e0262af1482b4553ff6aad8d7'
+        == 'ee276df866388e2741ae4053207c615883309fb81399c7186b3e2d8732e00e97'
     )
 
 
@@ -610,4 +584,4 @@ def test_cut_game_value_target_selects_whether_self_play_bootstraps(value_target
 
     implementation = ChessImplementation(configuration)
 
-    assert implementation.self_play_parameters_at(0).bootstrap_cut_game_value is expected
+    assert implementation.self_play_parameters_at(0, flat_curve()).bootstrap_cut_game_value is expected

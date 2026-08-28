@@ -2,7 +2,7 @@
 #
 # v2 and v3 both trailed the r3-replica reference per unit of fresh data, and they share exactly
 # one thing the replica has none of: an unvalidated delta set (rank-96 bottleneck head, virtual
-# loss 0.5, the 0.99 search discount, the search_correction auxiliary, the adaptive visit budget,
+# loss 0.5, the 0.99 search discount, the former correction auxiliary and threshold visit budget,
 # Syzygy adjudication). Fixing the generation-0 prior closed part of that gap in v3 but not all of
 # it. This configuration removes the whole delta set and returns to the only learning recipe that
 # has ever demonstrated the target rate on this platform — the r3 replica — while keeping the two
@@ -100,6 +100,7 @@ training:
     inference_retention:
       recent_checkpoint_count: 22
       milestone_interval: 20
+    search_budget: {}
   limits:
     hourly_price: 0.72
     maximum_cost: null
@@ -271,32 +272,17 @@ chess:
       confidence_level: 0.95
       maximum_relaxation_per_generation: 0.01
     search:
-      full_search_budget:
-        kind: fixed
-        visits:
-          kind: staged
-          stages:
-            - {start_generation: 0, value: 200}
-            - {start_generation: 10, value: 300}
-            - {start_generation: 30, value: 400}
-            - {start_generation: 50, value: 500}
-            - {start_generation: 90, value: 600}
-            - {start_generation: 180, value: 700}
-            - {start_generation: 250, value: 800}
-            - {start_generation: 550, value: 1000}
-      fast_searches:
+      baseline_visits:
         kind: staged
         stages:
-          - {start_generation: 0, value: 50}
-          - {start_generation: 10, value: 75}
-          - {start_generation: 30, value: 100}
-          - {start_generation: 50, value: 125}
-          - {start_generation: 90, value: 150}
-      parallel_searches:
-        kind: staged
-        stages:
-          - {start_generation: 0, value: 2}
-          - {start_generation: 90, value: 4}
+          - {start_generation: 0, value: 200}
+          - {start_generation: 10, value: 300}
+          - {start_generation: 30, value: 400}
+          - {start_generation: 50, value: 500}
+          - {start_generation: 90, value: 600}
+          - {start_generation: 180, value: 700}
+          - {start_generation: 250, value: 800}
+          - {start_generation: 550, value: 1000}
       virtual_loss_weight: 1.0
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
@@ -322,13 +308,6 @@ chess:
       minimum_remaining_plies: 15
       maximum_archive_positions: 50000
       maximum_age_generations: 40
-    full_search_probability:
-      kind: linear
-      start_generation: 0
-      end_generation: 70
-      start_value: 1.0
-      end_value: 0.25
-      rounding: none
     retained_root_visit_fraction: 0.6
     greedy_after_ply:
       kind: staged
@@ -343,7 +322,6 @@ chess:
         - {start_generation: 80, value: 180}
         - {start_generation: 110, value: 200}
         - {start_generation: 140, value: 250}
-    force_fast_search_after_ply: 200
     starting_temperature: 1.3
     final_temperature: 0.1
     primary_sample_weight: 1.0
@@ -366,3 +344,5 @@ chess:
       - kind: remaining_game_length
         loss_weight: 0.1
         normalization_scale: 400.0
+      - kind: search_budget
+        loss_weight: 0.2

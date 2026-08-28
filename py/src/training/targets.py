@@ -5,7 +5,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 from src.util.frozen_model import FrozenModel
-from src.util.generation_schedule import FloatGenerationSchedule, defined_schedule_values
+from src.util.generation_schedule import ConstantSchedule, FloatGenerationSchedule, defined_schedule_values
 
 
 class NextPolicyTargetConfiguration(FrozenModel):
@@ -68,12 +68,12 @@ class LegalMovesTargetConfiguration(FrozenModel):
         return self
 
 
-class SearchCorrectionTargetConfiguration(FrozenModel):
-    kind: Literal['search_correction'] = 'search_correction'
-    loss_weight: FloatGenerationSchedule
+class SearchBudgetTargetConfiguration(FrozenModel):
+    kind: Literal['search_budget'] = 'search_budget'
+    loss_weight: FloatGenerationSchedule = ConstantSchedule[float](value=0.2)
 
     @model_validator(mode='after')
-    def validate_loss_weight(self) -> SearchCorrectionTargetConfiguration:
+    def validate_loss_weight(self) -> SearchBudgetTargetConfiguration:
         if any(value < 0.0 for value in defined_schedule_values(self.loss_weight)):
             raise ValueError('Auxiliary loss weight must remain nonnegative.')
         return self
@@ -85,7 +85,7 @@ AuxiliaryTargetConfiguration: TypeAlias = Annotated[
     | FutureSearchValueTargetConfiguration
     | IrreversibleProgressTargetConfiguration
     | LegalMovesTargetConfiguration
-    | SearchCorrectionTargetConfiguration,
+    | SearchBudgetTargetConfiguration,
     Field(discriminator='kind'),
 ]
 
@@ -146,8 +146,8 @@ class LegalMovesHeadLayout:
 
 
 @dataclass(frozen=True)
-class SearchCorrectionHeadLayout:
-    kind: Literal['search_correction']
+class SearchBudgetHeadLayout:
+    kind: Literal['search_budget']
     output_size: Literal[1] = 1
 
 
@@ -157,7 +157,7 @@ AuxiliaryHeadLayout: TypeAlias = (
     | FutureSearchValueHeadLayout
     | IrreversibleProgressHeadLayout
     | LegalMovesHeadLayout
-    | SearchCorrectionHeadLayout
+    | SearchBudgetHeadLayout
 )
 
 
@@ -173,7 +173,7 @@ def auxiliary_head_output_size(head: AuxiliaryHeadLayout) -> int:
             return output_size
         case LegalMovesHeadLayout(action_size=action_size):
             return action_size
-        case SearchCorrectionHeadLayout(output_size=output_size):
+        case SearchBudgetHeadLayout(output_size=output_size):
             return output_size
 
 
@@ -224,6 +224,6 @@ def build_training_target_layout(
                 )
             case LegalMovesTargetConfiguration():
                 heads.append(LegalMovesHeadLayout(kind='legal_moves', action_size=action_size))
-            case SearchCorrectionTargetConfiguration():
-                heads.append(SearchCorrectionHeadLayout(kind='search_correction'))
+            case SearchBudgetTargetConfiguration():
+                heads.append(SearchBudgetHeadLayout(kind='search_budget'))
     return TrainingTargetLayout(action_size=action_size, wdl_size=3, auxiliary_heads=tuple(heads))

@@ -78,10 +78,7 @@ evaluation:
 chess:
   self_play:
     search:
-      full_search_budget:
-        kind: fixed
-        visits: 8
-      fast_searches: 2
+      baseline_visits: 8
     start_position:
       kind: restart_state
       true_start_probability: 0.5
@@ -92,8 +89,6 @@ chess:
       minimum_remaining_plies: 5
       maximum_archive_positions: 1000
       maximum_age_generations: 8
-    full_search_probability: 0.5
     greedy_after_ply: 30
     maximum_game_plies: 60
-    force_fast_search_after_ply: 40
     detailed_statistics_workers: 1

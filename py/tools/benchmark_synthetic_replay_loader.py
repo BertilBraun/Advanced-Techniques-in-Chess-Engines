@@ -26,9 +26,11 @@ from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
+    EligibleSearchBudgetTarget,
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
+    IneligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -42,7 +44,7 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchCorrectionHeadLayout,
+    SearchBudgetHeadLayout,
     TrainingTargetLayout,
     auxiliary_head_output_size,
 )
@@ -174,7 +176,7 @@ def _layout(state: _SyntheticChessState) -> ReplayLayout:
             FutureSearchValueHeadLayout(kind='future_search_value', ply_offset=4, smooth_l1_beta=0.5),
             IrreversibleProgressHeadLayout(kind='irreversible_progress', horizon_plies=8),
             LegalMovesHeadLayout(kind='legal_moves', action_size=ACTION_SIZE),
-            SearchCorrectionHeadLayout(kind='search_correction'),
+            SearchBudgetHeadLayout(kind='search_budget'),
         ),
     )
     return ReplayLayout(
@@ -233,7 +235,15 @@ def _sample(state: _SyntheticChessState, row: int) -> ReplaySample:
             if eligible
             else IneligibleScalarAuxiliaryTarget(kind='irreversible_progress'),
             EligibleLegalMovesTarget(),
-            EligibleScalarAuxiliaryTarget(kind='search_correction', value=float(row % 7) / 6.0),
+            EligibleSearchBudgetTarget(
+                normalized_target=float(row % 7) / 6.0,
+                raw_kl=float(row % 11) / 10.0,
+                prediction_logit=float((row % 9) - 4),
+                predicted_quantile=float(row % 7) / 6.0,
+                source_generation=row % 100,
+                model_generation=row % 100,
+                inference_model_sha256='0' * 64,
+            ),
         ),
         sample_weight=float(row % 4 + 1),
         source_model_generation=row % 100,
@@ -326,6 +336,9 @@ def _object_reference_batch(
                 case EligibleScalarAuxiliaryTarget(value=value):
                     auxiliary[target_index][output_row, 0] = value
                     auxiliary_eligibility[target_index][output_row] = True
+                case EligibleSearchBudgetTarget(normalized_target=value):
+                    auxiliary[target_index][output_row, 0] = value
+                    auxiliary_eligibility[target_index][output_row] = True
                 case EligibleLegalMovesTarget():
                     transformed = permutation[np.asarray(sample.policy.legal_action_ids, dtype=np.uint16)]
                     auxiliary[target_index][output_row, transformed] = 1.0
@@ -335,6 +348,7 @@ def _object_reference_batch(
                     IneligibleNextPolicyTarget()
                     | IneligibleRemainingGameLengthTarget()
                     | IneligibleScalarAuxiliaryTarget()
+                    | IneligibleSearchBudgetTarget()
                 ):
                     pass
     return TrainingBatch(

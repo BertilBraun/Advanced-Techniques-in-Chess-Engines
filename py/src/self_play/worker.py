@@ -8,10 +8,10 @@ from uuid import uuid4
 
 import numpy as np
 from src.games.contracts import WdlTarget
+from src.search_budget.curve import SearchBudgetCurve
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
-    SearchCheckpointObservation,
     SearchObservation,
     SearchStopReason,
     SearchVisitCounts,
@@ -43,12 +43,10 @@ def _stop_reason_from_native(native_stop_reason: object) -> SearchStopReason:
     match native_stop_reason:
         case NativeSearchStopReason.FIXED_LIMIT:
             return SearchStopReason.FIXED_LIMIT
-        case NativeSearchStopReason.DETERMINISTIC:
-            return SearchStopReason.DETERMINISTIC
-        case NativeSearchStopReason.LEARNED_GATE:
-            return SearchStopReason.LEARNED_GATE
-        case NativeSearchStopReason.MAXIMUM:
-            return SearchStopReason.MAXIMUM
+        case NativeSearchStopReason.ADDITIONAL_VISITS:
+            return SearchStopReason.ADDITIONAL_VISITS
+        case NativeSearchStopReason.PREDICTED_BUDGET:
+            return SearchStopReason.PREDICTED_BUDGET
         case unknown:
             raise ValueError(f'Unknown native search stop reason: {unknown!r}')
 
@@ -70,6 +68,7 @@ class ActiveSelfPlayGame(Generic[NativeRootT]):
 class SelfPlayStatisticsSnapshot:
     model_generation: int
     completed_searches: int
+    search_budget_spend_residual: int
     inference: InferenceStatistics
 
 
@@ -108,25 +107,15 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         search, parameters = self._loaded_runtime()
         requests: list[NativeRequestT] = []
         for active_game in self.active_games:
-            continuation_forces_fast_search = (
-                parameters.force_fast_search_after_ply is not None
-                and len(active_game.action_ids) >= parameters.force_fast_search_after_ply
-            )
-            full_search = (
-                active_game.awaiting_cut_evaluation
-                or active_game.reserved_restart_action_id is not None
-                or (not continuation_forces_fast_search and self.random.random() < parameters.full_search_probability)
-            )
-            if full_search:
-                active_game.root.discount(parameters.retained_root_visit_fraction)
-            requests.append(search.request(active_game.root, full_search))
+            active_game.root.discount(parameters.retained_root_visit_fraction)
+            requests.append(search.request(active_game.root))
         batch = search.search(requests, collect_statistics=False)
         if len(batch.results) != len(self.active_games):
             raise RuntimeError('Batched self-play search returned the wrong result count.')
         self.completed_searches += batch.simulations_completed
         next_games: list[ActiveSelfPlayGame[NativeRootT]] = []
-        for active_game, request, result in zip(self.active_games, requests, batch.results, strict=True):
-            completed = self._advance_game(active_game, request, result, parameters)
+        for active_game, result in zip(self.active_games, batch.results, strict=True):
+            completed = self._advance_game(active_game, result, parameters)
             if completed is None:
                 next_games.append(active_game)
             else:
@@ -135,14 +124,15 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
                 next_games.append(self._new_game(search, parameters))
         self.active_games = next_games
 
-    def refresh_published_model(self, checkpoint: CheckpointReference) -> None:
-        parameters = self.game.self_play_parameters_at(checkpoint.generation)
+    def refresh_published_model(self, checkpoint: CheckpointReference, search_budget_curve: SearchBudgetCurve) -> None:
+        parameters = self.game.self_play_parameters_at(checkpoint.generation, search_budget_curve)
         if self.search is None:
             self.search = self.game.create_native_search(self.device_id, checkpoint, parameters)
             capacity_changed = False
         else:
             self.search.refresh_model(checkpoint.generation, str(checkpoint.inference_model_path))
             capacity_changed = self.search.update_search_schedule(self.game.native_search_parameters(parameters))
+        self.search.reset_spend_residual()
         self.parameters = parameters
         self.model_generation = checkpoint.generation
         self._prepare_restart_archive(parameters)
@@ -172,8 +162,13 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         return SelfPlayStatisticsSnapshot(
             model_generation=self.model_generation,
             completed_searches=self.completed_searches,
+            search_budget_spend_residual=search.spend_residual,
             inference=inference,
         )
+
+    def search_budget_spend_residual(self) -> int:
+        search, _ = self._loaded_runtime()
+        return search.spend_residual
 
     def _new_game(
         self,
@@ -251,7 +246,6 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
     def _advance_game(
         self,
         active_game: ActiveSelfPlayGame[NativeRootT],
-        request: NativeRequestT,
         result: NativeResultT,
         parameters: ResolvedSelfPlayParameters,
     ) -> CompletedSelfPlayGame | None:
@@ -260,8 +254,6 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         if not search_visits[0]:
             raise RuntimeError('Native search returned no visited action for a nonterminal root.')
         ply = len(active_game.action_ids)
-        if active_game.reserved_restart_action_id is not None and not request.full_search:
-            raise RuntimeError('Restart roots require a full search.')
         policy_target_columns = result.policy_target_columns
         if not policy_target_columns[0]:
             raise RuntimeError('Native search returned an empty policy target for a nonterminal root.')
@@ -286,31 +278,19 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             selected_action_id=(
                 None if resignation_triggered or active_game.awaiting_cut_evaluation else selected_action_id
             ),
-            full_search=request.full_search,
             sample_weight=parameters.primary_sample_weight,
-            search_budget=parameters.maximum_full_searches if request.full_search else parameters.fast_searches,
+            baseline_visits=parameters.baseline_visits,
             network_root_value=result.network_root_value,
             policy_correction=result.policy_correction,
             value_correction=result.value_correction,
-            search_correction_target=result.search_correction_target,
-            predicted_search_correction=result.predicted_search_correction,
+            search_budget_logit=result.search_budget_logit,
+            predicted_search_budget=result.predicted_search_budget,
+            assigned_additional_visits=result.assigned_additional_visits,
+            parallel_searches=result.parallel_searches,
+            spend_residual=result.spend_residual,
             starting_visits=result.starting_visits,
             final_visits=result.final_visits,
             stop_reason=_stop_reason_from_native(result.stop_reason),
-            learned_gate_evaluated=result.learned_gate_evaluated,
-            checkpoints=tuple(
-                SearchCheckpointObservation(
-                    visits=checkpoint.visits,
-                    leader_action_id=checkpoint.leader_action_id,
-                    most_visited_action_id=checkpoint.most_visited_action_id,
-                    top_visit_share=checkpoint.top_visit_share,
-                    top_two_margin=checkpoint.top_two_margin,
-                    root_value=checkpoint.root_value,
-                    root_value_delta=checkpoint.root_value_delta,
-                    leader_stable=checkpoint.leader_stable,
-                )
-                for checkpoint in result.checkpoints
-            ),
         )
         active_game.observations.append(observation)
         if active_game.awaiting_cut_evaluation:
@@ -339,8 +319,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             oracle = self.game.terminal_oracle
             final_wdl = None if oracle is None else oracle.probe_wdl(active_game.root.position)
             if final_wdl is None and parameters.bootstrap_cut_game_value:
-                # Evaluate the cut position with its own full search rather than reusing the last move's
-                # value, which may have come from a fast search and would be stamped on every sample.
+                # Evaluate the cut position itself rather than stamping the preceding move's value.
                 active_game.awaiting_cut_evaluation = True
                 return None
             if final_wdl is None:
