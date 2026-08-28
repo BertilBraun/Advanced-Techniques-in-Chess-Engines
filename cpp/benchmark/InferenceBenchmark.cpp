@@ -163,12 +163,12 @@ std::vector<CompressedEncodedBoard> encodeBoards(const std::vector<Board> &board
 void fillInput(torch::Tensor &input, const std::vector<CompressedEncodedBoard> &encodings,
                const size_t firstEncoding, const size_t batchSize) {
     std::int8_t *destination = input.data_ptr<std::int8_t>();
-    constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channelCount *
-                                           ChessRepresentationDimensions::boardLength *
-                                           ChessRepresentationDimensions::boardLength;
+    constexpr size_t encodedBoardBytes = ChessRepresentationDimensions::channelCount *
+                                         ChessRepresentationDimensions::boardLength *
+                                         ChessRepresentationDimensions::boardLength;
     for (const auto index : range(batchSize)) {
         encodings[(firstEncoding + index) % encodings.size()].writeTensorInto(
-            std::span(destination + index * ENCODED_BOARD_BYTES, ENCODED_BOARD_BYTES));
+            std::span(destination + index * encodedBoardBytes, encodedBoardBytes));
     }
 }
 
@@ -238,15 +238,15 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
                                resolveExecutionOptions(arguments));
     std::vector<std::pair<size_t, size_t>> pendingBatches;
     pendingBatches.reserve(arguments.slots);
-    constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channelCount *
-                                           ChessRepresentationDimensions::boardLength *
-                                           ChessRepresentationDimensions::boardLength;
+    constexpr size_t encodedBoardBytes = ChessRepresentationDimensions::channelCount *
+                                         ChessRepresentationDimensions::boardLength *
+                                         ChessRepresentationDimensions::boardLength;
     for (const auto warmupIteration : range(WARMUP_ITERATIONS)) {
         static_cast<void>(warmupIteration);
         const InferencePipeline::WritableBatch warmup = pipeline.acquireWritableBatch();
         for (const auto index : range(arguments.batchSize)) {
             encodings[index % encodings.size()].writeTensorInto(
-                std::span(warmup.data + index * ENCODED_BOARD_BYTES, ENCODED_BOARD_BYTES));
+                std::span(warmup.data + index * encodedBoardBytes, encodedBoardBytes));
         }
         pipeline.submit(warmup.slotIndex, arguments.batchSize);
         static_cast<void>(pipeline.consume<ChessGame>(
@@ -268,7 +268,7 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
         const InferencePipeline::WritableBatch writable = pipeline.acquireWritableBatch();
         for (const auto index : range(arguments.batchSize)) {
             encodings[(iteration * arguments.batchSize + index) % encodings.size()].writeTensorInto(
-                std::span(writable.data + index * ENCODED_BOARD_BYTES, ENCODED_BOARD_BYTES));
+                std::span(writable.data + index * encodedBoardBytes, encodedBoardBytes));
         }
         pipeline.submit(writable.slotIndex, arguments.batchSize);
         pendingBatches.emplace_back(writable.slotIndex, iteration * arguments.batchSize);
@@ -408,14 +408,14 @@ int main(const int argumentCount, char **argumentValues) {
         double encodeMilliseconds = 0.0;
         const std::vector<CompressedEncodedBoard> encodings =
             encodeBoards(boards, encodeMilliseconds);
-        constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channelCount *
-                                               ChessRepresentationDimensions::boardLength *
-                                               ChessRepresentationDimensions::boardLength;
-        std::vector<std::int8_t> packedEncodings(positions * ENCODED_BOARD_BYTES);
+        constexpr size_t encodedBoardBytes = ChessRepresentationDimensions::channelCount *
+                                             ChessRepresentationDimensions::boardLength *
+                                             ChessRepresentationDimensions::boardLength;
+        std::vector<std::int8_t> packedEncodings(positions * encodedBoardBytes);
         const auto packingStartedAt = std::chrono::steady_clock::now();
         for (const auto index : range(positions)) {
-            encodings[index].writeTensorInto(std::span(
-                packedEncodings.data() + index * ENCODED_BOARD_BYTES, ENCODED_BOARD_BYTES));
+            encodings[index].writeTensorInto(
+                std::span(packedEncodings.data() + index * encodedBoardBytes, encodedBoardBytes));
         }
         const double packingMilliseconds = std::chrono::duration<double, std::milli>(
                                                std::chrono::steady_clock::now() - packingStartedAt)

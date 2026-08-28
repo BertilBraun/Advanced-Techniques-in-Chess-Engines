@@ -102,7 +102,7 @@ void testTwoOutstandingBatches(const std::filesystem::path &modelPath, const Inf
     pipeline.discardWritableBatch(reused.slotIndex);
 }
 
-constexpr size_t refreshCount = 4;
+constexpr size_t REFRESH_COUNT = 4;
 
 void testRepeatedModelRefresh(const std::filesystem::path &modelPath, const InferenceDevice device,
                               const bool dedicatedCudaStream) {
@@ -116,7 +116,7 @@ void testRepeatedModelRefresh(const std::filesystem::path &modelPath, const Infe
     require(!runner.usesCuda() || capturedGraphs > 0,
             "runner captured no graphs for a capturable model");
 #endif
-    for (const auto refresh : range(refreshCount)) {
+    for (const auto refresh : range(REFRESH_COUNT)) {
         static_cast<void>(refresh);
         runner.commitModelRefresh(runner.prepareModelRefresh(modelPath.string()));
         input.fill_(1);
