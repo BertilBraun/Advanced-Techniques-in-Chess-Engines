@@ -5,14 +5,14 @@
 # attributable to what appears below. hardware.offer_id is inherited and must be updated to the node
 # actually rented.
 #
-# Learning rate — a geometric schedule from 0.005 at generation 0 to 0.0005 at generation 1500: a
-# clean 10x drop at a constant ratio per generation, replacing v9's hand-computed 0.85-per-100 stage
-# list. Reference point: AlphaZero dropped 0.2 -> 0.02 -> 0.002 -> 0.0002 at 0 / 100k / 300k / 500k
-# steps of 700k. Generation here is 500 optimizer steps, so those boundaries fall at generations
-# 200 / 600 / 1000 of roughly 1400, and its total decay is 1000x. The magnitude is deliberately not
-# copied: AdamW normalises per parameter, so the conventional analogue is 10-30x and 10x sits at the
-# conservative end. At v9's observed ~18.5 generations/hour, generation 1500 falls at ~81 h, inside a
-# four-day run; the schedule holds 0.0005 as a floor beyond it.
+# Learning rate — retain v9's observed 0.005 -> 0.004 -> 0.0034 path through generation 500, then
+# decay in measured stages to 0.0015 at generation 1500. V9's 15% drops at generations 500 and 600
+# modestly improved the training-loss slope and stabilised value loss, but fixed-dataset quality did
+# not improve and playing strength showed no clear inflection. The evidence supports gradual cooling,
+# not the previously authored 10x geometric decay to 0.0005. This 3.33x total decay keeps v10 near the
+# learning-rate range in which v9 was still gaining strength at generation 632 while continuing to
+# reduce update size through days three and four. At v9's observed ~18.5 generations/hour, generation
+# 1500 falls at ~81 h, inside a four-day run; the schedule holds 0.0015 as a floor beyond it.
 #
 # Self-play inference uses the measured RTX 4070 SUPER winner: bf16 channels-last with cuDNN
 # benchmarking. It passed the trained-checkpoint agreement gate and improved end-to-end searches/s
@@ -91,12 +91,16 @@ training:
   save_path: py/training_data/validation/vast-chess-4day-production-v10
   trainer:
     learning_rate:
-      kind: geometric
-      start_generation: 0
-      end_generation: 1500
-      start_value: 0.005
-      end_value: 0.0005
-      rounding: none
+      kind: staged
+      stages:
+        - {start_generation: 0, value: 0.005}
+        - {start_generation: 100, value: 0.004}
+        - {start_generation: 500, value: 0.0034}
+        - {start_generation: 700, value: 0.0029}
+        - {start_generation: 900, value: 0.00245}
+        - {start_generation: 1100, value: 0.0021}
+        - {start_generation: 1300, value: 0.0018}
+        - {start_generation: 1500, value: 0.0015}
   lifecycle:
     replay:
       capacity:
