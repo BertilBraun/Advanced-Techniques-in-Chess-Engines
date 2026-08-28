@@ -177,6 +177,16 @@ int runBatchedSearchTests() {
         const auto predictionRoot = search.newRoot(Board{}, 3);
         require(predictionRoot.tree().maximumCapacity() == 3,
                 "per-root capacity did not constrain the initial arena allocation");
+        const auto tightDeepSearch = search.search({{
+            .root = search.newRoot(Board{}, 19),
+            .assigned_additional_visits = 16,
+            .policy_checkpoint_visits = {},
+            .parallel_searches = 2,
+            .add_root_noise = false,
+            .force_root_playouts = true,
+        }});
+        require(tightDeepSearch.results.front().final_visits == 16,
+                "deep-label arena bound did not reserve parallel-search and reroot slots");
         std::vector<ChessSelfPlaySearchRequest> productionRequests = {productionRequest(search),
                                                                       productionRequest(search)};
         const auto production = search.search(productionRequests, true);

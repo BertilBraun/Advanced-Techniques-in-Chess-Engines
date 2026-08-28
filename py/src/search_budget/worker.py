@@ -257,7 +257,7 @@ class DeepSearchShardTask(FrozenModel):
 
     @property
     def maximum_root_capacity(self) -> int:
-        return self.deep_visit_limit + 2
+        return self.deep_visit_limit + self.parallel_searches + 1
 
 
 class _WorkerState:
