@@ -2,7 +2,8 @@
 
 The learned search-budget system is the only production self-play budget path. It replaces the randomized fast/full
 split, threshold stopping, and the former `search_correction` gate. Native C++ remains the sole search
-implementation; Python owns targets, durable background labelling, replay write-back, and blend publication.
+implementation; Python owns targets, durable background labelling, replay write-back, live curve learning, and
+atomic curve publication.
 
 ## Model and replay contract
 
@@ -17,18 +18,35 @@ KL, prediction logit, bounded prediction, source generation, checkpoint generati
 The strongest `8 * baseline` policy becomes an ordinary replay sample; replay capacity and sampling alone determine
 its lifetime.
 
-## Fixed multiplier curve
+## Live multiplier curve
 
-The run-versioned `measured_oracle_600_v1` curve is a left-closed step function. Its upper quantile boundaries are
+The production curve is learned continuously. It has ten fixed-width predicted-quantile buckets and one positive,
+monotone nondecreasing multiplier per bucket. The arithmetic mean of the ten multipliers is exactly one. There is no
+historical lookup table, permanent `0.2` floor, fixed ceiling, or prediction-CDF layer in the production path.
 
-`1186/3000, 1570/3000, 1838/3000, 2048/3000, 2188/3000, 2347/3000, 2547/3000, 2699/3000, 2806/3000, 1`,
+The clean initializer is the exact bucket average of
 
-and the corresponding multipliers are
+```text
+m0(q) = 0.2 + 4.8 * q^5
+```
 
-`750/3761, 1500/3761, 2250/3761, 3000/3761, 3750/3761, 4500/3761, 6000/3761, 9000/3761, 12000/3761, 18000/3761`.
+For bucket `[a, b]` of width `0.1`, its initial multiplier is
+`0.2 + 8 * (b^6 - a^6)`. This analytic initializer is monotone and has exact uniform mean one. Its low end is a
+rough starting estimate only; subsequent generation updates may move every bucket. Historical measured allocations
+remain evidence in the benchmark documentation, not constants or defaults in executable code.
 
-The exact uniform mean is one, the floor is `750/3761`, the ceiling is `18000/3761`, and `2188/3000` of quantiles
-are below baseline. A published blend interpolates exactly between multiplier one and this curve.
+Each finalized label generation measures local marginal policy fidelity around the current shadow curve. For each
+bucket, the label search records policies at log-symmetric lower and upper probes, initially `1 / 1.1` and `1.1`
+times the bucket multiplier, after generation-wide mean normalization and deterministic integer allocation. Its
+generation statistic is the mean reduction in `KL(pi_deep || pi_checkpoint)` divided by the multiplier interval.
+Each bucket's marginal-utility EMA initializes from its first nonempty generation and subsequently uses decay `0.2`.
+Empty buckets retain their EMA.
+
+The common compute price is the count-weighted mean marginal utility over nonempty buckets. Centered bucket
+utilities produce bounded log updates: the largest absolute proposed log change is `log(1.1)`. A deterministic
+isotonic projection makes the curve nondecreasing, a common scale factor restores arithmetic mean one, and
+backtracking shrinks the update until every final bucket ratio is within `[1 / 1.1, 1.1]`. This is allocator curve
+state, not a cross-generation position window.
 
 Production allocation happens after root expansion for every position. It assigns additional simulations, carries a
 signed deterministic integer residual into later assignments, and preserves retained-root semantics. Per-request
@@ -50,34 +68,48 @@ inference worker, uses inference batches of 512 with two outstanding batches, an
 monotonically.
 
 The prediction phase persists raw logits and bounded predictions in shards of 512 positions plus a remainder. Only
-after complete prediction coverage is verified are candidate allocations normalized across the complete generation
-sample. The deep-search phase uses the same shards, fresh roots, no Dirichlet noise, parallelism two, and sorted
-policy checkpoints. Each root continues once through the baseline, the union of all candidate visits, and exactly
-eight times the source generation's configured baseline. Artifacts and lightweight manifests are written atomically,
-checksummed, retried at most three times, and rejected unless coverage is complete.
+after complete prediction coverage is verified does the coordinator normalize the flat, validation-candidate, and
+local-probe budget vectors across the complete generation sample. The deep-search phase uses the same shards, fresh
+roots, no Dirichlet noise, `parallel_searches = 2`, and sorted policy checkpoints. Each root continues once through
+the baseline, the union of all required checkpoint visits, and exactly eight times the source generation's configured
+baseline. Artifacts and lightweight manifests are written atomically, checksummed, retried at most three times, and
+rejected unless coverage is complete.
 
 Generation finalization uses the documented `1e-6` policy-probability floor for finite KL. It computes
 `KL(pi_deep || pi_baseline)` for every sampled position, assigns deterministic generation-wide mid-rank quantiles,
-scores every candidate blend at exact flat mean spend, and writes every deep-labelled sample to replay. Replay
-write-back uses a prepared transaction receipt so a retry cannot duplicate one generation's evidence. Calibration is
-updated only after that receipt commits.
+updates all observed bucket statistics, scores the previously prepared publication candidate at exact flat mean
+spend, and writes every deep-labelled sample to replay. Replay write-back uses a prepared transaction receipt so a
+retry cannot duplicate one generation's evidence. Curve state changes only after that receipt commits.
 
-## Calibration and publication
+## Validation and publication
 
-Candidate blends are exactly `0.0, 0.1, ..., 1.0`. Each candidate's generation gain is the mean reduction in deep
-policy KL relative to flat search. Its EMA initializes from the first finalized generation and then updates as
-`0.8 * previous + 0.2 * current`. Blend remains zero through 29 complete label generations. Thereafter a nonzero
-candidate requires strictly positive current and EMA gain and exact mean spend. The greatest EMA gain wins, ties go
-to the lower blend, upward movement is limited to `0.1` per completed label generation, and decreases are immediate.
-No eligible nonzero candidate publishes zero.
+A curve proposed from source generation `g` is first checkpointed and scored on source generation `g + 1`. This
+one-generation delay prevents the same evidence from both constructing and authorizing a curve. The report records
 
-Publication names the first production generation that has not started. A running generation never changes blend.
+```text
+generation_gain = mean(KL(pi_deep || pi_flat) - KL(pi_deep || pi_candidate))
+```
+
+and a scalar validation-gain EMA that initializes from its first scored proposal and then updates as
+`0.8 * previous + 0.2 * current`.
+
+The published curve remains exactly flat through 29 complete source-generation jobs. Thereafter the pending curve is
+eligible only when its current validation gain and validation-gain EMA are both strictly positive and its reconstructed
+sample compute is valid. An eligible publication moves each bucket by at most ten percent from the previously
+published curve and preserves monotonicity and exact mean. A failed eligibility test publishes the flat curve
+immediately. There is no blend coefficient or grid of fixed historical curves.
+
+Publication names the first production generation that has not started. A running generation never changes curve.
 Unfinished work retains the latest completed publication. Terminal job failure, invalid compute reconstruction, an
-incompatible configuration hash, or unreadable state publishes zero. Candidate gains, EMA values, mean visits,
-distributions, floor/ceiling shares, residual, decision reason, and failed eligibility conditions are persisted in
-each final report. The same completed-report fields are published under `search_budget/label/` and
-`search_budget/calibration/` in TensorBoard, including timing, retry, lag, replay-write, failure, and skip health.
-Correlation and calibration diagnostics never authorize activation.
+incompatible configuration hash, or unreadable state publishes flat. Finalization and publication are idempotent.
+
+TensorBoard receives label-pipeline health; target and prediction distributions; generation and EMA validation gain;
+and, for every bucket, sample count, generation marginal utility, EMA marginal utility, shadow, pending, and
+published multiplier, raw update, projection adjustment, and empty-bucket status. Reports also preserve exact spend
+residual, curve lineage, min/max multipliers, decision reason, and failed eligibility conditions. Correlation,
+calibration plots, regression loss, top-1 agreement, and oracle-gain share remain diagnostics only.
 
 Run state is under `search-budget-labels/` in the configured training save path. Replay cohort and write-back journals
-are under `completed-games/`. These artifacts are part of restart correctness and must be preserved with the run.
+are under `completed-games/`. Persisted curve calibration contains only generation aggregates and state lineage, not
+a cross-generation collection of labelled positions. These artifacts are part of restart correctness and must be
+preserved with the run.
