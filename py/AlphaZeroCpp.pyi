@@ -164,7 +164,12 @@ class BatchedInferenceParameters:
 
 class BatchedSearchParameters:
     def __init__(
-        self, tree_search: TreeSearchParameters, dirichlet_alpha: float, dirichlet_epsilon: float, tree_capacity: int
+        self,
+        tree_search: TreeSearchParameters,
+        dirichlet_alpha: float,
+        dirichlet_epsilon: float,
+        initial_tree_capacity: int,
+        maximum_tree_capacity: int,
     ) -> None: ...
 
 class CandidateAnalysis:

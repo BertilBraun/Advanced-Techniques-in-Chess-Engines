@@ -121,7 +121,7 @@ int runBatchedSearchTests() {
         }
 
         const std::array<std::uint32_t, 5> budgets = {100, 300, 600, 1'600, 2'400};
-        const std::array<std::uint32_t, 5> expectedParallelism = {1, 2, 4, 8, 16};
+        const std::array<std::uint32_t, 5> expectedParallelism = {2, 2, 4, 8, 16};
         for (const std::size_t index : range(budgets.size())) {
             require(searchParallelism(budgets[index]) == expectedParallelism[index],
                     "production parallelism mapping changed");
@@ -174,6 +174,23 @@ int runBatchedSearchTests() {
                                                         0.0F);
         const BatchedInferenceParameters inferenceParameters(2, 8, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
+        const auto baselineSizedRoot = search.newRoot(Board{});
+        require(baselineSizedRoot.tree().capacity() == 19 &&
+                    baselineSizedRoot.tree().maximumCapacity() == 145,
+                "production root arena capacities were " +
+                    std::to_string(baselineSizedRoot.tree().capacity()) + "/" +
+                    std::to_string(baselineSizedRoot.tree().maximumCapacity()));
+        const auto grownArenaResult = search.search({{
+            .root = baselineSizedRoot,
+            .assigned_additional_visits = 24,
+            .policy_checkpoint_visits = {},
+            .parallel_searches = 2,
+            .add_root_noise = false,
+            .force_root_playouts = false,
+        }});
+        require(grownArenaResult.results.front().root.tree().capacity() == 38 &&
+                    grownArenaResult.results.front().root.tree().maximumCapacity() == 145,
+                "production root did not grow within its configured adaptive-search bound");
         const auto predictionRoot = search.newRoot(Board{}, 3);
         require(predictionRoot.tree().maximumCapacity() == 3,
                 "per-root capacity did not constrain the initial arena allocation");

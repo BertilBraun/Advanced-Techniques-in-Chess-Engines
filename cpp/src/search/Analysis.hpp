@@ -73,7 +73,7 @@ public:
                        TreeSearchParameters(parameters.exploration_constant,
                                             FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero),
                                             0.0F, 1.0F),
-                       1.0F, 0.0F, 1'024),
+                       1.0F, 0.0F, 1'024, 1'024),
                    0, false, runtimeParameters.execution_options) {}
 
     [[nodiscard]] Root newRoot(Position position) {

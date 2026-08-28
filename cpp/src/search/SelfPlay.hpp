@@ -34,10 +34,20 @@ struct SelfPlaySearchParameters {
         static_cast<void>(PredictedSearchBudgetLimit(baseline_visits, search_budget_curve));
     }
 
-    [[nodiscard]] std::uint32_t arenaCapacity() const {
+    [[nodiscard]] std::uint32_t initialArenaCapacity() const {
+        return checkedArenaCapacity(baseline_visits, searchParallelism(baseline_visits));
+    }
+
+    [[nodiscard]] std::uint32_t maximumArenaCapacity() const {
         const std::uint64_t maximumSearches = maximumAdditionalVisits(
             PredictedSearchBudgetLimit(baseline_visits, search_budget_curve));
-        const std::uint64_t capacity = maximumSearches + 16U + 1U;
+        return checkedArenaCapacity(maximumSearches, 16U);
+    }
+
+private:
+    [[nodiscard]] static std::uint32_t checkedArenaCapacity(const std::uint64_t visits,
+                                                            const std::uint64_t parallelSearches) {
+        const std::uint64_t capacity = visits + parallelSearches + 1U;
         if (capacity > std::numeric_limits<std::uint32_t>::max()) {
             throw std::overflow_error("Search parameters exceed the node index capacity");
         }
@@ -105,7 +115,7 @@ public:
                        BatchedInferenceParameters inferenceParameters,
                        const std::uint64_t initialModelGeneration = 0)
         : m_runtimeParameters(runtimeParameters), m_searchParameters(searchParameters),
-          m_arenaCapacity(searchParameters.arenaCapacity()),
+          m_arenaCapacity(searchParameters.maximumArenaCapacity()),
           m_inferenceParameters(std::move(inferenceParameters)),
           m_search(std::make_unique<BatchedGameSearch<Game>>(
               m_runtimeParameters.model_path, m_runtimeParameters.device,
@@ -214,7 +224,7 @@ public:
 
     [[nodiscard]] bool updateSearchSchedule(const SelfPlaySearchParameters &parameters) {
         const std::unique_lock lock(m_operationMutex);
-        const std::uint32_t updatedCapacity = parameters.arenaCapacity();
+        const std::uint32_t updatedCapacity = parameters.maximumArenaCapacity();
         const bool capacityChanged = updatedCapacity != m_arenaCapacity;
         const bool valueDiscountChanged = parameters.tree_search.value_discount_per_ply !=
                                           m_searchParameters.tree_search.value_discount_per_ply;
@@ -242,7 +252,7 @@ private:
     [[nodiscard]] static BatchedSearchParameters
     engineParameters(const SelfPlaySearchParameters &parameters) {
         return {parameters.tree_search, parameters.dirichlet_alpha, parameters.dirichlet_epsilon,
-                parameters.arenaCapacity()};
+                parameters.initialArenaCapacity(), parameters.maximumArenaCapacity()};
     }
 
     [[nodiscard]] static SelfPlaySearchStatistics treeStatistics(const Root &root) {

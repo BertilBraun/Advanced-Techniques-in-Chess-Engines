@@ -192,8 +192,9 @@ void bind_search(py::module_ &module) {
         .def_readonly("stop_reason", &GameSearchResult::stop_reason)
         .def_readonly("checkpoints", &GameSearchResult::checkpoints);
     py::class_<BatchedSearchParameters>(module, "BatchedSearchParameters")
-        .def(py::init<TreeSearchParameters, float, float, std::size_t>(), py::arg("tree_search"),
-             py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"), py::arg("tree_capacity"));
+        .def(py::init<TreeSearchParameters, float, float, std::size_t, std::size_t>(),
+             py::arg("tree_search"), py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"),
+             py::arg("initial_tree_capacity"), py::arg("maximum_tree_capacity"));
     py::class_<BatchedInferenceParameters>(module, "BatchedInferenceParameters")
         .def(py::init<std::size_t, std::size_t, std::size_t>(), py::arg("workers"),
              py::arg("batch_size"), py::arg("outstanding_batches_per_worker"))

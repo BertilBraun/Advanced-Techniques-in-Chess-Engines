@@ -119,7 +119,7 @@ using SearchLimit =
         throw std::invalid_argument("Assigned additional visits must be positive");
     }
     const std::uint32_t targetRounds = (additionalVisits + 199U) / 200U;
-    std::uint32_t parallelSearches = 1;
+    std::uint32_t parallelSearches = 2;
     while (parallelSearches < targetRounds && parallelSearches < 16U) {
         parallelSearches *= 2U;
     }
@@ -224,14 +224,18 @@ struct BatchedSearchParameters {
     TreeSearchParameters tree_search;
     float dirichlet_alpha;
     float dirichlet_epsilon;
-    std::size_t tree_capacity;
+    std::size_t initial_tree_capacity;
+    std::size_t maximum_tree_capacity;
 
     BatchedSearchParameters(TreeSearchParameters treeSearch, const float dirichletAlpha,
-                            const float dirichletEpsilon, const std::size_t treeCapacity)
+                            const float dirichletEpsilon, const std::size_t initialTreeCapacity,
+                            const std::size_t maximumTreeCapacity)
         : tree_search(treeSearch), dirichlet_alpha(dirichletAlpha),
-          dirichlet_epsilon(dirichletEpsilon), tree_capacity(treeCapacity) {
-        if (tree_capacity == 0) {
-            throw std::invalid_argument("Batched search tree capacity must be positive");
+          dirichlet_epsilon(dirichletEpsilon), initial_tree_capacity(initialTreeCapacity),
+          maximum_tree_capacity(maximumTreeCapacity) {
+        if (initial_tree_capacity == 0 || maximum_tree_capacity < initial_tree_capacity) {
+            throw std::invalid_argument(
+                "Batched search tree capacities must be positive and ordered");
         }
         if (dirichlet_alpha <= 0.0F || dirichlet_epsilon < 0.0F || dirichlet_epsilon > 1.0F) {
             throw std::invalid_argument("Batched search constants are outside their valid range");
