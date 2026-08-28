@@ -215,6 +215,28 @@ class TrainingReporter:
                     generation,
                 )
                 log_scalar(
+                    'search_budget/calibration/previous_published_mean_multiplier',
+                    sum(event.previous_published_curve) / len(event.previous_published_curve),
+                    generation,
+                )
+                log_scalar(
+                    'search_budget/calibration/shadow_mean_multiplier',
+                    sum(event.shadow_curve) / len(event.shadow_curve),
+                    generation,
+                )
+                if event.pending_curve is not None:
+                    log_scalar(
+                        'search_budget/calibration/pending_mean_multiplier',
+                        sum(event.pending_curve) / len(event.pending_curve),
+                        generation,
+                    )
+                if event.validated_curve is not None:
+                    log_scalar(
+                        'search_budget/calibration/validated_mean_multiplier',
+                        sum(event.validated_curve) / len(event.validated_curve),
+                        generation,
+                    )
+                log_scalar(
                     f'search_budget/calibration/decision_reason/{_metric_tag(event.decision_reason)}', 1, generation
                 )
                 _record_search_budget_distribution(
@@ -224,7 +246,6 @@ class TrainingReporter:
                     'search_budget/label/target_quantile', event.target_distribution, generation
                 )
                 _record_search_budget_distribution('search_budget/label/raw_kl', event.raw_kl_distribution, generation)
-                total_bucket_samples = sum(bucket.sample_count for bucket in event.buckets)
                 for bucket in event.buckets:
                     prefix = f'search_budget/calibration/bucket_{bucket.bucket_index}'
                     log_scalar(f'{prefix}/sample_count', bucket.sample_count, generation)
@@ -242,6 +263,11 @@ class TrainingReporter:
                         log_scalar(
                             f'{prefix}/validated_multiplier', event.validated_curve[bucket.bucket_index], generation
                         )
+                    log_scalar(
+                        f'{prefix}/previous_published_multiplier',
+                        event.previous_published_curve[bucket.bucket_index],
+                        generation,
+                    )
                     log_scalar(f'{prefix}/published_multiplier', bucket.published_multiplier, generation)
                     log_scalar(f'{prefix}/raw_log_update', bucket.raw_log_update, generation)
                     log_scalar(f'{prefix}/projection_adjustment', bucket.projection_adjustment, generation)
@@ -254,17 +280,16 @@ class TrainingReporter:
                         bucket.checkpoint_deduplication_count,
                         generation,
                     )
-                if total_bucket_samples:
-                    log_scalar(
-                        'search_budget/calibration/floor_share',
-                        event.buckets[0].sample_count / total_bucket_samples,
-                        generation,
-                    )
-                    log_scalar(
-                        'search_budget/calibration/ceiling_share',
-                        event.buckets[-1].sample_count / total_bucket_samples,
-                        generation,
-                    )
+                log_scalar(
+                    'search_budget/calibration/floor_share',
+                    event.prediction_distribution.histogram_counts[0] / event.prediction_distribution.count,
+                    generation,
+                )
+                log_scalar(
+                    'search_budget/calibration/ceiling_share',
+                    event.prediction_distribution.histogram_counts[-1] / event.prediction_distribution.count,
+                    generation,
+                )
                 for condition in event.failed_eligibility_conditions:
                     log_scalar(f'search_budget/calibration/failed_eligibility/{_metric_tag(condition)}', 1, generation)
             case FailedLabelJobReport():
