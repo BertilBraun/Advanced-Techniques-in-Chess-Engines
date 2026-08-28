@@ -695,8 +695,13 @@ def test_label_source_cohort_survives_shard_deletion_and_restart(tmp_path: Path)
 
     ingestion = manager.append_staged_games(2)
     cohort = manager.finalize_label_source_cohort(2)
+    journal_text = (tmp_path / 'completed-games' / 'label-source-cohorts.json').read_text(encoding='utf-8')
+    shard_paths = tuple((tmp_path / 'completed-games' / 'label-source-cohort-shards').glob('*.json'))
 
     assert cohort.games == ingestion.label_source_games
+    assert '"schema_version": 2' in journal_text
+    assert '"games"' not in journal_text
+    assert len(shard_paths) == 1
     assert manager.pending_label_source_generations == (2,)
     assert manager.staging_depth == 0
     manager.close()
