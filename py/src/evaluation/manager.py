@@ -434,13 +434,13 @@ class EvaluationManager:
         self._write_boundary_summary(step, generation, optimizer_steps)
 
     def _publish_ladder_elo(self, boundary_seconds: int) -> None:
-        fixed_node_definitions = tuple(
-            definition
-            for definition in self.configuration.definitions
-            if isinstance(definition, StockfishFixedNodesEvaluationDefinition)
-        )
-        observations: list[LadderRungObservation] = []
-        for definition in fixed_node_definitions:
+        # One ladder per search budget: a rung played at one search per move measures the network
+        # alone and is hundreds of Elo below the same rung played at the full budget, so mixing them
+        # into a single fit reads as weakness rather than as two different things being measured.
+        by_budget: dict[int, list[LadderRungObservation]] = {}
+        for definition in self.configuration.definitions:
+            if not isinstance(definition, StockfishFixedNodesEvaluationDefinition):
+                continue
             paths = sorted(self.result_directory.glob(f'{boundary_seconds:010d}-{definition.definition_id}-g*.json'))
             if not paths:
                 return
@@ -451,12 +451,19 @@ class EvaluationManager:
             observation = ladder_rung_observation(anchor_elo, result.games)
             if observation is None:
                 continue
-            observations.append(observation)
-        if not observations:
+            by_budget.setdefault(definition.search.searches_per_move, []).append(observation)
+        if not by_budget:
             return
-        ladder_elo = fit_ladder_elo(tuple(observations))
-        log_scalar('evaluation/ladder_elo', ladder_elo, boundary_seconds)
-        log(f'Evaluation ladder Elo at {boundary_seconds}s: {ladder_elo:.0f} over {len(observations)} rungs')
+        primary_budget = max(by_budget)
+        for budget, observations in sorted(by_budget.items()):
+            ladder_elo = fit_ladder_elo(tuple(observations))
+            log_scalar(f'evaluation/ladder_elo_{budget}', ladder_elo, boundary_seconds)
+            if budget == primary_budget:
+                log_scalar('evaluation/ladder_elo', ladder_elo, boundary_seconds)
+            log(
+                f'Evaluation ladder Elo at {boundary_seconds}s: {ladder_elo:.0f} '
+                f'over {len(observations)} rungs at {budget} searches'
+            )
 
     def _write_boundary_summary(self, boundary_seconds: int, generation: int, optimizer_steps: int) -> None:
         results: list[EvaluationResult] = []
