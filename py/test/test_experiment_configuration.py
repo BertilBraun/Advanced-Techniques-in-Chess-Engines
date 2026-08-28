@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -42,6 +43,7 @@ from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_C
 
 OPTIMAL_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-optimal.yaml'
 V12_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'vast-chess-4day-production-v12.yaml'
+V13_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'vast-chess-4day-production-v13.yaml'
 
 
 def test_experiment_fixtures_use_the_current_contract_and_dependency_lock() -> None:
@@ -69,6 +71,17 @@ def test_v12_configuration_is_standalone_and_uses_two_minimum_parallel_searches(
     assert 'extends' not in payload
     assert configuration.run.run_name == 'vast-chess-4day-production-v12'
     assert configuration.run.tensorboard_run_directory == 'vast-chess-4day-production-v12'
+    assert configuration.training.lifecycle.search_budget.production.minimum_parallel_searches == 2
+
+
+def test_v13_configuration_is_standalone_and_uses_compact_label_sampling_settings() -> None:
+    payload = yaml.safe_load(V13_CHESS_EXPERIMENT_PATH.read_text(encoding='utf-8'))
+    configuration = load_experiment_configuration(V13_CHESS_EXPERIMENT_PATH)
+
+    assert 'extends' not in payload
+    assert configuration.run.run_name == 'vast-chess-4day-production-v13'
+    assert configuration.run.tensorboard_run_directory == 'vast-chess-4day-production-v13'
+    assert configuration.training.lifecycle.search_budget.labeling.sample_fraction == Decimal('0.005')
     assert configuration.training.lifecycle.search_budget.production.minimum_parallel_searches == 2
 
 
