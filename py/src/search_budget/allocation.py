@@ -142,7 +142,7 @@ def production_parallel_searches(assigned_new_visits: int) -> int:
     if assigned_new_visits <= 0:
         raise ValueError('Assigned new visits must be positive.')
     required_parallelism = (assigned_new_visits + 199) // 200
-    next_power_of_two = 1 << (required_parallelism - 1).bit_length()
+    next_power_of_two = max(2, 1 << (required_parallelism - 1).bit_length())
     return min(16, next_power_of_two)
 
 

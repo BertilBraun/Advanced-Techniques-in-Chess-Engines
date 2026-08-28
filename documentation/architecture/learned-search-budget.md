@@ -50,7 +50,7 @@ state, not a cross-generation position window.
 
 Production allocation happens after root expansion for every position. It assigns additional simulations, carries a
 signed deterministic integer residual into later assignments, and preserves retained-root semantics. Per-request
-parallelism is `min(16, next_power_of_two(ceil(assigned_additional_visits / 200)))`. Explicit evaluation and label
+parallelism is `min(16, max(2, next_power_of_two(ceil(assigned_additional_visits / 200))))`. Explicit evaluation and label
 budgets bypass the production allocator and cannot mutate its spend ledger.
 
 ## Deep-label lifecycle

@@ -130,6 +130,7 @@ def test_legacy_blend_state_migrates_fail_closed_and_defaults_are_resolved(tmp_p
     assert configuration.calibration.initializer_version == 'analytic_q5_v1'
     assert configuration.calibration.warmup_completed_source_generations == 30
     assert configuration.labeling.parallel_searches == 2
+    assert configuration.production.minimum_parallel_searches == 2
 
     path = tmp_path / 'legacy-state.json'
     path.write_text(

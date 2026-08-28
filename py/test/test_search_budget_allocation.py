@@ -74,7 +74,7 @@ def test_deep_label_limit_is_exactly_eight_times_source_baseline(baseline: int) 
 
 @pytest.mark.parametrize(
     ('visits', 'parallel_searches'),
-    [(100, 1), (200, 1), (201, 2), (300, 2), (600, 4), (1600, 8), (2400, 16), (10000, 16)],
+    [(1, 2), (100, 2), (200, 2), (201, 2), (400, 2), (401, 4), (1600, 8), (1601, 16), (10000, 16)],
 )
 def test_production_parallelism_mapping_and_cap(visits: int, parallel_searches: int) -> None:
     assert production_parallel_searches(visits) == parallel_searches

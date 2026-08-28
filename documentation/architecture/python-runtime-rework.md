@@ -1598,7 +1598,7 @@ NativeSearchResult
 An omitted additional-visit budget is the production path. After root expansion it reads the sigmoid-bounded
 `search_budget` scalar, applies the run's fixed measured-oracle curve and published blend, and assigns a deterministic
 integer budget. The per-search parallelism is
-`min(16, next_power_of_two(ceil(assigned_additional_visits / 200)))`. A signed cumulative residual corrects later
+`min(16, max(2, next_power_of_two(ceil(assigned_additional_visits / 200))))`. A signed cumulative residual corrects later
 assignments so finite prediction distributions and rounding cannot move cumulative production spend away from the
 flat baseline by more than the allocator's documented integer bound. Explicit budgets are used for evaluation and
 deep labels and do not mutate that production ledger.

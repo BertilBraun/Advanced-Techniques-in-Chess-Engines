@@ -61,12 +61,17 @@ class CurveCalibrationConfiguration(FrozenModel):
 
 class ProductionAllocationConfiguration(FrozenModel):
     sequential_round_target: int = Field(default=200, gt=0)
+    minimum_parallel_searches: int = Field(default=2, gt=0)
     maximum_parallel_searches: int = Field(default=16, gt=0)
 
     @model_validator(mode='after')
     def validate_first_run_defaults(self) -> ProductionAllocationConfiguration:
-        if self.sequential_round_target != 200 or self.maximum_parallel_searches != 16:
-            raise ValueError('Production allocation must target 200 rounds and cap parallel searches at 16.')
+        if (
+            self.sequential_round_target != 200
+            or self.minimum_parallel_searches != 2
+            or self.maximum_parallel_searches != 16
+        ):
+            raise ValueError('Production allocation must target 200 rounds and use parallel-search bounds 2..16.')
         return self
 
 

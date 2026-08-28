@@ -41,6 +41,7 @@ from test_helpers.chess_configuration import (
 from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_CONFIG_DIRECTORY
 
 OPTIMAL_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-optimal.yaml'
+V12_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'vast-chess-4day-production-v12.yaml'
 
 
 def test_experiment_fixtures_use_the_current_contract_and_dependency_lock() -> None:
@@ -59,6 +60,16 @@ def test_every_screening_configuration_parses() -> None:
     paths = tuple(sorted((REPOSITORY_CONFIG_DIRECTORY / 'screening').rglob('*.yaml')))
 
     assert all(load_experiment_configuration(path) for path in paths)
+
+
+def test_v12_configuration_is_standalone_and_uses_two_minimum_parallel_searches() -> None:
+    payload = yaml.safe_load(V12_CHESS_EXPERIMENT_PATH.read_text(encoding='utf-8'))
+    configuration = load_experiment_configuration(V12_CHESS_EXPERIMENT_PATH)
+
+    assert 'extends' not in payload
+    assert configuration.run.run_name == 'vast-chess-4day-production-v12'
+    assert configuration.run.tensorboard_run_directory == 'vast-chess-4day-production-v12'
+    assert configuration.training.lifecycle.search_budget.production.minimum_parallel_searches == 2
 
 
 def test_optimal_chess_experiment_uses_conservative_search_and_parallel_materialization() -> None:
@@ -555,7 +566,7 @@ def test_experiment_configuration_hash_is_stable_across_host_path_separators() -
 def test_experiment_configuration_hash_matches_pinned_regression_value() -> None:
     assert (
         experiment_configuration_sha256(CHESS_EXPERIMENT)
-        == 'ee276df866388e2741ae4053207c615883309fb81399c7186b3e2d8732e00e97'
+        == '4b99822435b47646170f44bc0e6f8fcd0e256af13ea898c452876dbd5f60ca31'
     )
 
 
