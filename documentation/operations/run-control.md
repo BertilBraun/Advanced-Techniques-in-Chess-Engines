@@ -95,12 +95,15 @@ Copies, point-in-time, into `<archive-root>/<run-name>-<UTC timestamp>/`:
 - `tensorboard/` — the run's TensorBoard directory
 - `run/` — `run_manifest.json`, `run_manifests/`, `resolved-experiment.json`, `run-outcome.json`,
   `resource-telemetry.jsonl`, `credit-ledger.json`, `evaluations/`, `checkpoint_*.json` manifests
+- `run/search-budget-labels/` and compact replay journals — finalized learned-budget reports, calibration state,
+  checksummed shard manifests, cleanup receipts, label-source cohort locators, and replay write-back receipts
+- `run/models/` — the latest retained model and optimizer weights for evaluation or resumption
 - `logs/` — the run log directory and supervisor stdout/stderr
 - `config/` — the authored configuration, the approval JSON, the registry entry
 
 It writes `SHA256SUMS` over every file and self-verifies it. Idempotent: if the newest existing archive for the run
-has identical content, no new directory is created. Model weights, replay stores and completed games stay on the
-node (same policy as the queue export). Safe to run against a live run; expect a newer archive later.
+has identical content, no new directory is created. Full replay stores, completed-game payloads, restart states,
+and live inbox/staging shards stay on the node. Safe to run against a live run; expect a newer archive later.
 
 ### `run_control.sh fetch <run-name> <local-dir>` (workstation)
 

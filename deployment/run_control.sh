@@ -10,7 +10,7 @@
 #   run_control.sh status <run-name>               supervisor state, last generation, last evaluation result,
 #                                                  inbox/staging depth, GPU utilisation
 #   run_control.sh preserve <run-name>             archive TensorBoard, run-state manifests, resolved config,
-#                                                  credit ledger, run log and evaluation results into
+#                                                  learned-budget evidence, weights, logs and evaluations into
 #                                                  .codex-diagnostics/<run-name>-<UTC timestamp>/ with SHA256SUMS;
 #                                                  idempotent
 #   run_control.sh fetch <run-name> <local-dir>    from the workstation: rsync the node archives into a local
@@ -380,6 +380,13 @@ command_preserve() {
         resource-telemetry.jsonl credit-ledger.json evaluations; do
         archive_copy "${SAVE_PATH}/${artifact}" "${partial}/run/${artifact}"
     done
+    archive_copy "${SAVE_PATH}/search-budget-labels" "${partial}/run/search-budget-labels"
+    archive_copy "${SAVE_PATH}/completed-games/label-source-cohorts.json" \
+        "${partial}/run/completed-games/label-source-cohorts.json"
+    archive_copy "${SAVE_PATH}/completed-games/label-source-cohort-shards" \
+        "${partial}/run/completed-games/label-source-cohort-shards"
+    archive_copy "${SAVE_PATH}/completed-games/labelled-replay-writebacks.json" \
+        "${partial}/run/completed-games/labelled-replay-writebacks.json"
     local checkpoint_manifest
     for checkpoint_manifest in "${SAVE_PATH}"/checkpoint_*.json; do
         [[ -f "${checkpoint_manifest}" ]] && archive_copy "${checkpoint_manifest}" "${partial}/run/$(basename "${checkpoint_manifest}")"
