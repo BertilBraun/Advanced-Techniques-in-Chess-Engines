@@ -11,7 +11,8 @@ from pydantic import Field
 from src.evaluation.contracts import OPENING_SUITE_MANIFEST_ADAPTER
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.training import ChessImplementation
-from src.self_play.parameters import FixedFullSearchBudget, ResolvedSelfPlayParameters
+from src.search_budget.allocation import production_parallel_searches
+from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
@@ -84,13 +85,11 @@ def _opening_positions(game: ChessImplementation, manifest_path: Path, games: in
 
 
 def _rollout_parameters(game: ChessImplementation, arguments: Arguments) -> ResolvedSelfPlayParameters:
-    baseline = game.self_play_parameters_at(arguments.generation)
+    baseline = game.self_play_parameters_at(arguments.generation, 0.0)
     # Sampling only needs a plausible move distribution, so it runs without root noise or forced playouts.
     return replace(
         baseline,
-        parallel_searches=min(baseline.parallel_searches, arguments.rollout_visits - 1),
-        full_search_budget=FixedFullSearchBudget(kind='fixed', visits=arguments.rollout_visits),
-        fast_searches=arguments.rollout_visits,
+        baseline_visits=arguments.rollout_visits,
         forced_playout_coefficient=0.0,
         dirichlet_alpha=1.0,
         dirichlet_epsilon=0.0,
@@ -110,7 +109,6 @@ def collect_positions(arguments: Arguments) -> PositionSample:
     from AlphaZeroCpp import (
         BatchedInferenceParameters,
         ChessSelfPlaySearch,
-        ChessSelfPlaySearchRequest,
     )
 
     configuration = load_chess_experiment_configuration(arguments.configuration)
@@ -135,7 +133,17 @@ def collect_positions(arguments: Arguments) -> PositionSample:
     for ply in range(arguments.maximum_plies):
         if not live:
             break
-        batch = search.search([ChessSelfPlaySearchRequest(root, True) for _, root in live])
+        batch = search.search(
+            [
+                search.request(
+                    root,
+                    assigned_additional_visits=arguments.rollout_visits,
+                    parallel_searches=production_parallel_searches(arguments.rollout_visits),
+                    add_root_noise=False,
+                )
+                for _, root in live
+            ]
+        )
         simulations += sum(result.final_visits - result.starting_visits for result in batch.results)
         advanced: list[tuple[int, object]] = []
         for (game_index, root), result in zip(live, batch.results, strict=True):

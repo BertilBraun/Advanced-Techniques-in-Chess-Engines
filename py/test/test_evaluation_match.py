@@ -48,8 +48,18 @@ class FakeSearch:
     def new_root(self, position: FakePosition) -> FakeRoot:
         return FakeRoot(position)
 
-    def request(self, root: FakeRoot, full_search: bool) -> FakeRoot:
-        assert full_search
+    def request(
+        self,
+        root: FakeRoot,
+        assigned_additional_visits: int | None = None,
+        policy_checkpoint_visits: list[int] | None = None,
+        parallel_searches: int | None = None,
+        add_root_noise: bool = True,
+    ) -> FakeRoot:
+        assert assigned_additional_visits == 8
+        assert policy_checkpoint_visits is None
+        assert parallel_searches == 1
+        assert not add_root_noise
         return root
 
     def search(self, requests: list[FakeRoot]) -> FakeBatch:
@@ -77,8 +87,8 @@ class FixedPolicyModel(torch.nn.Module):
     def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         policy = torch.tensor((0.1, 0.9), device=inputs.device).expand(inputs.shape[0], 2)
         value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
-        correction = torch.zeros((inputs.shape[0], 1), device=inputs.device)
-        return policy, value, correction
+        search_budget_logit = torch.zeros((inputs.shape[0], 1), device=inputs.device)
+        return policy, value, search_budget_logit
 
 
 def _checkpoint() -> CheckpointReference:

@@ -27,7 +27,13 @@ from src.replay.shard import (
     write_replay_shard,
 )
 from src.replay.store import ReplayStore
-from src.self_play.completed_game import GameIdentity, SearchVisitCounts, TerminationReason
+from src.self_play.completed_game import (
+    GameIdentity,
+    SearchObservation,
+    SearchStopReason,
+    SearchVisitCounts,
+    TerminationReason,
+)
 from src.training.targets import TrainingTargetLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -116,6 +122,33 @@ def _source(game_number: int) -> ReplayShardSourceGame:
     return ReplayShardSourceGame(identity=identity, counter=game_number)
 
 
+def _observation(ply: int) -> SearchObservation:
+    visits = SearchVisitCounts(action_ids=(ply,), visit_counts=(100,))
+    return SearchObservation(
+        ply=ply,
+        model_generation=0,
+        root_value=0.0,
+        policy_target_visits=visits,
+        highest_visited_child_action_id=ply,
+        highest_visited_child_visit_count=100,
+        highest_visited_child_q=0.0,
+        selected_action_id=ply,
+        sample_weight=1.0,
+        baseline_visits=100,
+        network_root_value=0.0,
+        policy_correction=0.0,
+        value_correction=0.0,
+        search_budget_logit=0.0,
+        predicted_search_budget=0.5,
+        assigned_additional_visits=100,
+        parallel_searches=1,
+        spend_residual=0,
+        starting_visits=0,
+        final_visits=100,
+        stop_reason=SearchStopReason.FIXED_LIMIT,
+    )
+
+
 @dataclass(frozen=True)
 class _ShardInput:
     first_counter: int
@@ -143,13 +176,16 @@ def _shard_inputs(
         metadata = tuple(
             ReplayShardGameMetadata(
                 source=source,
+                created_at_seconds=float(source.counter),
+                generation_seconds=1.0,
+                action_ids=tuple(range(rows_per_game)),
                 row_start=index * rows_per_game,
                 row_count=rows_per_game,
                 length_plies=rows_per_game,
                 termination_reason=TerminationReason.NATURAL,
                 is_resignation_continuation=False,
                 final_wdl=WdlTarget(win=0.0, draw=1.0, loss=0.0),
-                observations=(),
+                observations=tuple(_observation(ply) for ply in range(rows_per_game)),
                 policies_truncated=0,
                 retained_visit_mass=rows_per_game * 100,
                 discarded_visit_mass=0,

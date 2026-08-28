@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import Field
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.training import ChessImplementation
-from src.self_play.parameters import FixedFullSearchBudget, ResolvedSelfPlayParameters
+from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
@@ -67,13 +67,11 @@ def _parameters(
     parallel_searches: int,
     virtual_loss_weight: float,
 ) -> ResolvedSelfPlayParameters:
-    baseline = game.self_play_parameters_at(arguments.generation)
+    baseline = game.self_play_parameters_at(arguments.generation, 0.0)
     return replace(
         baseline,
-        parallel_searches=parallel_searches,
+        baseline_visits=arguments.visits,
         virtual_loss_weight=virtual_loss_weight,
-        full_search_budget=FixedFullSearchBudget(kind='fixed', visits=arguments.visits),
-        fast_searches=arguments.visits,
         dirichlet_alpha=1.0,
         dirichlet_epsilon=0.0,
     )
@@ -84,7 +82,6 @@ def measure_collisions(arguments: Arguments) -> CollisionReport:
         BatchedInferenceParameters,
         ChessPosition,
         ChessSelfPlaySearch,
-        ChessSelfPlaySearchRequest,
     )
 
     sample = PositionSample.model_validate_json(arguments.positions.read_text(encoding='utf-8'))
@@ -92,7 +89,7 @@ def measure_collisions(arguments: Arguments) -> CollisionReport:
     configuration = load_chess_experiment_configuration(arguments.configuration)
     game = ChessImplementation(configuration)
     measurements: list[CollisionMeasurement] = []
-    reference = game.self_play_parameters_at(arguments.generation)
+    reference = game.self_play_parameters_at(arguments.generation, 0.0)
     capacity = arguments.inference_workers * arguments.inference_batch_size * arguments.outstanding_batches_per_worker
 
     for parallel_searches in arguments.parallel_searches:
@@ -112,7 +109,17 @@ def measure_collisions(arguments: Arguments) -> CollisionReport:
             )
             roots = [search.new_root(ChessPosition(fen)) for fen in fens]
             started = time.perf_counter()
-            batch = search.search([ChessSelfPlaySearchRequest(root, True) for root in roots])
+            batch = search.search(
+                [
+                    search.request(
+                        root,
+                        assigned_additional_visits=arguments.visits,
+                        parallel_searches=parallel_searches,
+                        add_root_noise=False,
+                    )
+                    for root in roots
+                ]
+            )
             elapsed = time.perf_counter() - started
             statistics = search.inference_statistics()
             simulations = sum(result.final_visits - result.starting_visits for result in batch.results)

@@ -33,8 +33,8 @@ from src.training.targets import (
     SearchBudgetHeadLayout,
 )
 from src.training.telemetry import (
-    adaptive_search_telemetry,
     completed_game_length_telemetry,
+    search_budget_telemetry,
     training_lifecycle_telemetry,
 )
 from src.training.tensorboard import scheduled_settings_at
@@ -112,7 +112,7 @@ class TrainingReporter:
                 )
         self._record_ingestion(ingestion, outcome.publication.checkpoint.generation)
         self._record_completed_game_lengths(completed_games, outcome.publication.checkpoint.generation)
-        self._record_adaptive_search(completed_games, outcome.publication.checkpoint.generation)
+        self._record_search_budget(completed_games, outcome.publication.checkpoint.generation)
         self._record_scheduled_settings(outcome.publication.checkpoint.generation)
 
     @staticmethod
@@ -246,66 +246,48 @@ class TrainingReporter:
                 log_scalar(f'{prefix}/game_length_plies_mean', termination.mean_plies, generation)
 
     @staticmethod
-    def _record_adaptive_search(
+    def _record_search_budget(
         games: tuple[IngestedCompletedGame, ...],
         generation: int,
     ) -> None:
-        telemetry = adaptive_search_telemetry(games)
+        telemetry = search_budget_telemetry(games)
         if telemetry is None:
             return
-        log_scalar('adaptive_search/full_searches', len(telemetry.final_visits), generation)
-        _log_values('adaptive_search/final_visits', telemetry.final_visits, generation, log_mean=True)
-        _log_values('adaptive_search/new_simulations', telemetry.new_simulations, generation, log_mean=True)
+        log_scalar('search_budget/production/positions', len(telemetry.final_visits), generation)
+        _log_values('search_budget/production/baseline_visits', telemetry.baseline_visits, generation, log_mean=True)
+        _log_values('search_budget/production/final_visits', telemetry.final_visits, generation, log_mean=True)
         _log_values(
-            'adaptive_search/search_correction_target',
-            telemetry.search_correction_targets,
+            'search_budget/production/assigned_additional_visits',
+            telemetry.assigned_additional_visits,
+            generation,
+            log_mean=True,
+        )
+        _log_values('search_budget/production/prediction_logit', telemetry.search_budget_logits, generation)
+        _log_values(
+            'search_budget/production/predicted_quantile',
+            telemetry.predicted_search_budgets,
             generation,
             log_mean=True,
         )
         _log_values(
-            'adaptive_search/search_correction_prediction',
-            telemetry.search_correction_predictions,
-            generation,
-            log_mean=True,
+            'search_budget/production/parallel_searches', telemetry.parallel_searches, generation, log_mean=True
         )
+        _log_values('search_budget/production/spend_residual', telemetry.spend_residuals, generation)
+        _log_values('search_budget/production/starting_visits', telemetry.starting_visits, generation, log_mean=True)
         _log_values(
-            'adaptive_search/policy_correction',
+            'search_budget/production/policy_correction',
             telemetry.policy_corrections,
             generation,
             log_mean=True,
         )
         _log_values(
-            'adaptive_search/value_correction',
+            'search_budget/production/value_correction',
             telemetry.value_corrections,
             generation,
             log_mean=True,
         )
-        if telemetry.checkpoint_visits:
-            _log_values('adaptive_search/checkpoint_visits', telemetry.checkpoint_visits, generation, log_mean=True)
-            _log_values(
-                'adaptive_search/checkpoint_top_visit_share',
-                telemetry.checkpoint_top_visit_shares,
-                generation,
-                log_mean=True,
-            )
-            _log_values(
-                'adaptive_search/checkpoint_top_two_margin',
-                telemetry.checkpoint_top_two_margins,
-                generation,
-                log_mean=True,
-            )
-            _log_values(
-                'adaptive_search/checkpoint_root_value_delta',
-                telemetry.checkpoint_root_value_deltas,
-                generation,
-                log_mean=True,
-            )
-        log_scalar('adaptive_search/leader_changes', telemetry.leader_changes, generation)
-        log_scalar('adaptive_search/learned_gate/evaluations', telemetry.learned_gate_evaluations, generation)
-        log_scalar('adaptive_search/learned_gate/denials', telemetry.learned_gate_denials, generation)
-        log_scalar('adaptive_search/learned_gate/unlocks', telemetry.learned_gate_unlocks, generation)
         for reason, count in telemetry.stop_reasons:
-            log_scalar(f'adaptive_search/stop_reason/{reason.value}', count, generation)
+            log_scalar(f'search_budget/production/stop_reason/{reason.value}', count, generation)
 
     def _record_scheduled_settings(self, generation: int) -> None:
         for setting in scheduled_settings_at(self.configuration, generation):

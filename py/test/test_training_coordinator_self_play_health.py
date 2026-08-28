@@ -110,6 +110,9 @@ class _SearchBudgetLabelManager:
     def publication_for_generation(self, production_generation: int) -> BlendPublication:
         return _publication(production_generation)
 
+    def publication_for_starting_generation(self, production_generation: int) -> BlendPublication:
+        return _publication(production_generation)
+
     def poll(self) -> tuple[()]:
         self.poll_calls += 1
         return ()
