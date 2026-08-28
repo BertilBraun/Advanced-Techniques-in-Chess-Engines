@@ -213,7 +213,7 @@ int runBatchedSearchTests() {
             require(result.assigned_additional_visits == 16 && result.starting_visits == 0 &&
                         result.final_visits == 16,
                     "predicted allocation did not expose additional-visit semantics");
-            require(result.parallel_searches == 1,
+            require(result.parallel_searches == 2,
                     "small predicted budget used the wrong parallelism");
             require(result.search_budget_logit == 0.0F &&
                         std::abs(result.predicted_search_budget - 0.5F) < 1e-7F,
