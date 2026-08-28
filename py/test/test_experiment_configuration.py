@@ -17,6 +17,7 @@ from src.experiment.configuration import (
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.training import ChessImplementation
 from src.games.go.configuration import GoExperimentConfiguration
+from src.search_budget.curve import flat_curve
 from src.self_play.configuration import (
     EnabledForcedPlayoutConfiguration,
     SdpaBackend,
@@ -314,8 +315,8 @@ def test_early_termination_caps_maximum_game_plies_and_censors_cut_games() -> No
     assert configuration.chess.self_play.maximum_game_plies_at(0) == 80
     assert configuration.chess.self_play.maximum_game_plies_at(10) == 160
     assert configuration.chess.self_play.maximum_game_plies_at(50) == 600
-    assert implementation.self_play_parameters_at(0, 0.0).maximum_game_plies == 80
-    assert implementation.self_play_parameters_at(50, 0.0).maximum_game_plies == 600
+    assert implementation.self_play_parameters_at(0, flat_curve()).maximum_game_plies == 80
+    assert implementation.self_play_parameters_at(50, flat_curve()).maximum_game_plies == 600
     assert implementation.censor_remaining_game_length_on_cut_games is True
 
 
@@ -549,7 +550,7 @@ def test_experiment_configuration_hash_is_stable_across_host_path_separators() -
 def test_experiment_configuration_hash_matches_pinned_regression_value() -> None:
     assert (
         experiment_configuration_sha256(CHESS_EXPERIMENT)
-        == 'f50f6d24b4b05d9f6c9db86201bc3e0c78301eff038e44f2beec5f92d54836af'
+        == '904ee5bae5b989a6a5171c84bbf832e8fdb07b7c56c0097bcea9587cf18d588b'
     )
 
 
@@ -578,4 +579,4 @@ def test_cut_game_value_target_selects_whether_self_play_bootstraps(value_target
 
     implementation = ChessImplementation(configuration)
 
-    assert implementation.self_play_parameters_at(0, 0.0).bootstrap_cut_game_value is expected
+    assert implementation.self_play_parameters_at(0, flat_curve()).bootstrap_cut_game_value is expected

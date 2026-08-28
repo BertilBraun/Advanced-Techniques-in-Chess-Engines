@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
+from src.search_budget.curve import SearchBudgetCurve, flat_curve
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
 from src.self_play.native_configuration import native_execution_options
 from src.self_play.parameters import (
@@ -38,7 +39,7 @@ def resolved_evaluation_parameters(
     parameters = replace(
         baseline,
         baseline_visits=configuration.searches_per_move,
-        search_budget_blend=0.0,
+        search_budget_curve=flat_curve(),
         forced_playout_coefficient=0.0,
         exploration_constant=configuration.resolved_exploration_constant,
         first_play_urgency=(
@@ -120,7 +121,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
     def self_play_parameters_at(
         self,
         model_generation: int,
-        search_budget_blend: float,
+        search_budget_curve: SearchBudgetCurve,
     ) -> ResolvedSelfPlayParameters:
         raise NotImplementedError
 
@@ -156,6 +157,9 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
             SelfPlaySearchParameters,
             TreeSearchParameters,
         )
+        from AlphaZeroCpp import (
+            SearchBudgetCurve as NativeSearchBudgetCurve,
+        )
 
         match parameters.first_play_urgency:
             case ZeroFirstPlayUrgencyParameters():
@@ -170,7 +174,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
 
         return SelfPlaySearchParameters(
             baseline_visits=parameters.baseline_visits,
-            search_budget_blend=parameters.search_budget_blend,
+            search_budget_curve=NativeSearchBudgetCurve(list(parameters.search_budget_curve.multipliers)),
             tree_search=TreeSearchParameters(
                 exploration_constant=parameters.exploration_constant,
                 first_play_urgency=first_play_urgency,

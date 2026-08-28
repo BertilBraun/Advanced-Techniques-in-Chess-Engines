@@ -8,6 +8,7 @@ from src.games.chess.configuration import ChessExperimentConfiguration, ChessSel
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.implementation import GameImplementation, resolved_evaluation_parameters
 from src.games.representation import NetworkDimensions
+from src.search_budget.curve import SearchBudgetCurve, flat_curve
 from src.self_play.configuration import BatchedInferenceParams
 from src.self_play.native_search import NativeSelfPlaySearch
 from src.self_play.parameters import (
@@ -64,7 +65,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
     def self_play_parameters_at(
         self,
         model_generation: int,
-        search_budget_blend: float,
+        search_budget_curve: SearchBudgetCurve,
     ) -> ResolvedSelfPlayParameters:
         configuration = self.self_play_configuration
         objective = self.configuration.chess.objective
@@ -72,7 +73,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         return replace(
             configuration.resolve(
                 model_generation,
-                search_budget_blend,
+                search_budget_curve,
                 configuration.maximum_game_plies_at(model_generation),
                 objective.effective_search_value_discount_per_ply.value_at(model_generation),
             ),
@@ -121,7 +122,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
     ) -> ResolvedSelfPlayParameters:
         """Evaluation inherits the self-play first-play urgency; only the listed fields are overridden."""
         return resolved_evaluation_parameters(
-            self.self_play_parameters_at(model_generation, 0.0),
+            self.self_play_parameters_at(model_generation, flat_curve()),
             configuration,
             model_generation,
             tree_search,

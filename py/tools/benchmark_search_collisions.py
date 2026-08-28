@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import Field
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.training import ChessImplementation
+from src.search_budget.curve import flat_curve
 from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -67,7 +68,7 @@ def _parameters(
     parallel_searches: int,
     virtual_loss_weight: float,
 ) -> ResolvedSelfPlayParameters:
-    baseline = game.self_play_parameters_at(arguments.generation, 0.0)
+    baseline = game.self_play_parameters_at(arguments.generation, flat_curve())
     return replace(
         baseline,
         baseline_visits=arguments.visits,
@@ -89,7 +90,7 @@ def measure_collisions(arguments: Arguments) -> CollisionReport:
     configuration = load_chess_experiment_configuration(arguments.configuration)
     game = ChessImplementation(configuration)
     measurements: list[CollisionMeasurement] = []
-    reference = game.self_play_parameters_at(arguments.generation, 0.0)
+    reference = game.self_play_parameters_at(arguments.generation, flat_curve())
     capacity = arguments.inference_workers * arguments.inference_batch_size * arguments.outstanding_batches_per_worker
 
     for parallel_searches in arguments.parallel_searches:

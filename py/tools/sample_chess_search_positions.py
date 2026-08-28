@@ -12,6 +12,7 @@ from src.evaluation.contracts import OPENING_SUITE_MANIFEST_ADAPTER
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.training import ChessImplementation
 from src.search_budget.allocation import production_parallel_searches
+from src.search_budget.curve import flat_curve
 from src.self_play.parameters import ResolvedSelfPlayParameters
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -85,7 +86,7 @@ def _opening_positions(game: ChessImplementation, manifest_path: Path, games: in
 
 
 def _rollout_parameters(game: ChessImplementation, arguments: Arguments) -> ResolvedSelfPlayParameters:
-    baseline = game.self_play_parameters_at(arguments.generation, 0.0)
+    baseline = game.self_play_parameters_at(arguments.generation, flat_curve())
     # Sampling only needs a plausible move distribution, so it runs without root noise or forced playouts.
     return replace(
         baseline,

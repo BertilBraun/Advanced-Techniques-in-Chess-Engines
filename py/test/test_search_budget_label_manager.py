@@ -4,7 +4,6 @@ import hashlib
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
 
@@ -13,8 +12,9 @@ from src.games.contracts import WdlTarget
 from src.replay.contracts import ReplaySample
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
 from src.search_budget.artifacts import LabelShardManifest, LabelShardPhase
-from src.search_budget.calibration import BlendDecisionReason
+from src.search_budget.calibration import CurveDecisionReason
 from src.search_budget.configuration import DeepLabelingConfiguration, SearchBudgetConfiguration
+from src.search_budget.curve import analytic_initial_curve, flat_curve
 from src.search_budget.labeling import LabelGenerationSource, LabelPositionSource
 from src.search_budget.manager import (
     InvalidLabelComputeError,
@@ -259,8 +259,8 @@ def test_unreadable_manager_state_constructs_fail_closed_and_preserves_evidence(
     manager = _manager(tmp_path, executor)
 
     publication = manager.publication_for_generation(2)
-    assert publication.blend == 0
-    assert publication.decision_reason is BlendDecisionReason.UNREADABLE_STATE
+    assert publication.curve == flat_curve()
+    assert publication.decision_reason is CurveDecisionReason.UNREADABLE_STATE
     assert (jobs_path / 'manager-state-recovery.json').is_file()
     assert len(tuple(jobs_path.glob('manager-state-invalid-*.json'))) == 1
     manager.close()
@@ -337,16 +337,16 @@ def test_starting_generation_boundary_is_monotonic_durable_and_prevents_late_pub
     started = manager.publication_for_starting_generation(1)
     manager._calibration = manager._calibration.model_copy(
         update={
-            'previous_blend': Decimal(0),
-            'selected_blend': Decimal('0.1'),
+            'previous_published_curve': flat_curve(),
+            'published_curve': analytic_initial_curve(),
             'application_generation': manager._first_unstarted_production_generation,
         }
     )
 
-    assert started.blend == 0
-    assert manager.publication_for_generation(1).blend == 0
-    assert manager.publication_for_generation(2).blend == Decimal('0.1')
-    assert manager.publication_for_starting_generation(1).blend == 0
+    assert started.curve == flat_curve()
+    assert manager.publication_for_generation(1).curve == flat_curve()
+    assert manager.publication_for_generation(2).curve == analytic_initial_curve()
+    assert manager.publication_for_starting_generation(1).curve == flat_curve()
     with pytest.raises(ValueError, match='without gaps'):
         manager.publication_for_starting_generation(3)
     manager.close()
@@ -365,10 +365,10 @@ def test_starting_generation_boundary_is_monotonic_durable_and_prevents_late_pub
         configuration=SearchBudgetConfiguration(),
         executor=restarted_executor,
     )
-    assert restarted.publication_for_starting_generation(1).blend == 0
+    assert restarted.publication_for_starting_generation(1).curve == flat_curve()
     restarted.close()
 
 
 def test_invalid_reconstructed_compute_is_distinct_from_terminal_worker_failure() -> None:
-    assert _failure_decision_reason(InvalidLabelComputeError('bad checksum')) is BlendDecisionReason.INVALID_COMPUTE
-    assert _failure_decision_reason(RuntimeError('worker died')) is BlendDecisionReason.TERMINAL_FAILURE
+    assert _failure_decision_reason(InvalidLabelComputeError('bad checksum')) is CurveDecisionReason.INVALID_COMPUTE
+    assert _failure_decision_reason(RuntimeError('worker died')) is CurveDecisionReason.TERMINAL_FAILURE

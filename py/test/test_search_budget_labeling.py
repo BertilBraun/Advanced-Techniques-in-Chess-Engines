@@ -15,6 +15,7 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
+from src.search_budget.calibration import initial_calibration_state
 from src.search_budget.labeling import (
     DeepSearchRecord,
     DeepSearchShardArtifact,
@@ -182,7 +183,7 @@ def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_
         )
         for position in positions
     }
-    allocations = candidate_allocations(source, predictions)
+    allocations = candidate_allocations(source, predictions, initial_calibration_state('a' * 64), 1.1)
     checkpoints = checkpoint_visits_by_position(source, allocations)
     records = tuple(
         DeepSearchRecord(
@@ -230,9 +231,10 @@ def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_
     assert tuple(target.normalized_target for target in targets) == (0.75, 0.0, 0.75)
     assert all(sample.policy.visits.visit_counts == (40, 40) for sample in finalized.replay_samples)
     assert all(sample.root_value == 0.25 for sample in finalized.replay_samples)
-    assert all(diagnostic.exact_spend_residual == 0 for diagnostic in finalized.candidate_diagnostics)
-    assert all(diagnostic.assigned_new_visits_variance == 0.0 for diagnostic in finalized.candidate_diagnostics)
-    assert all(diagnostic.mean_kl_from_deep >= 0.0 for diagnostic in finalized.candidate_diagnostics)
+    assert finalized.validation_diagnostics.exact_spend_residual is None
+    assert finalized.evidence.validated_curve is None
+    assert sum(diagnostic.sample_count for diagnostic in finalized.bucket_diagnostics) == 3
+    assert finalized.bucket_diagnostics[5].generation_marginal_utility == 0.0
     assert finalized.target_distribution.variance > 0.0
     assert sum(finalized.target_distribution.histogram_counts) == 3
 

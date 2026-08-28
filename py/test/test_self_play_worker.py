@@ -13,6 +13,7 @@ from AlphaZeroCpp import GameSearchVisit
 from AlphaZeroCpp import SearchStopReason as NativeSearchStopReason
 from src.games.contracts import TerminalOracle, WdlTarget
 from src.games.implementation import GameImplementation
+from src.search_budget.curve import SearchBudgetCurve
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
@@ -235,7 +236,7 @@ class FakeGame:
     def self_play_parameters_at(
         self,
         model_generation: int,
-        search_budget_blend: float,
+        search_budget_curve: SearchBudgetCurve,
     ) -> ResolvedSelfPlayParameters:
         del model_generation
         start_position = self.restart_parameters
@@ -246,7 +247,7 @@ class FakeGame:
         return ResolvedSelfPlayParameters(
             start_position=start_position,
             baseline_visits=3,
-            search_budget_blend=search_budget_blend,
+            search_budget_curve=search_budget_curve,
             forced_playout_coefficient=0.0,
             exploration_constant=1.0,
             first_play_urgency=ZeroFirstPlayUrgencyParameters(),

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from decimal import Decimal
-
 import pytest
 import src.training.reporting as reporting_module
 from src.search_budget.labeling import DistributionSummary
 from src.search_budget.manager import (
-    CandidateFinalizationReport,
+    BucketFinalizationReport,
     FailedLabelJobReport,
     GenerationLabelReport,
     LabelManagerEvent,
@@ -50,19 +48,22 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
         prediction_distribution=_distribution(0.45),
         target_distribution=_distribution(0.5),
         raw_kl_distribution=_distribution(0.2),
-        candidates=(
-            CandidateFinalizationReport(
-                blend=Decimal('0.1'),
-                current_generation_gain=0.03,
-                ema_gain=0.02,
-                mean_assigned_new_visits=600.0,
-                assigned_new_visits_variance=25.0,
-                mean_kl_from_deep=0.18,
-                exact_spend_residual=0,
-                floor_share=0.4,
-                ceiling_share=0.05,
-                failed_eligibility_conditions=('warmup',),
-            ),
+        buckets=tuple(
+            BucketFinalizationReport(
+                bucket_index=index,
+                sample_count=1,
+                current_generation_utility=0.01 * index,
+                ema_utility=0.02 * index,
+                shadow_multiplier=1.0,
+                pending_multiplier=1.0,
+                published_multiplier=1.0,
+                raw_log_update=0.001 * index,
+                projection_adjustment=0.0,
+                lower_mean_visits=550.0,
+                upper_mean_visits=650.0,
+                checkpoint_deduplication_count=0,
+            )
+            for index in range(10)
         ),
         replay_samples_written=10,
         replay_write_applied=True,
@@ -73,8 +74,20 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
         deep_search_retry_count=2,
         completion_generation_lag=1,
         queued_generation_count=2,
-        previous_blend=Decimal('0.0'),
-        selected_blend=Decimal('0.1'),
+        current_validation_gain=0.03,
+        ema_validation_gain=0.02,
+        candidate_mean_assigned_new_visits=600.0,
+        candidate_assigned_new_visits_variance=25.0,
+        candidate_mean_kl_from_deep=0.15,
+        candidate_exact_spend_residual=0,
+        previous_published_curve=(1.0,) * 10,
+        validated_curve=(1.0,) * 10,
+        shadow_curve=(1.0,) * 10,
+        pending_curve=(1.0,) * 10,
+        published_curve=(1.0,) * 10,
+        minimum_published_multiplier=1.0,
+        maximum_published_multiplier=1.0,
+        failed_eligibility_conditions=('warmup',),
         application_generation=14,
         decision_reason='warmup',
     )
@@ -87,15 +100,18 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
     assert scalars['search_budget/label/target_quantile/median'] == (0.5, 12)
     assert scalars['search_budget/label/prediction_quantile/histogram_bin_9'] == (1, 12)
     assert scalars['search_budget/label/deep_search_retries'] == (2, 12)
-    assert scalars['search_budget/calibration/published_blend'] == (0.1, 12)
+    assert scalars['search_budget/calibration/published_mean_multiplier'] == (1.0, 12)
+    assert scalars['search_budget/calibration/current_validation_gain'] == (0.03, 12)
+    assert scalars['search_budget/calibration/ema_validation_gain'] == (0.02, 12)
+    assert scalars['search_budget/calibration/candidate_exact_spend_residual'] == (0, 12)
     assert scalars['search_budget/calibration/application_generation'] == (14, 12)
     assert scalars['search_budget/calibration/decision_reason/warmup'] == (1, 12)
-    prefix = 'search_budget/calibration/candidate_0_1'
-    assert scalars[f'{prefix}/current_generation_gain'] == (0.03, 12)
-    assert scalars[f'{prefix}/ema_gain'] == (0.02, 12)
-    assert scalars[f'{prefix}/exact_spend_residual'] == (0, 12)
-    assert scalars[f'{prefix}/eligible'] == (0, 12)
-    assert scalars[f'{prefix}/failed_eligibility/warmup'] == (1, 12)
+    prefix = 'search_budget/calibration/bucket_9'
+    assert scalars[f'{prefix}/generation_marginal_utility'] == (0.09, 12)
+    assert scalars[f'{prefix}/ema_marginal_utility'] == (0.18, 12)
+    assert scalars[f'{prefix}/validated_multiplier'] == (1.0, 12)
+    assert scalars[f'{prefix}/published_multiplier'] == (1.0, 12)
+    assert scalars['search_budget/calibration/failed_eligibility/warmup'] == (1, 12)
 
 
 def test_failed_and_skipped_label_reports_publish_health_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -110,7 +126,7 @@ def test_failed_and_skipped_label_reports_publish_health_metrics(monkeypatch: py
         FailedLabelJobReport(
             source_generation=4,
             failure='RuntimeError: failed shard',
-            published_blend=Decimal('0.0'),
+            published_curve=(1.0,) * 10,
             application_generation=6,
             decision_reason='terminal_failure',
         )

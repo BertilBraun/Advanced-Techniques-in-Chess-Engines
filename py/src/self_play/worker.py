@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import numpy as np
 from src.games.contracts import WdlTarget
+from src.search_budget.curve import SearchBudgetCurve
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
@@ -123,8 +124,8 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
                 next_games.append(self._new_game(search, parameters))
         self.active_games = next_games
 
-    def refresh_published_model(self, checkpoint: CheckpointReference, search_budget_blend: float) -> None:
-        parameters = self.game.self_play_parameters_at(checkpoint.generation, search_budget_blend)
+    def refresh_published_model(self, checkpoint: CheckpointReference, search_budget_curve: SearchBudgetCurve) -> None:
+        parameters = self.game.self_play_parameters_at(checkpoint.generation, search_budget_curve)
         if self.search is None:
             self.search = self.game.create_native_search(self.device_id, checkpoint, parameters)
             capacity_changed = False

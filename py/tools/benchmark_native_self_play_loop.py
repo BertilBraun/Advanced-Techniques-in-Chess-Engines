@@ -9,6 +9,7 @@ from pathlib import Path
 
 import AlphaZeroCpp as native
 import torch
+from src.search_budget.curve import analytic_initial_curve, flat_curve
 
 
 @dataclass(frozen=True)
@@ -16,7 +17,7 @@ class LoopArguments:
     games: int
     parallel_searches: int
     baseline_visits: int
-    search_budget_blend: float
+    analytic_search_budget_curve: bool
     retained_root_visit_fraction: float
     inference_workers: int
     inference_batch_size: int
@@ -78,7 +79,14 @@ def search_parameters(arguments: LoopArguments) -> native.SelfPlaySearchParamete
         0.99,
         0.5,
     )
-    return native.SelfPlaySearchParameters(arguments.baseline_visits, arguments.search_budget_blend, tree, 0.3, 0.25)
+    curve = analytic_initial_curve() if arguments.analytic_search_budget_curve else flat_curve()
+    return native.SelfPlaySearchParameters(
+        arguments.baseline_visits,
+        native.SearchBudgetCurve(list(curve.multipliers)),
+        tree,
+        0.3,
+        0.25,
+    )
 
 
 @dataclass
@@ -250,7 +258,7 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
             'games': arguments.games,
             'parallel_searches': arguments.parallel_searches,
             'baseline_visits': arguments.baseline_visits,
-            'search_budget_blend': arguments.search_budget_blend,
+            'search_budget_curve': 'analytic_q5_v1' if arguments.analytic_search_budget_curve else 'flat',
             'inference_workers': arguments.inference_workers,
             'inference_batch_size': arguments.inference_batch_size,
             'inference_hidden': arguments.inference_hidden,
@@ -301,7 +309,7 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
     parser.add_argument('--games', type=int, default=128)
     parser.add_argument('--parallel-searches', type=int, default=2)
     parser.add_argument('--baseline-visits', type=int, default=250)
-    parser.add_argument('--search-budget-blend', type=float, default=0.0)
+    parser.add_argument('--analytic-search-budget-curve', action='store_true')
     parser.add_argument('--retained-root-visit-fraction', type=float, default=0.6)
     parser.add_argument('--inference-workers', type=int, default=2)
     parser.add_argument('--inference-batch-size', type=int, default=256)
@@ -328,7 +336,7 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
         games=namespace.games,
         parallel_searches=namespace.parallel_searches,
         baseline_visits=namespace.baseline_visits,
-        search_budget_blend=namespace.search_budget_blend,
+        analytic_search_budget_curve=namespace.analytic_search_budget_curve,
         retained_root_visit_fraction=namespace.retained_root_visit_fraction,
         inference_workers=namespace.inference_workers,
         inference_batch_size=namespace.inference_batch_size,

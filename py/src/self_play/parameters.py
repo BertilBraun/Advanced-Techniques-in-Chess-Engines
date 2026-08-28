@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Literal, TypeAlias
 
+from src.search_budget.curve import SearchBudgetCurve
+
 
 @dataclass(frozen=True)
 class RandomOpeningStartParameters:
@@ -76,7 +78,7 @@ FirstPlayUrgencyParameters: TypeAlias = (
 class ResolvedSelfPlayParameters:
     start_position: StartPositionParameters
     baseline_visits: int
-    search_budget_blend: float
+    search_budget_curve: SearchBudgetCurve
     forced_playout_coefficient: float
     exploration_constant: float
     first_play_urgency: FirstPlayUrgencyParameters
@@ -95,8 +97,6 @@ class ResolvedSelfPlayParameters:
     def __post_init__(self) -> None:
         if self.baseline_visits <= 0:
             raise ValueError('Baseline visits must be positive.')
-        if not isfinite(self.search_budget_blend) or not 0.0 <= self.search_budget_blend <= 1.0:
-            raise ValueError('Search-budget blend must be finite and lie in [0, 1].')
         if not isfinite(self.forced_playout_coefficient) or self.forced_playout_coefficient < 0.0:
             raise ValueError('Forced-playout coefficient must be finite and nonnegative.')
         if self.exploration_constant <= 0.0 or self.dirichlet_alpha <= 0.0:

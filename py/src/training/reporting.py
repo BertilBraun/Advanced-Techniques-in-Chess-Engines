@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 
 import numpy as np
 from src.experiment.configuration import ExperimentConfiguration
@@ -169,9 +168,52 @@ class TrainingReporter:
                 log_scalar('search_budget/label/deep_search_retries', event.deep_search_retry_count, generation)
                 log_scalar('search_budget/label/completion_generation_lag', event.completion_generation_lag, generation)
                 log_scalar('search_budget/label/queued_generations', event.queued_generation_count, generation)
-                log_scalar('search_budget/calibration/previous_blend', float(event.previous_blend), generation)
-                log_scalar('search_budget/calibration/published_blend', float(event.selected_blend), generation)
                 log_scalar('search_budget/calibration/application_generation', event.application_generation, generation)
+                if event.current_validation_gain is not None:
+                    log_scalar(
+                        'search_budget/calibration/current_validation_gain', event.current_validation_gain, generation
+                    )
+                if event.ema_validation_gain is not None:
+                    log_scalar('search_budget/calibration/ema_validation_gain', event.ema_validation_gain, generation)
+                if event.candidate_mean_assigned_new_visits is not None:
+                    log_scalar(
+                        'search_budget/calibration/candidate_mean_assigned_new_visits',
+                        event.candidate_mean_assigned_new_visits,
+                        generation,
+                    )
+                if event.candidate_assigned_new_visits_variance is not None:
+                    log_scalar(
+                        'search_budget/calibration/candidate_assigned_new_visits_variance',
+                        event.candidate_assigned_new_visits_variance,
+                        generation,
+                    )
+                if event.candidate_mean_kl_from_deep is not None:
+                    log_scalar(
+                        'search_budget/calibration/candidate_mean_kl_from_deep',
+                        event.candidate_mean_kl_from_deep,
+                        generation,
+                    )
+                if event.candidate_exact_spend_residual is not None:
+                    log_scalar(
+                        'search_budget/calibration/candidate_exact_spend_residual',
+                        event.candidate_exact_spend_residual,
+                        generation,
+                    )
+                log_scalar(
+                    'search_budget/calibration/minimum_published_multiplier',
+                    event.minimum_published_multiplier,
+                    generation,
+                )
+                log_scalar(
+                    'search_budget/calibration/maximum_published_multiplier',
+                    event.maximum_published_multiplier,
+                    generation,
+                )
+                log_scalar(
+                    'search_budget/calibration/published_mean_multiplier',
+                    sum(event.published_curve) / len(event.published_curve),
+                    generation,
+                )
                 log_scalar(
                     f'search_budget/calibration/decision_reason/{_metric_tag(event.decision_reason)}', 1, generation
                 )
@@ -182,30 +224,56 @@ class TrainingReporter:
                     'search_budget/label/target_quantile', event.target_distribution, generation
                 )
                 _record_search_budget_distribution('search_budget/label/raw_kl', event.raw_kl_distribution, generation)
-                for candidate in event.candidates:
-                    prefix = f'search_budget/calibration/candidate_{_decimal_tag(candidate.blend)}'
-                    log_scalar(f'{prefix}/current_generation_gain', candidate.current_generation_gain, generation)
-                    log_scalar(f'{prefix}/ema_gain', candidate.ema_gain, generation)
-                    log_scalar(f'{prefix}/mean_assigned_new_visits', candidate.mean_assigned_new_visits, generation)
+                total_bucket_samples = sum(bucket.sample_count for bucket in event.buckets)
+                for bucket in event.buckets:
+                    prefix = f'search_budget/calibration/bucket_{bucket.bucket_index}'
+                    log_scalar(f'{prefix}/sample_count', bucket.sample_count, generation)
+                    log_scalar(f'{prefix}/empty', int(bucket.sample_count == 0), generation)
+                    if bucket.current_generation_utility is not None:
+                        log_scalar(
+                            f'{prefix}/generation_marginal_utility', bucket.current_generation_utility, generation
+                        )
+                    if bucket.ema_utility is not None:
+                        log_scalar(f'{prefix}/ema_marginal_utility', bucket.ema_utility, generation)
+                    log_scalar(f'{prefix}/shadow_multiplier', bucket.shadow_multiplier, generation)
+                    if bucket.pending_multiplier is not None:
+                        log_scalar(f'{prefix}/pending_multiplier', bucket.pending_multiplier, generation)
+                    if event.validated_curve is not None:
+                        log_scalar(
+                            f'{prefix}/validated_multiplier', event.validated_curve[bucket.bucket_index], generation
+                        )
+                    log_scalar(f'{prefix}/published_multiplier', bucket.published_multiplier, generation)
+                    log_scalar(f'{prefix}/raw_log_update', bucket.raw_log_update, generation)
+                    log_scalar(f'{prefix}/projection_adjustment', bucket.projection_adjustment, generation)
+                    if bucket.lower_mean_visits is not None:
+                        log_scalar(f'{prefix}/lower_mean_visits', bucket.lower_mean_visits, generation)
+                    if bucket.upper_mean_visits is not None:
+                        log_scalar(f'{prefix}/upper_mean_visits', bucket.upper_mean_visits, generation)
                     log_scalar(
-                        f'{prefix}/assigned_new_visits_variance',
-                        candidate.assigned_new_visits_variance,
+                        f'{prefix}/checkpoint_deduplication_count',
+                        bucket.checkpoint_deduplication_count,
                         generation,
                     )
-                    log_scalar(f'{prefix}/mean_kl_from_deep', candidate.mean_kl_from_deep, generation)
-                    log_scalar(f'{prefix}/exact_spend_residual', candidate.exact_spend_residual, generation)
-                    log_scalar(f'{prefix}/floor_share', candidate.floor_share, generation)
-                    log_scalar(f'{prefix}/ceiling_share', candidate.ceiling_share, generation)
+                if total_bucket_samples:
                     log_scalar(
-                        f'{prefix}/eligible',
-                        int(not candidate.failed_eligibility_conditions),
+                        'search_budget/calibration/floor_share',
+                        event.buckets[0].sample_count / total_bucket_samples,
                         generation,
                     )
-                    for condition in candidate.failed_eligibility_conditions:
-                        log_scalar(f'{prefix}/failed_eligibility/{_metric_tag(condition)}', 1, generation)
+                    log_scalar(
+                        'search_budget/calibration/ceiling_share',
+                        event.buckets[-1].sample_count / total_bucket_samples,
+                        generation,
+                    )
+                for condition in event.failed_eligibility_conditions:
+                    log_scalar(f'search_budget/calibration/failed_eligibility/{_metric_tag(condition)}', 1, generation)
             case FailedLabelJobReport():
                 log_scalar('search_budget/label/status/failed', 1, generation)
-                log_scalar('search_budget/calibration/published_blend', float(event.published_blend), generation)
+                log_scalar(
+                    'search_budget/calibration/published_mean_multiplier',
+                    sum(event.published_curve) / len(event.published_curve),
+                    generation,
+                )
                 log_scalar('search_budget/calibration/application_generation', event.application_generation, generation)
                 log_scalar(
                     f'search_budget/calibration/decision_reason/{_metric_tag(event.decision_reason)}', 1, generation
@@ -462,10 +530,6 @@ def _record_search_budget_distribution(prefix: str, distribution: DistributionSu
     log_scalar(f'{prefix}/p90', distribution.p90, generation)
     for index, count in enumerate(distribution.histogram_counts):
         log_scalar(f'{prefix}/histogram_bin_{index}', count, generation)
-
-
-def _decimal_tag(value: Decimal) -> str:
-    return format(value, 'f').replace('.', '_')
 
 
 def _metric_tag(value: str) -> str:

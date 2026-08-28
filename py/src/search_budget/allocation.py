@@ -1,11 +1,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from enum import Enum
 from fractions import Fraction
 
-from src.search_budget.curve import BLEND_CANDIDATES, CURVE_CEILING, CURVE_FLOOR, blended_multiplier
+from src.search_budget.curve import CURVE_BUCKET_COUNT, SearchBudgetCurve, multiplier_for_quantile
 from src.search_budget.sampling import LabelPositionIdentity
+
+
+class CurveAllocationPurpose(str, Enum):
+    FLAT = 'flat'
+    PENDING_VALIDATION = 'pending_validation'
+    PROBE_LOWER = 'probe_lower'
+    PROBE_UPPER = 'probe_upper'
+
+
+@dataclass(frozen=True)
+class CurveAllocationIdentity:
+    purpose: CurveAllocationPurpose
+    bucket_index: int | None = None
+
+    def __post_init__(self) -> None:
+        is_probe = self.purpose in {CurveAllocationPurpose.PROBE_LOWER, CurveAllocationPurpose.PROBE_UPPER}
+        if is_probe != (self.bucket_index is not None):
+            raise ValueError('Only local-probe allocations carry a bucket index.')
+        if self.bucket_index is not None and not 0 <= self.bucket_index < CURVE_BUCKET_COUNT:
+            raise ValueError('Probe allocation bucket index is outside the curve.')
 
 
 @dataclass(frozen=True)
@@ -22,7 +42,8 @@ class AllocatedBudget:
 
 @dataclass(frozen=True)
 class CandidateBudgetSet:
-    blend: Decimal
+    identity: CurveAllocationIdentity
+    allocation_multipliers: tuple[float, ...]
     budgets: tuple[AllocatedBudget, ...]
     total_assigned_new_visits: int
     flat_total_new_visits: int
@@ -42,40 +63,44 @@ class SequentialBudgetState:
         return self.cumulative_assigned_visits - self.cumulative_baseline_visits
 
 
-def allocate_generation_candidate(
+def allocate_generation_multiplier_vector(
     positions: tuple[AllocationPosition, ...],
     baseline_new_visits: int,
-    blend: Decimal,
+    multipliers: tuple[float, ...],
+    identity: CurveAllocationIdentity,
 ) -> CandidateBudgetSet:
     if baseline_new_visits <= 0:
         raise ValueError('Baseline new visits must be positive.')
     if not positions:
         raise ValueError('A candidate allocation requires at least one position.')
+    if len(multipliers) != CURVE_BUCKET_COUNT:
+        raise ValueError('A candidate allocation requires exactly ten bucket multipliers.')
     ordered_positions = tuple(sorted(positions, key=lambda position: _identity_key(position.identity)))
     identities = tuple(position.identity for position in ordered_positions)
     if len(set(identities)) != len(identities):
         raise ValueError('Candidate allocation position identities must be unique.')
 
     flat_total = baseline_new_visits * len(ordered_positions)
-    weights = tuple(blended_multiplier(position.predicted_quantile, blend) for position in ordered_positions)
-    minimum_exact_budget = baseline_new_visits * _blended_bound(blend, CURVE_FLOOR)
-    maximum_exact_budget = baseline_new_visits * _blended_bound(blend, CURVE_CEILING)
-    exact_budgets = _bounded_normalized_budgets(weights, flat_total, minimum_exact_budget, maximum_exact_budget)
-    minimum_integer_budget = _ceil_fraction(minimum_exact_budget)
-    maximum_integer_budget = _floor_fraction(maximum_exact_budget)
+    weights = tuple(
+        Fraction(str(multipliers[min(CURVE_BUCKET_COUNT - 1, int(position.predicted_quantile * CURVE_BUCKET_COUNT))]))
+        for position in ordered_positions
+    )
+    exact_budgets = _bounded_normalized_budgets(
+        weights,
+        flat_total,
+        Fraction(1),
+        Fraction(deep_label_visit_limit(baseline_new_visits)),
+    )
     cumulative_exact = Fraction(0)
     previous_rounded = 0
     budgets: list[AllocatedBudget] = []
     for index, (position, exact_budget) in enumerate(zip(ordered_positions, exact_budgets, strict=True)):
         cumulative_exact += exact_budget
         remaining_positions = len(ordered_positions) - index - 1
-        minimum_cumulative = max(
-            previous_rounded + minimum_integer_budget,
-            flat_total - remaining_positions * maximum_integer_budget,
-        )
+        minimum_cumulative = max(previous_rounded + 1, flat_total - remaining_positions * 8 * baseline_new_visits)
         maximum_cumulative = min(
-            previous_rounded + maximum_integer_budget,
-            flat_total - remaining_positions * minimum_integer_budget,
+            previous_rounded + 8 * baseline_new_visits,
+            flat_total - remaining_positions,
         )
         cumulative_rounded = min(max(_round_fraction(cumulative_exact), minimum_cumulative), maximum_cumulative)
         budgets.append(
@@ -87,36 +112,25 @@ def allocate_generation_candidate(
         previous_rounded = cumulative_rounded
     assert previous_rounded == flat_total
     return CandidateBudgetSet(
-        blend=blend,
+        identity=identity,
+        allocation_multipliers=multipliers,
         budgets=tuple(budgets),
         total_assigned_new_visits=previous_rounded,
         flat_total_new_visits=flat_total,
     )
 
 
-def allocate_candidate_budget_grid(
-    positions: tuple[AllocationPosition, ...],
-    baseline_new_visits: int,
-    blends: tuple[Decimal, ...] = BLEND_CANDIDATES,
-) -> tuple[CandidateBudgetSet, ...]:
-    if len(set(blends)) != len(blends):
-        raise ValueError('Candidate blends must be unique.')
-    return tuple(allocate_generation_candidate(positions, baseline_new_visits, blend) for blend in sorted(blends))
-
-
 def allocate_next_production_budget(
     state: SequentialBudgetState,
     baseline_new_visits: int,
     predicted_quantile: float,
-    blend: Decimal,
+    curve: SearchBudgetCurve,
 ) -> tuple[int, SequentialBudgetState]:
     if baseline_new_visits <= 0:
         raise ValueError('Baseline new visits must be positive.')
-    ideal_budget = baseline_new_visits * blended_multiplier(predicted_quantile, blend)
+    ideal_budget = Fraction(baseline_new_visits) * Fraction(str(multiplier_for_quantile(curve, predicted_quantile)))
     corrected_budget = ideal_budget - state.spend_error
-    minimum_budget = _ceil_fraction(baseline_new_visits * _blended_bound(blend, CURVE_FLOOR))
-    maximum_budget = _floor_fraction(baseline_new_visits * _blended_bound(blend, CURVE_CEILING))
-    assigned_budget = min(max(_round_fraction(corrected_budget), minimum_budget), maximum_budget)
+    assigned_budget = min(max(_round_fraction(corrected_budget), 1), deep_label_visit_limit(baseline_new_visits))
     next_state = SequentialBudgetState(
         cumulative_baseline_visits=state.cumulative_baseline_visits + baseline_new_visits,
         cumulative_assigned_visits=state.cumulative_assigned_visits + assigned_budget,
@@ -132,25 +146,16 @@ def production_parallel_searches(assigned_new_visits: int) -> int:
     return min(16, next_power_of_two)
 
 
-def production_spend_error_bound(
-    baseline_new_visits: int,
-) -> int:
+def production_spend_error_bound(baseline_new_visits: int) -> int:
     if baseline_new_visits <= 0:
         raise ValueError('Baseline new visits must be positive.')
-    minimum_budget = _ceil_fraction(baseline_new_visits * CURVE_FLOOR)
-    maximum_budget = _floor_fraction(baseline_new_visits * CURVE_CEILING)
-    return max(baseline_new_visits - minimum_budget, maximum_budget - baseline_new_visits) + 1
+    return 7 * baseline_new_visits + 1
 
 
 def deep_label_visit_limit(baseline_new_visits: int) -> int:
     if baseline_new_visits <= 0:
         raise ValueError('Baseline new visits must be positive.')
     return 8 * baseline_new_visits
-
-
-def _blended_bound(blend: Decimal, curve_bound: Fraction) -> Fraction:
-    exact_blend = Fraction(blend)
-    return (1 - exact_blend) + exact_blend * curve_bound
 
 
 def _bounded_normalized_budgets(
@@ -183,14 +188,6 @@ def _bounded_normalized_budgets(
 def _round_fraction(value: Fraction) -> int:
     quotient, remainder = divmod(value.numerator, value.denominator)
     return quotient + int(2 * remainder >= value.denominator)
-
-
-def _ceil_fraction(value: Fraction) -> int:
-    return -(-value.numerator // value.denominator)
-
-
-def _floor_fraction(value: Fraction) -> int:
-    return value.numerator // value.denominator
 
 
 def _identity_key(identity: LabelPositionIdentity) -> tuple[int, str, int]:

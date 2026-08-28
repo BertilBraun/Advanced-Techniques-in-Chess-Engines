@@ -15,6 +15,7 @@ from src.search_budget.artifacts import (
     write_immutable_artifact,
     write_persisted_model,
 )
+from src.search_budget.curve import flat_curve
 from src.search_budget.labeling import (
     DeepSearchRecord,
     DeepSearchShardArtifact,
@@ -85,7 +86,7 @@ class ConfiguredLabelWorkerRuntime:
             return
         self._search.refresh_model(checkpoint.generation, str(checkpoint.inference_model_path))
         self._search.update_search_schedule(
-            self._game.native_search_parameters(self._game.self_play_parameters_at(checkpoint.generation, 0.0))
+            self._game.native_search_parameters(self._game.self_play_parameters_at(checkpoint.generation, flat_curve()))
         )
 
     def predict(self, positions: tuple[LabelPositionSource, ...]) -> tuple[PredictionRecord, ...]:
@@ -166,7 +167,7 @@ class ConfiguredLabelWorkerRuntime:
         from src.games.go.training import GoImplementation
         from src.self_play.configuration import BatchedInferenceParams
 
-        parameters = self._game.self_play_parameters_at(checkpoint.generation, 0.0)
+        parameters = self._game.self_play_parameters_at(checkpoint.generation, flat_curve())
         source_inference = self._game.self_play_configuration.inference
         inference = BatchedInferenceParams(
             inference_workers=1,

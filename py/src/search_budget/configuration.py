@@ -4,7 +4,6 @@ from decimal import Decimal
 from typing import Literal
 
 from pydantic import Field, model_validator
-from src.search_budget.curve import BLEND_CANDIDATES
 from src.util.frozen_model import FrozenModel
 
 
@@ -31,20 +30,25 @@ class DeepLabelingConfiguration(FrozenModel):
         return self
 
 
-class BlendCalibrationConfiguration(FrozenModel):
-    candidate_blends: tuple[Decimal, ...] = BLEND_CANDIDATES
+class CurveCalibrationConfiguration(FrozenModel):
+    bucket_count: int = Field(default=10, ge=2)
+    initializer_version: Literal['analytic_q5_v1'] = 'analytic_q5_v1'
     warmup_completed_source_generations: int = Field(default=30, gt=0)
-    ema_decay: Decimal = Field(default=Decimal('0.2'), gt=Decimal(0), le=Decimal(1))
-    maximum_upward_step: Decimal = Field(default=Decimal('0.1'), gt=Decimal(0), le=Decimal(1))
+    bucket_utility_ema_decay: Decimal = Field(default=Decimal('0.2'), gt=Decimal(0), le=Decimal(1))
+    validation_gain_ema_decay: Decimal = Field(default=Decimal('0.2'), gt=Decimal(0), le=Decimal(1))
+    probe_ratio: Decimal = Field(default=Decimal('1.1'), gt=Decimal(1))
+    maximum_step_ratio: Decimal = Field(default=Decimal('1.1'), gt=Decimal(1))
 
     @model_validator(mode='after')
-    def validate_first_run_defaults(self) -> BlendCalibrationConfiguration:
-        if self.candidate_blends != BLEND_CANDIDATES:
-            raise ValueError('Blend candidates must be exactly [0.0, 0.1, ..., 1.0].')
+    def validate_first_run_defaults(self) -> CurveCalibrationConfiguration:
+        if self.bucket_count != 10 or self.initializer_version != 'analytic_q5_v1':
+            raise ValueError('Live curve calibration must use ten buckets and the analytic q5 initializer.')
         if self.warmup_completed_source_generations != 30:
             raise ValueError('Allocator warm-up must contain exactly 30 completed source generations.')
-        if self.ema_decay != Decimal('0.2') or self.maximum_upward_step != Decimal('0.1'):
-            raise ValueError('Blend calibration must use EMA decay 0.2 and maximum upward step 0.1.')
+        if self.bucket_utility_ema_decay != Decimal('0.2') or self.validation_gain_ema_decay != Decimal('0.2'):
+            raise ValueError('Curve calibration must use EMA decay 0.2 for utility and validation gain.')
+        if self.probe_ratio != Decimal('1.1') or self.maximum_step_ratio != Decimal('1.1'):
+            raise ValueError('Curve calibration must use a 1.1 probe and maximum multiplicative step ratio.')
         return self
 
 
@@ -60,7 +64,7 @@ class ProductionAllocationConfiguration(FrozenModel):
 
 
 class SearchBudgetConfiguration(FrozenModel):
-    curve_version: Literal['measured_oracle_600_v1'] = 'measured_oracle_600_v1'
+    curve_version: Literal['live_ema_ten_bucket_v1'] = 'live_ema_ten_bucket_v1'
     labeling: DeepLabelingConfiguration = DeepLabelingConfiguration()
-    calibration: BlendCalibrationConfiguration = BlendCalibrationConfiguration()
+    calibration: CurveCalibrationConfiguration = CurveCalibrationConfiguration()
     production: ProductionAllocationConfiguration = ProductionAllocationConfiguration()

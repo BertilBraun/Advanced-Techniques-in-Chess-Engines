@@ -8,7 +8,8 @@ import numpy as np
 import torch
 from src.experiment.configuration import load_experiment_configuration_json
 from src.games.composition import create_game_implementation
-from src.search_budget.calibration import BlendPublication
+from src.search_budget.calibration import CurvePublication
+from src.search_budget.curve import SearchBudgetCurve
 from src.self_play.protocol import (
     PausedSelfPlayState,
     RunningSelfPlayState,
@@ -31,7 +32,7 @@ class SelfPlayProcessRuntime:
         self.worker_id = worker_id
         self.loaded_generation: int | None = None
         self.loaded_sha256: str | None = None
-        self.loaded_search_budget_blend: float | None = None
+        self.loaded_search_budget_curve: SearchBudgetCurve | None = None
         self.completed_search_batches = 0
         self.running = False
 
@@ -95,16 +96,16 @@ class SelfPlayProcessRuntime:
         self.completed_search_batches = 0
         return statistics
 
-    def _load_checkpoint(self, checkpoint: CheckpointReference, search_budget: BlendPublication) -> None:
+    def _load_checkpoint(self, checkpoint: CheckpointReference, search_budget: CurvePublication) -> None:
         if checkpoint.generation == self.loaded_generation:
-            if float(search_budget.blend) != self.loaded_search_budget_blend:
-                raise ValueError('A started self-play generation cannot change its published search-budget blend.')
+            if search_budget.curve != self.loaded_search_budget_curve:
+                raise ValueError('A started self-play generation cannot change its published search-budget curve.')
             return
         checkpoint.validate_inference_model()
-        self.worker.refresh_published_model(checkpoint, float(search_budget.blend))
+        self.worker.refresh_published_model(checkpoint, search_budget.curve)
         self.loaded_generation = checkpoint.generation
         self.loaded_sha256 = checkpoint.inference_model_sha256
-        self.loaded_search_budget_blend = float(search_budget.blend)
+        self.loaded_search_budget_curve = search_budget.curve
 
 
 def self_play_worker_main(

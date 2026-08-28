@@ -7,7 +7,7 @@ from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
 
 from src.games.implementation import GameImplementation
-from src.search_budget.calibration import BlendPublication
+from src.search_budget.calibration import CurvePublication
 from src.self_play.process_runtime import self_play_worker_main
 from src.self_play.protocol import (
     PausedSelfPlayState,
@@ -97,7 +97,7 @@ class SelfPlayGroup:
     def supervise(
         self,
         checkpoint: CheckpointReference,
-        search_budget: BlendPublication,
+        search_budget: CurvePublication,
         resignation_policy: PublishedResignationPolicy,
     ) -> SelfPlaySupervision:
         """Reap dead workers and drive restarts forward without ever waiting on a worker."""
@@ -137,7 +137,7 @@ class SelfPlayGroup:
         self,
         slot: SelfPlayWorkerSlot,
         checkpoint: CheckpointReference,
-        search_budget: BlendPublication,
+        search_budget: CurvePublication,
         resignation_policy: PublishedResignationPolicy,
         now: float,
     ) -> None:

@@ -397,7 +397,9 @@ class Coordinator:
                 case GenerationLabelReport():
                     log(
                         f'Finalized search-budget label generation {event.source_generation}: '
-                        f'{event.replay_samples_written} replay samples, blend={event.selected_blend} '
+                        f'{event.replay_samples_written} replay samples, decision={event.decision_reason}, '
+                        f'published=[{event.minimum_published_multiplier:.4f}, '
+                        f'{event.maximum_published_multiplier:.4f}] '
                         f'for production generation {event.application_generation}.'
                     )
                 case FailedLabelJobReport():

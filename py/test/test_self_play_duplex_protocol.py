@@ -3,7 +3,6 @@ from __future__ import annotations
 import multiprocessing
 import time
 from dataclasses import dataclass
-from decimal import Decimal
 from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
 from pathlib import Path
@@ -15,7 +14,8 @@ import pytest
 import src.self_play.process_runtime as process_runtime_module
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
-from src.search_budget.calibration import BlendDecisionReason, BlendPublication
+from src.search_budget.calibration import CurveDecisionReason, CurvePublication
+from src.search_budget.curve import SearchBudgetCurve, analytic_initial_curve, flat_curve
 from src.self_play.process_runtime import self_play_worker_main
 from src.self_play.protocol import (
     PausedSelfPlayState,
@@ -76,8 +76,8 @@ class _Worker:
     def run_batch(self) -> None:
         pass
 
-    def refresh_published_model(self, checkpoint: CheckpointReference, search_budget_blend: float) -> None:
-        assert 0.0 <= search_budget_blend <= 1.0
+    def refresh_published_model(self, checkpoint: CheckpointReference, search_budget_curve: SearchBudgetCurve) -> None:
+        assert search_budget_curve in {flat_curve(), analytic_initial_curve()}
         self.generation = checkpoint.generation
 
     def update_resignation_policy(self, policy: PublishedResignationPolicy) -> None:
@@ -157,11 +157,11 @@ def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:
     return checkpoint_reference(tmp_path, generation, write_inference_model=True)
 
 
-def _publication(generation: int, blend: str = '0') -> BlendPublication:
-    return BlendPublication(
-        blend=Decimal(blend),
+def _publication(generation: int, adaptive: bool = False) -> CurvePublication:
+    return CurvePublication(
+        curve=analytic_initial_curve() if adaptive else flat_curve(),
         application_generation=generation,
-        decision_reason=BlendDecisionReason.INITIAL if blend == '0' else BlendDecisionReason.BEST_ELIGIBLE,
+        decision_reason=CurveDecisionReason.VALIDATED_PENDING if adaptive else CurveDecisionReason.INITIAL,
     )
 
 
@@ -212,7 +212,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     parent.send(
         RunningSelfPlayState(
             checkpoint=_checkpoint(tmp_path, 1),
-            search_budget=_publication(1, '0.1'),
+            search_budget=_publication(1, True),
             completed_generation_statistics=StatisticsLevel.DETAILED,
         )
     )
@@ -236,7 +236,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
 def _applied(
     worker_id: int,
     checkpoint: CheckpointReference,
-    search_budget: BlendPublication,
+    search_budget: CurvePublication,
 ) -> RunningSelfPlayStateApplied:
     return RunningSelfPlayStateApplied(
         worker_id=worker_id,
