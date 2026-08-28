@@ -234,7 +234,7 @@ evaluation:
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-2000
-      first_generation: 300
+      first_generation: 250
       nodes: 2000
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
