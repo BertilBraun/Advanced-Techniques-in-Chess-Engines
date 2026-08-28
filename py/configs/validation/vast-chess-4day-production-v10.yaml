@@ -166,6 +166,8 @@ chess:
       - kind: remaining_game_length
         loss_weight: 0.1
         normalization_scale: 400.0
+      - kind: search_budget
+        loss_weight: 0.2
 evaluation:
   maximum_concurrent_jobs: 16
   definitions:

@@ -88,6 +88,7 @@ training:
     inference_retention:
       recent_checkpoint_count: 11
       milestone_interval: 10
+    search_budget: {}
   limits:
     hourly_price: 0.11522222222222216
     maximum_wall_time_seconds: 14700
@@ -181,23 +182,13 @@ evaluation:
 go:
   self_play:
     search:
-      full_search_budget:
-        kind: fixed
-        visits:
-          kind: linear
-          start_generation: 0
-          end_generation: 50
-          start_value: 64
-          end_value: 256
-          rounding: nearest
-      fast_searches:
+      baseline_visits:
         kind: linear
         start_generation: 0
         end_generation: 50
-        start_value: 16
-        end_value: 64
+        start_value: 64
+        end_value: 256
         rounding: nearest
-      parallel_searches: 1
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
       exploration_constant: 1.5
@@ -221,13 +212,6 @@ go:
       minimum_remaining_plies: 15
       maximum_archive_positions: 50000
       maximum_age_generations: 20
-    full_search_probability:
-      kind: linear
-      start_generation: 0
-      end_generation: 25
-      start_value: 1.0
-      end_value: 0.25
-      rounding: none
     retained_root_visit_fraction: 0.6
     greedy_after_ply: 60
     starting_temperature: 1.0
@@ -261,3 +245,5 @@ go:
       - kind: remaining_game_length
         loss_weight: 0.1
         normalization_scale: 324
+      - kind: search_budget
+        loss_weight: 0.2

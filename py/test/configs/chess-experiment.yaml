@@ -87,6 +87,7 @@ training:
     inference_retention:
       recent_checkpoint_count: 11
       milestone_interval: 10
+    search_budget: {}
   limits:
     hourly_price: 1.0
     maximum_cost: null
@@ -182,23 +183,13 @@ chess:
     resignation:
       kind: disabled
     search:
-      full_search_budget:
-        kind: fixed
-        visits:
-          kind: linear
-          start_generation: 0
-          end_generation: 20
-          start_value: 300
-          end_value: 600
-          rounding: nearest
-      fast_searches:
+      baseline_visits:
         kind: linear
         start_generation: 0
         end_generation: 20
-        start_value: 75
-        end_value: 150
+        start_value: 300
+        end_value: 600
         rounding: nearest
-      parallel_searches: 1
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
       exploration_constant: 1.5
@@ -220,7 +211,6 @@ chess:
       minimum_remaining_plies: 15
       maximum_archive_positions: 50000
       maximum_age_generations: 20
-    full_search_probability: 0.25
     retained_root_visit_fraction: 0.6
     greedy_after_ply: 50
     maximum_game_plies:
@@ -230,7 +220,6 @@ chess:
       start_value: 200
       end_value: 600
       rounding: nearest
-    force_fast_search_after_ply: 250
     starting_temperature: 1.3
     final_temperature: 0.1
     primary_sample_weight: 1.0
@@ -245,4 +234,6 @@ chess:
       end_value: 0.15
       rounding: none
     value_discount_per_ply: 1.0
-    auxiliary_targets: []
+    auxiliary_targets:
+      - kind: search_budget
+        loss_weight: 0.2

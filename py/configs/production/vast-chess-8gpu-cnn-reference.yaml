@@ -24,37 +24,19 @@ training:
 chess:
   self_play:
     search:
-      full_search_budget:
-        kind: fixed
-        visits:
-          kind: staged
-          stages:
-            - {start_generation: 0, value: 200}
-            - {start_generation: 10, value: 300}
-            - {start_generation: 30, value: 400}
-            - {start_generation: 50, value: 500}
-            - {start_generation: 90, value: 600}
-            - {start_generation: 180, value: 700}
-            - {start_generation: 250, value: 800}
-            - {start_generation: 550, value: 1000}
-      fast_searches:
+      baseline_visits:
         kind: staged
         stages:
-          - {start_generation: 0, value: 50}
-          - {start_generation: 10, value: 75}
-          - {start_generation: 30, value: 100}
-          - {start_generation: 50, value: 125}
-          - {start_generation: 90, value: 150}
-      parallel_searches: 4
+          - {start_generation: 0, value: 200}
+          - {start_generation: 10, value: 300}
+          - {start_generation: 30, value: 400}
+          - {start_generation: 50, value: 500}
+          - {start_generation: 90, value: 600}
+          - {start_generation: 180, value: 700}
+          - {start_generation: 250, value: 800}
+          - {start_generation: 550, value: 1000}
     start_position:
       minimum_remaining_plies: 15
-    full_search_probability:
-      kind: linear
-      start_generation: 0
-      end_generation: 70
-      start_value: 1.0
-      end_value: 0.25
-      rounding: none
     greedy_after_ply:
       kind: staged
       stages:
@@ -68,4 +50,3 @@ chess:
         - {start_generation: 80, value: 180}
         - {start_generation: 110, value: 200}
         - {start_generation: 140, value: 250}
-    force_fast_search_after_ply: 200

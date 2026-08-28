@@ -9,12 +9,12 @@
 # Measured against the archives, the training data v8 consumes today is not the problem: its
 # samples sit closer to terminal positions (12.8% within ten plies of the end, against 11.0%) and
 # carry sharper targets (72.3% decisive, against 22.8%). What differed was generations 0-39, where
-# force_fast_search_after_ply ran 110-160 and excluded 14.4% of all plies from the training set,
+# the former late-ply fast-search cutoff ran 110-160 and excluded 14.4% of all plies from the training set,
 # and where cut games were bootstrapped from 81-136 simulation fast searches and that value stamped
 # on every sample in the game. That data left the buffer around generation 116, so v8 carries
 # residual weight damage rather than an ongoing defect. v9 restarts clean.
 #
-# Reverted to the r3 recipe: force_fast_search_after_ply is a flat 200 and the ply cap follows the
+# Reverted to the r3 recipe: the former late-ply cutoff is flat 200 and the ply cap follows the
 # original schedule, so no ply is structurally excluded before generation 140.
 #
 # The one mechanism the converting references had and no v-series run has ever had is a
@@ -127,6 +127,7 @@ training:
     inference_retention:
       recent_checkpoint_count: 22
       milestone_interval: 20
+    search_budget: {}
   limits:
     hourly_price: 0.72
     maximum_cost: null
@@ -278,33 +279,18 @@ chess:
       confidence_level: 0.95
       maximum_relaxation_per_generation: 0.01
     search:
-      full_search_budget:
-        kind: fixed
-        visits:
-          kind: staged
-          stages:
-            - {start_generation: 0, value: 200}
-            - {start_generation: 10, value: 300}
-            - {start_generation: 30, value: 400}
-            - {start_generation: 50, value: 500}
-            - {start_generation: 90, value: 600}
-            - {start_generation: 180, value: 700}
-            - {start_generation: 250, value: 800}
-            - {start_generation: 550, value: 1000}
-            - {start_generation: 1200, value: 1200}
-      fast_searches:
+      baseline_visits:
         kind: staged
         stages:
-          - {start_generation: 0, value: 50}
-          - {start_generation: 10, value: 75}
-          - {start_generation: 30, value: 100}
-          - {start_generation: 50, value: 125}
-          - {start_generation: 90, value: 150}
-      parallel_searches:
-        kind: staged
-        stages:
-          - {start_generation: 0, value: 2}
-          - {start_generation: 90, value: 4}
+          - {start_generation: 0, value: 200}
+          - {start_generation: 10, value: 300}
+          - {start_generation: 30, value: 400}
+          - {start_generation: 50, value: 500}
+          - {start_generation: 90, value: 600}
+          - {start_generation: 180, value: 700}
+          - {start_generation: 250, value: 800}
+          - {start_generation: 550, value: 1000}
+          - {start_generation: 1200, value: 1200}
       virtual_loss_weight: 1.0
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
@@ -330,13 +316,6 @@ chess:
       minimum_remaining_plies: 15
       maximum_archive_positions: 50000
       maximum_age_generations: 40
-    full_search_probability:
-      kind: linear
-      start_generation: 0
-      end_generation: 70
-      start_value: 1.0
-      end_value: 0.25
-      rounding: none
     retained_root_visit_fraction: 0.6
     greedy_after_ply:
       kind: staged
@@ -354,7 +333,6 @@ chess:
           - {start_generation: 80, value: 180}
           - {start_generation: 110, value: 200}
           - {start_generation: 140, value: 250}
-    force_fast_search_after_ply: 200
     starting_temperature: 1.3
     final_temperature: 0.1
     primary_sample_weight: 1.0
@@ -378,3 +356,5 @@ chess:
       - kind: remaining_game_length
         loss_weight: 0.1
         normalization_scale: 400.0
+      - kind: search_budget
+        loss_weight: 0.2

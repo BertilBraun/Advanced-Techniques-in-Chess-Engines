@@ -7,7 +7,4 @@ training:
 go:
   self_play:
     search:
-      full_search_budget:
-        kind: fixed
-        visits: 256
-      fast_searches: 64
+      baseline_visits: 256

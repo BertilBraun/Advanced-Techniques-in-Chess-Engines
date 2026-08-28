@@ -4,6 +4,3 @@ run:
   tensorboard_run_directory: go9-strong-09-no-mixed-search
 training:
   save_path: py/training_data/screening/go9-strong/09-no-mixed-search
-go:
-  self_play:
-    full_search_probability: 1.0

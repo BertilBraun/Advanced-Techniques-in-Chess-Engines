@@ -10,3 +10,5 @@ go:
       - kind: next_policy
         ply_offset: 1
         loss_weight: 0.15
+      - kind: search_budget
+        loss_weight: 0.2

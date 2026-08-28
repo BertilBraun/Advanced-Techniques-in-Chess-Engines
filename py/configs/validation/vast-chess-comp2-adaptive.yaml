@@ -24,27 +24,14 @@ training:
 chess:
   self_play:
     search:
-      full_search_budget:
-        kind: adaptive
-        minimum_visits: 200
-        maximum_visits:
-          kind: staged
-          stages:
-            - {start_generation: 0, value: 200}
-            - {start_generation: 10, value: 300}
-            - {start_generation: 30, value: 400}
-            - {start_generation: 50, value: 500}
-            - {start_generation: 90, value: 600}
-            - {start_generation: 180, value: 700}
-            - {start_generation: 250, value: 800}
-            - {start_generation: 550, value: 1000}
-        observation_interval: 100
-        leader_stability_window: 200
-        root_value_tolerance: 0.04
-        initial_top_visit_share: 0.7
-        final_top_visit_share: 0.5
-        initial_top_two_margin: 0.45
-        final_top_two_margin: 0.15
-        threshold_relaxation_visits: 1200
-        learned_gate_start_generation: 50
-        minimum_search_correction_to_unlock_tail: 0.4
+      baseline_visits:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 200}
+          - {start_generation: 10, value: 300}
+          - {start_generation: 30, value: 400}
+          - {start_generation: 50, value: 500}
+          - {start_generation: 90, value: 600}
+          - {start_generation: 180, value: 700}
+          - {start_generation: 250, value: 800}
+          - {start_generation: 550, value: 1000}

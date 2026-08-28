@@ -7,12 +7,10 @@ training:
 go:
   self_play:
     search:
-      full_search_budget:
-        kind: fixed
-        visits:
-          kind: linear
-          start_generation: 0
-          end_generation: 120
-          start_value: 64
-          end_value: 512
-          rounding: nearest
+      baseline_visits:
+        kind: linear
+        start_generation: 0
+        end_generation: 120
+        start_value: 64
+        end_value: 512
+        rounding: nearest

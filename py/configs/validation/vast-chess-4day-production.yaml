@@ -4,7 +4,7 @@
 #     bake-off, benchmark-results/policy-heads-*.json), replay ratio 10 (A/B showed reuse
 #     insensitivity 2 vs 16), r3's split search discount 0.99 restored (forensics), adaptive
 #     budget with caps at 1.25x the r3 schedule (realized mean ~r3), virtual loss 0.5 to soften
-#     parallel-search distortion, the two permanent aux targets + search_correction for the gate,
+#     parallel-search distortion, the two permanent aux targets plus the former gate auxiliary,
 #     Syzygy adjudication and compilation on. Judged by wall-clock evaluation curves.
 extends: vast-chess-4day-r3replica.yaml
 
@@ -55,30 +55,17 @@ chess:
   self_play:
     search:
       virtual_loss_weight: 0.5
-      full_search_budget:
-        kind: adaptive
-        minimum_visits: 200
-        maximum_visits:
-          kind: staged
-          stages:
-            - {start_generation: 0, value: 250}
-            - {start_generation: 10, value: 375}
-            - {start_generation: 30, value: 500}
-            - {start_generation: 50, value: 625}
-            - {start_generation: 90, value: 750}
-            - {start_generation: 180, value: 875}
-            - {start_generation: 250, value: 1000}
-            - {start_generation: 550, value: 1250}
-        observation_interval: 100
-        leader_stability_window: 200
-        root_value_tolerance: 0.04
-        initial_top_visit_share: 0.7
-        final_top_visit_share: 0.5
-        initial_top_two_margin: 0.45
-        final_top_two_margin: 0.15
-        threshold_relaxation_visits: 1200
-        learned_gate_start_generation: 50
-        minimum_search_correction_to_unlock_tail: 0.4
+      baseline_visits:
+        kind: staged
+        stages:
+          - {start_generation: 0, value: 250}
+          - {start_generation: 10, value: 375}
+          - {start_generation: 30, value: 500}
+          - {start_generation: 50, value: 625}
+          - {start_generation: 90, value: 750}
+          - {start_generation: 180, value: 875}
+          - {start_generation: 250, value: 1000}
+          - {start_generation: 550, value: 1250}
   objective:
     search_value_discount_per_ply: 0.99
     auxiliary_targets:
@@ -88,5 +75,5 @@ chess:
       - kind: remaining_game_length
         loss_weight: 0.1
         normalization_scale: 400.0
-      - kind: search_correction
-        loss_weight: 0.05
+      - kind: search_budget
+        loss_weight: 0.2
