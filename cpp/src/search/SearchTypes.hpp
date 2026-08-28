@@ -6,13 +6,17 @@
 #include "search/tree/TreeSearchParameters.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <numeric>
 #include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <type_traits>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -54,15 +58,50 @@ struct AdditionalSearchLimit {
     }
 };
 
+struct SearchBudgetCurve {
+    static constexpr std::size_t BUCKET_COUNT = 10;
+    std::array<double, BUCKET_COUNT> multipliers;
+
+    SearchBudgetCurve() : multipliers{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0} {}
+    explicit SearchBudgetCurve(std::array<double, BUCKET_COUNT> curveMultipliers)
+        : multipliers(std::move(curveMultipliers)) {
+        if (std::ranges::any_of(multipliers, [](const double multiplier) {
+                return !std::isfinite(multiplier) || multiplier <= 0.0;
+            })) {
+            throw std::invalid_argument(
+                "Search-budget curve multipliers must be finite and positive");
+        }
+        if (!std::ranges::is_sorted(multipliers)) {
+            throw std::invalid_argument(
+                "Search-budget curve multipliers must be monotone nondecreasing");
+        }
+        const double sum = std::accumulate(multipliers.begin(), multipliers.end(), 0.0);
+        if (std::abs(sum - static_cast<double>(BUCKET_COUNT)) > 1e-6) {
+            throw std::invalid_argument(
+                "Search-budget curve multipliers must have arithmetic mean one");
+        }
+    }
+
+    [[nodiscard]] double multiplier(const float quantile) const {
+        if (!std::isfinite(quantile) || quantile < 0.0F || quantile > 1.0F) {
+            throw std::invalid_argument("Search-budget prediction must lie in [0, 1]");
+        }
+        const std::size_t bucket =
+            std::min(static_cast<std::size_t>(quantile * static_cast<float>(BUCKET_COUNT)),
+                     BUCKET_COUNT - 1);
+        return multipliers[bucket];
+    }
+};
+
 struct PredictedSearchBudgetLimit {
     std::uint32_t baseline_visits;
-    float blend;
+    SearchBudgetCurve curve;
 
-    PredictedSearchBudgetLimit() : baseline_visits(1), blend(0.0F) {}
-    PredictedSearchBudgetLimit(const std::uint32_t baselineVisits, const float allocatorBlend)
-        : baseline_visits(baselineVisits), blend(allocatorBlend) {
-        if (baseline_visits == 0 || !std::isfinite(blend) || blend < 0.0F || blend > 1.0F) {
-            throw std::invalid_argument("Predicted search-budget limit is invalid");
+    PredictedSearchBudgetLimit() : baseline_visits(1), curve() {}
+    PredictedSearchBudgetLimit(const std::uint32_t baselineVisits, SearchBudgetCurve budgetCurve)
+        : baseline_visits(baselineVisits), curve(std::move(budgetCurve)) {
+        if (baseline_visits == 0) {
+            throw std::invalid_argument("Predicted search-budget baseline must be positive");
         }
     }
 };
@@ -70,39 +109,9 @@ struct PredictedSearchBudgetLimit {
 using SearchLimit =
     std::variant<FixedSearchLimit, AdditionalSearchLimit, PredictedSearchBudgetLimit>;
 
-[[nodiscard]] inline float searchBudgetMultiplier(const float quantile) {
-    if (!std::isfinite(quantile) || quantile < 0.0F || quantile > 1.0F) {
-        throw std::invalid_argument("Search-budget prediction must lie in [0, 1]");
-    }
-    constexpr float denominator = 3'761.0F;
-    if (quantile < 1'186.0F / 3'000.0F) {
-        return 750.0F / denominator;
-    }
-    if (quantile < 1'570.0F / 3'000.0F) {
-        return 1'500.0F / denominator;
-    }
-    if (quantile < 1'838.0F / 3'000.0F) {
-        return 2'250.0F / denominator;
-    }
-    if (quantile < 2'048.0F / 3'000.0F) {
-        return 3'000.0F / denominator;
-    }
-    if (quantile < 2'188.0F / 3'000.0F) {
-        return 3'750.0F / denominator;
-    }
-    if (quantile < 2'347.0F / 3'000.0F) {
-        return 4'500.0F / denominator;
-    }
-    if (quantile < 2'547.0F / 3'000.0F) {
-        return 6'000.0F / denominator;
-    }
-    if (quantile < 2'699.0F / 3'000.0F) {
-        return 9'000.0F / denominator;
-    }
-    if (quantile < 2'806.0F / 3'000.0F) {
-        return 12'000.0F / denominator;
-    }
-    return 18'000.0F / denominator;
+[[nodiscard]] inline double searchBudgetMultiplier(const SearchBudgetCurve &curve,
+                                                   const float quantile) {
+    return curve.multiplier(quantile);
 }
 
 [[nodiscard]] inline std::uint32_t searchParallelism(const std::uint32_t additionalVisits) {
@@ -121,21 +130,17 @@ class SearchBudgetAllocator {
 public:
     [[nodiscard]] std::uint32_t assign(const PredictedSearchBudgetLimit &limit,
                                        const float predictedQuantile) {
-        const double multiplier = static_cast<double>(searchBudgetMultiplier(predictedQuantile));
-        const double blendedMultiplier = (1.0 - static_cast<double>(limit.blend)) +
-                                         static_cast<double>(limit.blend) * multiplier;
-        constexpr double floorMultiplier = 750.0 / 3'761.0;
-        constexpr double ceilingMultiplier = 18'000.0 / 3'761.0;
-        const double blendedFloor = (1.0 - static_cast<double>(limit.blend)) +
-                                    static_cast<double>(limit.blend) * floorMultiplier;
-        const double blendedCeiling = (1.0 - static_cast<double>(limit.blend)) +
-                                      static_cast<double>(limit.blend) * ceilingMultiplier;
-        const double minimum = std::ceil(static_cast<double>(limit.baseline_visits) * blendedFloor);
-        const double maximum =
-            std::floor(static_cast<double>(limit.baseline_visits) * blendedCeiling);
-        const double ideal = static_cast<double>(limit.baseline_visits) * blendedMultiplier;
+        const double multiplier = searchBudgetMultiplier(limit.curve, predictedQuantile);
+        constexpr std::uint64_t maximumBaselineMultiple = 8;
+        const std::uint64_t maximumVisits =
+            static_cast<std::uint64_t>(limit.baseline_visits) * maximumBaselineMultiple;
+        if (maximumVisits > std::numeric_limits<std::uint32_t>::max()) {
+            throw std::overflow_error("Predicted search budget exceeds the visit range");
+        }
+        const double ideal = static_cast<double>(limit.baseline_visits) * multiplier;
         const double corrected = ideal - static_cast<double>(m_spendError);
-        const double rounded = std::clamp(std::floor(corrected + 0.5), minimum, maximum);
+        const double rounded =
+            std::clamp(std::floor(corrected + 0.5), 1.0, static_cast<double>(maximumVisits));
         if (rounded < 1.0 || rounded > std::numeric_limits<std::uint32_t>::max()) {
             throw std::overflow_error("Predicted search budget is outside the visit range");
         }
@@ -166,12 +171,9 @@ private:
             } else if constexpr (std::is_same_v<Limit, AdditionalSearchLimit>) {
                 return selected.additional_visits;
             } else {
-                constexpr double maximumMultiplier = 18'000.0 / 3'761.0;
-                const double blendedMaximum =
-                    (1.0 - static_cast<double>(selected.blend)) +
-                    static_cast<double>(selected.blend) * maximumMultiplier;
-                const double maximum =
-                    std::ceil(static_cast<double>(selected.baseline_visits) * blendedMaximum) + 1.0;
+                constexpr std::uint64_t maximumBaselineMultiple = 8;
+                const std::uint64_t maximum =
+                    static_cast<std::uint64_t>(selected.baseline_visits) * maximumBaselineMultiple;
                 if (maximum > std::numeric_limits<std::uint32_t>::max()) {
                     throw std::overflow_error("Predicted search budget exceeds the visit range");
                 }

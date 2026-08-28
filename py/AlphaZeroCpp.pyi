@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import typing
 
+import pybind11_stubgen.typing_ext
+
 __all__ = [
     'ActionAnalysisCandidate',
     'AdditionalSearchLimit',
@@ -60,6 +62,7 @@ __all__ = [
     'OutcomeProbabilities',
     'PredictedSearchBudgetLimit',
     'SdpaBackend',
+    'SearchBudgetCurve',
     'SearchCheckpoint',
     'SearchCheckpointDetail',
     'SearchStopReason',
@@ -1106,11 +1109,11 @@ class InferenceStatistics:
     def workerUtilization(self) -> float: ...
 
 class PredictedSearchBudgetLimit:
-    def __init__(self, baseline_visits: int, blend: float) -> None: ...
+    def __init__(self, baseline_visits: int, curve: SearchBudgetCurve) -> None: ...
     @property
     def baseline_visits(self) -> int: ...
     @property
-    def blend(self) -> float: ...
+    def curve(self) -> SearchBudgetCurve: ...
 
 class SdpaBackend:
     """
@@ -1149,6 +1152,14 @@ class SdpaBackend:
     def name(self) -> str: ...
     @property
     def value(self) -> int: ...
+
+class SearchBudgetCurve:
+    def __init__(
+        self, multipliers: typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)]
+    ) -> None: ...
+    def multiplier(self, quantile: float) -> float: ...
+    @property
+    def multipliers(self) -> typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)]: ...
 
 class SearchCheckpoint:
     @property
@@ -1221,12 +1232,12 @@ class SelfPlaySearchParameters:
     baseline_visits: int
     dirichlet_alpha: float
     dirichlet_epsilon: float
-    search_budget_blend: float
+    search_budget_curve: SearchBudgetCurve
     tree_search: TreeSearchParameters
     def __init__(
         self,
         baseline_visits: int,
-        search_budget_blend: float,
+        search_budget_curve: SearchBudgetCurve,
         tree_search: TreeSearchParameters,
         dirichlet_alpha: float,
         dirichlet_epsilon: float,
@@ -1284,7 +1295,7 @@ def encode_board_packed_bytes(fen: str) -> bytes:
 def mirror_chess_action_id(action_id: int) -> int: ...
 def new_root(fen: str, arena_capacity: int) -> ChessSearchRoot: ...
 def new_root_with_history(starting_fen: str, moves_uci: list[str], arena_capacity: int) -> ChessSearchRoot: ...
-def search_budget_multiplier(quantile: float) -> float: ...
+def search_budget_multiplier(curve: SearchBudgetCurve, quantile: float) -> float: ...
 def search_parallelism(additional_visits: int) -> int: ...
 
 CHESS_ACTION_SIZE: int = 1880

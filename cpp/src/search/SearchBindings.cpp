@@ -157,11 +157,18 @@ void bind_search(py::module_ &module) {
     py::class_<AdditionalSearchLimit>(module, "AdditionalSearchLimit")
         .def(py::init<std::uint32_t>(), py::arg("additional_visits"))
         .def_readonly("additional_visits", &AdditionalSearchLimit::additional_visits);
+    py::class_<SearchBudgetCurve>(module, "SearchBudgetCurve")
+        .def(py::init<std::array<double, SearchBudgetCurve::BUCKET_COUNT>>(),
+             py::arg("multipliers"))
+        .def_readonly("multipliers", &SearchBudgetCurve::multipliers)
+        .def("multiplier", &SearchBudgetCurve::multiplier, py::arg("quantile"));
     py::class_<PredictedSearchBudgetLimit>(module, "PredictedSearchBudgetLimit")
-        .def(py::init<std::uint32_t, float>(), py::arg("baseline_visits"), py::arg("blend"))
+        .def(py::init<std::uint32_t, SearchBudgetCurve>(), py::arg("baseline_visits"),
+             py::arg("curve"))
         .def_readonly("baseline_visits", &PredictedSearchBudgetLimit::baseline_visits)
-        .def_readonly("blend", &PredictedSearchBudgetLimit::blend);
-    module.def("search_budget_multiplier", &searchBudgetMultiplier, py::arg("quantile"));
+        .def_readonly("curve", &PredictedSearchBudgetLimit::curve);
+    module.def("search_budget_multiplier", &searchBudgetMultiplier, py::arg("curve"),
+               py::arg("quantile"));
     module.def("search_parallelism", &searchParallelism, py::arg("additional_visits"));
     py::class_<GameSearchResult>(module, "GameSearchResult")
         .def_readonly("root_value", &GameSearchResult::root_value)
@@ -201,11 +208,11 @@ void bind_search(py::module_ &module) {
         .def_readonly("exploration_constant", &AnalysisParameters::exploration_constant)
         .def_readonly("inference", &AnalysisParameters::inference);
     py::class_<SelfPlaySearchParameters>(module, "SelfPlaySearchParameters")
-        .def(py::init<std::uint32_t, float, TreeSearchParameters, float, float>(),
-             py::arg("baseline_visits"), py::arg("search_budget_blend"), py::arg("tree_search"),
+        .def(py::init<std::uint32_t, SearchBudgetCurve, TreeSearchParameters, float, float>(),
+             py::arg("baseline_visits"), py::arg("search_budget_curve"), py::arg("tree_search"),
              py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"))
         .def_readwrite("baseline_visits", &SelfPlaySearchParameters::baseline_visits)
-        .def_readwrite("search_budget_blend", &SelfPlaySearchParameters::search_budget_blend)
+        .def_readwrite("search_budget_curve", &SelfPlaySearchParameters::search_budget_curve)
         .def_readwrite("tree_search", &SelfPlaySearchParameters::tree_search)
         .def_readwrite("dirichlet_alpha", &SelfPlaySearchParameters::dirichlet_alpha)
         .def_readwrite("dirichlet_epsilon", &SelfPlaySearchParameters::dirichlet_epsilon);

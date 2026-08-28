@@ -89,21 +89,36 @@ int runBatchedSearchTests() {
     const std::filesystem::path invalidModelPath =
         createTestModel("invalid", 0.5F, 0.5F, 0.0F, 0.0F, false);
     try {
-        constexpr std::array<std::uint32_t, 10> widths = {1'186, 384, 268, 210, 140,
-                                                          159,   200, 152, 107, 194};
-        constexpr std::array<std::uint32_t, 10> numerators = {750,   1'500, 2'250, 3'000,  3'750,
-                                                              4'500, 6'000, 9'000, 12'000, 18'000};
-        std::uint64_t weightedNumerator = 0;
-        for (const std::size_t index : range(widths.size())) {
-            weightedNumerator += static_cast<std::uint64_t>(widths[index]) * numerators[index];
+        const SearchBudgetCurve flatCurve;
+        const SearchBudgetCurve liveCurve(
+            {0.55, 0.65, 0.75, 0.85, 0.95, 1.05, 1.15, 1.25, 1.35, 1.45});
+        require(std::abs(std::accumulate(liveCurve.multipliers.begin(), liveCurve.multipliers.end(),
+                                         0.0) -
+                         10.0) < 1e-12,
+                "search-budget curve does not have uniform mean one");
+        require(searchBudgetMultiplier(liveCurve, 0.0F) == 0.55 &&
+                    searchBudgetMultiplier(liveCurve, std::nextafter(0.1F, 0.0F)) == 0.55 &&
+                    searchBudgetMultiplier(liveCurve, 0.1F) == 0.65 &&
+                    searchBudgetMultiplier(liveCurve, 1.0F) == 1.45,
+                "search-budget curve lost its equal-width bucket boundaries");
+        try {
+            static_cast<void>(
+                SearchBudgetCurve({1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.1}));
+            throw std::runtime_error("non-monotone search-budget curve unexpectedly validated");
+        } catch (const std::invalid_argument &) {
         }
-        require(weightedNumerator == 3'000ULL * 3'761ULL,
-                "search-budget curve does not have exact uniform mean one");
-        require(std::abs(searchBudgetMultiplier(0.0F) - 750.0F / 3'761.0F) < 1e-7F &&
-                    std::abs(searchBudgetMultiplier(1.0F) - 18'000.0F / 3'761.0F) < 1e-7F,
-                "search-budget curve lost its exact floor or ceiling");
-        require(searchBudgetMultiplier(1'186.0F / 3'000.0F) == 1'500.0F / 3'761.0F,
-                "search-budget boundary did not select the right-open interval");
+        try {
+            static_cast<void>(
+                SearchBudgetCurve({0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9}));
+            throw std::runtime_error("non-unit-mean search-budget curve unexpectedly validated");
+        } catch (const std::invalid_argument &) {
+        }
+        try {
+            static_cast<void>(
+                SearchBudgetCurve({0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0}));
+            throw std::runtime_error("nonpositive search-budget curve unexpectedly validated");
+        } catch (const std::invalid_argument &) {
+        }
 
         const std::array<std::uint32_t, 5> budgets = {100, 300, 600, 1'600, 2'400};
         const std::array<std::uint32_t, 5> expectedParallelism = {1, 2, 4, 8, 16};
@@ -114,7 +129,7 @@ int runBatchedSearchTests() {
         require(searchParallelism(100'000) == 16, "production parallelism exceeded its cap");
 
         SearchBudgetAllocator allocator;
-        const PredictedSearchBudgetLimit allocationLimit(101, 1.0F);
+        const PredictedSearchBudgetLimit allocationLimit(101, liveCurve);
         std::uint64_t assignedTotal = 0;
         constexpr std::uint32_t allocationCount = 10'000;
         for (const auto index : range(allocationCount)) {
@@ -124,31 +139,38 @@ int runBatchedSearchTests() {
         const auto expectedFloorError = static_cast<std::int64_t>(assignedTotal) -
                                         static_cast<std::int64_t>(allocationCount) * 101;
         const std::int64_t strictErrorBound =
-            std::max<std::int64_t>(
-                101 - static_cast<std::int64_t>(std::ceil(101.0 * 750.0 / 3'761.0)),
-                static_cast<std::int64_t>(std::floor(101.0 * 18'000.0 / 3'761.0)) - 101) +
+            std::max<std::int64_t>(101 - static_cast<std::int64_t>(std::ceil(101.0 * 0.55)),
+                                   static_cast<std::int64_t>(std::floor(101.0 * 1.45)) - 101) +
             1;
         require(allocator.spendError() == expectedFloorError &&
                     std::abs(allocator.spendError()) < strictErrorBound,
                 "all-floor predictions violated cumulative mean-spend accounting");
-        const std::int64_t errorBeforeFlatBlend = allocator.spendError();
-        const PredictedSearchBudgetLimit flatLimit(101, 0.0F);
+        const std::int64_t errorBeforeFlatCurve = allocator.spendError();
+        const PredictedSearchBudgetLimit flatLimit(101, flatCurve);
+        std::uint64_t flatAssignedTotal = 0;
         for (const auto index : range(100)) {
             static_cast<void>(index);
-            require(allocator.assign(flatLimit, 0.0F) == 101,
-                    "zero blend did not assign the exact baseline");
+            flatAssignedTotal += allocator.assign(flatLimit, 0.0F);
         }
-        require(allocator.spendError() == errorBeforeFlatBlend,
-                "zero blend worsened an existing cumulative spend error");
+        const std::int64_t flatCorrection =
+            static_cast<std::int64_t>(flatAssignedTotal) - 100 * 101;
+        require(allocator.spendError() == 0 && flatCorrection == -errorBeforeFlatCurve,
+                "flat curve did not repay the existing cumulative spend error");
         for (const auto index : range(allocationCount)) {
             static_cast<void>(index);
             static_cast<void>(allocator.assign(allocationLimit, 1.0F));
         }
         require(std::abs(allocator.spendError()) < strictErrorBound,
                 "all-ceiling predictions violated cumulative mean-spend accounting");
+        const SearchBudgetCurve cappedCurve({0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 9.1});
+        SearchBudgetAllocator cappedAllocator;
+        require(cappedAllocator.assign(PredictedSearchBudgetLimit(101, cappedCurve), 1.0F) == 808,
+                "production allocation exceeded the eight-times-baseline deep reference");
+        require(maximumAdditionalVisits(PredictedSearchBudgetLimit(101, cappedCurve)) == 808,
+                "predicted search capacity did not use the eight-times-baseline cap");
 
         const InferenceConfiguration runtimeParameters(0, modelPath.string(), InferenceDevice::Cpu);
-        const SelfPlaySearchParameters searchParameters(16, 0.0F, treeSearchParameters(), 0.3F,
+        const SelfPlaySearchParameters searchParameters(16, flatCurve, treeSearchParameters(), 0.3F,
                                                         0.0F);
         const BatchedInferenceParameters inferenceParameters(2, 8, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
@@ -182,19 +204,19 @@ int runBatchedSearchTests() {
                     retainedResult.final_visits == 32,
                 "retained root treated the assigned budget as an absolute visit limit");
 
-        const SelfPlaySearchParameters blendedParameters(101, 1.0F, treeSearchParameters(), 0.3F,
-                                                         0.0F);
-        ChessSelfPlaySearch blendedSearch(runtimeParameters, blendedParameters,
-                                          inferenceParameters);
-        const auto blendedResult =
-            blendedSearch.search({productionRequest(blendedSearch, 600)}).results.front();
-        require(blendedResult.spend_residual == blendedSearch.spendResidual(),
+        const SelfPlaySearchParameters liveCurveParameters(101, liveCurve, treeSearchParameters(),
+                                                           0.3F, 0.0F);
+        ChessSelfPlaySearch liveCurveSearch(runtimeParameters, liveCurveParameters,
+                                            inferenceParameters);
+        const auto liveCurveResult =
+            liveCurveSearch.search({productionRequest(liveCurveSearch)}).results.front();
+        require(liveCurveResult.spend_residual == liveCurveSearch.spendResidual(),
                 "predicted request did not expose its exact post-assignment spend residual");
-        const std::int64_t residualBeforeExplicit = blendedSearch.spendResidual();
+        const std::int64_t residualBeforeExplicit = liveCurveSearch.spendResidual();
         const auto explicitResult =
-            blendedSearch.search({fixedRequest(blendedSearch, 50, {}, 1)}).results.front();
+            liveCurveSearch.search({fixedRequest(liveCurveSearch, 50, {}, 1)}).results.front();
         require(explicitResult.spend_residual == residualBeforeExplicit &&
-                    blendedSearch.spendResidual() == residualBeforeExplicit,
+                    liveCurveSearch.spendResidual() == residualBeforeExplicit,
                 "explicit deep-label budget mutated the production spend ledger");
 
         std::vector<ChessSelfPlaySearchRequest> heterogeneous;

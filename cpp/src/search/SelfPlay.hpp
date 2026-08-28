@@ -20,23 +20,23 @@
 
 struct SelfPlaySearchParameters {
     std::uint32_t baseline_visits;
-    float search_budget_blend;
+    SearchBudgetCurve search_budget_curve;
     TreeSearchParameters tree_search;
     float dirichlet_alpha;
     float dirichlet_epsilon;
 
-    SelfPlaySearchParameters(const std::uint32_t baselineVisits, const float searchBudgetBlend,
-                             TreeSearchParameters treeSearch, const float dirichletAlpha,
-                             const float dirichletEpsilon)
-        : baseline_visits(baselineVisits), search_budget_blend(searchBudgetBlend),
+    SelfPlaySearchParameters(const std::uint32_t baselineVisits,
+                             SearchBudgetCurve searchBudgetCurve, TreeSearchParameters treeSearch,
+                             const float dirichletAlpha, const float dirichletEpsilon)
+        : baseline_visits(baselineVisits), search_budget_curve(std::move(searchBudgetCurve)),
           tree_search(treeSearch), dirichlet_alpha(dirichletAlpha),
           dirichlet_epsilon(dirichletEpsilon) {
-        static_cast<void>(PredictedSearchBudgetLimit(baseline_visits, search_budget_blend));
+        static_cast<void>(PredictedSearchBudgetLimit(baseline_visits, search_budget_curve));
     }
 
     [[nodiscard]] std::uint32_t arenaCapacity() const {
         const std::uint64_t maximumSearches = maximumAdditionalVisits(
-            PredictedSearchBudgetLimit(baseline_visits, search_budget_blend));
+            PredictedSearchBudgetLimit(baseline_visits, search_budget_curve));
         const std::uint64_t capacity = maximumSearches + 16U + 1U;
         if (capacity > std::numeric_limits<std::uint32_t>::max()) {
             throw std::overflow_error("Search parameters exceed the node index capacity");
@@ -132,7 +132,7 @@ public:
                     ? SearchLimit{AdditionalSearchLimit(*request.assigned_additional_visits)}
                     : SearchLimit{
                           PredictedSearchBudgetLimit(m_searchParameters.baseline_visits,
-                                                     m_searchParameters.search_budget_blend)};
+                                                     m_searchParameters.search_budget_curve)};
             engineRequests.push_back({
                 .root = request.root,
                 .limit = limit,
