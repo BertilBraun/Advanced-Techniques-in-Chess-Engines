@@ -276,3 +276,66 @@ def test_stockfish_fixed_node_rungs_require_unique_node_counts() -> None:
 
     with pytest.raises(ValidationError, match='unique node counts'):
         EvaluationConfiguration.model_validate(evaluation_payload)
+
+
+def _fixed_nodes_definition_payload(
+    template: dict[str, object], definition_id: str, nodes: int, **window: object
+) -> dict[str, object]:
+    payload = dict(template)
+    payload.update({'kind': 'stockfish_fixed_nodes', 'definition_id': definition_id, 'nodes': nodes})
+    payload.pop('skill_level', None)
+    payload.update(window)
+    return payload
+
+
+def _search_template(experiment: object) -> dict[str, object]:
+    payload = experiment.evaluation.model_dump(mode='json')
+    return next(d for d in payload['definitions'] if 'search' in d and 'maximum_game_plies' in d)
+
+
+def _scheduled_definition_ids(experiment: object, generation: int, tmp_path: Path) -> set[str]:
+    jobs, _ = jobs_for_suite(
+        experiment,
+        tmp_path,
+        tmp_path / 'results',
+        ScheduledEvaluationSuite(boundary_seconds=1200, checkpoint=checkpoint_reference(generation=generation)),
+        (),
+        0,
+    )
+    windowed = {'retires-early', 'always-on', 'starts-late'}
+    return {job.definition.definition_id for job in jobs} & windowed
+
+
+def _experiment_with_windowed_rungs(tmp_path: Path) -> object:
+    experiment = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    payload = experiment.evaluation.model_dump(mode='json')
+    template = _search_template(experiment)
+    fixed_dataset = next(d for d in payload['definitions'] if d['kind'] == 'fixed_dataset')
+    payload['definitions'] = [
+        fixed_dataset,
+        _fixed_nodes_definition_payload(template, 'retires-early', 30, final_generation=100),
+        _fixed_nodes_definition_payload(template, 'always-on', 300),
+        _fixed_nodes_definition_payload(template, 'starts-late', 10000, first_generation=500),
+    ]
+    return experiment.model_copy(update={'evaluation': EvaluationConfiguration.model_validate(payload)})
+
+
+def test_evaluation_rungs_activate_and_retire_on_their_generation_window(tmp_path: Path) -> None:
+    experiment = _experiment_with_windowed_rungs(tmp_path)
+
+    assert _scheduled_definition_ids(experiment, 50, tmp_path) == {'retires-early', 'always-on'}
+    assert _scheduled_definition_ids(experiment, 300, tmp_path) == {'always-on'}
+    assert _scheduled_definition_ids(experiment, 700, tmp_path) == {'always-on', 'starts-late'}
+
+
+def test_evaluation_window_rejects_a_final_generation_before_its_first() -> None:
+    with pytest.raises(ValidationError, match='cannot precede'):
+        StockfishFixedNodesEvaluationDefinition.model_validate(
+            _fixed_nodes_definition_payload(
+                _search_template(load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')),
+                'backwards',
+                300,
+                first_generation=500,
+                final_generation=100,
+            )
+        )

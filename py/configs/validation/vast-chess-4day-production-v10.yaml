@@ -202,6 +202,7 @@ evaluation:
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-100
+      final_generation: 250
       nodes: 100
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
@@ -209,6 +210,7 @@ evaluation:
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-300
+      final_generation: 450
       nodes: 300
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
@@ -216,6 +218,7 @@ evaluation:
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-1000
+      final_generation: 900
       nodes: 1000
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
@@ -223,6 +226,7 @@ evaluation:
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-2000
+      first_generation: 150
       nodes: 2000
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
@@ -230,7 +234,24 @@ evaluation:
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-3000
+      first_generation: 300
       nodes: 3000
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-5000
+      first_generation: 600
+      nodes: 5000
+      engine_executable_path: engines/stockfish-13
+      opening_pair_count: 50
+      maximum_game_plies: 300
+      search: *evaluation_search
+    - kind: stockfish_fixed_nodes
+      definition_id: stockfish-fixed-nodes-10000
+      first_generation: 1000
+      nodes: 10000
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
       maximum_game_plies: 300
@@ -238,6 +259,7 @@ evaluation:
     # Raw-policy rungs: one search per move, so the reported strength is the network alone.
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-policy-only-30
+      final_generation: 250
       nodes: 30
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
@@ -253,6 +275,7 @@ evaluation:
           sdpa_backend: memory_efficient
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-policy-only-100
+      final_generation: 450
       nodes: 100
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
