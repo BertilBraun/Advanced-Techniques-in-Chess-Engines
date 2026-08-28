@@ -5,6 +5,8 @@ import math
 from pydantic import Field, model_validator
 from src.util.frozen_model import FrozenModel
 
+POLICY_PROBABILITY_FLOOR = 1e-6
+
 
 class PolicyDistribution(FrozenModel):
     probabilities: tuple[float, ...] = Field(min_length=1)
@@ -52,9 +54,9 @@ def policy_kl(deep_policy: PolicyDistribution, approximate_policy: PolicyDistrib
     ):
         if deep_probability == 0.0:
             continue
-        if approximate_probability == 0.0:
-            return math.inf
-        divergence += deep_probability * math.log(deep_probability / approximate_probability)
+        divergence += deep_probability * math.log(
+            max(POLICY_PROBABILITY_FLOOR, deep_probability) / max(POLICY_PROBABILITY_FLOOR, approximate_probability)
+        )
     return max(0.0, divergence)
 
 

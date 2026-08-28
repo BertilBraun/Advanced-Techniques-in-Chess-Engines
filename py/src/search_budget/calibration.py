@@ -234,7 +234,7 @@ def load_calibration_state_fail_closed(
 ) -> BlendCalibrationState:
     try:
         state = BlendCalibrationState.model_validate_json(path.read_text(encoding='utf-8'))
-    except (OSError, ValidationError):
+    except (OSError, UnicodeError, ValidationError):
         return publish_fail_closed(
             initial_calibration_state(expected_configuration_sha256),
             first_unstarted_production_generation,
