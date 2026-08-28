@@ -388,7 +388,11 @@ class ReplayManager(Generic[PositionT]):
 
     def total_materialized_samples(self) -> int:
         self.raise_if_materialization_failed()
-        return self.store.total_appended_rows
+        with self._lock:
+            labelled_rows = sum(
+                receipt.row_count for receipt in self._labelled_writebacks.receipts if receipt.committed
+            )
+            return self.store.total_appended_rows - labelled_rows
 
     def start_materialization(self, poll_interval_seconds: float = DISPATCH_INTERVAL_SECONDS) -> None:
         if self.experiment_configuration_json is None:

@@ -1,7 +1,28 @@
 # Current node
 
-Two nodes are described here while both are rented. When one is released, delete its section and move the
-facts to a dated provisioning note.
+Several short-lived nodes are described here while they remain rented. When one is released, delete its section and
+move the facts to a dated provisioning note.
+
+## Facts (2x RTX 3060, adaptive-budget smoke, rented 2026-08-28)
+
+| | |
+| --- | --- |
+| Provider / container | Vast.ai container `49004012`, machine `147602` |
+| SSH | `root@57.132.208.22:28416` (key is local-only; never in the repository or on the node) |
+| Port forward | provider port 6006 → node `localhost:6006`; SSH forwarding may use a free local port |
+| GPU | 2× RTX 3060 12 GiB, driver 580.173.02, compute capability 8.6, 170 W limits |
+| CPU / RAM / disk | 48 visible CPUs, 23 effective CPU quota · about 60 GiB container RAM · 150 GiB overlay |
+| GPU topology | Both GPUs on NUMA node 0; peer path crosses host bridges (`NODE`) |
+| `/workspace` volume-backed | **no** — fetch run-control evidence before release |
+| Environment | Ubuntu 24.04 · Python 3.12.3 · system CUDA toolkit 12.8 |
+| Cost | $0.1483333333/hour |
+
+### Purpose and limits
+
+Three-hour two-GPU integration smoke for the learned adaptive search-budget lifecycle. The authored configuration is
+`py/configs/validation/vast-chess-adaptive-budget-2gpu-smoke.yaml`. It is not a strength evaluation or a production
+throughput reference. Both GPUs were idle before provisioning. Measured dependency downloads were 18.6–88.7 MB/s
+from the PyTorch CDN and 9.5 MB/s from GitHub.
 
 ## Facts (RTX 4070 SUPER, rented 2026-08-27)
 

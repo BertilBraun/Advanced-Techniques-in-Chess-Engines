@@ -111,5 +111,9 @@ calibration plots, regression loss, top-1 agreement, and oracle-gain share remai
 
 Run state is under `search-budget-labels/` in the configured training save path. Replay cohort and write-back journals
 are under `completed-games/`. Persisted curve calibration contains only generation aggregates and state lineage, not
-a cross-generation collection of labelled positions. These artifacts are part of restart correctness and must be
-preserved with the run.
+a cross-generation collection of labelled positions. The initial integration smoke intentionally retains every
+prediction and policy-checkpoint artifact so their contents, checksums, and disk cost can be inspected.
+
+Before a multi-day production run, add terminal-generation cleanup that removes only the bulky shard artifacts after
+replay write-back, calibration publication, the final report, and completed manager state are all durable. Retain
+failed-job artifacts and all compact reports, manifests, TensorBoard events, curve evidence, and replay receipts.

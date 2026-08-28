@@ -1245,6 +1245,22 @@ def test_labelled_replay_writeback_is_idempotent_after_commit(tmp_path: Path) ->
     manager.close()
 
 
+def test_labelled_replay_writeback_does_not_count_as_new_materialized_data(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    _publish_games(inbox, 2)
+    manager = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
+    manager.materialize_available_games()
+    manager.append_staged_games(2)
+    materialized_samples = manager.total_materialized_samples()
+
+    samples = _label_writeback_samples()
+    manager.append_labelled_samples(2, samples)
+
+    assert manager.store.total_appended_rows == materialized_samples + len(samples)
+    assert manager.total_materialized_samples() == materialized_samples
+    manager.close()
+
+
 def test_prepared_label_writeback_recovers_before_store_append(tmp_path: Path) -> None:
     manager = _open_manager(tmp_path, capacity=32, maximum_capacity=32)
     samples = _label_writeback_samples()
