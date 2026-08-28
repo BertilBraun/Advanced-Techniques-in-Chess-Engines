@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
@@ -15,12 +16,14 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
+from src.search_budget.artifacts import load_persisted_model, write_persisted_model
 from src.search_budget.calibration import initial_calibration_state
 from src.search_budget.labeling import (
     DeepSearchRecord,
     DeepSearchShardArtifact,
     LabelGenerationSource,
     LabelPositionSource,
+    LabelReplaySampleSource,
     PolicyCheckpointRecord,
     PredictionRecord,
     build_generation_source,
@@ -107,8 +110,8 @@ def _game(game_number: int, observation_generations: tuple[int, ...]) -> ReplayS
 def test_generation_source_samples_exact_floor_two_percent_deterministically(tmp_path: Path) -> None:
     games = (_game(1, (4,) * 51), _game(2, (4,) * 98))
 
-    first = build_generation_source(4, games, _checkpoint(tmp_path, 4), 600, 123, Decimal('0.02'))
-    second = build_generation_source(4, games, _checkpoint(tmp_path, 4), 600, 123, Decimal('0.02'))
+    first = build_generation_source(4, games, _checkpoint(tmp_path, 4), 600, 123, Decimal('0.02'), _sample)
+    second = build_generation_source(4, games, _checkpoint(tmp_path, 4), 600, 123, Decimal('0.02'), _sample)
 
     assert first is not None
     assert second is not None
@@ -121,15 +124,12 @@ def test_generation_source_samples_exact_floor_two_percent_deterministically(tmp
 def test_cross_checkpoint_game_keeps_every_cohort_observation(tmp_path: Path) -> None:
     game = _game(7, (3, 3, 4, 4, 5))
 
-    source = build_generation_source(4, (game,), _checkpoint(tmp_path, 4), 300, 9, Decimal(1))
+    source = build_generation_source(4, (game,), _checkpoint(tmp_path, 4), 300, 9, Decimal(1), _sample)
 
     assert source is not None
     assert source.population_position_count == 5
-    assert tuple(sorted(position.observation_index for position in source.selected_positions)) == (0, 1, 2, 3, 4)
-    assert {
-        position.game.observations[position.observation_index].model_generation
-        for position in source.selected_positions
-    } == {
+    assert tuple(sorted(position.identity.ply for position in source.selected_positions)) == (0, 1, 2, 3, 4)
+    assert {position.replay.source_model_generation for position in source.selected_positions} == {
         3,
         4,
         5,
@@ -137,8 +137,56 @@ def test_cross_checkpoint_game_keeps_every_cohort_observation(tmp_path: Path) ->
     assert all(position.identity.source_generation == 4 for position in source.selected_positions)
 
 
-def _base_sample(source: LabelPositionSource) -> ReplaySample:
-    del source
+def test_generation_source_is_compact_durable_and_materializes_only_selected_positions(tmp_path: Path) -> None:
+    game = _game(9, (4,) * 50)
+    materialized_indices: list[int] = []
+
+    def recording_sample_provider(
+        source_game: ReplayShardGameMetadata,
+        observation_index: int,
+    ) -> ReplaySample:
+        assert source_game is game
+        materialized_indices.append(observation_index)
+        return _sample(source_game, observation_index)
+
+    source = build_generation_source(
+        4,
+        (game,),
+        _checkpoint(tmp_path, 4),
+        600,
+        123,
+        Decimal('0.4'),
+        recording_sample_provider,
+    )
+
+    assert source is not None
+    assert len(source.selected_positions) == 20
+    assert len(materialized_indices) == 20
+    assert sorted(materialized_indices) == sorted(position.identity.ply for position in source.selected_positions)
+    path = tmp_path / 'source.json'
+    write_persisted_model(path, source)
+    restored = load_persisted_model(path, LabelGenerationSource)
+    assert restored == source
+    assert tuple(position.replay.replay_sample() for position in restored.selected_positions) == tuple(
+        _sample(game, position.identity.ply) for position in restored.selected_positions
+    )
+
+    repeated_game_payload = {
+        'selected_positions': [
+            {
+                'identity': position.identity.model_dump(mode='json'),
+                'game': game.model_dump(mode='json'),
+                'observation_index': position.identity.ply,
+            }
+            for position in source.selected_positions
+        ]
+    }
+    repeated_size = len(json.dumps(repeated_game_payload, separators=(',', ':')).encode())
+    assert path.stat().st_size < repeated_size // 20
+
+
+def _sample(game: ReplayShardGameMetadata, observation_index: int) -> ReplaySample:
+    observation = game.observations[observation_index]
     return ReplaySample(
         encoded_state=PackedPlanePayload(bytes(8)),
         policy=SparsePolicyTarget(
@@ -149,7 +197,7 @@ def _base_sample(source: LabelPositionSource) -> ReplaySample:
         root_value=0.0,
         auxiliary_targets=(IneligibleSearchBudgetTarget(),),
         sample_weight=1.0,
-        source_model_generation=4,
+        source_model_generation=observation.model_generation,
         source_created_at_seconds=100.0,
     )
 
@@ -163,8 +211,8 @@ def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_
                 game_identity=game.source.identity.archive_key,
                 ply=index,
             ),
-            game=game,
-            observation_index=index,
+            action_prefix=game.action_ids[:index],
+            replay=LabelReplaySampleSource.from_replay_sample(_sample(game, index)),
         )
         for index in range(3)
     )
@@ -219,7 +267,6 @@ def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_
         (artifact,),
         action_size=2,
         maximum_policy_entries=2,
-        sample_provider=_base_sample,
     )
 
     targets = tuple(
@@ -238,20 +285,25 @@ def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_
     assert finalized.target_distribution.variance > 0.0
     assert sum(finalized.target_distribution.histogram_counts) == 3
 
-    def duplicate_target_provider(position: LabelPositionSource) -> ReplaySample:
-        base = _base_sample(position)
-        return replace(
-            base,
-            auxiliary_targets=(IneligibleSearchBudgetTarget(), IneligibleSearchBudgetTarget()),
+    invalid_positions = tuple(
+        position.model_copy(
+            update={
+                'replay': LabelReplaySampleSource.from_replay_sample(
+                    replace(
+                        position.replay.replay_sample(),
+                        auxiliary_targets=(IneligibleSearchBudgetTarget(), IneligibleSearchBudgetTarget()),
+                    )
+                )
+            }
         )
-
+        for position in positions
+    )
     with pytest.raises(ValueError, match='exactly one'):
         finalize_generation(
-            source,
+            source.model_copy(update={'selected_positions': invalid_positions}),
             predictions,
             allocations,
             (artifact,),
             action_size=2,
             maximum_policy_entries=2,
-            sample_provider=duplicate_target_provider,
         )

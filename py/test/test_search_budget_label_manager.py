@@ -10,7 +10,8 @@ from uuid import UUID
 import pytest
 import src.search_budget.manager as search_budget_manager_module
 from src.games.contracts import WdlTarget
-from src.replay.contracts import ReplaySample
+from src.games.representation import PackedPlanePayload
+from src.replay.contracts import IneligibleSearchBudgetTarget, ReplaySample, SparsePolicyTarget
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
 from src.search_budget.artifacts import LabelShardManifest, LabelShardPhase
 from src.search_budget.calibration import CurveDecisionReason
@@ -20,7 +21,7 @@ from src.search_budget.configuration import (
     SearchBudgetConfiguration,
 )
 from src.search_budget.curve import analytic_initial_curve, flat_curve
-from src.search_budget.labeling import LabelGenerationSource, LabelPositionSource
+from src.search_budget.labeling import LabelGenerationSource, LabelPositionSource, LabelReplaySampleSource
 from src.search_budget.manager import (
     InvalidLabelComputeError,
     LabelGenerationJob,
@@ -60,7 +61,7 @@ def _checkpoint(path: Path) -> CheckpointReference:
     )
 
 
-def _position() -> LabelPositionSource:
+def _game() -> ReplayShardGameMetadata:
     observation = SearchObservation(
         ply=0,
         model_generation=1,
@@ -106,14 +107,32 @@ def _position() -> LabelPositionSource:
         retained_visit_mass=10,
         discarded_visit_mass=0,
     )
+    return game
+
+
+def _position() -> LabelPositionSource:
+    game = _game()
+    replay_sample = ReplaySample(
+        encoded_state=PackedPlanePayload(bytes(8)),
+        policy=SparsePolicyTarget(
+            visits=SearchVisitCounts(action_ids=(0,), visit_counts=(10,)),
+            legal_action_ids=(0,),
+        ),
+        wdl_target=game.final_wdl,
+        root_value=0.0,
+        auxiliary_targets=(IneligibleSearchBudgetTarget(),),
+        sample_weight=1.0,
+        source_model_generation=1,
+        source_created_at_seconds=1.0,
+    )
     return LabelPositionSource(
         identity=LabelPositionIdentity(
             source_generation=1,
-            game_identity=game_identity.archive_key,
+            game_identity=game.source.identity.archive_key,
             ply=0,
         ),
-        game=game,
-        observation_index=0,
+        action_prefix=(),
+        replay=LabelReplaySampleSource.from_replay_sample(replay_sample),
     )
 
 
@@ -122,10 +141,15 @@ def _unused_runtime_factory(device_id: int) -> LabelWorkerRuntime:
 
 
 class _UnusedSampleProvider:
-    def __call__(self, source: LabelPositionSource) -> ReplaySample:
-        raise AssertionError(f'No sample should be requested for {source.identity}.')
+    def __call__(self, game: ReplayShardGameMetadata, observation_index: int) -> ReplaySample:
+        raise AssertionError(
+            f'No sample should be requested for {game.source.identity.archive_key} at {observation_index}.'
+        )
 
     def close(self) -> None:
+        return None
+
+    def clear(self) -> None:
         return None
 
 
@@ -236,7 +260,7 @@ def test_shard_retry_fails_terminally_after_three_attempts(tmp_path: Path) -> No
     manager.close()
 
 
-@pytest.mark.parametrize('games', ((), (_position().game,)))
+@pytest.mark.parametrize('games', ((), (_game(),)))
 def test_zero_or_under_fifty_position_cohort_is_durably_skipped(
     tmp_path: Path,
     games: tuple[ReplayShardGameMetadata, ...],

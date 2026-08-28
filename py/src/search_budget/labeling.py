@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from base64 import b64decode, b64encode
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from fractions import Fraction
@@ -8,7 +9,14 @@ from statistics import fmean, pvariance
 from typing import Protocol
 
 from pydantic import Field, model_validator
-from src.replay.contracts import EligibleSearchBudgetTarget, ReplaySample, SparsePolicyTarget
+from src.games.contracts import WdlTarget
+from src.games.representation import PackedPlanePayload
+from src.replay.contracts import (
+    AuxiliaryReplayTarget,
+    EligibleSearchBudgetTarget,
+    ReplaySample,
+    SparsePolicyTarget,
+)
 from src.replay.shard import ReplayShardGameMetadata
 from src.search_budget.allocation import (
     AllocationPosition,
@@ -31,29 +39,66 @@ from src.training.checkpoint import CheckpointReference
 from src.util.frozen_model import FrozenModel
 
 
+class LabelReplaySampleSource(FrozenModel):
+    encoded_state_base64: str = Field(min_length=1)
+    policy: SparsePolicyTarget
+    wdl_target: WdlTarget
+    root_value: float = Field(ge=-1.0, le=1.0)
+    auxiliary_targets: tuple[AuxiliaryReplayTarget, ...]
+    sample_weight: float = Field(gt=0.0)
+    source_model_generation: int = Field(ge=0)
+    source_created_at_seconds: float = Field(ge=0.0)
+
+    @classmethod
+    def from_replay_sample(cls, sample: ReplaySample) -> LabelReplaySampleSource:
+        return cls(
+            encoded_state_base64=b64encode(bytes(sample.encoded_state)).decode('ascii'),
+            policy=sample.policy,
+            wdl_target=sample.wdl_target,
+            root_value=sample.root_value,
+            auxiliary_targets=sample.auxiliary_targets,
+            sample_weight=sample.sample_weight,
+            source_model_generation=sample.source_model_generation,
+            source_created_at_seconds=sample.source_created_at_seconds,
+        )
+
+    @model_validator(mode='after')
+    def validate_encoded_state(self) -> LabelReplaySampleSource:
+        try:
+            payload = b64decode(self.encoded_state_base64, validate=True)
+        except ValueError as error:
+            raise ValueError('Label replay sample state must use valid base64.') from error
+        if not payload or b64encode(payload).decode('ascii') != self.encoded_state_base64:
+            raise ValueError('Label replay sample state must use canonical nonempty base64.')
+        return self
+
+    def replay_sample(self) -> ReplaySample:
+        return ReplaySample(
+            encoded_state=PackedPlanePayload(b64decode(self.encoded_state_base64, validate=True)),
+            policy=self.policy,
+            wdl_target=self.wdl_target,
+            root_value=self.root_value,
+            auxiliary_targets=self.auxiliary_targets,
+            sample_weight=self.sample_weight,
+            source_model_generation=self.source_model_generation,
+            source_created_at_seconds=self.source_created_at_seconds,
+        )
+
+
 class LabelPositionSource(FrozenModel):
     identity: LabelPositionIdentity
-    game: ReplayShardGameMetadata
-    observation_index: int = Field(ge=0)
+    action_prefix: tuple[int, ...]
+    replay: LabelReplaySampleSource
 
     @model_validator(mode='after')
     def validate_observation(self) -> LabelPositionSource:
-        if self.observation_index >= len(self.game.observations):
-            raise ValueError('Label position observation index is outside its source game.')
-        observation = self.game.observations[self.observation_index]
-        if observation.ply != self.identity.ply:
-            raise ValueError('Label position identity ply does not match its source observation.')
-        if self.game.source.identity.archive_key != self.identity.game_identity:
-            raise ValueError('Label position identity does not match its source game.')
+        if len(self.action_prefix) != self.identity.ply:
+            raise ValueError('Label position action prefix must end at its identity ply.')
         return self
-
-    @property
-    def action_prefix(self) -> tuple[int, ...]:
-        return self.game.action_ids[: self.identity.ply]
 
 
 class LabelGenerationSource(FrozenModel):
-    schema_version: int = Field(default=1, ge=1, le=1)
+    schema_version: int = Field(default=2, ge=2, le=2)
     source_generation: int = Field(ge=0)
     population_position_count: int = Field(gt=0)
     baseline_new_visits: int = Field(gt=0)
@@ -179,7 +224,9 @@ class GenerationFinalization:
 
 
 class ReplaySampleProvider(Protocol):
-    def __call__(self, source: LabelPositionSource) -> ReplaySample: ...
+    def __call__(self, game: ReplayShardGameMetadata, observation_index: int) -> ReplaySample: ...
+
+    def clear(self) -> None: ...
 
     def close(self) -> None: ...
 
@@ -194,15 +241,15 @@ class ExperimentReplaySampleProvider:
         self._maximum_policy_entries = configuration.training.lifecycle.replay.maximum_policy_entries
         self._cache: dict[str, tuple[ReplaySample, ...]] = {}
 
-    def __call__(self, source: LabelPositionSource) -> ReplaySample:
+    def __call__(self, game: ReplayShardGameMetadata, observation_index: int) -> ReplaySample:
         from src.replay.materialization import materialize_completed_game
 
-        game_key = source.game.source.identity.archive_key
+        game_key = game.source.identity.archive_key
         samples = self._cache.get(game_key)
         if samples is None:
             samples = tuple(
                 materialize_completed_game(
-                    source.game.completed_game(),
+                    game.completed_game(),
                     self._game.state,
                     self._game.terminal_oracle,
                     self._game.target_layout,
@@ -212,11 +259,14 @@ class ExperimentReplaySampleProvider:
                 ).samples
             )
             self._cache[game_key] = samples
-        return samples[source.observation_index]
+        return samples[observation_index]
 
     def close(self) -> None:
         self._cache.clear()
         self._game.close()
+
+    def clear(self) -> None:
+        self._cache.clear()
 
 
 def build_generation_source(
@@ -226,26 +276,27 @@ def build_generation_source(
     baseline_new_visits: int,
     run_seed: int,
     sample_fraction: Decimal,
+    sample_provider: ReplaySampleProvider,
 ) -> LabelGenerationSource | None:
     if not games:
         raise ValueError('A source generation requires complete replay-game metadata.')
-    positions = tuple(
-        LabelPositionSource(
-            identity=LabelPositionIdentity(
+    candidates = tuple(
+        (
+            LabelPositionIdentity(
                 source_generation=source_generation,
                 game_identity=game.source.identity.archive_key,
                 ply=observation.ply,
             ),
-            game=game,
-            observation_index=observation_index,
+            game,
+            observation_index,
         )
         for game in games
         for observation_index, observation in enumerate(game.observations)
     )
-    if not positions:
+    if not candidates:
         raise ValueError('A source generation must contain at least one played position.')
-    by_identity = {position.identity: position for position in positions}
-    if len(by_identity) != len(positions):
+    by_identity = {identity: (game, observation_index) for identity, game, observation_index in candidates}
+    if len(by_identity) != len(candidates):
         raise ValueError('Complete source-generation observations contain duplicate stable identities.')
     fraction = Fraction(sample_fraction)
     selected_identities = select_generation_sample(tuple(by_identity), run_seed, fraction)
@@ -253,10 +304,19 @@ def build_generation_source(
         return None
     return LabelGenerationSource(
         source_generation=source_generation,
-        population_position_count=len(positions),
+        population_position_count=len(candidates),
         baseline_new_visits=baseline_new_visits,
         checkpoint=checkpoint,
-        selected_positions=tuple(by_identity[identity] for identity in selected_identities),
+        selected_positions=tuple(
+            LabelPositionSource(
+                identity=identity,
+                action_prefix=by_identity[identity][0].action_ids[: identity.ply],
+                replay=LabelReplaySampleSource.from_replay_sample(
+                    sample_provider(by_identity[identity][0], by_identity[identity][1])
+                ),
+            )
+            for identity in selected_identities
+        ),
     )
 
 
@@ -336,7 +396,6 @@ def finalize_generation(
     deep_artifacts: tuple[DeepSearchShardArtifact, ...],
     action_size: int,
     maximum_policy_entries: int,
-    sample_provider: ReplaySampleProvider,
 ) -> GenerationFinalization:
     deep_records = tuple(record for artifact in deep_artifacts for record in artifact.records)
     expected = tuple(position.identity for position in source.selected_positions)
@@ -359,7 +418,7 @@ def finalize_generation(
     source_by_identity = {position.identity: position for position in source.selected_positions}
     replay_samples = tuple(
         _labelled_replay_sample(
-            sample_provider(source_by_identity[identity]),
+            source_by_identity[identity].replay.replay_sample(),
             deep_by_identity[identity],
             raw_kl,
             normalized_target,

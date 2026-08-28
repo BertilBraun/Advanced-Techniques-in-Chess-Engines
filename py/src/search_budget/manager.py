@@ -356,14 +356,18 @@ class SearchBudgetLabelManager:
                 0,
                 'generation population is empty',
             )
-        source = build_generation_source(
-            source_generation,
-            label_source_games,
-            checkpoint,
-            baseline_new_visits,
-            run_seed,
-            self.configuration.labeling.sample_fraction,
-        )
+        try:
+            source = build_generation_source(
+                source_generation,
+                label_source_games,
+                checkpoint,
+                baseline_new_visits,
+                run_seed,
+                self.configuration.labeling.sample_fraction,
+                self.sample_provider,
+            )
+        finally:
+            self.sample_provider.clear()
         if source is None:
             return self._enqueue_skipped_generation(
                 source_generation,
@@ -509,7 +513,6 @@ class SearchBudgetLabelManager:
                 deep_artifacts,
                 self.action_size,
                 self.maximum_policy_entries,
-                self.sample_provider,
             )
         except ValueError as error:
             raise InvalidLabelComputeError(str(error)) from error
