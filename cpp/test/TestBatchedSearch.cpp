@@ -174,6 +174,9 @@ int runBatchedSearchTests() {
                                                         0.0F);
         const BatchedInferenceParameters inferenceParameters(2, 8, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
+        const auto predictionRoot = search.newRoot(Board{}, 3);
+        require(predictionRoot.tree().maximumCapacity() == 3,
+                "per-root capacity did not constrain the initial arena allocation");
         std::vector<ChessSelfPlaySearchRequest> productionRequests = {productionRequest(search),
                                                                       productionRequest(search)};
         const auto production = search.search(productionRequests, true);

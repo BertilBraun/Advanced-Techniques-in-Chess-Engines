@@ -34,8 +34,10 @@ public:
         // Without compaction the registry grows one expired entry per game for the engine's
         // lifetime.
         std::erase_if(m_trees, [](const std::weak_ptr<Tree> &tree) { return tree.expired(); });
-        Root root(std::move(position), m_searchParameters.tree_capacity, maximumCapacity,
-                  m_valueDiscountPerPly);
+        const std::size_t initialCapacity =
+            maximumCapacity == 0 ? m_searchParameters.tree_capacity
+                                 : std::min(m_searchParameters.tree_capacity, maximumCapacity);
+        Root root(std::move(position), initialCapacity, maximumCapacity, m_valueDiscountPerPly);
         m_trees.push_back(root.sharedTree());
         return root;
     }
