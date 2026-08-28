@@ -234,7 +234,7 @@ evaluation:
       search: *evaluation_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-fixed-nodes-2000
-      first_generation: 150
+      first_generation: 300
       nodes: 2000
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
@@ -267,7 +267,7 @@ evaluation:
     # Raw-policy rungs: one search per move, so the reported strength is the network alone.
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-policy-only-30
-      final_generation: 500
+      final_generation: 300
       nodes: 30
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
@@ -291,6 +291,7 @@ evaluation:
       search: *policy_only_search
     - kind: stockfish_fixed_nodes
       definition_id: stockfish-policy-only-300
+      first_generation: 150
       nodes: 300
       engine_executable_path: engines/stockfish-13
       opening_pair_count: 50
