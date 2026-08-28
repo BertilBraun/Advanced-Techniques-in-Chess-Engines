@@ -137,7 +137,7 @@ The first live-run configuration uses all eight GPU identifiers as eligible labe
 
 The native inference maximum batch size is 512 for these shards. Full shards can therefore submit one independent leaf per root, while the final remainder uses its actual smaller size. This is separate from the approximately 2,400 total positions in the generation job; no model batch contains all sampled positions.
 
-Deep labels use `parallel_searches = 1`. Each device-pinned label process owns one inference worker with batch size 512 and two outstanding batches. With hundreds of independent roots, the executor can fill inference batches without multiple simultaneous descents in one tree, and sequential search avoids the measured policy-quality loss from parallel selection. Unlike production adaptive allocation, every label root has the same deep final limit, so there is little long-budget tail to keep fed. Any later change requires a direct label-fidelity and throughput measurement.
+Deep labels use `parallel_searches = 2`. Each device-pinned label process owns one inference worker with batch size 512 and two outstanding batches. Two simultaneous descents per labelled root are required so both outstanding inference batches can be filled; using one leaves the second slot structurally starved. This is the minimum concurrency that matches the two-batch pipeline. The original offline oracle measurements used parallelism one, so label fidelity and throughput at two remain important live diagnostics.
 
 For sample fraction `f` and deep multiple `d`, label search costs approximately `f * d` of flat self-play visit compute: 2% at 8x is about 16%. Queue lag determines whether the shared eight-GPU pool keeps up under real contention. Workers write policy-heavy results directly to atomic shard artifacts rather than pickling them through the executor result pipe. The parent receives a typed manifest containing shard identity, device, counts, timings, checksums, and artifact paths. No in-memory coordinator owns irreplaceable search output.
 
@@ -341,7 +341,7 @@ These defaults belong to the canonical typed calibrator configuration, so an ord
 - positions per persisted shard;
 - roots per native search chunk;
 - one inference worker, maximum batch size 512, and two outstanding batches per process;
-- fixed label-search parallelism, one.
+- fixed label-search parallelism, two.
 
 ## Required telemetry
 
@@ -440,7 +440,7 @@ All played positions become replay samples. There is no weighting adjustment bas
 ## Implementation sequence
 
 1. **Target and model path.** Add the scalar head, eligibility mask, replay schema, columnar storage, materialization support, losses, metrics, and generated native bindings. Remove the `full_search` materialization filter.
-2. **Deep-label pipeline.** Add deterministic generation sampling, shard-local prediction, the scalar-aggregation barrier, exact generation-wide candidate-budget construction, fixed 512-position shards plus a final remainder, a run-lifetime spawn-based device-pinned process pool, explicit native checkpoint-visit requests, monotonic immutable-checkpoint refresh, noise-free baseline/candidate/deep policy capture from one continued fresh root, atomic shard artifacts, quantile normalization, persistent job state, and deep-policy replay write-back. Use one inference worker with batch size 512 and two outstanding batches per process, and label-search parallelism one.
+2. **Deep-label pipeline.** Add deterministic generation sampling, shard-local prediction, the scalar-aggregation barrier, exact generation-wide candidate-budget construction, fixed 512-position shards plus a final remainder, a run-lifetime spawn-based device-pinned process pool, explicit native checkpoint-visit requests, monotonic immutable-checkpoint refresh, noise-free baseline/candidate/deep policy capture from one continued fresh root, atomic shard artifacts, quantile normalization, persistent job state, and deep-policy replay write-back. Use one inference worker with batch size 512 and two outstanding batches per process, and label-search parallelism two.
 3. **Shadow evaluator and calibrator.** Add exact candidate-budget reconstruction, equal-compute generation utility scoring, EMA state, deterministic selection, atomic publication, fail-closed behavior, and complete diagnostics.
 4. **Native allocator in shadow-safe form.** Add predicted budget plumbing, mean-preserving generation allocation, retained-root accounting, and per-search parallelism. Ship with the published blend clamped to zero until calibrator conditions permit otherwise.
 5. **Remove superseded systems.** Delete threshold adaptation, `SearchCorrectionGate`, `search_correction`, fast/full admission and configuration, old filters, obsolete tools, stale telemetry, and compatibility layers. Migrate production configuration and documentation in the same phase.
@@ -499,7 +499,7 @@ The labeler overhead must be included in wall-clock comparisons, even though its
 - Use a 2% label sample for the first live run.
 - Compute predictions inside the normal shards, then aggregate their scalars before constructing generation-wide candidate checkpoint budgets.
 - Run deterministic 512-root shards plus a final remainder through a spawn-based, device-pinned process pool over all eight eligible GPUs.
-- Use one label inference worker per process, batch size 512, two outstanding batches, and `parallel_searches = 1`.
+- Use one label inference worker per process, batch size 512, two outstanding batches, and `parallel_searches = 2`.
 - Write policy-heavy shard output atomically and return lightweight manifests to the coordinator.
 - Reconstruct fresh label roots, disable Dirichlet noise, and continue one tree through baseline and deep checkpoints.
 - Train the sigmoid-bounded quantile prediction with masked L1 at loss weight 0.2.

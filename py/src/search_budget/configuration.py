@@ -16,7 +16,7 @@ class DeepLabelingConfiguration(FrozenModel):
     inference_workers_per_process: int = Field(default=1, gt=0)
     inference_batch_size: int = Field(default=512, gt=0, le=512)
     outstanding_inference_batches: int = Field(default=2, ge=1, le=2)
-    parallel_searches: int = Field(default=1, gt=0)
+    parallel_searches: int = Field(default=2, gt=0)
 
     @model_validator(mode='after')
     def validate_first_run_defaults(self) -> DeepLabelingConfiguration:
@@ -26,8 +26,8 @@ class DeepLabelingConfiguration(FrozenModel):
             raise ValueError('Deep-label shards and inference batches must use the settled size of 512.')
         if self.inference_workers_per_process != 1 or self.outstanding_inference_batches != 2:
             raise ValueError('Each label process must own one inference worker with two outstanding batches.')
-        if self.parallel_searches != 1:
-            raise ValueError('Deep-label search parallelism must remain one.')
+        if self.parallel_searches != 2:
+            raise ValueError('Deep-label search parallelism must remain two.')
         return self
 
 

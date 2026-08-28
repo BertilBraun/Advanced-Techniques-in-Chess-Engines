@@ -51,7 +51,7 @@ monotonically.
 
 The prediction phase persists raw logits and bounded predictions in shards of 512 positions plus a remainder. Only
 after complete prediction coverage is verified are candidate allocations normalized across the complete generation
-sample. The deep-search phase uses the same shards, fresh roots, no Dirichlet noise, parallelism one, and sorted
+sample. The deep-search phase uses the same shards, fresh roots, no Dirichlet noise, parallelism two, and sorted
 policy checkpoints. Each root continues once through the baseline, the union of all candidate visits, and exactly
 eight times the source generation's configured baseline. Artifacts and lightweight manifests are written atomically,
 checksummed, retried at most three times, and rejected unless coverage is complete.
@@ -75,7 +75,9 @@ Publication names the first production generation that has not started. A runnin
 Unfinished work retains the latest completed publication. Terminal job failure, invalid compute reconstruction, an
 incompatible configuration hash, or unreadable state publishes zero. Candidate gains, EMA values, mean visits,
 distributions, floor/ceiling shares, residual, decision reason, and failed eligibility conditions are persisted in
-each final report. Correlation and calibration diagnostics never authorize activation.
+each final report. The same completed-report fields are published under `search_budget/label/` and
+`search_budget/calibration/` in TensorBoard, including timing, retry, lag, replay-write, failure, and skip health.
+Correlation and calibration diagnostics never authorize activation.
 
 Run state is under `search-budget-labels/` in the configured training save path. Replay cohort and write-back journals
 are under `completed-games/`. These artifacts are part of restart correctness and must be preserved with the run.

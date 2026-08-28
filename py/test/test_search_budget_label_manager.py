@@ -14,7 +14,7 @@ from src.replay.contracts import ReplaySample
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
 from src.search_budget.artifacts import LabelShardManifest, LabelShardPhase
 from src.search_budget.calibration import BlendDecisionReason
-from src.search_budget.configuration import SearchBudgetConfiguration
+from src.search_budget.configuration import DeepLabelingConfiguration, SearchBudgetConfiguration
 from src.search_budget.labeling import LabelGenerationSource, LabelPositionSource
 from src.search_budget.manager import (
     InvalidLabelComputeError,
@@ -26,7 +26,7 @@ from src.search_budget.manager import (
     _failure_decision_reason,
 )
 from src.search_budget.sampling import LabelPositionIdentity
-from src.search_budget.worker import LabelWorkerRuntime, PredictionShardTask
+from src.search_budget.worker import DeepSearchShardTask, LabelWorkerRuntime, PredictionShardTask
 from src.self_play.completed_game import (
     GameIdentity,
     SearchObservation,
@@ -153,6 +153,26 @@ def _task(path: Path) -> PredictionShardTask:
         artifact_path=path / 'artifact-attempt-1.json',
         manifest_path=path / 'attempt-1.json',
     )
+
+
+def test_deep_label_search_parallelism_matches_two_outstanding_batches(tmp_path: Path) -> None:
+    configuration = DeepLabelingConfiguration()
+    task = DeepSearchShardTask(
+        source_generation=1,
+        shard_index=0,
+        attempt=1,
+        checkpoint=_checkpoint(tmp_path),
+        positions=(_position(),),
+        checkpoint_visits=((10, 80),),
+        deep_visit_limit=80,
+        artifact_path=tmp_path / 'deep-artifact.json',
+        manifest_path=tmp_path / 'deep-manifest.json',
+    )
+
+    assert configuration.parallel_searches == 2
+    assert task.parallel_searches == 2
+    with pytest.raises(ValueError, match='parallelism must remain two'):
+        DeepLabelingConfiguration(parallel_searches=1)
 
 
 def _successful_manifest(task: PredictionShardTask) -> LabelShardManifest:

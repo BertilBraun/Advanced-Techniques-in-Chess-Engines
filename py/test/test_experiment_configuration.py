@@ -549,7 +549,7 @@ def test_experiment_configuration_hash_is_stable_across_host_path_separators() -
 def test_experiment_configuration_hash_matches_pinned_regression_value() -> None:
     assert (
         experiment_configuration_sha256(CHESS_EXPERIMENT)
-        == 'c0176fb731988b7e76de0261712e52e9b3bf2329b4fe26c83fa9a4b0496d5da1'
+        == 'f50f6d24b4b05d9f6c9db86201bc3e0c78301eff038e44f2beec5f92d54836af'
     )
 
 

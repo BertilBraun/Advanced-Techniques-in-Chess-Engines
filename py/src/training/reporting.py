@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 import numpy as np
 from src.experiment.configuration import ExperimentConfiguration
 from src.replay.description import ReplayDescription
 from src.replay.manager import IngestedCompletedGame
+from src.search_budget.labeling import DistributionSummary
+from src.search_budget.manager import (
+    FailedLabelJobReport,
+    GenerationLabelReport,
+    LabelManagerEvent,
+    SkippedLabelJobReport,
+)
 from src.self_play.resignation import ResignationDiagnostics
 from src.training.credit_ledger import CreditLedgerState
 from src.training.distributions import (
@@ -137,6 +145,82 @@ class TrainingReporter:
             log_scalar('resignation/average_trigger_ply', diagnostics.average_trigger_ply, generation)
         if diagnostics.average_saved_plies is not None:
             log_scalar('resignation/average_saved_plies', diagnostics.average_saved_plies, generation)
+
+    @staticmethod
+    def record_search_budget_label_event(event: LabelManagerEvent) -> None:
+        generation = event.source_generation
+        match event:
+            case GenerationLabelReport():
+                log_scalar('search_budget/label/status/completed', 1, generation)
+                log_scalar('search_budget/label/model_generation', event.model_generation, generation)
+                log_scalar('search_budget/label/population_positions', event.population_position_count, generation)
+                log_scalar('search_budget/label/selected_positions', event.selected_position_count, generation)
+                log_scalar(
+                    'search_budget/label/sample_fraction',
+                    event.selected_position_count / event.population_position_count,
+                    generation,
+                )
+                log_scalar('search_budget/label/replay_samples_written', event.replay_samples_written, generation)
+                log_scalar('search_budget/label/replay_write_applied', int(event.replay_write_applied), generation)
+                log_scalar('search_budget/label/prediction_shard_seconds', event.prediction_shard_seconds, generation)
+                log_scalar('search_budget/label/deep_search_shard_seconds', event.deep_search_shard_seconds, generation)
+                log_scalar('search_budget/label/total_gpu_seconds', event.total_gpu_seconds, generation)
+                log_scalar('search_budget/label/prediction_retries', event.prediction_retry_count, generation)
+                log_scalar('search_budget/label/deep_search_retries', event.deep_search_retry_count, generation)
+                log_scalar('search_budget/label/completion_generation_lag', event.completion_generation_lag, generation)
+                log_scalar('search_budget/label/queued_generations', event.queued_generation_count, generation)
+                log_scalar('search_budget/calibration/previous_blend', float(event.previous_blend), generation)
+                log_scalar('search_budget/calibration/published_blend', float(event.selected_blend), generation)
+                log_scalar('search_budget/calibration/application_generation', event.application_generation, generation)
+                log_scalar(
+                    f'search_budget/calibration/decision_reason/{_metric_tag(event.decision_reason)}', 1, generation
+                )
+                _record_search_budget_distribution(
+                    'search_budget/label/prediction_quantile', event.prediction_distribution, generation
+                )
+                _record_search_budget_distribution(
+                    'search_budget/label/target_quantile', event.target_distribution, generation
+                )
+                _record_search_budget_distribution('search_budget/label/raw_kl', event.raw_kl_distribution, generation)
+                for candidate in event.candidates:
+                    prefix = f'search_budget/calibration/candidate_{_decimal_tag(candidate.blend)}'
+                    log_scalar(f'{prefix}/current_generation_gain', candidate.current_generation_gain, generation)
+                    log_scalar(f'{prefix}/ema_gain', candidate.ema_gain, generation)
+                    log_scalar(f'{prefix}/mean_assigned_new_visits', candidate.mean_assigned_new_visits, generation)
+                    log_scalar(
+                        f'{prefix}/assigned_new_visits_variance',
+                        candidate.assigned_new_visits_variance,
+                        generation,
+                    )
+                    log_scalar(f'{prefix}/mean_kl_from_deep', candidate.mean_kl_from_deep, generation)
+                    log_scalar(f'{prefix}/exact_spend_residual', candidate.exact_spend_residual, generation)
+                    log_scalar(f'{prefix}/floor_share', candidate.floor_share, generation)
+                    log_scalar(f'{prefix}/ceiling_share', candidate.ceiling_share, generation)
+                    log_scalar(
+                        f'{prefix}/eligible',
+                        int(not candidate.failed_eligibility_conditions),
+                        generation,
+                    )
+                    for condition in candidate.failed_eligibility_conditions:
+                        log_scalar(f'{prefix}/failed_eligibility/{_metric_tag(condition)}', 1, generation)
+            case FailedLabelJobReport():
+                log_scalar('search_budget/label/status/failed', 1, generation)
+                log_scalar('search_budget/calibration/published_blend', float(event.published_blend), generation)
+                log_scalar('search_budget/calibration/application_generation', event.application_generation, generation)
+                log_scalar(
+                    f'search_budget/calibration/decision_reason/{_metric_tag(event.decision_reason)}', 1, generation
+                )
+            case SkippedLabelJobReport():
+                log_scalar('search_budget/label/status/skipped', 1, generation)
+                log_scalar('search_budget/label/population_positions', event.population_position_count, generation)
+                log_scalar('search_budget/label/selected_positions', event.selected_position_count, generation)
+                sample_fraction = (
+                    event.selected_position_count / event.population_position_count
+                    if event.population_position_count > 0
+                    else 0.0
+                )
+                log_scalar('search_budget/label/sample_fraction', sample_fraction, generation)
+                log_scalar(f'search_budget/label/skip_reason/{_skip_reason_tag(event.reason)}', 1, generation)
 
     def _record_training_statistics(
         self,
@@ -363,6 +447,37 @@ def _log_values(name: str, values: tuple[float, ...], generation: int, log_mean:
     log_histogram(name, array, generation)
     if log_mean:
         log_scalar(f'{name}_mean', float(array.mean()), generation)
+
+
+def _record_search_budget_distribution(prefix: str, distribution: DistributionSummary, generation: int) -> None:
+    log_scalar(f'{prefix}/count', distribution.count, generation)
+    log_scalar(f'{prefix}/minimum', distribution.minimum, generation)
+    log_scalar(f'{prefix}/maximum', distribution.maximum, generation)
+    log_scalar(f'{prefix}/mean', distribution.mean, generation)
+    log_scalar(f'{prefix}/variance', distribution.variance, generation)
+    log_scalar(f'{prefix}/p10', distribution.p10, generation)
+    log_scalar(f'{prefix}/p25', distribution.p25, generation)
+    log_scalar(f'{prefix}/median', distribution.median, generation)
+    log_scalar(f'{prefix}/p75', distribution.p75, generation)
+    log_scalar(f'{prefix}/p90', distribution.p90, generation)
+    for index, count in enumerate(distribution.histogram_counts):
+        log_scalar(f'{prefix}/histogram_bin_{index}', count, generation)
+
+
+def _decimal_tag(value: Decimal) -> str:
+    return format(value, 'f').replace('.', '_')
+
+
+def _metric_tag(value: str) -> str:
+    return ''.join(character if character.isalnum() else '_' for character in value).strip('_')
+
+
+def _skip_reason_tag(reason: str) -> str:
+    if reason.startswith('unstarted source-generation lag'):
+        return 'unstarted_generation_lag'
+    if reason == 'generation population produces zero positions at the configured sample fraction':
+        return 'zero_position_sample'
+    return 'other'
 
 
 def _auxiliary_name(index: int, head: AuxiliaryHeadLayout) -> str:

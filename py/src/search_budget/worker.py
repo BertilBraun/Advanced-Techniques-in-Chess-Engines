@@ -52,6 +52,7 @@ class LabelWorkerRuntime(Protocol):
         checkpoint_visits: tuple[tuple[int, ...], ...],
         deep_visit_limit: int,
         maximum_root_capacity: int,
+        parallel_searches: int,
     ) -> tuple[DeepSearchRecord, ...]: ...
 
     def close(self) -> None: ...
@@ -117,6 +118,7 @@ class ConfiguredLabelWorkerRuntime:
         checkpoint_visits: tuple[tuple[int, ...], ...],
         deep_visit_limit: int,
         maximum_root_capacity: int,
+        parallel_searches: int,
     ) -> tuple[DeepSearchRecord, ...]:
         from AlphaZeroCpp import SearchCheckpointDetail
 
@@ -129,7 +131,7 @@ class ConfiguredLabelWorkerRuntime:
                 root,
                 assigned_additional_visits=deep_visit_limit,
                 policy_checkpoint_visits=list(visits),
-                parallel_searches=1,
+                parallel_searches=parallel_searches,
                 add_root_noise=False,
                 force_root_playouts=True,
                 checkpoint_detail=SearchCheckpointDetail.POLICIES,
@@ -230,7 +232,7 @@ class DeepSearchShardTask(FrozenModel):
     positions: tuple[LabelPositionSource, ...] = Field(min_length=1, max_length=512)
     checkpoint_visits: tuple[tuple[int, ...], ...]
     deep_visit_limit: int = Field(gt=0)
-    parallel_searches: int = Field(default=1, ge=1, le=1)
+    parallel_searches: int = Field(default=2, ge=2, le=2)
     add_root_noise: bool = Field(default=False)
     artifact_path: Path
     manifest_path: Path
@@ -334,6 +336,7 @@ def execute_deep_search_shard(task: DeepSearchShardTask) -> LabelShardManifest:
         task.checkpoint_visits,
         task.deep_visit_limit,
         task.maximum_root_capacity,
+        task.parallel_searches,
     )
     expected = tuple(position.identity for position in task.positions)
     if tuple(record.identity for record in records) != expected:

@@ -392,17 +392,13 @@ class Coordinator:
 
     def _collect_search_budget_label_jobs(self) -> None:
         for event in self.search_budget_label_manager.poll():
+            self.reporter.record_search_budget_label_event(event)
             match event:
                 case GenerationLabelReport():
                     log(
                         f'Finalized search-budget label generation {event.source_generation}: '
                         f'{event.replay_samples_written} replay samples, blend={event.selected_blend} '
                         f'for production generation {event.application_generation}.'
-                    )
-                    log_scalar(
-                        'search_budget/calibration/published_blend',
-                        float(event.selected_blend),
-                        event.source_generation,
                     )
                 case FailedLabelJobReport():
                     warn(f'Search-budget label generation {event.source_generation} failed closed: {event.failure}')

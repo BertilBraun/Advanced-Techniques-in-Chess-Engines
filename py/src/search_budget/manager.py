@@ -555,6 +555,7 @@ class SearchBudgetLabelManager:
                 positions=tuple(positions_by_identity[identity] for identity in identities),
                 checkpoint_visits=tuple(checkpoints[identity] for identity in identities),
                 deep_visit_limit=source.deep_visit_limit,
+                parallel_searches=self.configuration.labeling.parallel_searches,
                 artifact_path=self._phase_path(
                     source.source_generation, 'deep-search', index, 'artifact-attempt-1.json'
                 ),
