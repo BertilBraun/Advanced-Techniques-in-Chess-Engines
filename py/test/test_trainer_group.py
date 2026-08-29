@@ -26,7 +26,7 @@ from src.self_play.completed_game import SearchVisitCounts
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.configuration import TrainingCompilation, TrainingPrecision
-from src.training.network import Chess76PlaneDirectPolicyHeadConfiguration, Network
+from src.training.network import DensePolicyHeadConfiguration, Network
 from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
@@ -49,7 +49,7 @@ def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
         update={
             'num_layers': 1,
             'hidden_size': 8,
-            'policy_head': Chess76PlaneDirectPolicyHeadConfiguration(),
+            'policy_head': DensePolicyHeadConfiguration(channels=8),
             'num_value_channels': 2,
             'value_fc_size': 8,
         }
