@@ -86,12 +86,37 @@ def test_thirtieth_completed_generation_can_publish_positive_validated_curve() -
     assert updated.published_curve != flat_curve()
 
 
-def test_nonpositive_current_or_ema_gain_retreats_immediately_to_flat() -> None:
+def test_nonpositive_gain_reaches_flat_when_the_previous_curve_was_already_flat() -> None:
     state = warm_state()
     activated = update_calibration(state, 29, generation_evidence(state, 1.0), 30).state
     retreated = update_calibration(activated, 30, generation_evidence(activated, 1.0, gain=-10.0), 31).state
     assert retreated.published_curve == flat_curve()
     assert retreated.decision_reason == CurveDecisionReason.NO_ELIGIBLE_PENDING
+
+
+def test_nonpositive_gain_decays_a_matured_curve_towards_flat_within_the_step_bound() -> None:
+    state = update_calibration(warm_state(), 29, generation_evidence(warm_state(), 1.0), 30).state
+    generation = 30
+    for _ in range(6):
+        state = update_calibration(state, generation, generation_evidence(state, 1.0), generation + 1).state
+        generation += 1
+    matured = state.published_curve
+    assert matured != flat_curve()
+
+    decayed = update_calibration(state, generation, generation_evidence(state, 1.0, gain=-10.0), generation + 1).state
+
+    # A single noisy generation must pause progress, not discard every validated bucket.
+    assert decayed.published_curve != flat_curve()
+    assert decayed.decision_reason == CurveDecisionReason.NO_ELIGIBLE_PENDING
+    ratios = [
+        after / before for after, before in zip(decayed.published_curve.multipliers, matured.multipliers, strict=True)
+    ]
+    assert all(1.0 / 1.1 - 1e-9 <= ratio <= 1.1 + 1e-9 for ratio in ratios)
+    # Every bucket moves towards one.
+    assert all(
+        abs(after - 1.0) < abs(before - 1.0)
+        for after, before in zip(decayed.published_curve.multipliers, matured.multipliers, strict=True)
+    )
 
 
 def test_finalization_is_idempotent_and_publication_applies_only_at_named_generation() -> None:
