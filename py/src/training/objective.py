@@ -140,11 +140,11 @@ def resolve_auxiliary_losses(
     return tuple(losses)
 
 
-def auxiliary_main_batch_weight(configuration: ResolvedAuxiliaryLoss) -> float:
-    """Dedicated search-budget batches carry the head's whole loss, so the main batch must not weight it twice."""
+def auxiliary_batch_weight(configuration: ResolvedAuxiliaryLoss, search_budget_labelled_batch: bool) -> float:
+    """The search-budget head learns only from fully labelled batches; the handful of labelled rows elsewhere is noise."""
     match configuration:
         case ResolvedSearchBudgetLoss():
-            return configuration.main_batch_weight
+            return configuration.weight if search_budget_labelled_batch else configuration.main_batch_weight
         case _:
             return configuration.weight
 
@@ -155,7 +155,12 @@ class ResolvedTrainingObjective(FrozenModel):
     root_value_blend: float
     auxiliary_losses: tuple[ResolvedAuxiliaryLoss, ...]
 
-    def calculate_loss(self, output: TrainingModelOutput, batch: TrainingBatch) -> ObjectiveLoss:
+    def calculate_loss(
+        self,
+        output: TrainingModelOutput,
+        batch: TrainingBatch,
+        search_budget_labelled_batch: bool = False,
+    ) -> ObjectiveLoss:
         auxiliary_count = len(self.auxiliary_losses)
         if not (
             len(output.auxiliary_logits)
@@ -186,7 +191,7 @@ class ResolvedTrainingObjective(FrozenModel):
         )
         total = self.policy_loss_weight * policy_loss + self.value_loss_weight * wdl_loss
         for configuration, loss in zip(self.auxiliary_losses, auxiliary_losses):
-            total = total + auxiliary_main_batch_weight(configuration) * loss
+            total = total + auxiliary_batch_weight(configuration, search_budget_labelled_batch) * loss
         return ObjectiveLoss(policy=policy_loss, wdl=wdl_loss, auxiliary=auxiliary_losses, total=total)
 
     @staticmethod

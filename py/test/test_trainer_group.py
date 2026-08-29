@@ -225,10 +225,10 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
     head_statistics = result.statistics.search_budget_head
     assert head_statistics is not None
     assert head_statistics.labelled_pool_rows == 0
-    assert head_statistics.optimizer_steps == 0
+    assert head_statistics.labelled_batches == 0
 
 
-def test_a_labelled_replay_trains_the_search_budget_head_on_its_own_batch(tmp_path: Path) -> None:
+def test_a_labelled_replay_trains_the_search_budget_head_on_a_fully_labelled_batch(tmp_path: Path) -> None:
     configuration = _with_head_training(_configuration(tmp_path))
     game = ChessImplementation(configuration)
     model = Network(
@@ -280,8 +280,7 @@ def test_a_labelled_replay_trains_the_search_budget_head_on_its_own_batch(tmp_pa
     assert head_statistics is not None
     assert head_statistics.auxiliary_index == 0
     assert head_statistics.labelled_pool_rows == 2
-    assert head_statistics.global_batch_rows == 2
-    assert head_statistics.optimizer_steps == 1
+    assert head_statistics.labelled_batches == 1
     assert head_statistics.target_mean == pytest.approx(0.375)
     assert 0.0 < head_statistics.prediction_mean < 1.0
     assert result.statistics.auxiliary_losses == (pytest.approx(head_statistics.loss),)
@@ -293,9 +292,7 @@ def _with_head_training(configuration: ChessExperimentConfiguration) -> ChessExp
         update={
             'head_training': {
                 'dedicated_batches': True,
-                'batch_size': 2,
                 'interval_optimizer_steps': 1,
-                'minimum_labelled_rows': 1,
             }
         }
     )

@@ -8,6 +8,7 @@ import pytest
 import torch
 from src.games.contracts import WdlTarget
 from src.games.representation import NetworkDimensions, PackedPlaneLayout, RepresentationDimensions
+from src.replay.batch_loader import MappedReplayBatchLoader, SearchBudgetLabelledBatches
 from src.replay.contracts import (
     EligibleRemainingGameLengthTarget,
     EligibleSearchBudgetTarget,
@@ -16,13 +17,10 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.replay.description import ReplayDescription
-from src.replay.head_batch import SearchBudgetLabelPool, build_search_budget_head_batch
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
-from src.search_budget.configuration import SearchBudgetHeadTrainingConfiguration
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.batch import TrainingBatch, TrainingModelOutput
-from src.training.configuration import TrainingPrecision
 from src.training.network import DensePolicyHeadConfiguration, Network, NetworkParams
 from src.training.objective import (
     ResolvedRemainingGameLengthLoss,
@@ -37,7 +35,6 @@ from src.training.targets import (
     TrainingTargetLayout,
     search_budget_auxiliary_index,
 )
-from src.training.trainer.search_budget_head import SearchBudgetHeadTrainer, resolved_global_batch_rows
 
 PACKED_PLANES = PackedPlaneLayout(board_size=3, binary_plane_count=1, scalar_count=1)
 AUXILIARY_INDEX = 1
@@ -173,59 +170,6 @@ def test_labelled_row_index_follows_the_wrapped_replay_ring(tmp_path: Path) -> N
     np.testing.assert_array_equal(indices, np.asarray((0, 1), dtype=np.int64))
 
 
-def test_every_row_of_a_head_batch_carries_a_label(tmp_path: Path) -> None:
-    path = tmp_path / 'replay.bin'
-    store = _store_with_labels(path, (None, 0.25, None, 0.75, 0.5, None))
-    description = _description(path, store)
-    store.close()
-
-    with SearchBudgetLabelPool(description, STUB_STATE, AUXILIARY_INDEX) as pool:
-        generator = np.random.default_rng(7)
-        selected = pool.select_logical_indices(generator, 3)
-        batch = pool.batch(selected, np.zeros(3, dtype=np.int64))
-
-    assert pool.size == 3
-    assert sorted(int(index) for index in selected) == [1, 3, 4]
-    assert len(batch) == 3
-    assert torch.all((batch.targets > 0.0) & (batch.targets <= 1.0))
-
-
-def test_a_head_batch_of_unlabelled_rows_is_refused(tmp_path: Path) -> None:
-    path = tmp_path / 'replay.bin'
-    store = _store_with_labels(path, (None, 0.25))
-
-    with pytest.raises(ValueError, match='labelled replay rows'):
-        build_search_budget_head_batch(
-            store,
-            STUB_STATE,
-            AUXILIARY_INDEX,
-            np.asarray((0, 1), dtype=np.int64),
-            np.zeros(2, dtype=np.int64),
-        )
-    store.close()
-
-
-@pytest.mark.parametrize(
-    ('labelled_rows', 'world_size', 'expected'),
-    (
-        (5_000, 1, 2_000),
-        (5_000, 8, 2_000),
-        (1_100, 8, 1_096),
-        (300, 1, 300),
-        (255, 1, 0),
-        (0, 4, 0),
-    ),
-)
-def test_a_short_labelled_pool_shrinks_the_head_batch_instead_of_padding_it(
-    labelled_rows: int,
-    world_size: int,
-    expected: int,
-) -> None:
-    configuration = SearchBudgetHeadTrainingConfiguration()
-
-    assert resolved_global_batch_rows(configuration, labelled_rows, world_size) == expected
-
-
 def test_dedicated_head_batches_remove_the_search_budget_term_from_the_main_batch() -> None:
     targets = (SearchBudgetTargetConfiguration(),)
     shared = resolve_auxiliary_losses(targets, 0, search_budget_dedicated_batches=False)
@@ -293,6 +237,100 @@ def test_the_main_batch_path_is_unchanged_apart_from_the_search_budget_contribut
     assert dedicated.total.item() == pytest.approx(shared.total.item() - 0.2 * shared.auxiliary[1].item())
 
 
+def test_a_labelled_batch_restores_the_search_budget_term() -> None:
+    batch = _batch_with_one_labelled_row()
+    output = _output_for(batch)
+    objective = _objective(dedicated=True)
+
+    ordinary = objective.calculate_loss(output, batch)
+    labelled = objective.calculate_loss(output, batch, search_budget_labelled_batch=True)
+
+    assert labelled.total.item() == pytest.approx(ordinary.total.item() + 0.2 * ordinary.auxiliary[1].item())
+
+
+def _loader(
+    description: ReplayDescription,
+    global_batch_size: int,
+    interval_optimizer_steps: int,
+    optimizer_steps: int,
+    world_size: int = 1,
+    rank: int = 0,
+) -> MappedReplayBatchLoader:
+    return MappedReplayBatchLoader(
+        replay=description,
+        state=STUB_STATE,
+        source_optimizer_step=3,
+        optimizer_steps=optimizer_steps,
+        global_batch_size=global_batch_size,
+        world_size=world_size,
+        rank=rank,
+        sampler_seed=11,
+        pin_memory=False,
+        labelled_batches=SearchBudgetLabelledBatches(
+            auxiliary_index=AUXILIARY_INDEX,
+            interval_optimizer_steps=interval_optimizer_steps,
+        ),
+    )
+
+
+def _labelled_description(tmp_path: Path, targets: tuple[float | None, ...]) -> ReplayDescription:
+    path = tmp_path / 'replay.bin'
+    store = _store_with_labels(path, targets)
+    description = _description(path, store)
+    store.close()
+    return description
+
+
+def test_every_row_of_a_labelled_batch_carries_a_label(tmp_path: Path) -> None:
+    targets = tuple(None if index % 2 else 0.1 * (index % 8) + 0.05 for index in range(32))
+    loader = _loader(
+        _labelled_description(tmp_path, targets), global_batch_size=4, interval_optimizer_steps=2, optimizer_steps=4
+    )
+
+    batches = list(loader)
+
+    assert loader.labelled_pool_rows == 16
+    for batch_index, batch in enumerate(batches):
+        eligibility = batch.auxiliary_eligibility[AUXILIARY_INDEX]
+        assert loader.is_labelled_batch(batch_index) == (batch_index % 2 == 0)
+        if loader.is_labelled_batch(batch_index):
+            assert bool(torch.all(eligibility))
+        else:
+            assert not bool(torch.all(eligibility))
+
+
+def test_a_labelled_pool_shorter_than_the_batch_falls_back_to_a_uniform_sample(tmp_path: Path) -> None:
+    targets = (None, 0.25, None, 0.75, 0.5, None, None, None)
+    loader = _loader(
+        _labelled_description(tmp_path, targets), global_batch_size=4, interval_optimizer_steps=1, optimizer_steps=2
+    )
+
+    batches = list(loader)
+
+    assert loader.labelled_pool_rows == 3
+    assert not loader.is_labelled_batch(0)
+    assert all(len(batch) == 4 for batch in batches)
+    assert any(not bool(torch.all(batch.auxiliary_eligibility[AUXILIARY_INDEX])) for batch in batches)
+
+
+def test_every_rank_agrees_on_which_batches_are_labelled_and_splits_the_same_draw(tmp_path: Path) -> None:
+    description = _labelled_description(tmp_path, tuple(0.1 * (index % 8) + 0.05 for index in range(16)))
+    first = _loader(
+        description, global_batch_size=4, interval_optimizer_steps=2, optimizer_steps=4, world_size=2, rank=0
+    )
+    second = _loader(
+        description, global_batch_size=4, interval_optimizer_steps=2, optimizer_steps=4, world_size=2, rank=1
+    )
+
+    decisions = tuple(first.is_labelled_batch(index) for index in range(4))
+
+    assert decisions == tuple(second.is_labelled_batch(index) for index in range(4))
+    assert decisions == (True, False, True, False)
+    for left, right in zip(list(first), list(second), strict=True):
+        assert len(left) == len(right) == 2
+        assert not torch.equal(left.states, right.states)
+
+
 def _small_network() -> Network:
     return Network(
         NetworkParams(num_layers=1, hidden_size=8, policy_head=DensePolicyHeadConfiguration(channels=2)),
@@ -305,92 +343,58 @@ def _small_network() -> Network:
     )
 
 
-def test_a_head_step_moves_the_head_and_leaves_the_shared_trunk_untouched(tmp_path: Path) -> None:
-    path = tmp_path / 'replay.bin'
-    store = _store_with_labels(path, tuple(0.1 * (index % 10) + 0.05 for index in range(64)))
-    description = _description(path, store)
-    store.close()
+def _budget_only_objective() -> ResolvedTrainingObjective:
+    """Zero sibling weights isolate how far the search-budget term reaches on one ordinary optimizer step."""
+    return ResolvedTrainingObjective(
+        policy_loss_weight=0.0,
+        value_loss_weight=0.0,
+        root_value_blend=0.0,
+        auxiliary_losses=(
+            ResolvedRemainingGameLengthLoss(weight=0.0),
+            ResolvedSearchBudgetLoss(weight=0.2, dedicated_batches=True),
+        ),
+    )
+
+
+def _moved_parameters(model: Network, before: dict[str, torch.Tensor]) -> set[str]:
+    return {name for name, value in model.named_parameters() if not torch.equal(before[name], value)}
+
+
+def _one_training_step(model: Network, batch: TrainingBatch, labelled_batch: bool) -> set[str]:
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    before = {name: value.detach().clone() for name, value in model.named_parameters()}
+    optimizer.zero_grad(set_to_none=True)
+    output = model.training_output(batch.states)
+    loss = _budget_only_objective().calculate_loss(output, batch, search_budget_labelled_batch=labelled_batch)
+    loss.total.backward()
+    optimizer.step()
+    return _moved_parameters(model, before)
+
+
+def test_a_labelled_batch_moves_the_budget_head_and_the_trunk_but_not_sibling_heads(tmp_path: Path) -> None:
+    description = _labelled_description(tmp_path, tuple(0.1 * (index % 10) + 0.05 for index in range(16)))
+    loader = _loader(description, global_batch_size=8, interval_optimizer_steps=1, optimizer_steps=1)
+    batch = next(iter(loader))
     model = _small_network()
     model.train()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
-    trunk_before = tuple(parameter.detach().clone() for parameter in model.start_block.parameters())
-    head_before = tuple(parameter.detach().clone() for parameter in model.auxiliary_head_modules[0].parameters())
-    budget_before = tuple(
-        parameter.detach().clone() for parameter in model.auxiliary_head_modules[AUXILIARY_INDEX].parameters()
-    )
 
-    with SearchBudgetHeadTrainer(
-        replay=description,
-        state=STUB_STATE,
-        auxiliary_index=AUXILIARY_INDEX,
-        configuration=SearchBudgetHeadTrainingConfiguration(batch_size=32, minimum_labelled_rows=8),
-        loss_weight=0.2,
-        model=model,
-        optimizer=optimizer,
-        device=torch.device('cpu'),
-        precision=TrainingPrecision.FLOAT32,
-        maximum_gradient_norm=0.5,
-        world_size=1,
-        rank=0,
-        sampler_seed=11,
-        source_optimizer_step=3,
-    ) as trainer:
-        assert trainer.global_batch_rows == 32
-        trainer.train_step(batch_index=0, capture_distribution=True)
-        statistics = trainer.statistics()
-        distribution = trainer.distribution
+    moved = _one_training_step(model, batch, labelled_batch=True)
 
-    for before, after in zip(trunk_before, model.start_block.parameters(), strict=True):
-        assert torch.equal(before, after)
-    for before, after in zip(head_before, model.auxiliary_head_modules[0].parameters(), strict=True):
-        assert torch.equal(before, after)
-    assert any(
-        not torch.equal(before, after)
-        for before, after in zip(
-            budget_before,
-            model.auxiliary_head_modules[AUXILIARY_INDEX].parameters(),
-            strict=True,
-        )
-    )
-    assert statistics.labelled_pool_rows == 64
-    assert statistics.optimizer_steps == 1
-    assert statistics.global_batch_rows == 32
-    assert 0.0 < statistics.target_mean < 1.0
-    assert statistics.target_standard_deviation > 0.0
-    assert distribution is not None
-    assert len(distribution.target) == 32
+    assert any(name.startswith('start_block') for name in moved)
+    assert any(name.startswith('auxiliary_head_modules.1') for name in moved)
+    assert not any(name.startswith('auxiliary_head_modules.0') for name in moved)
 
 
-def test_a_labelled_pool_below_the_floor_disables_head_training(tmp_path: Path) -> None:
-    path = tmp_path / 'replay.bin'
-    store = _store_with_labels(path, (None, 0.25, None, 0.75))
-    description = _description(path, store)
-    store.close()
+def test_an_ordinary_batch_leaves_the_search_budget_head_untouched(tmp_path: Path) -> None:
+    description = _labelled_description(tmp_path, tuple(0.1 * (index % 10) + 0.05 for index in range(16)))
+    loader = _loader(description, global_batch_size=8, interval_optimizer_steps=1, optimizer_steps=1)
+    batch = next(iter(loader))
     model = _small_network()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    model.train()
 
-    with SearchBudgetHeadTrainer(
-        replay=description,
-        state=STUB_STATE,
-        auxiliary_index=AUXILIARY_INDEX,
-        configuration=SearchBudgetHeadTrainingConfiguration(batch_size=32, minimum_labelled_rows=8),
-        loss_weight=0.2,
-        model=model,
-        optimizer=optimizer,
-        device=torch.device('cpu'),
-        precision=TrainingPrecision.FLOAT32,
-        maximum_gradient_norm=0.5,
-        world_size=1,
-        rank=0,
-        sampler_seed=11,
-        source_optimizer_step=3,
-    ) as trainer:
-        assert trainer.global_batch_rows == 0
-        assert not trainer.due_at_step(0)
-        statistics = trainer.statistics()
+    moved = _one_training_step(model, batch, labelled_batch=False)
 
-    assert statistics.labelled_pool_rows == 2
-    assert statistics.optimizer_steps == 0
+    assert moved == set()
 
 
 def test_the_search_budget_head_is_located_once_for_replay_and_telemetry() -> None:
