@@ -327,6 +327,7 @@ def _train_batches(
     )
     distributions = None
     head_distribution = None
+    labelled_snapshot = None
     with loader.prefetch(device, uses_cuda, replay_prefetch_depth) as prefetched_batches:
         for batch_index, batch in enumerate(prefetched_batches):
             labelled_batch = loader.is_labelled_batch(batch_index)
@@ -356,6 +357,7 @@ def _train_batches(
                 if labelled_batch:
                     assert search_budget_auxiliary is not None
                     head_distribution = snapshot.auxiliary[search_budget_auxiliary]
+                    labelled_snapshot = snapshot
                 else:
                     distributions = snapshot
             if gradient_probe_interval_steps > 0 and batch_index % gradient_probe_interval_steps == 0:
@@ -375,6 +377,9 @@ def _train_batches(
             if labelled_batch and head_totals is not None:
                 head_totals.accumulate(output, batch, loss)
     head_statistics = None if head_totals is None else head_totals.resolve(loader.labelled_pool_rows)
+    # A quantum whose every batch is labelled would otherwise report no distributions at all.
+    if distributions is None:
+        distributions = labelled_snapshot
     if head_distribution is not None and distributions is not None:
         assert search_budget_auxiliary is not None
         distributions = _with_search_budget_head_distribution(
