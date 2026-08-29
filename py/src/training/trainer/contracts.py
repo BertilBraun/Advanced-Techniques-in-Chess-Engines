@@ -19,6 +19,21 @@ class ResolvedTrainingParameters(FrozenModel):
     objective: ResolvedTrainingObjective
 
 
+class SearchBudgetHeadStatistics(FrozenModel):
+    """Measured on fully labelled head batches, so these read as head health rather than sampling noise."""
+
+    auxiliary_index: int = Field(ge=0)
+    labelled_pool_rows: int = Field(ge=0)
+    global_batch_rows: int = Field(ge=0)
+    optimizer_steps: int = Field(ge=0)
+    loss: float
+    target_mean: float
+    target_standard_deviation: float
+    prediction_mean: float
+    prediction_standard_deviation: float
+    absolute_error_mean: float
+
+
 class TrainerStartup(FrozenModel):
     network: NetworkConfiguration
     save_path: Path
@@ -61,6 +76,7 @@ class RankTrainingResult(FrozenModel):
     elapsed_seconds: float
     checkpoint: CheckpointReference | None
     distributions: TrainingDistributionSnapshot | None
+    search_budget_head: SearchBudgetHeadStatistics | None
 
 
 class RankTrainingFailure(FrozenModel):
@@ -88,6 +104,7 @@ class TrainingStatistics:
     training_samples_per_second: float
     elapsed_seconds: float
     distributions: TrainingDistributionSnapshot
+    search_budget_head: SearchBudgetHeadStatistics | None
 
 
 @dataclass(frozen=True)

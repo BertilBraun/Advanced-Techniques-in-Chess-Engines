@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from src.search_budget.calibration import CurveDecisionReason, CurveEligibilityFailure
 from src.search_budget.curve import CURVE_BUCKET_COUNT
-from src.training.targets import AuxiliaryHeadLayout, SearchBudgetHeadLayout
+from src.training.targets import AuxiliaryHeadLayout, search_budget_auxiliary_index
 from src.util.tensorboard import TensorboardCustomScalarCategory, TensorboardMultilineChart
 
 
@@ -96,6 +96,31 @@ def _scalar_head_category(auxiliary_prefix: str) -> TensorboardCustomScalarCateg
                 'Training target and prediction mean',
                 f'{auxiliary_prefix}/target_mean',
                 f'{auxiliary_prefix}/prediction_mean',
+            ),
+            _chart(
+                'Head-batch target and prediction mean',
+                'search_budget/head_batch/target_mean',
+                'search_budget/head_batch/prediction_mean',
+            ),
+            _chart(
+                'Head-batch spread',
+                'search_budget/head_batch/target_standard_deviation',
+                'search_budget/head_batch/prediction_standard_deviation',
+            ),
+            _chart(
+                'Head-batch error',
+                'search_budget/head_batch/loss',
+                'search_budget/head_batch/absolute_error_mean',
+            ),
+            _chart(
+                'Head-batch supply',
+                'search_budget/head_batch/labelled_pool_rows',
+                'search_budget/head_batch/global_batch_rows',
+            ),
+            _chart(
+                'Head-batch steps',
+                'search_budget/head_batch/optimizer_steps',
+                'search_budget/head_batch/skipped',
             ),
             _chart(
                 'Generation-wide quantile mean',
@@ -266,12 +291,5 @@ def _chart(title: str, *tags: str) -> TensorboardMultilineChart:
 
 
 def _search_budget_auxiliary_prefix(auxiliary_heads: tuple[AuxiliaryHeadLayout, ...]) -> str | None:
-    indices: list[int] = []
-    for index, head in enumerate(auxiliary_heads):
-        match head:
-            case SearchBudgetHeadLayout():
-                indices.append(index)
-    if not indices:
-        return None
-    assert len(indices) == 1, 'Training layout must contain at most one search-budget head.'
-    return f'training_auxiliary/{indices[0]}-search-budget'
+    index = search_budget_auxiliary_index(auxiliary_heads)
+    return None if index is None else f'training_auxiliary/{index}-search-budget'

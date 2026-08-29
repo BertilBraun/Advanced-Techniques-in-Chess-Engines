@@ -47,7 +47,7 @@ from src.training.telemetry import (
     training_lifecycle_telemetry,
 )
 from src.training.tensorboard import scheduled_settings_at
-from src.training.trainer import TrainingStatistics
+from src.training.trainer import SearchBudgetHeadStatistics, TrainingStatistics
 from src.util.log import log
 from src.util.tensorboard import log_custom_scalar_layout, log_equal_width_histogram_summary, log_histogram, log_scalar
 
@@ -367,6 +367,7 @@ class TrainingReporter:
                         auxiliary_gradient / main_gradient,
                         generation,
                     )
+        _record_search_budget_head_statistics(statistics.search_budget_head, generation)
         _record_training_distributions(statistics.distributions, self.auxiliary_heads, generation)
         log_scalar('throughput/training_samples_per_second', statistics.training_samples_per_second, generation)
         log_scalar('training/optimizer_steps', publication.completed_optimizer_steps, generation)
@@ -481,6 +482,27 @@ class TrainingReporter:
     def _record_scheduled_settings(self, generation: int) -> None:
         for setting in scheduled_settings_at(self.configuration, generation):
             log_scalar(setting.tag, setting.value, generation)
+
+
+def _record_search_budget_head_statistics(
+    statistics: SearchBudgetHeadStatistics | None,
+    generation: int,
+) -> None:
+    if statistics is None:
+        return
+    prefix = 'search_budget/head_batch'
+    log_scalar(f'{prefix}/labelled_pool_rows', statistics.labelled_pool_rows, generation)
+    log_scalar(f'{prefix}/global_batch_rows', statistics.global_batch_rows, generation)
+    log_scalar(f'{prefix}/optimizer_steps', statistics.optimizer_steps, generation)
+    log_scalar(f'{prefix}/skipped', int(statistics.optimizer_steps == 0), generation)
+    if statistics.optimizer_steps == 0:
+        return
+    log_scalar(f'{prefix}/loss', statistics.loss, generation)
+    log_scalar(f'{prefix}/target_mean', statistics.target_mean, generation)
+    log_scalar(f'{prefix}/target_standard_deviation', statistics.target_standard_deviation, generation)
+    log_scalar(f'{prefix}/prediction_mean', statistics.prediction_mean, generation)
+    log_scalar(f'{prefix}/prediction_standard_deviation', statistics.prediction_standard_deviation, generation)
+    log_scalar(f'{prefix}/absolute_error_mean', statistics.absolute_error_mean, generation)
 
 
 def _record_training_distributions(
