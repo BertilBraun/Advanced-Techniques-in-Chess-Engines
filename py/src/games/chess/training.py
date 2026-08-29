@@ -158,5 +158,9 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             policy_loss_weight=configuration.policy_loss_weight.value_at(model_generation),
             value_loss_weight=configuration.value_loss_weight.value_at(model_generation),
             root_value_blend=configuration.root_value_blend.value_at(model_generation),
-            auxiliary_losses=resolve_auxiliary_losses(configuration.auxiliary_targets, model_generation),
+            auxiliary_losses=resolve_auxiliary_losses(
+                configuration.auxiliary_targets,
+                model_generation,
+                self.configuration.training.lifecycle.search_budget.head_training.dedicated_batches,
+            ),
         )

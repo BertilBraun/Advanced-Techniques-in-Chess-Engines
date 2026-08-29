@@ -35,7 +35,7 @@ from src.replay.contracts import (
 )
 from src.replay.encoding import encode_replay_columns
 from src.replay.encoding import encode_replay_rows as encode_replay_rows
-from src.replay.layout import ReplayColumnDescriptor, ReplayLayout
+from src.replay.layout import ReplayColumnDescriptor, ReplayColumnKey, ReplayColumnKind, ReplayLayout
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.targets import (
     FutureSearchValueHeadLayout,
@@ -382,6 +382,24 @@ class ReplayStore:
         if np.any(indices < 0) or np.any(indices >= state.size):
             raise ValueError('Replay logical index is outside the live FIFO.')
         return (state.head + indices) % state.maximum_capacity
+
+    def eligible_logical_indices(self, auxiliary_index: int) -> npt.NDArray[np.int64]:
+        """Scan one auxiliary eligibility column: it is a byte per row, so the whole live window costs a few ms."""
+        column = self._eligibility_column(auxiliary_index)
+        state = self.state
+        first_span = min(state.size, state.maximum_capacity - state.head)
+        leading = np.flatnonzero(column[state.head : state.head + first_span]).astype(np.int64)
+        if first_span == state.size:
+            return leading
+        wrapped = np.flatnonzero(column[: state.size - first_span]).astype(np.int64) + first_span
+        return np.concatenate((leading, wrapped))
+
+    def _eligibility_column(self, auxiliary_index: int) -> npt.NDArray[np.uint8]:
+        key = ReplayColumnKey(ReplayColumnKind.AUXILIARY_ELIGIBLE, auxiliary_index)
+        for column in self._column_arrays:
+            if column.descriptor.key == key:
+                return np.asarray(column.values, dtype=np.uint8)
+        raise ValueError(f'Replay layout has no eligibility column for auxiliary head {auxiliary_index}.')
 
     def gather_physical(self, physical_indices: npt.ArrayLike) -> ReplayColumnViews:
         indices = np.asarray(physical_indices, dtype=np.int64)

@@ -248,7 +248,12 @@ def distillation_objective(auxiliary_heads: tuple[str, ...] = ()) -> ResolvedTra
         policy_loss_weight=1.0,
         value_loss_weight=1.0,
         root_value_blend=0.0,
-        auxiliary_losses=resolve_auxiliary_losses(auxiliary_target_configurations(auxiliary_heads), 0),
+        # Distillation has no replay label pool, so the search-budget head stays in the ordinary batch.
+        auxiliary_losses=resolve_auxiliary_losses(
+            auxiliary_target_configurations(auxiliary_heads),
+            0,
+            search_budget_dedicated_batches=False,
+        ),
     )
 
 

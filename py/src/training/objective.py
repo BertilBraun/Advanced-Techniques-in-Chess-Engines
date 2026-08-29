@@ -86,6 +86,11 @@ class ResolvedLegalMovesLoss(FrozenModel):
 class ResolvedSearchBudgetLoss(FrozenModel):
     kind: Literal['search_budget'] = 'search_budget'
     weight: float = Field(ge=0.0)
+    dedicated_batches: bool = False
+
+    @property
+    def main_batch_weight(self) -> float:
+        return 0.0 if self.dedicated_batches else self.weight
 
 
 ResolvedAuxiliaryLoss: TypeAlias = Annotated[
@@ -102,6 +107,7 @@ ResolvedAuxiliaryLoss: TypeAlias = Annotated[
 def resolve_auxiliary_losses(
     targets: tuple[AuxiliaryTargetConfiguration, ...],
     model_generation: int,
+    search_budget_dedicated_batches: bool,
 ) -> tuple[ResolvedAuxiliaryLoss, ...]:
     losses: list[ResolvedAuxiliaryLoss] = []
     for target in targets:
@@ -125,8 +131,22 @@ def resolve_auxiliary_losses(
             case LegalMovesTargetConfiguration(loss_weight=loss_weight):
                 losses.append(ResolvedLegalMovesLoss(weight=loss_weight.value_at(model_generation)))
             case SearchBudgetTargetConfiguration(loss_weight=loss_weight):
-                losses.append(ResolvedSearchBudgetLoss(weight=loss_weight.value_at(model_generation)))
+                losses.append(
+                    ResolvedSearchBudgetLoss(
+                        weight=loss_weight.value_at(model_generation),
+                        dedicated_batches=search_budget_dedicated_batches,
+                    )
+                )
     return tuple(losses)
+
+
+def auxiliary_main_batch_weight(configuration: ResolvedAuxiliaryLoss) -> float:
+    """Dedicated search-budget batches carry the head's whole loss, so the main batch must not weight it twice."""
+    match configuration:
+        case ResolvedSearchBudgetLoss():
+            return configuration.main_batch_weight
+        case _:
+            return configuration.weight
 
 
 class ResolvedTrainingObjective(FrozenModel):
@@ -166,7 +186,7 @@ class ResolvedTrainingObjective(FrozenModel):
         )
         total = self.policy_loss_weight * policy_loss + self.value_loss_weight * wdl_loss
         for configuration, loss in zip(self.auxiliary_losses, auxiliary_losses):
-            total = total + configuration.weight * loss
+            total = total + auxiliary_main_batch_weight(configuration) * loss
         return ObjectiveLoss(policy=policy_loss, wdl=wdl_loss, auxiliary=auxiliary_losses, total=total)
 
     @staticmethod

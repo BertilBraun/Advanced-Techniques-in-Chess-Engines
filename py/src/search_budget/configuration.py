@@ -75,8 +75,24 @@ class ProductionAllocationConfiguration(FrozenModel):
         return self
 
 
+class SearchBudgetHeadTrainingConfiguration(FrozenModel):
+    # Labels cover well under one percent of replay, so mixing them into ordinary batches leaves ~10 labelled rows
+    # in 2048 and the head's telemetry measures sampling noise instead of learning.
+    dedicated_batches: bool = True
+    batch_size: int = Field(default=2000, gt=0)
+    interval_optimizer_steps: int = Field(default=50, gt=0)
+    minimum_labelled_rows: int = Field(default=256, gt=0)
+
+    @model_validator(mode='after')
+    def validate_pool_floor(self) -> SearchBudgetHeadTrainingConfiguration:
+        if self.minimum_labelled_rows > self.batch_size:
+            raise ValueError('The labelled-pool floor cannot exceed the search-budget head batch size.')
+        return self
+
+
 class SearchBudgetConfiguration(FrozenModel):
     curve_version: Literal['live_ema_ten_bucket_v1'] = 'live_ema_ten_bucket_v1'
     labeling: DeepLabelingConfiguration = DeepLabelingConfiguration()
     calibration: CurveCalibrationConfiguration = CurveCalibrationConfiguration()
     production: ProductionAllocationConfiguration = ProductionAllocationConfiguration()
+    head_training: SearchBudgetHeadTrainingConfiguration = SearchBudgetHeadTrainingConfiguration()

@@ -161,6 +161,19 @@ AuxiliaryHeadLayout: TypeAlias = (
 )
 
 
+def search_budget_auxiliary_index(auxiliary_heads: tuple[AuxiliaryHeadLayout, ...]) -> int | None:
+    indices: list[int] = []
+    for index, head in enumerate(auxiliary_heads):
+        match head:
+            case SearchBudgetHeadLayout():
+                indices.append(index)
+    if not indices:
+        return None
+    if len(indices) > 1:
+        raise ValueError('A training layout may contain at most one search-budget head.')
+    return indices[0]
+
+
 def auxiliary_head_output_size(head: AuxiliaryHeadLayout) -> int:
     match head:
         case NextPolicyHeadLayout(action_size=action_size):
