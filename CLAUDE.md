@@ -62,7 +62,9 @@ validated.
   "Fix …", "Bound …"); body states what was validated. Do not mix unrelated changes; preserve unrelated local
   changes you find in the tree.
 - One branch per work package (`wp1-heads`, `wp2-ingestion`, `wp8-run-control`, …), rebased on `master`, merged
-  only after its acceptance criterion in the plan is met. Do not push to `master` directly.
+  only after its acceptance criterion in the plan is met.
+- Pushing to `origin` is fine, `master` included; nodes fetch what they run, so unpushed work cannot be deployed.
+  Push validated commits, not a broken tree, and never force-push a branch someone else may have based on.
 
 ## Remote nodes
 
