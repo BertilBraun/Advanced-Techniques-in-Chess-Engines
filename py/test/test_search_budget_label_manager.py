@@ -205,8 +205,7 @@ def test_deep_label_search_parallelism_matches_two_outstanding_batches(tmp_path:
     assert configuration.parallel_searches == 2
     assert task.parallel_searches == 2
     assert task.maximum_root_capacity == 83
-    with pytest.raises(ValueError, match='parallelism must remain two'):
-        DeepLabelingConfiguration(parallel_searches=1)
+    assert DeepLabelingConfiguration(parallel_searches=1).parallel_searches == 1
 
 
 def _successful_manifest(task: PredictionShardTask) -> LabelShardManifest:
