@@ -30,6 +30,7 @@ from src.replay.pinned_batch_pool import (
 )
 from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
+from src.util.log import LogLevel, log
 
 PositionT = TypeVar('PositionT')
 
@@ -58,6 +59,14 @@ class _PrefetchedBatch:
 
 
 @dataclass(frozen=True)
+class SearchBudgetLabelledBatches:
+    """Composition rule for the search-budget head: every Nth batch is drawn entirely from labelled replay rows."""
+
+    auxiliary_index: int
+    interval_optimizer_steps: int
+
+
+@dataclass(frozen=True)
 class DenseTargetArrays:
     policy: npt.NDArray[np.float32]
     policy_legal_action_ids: npt.NDArray[np.int64]
@@ -78,6 +87,7 @@ class MappedReplayBatchLoader(Generic[PositionT]):
         rank: int,
         sampler_seed: int,
         pin_memory: bool,
+        labelled_batches: SearchBudgetLabelledBatches | None = None,
     ) -> None:
         if optimizer_steps <= 0 or global_batch_size <= 0 or world_size <= 0:
             raise ValueError('Optimizer steps, global batch size, and world size must be positive.')
@@ -98,6 +108,29 @@ class MappedReplayBatchLoader(Generic[PositionT]):
         self.rank = rank
         self.sampler_seed = sampler_seed
         self.pin_memory = pin_memory
+        self.labelled_batches = labelled_batches
+        self.labelled_logical_indices = (
+            _labelled_logical_indices(replay, labelled_batches.auxiliary_index)
+            if labelled_batches is not None
+            else np.empty(0, dtype=np.int64)
+        )
+        if labelled_batches is not None and self.labelled_pool_rows < global_batch_size:
+            log(
+                f'Search-budget labelled pool holds {self.labelled_pool_rows} rows, fewer than the '
+                f'{global_batch_size}-row batch; every batch of this quantum stays a uniform replay sample.',
+                level=LogLevel.WARNING,
+            )
+
+    @property
+    def labelled_pool_rows(self) -> int:
+        return int(self.labelled_logical_indices.shape[0])
+
+    def is_labelled_batch(self, batch_index: int) -> bool:
+        """Keyed on the batch index and a pool size read from the shared replay file, so every rank agrees."""
+        labelled_batches = self.labelled_batches
+        if labelled_batches is None or self.labelled_pool_rows < self.global_batch_size:
+            return False
+        return batch_index % labelled_batches.interval_optimizer_steps == 0
 
     def __iter__(self) -> Iterator[TrainingBatch]:
         return self._prepared_batches()
@@ -125,9 +158,10 @@ class MappedReplayBatchLoader(Generic[PositionT]):
             ):
                 raise ValueError('Replay changed after the training description was captured.')
             generator = np.random.default_rng(np.random.SeedSequence((self.sampler_seed, self.source_optimizer_step)))
-            for _ in range(self.optimizer_steps):
+            for batch_index in range(self.optimizer_steps):
+                population = self.labelled_logical_indices if self.is_labelled_batch(batch_index) else self.replay.size
                 global_sample_indices = generator.choice(
-                    self.replay.size,
+                    population,
                     size=self.global_batch_size,
                     replace=False,
                 )
@@ -328,6 +362,14 @@ class PrefetchedReplayBatches(Iterator[TrainingBatch]):
         current_stream = torch.cuda.current_stream(self.device)
         current_stream.wait_event(transfer_complete)
         record_training_batch_stream(prefetched.device_batch, current_stream)
+
+
+def _labelled_logical_indices(replay: ReplayDescription, auxiliary_index: int) -> npt.NDArray[np.int64]:
+    store = ReplayStore.open(replay.path, replay.layout, writable=False)
+    try:
+        return store.eligible_logical_indices(auxiliary_index)
+    finally:
+        store.close()
 
 
 def build_training_batch(

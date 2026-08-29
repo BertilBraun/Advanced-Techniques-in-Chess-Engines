@@ -492,10 +492,9 @@ def _record_search_budget_head_statistics(
         return
     prefix = 'search_budget/head_batch'
     log_scalar(f'{prefix}/labelled_pool_rows', statistics.labelled_pool_rows, generation)
-    log_scalar(f'{prefix}/global_batch_rows', statistics.global_batch_rows, generation)
-    log_scalar(f'{prefix}/optimizer_steps', statistics.optimizer_steps, generation)
-    log_scalar(f'{prefix}/skipped', int(statistics.optimizer_steps == 0), generation)
-    if statistics.optimizer_steps == 0:
+    log_scalar(f'{prefix}/labelled_batches', statistics.labelled_batches, generation)
+    log_scalar(f'{prefix}/skipped', int(statistics.labelled_batches == 0), generation)
+    if statistics.labelled_batches == 0:
         return
     log_scalar(f'{prefix}/loss', statistics.loss, generation)
     log_scalar(f'{prefix}/target_mean', statistics.target_mean, generation)

@@ -115,11 +115,10 @@ def _scalar_head_category(auxiliary_prefix: str) -> TensorboardCustomScalarCateg
             _chart(
                 'Head-batch supply',
                 'search_budget/head_batch/labelled_pool_rows',
-                'search_budget/head_batch/global_batch_rows',
+                'search_budget/head_batch/labelled_batches',
             ),
             _chart(
-                'Head-batch steps',
-                'search_budget/head_batch/optimizer_steps',
+                'Head-batch skipped',
                 'search_budget/head_batch/skipped',
             ),
             _chart(

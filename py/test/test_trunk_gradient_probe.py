@@ -24,7 +24,9 @@ def _loss(features: torch.Tensor) -> ObjectiveLoss:
 
 def test_trunk_gradients_scale_with_the_loss_weight() -> None:
     features = torch.ones((4, 8), requires_grad=True)
-    gradients = _term_trunk_gradients(_objective(1.0, 0.5, 0.25), _loss(features), features)
+    gradients = _term_trunk_gradients(
+        _objective(1.0, 0.5, 0.25), _loss(features), features, search_budget_labelled_batch=False
+    )
 
     root = torch.tensor(32.0).sqrt()
     assert gradients.tolist() == pytest.approx(
@@ -34,14 +36,18 @@ def test_trunk_gradients_scale_with_the_loss_weight() -> None:
 
 def test_a_zero_weight_term_contributes_no_trunk_gradient() -> None:
     features = torch.ones((4, 8), requires_grad=True)
-    gradients = _term_trunk_gradients(_objective(1.0, 1.0, 0.0), _loss(features), features)
+    gradients = _term_trunk_gradients(
+        _objective(1.0, 1.0, 0.0), _loss(features), features, search_budget_labelled_batch=False
+    )
 
     assert gradients[2].item() == pytest.approx(0.0)
 
 
 def test_trunk_gradients_report_one_entry_per_loss_term() -> None:
     features = torch.ones((2, 3), requires_grad=True)
-    gradients = _term_trunk_gradients(_objective(1.0, 1.0, 0.1), _loss(features), features)
+    gradients = _term_trunk_gradients(
+        _objective(1.0, 1.0, 0.1), _loss(features), features, search_budget_labelled_batch=False
+    )
 
     assert gradients.shape == (3,)
 
@@ -50,7 +56,7 @@ def test_the_probe_leaves_the_graph_usable_for_the_real_backward() -> None:
     features = torch.ones((4, 8), requires_grad=True)
     loss = _loss(features)
 
-    _term_trunk_gradients(_objective(1.0, 1.0, 1.0), loss, features)
+    _term_trunk_gradients(_objective(1.0, 1.0, 1.0), loss, features, search_budget_labelled_batch=False)
     loss.total.backward()
 
     assert features.grad is not None
