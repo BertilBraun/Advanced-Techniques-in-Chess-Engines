@@ -114,10 +114,15 @@ class MappedReplayBatchLoader(Generic[PositionT]):
             if labelled_batches is not None
             else np.empty(0, dtype=np.int64)
         )
-        if labelled_batches is not None and self.labelled_pool_rows < global_batch_size:
+        if labelled_batches is not None and 0 < self.labelled_pool_rows < global_batch_size:
             log(
                 f'Search-budget labelled pool holds {self.labelled_pool_rows} rows, fewer than the '
-                f'{global_batch_size}-row batch; every batch of this quantum stays a uniform replay sample.',
+                f'{global_batch_size}-row batch; labelled batches repeat rows to fill the batch.',
+                level=LogLevel.WARNING,
+            )
+        elif labelled_batches is not None and self.labelled_pool_rows == 0:
+            log(
+                'Search-budget labelled pool is empty; every batch of this quantum stays a uniform replay sample.',
                 level=LogLevel.WARNING,
             )
 
@@ -128,7 +133,7 @@ class MappedReplayBatchLoader(Generic[PositionT]):
     def is_labelled_batch(self, batch_index: int) -> bool:
         """Keyed on the batch index and a pool size read from the shared replay file, so every rank agrees."""
         labelled_batches = self.labelled_batches
-        if labelled_batches is None or self.labelled_pool_rows < self.global_batch_size:
+        if labelled_batches is None or self.labelled_pool_rows == 0:
             return False
         return batch_index % labelled_batches.interval_optimizer_steps == 0
 
@@ -159,11 +164,14 @@ class MappedReplayBatchLoader(Generic[PositionT]):
                 raise ValueError('Replay changed after the training description was captured.')
             generator = np.random.default_rng(np.random.SeedSequence((self.sampler_seed, self.source_optimizer_step)))
             for batch_index in range(self.optimizer_steps):
-                population = self.labelled_logical_indices if self.is_labelled_batch(batch_index) else self.replay.size
+                labelled_batch = self.is_labelled_batch(batch_index)
+                population = self.labelled_logical_indices if labelled_batch else self.replay.size
+                # A pool smaller than the batch still trains the head; repeating rows beats not training it at all.
+                with_replacement = labelled_batch and self.labelled_pool_rows < self.global_batch_size
                 global_sample_indices = generator.choice(
                     population,
                     size=self.global_batch_size,
-                    replace=False,
+                    replace=with_replacement,
                 )
                 global_augmentation_indices = generator.integers(
                     0,

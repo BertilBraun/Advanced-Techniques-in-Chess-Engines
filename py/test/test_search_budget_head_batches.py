@@ -299,7 +299,7 @@ def test_every_row_of_a_labelled_batch_carries_a_label(tmp_path: Path) -> None:
             assert not bool(torch.all(eligibility))
 
 
-def test_a_labelled_pool_shorter_than_the_batch_falls_back_to_a_uniform_sample(tmp_path: Path) -> None:
+def test_a_labelled_pool_shorter_than_the_batch_repeats_rows_to_fill_it(tmp_path: Path) -> None:
     targets = (None, 0.25, None, 0.75, 0.5, None, None, None)
     loader = _loader(
         _labelled_description(tmp_path, targets), global_batch_size=4, interval_optimizer_steps=1, optimizer_steps=2
@@ -308,9 +308,24 @@ def test_a_labelled_pool_shorter_than_the_batch_falls_back_to_a_uniform_sample(t
     batches = list(loader)
 
     assert loader.labelled_pool_rows == 3
+    assert loader.is_labelled_batch(0)
+    assert all(len(batch) == 4 for batch in batches)
+    assert all(bool(torch.all(batch.auxiliary_eligibility[AUXILIARY_INDEX])) for batch in batches)
+
+
+def test_an_empty_labelled_pool_falls_back_to_a_uniform_sample(tmp_path: Path) -> None:
+    loader = _loader(
+        _labelled_description(tmp_path, (None,) * 8),
+        global_batch_size=4,
+        interval_optimizer_steps=1,
+        optimizer_steps=2,
+    )
+
+    batches = list(loader)
+
+    assert loader.labelled_pool_rows == 0
     assert not loader.is_labelled_batch(0)
     assert all(len(batch) == 4 for batch in batches)
-    assert any(not bool(torch.all(batch.auxiliary_eligibility[AUXILIARY_INDEX])) for batch in batches)
 
 
 def test_every_rank_agrees_on_which_batches_are_labelled_and_splits_the_same_draw(tmp_path: Path) -> None:
