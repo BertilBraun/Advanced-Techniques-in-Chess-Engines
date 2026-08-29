@@ -46,14 +46,14 @@ class CurveCalibrationParameters:
     maximum_step_ratio: Decimal = Decimal('1.1')
 
     def __post_init__(self) -> None:
-        if self.warmup_completed_generations != 30:
-            raise ValueError('The first-run warm-up is exactly 30 completed label generations.')
-        if self.bucket_utility_ema_decay != Decimal('0.2'):
-            raise ValueError('The first-run bucket-utility EMA decay is exactly 0.2.')
-        if self.validation_gain_ema_decay != Decimal('0.2'):
-            raise ValueError('The first-run validation-gain EMA decay is exactly 0.2.')
-        if self.maximum_step_ratio != Decimal('1.1'):
-            raise ValueError('The first-run maximum multiplicative curve step is exactly 1.1.')
+        if self.warmup_completed_generations <= 0:
+            raise ValueError('Curve warm-up must span a positive number of completed label generations.')
+        if not Decimal(0) < self.bucket_utility_ema_decay <= Decimal(1):
+            raise ValueError('Bucket-utility EMA decay must lie in (0, 1].')
+        if not Decimal(0) < self.validation_gain_ema_decay <= Decimal(1):
+            raise ValueError('Validation-gain EMA decay must lie in (0, 1].')
+        if self.maximum_step_ratio <= Decimal(1):
+            raise ValueError('The maximum multiplicative curve step must exceed one.')
 
 
 class BucketGenerationEvidence(FrozenModel):
