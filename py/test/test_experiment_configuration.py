@@ -577,10 +577,11 @@ def test_experiment_configuration_hash_is_stable_across_host_path_separators() -
 
 
 def test_experiment_configuration_hash_matches_pinned_regression_value() -> None:
-    assert (
-        experiment_configuration_sha256(CHESS_EXPERIMENT)
-        == 'b40000ecf65defaaa8638cfe0f30469979f918c83d3bac7aed42ee93334cc0e4'
-    )
+    # Pinned against a frozen configuration, not an evolving fixture: this must fail only when the
+    # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
+    frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
+
+    assert experiment_configuration_sha256(frozen) == 'b40000ecf65defaaa8638cfe0f30469979f918c83d3bac7aed42ee93334cc0e4'
 
 
 @pytest.mark.parametrize(
