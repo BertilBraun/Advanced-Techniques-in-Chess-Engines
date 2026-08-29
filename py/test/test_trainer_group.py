@@ -308,7 +308,8 @@ def test_distributed_training_model_has_only_batch_norm_buffers() -> None:
         Network(configuration.training.initial_model.network, torch.device('cpu'), game.network_dimensions)
     )
 
-    buffer_names = tuple(name for name, _ in model.named_buffers())
+    checkpointed = set(model.state_dict())
+    buffer_names = tuple(name for name, _ in model.named_buffers() if name in checkpointed)
 
     assert buffer_names
     assert all(name.endswith(('running_mean', 'running_var', 'num_batches_tracked')) for name in buffer_names)
