@@ -434,13 +434,14 @@ def _scheduled_rung_jobs(
     manager: EvaluationManager,
     clock: FakeClock,
     run_path: Path,
+    expected_rung_count: int = 4,
 ) -> tuple[MatchEvaluationJob, ...]:
     clock.now = 21.0
     jobs = manager.schedule_due_jobs(checkpoint(run_path, 1))
     rung_jobs = tuple(
         job for job in jobs if isinstance(job, MatchEvaluationJob) and job.definition.kind == 'stockfish_fixed_nodes'
     )
-    assert len(rung_jobs) == 4
+    assert len(rung_jobs) == expected_rung_count
     return rung_jobs
 
 
@@ -719,3 +720,38 @@ def test_manager_fits_one_ladder_per_search_budget(tmp_path: Path, monkeypatch: 
     assert named['evaluation/ladder_elo_64'] > named['evaluation/ladder_elo_1']
     # The unsuffixed series stays the highest-budget ladder, so it remains comparable across runs.
     assert named['evaluation/ladder_elo'] == pytest.approx(named['evaluation/ladder_elo_64'])
+
+
+def _experiment_with_a_windowed_rung(run_path: Path) -> ChessExperimentConfiguration:
+    experiment = _experiment_with_fixed_node_rungs(run_path)
+    payload = experiment.evaluation.model_dump(mode='json')
+    for definition in payload['definitions']:
+        if definition.get('definition_id') == 'stockfish-fixed-nodes-1000':
+            definition['first_generation'] = 10_000
+    return experiment.model_copy(update={'evaluation': EvaluationConfiguration.model_validate(payload)})
+
+
+def test_manager_publishes_ladder_while_a_rung_is_outside_its_generation_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = _experiment_with_a_windowed_rung(tmp_path)
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
+    rung_jobs = _scheduled_rung_jobs(manager, clock, tmp_path, expected_rung_count=3)
+
+    scalar_events: list[tuple[str, float, int]] = []
+    monkeypatch.setattr(
+        'src.evaluation.manager.log_scalar',
+        lambda name, value, step: scalar_events.append((name, value, step)),
+    )
+    for job in rung_jobs:
+        _write_rung_result(job, _rung_games(_NATURAL_RUNG_OUTCOMES[_rung_nodes(job)]))
+    for process in context.processes:
+        process.exitcode = 0
+    manager.collect_completed_jobs()
+
+    # The 1000-node rung never runs at this generation, so waiting on it would suppress the ladder.
+    assert not any(job.definition.definition_id == 'stockfish-fixed-nodes-1000' for job in rung_jobs)
+    assert any(name == 'evaluation/ladder_elo' for name, _, _ in scalar_events)

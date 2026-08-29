@@ -443,7 +443,15 @@ class EvaluationManager:
                 continue
             paths = sorted(self.result_directory.glob(f'{boundary_seconds:010d}-{definition.definition_id}-g*.json'))
             if not paths:
-                return
+                # A rung outside its generation window never reports, so waiting on it would suppress
+                # the ladder for the whole run; only an active rung that has yet to finish should wait.
+                if any(
+                    definition.is_active_at(suite.checkpoint.generation)
+                    for suite in self._state.scheduled_suites
+                    if suite.boundary_seconds == boundary_seconds
+                ):
+                    return
+                continue
             result = TypeAdapter(EvaluationResult).validate_json(paths[-1].read_text(encoding='utf-8'))
             anchor_elo = STOCKFISH_FIXED_NODES_ANCHOR_ELO.get(definition.nodes)
             if anchor_elo is None or not isinstance(result, MatchEvaluationResult):
