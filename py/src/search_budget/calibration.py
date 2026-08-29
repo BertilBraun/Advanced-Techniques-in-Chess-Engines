@@ -247,13 +247,17 @@ def update_calibration(
         assert state.pending_curve is not None
         published = state.pending_curve
         decision_reason = CurveDecisionReason.VALIDATED_PENDING
-    else:
+    elif CurveEligibilityFailure.WARMUP in failures:
+        # Nothing has been validated yet, so there is no earlier curve to fall back towards.
         published = flat_curve()
-        decision_reason = (
-            CurveDecisionReason.WARMUP
-            if CurveEligibilityFailure.WARMUP in failures
-            else CurveDecisionReason.NO_ELIGIBLE_PENDING
-        )
+        decision_reason = CurveDecisionReason.WARMUP
+    else:
+        # Single-generation gain is noisy enough to go negative on its own, and republishing a flat
+        # curve threw away every validated bucket and cost ~30 generations of bounded steps to climb
+        # back. Decay towards flat at the same 10% per-generation bound the curve rises by, so a noisy
+        # generation pauses progress and only a persistent negative gain disables the curve.
+        published = bounded_curve_toward(previous_published, flat_curve(), float(parameters.maximum_step_ratio))
+        decision_reason = CurveDecisionReason.NO_ELIGIBLE_PENDING
     pending = bounded_curve_toward(published, curve_update.curve, float(parameters.maximum_step_ratio))
     bucket_states = tuple(
         BucketCalibrationState(
