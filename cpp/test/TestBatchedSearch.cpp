@@ -154,9 +154,10 @@ int runBatchedSearchTests() {
         SearchBudgetCurvePrediction dippingPrediction;
         dippingPrediction.fill(5.0F);
         dippingPrediction[6] = -3.0F;
-        // Isotonic projection pulls indices 0..6 down to -3, so the earliest index qualifies.
-        require(selectBudgetIndex(learnedPolicy, dippingPrediction) == 0,
-                "isotonic projection did not propagate a deep-budget dip to cheaper budgets");
+        // The projection may only pull deeper points down to a cheaper point's level, never the
+        // reverse, so the dip qualifies at its own index and the cheaper points stay unqualified.
+        require(selectBudgetIndex(learnedPolicy, dippingPrediction) == 6,
+                "isotonic projection did not keep a dip at its own grid point");
         // A constant projected curve leaves only sigma to separate grid points: wide sigma
         // blocks the cheap points and the first tight point qualifies.
         const std::array<double, 10> mixedSigma = {5.0, 5.0, 5.0, 5.0, 1.0,
