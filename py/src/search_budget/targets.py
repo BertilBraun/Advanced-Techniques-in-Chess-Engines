@@ -20,29 +20,6 @@ class PolicyDistribution(FrozenModel):
         return self
 
 
-def midrank_quantiles(raw_kl_values: tuple[float, ...]) -> tuple[float, ...]:
-    if not raw_kl_values:
-        raise ValueError('At least one raw KL value is required.')
-    if any(not math.isfinite(value) or value < 0.0 for value in raw_kl_values):
-        raise ValueError('Raw KL values must be finite and nonnegative.')
-    if len(raw_kl_values) == 1:
-        return (0.5,)
-
-    indexed_values = sorted(enumerate(raw_kl_values), key=lambda item: (item[1], item[0]))
-    quantiles = [0.0] * len(raw_kl_values)
-    group_start = 0
-    while group_start < len(indexed_values):
-        group_end = group_start + 1
-        while group_end < len(indexed_values) and indexed_values[group_end][1] == indexed_values[group_start][1]:
-            group_end += 1
-        midrank = (group_start + group_end - 1) / 2
-        quantile = midrank / (len(indexed_values) - 1)
-        for position in range(group_start, group_end):
-            quantiles[indexed_values[position][0]] = quantile
-        group_start = group_end
-    return tuple(quantiles)
-
-
 def policy_kl(deep_policy: PolicyDistribution, approximate_policy: PolicyDistribution) -> float:
     if len(deep_policy.probabilities) != len(approximate_policy.probabilities):
         raise ValueError('Deep and approximate policies must use the same action space.')
@@ -76,3 +53,11 @@ def shadow_gain(
     if any(not math.isfinite(gain) for gain in paired_gains):
         raise ValueError('Shadow gain requires finite policy divergences.')
     return math.fsum(paired_gains) / len(paired_gains)
+
+
+def policy_entropy(policy: PolicyDistribution) -> float:
+    return -sum(probability * math.log(probability) for probability in policy.probabilities if probability > 0.0)
+
+
+def top_visit_share(policy: PolicyDistribution) -> float:
+    return max(policy.probabilities)

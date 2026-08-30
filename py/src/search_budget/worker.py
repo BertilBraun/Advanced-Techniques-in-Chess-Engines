@@ -15,7 +15,6 @@ from src.search_budget.artifacts import (
     write_immutable_artifact,
     write_persisted_model,
 )
-from src.search_budget.curve import flat_curve
 from src.search_budget.labeling import (
     DeepSearchRecord,
     DeepSearchShardArtifact,
@@ -24,6 +23,7 @@ from src.search_budget.labeling import (
     PredictionRecord,
     PredictionShardArtifact,
 )
+from src.search_budget.policy import disabled_policy
 from src.search_budget.sampling import LabelPositionIdentity
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.checkpoint import CheckpointReference
@@ -86,7 +86,9 @@ class ConfiguredLabelWorkerRuntime:
             return
         self._search.refresh_model(checkpoint.generation, str(checkpoint.inference_model_path))
         self._search.update_search_schedule(
-            self._game.native_search_parameters(self._game.self_play_parameters_at(checkpoint.generation, flat_curve()))
+            self._game.native_search_parameters(
+                self._game.self_play_parameters_at(checkpoint.generation, disabled_policy())
+            )
         )
 
     def predict(self, positions: tuple[LabelPositionSource, ...]) -> tuple[PredictionRecord, ...]:
@@ -107,8 +109,7 @@ class ConfiguredLabelWorkerRuntime:
         return tuple(
             PredictionRecord(
                 identity=source.identity,
-                search_budget_logit=result.search_budget_logit,
-                predicted_quantile=result.predicted_search_budget,
+                predicted_curve=tuple(result.predicted_budget_curve),
             )
             for source, result in zip(positions, results, strict=True)
         )
@@ -146,6 +147,7 @@ class ConfiguredLabelWorkerRuntime:
                 checkpoints=tuple(
                     PolicyCheckpointRecord(
                         visits=checkpoint.visits,
+                        root_value=checkpoint.root_value,
                         policy_target_visits=SearchVisitCounts.from_native(tuple(checkpoint.policy_target_visits)),
                     )
                     for checkpoint in result.checkpoints
@@ -167,7 +169,7 @@ class ConfiguredLabelWorkerRuntime:
         from src.games.go.training import GoImplementation
         from src.self_play.configuration import BatchedInferenceParams
 
-        parameters = self._game.self_play_parameters_at(checkpoint.generation, flat_curve())
+        parameters = self._game.self_play_parameters_at(checkpoint.generation, disabled_policy())
         source_inference = self._game.self_play_configuration.inference
         inference = BatchedInferenceParams(
             inference_workers=1,

@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import numpy as np
 from src.games.contracts import WdlTarget
-from src.search_budget.curve import SearchBudgetCurve
+from src.search_budget.policy import BASELINE_CURVE_INDEX, SearchBudgetPolicy
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
@@ -131,8 +131,10 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             fsync_directory(self.inbox_path)
         self.active_games = next_games
 
-    def refresh_published_model(self, checkpoint: CheckpointReference, search_budget_curve: SearchBudgetCurve) -> None:
-        parameters = self.game.self_play_parameters_at(checkpoint.generation, search_budget_curve)
+    def refresh_published_model(
+        self, checkpoint: CheckpointReference, search_budget_policy: SearchBudgetPolicy
+    ) -> None:
+        parameters = self.game.self_play_parameters_at(checkpoint.generation, search_budget_policy)
         if self.search is None:
             self.search = self.game.create_native_search(self.device_id, checkpoint, parameters)
             capacity_changed = False
@@ -290,8 +292,8 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             network_root_value=result.network_root_value,
             policy_correction=result.policy_correction,
             value_correction=result.value_correction,
-            search_budget_logit=result.search_budget_logit,
-            predicted_search_budget=result.predicted_search_budget,
+            predicted_baseline_log_kl=result.predicted_budget_curve[BASELINE_CURVE_INDEX],
+            selected_budget_index=result.selected_budget_index,
             assigned_additional_visits=result.assigned_additional_visits,
             parallel_searches=result.parallel_searches,
             spend_residual=result.spend_residual,

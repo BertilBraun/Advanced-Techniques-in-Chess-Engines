@@ -49,8 +49,8 @@ class SearchBudgetTelemetry:
     baseline_visits: tuple[int, ...]
     final_visits: tuple[int, ...]
     assigned_additional_visits: tuple[int, ...]
-    search_budget_logits: tuple[float, ...]
-    predicted_search_budgets: tuple[float, ...]
+    predicted_baseline_log_kls: tuple[float, ...]
+    selected_budget_indices: tuple[int, ...]
     parallel_searches: tuple[int, ...]
     spend_residuals: tuple[int, ...]
     starting_visits: tuple[int, ...]
@@ -69,8 +69,8 @@ def search_budget_telemetry(
         baseline_visits=tuple(observation.baseline_visits for observation in observations),
         final_visits=tuple(observation.final_visits for observation in observations),
         assigned_additional_visits=tuple(observation.assigned_additional_visits for observation in observations),
-        search_budget_logits=tuple(observation.search_budget_logit for observation in observations),
-        predicted_search_budgets=tuple(observation.predicted_search_budget for observation in observations),
+        predicted_baseline_log_kls=tuple(observation.predicted_baseline_log_kl for observation in observations),
+        selected_budget_indices=tuple(observation.selected_budget_index for observation in observations),
         parallel_searches=tuple(observation.parallel_searches for observation in observations),
         spend_residuals=tuple(observation.spend_residual for observation in observations),
         starting_visits=tuple(observation.starting_visits for observation in observations),

@@ -108,8 +108,8 @@ class SealedSearchObservation(FrozenModel):
     network_root_value: float = Field(ge=-1.0, le=1.0)
     policy_correction: float = Field(ge=0.0, le=1.0)
     value_correction: float = Field(ge=0.0, le=1.0)
-    search_budget_logit: float
-    predicted_search_budget: float = Field(ge=0.0, le=1.0)
+    predicted_baseline_log_kl: float
+    selected_budget_index: int = Field(ge=-1, lt=10)
     assigned_additional_visits: int = Field(gt=0)
     parallel_searches: int = Field(gt=0, le=16)
     spend_residual: int
@@ -126,8 +126,8 @@ class SealedSearchObservation(FrozenModel):
             raise ValueError('Final root visits cannot precede retained starting visits.')
         if self.final_visits - self.starting_visits != self.assigned_additional_visits:
             raise ValueError('Final visits must equal retained starting visits plus the assigned additional budget.')
-        if not isfinite(self.search_budget_logit):
-            raise ValueError('Search-budget logits must be finite.')
+        if not isfinite(self.predicted_baseline_log_kl):
+            raise ValueError('Predicted baseline log KL must be finite.')
 
 
 class SearchObservation(SealedSearchObservation):

@@ -600,10 +600,8 @@ class ReplayStore:
                     if int(target.eligible[0]):
                         auxiliary_targets.append(
                             EligibleSearchBudgetTarget(
-                                normalized_target=float(target.value[0]),
+                                curve=tuple(float(value) for value in target.value[0]),
                                 raw_kl=float(target.raw_kl[0]),
-                                prediction_logit=float(target.prediction_logit[0]),
-                                predicted_quantile=float(target.predicted_quantile[0]),
                                 source_generation=int(target.source_generation[0]),
                                 model_generation=int(target.model_generation[0]),
                                 inference_model_sha256=target.inference_model_sha256[0].tobytes().decode('ascii'),
@@ -753,11 +751,9 @@ def _validate_eligible_values(
 
 def _validate_search_budget_columns(target: ReplaySearchBudgetColumnViews) -> None:
     eligible = target.eligible.astype(np.bool_)
-    _validate_eligible_values(target.value, target.eligible, minimum=0.0, maximum=1.0)
+    if np.any(~np.isfinite(target.value[eligible])):
+        raise ValueError('Eligible replay search-budget curve targets must be finite.')
     _validate_eligible_values(target.raw_kl, target.eligible, minimum=0.0, maximum=None)
-    if np.any(~np.isfinite(target.prediction_logit[eligible])):
-        raise ValueError('Eligible replay search-budget logits must be finite.')
-    _validate_eligible_values(target.predicted_quantile, target.eligible, minimum=0.0, maximum=1.0)
     digests = target.inference_model_sha256[eligible]
     for digest in digests:
         try:

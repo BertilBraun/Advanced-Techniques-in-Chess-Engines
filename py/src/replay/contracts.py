@@ -6,6 +6,7 @@ from typing import Literal, TypeAlias
 
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlanePayload
+from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.self_play.completed_game import SearchVisitCounts
 
 
@@ -69,10 +70,8 @@ class IneligibleScalarAuxiliaryTarget:
 
 @dataclass(frozen=True)
 class EligibleSearchBudgetTarget:
-    normalized_target: float
+    curve: tuple[float, ...]
     raw_kl: float
-    prediction_logit: float
-    predicted_quantile: float
     source_generation: int
     model_generation: int
     inference_model_sha256: str
@@ -80,14 +79,10 @@ class EligibleSearchBudgetTarget:
     eligible: Literal[True] = True
 
     def __post_init__(self) -> None:
-        if not isfinite(self.normalized_target) or not 0.0 <= self.normalized_target <= 1.0:
-            raise ValueError('Search-budget targets must lie in [0, 1].')
+        if len(self.curve) != BUDGET_CURVE_POINTS or any(not isfinite(value) for value in self.curve):
+            raise ValueError('Search-budget curve targets require one finite value per grid point.')
         if not isfinite(self.raw_kl) or self.raw_kl < 0.0:
             raise ValueError('Search-budget raw KL must be finite and nonnegative.')
-        if not isfinite(self.prediction_logit):
-            raise ValueError('Search-budget prediction logits must be finite.')
-        if not isfinite(self.predicted_quantile) or not 0.0 <= self.predicted_quantile <= 1.0:
-            raise ValueError('Search-budget predicted quantiles must lie in [0, 1].')
         if self.source_generation < 0 or self.model_generation < 0:
             raise ValueError('Search-budget source and model generations must be nonnegative.')
         if len(self.inference_model_sha256) != 64 or any(

@@ -226,12 +226,12 @@ class ResolvedTrainingObjective(FrozenModel):
                 eligible_rows = eligibility.to(dtype=torch.bool)
                 rows = torch.zeros(prediction.shape[0], dtype=prediction.dtype, device=prediction.device)
                 rows[eligible_rows] = (
-                    functional.l1_loss(
-                        torch.sigmoid(prediction[eligible_rows]),
+                    functional.smooth_l1_loss(
+                        prediction[eligible_rows],
                         target[eligible_rows],
                         reduction='none',
                     )
-                    .squeeze(1)
+                    .mean(dim=1)
                     .to(dtype=rows.dtype)
                 )
             case ResolvedLegalMovesLoss():

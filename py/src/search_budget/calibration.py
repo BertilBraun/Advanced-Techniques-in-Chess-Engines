@@ -7,325 +7,262 @@ from enum import Enum
 from pathlib import Path
 
 from pydantic import Field, ValidationError, model_validator
-from src.search_budget.curve import (
-    CURVE_BUCKET_COUNT,
-    SearchBudgetCurve,
-    analytic_initial_curve,
-    bounded_curve_toward,
-    flat_curve,
-    update_shadow_curve,
-)
+from src.search_budget.policy import BUDGET_CURVE_POINTS, SearchBudgetPolicy
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 
 
-class CurveDecisionReason(str, Enum):
+class BudgetDecisionReason(str, Enum):
     INITIAL = 'initial'
     WARMUP = 'warmup'
-    VALIDATED_PENDING = 'validated_pending'
-    NO_ELIGIBLE_PENDING = 'no_eligible_pending'
+    APPLIED = 'applied'
+    GATE_CLOSED = 'gate_closed'
     TERMINAL_FAILURE = 'terminal_failure'
     INCOMPATIBLE_STATE = 'incompatible_state'
     INVALID_COMPUTE = 'invalid_compute'
     UNREADABLE_STATE = 'unreadable_state'
 
 
-class CurveEligibilityFailure(str, Enum):
-    NO_PENDING_CURVE = 'no_pending_curve'
+class BudgetEligibilityFailure(str, Enum):
     WARMUP = 'warmup'
     NON_POSITIVE_CURRENT_GAIN = 'non_positive_current_gain'
     NON_POSITIVE_EMA_GAIN = 'non_positive_ema_gain'
-    SPEND_MISMATCH = 'spend_mismatch'
+
+
+_FAIL_CLOSED_REASONS = frozenset(
+    {
+        BudgetDecisionReason.TERMINAL_FAILURE,
+        BudgetDecisionReason.INCOMPATIBLE_STATE,
+        BudgetDecisionReason.INVALID_COMPUTE,
+        BudgetDecisionReason.UNREADABLE_STATE,
+    }
+)
 
 
 @dataclass(frozen=True)
-class CurveCalibrationParameters:
+class BudgetCalibrationParameters:
     warmup_completed_generations: int = 30
-    bucket_utility_ema_decay: Decimal = Decimal('0.2')
+    sigma_ema_decay: Decimal = Decimal('0.1')
     validation_gain_ema_decay: Decimal = Decimal('0.2')
-    maximum_step_ratio: Decimal = Decimal('1.1')
+    initial_tau: Decimal = Decimal('0.1')
+    tau_step_ratio: Decimal = Decimal('1.05')
+    selection_threshold: Decimal = Decimal('0.8')
 
     def __post_init__(self) -> None:
         if self.warmup_completed_generations <= 0:
-            raise ValueError('Curve warm-up must span a positive number of completed label generations.')
-        if not Decimal(0) < self.bucket_utility_ema_decay <= Decimal(1):
-            raise ValueError('Bucket-utility EMA decay must lie in (0, 1].')
+            raise ValueError('Budget warm-up must span a positive number of completed label generations.')
+        if not Decimal(0) < self.sigma_ema_decay <= Decimal(1):
+            raise ValueError('Sigma EMA decay must lie in (0, 1].')
         if not Decimal(0) < self.validation_gain_ema_decay <= Decimal(1):
             raise ValueError('Validation-gain EMA decay must lie in (0, 1].')
-        if self.maximum_step_ratio <= Decimal(1):
-            raise ValueError('The maximum multiplicative curve step must exceed one.')
+        if self.initial_tau <= Decimal(0):
+            raise ValueError('The initial tau threshold must be positive.')
+        if self.tau_step_ratio <= Decimal(1):
+            raise ValueError('The per-generation tau step ratio must exceed one.')
+        if not Decimal(0) < self.selection_threshold < Decimal(1):
+            raise ValueError('The selection threshold must lie strictly in (0, 1).')
 
 
-class BucketGenerationEvidence(FrozenModel):
-    bucket_index: int = Field(ge=0, lt=CURVE_BUCKET_COUNT)
-    sample_count: int = Field(ge=0)
-    generation_marginal_utility: float | None
-
-    @model_validator(mode='after')
-    def validate_observation(self) -> BucketGenerationEvidence:
-        if (self.sample_count == 0) != (self.generation_marginal_utility is None):
-            raise ValueError('Only an empty bucket may omit generation marginal utility.')
-        if self.generation_marginal_utility is not None and not math.isfinite(self.generation_marginal_utility):
-            raise ValueError('Generation marginal utility must be finite.')
-        return self
-
-
-class CurveGenerationEvidence(FrozenModel):
-    bucket_evidence: tuple[BucketGenerationEvidence, ...] = Field(
-        min_length=CURVE_BUCKET_COUNT,
-        max_length=CURVE_BUCKET_COUNT,
-    )
-    validated_curve: SearchBudgetCurve | None
-    generation_gain: float | None
-    total_assigned_new_visits: int | None = Field(default=None, gt=0)
-    flat_total_new_visits: int = Field(gt=0)
+class BudgetGenerationEvidence(FrozenModel):
     position_count: int = Field(gt=0)
+    mean_absolute_curve_error: tuple[float, ...] = Field(
+        min_length=BUDGET_CURVE_POINTS,
+        max_length=BUDGET_CURVE_POINTS,
+    )
+    generation_gain: float
+    realized_mean_multiple: float = Field(gt=0.0)
+    realized_mean_assigned_visits: float = Field(gt=0.0)
+    flat_mean_assigned_visits: float = Field(gt=0.0)
+    selected_index_counts: tuple[int, ...] = Field(
+        min_length=BUDGET_CURVE_POINTS,
+        max_length=BUDGET_CURVE_POINTS,
+    )
 
     @model_validator(mode='after')
-    def validate_evidence(self) -> CurveGenerationEvidence:
-        if tuple(bucket.bucket_index for bucket in self.bucket_evidence) != tuple(range(CURVE_BUCKET_COUNT)):
-            raise ValueError('Curve evidence must contain every bucket exactly once in order.')
-        fields_present = (
-            self.validated_curve is not None,
-            self.generation_gain is not None,
-            self.total_assigned_new_visits is not None,
-        )
-        if len(set(fields_present)) != 1:
-            raise ValueError('Pending-curve validation fields must all be present or all absent.')
-        if self.generation_gain is not None and not math.isfinite(self.generation_gain):
+    def validate_evidence(self) -> BudgetGenerationEvidence:
+        if any(not math.isfinite(value) or value < 0.0 for value in self.mean_absolute_curve_error):
+            raise ValueError('Curve-error evidence must be finite and nonnegative.')
+        if not math.isfinite(self.generation_gain):
             raise ValueError('Generation validation gain must be finite.')
+        if not math.isfinite(self.realized_mean_multiple):
+            raise ValueError('Realized mean multiple must be finite.')
+        if any(count < 0 for count in self.selected_index_counts):
+            raise ValueError('Selected-index counts must be nonnegative.')
+        if sum(self.selected_index_counts) != self.position_count:
+            raise ValueError('Selected-index counts must cover every labelled position exactly once.')
         return self
 
 
-class BucketCalibrationState(FrozenModel):
-    bucket_index: int = Field(ge=0, lt=CURVE_BUCKET_COUNT)
-    sample_count: int = Field(ge=0)
-    current_generation_utility: float | None
-    ema_utility: float | None
-    raw_log_update: float
-    projection_adjustment: float
-
-    @model_validator(mode='after')
-    def validate_finite_state(self) -> BucketCalibrationState:
-        values = (
-            self.current_generation_utility,
-            self.ema_utility,
-            self.raw_log_update,
-            self.projection_adjustment,
-        )
-        if any(value is not None and not math.isfinite(value) for value in values):
-            raise ValueError('Persisted bucket calibration values must be finite.')
-        return self
-
-
-class CurveCalibrationState(FrozenModel):
-    schema_version: int = Field(default=2, ge=2, le=2)
+class BudgetCalibrationState(FrozenModel):
+    schema_version: int = Field(default=3, ge=3, le=3)
     configuration_sha256: str = Field(min_length=64, max_length=64)
     finalized_source_generations: tuple[int, ...]
-    bucket_states: tuple[BucketCalibrationState, ...] = Field(
-        min_length=CURVE_BUCKET_COUNT,
-        max_length=CURVE_BUCKET_COUNT,
-    )
-    shadow_curve: SearchBudgetCurve
-    pending_curve: SearchBudgetCurve | None
-    pending_source_generation: int | None = Field(default=None, ge=0)
-    previous_published_curve: SearchBudgetCurve
-    published_curve: SearchBudgetCurve
-    application_generation: int = Field(ge=0)
+    sigma: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
+    log_tau: float
     current_validation_gain: float | None
     ema_validation_gain: float | None
-    failed_eligibility_conditions: tuple[CurveEligibilityFailure, ...]
-    decision_reason: CurveDecisionReason
+    realized_mean_multiple: float | None
+    previous_published_policy: SearchBudgetPolicy
+    published_policy: SearchBudgetPolicy
+    application_generation: int = Field(ge=0)
+    failed_eligibility_conditions: tuple[BudgetEligibilityFailure, ...]
+    decision_reason: BudgetDecisionReason
 
     @model_validator(mode='after')
-    def validate_state(self) -> CurveCalibrationState:
+    def validate_state(self) -> BudgetCalibrationState:
         if tuple(sorted(set(self.finalized_source_generations))) != self.finalized_source_generations:
             raise ValueError('Finalized source generations must be unique and increasing.')
-        if tuple(bucket.bucket_index for bucket in self.bucket_states) != tuple(range(CURVE_BUCKET_COUNT)):
-            raise ValueError('Calibration state must contain every bucket exactly once in order.')
-        if (self.pending_curve is None) != (self.pending_source_generation is None):
-            raise ValueError('Pending curve and its construction generation must be present together.')
+        if any(not math.isfinite(value) or value <= 0.0 for value in self.sigma):
+            raise ValueError('Persisted sigma values must be finite and positive.')
+        if not math.isfinite(self.log_tau):
+            raise ValueError('Persisted log tau must be finite.')
         if any(
             value is not None and not math.isfinite(value)
-            for value in (self.current_validation_gain, self.ema_validation_gain)
+            for value in (self.current_validation_gain, self.ema_validation_gain, self.realized_mean_multiple)
         ):
-            raise ValueError('Persisted curve validation gains must be finite.')
+            raise ValueError('Persisted calibration statistics must be finite.')
         return self
 
 
-class CurvePublication(FrozenModel):
-    curve: SearchBudgetCurve
+class BudgetPolicyPublication(FrozenModel):
+    policy: SearchBudgetPolicy
     application_generation: int = Field(ge=0)
-    decision_reason: CurveDecisionReason
+    decision_reason: BudgetDecisionReason
 
 
 @dataclass(frozen=True)
 class CalibrationUpdate:
-    state: CurveCalibrationState
+    state: BudgetCalibrationState
     applied: bool
 
 
-def initial_calibration_state(configuration_sha256: str) -> CurveCalibrationState:
-    return CurveCalibrationState(
+def initial_calibration_state(
+    configuration_sha256: str,
+    parameters: BudgetCalibrationParameters = BudgetCalibrationParameters(),
+) -> BudgetCalibrationState:
+    policy = SearchBudgetPolicy(
+        sigma=(1.0,) * BUDGET_CURVE_POINTS,
+        log_tau=_initial_log_tau(parameters),
+        selection_threshold=float(parameters.selection_threshold),
+        apply_learned=False,
+    )
+    return BudgetCalibrationState(
         configuration_sha256=configuration_sha256,
         finalized_source_generations=(),
-        bucket_states=tuple(
-            BucketCalibrationState(
-                bucket_index=index,
-                sample_count=0,
-                current_generation_utility=None,
-                ema_utility=None,
-                raw_log_update=0.0,
-                projection_adjustment=0.0,
-            )
-            for index in range(CURVE_BUCKET_COUNT)
-        ),
-        shadow_curve=analytic_initial_curve(),
-        pending_curve=None,
-        previous_published_curve=flat_curve(),
-        published_curve=flat_curve(),
-        application_generation=0,
+        sigma=policy.sigma,
+        log_tau=policy.log_tau,
         current_validation_gain=None,
         ema_validation_gain=None,
-        failed_eligibility_conditions=(CurveEligibilityFailure.NO_PENDING_CURVE,),
-        decision_reason=CurveDecisionReason.INITIAL,
+        realized_mean_multiple=None,
+        previous_published_policy=policy,
+        published_policy=policy,
+        application_generation=0,
+        failed_eligibility_conditions=(BudgetEligibilityFailure.WARMUP,),
+        decision_reason=BudgetDecisionReason.INITIAL,
+    )
+
+
+def working_policy(state: BudgetCalibrationState) -> SearchBudgetPolicy:
+    """The learned rule as the calibrator sees it, used for shadow allocation whatever the gate says."""
+    return SearchBudgetPolicy(
+        sigma=state.sigma,
+        log_tau=state.log_tau,
+        selection_threshold=state.published_policy.selection_threshold,
+        apply_learned=True,
     )
 
 
 def update_calibration(
-    state: CurveCalibrationState,
+    state: BudgetCalibrationState,
     source_generation: int,
-    evidence: CurveGenerationEvidence,
+    evidence: BudgetGenerationEvidence,
     first_unstarted_production_generation: int,
-    parameters: CurveCalibrationParameters = CurveCalibrationParameters(),
+    parameters: BudgetCalibrationParameters = BudgetCalibrationParameters(),
 ) -> CalibrationUpdate:
     if source_generation < 0:
         raise ValueError('Source generation must be nonnegative.')
     if first_unstarted_production_generation <= source_generation:
-        raise ValueError('Curve publication must apply after its source generation.')
+        raise ValueError('Budget-policy publication must apply after its source generation.')
     if source_generation in state.finalized_source_generations:
         return CalibrationUpdate(state=state, applied=False)
     if state.finalized_source_generations and source_generation < state.finalized_source_generations[-1]:
         raise ValueError('Source-generation label jobs must finalize in source order.')
-    if evidence.validated_curve != state.pending_curve:
-        raise ValueError('Generation evidence must validate the curve pending before its search started.')
-    if state.pending_source_generation is not None and state.pending_source_generation >= source_generation:
-        raise ValueError('A pending curve must be validated on a later source generation.')
 
-    utility_decay = float(parameters.bucket_utility_ema_decay)
-    previous_buckets = {bucket.bucket_index: bucket for bucket in state.bucket_states}
-    ema_utilities: list[float | None] = []
-    for bucket in evidence.bucket_evidence:
-        previous = previous_buckets[bucket.bucket_index]
-        if bucket.generation_marginal_utility is None:
-            ema_utilities.append(previous.ema_utility)
-        elif previous.ema_utility is None:
-            ema_utilities.append(bucket.generation_marginal_utility)
-        else:
-            ema_utilities.append(
-                (1.0 - utility_decay) * previous.ema_utility + utility_decay * bucket.generation_marginal_utility
-            )
-    curve_update = update_shadow_curve(
-        state.shadow_curve,
-        tuple(ema_utilities),
-        tuple(bucket.sample_count for bucket in evidence.bucket_evidence),
-        float(parameters.maximum_step_ratio),
+    sigma_decay = float(parameters.sigma_ema_decay)
+    sigma = tuple(
+        (1.0 - sigma_decay) * previous + sigma_decay * max(error, 1e-9)
+        for previous, error in zip(state.sigma, evidence.mean_absolute_curve_error, strict=True)
     )
+    maximum_step = math.log(float(parameters.tau_step_ratio))
+    tau_step = min(max(math.log(evidence.realized_mean_multiple), -maximum_step), maximum_step)
+    log_tau = state.log_tau + tau_step
+
     current_gain = evidence.generation_gain
-    if current_gain is None:
-        ema_gain = state.ema_validation_gain
-    elif state.ema_validation_gain is None:
+    if state.ema_validation_gain is None:
         ema_gain = current_gain
     else:
-        validation_decay = float(parameters.validation_gain_ema_decay)
-        ema_gain = (1.0 - validation_decay) * state.ema_validation_gain + validation_decay * current_gain
+        gain_decay = float(parameters.validation_gain_ema_decay)
+        ema_gain = (1.0 - gain_decay) * state.ema_validation_gain + gain_decay * current_gain
 
     completed_count = len(state.finalized_source_generations) + 1
-    failures = _eligibility_failures(evidence, ema_gain, completed_count, parameters)
-    previous_published = published_curve_for_generation(state, max(0, first_unstarted_production_generation - 1))
-    if not failures:
-        assert state.pending_curve is not None
-        published = state.pending_curve
-        decision_reason = CurveDecisionReason.VALIDATED_PENDING
-    elif CurveEligibilityFailure.WARMUP in failures:
-        # Nothing has been validated yet, so there is no earlier curve to fall back towards.
-        published = flat_curve()
-        decision_reason = CurveDecisionReason.WARMUP
-    else:
-        # Single-generation gain is noisy enough to go negative on its own, and republishing a flat
-        # curve threw away every validated bucket and cost ~30 generations of bounded steps to climb
-        # back. Decay towards flat at the same 10% per-generation bound the curve rises by, so a noisy
-        # generation pauses progress and only a persistent negative gain disables the curve.
-        published = bounded_curve_toward(previous_published, flat_curve(), float(parameters.maximum_step_ratio))
-        decision_reason = CurveDecisionReason.NO_ELIGIBLE_PENDING
-    pending = bounded_curve_toward(published, curve_update.curve, float(parameters.maximum_step_ratio))
-    bucket_states = tuple(
-        BucketCalibrationState(
-            bucket_index=bucket.bucket_index,
-            sample_count=bucket.sample_count,
-            current_generation_utility=bucket.generation_marginal_utility,
-            ema_utility=ema_utility,
-            raw_log_update=raw_update,
-            projection_adjustment=projection_adjustment,
-        )
-        for bucket, ema_utility, raw_update, projection_adjustment in zip(
-            evidence.bucket_evidence,
-            ema_utilities,
-            curve_update.raw_log_updates,
-            curve_update.projection_adjustments,
-            strict=True,
-        )
+    failures = _eligibility_failures(current_gain, ema_gain, completed_count, parameters)
+    published = SearchBudgetPolicy(
+        sigma=sigma,
+        log_tau=log_tau,
+        selection_threshold=float(parameters.selection_threshold),
+        apply_learned=not failures,
     )
-    next_state = CurveCalibrationState(
+    if not failures:
+        decision_reason = BudgetDecisionReason.APPLIED
+    elif BudgetEligibilityFailure.WARMUP in failures:
+        decision_reason = BudgetDecisionReason.WARMUP
+    else:
+        decision_reason = BudgetDecisionReason.GATE_CLOSED
+    previous_published = published_policy_for_generation(state, max(0, first_unstarted_production_generation - 1))
+    next_state = BudgetCalibrationState(
         configuration_sha256=state.configuration_sha256,
         finalized_source_generations=(*state.finalized_source_generations, source_generation),
-        bucket_states=bucket_states,
-        shadow_curve=curve_update.curve,
-        pending_curve=pending,
-        pending_source_generation=source_generation,
-        previous_published_curve=previous_published,
-        published_curve=published,
-        application_generation=first_unstarted_production_generation,
+        sigma=sigma,
+        log_tau=log_tau,
         current_validation_gain=current_gain,
         ema_validation_gain=ema_gain,
+        realized_mean_multiple=evidence.realized_mean_multiple,
+        previous_published_policy=previous_published,
+        published_policy=published,
+        application_generation=first_unstarted_production_generation,
         failed_eligibility_conditions=failures,
         decision_reason=decision_reason,
     )
     return CalibrationUpdate(state=next_state, applied=True)
 
 
-def published_curve_for_generation(state: CurveCalibrationState, production_generation: int) -> SearchBudgetCurve:
+def published_policy_for_generation(state: BudgetCalibrationState, production_generation: int) -> SearchBudgetPolicy:
     if production_generation < 0:
         raise ValueError('Production generation must be nonnegative.')
     if production_generation < state.application_generation:
-        return state.previous_published_curve
-    return state.published_curve
+        return state.previous_published_policy
+    return state.published_policy
 
 
 def publish_fail_closed(
-    state: CurveCalibrationState,
+    state: BudgetCalibrationState,
     first_unstarted_production_generation: int,
-    reason: CurveDecisionReason,
-) -> CurveCalibrationState:
-    if reason not in {
-        CurveDecisionReason.TERMINAL_FAILURE,
-        CurveDecisionReason.INCOMPATIBLE_STATE,
-        CurveDecisionReason.INVALID_COMPUTE,
-        CurveDecisionReason.UNREADABLE_STATE,
-    }:
+    reason: BudgetDecisionReason,
+) -> BudgetCalibrationState:
+    if reason not in _FAIL_CLOSED_REASONS:
         raise ValueError('Fail-closed publication requires a failure decision reason.')
-    previous_curve = published_curve_for_generation(state, max(0, first_unstarted_production_generation - 1))
+    previous_policy = published_policy_for_generation(state, max(0, first_unstarted_production_generation - 1))
     return state.model_copy(
         update={
-            'previous_published_curve': previous_curve,
-            'published_curve': flat_curve(),
+            'previous_published_policy': previous_policy,
+            'published_policy': state.published_policy.model_copy(update={'apply_learned': False}),
             'application_generation': first_unstarted_production_generation,
             'decision_reason': reason,
         }
     )
 
 
-def save_calibration_state(path: Path, state: CurveCalibrationState) -> None:
+def save_calibration_state(path: Path, state: BudgetCalibrationState) -> None:
     write_text_atomically(path, state.model_dump_json(indent=2) + '\n')
 
 
@@ -333,50 +270,48 @@ def load_calibration_state_fail_closed(
     path: Path,
     expected_configuration_sha256: str,
     first_unstarted_production_generation: int,
-) -> CurveCalibrationState:
+    parameters: BudgetCalibrationParameters = BudgetCalibrationParameters(),
+) -> BudgetCalibrationState:
     try:
-        state = CurveCalibrationState.model_validate_json(path.read_text(encoding='utf-8'))
+        state = BudgetCalibrationState.model_validate_json(path.read_text(encoding='utf-8'))
     except (OSError, UnicodeError, ValidationError):
         return publish_fail_closed(
-            initial_calibration_state(expected_configuration_sha256),
+            initial_calibration_state(expected_configuration_sha256, parameters),
             first_unstarted_production_generation,
-            CurveDecisionReason.UNREADABLE_STATE,
+            BudgetDecisionReason.UNREADABLE_STATE,
         )
     if state.configuration_sha256 != expected_configuration_sha256:
         return publish_fail_closed(
-            initial_calibration_state(expected_configuration_sha256),
+            initial_calibration_state(expected_configuration_sha256, parameters),
             first_unstarted_production_generation,
-            CurveDecisionReason.INCOMPATIBLE_STATE,
+            BudgetDecisionReason.INCOMPATIBLE_STATE,
         )
     return state
 
 
-def publication_for_generation(state: CurveCalibrationState, production_generation: int) -> CurvePublication:
-    return CurvePublication(
-        curve=published_curve_for_generation(state, production_generation),
+def publication_for_generation(state: BudgetCalibrationState, production_generation: int) -> BudgetPolicyPublication:
+    return BudgetPolicyPublication(
+        policy=published_policy_for_generation(state, production_generation),
         application_generation=state.application_generation,
         decision_reason=state.decision_reason,
     )
 
 
+def _initial_log_tau(parameters: BudgetCalibrationParameters) -> float:
+    return math.log(float(parameters.initial_tau))
+
+
 def _eligibility_failures(
-    evidence: CurveGenerationEvidence,
-    ema_gain: float | None,
+    current_gain: float,
+    ema_gain: float,
     completed_count: int,
-    parameters: CurveCalibrationParameters,
-) -> tuple[CurveEligibilityFailure, ...]:
-    failures: list[CurveEligibilityFailure] = []
-    if evidence.validated_curve is None:
-        failures.append(CurveEligibilityFailure.NO_PENDING_CURVE)
+    parameters: BudgetCalibrationParameters,
+) -> tuple[BudgetEligibilityFailure, ...]:
+    failures: list[BudgetEligibilityFailure] = []
     if completed_count < parameters.warmup_completed_generations:
-        failures.append(CurveEligibilityFailure.WARMUP)
-    if evidence.generation_gain is None or evidence.generation_gain <= 0.0:
-        failures.append(CurveEligibilityFailure.NON_POSITIVE_CURRENT_GAIN)
-    if ema_gain is None or ema_gain <= 0.0:
-        failures.append(CurveEligibilityFailure.NON_POSITIVE_EMA_GAIN)
-    if (
-        evidence.total_assigned_new_visits is not None
-        and evidence.total_assigned_new_visits != evidence.flat_total_new_visits
-    ):
-        failures.append(CurveEligibilityFailure.SPEND_MISMATCH)
+        failures.append(BudgetEligibilityFailure.WARMUP)
+    if current_gain <= 0.0:
+        failures.append(BudgetEligibilityFailure.NON_POSITIVE_CURRENT_GAIN)
+    if ema_gain <= 0.0:
+        failures.append(BudgetEligibilityFailure.NON_POSITIVE_EMA_GAIN)
     return tuple(failures)

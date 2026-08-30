@@ -118,21 +118,17 @@ def _encode_sample(
             case (
                 SearchBudgetHeadLayout(),
                 EligibleSearchBudgetTarget(
-                    normalized_target=normalized_target,
+                    curve=curve,
                     raw_kl=raw_kl,
-                    prediction_logit=prediction_logit,
-                    predicted_quantile=predicted_quantile,
                     source_generation=source_generation,
                     model_generation=model_generation,
                     inference_model_sha256=inference_model_sha256,
                 ),
                 ReplaySearchBudgetColumnViews(),
             ):
-                destination.value[row_index] = normalized_target
+                destination.value[row_index] = curve
                 destination.eligible[row_index] = 1
                 destination.raw_kl[row_index] = raw_kl
-                destination.prediction_logit[row_index] = prediction_logit
-                destination.predicted_quantile[row_index] = predicted_quantile
                 destination.source_generation[row_index] = source_generation
                 destination.model_generation[row_index] = model_generation
                 destination.inference_model_sha256[row_index] = np.frombuffer(

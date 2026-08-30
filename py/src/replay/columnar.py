@@ -59,8 +59,6 @@ class ReplaySearchBudgetColumnViews:
     value: npt.NDArray[np.float32]
     eligible: npt.NDArray[np.uint8]
     raw_kl: npt.NDArray[np.float32]
-    prediction_logit: npt.NDArray[np.float32]
-    predicted_quantile: npt.NDArray[np.float32]
     source_generation: npt.NDArray[np.uint32]
     model_generation: npt.NDArray[np.uint32]
     inference_model_sha256: npt.NDArray[np.uint8]
@@ -139,8 +137,6 @@ def build_column_views(
                         value=_float32_array(arrays, ReplayColumnKind.AUXILIARY_VALUE, index),
                         eligible=_uint8_array(arrays, ReplayColumnKind.AUXILIARY_ELIGIBLE, index),
                         raw_kl=_float32_array(arrays, ReplayColumnKind.AUXILIARY_RAW_KL, index),
-                        prediction_logit=_float32_array(arrays, ReplayColumnKind.AUXILIARY_PREDICTION_LOGIT, index),
-                        predicted_quantile=_float32_array(arrays, ReplayColumnKind.AUXILIARY_PREDICTED_QUANTILE, index),
                         source_generation=_uint32_array(arrays, ReplayColumnKind.AUXILIARY_SOURCE_GENERATION, index),
                         model_generation=_uint32_array(arrays, ReplayColumnKind.AUXILIARY_MODEL_GENERATION, index),
                         inference_model_sha256=_uint8_array(
@@ -249,14 +245,6 @@ def _values_for_descriptor(
             return eligible
         case ReplaySearchBudgetColumnViews(raw_kl=raw_kl), ReplayColumnKind.AUXILIARY_RAW_KL:
             return raw_kl
-        case ReplaySearchBudgetColumnViews(
-            prediction_logit=prediction_logit
-        ), ReplayColumnKind.AUXILIARY_PREDICTION_LOGIT:
-            return prediction_logit
-        case ReplaySearchBudgetColumnViews(
-            predicted_quantile=predicted_quantile
-        ), ReplayColumnKind.AUXILIARY_PREDICTED_QUANTILE:
-            return predicted_quantile
         case ReplaySearchBudgetColumnViews(
             source_generation=source_generation
         ), ReplayColumnKind.AUXILIARY_SOURCE_GENERATION:

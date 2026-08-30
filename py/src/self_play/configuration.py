@@ -6,7 +6,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, JsonValue, model_serializer, model_validator
 from pydantic.functional_serializers import SerializerFunctionWrapHandler
-from src.search_budget.curve import SearchBudgetCurve
+from src.search_budget.policy import SearchBudgetPolicy
 from src.self_play.parameters import (
     ParentValueFirstPlayUrgencyParameters,
     RandomOpeningStartParameters,
@@ -255,7 +255,7 @@ class SelfPlayConfiguration(FrozenModel):
     def resolve(
         self,
         model_generation: int,
-        search_budget_curve: SearchBudgetCurve,
+        search_budget_policy: SearchBudgetPolicy,
         maximum_game_plies: int | None,
         value_discount_per_ply: float,
     ) -> ResolvedSelfPlayParameters:
@@ -263,7 +263,7 @@ class SelfPlayConfiguration(FrozenModel):
         return ResolvedSelfPlayParameters(
             start_position=self.start_position.resolve(model_generation),
             baseline_visits=search.baseline_visits.value_at(model_generation),
-            search_budget_curve=search_budget_curve,
+            search_budget_policy=search_budget_policy,
             virtual_loss_weight=search.virtual_loss_weight,
             forced_playout_coefficient=search.forced_playouts.resolved_coefficient(),
             exploration_constant=search.exploration_constant.value_at(model_generation),

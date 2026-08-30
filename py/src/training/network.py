@@ -345,7 +345,7 @@ class Network(nn.Module):
 
 class ZeroSearchBudgetHead(nn.Module):
     def forward(self, features: Tensor) -> Tensor:
-        return torch.zeros((features.shape[0], 1), dtype=features.dtype, device=features.device)
+        return torch.zeros((features.shape[0], 10), dtype=features.dtype, device=features.device)
 
 
 class InferenceNetwork(nn.Module):

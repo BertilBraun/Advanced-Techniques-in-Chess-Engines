@@ -464,7 +464,7 @@ def build_dense_targets(
                 auxiliary_eligibility.append(eligible_rows)
             case ReplaySearchBudgetColumnViews(value=value, eligible=eligible):
                 eligible_rows = eligible.astype(np.bool_, copy=False)
-                auxiliary_targets.append(np.where(eligible_rows, value, np.float32(0.0)).reshape(-1, 1))
+                auxiliary_targets.append(np.where(eligible_rows[:, np.newaxis], value, np.float32(0.0)))
                 auxiliary_legal_action_ids.append(empty_legal)
                 auxiliary_eligibility.append(eligible_rows)
             case ReplayLegalMovesColumnViews():

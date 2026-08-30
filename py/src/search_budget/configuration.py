@@ -25,14 +25,13 @@ class DeepLabelingConfiguration(FrozenModel):
     artifact_retention: LabelArtifactRetention = LabelArtifactRetention.RETAIN_ALL
 
 
-class CurveCalibrationConfiguration(FrozenModel):
-    bucket_count: int = Field(default=10, ge=2)
-    initializer_version: Literal['analytic_q5_v1'] = 'analytic_q5_v1'
+class BudgetPolicyCalibrationConfiguration(FrozenModel):
     warmup_completed_source_generations: int = Field(default=30, gt=0)
-    bucket_utility_ema_decay: Decimal = Field(default=Decimal('0.2'), gt=Decimal(0), le=Decimal(1))
+    sigma_ema_decay: Decimal = Field(default=Decimal('0.1'), gt=Decimal(0), le=Decimal(1))
     validation_gain_ema_decay: Decimal = Field(default=Decimal('0.2'), gt=Decimal(0), le=Decimal(1))
-    probe_ratio: Decimal = Field(default=Decimal('1.1'), gt=Decimal(1))
-    maximum_step_ratio: Decimal = Field(default=Decimal('1.1'), gt=Decimal(1))
+    initial_tau: Decimal = Field(default=Decimal('0.1'), gt=Decimal(0))
+    tau_step_ratio: Decimal = Field(default=Decimal('1.05'), gt=Decimal(1))
+    selection_threshold: Decimal = Field(default=Decimal('0.8'), gt=Decimal(0), lt=Decimal(1))
 
 
 class ProductionAllocationConfiguration(FrozenModel):
@@ -49,8 +48,8 @@ class SearchBudgetHeadTrainingConfiguration(FrozenModel):
 
 
 class SearchBudgetConfiguration(FrozenModel):
-    curve_version: Literal['live_ema_ten_bucket_v1'] = 'live_ema_ten_bucket_v1'
+    curve_version: Literal['predicted_kl_curve_v1'] = 'predicted_kl_curve_v1'
     labeling: DeepLabelingConfiguration = DeepLabelingConfiguration()
-    calibration: CurveCalibrationConfiguration = CurveCalibrationConfiguration()
+    calibration: BudgetPolicyCalibrationConfiguration = BudgetPolicyCalibrationConfiguration()
     production: ProductionAllocationConfiguration = ProductionAllocationConfiguration()
     head_training: SearchBudgetHeadTrainingConfiguration = SearchBudgetHeadTrainingConfiguration()
