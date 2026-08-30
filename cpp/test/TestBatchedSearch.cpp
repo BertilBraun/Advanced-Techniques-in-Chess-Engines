@@ -17,14 +17,20 @@ TreeSearchParameters treeSearchParameters(const float explorationConstant = 1.5F
 }
 
 std::filesystem::path createTestModel(const std::string &name, const float win, const float draw,
-                                      const float loss, const float searchBudgetLogit = 0.0F,
-                                      const bool validOutput = true) {
+                                      const float loss, const float searchBudgetValue = 0.0F,
+                                      const bool validOutput = true,
+                                      const bool validBudgetWidth = true) {
     torch::jit::script::Module model("batched_search_test");
     model.register_parameter("outcome_parameter",
                              validOutput ? torch::tensor({win, draw}) : torch::tensor({win}),
                              false);
     model.register_buffer("outcome_buffer", torch::tensor({loss}));
-    model.register_buffer("search_budget_logit", torch::tensor({searchBudgetLogit}));
+    model.register_buffer(
+        "search_budget_curve",
+        validBudgetWidth
+            ? torch::full({static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)},
+                          searchBudgetValue)
+            : torch::full({1}, searchBudgetValue));
     model.define(R"JIT(
         def forward(self, boards):
             batch_size = boards.size(0)
@@ -32,7 +38,7 @@ std::filesystem::path createTestModel(const std::string &name, const float win, 
                  std::to_string(ChessEncoding::actionCount) + R"JIT(), device=boards.device)
             outcome = torch.cat((self.outcome_parameter, self.outcome_buffer))
             outcomes = outcome.unsqueeze(0).repeat((batch_size, 1))
-            search_budgets = self.search_budget_logit.unsqueeze(0).repeat((batch_size, 1))
+            search_budgets = self.search_budget_curve.unsqueeze(0).repeat((batch_size, 1))
             return policies, outcomes, search_budgets
     )JIT");
     const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -88,37 +94,73 @@ int runBatchedSearchTests() {
         createTestModel("updated", 0.8F, 0.15F, 0.05F, 2.0F);
     const std::filesystem::path invalidModelPath =
         createTestModel("invalid", 0.5F, 0.5F, 0.0F, 0.0F, false);
+    const std::filesystem::path narrowBudgetModelPath =
+        createTestModel("narrow-budget", 0.5F, 0.5F, 0.0F, 0.0F, true, false);
     try {
-        const SearchBudgetCurve flatCurve;
-        const SearchBudgetCurve liveCurve(
-            {0.55, 0.65, 0.75, 0.85, 0.95, 1.05, 1.15, 1.25, 1.35, 1.45});
-        require(std::abs(std::accumulate(liveCurve.multipliers.begin(), liveCurve.multipliers.end(),
-                                         0.0) -
-                         10.0) < 1e-12,
-                "search-budget curve does not have uniform mean one");
-        require(searchBudgetMultiplier(liveCurve, 0.0F) == 0.55 &&
-                    searchBudgetMultiplier(liveCurve, std::nextafter(0.1F, 0.0F)) == 0.55 &&
-                    searchBudgetMultiplier(liveCurve, 0.1F) == 0.65 &&
-                    searchBudgetMultiplier(liveCurve, 1.0F) == 1.45,
-                "search-budget curve lost its equal-width bucket boundaries");
+        const SearchBudgetPolicy flatPolicy;
+        require(!flatPolicy.apply_learned, "default search-budget policy is not flat");
+        const std::array<double, 10> gridMultiples = {0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0,
+                                                      1.0,   1.5, 2.0,       3.0, 4.0};
+        const std::array<double, 10> unitSigma = {1.0, 1.0, 1.0, 1.0, 1.0,
+                                                  1.0, 1.0, 1.0, 1.0, 1.0};
+        const SearchBudgetPolicy learnedPolicy(gridMultiples, unitSigma, 1.0, 0.8, true);
         try {
-            static_cast<void>(
-                SearchBudgetCurve({1.0, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.1}));
-            throw std::runtime_error("non-monotone search-budget curve unexpectedly validated");
+            std::array<double, 10> nonIncreasing = gridMultiples;
+            nonIncreasing[3] = nonIncreasing[2];
+            static_cast<void>(SearchBudgetPolicy(nonIncreasing, unitSigma, 0.0, 0.8, true));
+            throw std::runtime_error("non-increasing grid multiples unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         try {
-            static_cast<void>(
-                SearchBudgetCurve({0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9}));
-            throw std::runtime_error("non-unit-mean search-budget curve unexpectedly validated");
+            std::array<double, 10> withoutBaseline = gridMultiples;
+            withoutBaseline[5] = 1.1;
+            static_cast<void>(SearchBudgetPolicy(withoutBaseline, unitSigma, 0.0, 0.8, true));
+            throw std::runtime_error("grid without the flat multiple unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         try {
-            static_cast<void>(
-                SearchBudgetCurve({0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0}));
-            throw std::runtime_error("nonpositive search-budget curve unexpectedly validated");
+            std::array<double, 10> zeroSigma = unitSigma;
+            zeroSigma[0] = 0.0;
+            static_cast<void>(SearchBudgetPolicy(gridMultiples, zeroSigma, 0.0, 0.8, true));
+            throw std::runtime_error("nonpositive sigma unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
+        try {
+            static_cast<void>(SearchBudgetPolicy(gridMultiples, unitSigma, 0.0, 1.0, true));
+            throw std::runtime_error("unit selection threshold unexpectedly validated");
+        } catch (const std::invalid_argument &) {
+        }
+
+        const SearchBudgetCurvePrediction unsortedPrediction = {5.0F, 1.0F, 4.0F, 2.0F, 3.0F,
+                                                                2.0F, 9.0F, 0.0F, 8.0F, 7.0F};
+        const SearchBudgetCurvePrediction expectedProjection = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
+                                                                0.0F, 0.0F, 0.0F, 7.0F, 7.0F};
+        require(isotonicFromTop(unsortedPrediction) == expectedProjection,
+                "isotonic projection is not the running minimum from the largest budget downward");
+
+        // With log_tau = 1 and unit sigma, Phi(1) ~= 0.841 > 0.8 qualifies a zero prediction.
+        SearchBudgetCurvePrediction cheapPrediction{};
+        require(selectBudgetIndex(learnedPolicy, cheapPrediction) == 0,
+                "a confidently cheap curve did not select the cheapest grid point");
+        SearchBudgetCurvePrediction hardPrediction;
+        hardPrediction.fill(5.0F);
+        require(selectBudgetIndex(learnedPolicy, hardPrediction) == 9,
+                "an unqualified curve did not fall back to the deepest grid point");
+        SearchBudgetCurvePrediction dippingPrediction;
+        dippingPrediction.fill(5.0F);
+        dippingPrediction[6] = -3.0F;
+        // Isotonic projection pulls indices 0..6 down to -3, so the earliest index qualifies.
+        require(selectBudgetIndex(learnedPolicy, dippingPrediction) == 0,
+                "isotonic projection did not propagate a deep-budget dip to cheaper budgets");
+        // A constant projected curve leaves only sigma to separate grid points: wide sigma
+        // blocks the cheap points and the first tight point qualifies.
+        const std::array<double, 10> mixedSigma = {5.0, 5.0, 5.0, 5.0, 1.0,
+                                                   1.0, 1.0, 1.0, 1.0, 1.0};
+        const SearchBudgetPolicy mixedSigmaPolicy(gridMultiples, mixedSigma, -2.0, 0.8, true);
+        SearchBudgetCurvePrediction constantPrediction;
+        constantPrediction.fill(-4.0F);
+        require(selectBudgetIndex(mixedSigmaPolicy, constantPrediction) == 4,
+                "selection did not choose the lowest qualifying grid point");
 
         const std::array<std::uint32_t, 5> budgets = {100, 300, 600, 1'600, 2'400};
         const std::array<std::uint32_t, 5> expectedParallelism = {2, 2, 4, 8, 16};
@@ -129,49 +171,40 @@ int runBatchedSearchTests() {
         require(searchParallelism(100'000) == 16, "production parallelism exceeded its cap");
 
         SearchBudgetAllocator allocator;
-        const PredictedSearchBudgetLimit allocationLimit(101, liveCurve);
-        std::uint64_t assignedTotal = 0;
+        const PredictedSearchBudgetLimit learnedLimit(101, learnedPolicy);
+        const AssignedSearchBudget firstAssigned = allocator.assign(learnedLimit, cheapPrediction);
+        require(firstAssigned.selected_index == 0 && firstAssigned.additional_visits == 13,
+                "first learned assignment did not round the cheapest grid budget");
+        std::uint64_t assignedTotal = firstAssigned.additional_visits;
         constexpr std::uint32_t allocationCount = 10'000;
-        for (const auto index : range(allocationCount)) {
+        for (const auto index : range(allocationCount - 1)) {
             static_cast<void>(index);
-            assignedTotal += allocator.assign(allocationLimit, 0.0F);
+            assignedTotal += allocator.assign(learnedLimit, cheapPrediction).additional_visits;
         }
-        const auto expectedFloorError = static_cast<std::int64_t>(assignedTotal) -
-                                        static_cast<std::int64_t>(allocationCount) * 101;
-        const std::int64_t strictErrorBound =
-            std::max<std::int64_t>(101 - static_cast<std::int64_t>(std::ceil(101.0 * 0.55)),
-                                   static_cast<std::int64_t>(std::floor(101.0 * 1.45)) - 101) +
-            1;
-        require(allocator.spendError() == expectedFloorError &&
-                    std::abs(allocator.spendError()) < strictErrorBound,
-                "all-floor predictions violated cumulative mean-spend accounting");
-        const std::int64_t errorBeforeFlatCurve = allocator.spendError();
-        const PredictedSearchBudgetLimit flatLimit(101, flatCurve);
-        std::uint64_t flatAssignedTotal = 0;
+        require(std::abs(static_cast<std::int64_t>(assignedTotal) -
+                         static_cast<std::int64_t>(allocationCount) * 101) <=
+                    8 * 101 + 1,
+                "constantly cheap predictions violated cumulative mean-spend accounting");
+        require(allocator.spendError() ==
+                    static_cast<std::int64_t>(assignedTotal) -
+                        static_cast<std::int64_t>(allocationCount) * 101,
+                "spend ledger does not equal assigned-minus-baseline");
+        const std::int64_t errorBeforeFlat = allocator.spendError();
+        const PredictedSearchBudgetLimit flatLimit(101, flatPolicy);
         for (const auto index : range(100)) {
             static_cast<void>(index);
-            flatAssignedTotal += allocator.assign(flatLimit, 0.0F);
+            const AssignedSearchBudget flatAssigned = allocator.assign(flatLimit, cheapPrediction);
+            require(flatAssigned.additional_visits == 101 && flatAssigned.selected_index == -1,
+                    "flat policy did not assign exactly the baseline");
         }
-        const std::int64_t flatCorrection =
-            static_cast<std::int64_t>(flatAssignedTotal) - 100 * 101;
-        require(allocator.spendError() == 0 && flatCorrection == -errorBeforeFlatCurve,
-                "flat curve did not repay the existing cumulative spend error");
-        for (const auto index : range(allocationCount)) {
-            static_cast<void>(index);
-            static_cast<void>(allocator.assign(allocationLimit, 1.0F));
-        }
-        require(std::abs(allocator.spendError()) < strictErrorBound,
-                "all-ceiling predictions violated cumulative mean-spend accounting");
-        const SearchBudgetCurve cappedCurve({0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 9.1});
-        SearchBudgetAllocator cappedAllocator;
-        require(cappedAllocator.assign(PredictedSearchBudgetLimit(101, cappedCurve), 1.0F) == 808,
-                "production allocation exceeded the eight-times-baseline deep reference");
-        require(maximumAdditionalVisits(PredictedSearchBudgetLimit(101, cappedCurve)) == 808,
+        require(allocator.spendError() == errorBeforeFlat,
+                "flat policy mutated the learned spend ledger");
+        require(maximumAdditionalVisits(learnedLimit) == 808,
                 "predicted search capacity did not use the eight-times-baseline cap");
 
         const InferenceConfiguration runtimeParameters(0, modelPath.string(), InferenceDevice::Cpu);
-        const SelfPlaySearchParameters searchParameters(16, flatCurve, treeSearchParameters(), 0.3F,
-                                                        0.0F);
+        const SelfPlaySearchParameters searchParameters(16, flatPolicy, treeSearchParameters(),
+                                                        0.3F, 0.0F);
         const BatchedInferenceParameters inferenceParameters(2, 8, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
         const auto baselineSizedRoot = search.newRoot(Board{});
@@ -215,9 +248,11 @@ int runBatchedSearchTests() {
                     "predicted allocation did not expose additional-visit semantics");
             require(result.parallel_searches == 2,
                     "small predicted budget used the wrong parallelism");
-            require(result.search_budget_logit == 0.0F &&
-                        std::abs(result.predicted_search_budget - 0.5F) < 1e-7F,
-                    "native root did not preserve raw and bounded search-budget outputs");
+            require(result.selected_budget_index == -1,
+                    "flat allocation reported a learned grid selection");
+            require(std::ranges::all_of(result.predicted_budget_curve,
+                                        [](const float value) { return value == 0.0F; }),
+                    "native root did not preserve the predicted budget curve");
         }
 
         ChessSelfPlaySearchRequest retained{
@@ -234,19 +269,23 @@ int runBatchedSearchTests() {
                     retainedResult.final_visits == 32,
                 "retained root treated the assigned budget as an absolute visit limit");
 
-        const SelfPlaySearchParameters liveCurveParameters(101, liveCurve, treeSearchParameters(),
-                                                           0.3F, 0.0F);
-        ChessSelfPlaySearch liveCurveSearch(runtimeParameters, liveCurveParameters,
-                                            inferenceParameters);
-        const auto liveCurveResult =
-            liveCurveSearch.search({productionRequest(liveCurveSearch)}).results.front();
-        require(liveCurveResult.spend_residual == liveCurveSearch.spendResidual(),
+        const SelfPlaySearchParameters learnedParameters(16, learnedPolicy,
+                                                         treeSearchParameters(), 0.3F, 0.0F);
+        ChessSelfPlaySearch learnedSearch(runtimeParameters, learnedParameters,
+                                          inferenceParameters);
+        const auto learnedResult =
+            learnedSearch.search({productionRequest(learnedSearch)}).results.front();
+        // The test model predicts a zero curve, which qualifies the cheapest grid point.
+        require(learnedResult.selected_budget_index == 0 &&
+                    learnedResult.assigned_additional_visits == 2,
+                "learned policy did not select and round the cheapest grid budget");
+        require(learnedResult.spend_residual == learnedSearch.spendResidual(),
                 "predicted request did not expose its exact post-assignment spend residual");
-        const std::int64_t residualBeforeExplicit = liveCurveSearch.spendResidual();
+        const std::int64_t residualBeforeExplicit = learnedSearch.spendResidual();
         const auto explicitResult =
-            liveCurveSearch.search({fixedRequest(liveCurveSearch, 50, {}, 1)}).results.front();
+            learnedSearch.search({fixedRequest(learnedSearch, 50, {}, 1)}).results.front();
         require(explicitResult.spend_residual == residualBeforeExplicit &&
-                    liveCurveSearch.spendResidual() == residualBeforeExplicit,
+                    learnedSearch.spendResidual() == residualBeforeExplicit,
                 "explicit deep-label budget mutated the production spend ledger");
 
         std::vector<ChessSelfPlaySearchRequest> heterogeneous;
@@ -275,6 +314,13 @@ int runBatchedSearchTests() {
                                         return !checkpoint.policy_target_visits.empty();
                                     }),
                 "policy checkpoint detail omitted a requested policy snapshot");
+        require(std::ranges::all_of(checkpointResult.checkpoints,
+                                    [](const SearchCheckpoint &checkpoint) {
+                                        return std::isfinite(checkpoint.root_value) &&
+                                               checkpoint.root_value >= -1.0F &&
+                                               checkpoint.root_value <= 1.0F;
+                                    }),
+                "policy checkpoints did not record a bounded root value");
 
         try {
             static_cast<void>(search.search({fixedRequest(search, 80, {40, 20}, 1)}));
@@ -290,12 +336,19 @@ int runBatchedSearchTests() {
         search.refreshModel(8, updatedModelPath.string());
         require(search.modelGeneration() == 8, "refresh did not publish its model generation");
         const auto updated = search.search({productionRequest(search)}).results.front();
-        require(std::abs(updated.search_budget_logit - 2.0F) < 1e-7F &&
-                    std::abs(updated.predicted_search_budget - 0.880797F) < 1e-6F,
-                "model refresh did not update the raw and bounded budget prediction");
+        require(std::ranges::all_of(updated.predicted_budget_curve,
+                                    [](const float value) {
+                                        return std::abs(value - 2.0F) < 1e-7F;
+                                    }),
+                "model refresh did not update the predicted budget curve");
         try {
             search.refreshModel(9, invalidModelPath.string());
             throw std::runtime_error("invalid model refresh unexpectedly succeeded");
+        } catch (const std::invalid_argument &) {
+        }
+        try {
+            search.refreshModel(9, narrowBudgetModelPath.string());
+            throw std::runtime_error("narrow search-budget head unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         require(search.modelGeneration() == 8,
@@ -304,10 +357,12 @@ int runBatchedSearchTests() {
         std::filesystem::remove(modelPath);
         std::filesystem::remove(updatedModelPath);
         std::filesystem::remove(invalidModelPath);
+        std::filesystem::remove(narrowBudgetModelPath);
         throw;
     }
     std::filesystem::remove(modelPath);
     std::filesystem::remove(updatedModelPath);
     std::filesystem::remove(invalidModelPath);
+    std::filesystem::remove(narrowBudgetModelPath);
     return 0;
 }

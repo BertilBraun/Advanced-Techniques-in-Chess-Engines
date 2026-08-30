@@ -31,8 +31,7 @@ template <SearchGame Game> struct GameSearchNode {
     float value_sum = 0.0F;
     float virtual_loss = 0.0F;
     bool inference_pending = false;
-    float search_budget_logit = 0.0F;
-    float search_budget = 0.5F;
+    SearchBudgetCurvePrediction search_budget_curve{};
     std::optional<WdlPrediction> network_outcome;
 
     [[nodiscard]] bool expanded() const noexcept { return !children.empty(); }

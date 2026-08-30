@@ -32,6 +32,7 @@ enum class SearchCheckpointDetail { Scalars, Policies };
 
 struct SearchCheckpoint {
     std::uint32_t visits;
+    float root_value;
     std::vector<GameSearchVisit> policy_target_visits;
 };
 
@@ -58,48 +59,96 @@ struct AdditionalSearchLimit {
     }
 };
 
-struct SearchBudgetCurve {
-    static constexpr std::size_t BUCKET_COUNT = 10;
-    std::array<double, BUCKET_COUNT> multipliers;
+struct SearchBudgetPolicy {
+    static constexpr std::size_t CURVE_POINTS = SEARCH_BUDGET_CURVE_POINTS;
+    std::array<double, CURVE_POINTS> multiples;
+    std::array<double, CURVE_POINTS> sigma;
+    double log_tau;
+    double selection_threshold;
+    bool apply_learned;
 
-    SearchBudgetCurve() : multipliers{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0} {}
-    explicit SearchBudgetCurve(std::array<double, BUCKET_COUNT> curveMultipliers)
-        : multipliers(std::move(curveMultipliers)) {
-        if (std::ranges::any_of(multipliers, [](const double multiplier) {
-                return !std::isfinite(multiplier) || multiplier <= 0.0;
+    SearchBudgetPolicy()
+        : multiples{0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5, 2.0, 3.0, 4.0},
+          sigma{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0}, log_tau(0.0),
+          selection_threshold(0.8), apply_learned(false) {}
+
+    SearchBudgetPolicy(std::array<double, CURVE_POINTS> gridMultiples,
+                       std::array<double, CURVE_POINTS> sigmaValues, const double logTau,
+                       const double selectionThreshold, const bool applyLearned)
+        : multiples(gridMultiples), sigma(sigmaValues), log_tau(logTau),
+          selection_threshold(selectionThreshold), apply_learned(applyLearned) {
+        if (std::ranges::any_of(multiples, [](const double multiple) {
+                return !std::isfinite(multiple) || multiple <= 0.0;
             })) {
             throw std::invalid_argument(
-                "Search-budget curve multipliers must be finite and positive");
+                "Search-budget grid multiples must be finite and positive");
         }
-        if (!std::ranges::is_sorted(multipliers)) {
+        for (std::size_t index = 1; index < CURVE_POINTS; ++index) {
+            if (multiples[index] <= multiples[index - 1]) {
+                throw std::invalid_argument(
+                    "Search-budget grid multiples must be strictly increasing");
+            }
+        }
+        if (std::ranges::none_of(multiples,
+                                 [](const double multiple) { return multiple == 1.0; })) {
+            throw std::invalid_argument("Search-budget grid must contain the flat multiple");
+        }
+        if (std::ranges::any_of(sigma, [](const double value) {
+                return !std::isfinite(value) || value <= 0.0;
+            })) {
+            throw std::invalid_argument("Search-budget sigma values must be finite and positive");
+        }
+        if (!std::isfinite(log_tau)) {
+            throw std::invalid_argument("Search-budget log tau must be finite");
+        }
+        if (!std::isfinite(selection_threshold) || selection_threshold <= 0.0 ||
+            selection_threshold >= 1.0) {
             throw std::invalid_argument(
-                "Search-budget curve multipliers must be monotone nondecreasing");
+                "Search-budget selection threshold must lie strictly in (0, 1)");
         }
-        const double sum = std::accumulate(multipliers.begin(), multipliers.end(), 0.0);
-        if (std::abs(sum - static_cast<double>(BUCKET_COUNT)) > 1e-6) {
-            throw std::invalid_argument(
-                "Search-budget curve multipliers must have arithmetic mean one");
-        }
-    }
-
-    [[nodiscard]] double multiplier(const float quantile) const {
-        if (!std::isfinite(quantile) || quantile < 0.0F || quantile > 1.0F) {
-            throw std::invalid_argument("Search-budget prediction must lie in [0, 1]");
-        }
-        const std::size_t bucket =
-            std::min(static_cast<std::size_t>(quantile * static_cast<float>(BUCKET_COUNT)),
-                     BUCKET_COUNT - 1);
-        return multipliers[bucket];
     }
 };
 
+// Running minimum from the largest budget downward: more search never predicts more error.
+[[nodiscard]] inline SearchBudgetCurvePrediction
+isotonicFromTop(SearchBudgetCurvePrediction values) {
+    for (std::size_t offset = 1; offset < values.size(); ++offset) {
+        const std::size_t index = values.size() - 1 - offset;
+        values[index] = std::min(values[index], values[index + 1]);
+    }
+    return values;
+}
+
+[[nodiscard]] inline double standardNormalCdf(const double value) {
+    return 0.5 * (1.0 + std::erf(value / std::sqrt(2.0)));
+}
+
+// Lowest grid point whose projected predicted log KL is confidently below log tau; the deepest
+// point when none qualifies.
+[[nodiscard]] inline std::size_t selectBudgetIndex(const SearchBudgetPolicy &policy,
+                                                   const SearchBudgetCurvePrediction &prediction) {
+    if (std::ranges::any_of(prediction,
+                            [](const float value) { return !std::isfinite(value); })) {
+        throw std::invalid_argument("Search-budget curve predictions must be finite");
+    }
+    const SearchBudgetCurvePrediction projected = isotonicFromTop(prediction);
+    for (std::size_t index = 0; index < projected.size(); ++index) {
+        const double probability = standardNormalCdf(
+            (policy.log_tau - static_cast<double>(projected[index])) / policy.sigma[index]);
+        if (probability > policy.selection_threshold) {
+            return index;
+        }
+    }
+    return projected.size() - 1;
+}
+
 struct PredictedSearchBudgetLimit {
     std::uint32_t baseline_visits;
-    SearchBudgetCurve curve;
+    SearchBudgetPolicy policy;
 
-    PredictedSearchBudgetLimit() : baseline_visits(1), curve() {}
-    PredictedSearchBudgetLimit(const std::uint32_t baselineVisits, SearchBudgetCurve budgetCurve)
-        : baseline_visits(baselineVisits), curve(std::move(budgetCurve)) {
+    PredictedSearchBudgetLimit() : baseline_visits(1), policy() {}
+    PredictedSearchBudgetLimit(const std::uint32_t baselineVisits, SearchBudgetPolicy budgetPolicy)
+        : baseline_visits(baselineVisits), policy(std::move(budgetPolicy)) {
         if (baseline_visits == 0) {
             throw std::invalid_argument("Predicted search-budget baseline must be positive");
         }
@@ -108,11 +157,6 @@ struct PredictedSearchBudgetLimit {
 
 using SearchLimit =
     std::variant<FixedSearchLimit, AdditionalSearchLimit, PredictedSearchBudgetLimit>;
-
-[[nodiscard]] inline double searchBudgetMultiplier(const SearchBudgetCurve &curve,
-                                                   const float quantile) {
-    return curve.multiplier(quantile);
-}
 
 [[nodiscard]] inline std::uint32_t searchParallelism(const std::uint32_t additionalVisits) {
     if (additionalVisits == 0) {
@@ -126,18 +170,27 @@ using SearchLimit =
     return std::min(parallelSearches, 16U);
 }
 
+struct AssignedSearchBudget {
+    std::uint32_t additional_visits;
+    int selected_index;
+};
+
 class SearchBudgetAllocator {
 public:
-    [[nodiscard]] std::uint32_t assign(const PredictedSearchBudgetLimit &limit,
-                                       const float predictedQuantile) {
-        const double multiplier = searchBudgetMultiplier(limit.curve, predictedQuantile);
+    [[nodiscard]] AssignedSearchBudget assign(const PredictedSearchBudgetLimit &limit,
+                                              const SearchBudgetCurvePrediction &prediction) {
+        if (!limit.policy.apply_learned) {
+            return {.additional_visits = limit.baseline_visits, .selected_index = -1};
+        }
         constexpr std::uint64_t maximumBaselineMultiple = 8;
         const std::uint64_t maximumVisits =
             static_cast<std::uint64_t>(limit.baseline_visits) * maximumBaselineMultiple;
         if (maximumVisits > std::numeric_limits<std::uint32_t>::max()) {
             throw std::overflow_error("Predicted search budget exceeds the visit range");
         }
-        const double ideal = static_cast<double>(limit.baseline_visits) * multiplier;
+        const std::size_t selectedIndex = selectBudgetIndex(limit.policy, prediction);
+        const double ideal =
+            static_cast<double>(limit.baseline_visits) * limit.policy.multiples[selectedIndex];
         const double corrected = ideal - static_cast<double>(m_spendError);
         const double rounded =
             std::clamp(std::floor(corrected + 0.5), 1.0, static_cast<double>(maximumVisits));
@@ -152,7 +205,8 @@ public:
             throw std::overflow_error("Search-budget spend ledger overflowed");
         }
         m_spendError += delta;
-        return assigned;
+        return {.additional_visits = assigned,
+                .selected_index = static_cast<int>(selectedIndex)};
     }
 
     [[nodiscard]] std::int64_t spendError() const noexcept { return m_spendError; }
@@ -193,8 +247,8 @@ struct GameSearchResult {
     float network_root_value;
     float policy_correction;
     float value_correction;
-    float search_budget_logit;
-    float predicted_search_budget;
+    SearchBudgetCurvePrediction predicted_budget_curve;
+    int selected_budget_index;
     std::uint32_t assigned_additional_visits;
     std::uint32_t parallel_searches;
     std::int64_t spend_residual;

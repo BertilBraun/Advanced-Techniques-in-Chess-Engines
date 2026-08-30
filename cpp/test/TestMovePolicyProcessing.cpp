@@ -60,10 +60,13 @@ std::vector<float> finiteLogits() {
     return policy;
 }
 
+constexpr SearchBudgetCurvePrediction zeroBudgetCurve{};
+
 void requireNormalized(const Board &board, const std::vector<float> &policy,
                        const std::string &description) {
     const SearchInferenceResult<ChessGame> result =
-        processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), 0.5F, board);
+        processInferencePosition<ChessGame>(policy.data(), validOutcome.data(),
+                                            zeroBudgetCurve.data(), board);
     float sum = 0.0F;
     int previousActionId = -1;
     for (const auto &[action, actionId, probability] : result.actions) {
@@ -254,7 +257,8 @@ void testStableLegalOnlySoftmax() {
         policy[ChessEncoding::actionId(ChessAction(move), board)] = 1'000.0F;
     }
     SearchInferenceResult<ChessGame> uniform =
-        processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), 0.5F, board);
+        processInferencePosition<ChessGame>(policy.data(), validOutcome.data(),
+                                            zeroBudgetCurve.data(), board);
     require(uniform.actions.size() == board.validMoves().size(),
             "uniform fallback omitted legal actions");
     const float expected = 1.0F / static_cast<float>(uniform.actions.size());
@@ -272,7 +276,8 @@ void testStableLegalOnlySoftmax() {
         ChessEncoding::actionId(ChessAction(board.validMoves().front()), board);
     policy[preferredAction] += std::log(2.0F);
     const SearchInferenceResult<ChessGame> weighted =
-        processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), 0.5F, board);
+        processInferencePosition<ChessGame>(policy.data(), validOutcome.data(),
+                                            zeroBudgetCurve.data(), board);
     require(weighted.actions.size() == board.validMoves().size(), "softmax omitted legal actions");
     const auto preferred = std::ranges::find_if(
         weighted.actions, [&](const auto &entry) { return entry.action_id == preferredAction; });
@@ -293,7 +298,8 @@ void testGoPointPassLegalOnlySoftmax() {
     policy[GoAction<7>::passId] += std::log(3.0F);
 
     const SearchInferenceResult<Go7Game> result =
-        processInferencePosition<Go7Game>(policy.data(), validOutcome.data(), 0.5F, occupied);
+        processInferencePosition<Go7Game>(policy.data(), validOutcome.data(),
+                                          zeroBudgetCurve.data(), occupied);
     require(result.actions.size() == 49, "Go legal-only softmax returned the wrong action count");
     require(result.actions.back().action.isPass(), "Go pass was not the final point-pass action");
     require(std::abs(result.actions.back().prior - 1.0F / 17.0F) <= scoreTolerance,
@@ -311,7 +317,8 @@ void testGoPointPassLegalOnlySoftmax() {
 void testTerminalAndOutcomeValidation() {
     const Board terminal("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
     const std::vector<float> policy = finiteLogits();
-    require(processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), 0.5F, terminal)
+    require(processInferencePosition<ChessGame>(policy.data(), validOutcome.data(),
+                                                zeroBudgetCurve.data(), terminal)
                 .actions.empty(),
             "terminal position returned policy actions");
 
@@ -325,7 +332,8 @@ void testTerminalAndOutcomeValidation() {
         bool rejected = false;
         try {
             static_cast<void>(
-                processInferencePosition<ChessGame>(policy.data(), outcome.data(), 0.5F, Board{}));
+                processInferencePosition<ChessGame>(policy.data(), outcome.data(),
+                                                    zeroBudgetCurve.data(), Board{}));
         } catch (const std::runtime_error &) {
             rejected = true;
         }
