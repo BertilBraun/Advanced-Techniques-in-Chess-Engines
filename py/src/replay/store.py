@@ -720,15 +720,22 @@ def _validate_policy_columns(
         raise ValueError('Replay policy action IDs must lie inside the action space.')
     if np.any(policy.visit_counts[active_entries] == 0):
         raise ValueError('Replay policy visit counts must be positive.')
-    row_numbers = np.arange(policy.entry_count.shape[0], dtype=np.int64)[:, np.newaxis]
+    row_count = policy.entry_count.shape[0]
+    row_numbers = np.arange(row_count, dtype=np.int64)[:, np.newaxis]
     visited_keys = (row_numbers * action_size + action_ids)[active_entries]
     legal_keys = (row_numbers * action_size + legal_action_ids)[active_legal]
-    if np.unique(visited_keys).size != visited_keys.size:
-        raise ValueError('Replay policy visited action IDs must be unique.')
-    if np.unique(legal_keys).size != legal_keys.size:
+    # Membership and uniqueness over the bounded (row, action) key space are a linear scatter;
+    # np.unique and np.isin sort instead, and dominated the whole replay append.
+    membership = np.zeros(row_count * action_size, dtype=np.bool_)
+    membership[legal_keys] = True
+    if int(np.count_nonzero(membership)) != legal_keys.size:
         raise ValueError('Replay policy legal action IDs must be unique.')
-    if np.any(~np.isin(visited_keys, legal_keys)):
+    if not bool(membership[visited_keys].all()):
         raise ValueError('Replay policy visited actions must be legal.')
+    membership[:] = False
+    membership[visited_keys] = True
+    if int(np.count_nonzero(membership)) != visited_keys.size:
+        raise ValueError('Replay policy visited action IDs must be unique.')
 
 
 def _validate_eligible_values(

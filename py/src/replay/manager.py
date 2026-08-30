@@ -53,7 +53,7 @@ from src.replay.shard import (
 from src.replay.store import ReplayStore
 from src.self_play.completed_game import SearchObservation, TerminationReason
 from src.self_play.resignation import ResignationCalibrator
-from src.util.atomic_file import write_text_atomically
+from src.util.atomic_file import fsync_directory, write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.generation_schedule import FloatGenerationSchedule
 from src.util.log import log, warn
@@ -482,6 +482,7 @@ class ReplayManager(Generic[PositionT]):
                     0, 0, after.size, after.evicted_rows - before.evicted_rows, 0, 0, 0, elapsed_seconds, ()
                 )
             readers: list[ReplayShardReader] = []
+            recorded_cohort_shard = False
             try:
                 for manifest in manifests:
                     readers.append(self._open_staged_shard(manifest))
@@ -492,8 +493,15 @@ class ReplayManager(Generic[PositionT]):
                         absolute_row_start = state.total_appended_rows - reader.manifest.row_count
                     else:
                         absolute_row_start = state.total_appended_rows
-                    self._record_label_cohort_shard(model_generation, reader.manifest, absolute_row_start)
+                    recorded_cohort_shard |= self._record_label_cohort_shard(
+                        model_generation, reader.manifest, absolute_row_start
+                    )
                     self.store.append_columns(reader.columns, reader.manifest.shard_identity)
+                # One directory fsync covers every cohort-shard file written above, and the journal
+                # naming them is persisted once the files it references are durable.
+                if recorded_cohort_shard:
+                    fsync_directory(self._label_cohort_shards_path)
+                    self._save_label_cohorts()
                 self.store.flush()
             finally:
                 for reader in readers:
@@ -666,7 +674,7 @@ class ReplayManager(Generic[PositionT]):
         source_generation: int,
         manifest: SealedReplayShardManifest,
         absolute_row_start: int,
-    ) -> None:
+    ) -> bool:
         if absolute_row_start < 0:
             raise ValueError('Replay label cohort rows require a nonnegative absolute start.')
         cohort = self._label_cohort(source_generation)
@@ -691,7 +699,7 @@ class ReplayManager(Generic[PositionT]):
         if recorded is not None:
             if recorded != candidate:
                 raise ValueError('An ingested replay shard conflicts with its durable label cohort record.')
-            return
+            return False
         if cohort.status is not ReplayLabelCohortStatus.OPEN:
             raise ValueError('A finalized label source cohort cannot accept newly ingested replay shards.')
         self._save_label_cohort_shard(candidate)
@@ -699,7 +707,7 @@ class ReplayManager(Generic[PositionT]):
         self._label_cohorts = ReplayLabelCohortJournal(
             cohorts=tuple(updated if item.source_generation == source_generation else item for item in cohorts)
         )
-        self._save_label_cohorts()
+        return True
 
     def _label_cohort(self, source_generation: int) -> ReplayLabelSourceCohort | None:
         return next(
@@ -742,7 +750,7 @@ class ReplayManager(Generic[PositionT]):
             if existing != shard:
                 raise ValueError('A persisted replay label source cohort shard conflicts with staged metadata.')
             return
-        write_text_atomically(path, shard.model_dump_json() + '\n')
+        write_text_atomically(path, shard.model_dump_json() + '\n', sync_directory=False)
 
     def _label_cohort_shard_path(self, shard_identity: str) -> Path:
         return self._label_cohort_shards_path / f'{shard_identity}{MANIFEST_SUFFIX}'
