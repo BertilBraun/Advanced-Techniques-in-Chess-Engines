@@ -147,8 +147,8 @@ def test_search_budget_telemetry_reports_prediction_allocation_and_residual() ->
     assert telemetry is not None
     assert telemetry.baseline_visits == (800,)
     assert telemetry.assigned_additional_visits == (700,)
-    assert telemetry.search_budget_logits == (0.85,)
-    assert telemetry.predicted_search_budgets == (0.7,)
+    assert telemetry.predicted_baseline_log_kls == (0.85,)
+    assert telemetry.selected_budget_indices == (5,)
     assert telemetry.parallel_searches == (4,)
     assert telemetry.spend_residuals == (-2,)
     assert telemetry.starting_visits == (100,)
