@@ -185,7 +185,7 @@ training:
     search_budget:
       curve_version: predicted_kl_curve_v1
       labeling:
-        sample_fraction: '0.01'
+        sample_fraction: '0.015'
         deep_search_multiple: 8
         maximum_unstarted_generation_lag: 2
         persisted_shard_size: 512
