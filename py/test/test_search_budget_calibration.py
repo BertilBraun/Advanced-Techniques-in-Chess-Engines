@@ -16,29 +16,34 @@ from src.search_budget.calibration import (
     publication_for_generation,
     publish_fail_closed,
     save_calibration_state,
+    solve_spend_matched_lagrange_multiplier,
     update_calibration,
     working_policy,
 )
-from src.search_budget.policy import BUDGET_CURVE_POINTS
+from src.search_budget.calibrator import CalibratorCoefficients
+from src.search_budget.policy import BUDGET_CURVE_MULTIPLES, BUDGET_CURVE_POINTS
 
 CONFIGURATION_SHA = 'c' * 64
+
+STEEP_CURVE = tuple(float(10 - index) for index in range(BUDGET_CURVE_POINTS))
+FLAT_CURVE = (0.5,) * BUDGET_CURVE_POINTS
 
 
 def evidence(
     gain: float = 0.05,
     realized_mean_multiple: float = 1.0,
     errors: tuple[float, ...] = (0.5,) * BUDGET_CURVE_POINTS,
-    median_baseline_log_kl: float = -1.5,
+    curves: tuple[tuple[float, ...], ...] = (STEEP_CURVE, STEEP_CURVE, FLAT_CURVE, FLAT_CURVE),
 ) -> BudgetGenerationEvidence:
     return BudgetGenerationEvidence(
-        position_count=4,
+        position_count=len(curves),
         mean_absolute_curve_error=errors,
         generation_gain=gain,
-        median_baseline_log_kl=median_baseline_log_kl,
+        target_raw_kl_curves=curves,
         realized_mean_multiple=realized_mean_multiple,
         realized_mean_assigned_visits=600.0 * realized_mean_multiple,
         flat_mean_assigned_visits=600.0,
-        selected_index_counts=(4, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        selected_index_counts=(len(curves), 0, 0, 0, 0, 0, 0, 0, 0, 0),
     )
 
 
@@ -53,11 +58,26 @@ def completed_state(generations: int, gain: float = 0.05, warmup: int = 2) -> Bu
     return state
 
 
-def test_initial_state_publishes_flat_with_unit_sigma_and_configured_tau() -> None:
+def mean_multiple_at(curves: tuple[tuple[float, ...], ...], multiplier: float) -> float:
+    total = 0.0
+    for curve in curves:
+        projected = list(curve)
+        for index in range(1, BUDGET_CURVE_POINTS):
+            projected[index] = min(projected[index], projected[index - 1])
+        objectives = tuple(
+            value + multiplier * multiple for value, multiple in zip(projected, BUDGET_CURVE_MULTIPLES, strict=True)
+        )
+        total += BUDGET_CURVE_MULTIPLES[min(range(BUDGET_CURVE_POINTS), key=objectives.__getitem__)]
+    return total / len(curves)
+
+
+def test_initial_state_publishes_flat_with_unit_sigma_and_identity_calibration() -> None:
     state = initial_calibration_state(CONFIGURATION_SHA)
     assert not state.published_policy.apply_learned
     assert state.sigma == (1.0,) * BUDGET_CURVE_POINTS
-    assert state.log_tau == pytest.approx(math.log(0.1))
+    assert state.lagrange_multiplier == 0.0
+    assert state.calibration_bias == (0.0,) * BUDGET_CURVE_POINTS
+    assert all(row == (0.0,) * 5 for row in state.calibration_weights)
     assert state.decision_reason is BudgetDecisionReason.INITIAL
 
 
@@ -65,8 +85,9 @@ def test_working_policy_applies_the_learned_rule_regardless_of_the_gate() -> Non
     state = initial_calibration_state(CONFIGURATION_SHA)
     policy = working_policy(state)
     assert policy.apply_learned
-    assert policy.sigma == state.sigma
-    assert policy.log_tau == state.log_tau
+    assert policy.lagrange_multiplier == state.lagrange_multiplier
+    assert policy.calibration_bias == state.calibration_bias
+    assert policy.calibration_weights == state.calibration_weights
 
 
 def test_sigma_updates_with_ema_decay_from_unit_initialisation() -> None:
@@ -75,24 +96,66 @@ def test_sigma_updates_with_ema_decay_from_unit_initialisation() -> None:
     assert updated.sigma == pytest.approx((0.9 * 1.0 + 0.1 * 2.0,) * 10)
 
 
-def test_the_first_generation_seeds_log_tau_from_the_measured_baseline_curve() -> None:
+def test_lambda_seeding_bisects_to_the_boundary_of_unit_mean_spend() -> None:
+    curves = (STEEP_CURVE, STEEP_CURVE, FLAT_CURVE, FLAT_CURVE)
+    seeded = solve_spend_matched_lagrange_multiplier(curves)
+    assert seeded > 0.0
+    assert mean_multiple_at(curves, seeded) <= 1.0
+    assert mean_multiple_at(curves, seeded * 0.99) > 1.0
+
+
+def test_lambda_seeding_returns_zero_when_even_free_spend_stays_at_baseline() -> None:
+    # A flat measured curve gains nothing from any spend, so every position takes the cheapest
+    # grid point already at a zero dual.
+    assert solve_spend_matched_lagrange_multiplier((FLAT_CURVE, FLAT_CURVE)) == 0.0
+
+
+def test_the_first_generation_seeds_lambda_from_the_measured_curves() -> None:
     state = initial_calibration_state(CONFIGURATION_SHA)
-    seeded = update_calibration(state, 0, evidence(median_baseline_log_kl=-1.75), 1, parameters()).state
-    assert seeded.log_tau == pytest.approx(-1.75)
+    seeded = update_calibration(state, 0, evidence(), 1, parameters()).state
+    assert seeded.lagrange_multiplier == pytest.approx(
+        solve_spend_matched_lagrange_multiplier(evidence().target_raw_kl_curves)
+    )
 
 
-def test_log_tau_moves_toward_lower_spend_when_realized_multiple_is_high() -> None:
+def test_lambda_rises_when_realized_spend_exceeds_baseline() -> None:
     seeded = update_calibration(initial_calibration_state(CONFIGURATION_SHA), 0, evidence(), 1, parameters()).state
     overspend = update_calibration(seeded, 1, evidence(realized_mean_multiple=1.02), 2, parameters()).state
-    assert overspend.log_tau == pytest.approx(seeded.log_tau + math.log(1.02))
+    assert overspend.lagrange_multiplier == pytest.approx(seeded.lagrange_multiplier * 1.02)
 
 
-def test_log_tau_step_is_bounded_to_the_configured_ratio() -> None:
+def test_lambda_falls_when_realized_spend_undershoots_baseline() -> None:
+    seeded = update_calibration(initial_calibration_state(CONFIGURATION_SHA), 0, evidence(), 1, parameters()).state
+    undershoot = update_calibration(seeded, 1, evidence(realized_mean_multiple=0.98), 2, parameters()).state
+    assert undershoot.lagrange_multiplier == pytest.approx(seeded.lagrange_multiplier * 0.98)
+
+
+def test_lambda_step_is_bounded_to_the_configured_ratio() -> None:
     seeded = update_calibration(initial_calibration_state(CONFIGURATION_SHA), 0, evidence(), 1, parameters()).state
     surge = update_calibration(seeded, 1, evidence(realized_mean_multiple=4.0), 2, parameters()).state
     collapse = update_calibration(seeded, 1, evidence(realized_mean_multiple=0.2), 2, parameters()).state
-    assert surge.log_tau == pytest.approx(seeded.log_tau + math.log(1.05))
-    assert collapse.log_tau == pytest.approx(seeded.log_tau - math.log(1.05))
+    assert surge.lagrange_multiplier == pytest.approx(seeded.lagrange_multiplier * 1.05)
+    assert collapse.lagrange_multiplier == pytest.approx(seeded.lagrange_multiplier / 1.05)
+
+
+def test_a_zero_seeded_lambda_can_still_ratchet_upward() -> None:
+    state = initial_calibration_state(CONFIGURATION_SHA)
+    seeded = update_calibration(state, 0, evidence(curves=(FLAT_CURVE, FLAT_CURVE)), 1, parameters()).state
+    assert seeded.lagrange_multiplier == 0.0
+    raised = update_calibration(seeded, 1, evidence(realized_mean_multiple=2.0), 2, parameters()).state
+    assert raised.lagrange_multiplier > 0.0
+
+
+def test_fitted_calibrator_coefficients_are_published_with_the_policy() -> None:
+    state = initial_calibration_state(CONFIGURATION_SHA)
+    calibrator = CalibratorCoefficients(
+        bias=tuple(0.1 * index for index in range(BUDGET_CURVE_POINTS)),
+        weights=tuple((0.01, 0.02, 0.03, 0.04, 0.05) for _ in range(BUDGET_CURVE_POINTS)),
+    )
+    updated = update_calibration(state, 0, evidence(), 1, parameters(), calibrator).state
+    assert updated.published_policy.calibration_bias == calibrator.bias
+    assert updated.published_policy.calibration_weights == calibrator.weights
+    assert working_policy(updated).calibration_bias == calibrator.bias
 
 
 def test_unconverged_spend_keeps_the_gate_closed_even_with_positive_gain() -> None:
@@ -166,7 +229,7 @@ def test_fail_closed_disables_the_learned_rule_but_keeps_calibration() -> None:
     failed = publish_fail_closed(state, 5, BudgetDecisionReason.TERMINAL_FAILURE)
     assert not failed.published_policy.apply_learned
     assert failed.sigma == state.sigma
-    assert failed.log_tau == state.log_tau
+    assert failed.lagrange_multiplier == state.lagrange_multiplier
     assert failed.decision_reason is BudgetDecisionReason.TERMINAL_FAILURE
     with pytest.raises(ValueError, match='failure decision reason'):
         publish_fail_closed(state, 5, BudgetDecisionReason.APPLIED)
@@ -188,6 +251,16 @@ def test_unreadable_state_fails_closed_to_flat(tmp_path: Path) -> None:
     assert loaded.decision_reason is BudgetDecisionReason.UNREADABLE_STATE
 
 
+def test_a_previous_schema_state_fails_closed_as_unreadable(tmp_path: Path) -> None:
+    state = completed_state(2)
+    path = tmp_path / 'calibration-state.json'
+    payload = state.model_dump_json().replace('"schema_version":4', '"schema_version":3')
+    path.write_text(payload, encoding='utf-8')
+    loaded = load_calibration_state_fail_closed(path, CONFIGURATION_SHA, 3)
+    assert not loaded.published_policy.apply_learned
+    assert loaded.decision_reason is BudgetDecisionReason.UNREADABLE_STATE
+
+
 def test_configuration_digest_mismatch_fails_closed(tmp_path: Path) -> None:
     state = completed_state(2)
     path = tmp_path / 'calibration-state.json'
@@ -197,10 +270,29 @@ def test_configuration_digest_mismatch_fails_closed(tmp_path: Path) -> None:
     assert loaded.decision_reason is BudgetDecisionReason.INCOMPATIBLE_STATE
 
 
+def test_evidence_requires_one_measured_curve_per_position() -> None:
+    with pytest.raises(ValueError, match='every labelled position'):
+        BudgetGenerationEvidence(
+            position_count=2,
+            mean_absolute_curve_error=(0.5,) * BUDGET_CURVE_POINTS,
+            generation_gain=0.0,
+            target_raw_kl_curves=(STEEP_CURVE,),
+            realized_mean_multiple=1.0,
+            realized_mean_assigned_visits=600.0,
+            flat_mean_assigned_visits=600.0,
+            selected_index_counts=(2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        )
+
+
 def test_parameters_reject_invalid_configuration() -> None:
-    with pytest.raises(ValueError, match='tau step ratio'):
-        BudgetCalibrationParameters(tau_step_ratio=Decimal(1))
-    with pytest.raises(ValueError, match='initial tau'):
-        BudgetCalibrationParameters(initial_tau=Decimal(0))
-    with pytest.raises(ValueError, match='selection threshold'):
-        BudgetCalibrationParameters(selection_threshold=Decimal(1))
+    with pytest.raises(ValueError, match='lambda step ratio'):
+        BudgetCalibrationParameters(lambda_step_ratio=Decimal(1))
+    with pytest.raises(ValueError, match='warm-up'):
+        BudgetCalibrationParameters(warmup_completed_generations=0)
+
+
+def test_seeded_lambda_is_finite_and_reasonable_for_production_scale_curves() -> None:
+    curves = tuple(tuple(0.3 * (0.7**index) for index in range(BUDGET_CURVE_POINTS)) for _ in range(50))
+    seeded = solve_spend_matched_lagrange_multiplier(curves)
+    assert math.isfinite(seeded)
+    assert mean_multiple_at(curves, seeded) <= 1.0

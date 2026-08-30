@@ -109,7 +109,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         requests: list[NativeRequestT] = []
         for active_game in self.active_games:
             active_game.root.discount(parameters.retained_root_visit_fraction)
-            requests.append(search.request(active_game.root))
+            requests.append(search.request(active_game.root, root_ply=len(active_game.action_ids)))
         batch = search.search(requests, collect_statistics=False)
         if len(batch.results) != len(self.active_games):
             raise RuntimeError('Batched self-play search returned the wrong result count.')

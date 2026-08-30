@@ -5,7 +5,7 @@ from base64 import b64decode, b64encode
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from fractions import Fraction
-from statistics import fmean, median, pvariance
+from statistics import fmean, pvariance
 from typing import Protocol
 
 import numpy as np
@@ -27,7 +27,9 @@ from src.search_budget.policy import (
     BUDGET_CURVE_MULTIPLES,
     BUDGET_CURVE_POINTS,
     HALF_DEEP_CURVE_INDEX,
+    BudgetSelectionFeatures,
     SearchBudgetPolicy,
+    calibrate_curve,
     deep_label_visit_limit,
     grid_checkpoint_visits,
     grid_visit_counts,
@@ -312,6 +314,7 @@ def finalize_generation(
     flat_policies: list[PolicyDistribution] = []
     assigned_policies: list[PolicyDistribution] = []
     assigned_visits_values: list[int] = []
+    target_raw_kl_curves: list[tuple[float, ...]] = []
     baseline_raw_kls: list[float] = []
     predicted_baseline_log_kls: list[float] = []
     target_baseline_log_kls: list[float] = []
@@ -326,9 +329,17 @@ def finalize_generation(
             raise ValueError('Deep-label KL reconstruction must be finite.')
         curve_label = log_kl_curve(raw_kls)
         predicted = predictions[identity].predicted_curve
-        selected = select_budget_index(predicted, policy)
+        features = BudgetSelectionFeatures(
+            top_visit_share=top_visit_share(grid_policies[BASELINE_CURVE_INDEX]),
+            policy_entropy=policy_entropy(grid_policies[BASELINE_CURVE_INDEX]),
+            ply=identity.ply,
+            baseline_visits=source.baseline_new_visits,
+        )
+        calibrated = calibrate_curve(predicted, policy, features)
+        selected = select_budget_index(predicted, policy, features)
         selected_counts[selected] += 1
         assigned_visits_values.append(grid_visits[selected])
+        target_raw_kl_curves.append(raw_kls)
         deep_policies.append(deep_policy)
         flat_policies.append(grid_policies[BASELINE_CURVE_INDEX])
         assigned_policies.append(grid_policies[selected])
@@ -359,9 +370,10 @@ def finalize_generation(
         record['value_error'] = tuple(
             abs(_root_value_at(deep, visits) - deep.final_root_value) for visits in grid_visits
         )
-        record['top_visit_share'] = top_visit_share(grid_policies[BASELINE_CURVE_INDEX])
-        record['policy_entropy'] = policy_entropy(grid_policies[BASELINE_CURVE_INDEX])
+        record['top_visit_share'] = features.top_visit_share
+        record['policy_entropy'] = features.policy_entropy
         record['predicted_curve'] = predicted
+        record['calibrated_curve'] = calibrated
         record['deep_half_kl'] = raw_kls[HALF_DEEP_CURVE_INDEX]
         record['assigned_visits'] = grid_visits[selected]
         record['selected_index'] = selected
@@ -372,7 +384,7 @@ def finalize_generation(
         position_count=position_count,
         mean_absolute_curve_error=tuple(value / position_count for value in error_sums),
         generation_gain=generation_gain,
-        median_baseline_log_kl=median(target_baseline_log_kls),
+        target_raw_kl_curves=tuple(target_raw_kl_curves),
         realized_mean_multiple=fmean(BUDGET_CURVE_MULTIPLES[index] for index in _selected_indices(selected_counts)),
         realized_mean_assigned_visits=fmean(assigned_visits_values),
         flat_mean_assigned_visits=float(source.baseline_new_visits),

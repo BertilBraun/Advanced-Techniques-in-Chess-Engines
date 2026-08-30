@@ -23,12 +23,21 @@ from src.search_budget.calibration import (
     update_calibration,
     working_policy,
 )
+from src.search_budget.calibrator import (
+    IDENTITY_CALIBRATOR,
+    CalibratorCoefficients,
+    CalibratorFit,
+    fit_linear_calibrator,
+)
 from src.search_budget.policy import (
     BASELINE_CURVE_INDEX,
     BUDGET_CURVE_MULTIPLES,
     BUDGET_CURVE_POINTS,
+    CALIBRATION_FEATURE_COUNT,
     HALF_DEEP_CURVE_INDEX,
+    BudgetSelectionFeatures,
     SearchBudgetPolicy,
+    calibrate_curve,
     deep_label_visit_limit,
     disabled_policy,
     grid_checkpoint_visits,
@@ -36,7 +45,6 @@ from src.search_budget.policy import (
     log_kl_curve,
     project_non_increasing,
     select_budget_index,
-    standard_normal_cdf,
 )
 from src.search_budget.sampling import LabelPositionIdentity, partition_generation_sample, select_generation_sample
 from src.search_budget.targets import PolicyDistribution, policy_entropy, policy_kl, shadow_gain, top_visit_share
@@ -52,6 +60,11 @@ __all__ = [
     'BudgetEligibilityFailure',
     'BudgetGenerationEvidence',
     'BudgetPolicyPublication',
+    'BudgetSelectionFeatures',
+    'CALIBRATION_FEATURE_COUNT',
+    'CalibratorCoefficients',
+    'CalibratorFit',
+    'IDENTITY_CALIBRATOR',
     'CalibrationUpdate',
     'LabelPositionIdentity',
     'LabelShardManifest',
@@ -72,10 +85,12 @@ __all__ = [
     'policy_kl',
     'publication_for_generation',
     'publish_fail_closed',
+    'calibrate_curve',
+    'fit_linear_calibrator',
     'select_budget_index',
     'select_generation_sample',
     'shadow_gain',
-    'standard_normal_cdf',
+    'solve_spend_matched_lagrange_multiplier',
     'top_visit_share',
     'update_calibration',
     'validate_complete_shard_coverage',

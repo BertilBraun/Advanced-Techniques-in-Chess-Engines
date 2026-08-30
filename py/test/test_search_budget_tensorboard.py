@@ -32,6 +32,7 @@ def test_search_budget_dashboard_is_compact_and_uses_dynamic_auxiliary_index() -
         'Spend tracking',
         'Realized mean multiple',
         'Dual variable',
+        'Calibrator applied',
         'Gate',
         'Exact spend residual',
         'Label job outcome',

@@ -43,7 +43,8 @@ def _overview_category(auxiliary_prefix: str) -> TensorboardCustomScalarCategory
                 'search_budget/production/assigned_additional_visits_mean',
             ),
             _chart('Realized mean multiple', 'search_budget/calibration/realized_mean_multiple'),
-            _chart('Dual variable', 'search_budget/calibration/log_tau'),
+            _chart('Dual variable', 'search_budget/calibration/lagrange_multiplier'),
+            _chart('Calibrator applied', 'search_budget/calibration/calibrator_applied'),
             _chart('Gate', 'search_budget/calibration/published_apply_learned'),
             _chart(
                 'Exact spend residual',
@@ -130,7 +131,8 @@ def _calibration_category() -> TensorboardCustomScalarCategory:
             ),
             _curve_point_chart('Sigma by grid point', 'sigma'),
             _curve_point_chart('Selected count by grid point', 'selected_count'),
-            _chart('Dual variable', 'search_budget/calibration/log_tau'),
+            _chart('Dual variable', 'search_budget/calibration/lagrange_multiplier'),
+            _chart('Calibrator applied', 'search_budget/calibration/calibrator_applied'),
             _chart(
                 'Spend tracking',
                 'search_budget/calibration/realized_mean_assigned_visits',

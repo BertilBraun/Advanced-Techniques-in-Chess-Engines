@@ -18,6 +18,7 @@ ANALYSIS_RECORD_DTYPE = np.dtype(
         ('top_visit_share', '<f4'),
         ('policy_entropy', '<f4'),
         ('predicted_curve', '<f4', (BUDGET_CURVE_POINTS,)),
+        ('calibrated_curve', '<f4', (BUDGET_CURVE_POINTS,)),
         ('deep_half_kl', '<f4'),
         ('assigned_visits', '<u4'),
         ('selected_index', '<u4'),

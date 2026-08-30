@@ -142,6 +142,7 @@ class NativeSelfPlaySearch(Protocol[PositionT, NativeRootT, NativeRequestT, Nati
         add_root_noise: bool = True,
         force_root_playouts: bool = True,
         checkpoint_detail: SearchCheckpointDetail = ...,
+        root_ply: int = 0,
     ) -> NativeRequestT: ...
 
     def search(

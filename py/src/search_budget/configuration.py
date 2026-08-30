@@ -25,13 +25,18 @@ class DeepLabelingConfiguration(FrozenModel):
     artifact_retention: LabelArtifactRetention = LabelArtifactRetention.RETAIN_ALL
 
 
+class BudgetCurveCalibratorConfiguration(FrozenModel):
+    enabled: bool = True
+    window_generations: int = Field(default=10, gt=0)
+    ridge_coefficient: Decimal = Field(default=Decimal('1.0'), gt=Decimal(0))
+
+
 class BudgetPolicyCalibrationConfiguration(FrozenModel):
     warmup_completed_source_generations: int = Field(default=30, gt=0)
     sigma_ema_decay: Decimal = Field(default=Decimal('0.1'), gt=Decimal(0), le=Decimal(1))
     validation_gain_ema_decay: Decimal = Field(default=Decimal('0.2'), gt=Decimal(0), le=Decimal(1))
-    initial_tau: Decimal = Field(default=Decimal('0.1'), gt=Decimal(0))
-    tau_step_ratio: Decimal = Field(default=Decimal('1.05'), gt=Decimal(1))
-    selection_threshold: Decimal = Field(default=Decimal('0.8'), gt=Decimal(0), lt=Decimal(1))
+    lambda_step_ratio: Decimal = Field(default=Decimal('1.05'), gt=Decimal(1))
+    calibrator: BudgetCurveCalibratorConfiguration = BudgetCurveCalibratorConfiguration()
 
 
 class ProductionAllocationConfiguration(FrozenModel):
