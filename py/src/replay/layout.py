@@ -9,6 +9,7 @@ from typing import TypeAlias
 import numpy as np
 from pydantic import Field, model_validator
 from src.games.representation import PackedPlaneLayout
+from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.training.targets import (
     AuxiliaryHeadLayout,
     FutureSearchValueHeadLayout,
@@ -66,8 +67,6 @@ class ReplayColumnKind(str, Enum):
     AUXILIARY_VALUE = 'auxiliary_value'
     AUXILIARY_ELIGIBLE = 'auxiliary_eligible'
     AUXILIARY_RAW_KL = 'auxiliary_raw_kl'
-    AUXILIARY_PREDICTION_LOGIT = 'auxiliary_prediction_logit'
-    AUXILIARY_PREDICTED_QUANTILE = 'auxiliary_predicted_quantile'
     AUXILIARY_SOURCE_GENERATION = 'auxiliary_source_generation'
     AUXILIARY_MODEL_GENERATION = 'auxiliary_model_generation'
     AUXILIARY_INFERENCE_MODEL_SHA256 = 'auxiliary_inference_model_sha256'
@@ -221,21 +220,15 @@ class ReplayLayout(FrozenModel):
                     descriptors.extend(
                         (
                             ReplayColumnDescriptor(
-                                ReplayColumnKey(ReplayColumnKind.AUXILIARY_VALUE, index), ReplayElementType.FLOAT32
+                                ReplayColumnKey(ReplayColumnKind.AUXILIARY_VALUE, index),
+                                ReplayElementType.FLOAT32,
+                                (BUDGET_CURVE_POINTS,),
                             ),
                             ReplayColumnDescriptor(
                                 ReplayColumnKey(ReplayColumnKind.AUXILIARY_ELIGIBLE, index), ReplayElementType.UINT8
                             ),
                             ReplayColumnDescriptor(
                                 ReplayColumnKey(ReplayColumnKind.AUXILIARY_RAW_KL, index), ReplayElementType.FLOAT32
-                            ),
-                            ReplayColumnDescriptor(
-                                ReplayColumnKey(ReplayColumnKind.AUXILIARY_PREDICTION_LOGIT, index),
-                                ReplayElementType.FLOAT32,
-                            ),
-                            ReplayColumnDescriptor(
-                                ReplayColumnKey(ReplayColumnKind.AUXILIARY_PREDICTED_QUANTILE, index),
-                                ReplayElementType.FLOAT32,
                             ),
                             ReplayColumnDescriptor(
                                 ReplayColumnKey(ReplayColumnKind.AUXILIARY_SOURCE_GENERATION, index),
@@ -283,7 +276,7 @@ class ReplayLayout(FrozenModel):
     @property
     def digest(self) -> str:
         payload = {
-            'schema_version': 4,
+            'schema_version': 5,
             'packed_planes': {
                 'board_size': self.packed_planes.board_size,
                 'binary_plane_count': self.packed_planes.binary_plane_count,
@@ -324,4 +317,4 @@ def _head_digest_fields(head: AuxiliaryHeadLayout) -> dict[str, int | float | st
         case LegalMovesHeadLayout(action_size=action_size):
             return {'kind': head.kind, 'action_size': action_size}
         case SearchBudgetHeadLayout():
-            return {'kind': head.kind, 'output_size': 1}
+            return {'kind': head.kind, 'output_size': BUDGET_CURVE_POINTS}

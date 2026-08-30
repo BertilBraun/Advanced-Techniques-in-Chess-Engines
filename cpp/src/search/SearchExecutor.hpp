@@ -99,8 +99,8 @@ public:
                 .network_root_value = 0.0F,
                 .policy_correction = 0.0F,
                 .value_correction = 0.0F,
-                .search_budget_logit = node.search_budget_logit,
-                .predicted_search_budget = node.search_budget,
+                .predicted_budget_curve = node.search_budget_curve,
+                .selected_budget_index = task.selected_budget_index,
                 .assigned_additional_visits = task.assigned_additional_visits,
                 .parallel_searches = task.parallel_searches,
                 .spend_residual = task.spend_residual,
@@ -247,6 +247,7 @@ private:
         SearchLimit limit;
         std::uint32_t maximum_visits;
         std::uint32_t assigned_additional_visits;
+        int selected_budget_index;
         std::uint32_t parallel_searches;
         std::int64_t spend_residual;
         std::size_t checkpoint_cursor;
@@ -350,6 +351,7 @@ private:
             .limit = request.limit,
             .maximum_visits = maximumVisitLimit,
             .assigned_additional_visits = assignedAdditional,
+            .selected_budget_index = -1,
             .parallel_searches = parallelSearches,
             .spend_residual = 0,
             .checkpoint_cursor = 0,
@@ -400,6 +402,9 @@ private:
         }
         return {
             .visits = task.root.visits(),
+            .root_value = rootNode.visits == 0
+                              ? 0.0F
+                              : rootNode.value_sum / static_cast<float>(rootNode.visits),
             .policy_target_visits = std::move(checkpointVisits),
         };
     }
@@ -434,8 +439,10 @@ private:
                 return;
             }
             const auto &limit = std::get<PredictedSearchBudgetLimit>(task.limit);
-            task.assigned_additional_visits =
-                allocator->assign(limit, task.root.tree().root().search_budget);
+            const AssignedSearchBudget assigned =
+                allocator->assign(limit, task.root.tree().root().search_budget_curve);
+            task.assigned_additional_visits = assigned.additional_visits;
+            task.selected_budget_index = assigned.selected_index;
             task.spend_residual = allocator->spendError();
             const std::uint64_t finalVisits =
                 static_cast<std::uint64_t>(task.starting_visits) + task.assigned_additional_visits;

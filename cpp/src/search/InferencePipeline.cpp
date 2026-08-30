@@ -133,7 +133,8 @@ prepareInferenceModelUpdate(const std::vector<ModelTensorSignature> &parameterSi
         outcome.dim() != 2 || outcome.size(0) != 1 || outcome.size(1) != outcomeCount ||
         !torch::isfinite(policy).all().item<bool>() ||
         !torch::isfinite(outcome).all().item<bool>() || (outcome < 0).any().item<bool>() ||
-        searchBudget.dim() != 2 || searchBudget.size(0) != 1 || searchBudget.size(1) != 1 ||
+        searchBudget.dim() != 2 || searchBudget.size(0) != 1 ||
+        searchBudget.size(1) != static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS) ||
         !torch::isfinite(searchBudget).all().item<bool>() ||
         std::abs(outcome.sum().item<float>() - 1.0F) > 1e-2F) {
         throw std::invalid_argument("Updated inference model returned invalid output");
@@ -359,7 +360,9 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
                                  stagingOptions),
         .outcomes = torch::empty(
             {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.outcomes)}, stagingOptions),
-        .search_budgets = torch::empty({tensorSize(m_maximumBatchSize), 1}, stagingOptions),
+        .search_budgets = torch::empty(
+            {tensorSize(m_maximumBatchSize), static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)},
+            stagingOptions),
     };
     captureBatchGraphs();
 }
@@ -557,7 +560,9 @@ InferenceOutput InferenceRunner::createOutputBuffer() const {
                                  options),
         .outcomes = torch::empty(
             {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.outcomes)}, options),
-        .search_budgets = torch::empty({tensorSize(m_maximumBatchSize), 1}, options),
+        .search_budgets = torch::empty(
+            {tensorSize(m_maximumBatchSize), static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)},
+            options),
     };
 }
 
@@ -583,7 +588,7 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size
         output.search_budgets.scalar_type() != torch::kFloat32 ||
         output.search_budgets.dim() != 2 ||
         output.search_budgets.size(0) < static_cast<int64_t>(batchSize) ||
-        output.search_budgets.size(1) != 1) {
+        output.search_budgets.size(1) != static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)) {
         throw std::invalid_argument("Inference output buffers have invalid shapes or types");
     }
 

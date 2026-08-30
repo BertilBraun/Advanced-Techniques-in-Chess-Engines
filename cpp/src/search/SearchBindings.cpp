@@ -150,6 +150,7 @@ void bind_search(py::module_ &module) {
         .value("POLICIES", SearchCheckpointDetail::Policies);
     py::class_<SearchCheckpoint>(module, "SearchCheckpoint")
         .def_readonly("visits", &SearchCheckpoint::visits)
+        .def_readonly("root_value", &SearchCheckpoint::root_value)
         .def_readonly("policy_target_visits", &SearchCheckpoint::policy_target_visits);
     py::class_<FixedSearchLimit>(module, "FixedSearchLimit")
         .def(py::init<std::uint32_t>(), py::arg("visits"))
@@ -157,18 +158,27 @@ void bind_search(py::module_ &module) {
     py::class_<AdditionalSearchLimit>(module, "AdditionalSearchLimit")
         .def(py::init<std::uint32_t>(), py::arg("additional_visits"))
         .def_readonly("additional_visits", &AdditionalSearchLimit::additional_visits);
-    py::class_<SearchBudgetCurve>(module, "SearchBudgetCurve")
-        .def(py::init<std::array<double, SearchBudgetCurve::BUCKET_COUNT>>(),
-             py::arg("multipliers"))
-        .def_readonly("multipliers", &SearchBudgetCurve::multipliers)
-        .def("multiplier", &SearchBudgetCurve::multiplier, py::arg("quantile"));
+    py::class_<SearchBudgetPolicy>(module, "SearchBudgetPolicy")
+        .def(py::init<std::array<double, SearchBudgetPolicy::CURVE_POINTS>,
+                      std::array<double, SearchBudgetPolicy::CURVE_POINTS>, double, double, bool>(),
+             py::arg("multiples"), py::arg("sigma"), py::arg("log_tau"),
+             py::arg("selection_threshold"), py::arg("apply_learned"))
+        .def_readonly("multiples", &SearchBudgetPolicy::multiples)
+        .def_readonly("sigma", &SearchBudgetPolicy::sigma)
+        .def_readonly("log_tau", &SearchBudgetPolicy::log_tau)
+        .def_readonly("selection_threshold", &SearchBudgetPolicy::selection_threshold)
+        .def_readonly("apply_learned", &SearchBudgetPolicy::apply_learned);
     py::class_<PredictedSearchBudgetLimit>(module, "PredictedSearchBudgetLimit")
-        .def(py::init<std::uint32_t, SearchBudgetCurve>(), py::arg("baseline_visits"),
-             py::arg("curve"))
+        .def(py::init<std::uint32_t, SearchBudgetPolicy>(), py::arg("baseline_visits"),
+             py::arg("policy"))
         .def_readonly("baseline_visits", &PredictedSearchBudgetLimit::baseline_visits)
-        .def_readonly("curve", &PredictedSearchBudgetLimit::curve);
-    module.def("search_budget_multiplier", &searchBudgetMultiplier, py::arg("curve"),
-               py::arg("quantile"));
+        .def_readonly("policy", &PredictedSearchBudgetLimit::policy);
+    module.def(
+        "select_budget_index",
+        [](const SearchBudgetPolicy &policy, const SearchBudgetCurvePrediction &prediction) {
+            return selectBudgetIndex(policy, prediction);
+        },
+        py::arg("policy"), py::arg("prediction"));
     module.def("search_parallelism", &searchParallelism, py::arg("additional_visits"));
     py::class_<GameSearchResult>(module, "GameSearchResult")
         .def_readonly("root_value", &GameSearchResult::root_value)
@@ -182,8 +192,8 @@ void bind_search(py::module_ &module) {
         .def_readonly("network_root_value", &GameSearchResult::network_root_value)
         .def_readonly("policy_correction", &GameSearchResult::policy_correction)
         .def_readonly("value_correction", &GameSearchResult::value_correction)
-        .def_readonly("search_budget_logit", &GameSearchResult::search_budget_logit)
-        .def_readonly("predicted_search_budget", &GameSearchResult::predicted_search_budget)
+        .def_readonly("predicted_budget_curve", &GameSearchResult::predicted_budget_curve)
+        .def_readonly("selected_budget_index", &GameSearchResult::selected_budget_index)
         .def_readonly("assigned_additional_visits", &GameSearchResult::assigned_additional_visits)
         .def_readonly("parallel_searches", &GameSearchResult::parallel_searches)
         .def_readonly("spend_residual", &GameSearchResult::spend_residual)
@@ -209,11 +219,11 @@ void bind_search(py::module_ &module) {
         .def_readonly("exploration_constant", &AnalysisParameters::exploration_constant)
         .def_readonly("inference", &AnalysisParameters::inference);
     py::class_<SelfPlaySearchParameters>(module, "SelfPlaySearchParameters")
-        .def(py::init<std::uint32_t, SearchBudgetCurve, TreeSearchParameters, float, float>(),
-             py::arg("baseline_visits"), py::arg("search_budget_curve"), py::arg("tree_search"),
+        .def(py::init<std::uint32_t, SearchBudgetPolicy, TreeSearchParameters, float, float>(),
+             py::arg("baseline_visits"), py::arg("search_budget_policy"), py::arg("tree_search"),
              py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"))
         .def_readwrite("baseline_visits", &SelfPlaySearchParameters::baseline_visits)
-        .def_readwrite("search_budget_curve", &SelfPlaySearchParameters::search_budget_curve)
+        .def_readwrite("search_budget_policy", &SelfPlaySearchParameters::search_budget_policy)
         .def_readwrite("tree_search", &SelfPlaySearchParameters::tree_search)
         .def_readwrite("dirichlet_alpha", &SelfPlaySearchParameters::dirichlet_alpha)
         .def_readwrite("dirichlet_epsilon", &SelfPlaySearchParameters::dirichlet_epsilon);

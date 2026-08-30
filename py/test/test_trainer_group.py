@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import cast
 
@@ -112,10 +113,8 @@ def _replay_sample(
 ) -> ReplaySample:
     budget_target = (
         EligibleSearchBudgetTarget(
-            normalized_target=0.5 * weight,
+            curve=(0.5 * weight,) * 10,
             raw_kl=0.25,
-            prediction_logit=0.0,
-            predicted_quantile=0.5,
             source_generation=0,
             model_generation=0,
             inference_model_sha256='0' * 64,
@@ -282,7 +281,9 @@ def test_a_labelled_replay_trains_the_search_budget_head_on_a_fully_labelled_bat
     assert head_statistics.labelled_pool_rows == 2
     assert head_statistics.labelled_batches == 1
     assert head_statistics.target_mean == pytest.approx(0.375)
-    assert 0.0 < head_statistics.prediction_mean < 1.0
+    # The head predicts raw log-KL values, so the untrained prediction mean is only bounded by finiteness.
+    assert math.isfinite(head_statistics.prediction_mean)
+    assert head_statistics.absolute_error_mean >= 0.0
     assert result.statistics.auxiliary_losses == (pytest.approx(head_statistics.loss),)
 
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
-from src.search_budget.curve import SearchBudgetCurve, flat_curve
+from src.search_budget.policy import BUDGET_CURVE_MULTIPLES, SearchBudgetPolicy, disabled_policy
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
 from src.self_play.native_configuration import native_execution_options
 from src.self_play.parameters import (
@@ -39,7 +39,7 @@ def resolved_evaluation_parameters(
     parameters = replace(
         baseline,
         baseline_visits=configuration.searches_per_move,
-        search_budget_curve=flat_curve(),
+        search_budget_policy=disabled_policy(),
         forced_playout_coefficient=0.0,
         exploration_constant=configuration.resolved_exploration_constant,
         first_play_urgency=(
@@ -121,7 +121,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
     def self_play_parameters_at(
         self,
         model_generation: int,
-        search_budget_curve: SearchBudgetCurve,
+        search_budget_policy: SearchBudgetPolicy,
     ) -> ResolvedSelfPlayParameters:
         raise NotImplementedError
 
@@ -158,7 +158,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
             TreeSearchParameters,
         )
         from AlphaZeroCpp import (
-            SearchBudgetCurve as NativeSearchBudgetCurve,
+            SearchBudgetPolicy as NativeSearchBudgetPolicy,
         )
 
         match parameters.first_play_urgency:
@@ -172,9 +172,16 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
                     reduction,
                 )
 
+        policy = parameters.search_budget_policy
         return SelfPlaySearchParameters(
             baseline_visits=parameters.baseline_visits,
-            search_budget_curve=NativeSearchBudgetCurve(list(parameters.search_budget_curve.multipliers)),
+            search_budget_policy=NativeSearchBudgetPolicy(
+                list(BUDGET_CURVE_MULTIPLES),
+                list(policy.sigma),
+                policy.log_tau,
+                policy.selection_threshold,
+                policy.apply_learned,
+            ),
             tree_search=TreeSearchParameters(
                 exploration_constant=parameters.exploration_constant,
                 first_play_urgency=first_play_urgency,

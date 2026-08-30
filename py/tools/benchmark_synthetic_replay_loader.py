@@ -236,10 +236,8 @@ def _sample(state: _SyntheticChessState, row: int) -> ReplaySample:
             else IneligibleScalarAuxiliaryTarget(kind='irreversible_progress'),
             EligibleLegalMovesTarget(),
             EligibleSearchBudgetTarget(
-                normalized_target=float(row % 7) / 6.0,
+                curve=tuple(float(row % 7) / 6.0 - 0.1 * index for index in range(10)),
                 raw_kl=float(row % 11) / 10.0,
-                prediction_logit=float((row % 9) - 4),
-                predicted_quantile=float(row % 7) / 6.0,
                 source_generation=row % 100,
                 model_generation=row % 100,
                 inference_model_sha256='0' * 64,
@@ -336,8 +334,8 @@ def _object_reference_batch(
                 case EligibleScalarAuxiliaryTarget(value=value):
                     auxiliary[target_index][output_row, 0] = value
                     auxiliary_eligibility[target_index][output_row] = True
-                case EligibleSearchBudgetTarget(normalized_target=value):
-                    auxiliary[target_index][output_row, 0] = value
+                case EligibleSearchBudgetTarget(curve=curve):
+                    auxiliary[target_index][output_row, :] = curve
                     auxiliary_eligibility[target_index][output_row] = True
                 case EligibleLegalMovesTarget():
                     transformed = permutation[np.asarray(sample.policy.legal_action_ids, dtype=np.uint16)]

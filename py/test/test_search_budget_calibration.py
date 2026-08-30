@@ -1,183 +1,206 @@
 from __future__ import annotations
 
+import math
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from src.search_budget.calibration import (
-    BucketCalibrationState,
-    BucketGenerationEvidence,
-    CurveCalibrationState,
-    CurveDecisionReason,
-    CurveGenerationEvidence,
+    BudgetCalibrationParameters,
+    BudgetCalibrationState,
+    BudgetDecisionReason,
+    BudgetEligibilityFailure,
+    BudgetGenerationEvidence,
     initial_calibration_state,
     load_calibration_state_fail_closed,
+    publication_for_generation,
     publish_fail_closed,
-    published_curve_for_generation,
     save_calibration_state,
     update_calibration,
+    working_policy,
 )
-from src.search_budget.configuration import SearchBudgetConfiguration
-from src.search_budget.curve import CURVE_BUCKET_COUNT, flat_curve
+from src.search_budget.policy import BUDGET_CURVE_POINTS
 
-CONFIGURATION_SHA256 = 'a' * 64
+CONFIGURATION_SHA = 'c' * 64
 
 
-def generation_evidence(state: CurveCalibrationState, utility: float, gain: float = 1.0) -> CurveGenerationEvidence:
-    pending = state.pending_curve
-    return CurveGenerationEvidence(
-        bucket_evidence=tuple(
-            BucketGenerationEvidence(bucket_index=index, sample_count=10, generation_marginal_utility=utility + index)
-            for index in range(CURVE_BUCKET_COUNT)
-        ),
-        validated_curve=pending,
-        generation_gain=None if pending is None else gain,
-        total_assigned_new_visits=None if pending is None else 6000,
-        flat_total_new_visits=6000,
-        position_count=10,
+def evidence(
+    gain: float = 0.05,
+    realized_mean_multiple: float = 1.0,
+    errors: tuple[float, ...] = (0.5,) * BUDGET_CURVE_POINTS,
+    median_baseline_log_kl: float = -1.5,
+) -> BudgetGenerationEvidence:
+    return BudgetGenerationEvidence(
+        position_count=4,
+        mean_absolute_curve_error=errors,
+        generation_gain=gain,
+        median_baseline_log_kl=median_baseline_log_kl,
+        realized_mean_multiple=realized_mean_multiple,
+        realized_mean_assigned_visits=600.0 * realized_mean_multiple,
+        flat_mean_assigned_visits=600.0,
+        selected_index_counts=(4, 0, 0, 0, 0, 0, 0, 0, 0, 0),
     )
 
 
-def warm_state() -> CurveCalibrationState:
-    state = initial_calibration_state(CONFIGURATION_SHA256)
-    for generation in range(29):
-        state = update_calibration(state, generation, generation_evidence(state, 1.0), generation + 1).state
-        assert state.published_curve == flat_curve()
+def parameters(warmup: int = 2) -> BudgetCalibrationParameters:
+    return BudgetCalibrationParameters(warmup_completed_generations=warmup)
+
+
+def completed_state(generations: int, gain: float = 0.05, warmup: int = 2) -> BudgetCalibrationState:
+    state = initial_calibration_state(CONFIGURATION_SHA)
+    for generation in range(generations):
+        state = update_calibration(state, generation, evidence(gain), generation + 1, parameters(warmup)).state
     return state
 
 
-def test_bucket_ema_initializes_updates_and_retains_empty_bucket() -> None:
-    state = initial_calibration_state(CONFIGURATION_SHA256)
-    first = update_calibration(state, 0, generation_evidence(state, 1.0), 1).state
-    empty_second = CurveGenerationEvidence(
-        bucket_evidence=tuple(
-            BucketGenerationEvidence(
-                bucket_index=index,
-                sample_count=0 if index == 0 else 10,
-                generation_marginal_utility=None if index == 0 else 0.0,
-            )
-            for index in range(CURVE_BUCKET_COUNT)
-        ),
-        validated_curve=first.pending_curve,
-        generation_gain=0.0,
-        total_assigned_new_visits=6000,
-        flat_total_new_visits=6000,
-        position_count=10,
-    )
-    second = update_calibration(first, 1, empty_second, 2).state
-    assert first.bucket_states[0].ema_utility == 1.0
-    assert second.bucket_states[0].ema_utility == 1.0
-    assert second.bucket_states[1].ema_utility == 1.6
+def test_initial_state_publishes_flat_with_unit_sigma_and_configured_tau() -> None:
+    state = initial_calibration_state(CONFIGURATION_SHA)
+    assert not state.published_policy.apply_learned
+    assert state.sigma == (1.0,) * BUDGET_CURVE_POINTS
+    assert state.log_tau == pytest.approx(math.log(0.1))
+    assert state.decision_reason is BudgetDecisionReason.INITIAL
 
 
-def test_pending_curve_is_validated_one_generation_later_and_warmup_is_flat() -> None:
-    state = initial_calibration_state(CONFIGURATION_SHA256)
-    first = update_calibration(state, 0, generation_evidence(state, 1.0), 1).state
-    assert first.pending_source_generation == 0
-    assert first.current_validation_gain is None
-    second = update_calibration(first, 1, generation_evidence(first, 1.0), 2).state
-    assert second.current_validation_gain == 1.0
-    assert second.published_curve == flat_curve()
+def test_working_policy_applies_the_learned_rule_regardless_of_the_gate() -> None:
+    state = initial_calibration_state(CONFIGURATION_SHA)
+    policy = working_policy(state)
+    assert policy.apply_learned
+    assert policy.sigma == state.sigma
+    assert policy.log_tau == state.log_tau
 
 
-def test_thirtieth_completed_generation_can_publish_positive_validated_curve() -> None:
-    state = warm_state()
-    updated = update_calibration(state, 29, generation_evidence(state, 1.0), 30).state
-    assert updated.decision_reason == CurveDecisionReason.VALIDATED_PENDING
-    assert updated.published_curve != flat_curve()
+def test_sigma_updates_with_ema_decay_from_unit_initialisation() -> None:
+    state = initial_calibration_state(CONFIGURATION_SHA)
+    updated = update_calibration(state, 0, evidence(errors=(2.0,) * 10), 1, parameters()).state
+    assert updated.sigma == pytest.approx((0.9 * 1.0 + 0.1 * 2.0,) * 10)
 
 
-def test_nonpositive_gain_reaches_flat_when_the_previous_curve_was_already_flat() -> None:
-    state = warm_state()
-    activated = update_calibration(state, 29, generation_evidence(state, 1.0), 30).state
-    retreated = update_calibration(activated, 30, generation_evidence(activated, 1.0, gain=-10.0), 31).state
-    assert retreated.published_curve == flat_curve()
-    assert retreated.decision_reason == CurveDecisionReason.NO_ELIGIBLE_PENDING
+def test_the_first_generation_seeds_log_tau_from_the_measured_baseline_curve() -> None:
+    state = initial_calibration_state(CONFIGURATION_SHA)
+    seeded = update_calibration(state, 0, evidence(median_baseline_log_kl=-1.75), 1, parameters()).state
+    assert seeded.log_tau == pytest.approx(-1.75)
 
 
-def test_nonpositive_gain_decays_a_matured_curve_towards_flat_within_the_step_bound() -> None:
-    state = update_calibration(warm_state(), 29, generation_evidence(warm_state(), 1.0), 30).state
-    generation = 30
-    for _ in range(6):
-        state = update_calibration(state, generation, generation_evidence(state, 1.0), generation + 1).state
-        generation += 1
-    matured = state.published_curve
-    assert matured != flat_curve()
-
-    decayed = update_calibration(state, generation, generation_evidence(state, 1.0, gain=-10.0), generation + 1).state
-
-    # A single noisy generation must pause progress, not discard every validated bucket.
-    assert decayed.published_curve != flat_curve()
-    assert decayed.decision_reason == CurveDecisionReason.NO_ELIGIBLE_PENDING
-    ratios = [
-        after / before for after, before in zip(decayed.published_curve.multipliers, matured.multipliers, strict=True)
-    ]
-    assert all(1.0 / 1.1 - 1e-9 <= ratio <= 1.1 + 1e-9 for ratio in ratios)
-    # Every bucket moves towards one.
-    assert all(
-        abs(after - 1.0) < abs(before - 1.0)
-        for after, before in zip(decayed.published_curve.multipliers, matured.multipliers, strict=True)
-    )
+def test_log_tau_moves_toward_lower_spend_when_realized_multiple_is_high() -> None:
+    seeded = update_calibration(initial_calibration_state(CONFIGURATION_SHA), 0, evidence(), 1, parameters()).state
+    overspend = update_calibration(seeded, 1, evidence(realized_mean_multiple=1.02), 2, parameters()).state
+    assert overspend.log_tau == pytest.approx(seeded.log_tau + math.log(1.02))
 
 
-def test_finalization_is_idempotent_and_publication_applies_only_at_named_generation() -> None:
-    state = warm_state()
-    update = update_calibration(state, 29, generation_evidence(state, 1.0), 35)
-    assert update.applied
-    assert published_curve_for_generation(update.state, 34) == flat_curve()
-    assert published_curve_for_generation(update.state, 35) == update.state.published_curve
-    repeated = update_calibration(update.state, 29, generation_evidence(state, 1.0), 35)
+def test_log_tau_step_is_bounded_to_the_configured_ratio() -> None:
+    seeded = update_calibration(initial_calibration_state(CONFIGURATION_SHA), 0, evidence(), 1, parameters()).state
+    surge = update_calibration(seeded, 1, evidence(realized_mean_multiple=4.0), 2, parameters()).state
+    collapse = update_calibration(seeded, 1, evidence(realized_mean_multiple=0.2), 2, parameters()).state
+    assert surge.log_tau == pytest.approx(seeded.log_tau + math.log(1.05))
+    assert collapse.log_tau == pytest.approx(seeded.log_tau - math.log(1.05))
+
+
+def test_unconverged_spend_keeps_the_gate_closed_even_with_positive_gain() -> None:
+    # A positive gain while mean spend still sits far above baseline only says that a larger budget
+    # beats a smaller one, so it must not be allowed to open the gate.
+    state = completed_state(40, warmup=5)
+    overspending = update_calibration(
+        state, 40, evidence(gain=0.5, realized_mean_multiple=3.0), 41, parameters(warmup=5)
+    ).state
+    assert BudgetEligibilityFailure.UNCONVERGED_SPEND in overspending.failed_eligibility_conditions
+    assert not overspending.published_policy.apply_learned
+
+
+def test_warmup_keeps_the_gate_closed_while_calibration_progresses() -> None:
+    state = completed_state(1, warmup=5)
+    assert not state.published_policy.apply_learned
+    assert state.decision_reason is BudgetDecisionReason.WARMUP
+    assert BudgetEligibilityFailure.WARMUP in state.failed_eligibility_conditions
+    assert state.current_validation_gain == pytest.approx(0.05)
+
+
+def test_gate_opens_after_warmup_with_positive_current_and_ema_gain() -> None:
+    state = completed_state(2)
+    assert state.published_policy.apply_learned
+    assert state.decision_reason is BudgetDecisionReason.APPLIED
+    assert state.failed_eligibility_conditions == ()
+
+
+def test_negative_current_gain_closes_the_gate_to_flat() -> None:
+    state = completed_state(2)
+    closed = update_calibration(state, 2, evidence(gain=-0.05), 3, parameters()).state
+    assert not closed.published_policy.apply_learned
+    assert closed.decision_reason is BudgetDecisionReason.GATE_CLOSED
+    assert BudgetEligibilityFailure.NON_POSITIVE_CURRENT_GAIN in closed.failed_eligibility_conditions
+
+
+def test_ema_gain_uses_configured_decay_and_gates_independently() -> None:
+    state = completed_state(2, gain=0.1)
+    dipped = update_calibration(state, 2, evidence(gain=-0.01), 3, parameters()).state
+    assert dipped.ema_validation_gain == pytest.approx(0.8 * state.ema_validation_gain + 0.2 * -0.01)
+    assert BudgetEligibilityFailure.NON_POSITIVE_CURRENT_GAIN in dipped.failed_eligibility_conditions
+    assert BudgetEligibilityFailure.NON_POSITIVE_EMA_GAIN not in dipped.failed_eligibility_conditions
+
+
+def test_publication_applies_only_from_its_application_generation() -> None:
+    state = completed_state(2)
+    later = update_calibration(state, 2, evidence(gain=-0.05), 7, parameters()).state
+    assert publication_for_generation(later, 6).policy == state.published_policy
+    assert publication_for_generation(later, 7).policy == later.published_policy
+
+
+def test_reprocessing_a_finalized_generation_is_idempotent() -> None:
+    state = completed_state(2)
+    repeated = update_calibration(state, 1, evidence(), 3, parameters())
     assert not repeated.applied
-    assert repeated.state == update.state
+    assert repeated.state == state
 
 
-def test_fail_closed_state_and_unreadable_persistence_publish_flat(tmp_path: Path) -> None:
-    state = warm_state()
-    state = update_calibration(state, 29, generation_evidence(state, 1.0), 30).state
-    failed = publish_fail_closed(state, 31, CurveDecisionReason.TERMINAL_FAILURE)
-    assert published_curve_for_generation(failed, 30) == state.published_curve
-    assert published_curve_for_generation(failed, 31) == flat_curve()
+def test_out_of_order_finalization_is_rejected() -> None:
+    state = initial_calibration_state(CONFIGURATION_SHA)
+    state = update_calibration(state, 0, evidence(), 1, parameters()).state
+    state = update_calibration(state, 2, evidence(), 3, parameters()).state
+    with pytest.raises(ValueError, match='source order'):
+        update_calibration(state, 1, evidence(), 3, parameters())
+    with pytest.raises(ValueError, match='after its source generation'):
+        update_calibration(state, 5, evidence(), 5, parameters())
 
-    path = tmp_path / 'state.json'
-    path.write_text('{not json', encoding='utf-8')
-    unreadable = load_calibration_state_fail_closed(path, CONFIGURATION_SHA256, 40)
-    assert unreadable.published_curve == flat_curve()
-    assert unreadable.decision_reason == CurveDecisionReason.UNREADABLE_STATE
 
+def test_fail_closed_disables_the_learned_rule_but_keeps_calibration() -> None:
+    state = completed_state(2)
+    failed = publish_fail_closed(state, 5, BudgetDecisionReason.TERMINAL_FAILURE)
+    assert not failed.published_policy.apply_learned
+    assert failed.sigma == state.sigma
+    assert failed.log_tau == state.log_tau
+    assert failed.decision_reason is BudgetDecisionReason.TERMINAL_FAILURE
+    with pytest.raises(ValueError, match='failure decision reason'):
+        publish_fail_closed(state, 5, BudgetDecisionReason.APPLIED)
+
+
+def test_calibration_state_round_trips_through_disk(tmp_path: Path) -> None:
+    state = completed_state(2)
+    path = tmp_path / 'calibration-state.json'
     save_calibration_state(path, state)
-    restarted = load_calibration_state_fail_closed(path, CONFIGURATION_SHA256, 40)
-    assert restarted == state
+    loaded = load_calibration_state_fail_closed(path, CONFIGURATION_SHA, 3)
+    assert loaded == state
 
 
-def test_legacy_blend_state_migrates_fail_closed_and_defaults_are_resolved(tmp_path: Path) -> None:
-    configuration = SearchBudgetConfiguration()
-    assert configuration.curve_version == 'live_ema_ten_bucket_v1'
-    assert configuration.calibration.bucket_count == CURVE_BUCKET_COUNT
-    assert configuration.calibration.initializer_version == 'analytic_q5_v1'
-    assert configuration.calibration.warmup_completed_source_generations == 30
-    assert configuration.labeling.parallel_searches == 2
-    assert configuration.production.minimum_parallel_searches == 2
-
-    path = tmp_path / 'legacy-state.json'
-    path.write_text(
-        '{"schema_version":1,"configuration_sha256":"'
-        + CONFIGURATION_SHA256
-        + '","finalized_source_generations":[],"previous_blend":"0",'
-        '"selected_blend":"0","application_generation":0,"candidate_states":[],"decision_reason":"initial"}',
-        encoding='utf-8',
-    )
-    migrated = load_calibration_state_fail_closed(path, CONFIGURATION_SHA256, 12)
-    assert migrated.published_curve == flat_curve()
-    assert migrated.application_generation == 12
-    assert migrated.decision_reason == CurveDecisionReason.UNREADABLE_STATE
+def test_unreadable_state_fails_closed_to_flat(tmp_path: Path) -> None:
+    path = tmp_path / 'calibration-state.json'
+    path.write_text('{not json', encoding='utf-8')
+    loaded = load_calibration_state_fail_closed(path, CONFIGURATION_SHA, 3)
+    assert not loaded.published_policy.apply_learned
+    assert loaded.decision_reason is BudgetDecisionReason.UNREADABLE_STATE
 
 
-def test_persisted_calibration_rejects_nonfinite_aggregate_state() -> None:
-    with pytest.raises(ValueError, match='finite'):
-        BucketCalibrationState(
-            bucket_index=0,
-            sample_count=1,
-            current_generation_utility=1.0,
-            ema_utility=1.0,
-            raw_log_update=float('nan'),
-            projection_adjustment=0.0,
-        )
+def test_configuration_digest_mismatch_fails_closed(tmp_path: Path) -> None:
+    state = completed_state(2)
+    path = tmp_path / 'calibration-state.json'
+    save_calibration_state(path, state)
+    loaded = load_calibration_state_fail_closed(path, 'd' * 64, 3)
+    assert not loaded.published_policy.apply_learned
+    assert loaded.decision_reason is BudgetDecisionReason.INCOMPATIBLE_STATE
+
+
+def test_parameters_reject_invalid_configuration() -> None:
+    with pytest.raises(ValueError, match='tau step ratio'):
+        BudgetCalibrationParameters(tau_step_ratio=Decimal(1))
+    with pytest.raises(ValueError, match='initial tau'):
+        BudgetCalibrationParameters(initial_tau=Decimal(0))
+    with pytest.raises(ValueError, match='selection threshold'):
+        BudgetCalibrationParameters(selection_threshold=Decimal(1))

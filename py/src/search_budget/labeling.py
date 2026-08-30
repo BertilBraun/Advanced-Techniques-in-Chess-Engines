@@ -5,9 +5,11 @@ from base64 import b64decode, b64encode
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from fractions import Fraction
-from statistics import fmean, pvariance
+from statistics import fmean, median, pvariance
 from typing import Protocol
 
+import numpy as np
+import numpy.typing as npt
 from pydantic import Field, model_validator
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlanePayload
@@ -18,22 +20,22 @@ from src.replay.contracts import (
     SparsePolicyTarget,
 )
 from src.replay.label_source import ReplayLabelGameLocator
-from src.search_budget.allocation import (
-    AllocationPosition,
-    CandidateBudgetSet,
-    CurveAllocationIdentity,
-    CurveAllocationPurpose,
-    allocate_generation_multiplier_vector,
+from src.search_budget.analysis_log import ANALYSIS_RECORD_DTYPE
+from src.search_budget.calibration import BudgetGenerationEvidence
+from src.search_budget.policy import (
+    BASELINE_CURVE_INDEX,
+    BUDGET_CURVE_MULTIPLES,
+    BUDGET_CURVE_POINTS,
+    HALF_DEEP_CURVE_INDEX,
+    SearchBudgetPolicy,
     deep_label_visit_limit,
+    grid_checkpoint_visits,
+    grid_visit_counts,
+    log_kl_curve,
+    select_budget_index,
 )
-from src.search_budget.calibration import (
-    BucketGenerationEvidence,
-    CurveCalibrationState,
-    CurveGenerationEvidence,
-)
-from src.search_budget.curve import CURVE_BUCKET_COUNT, SearchBudgetCurve, bucket_index, flat_curve, probe_curve
 from src.search_budget.sampling import LabelPositionIdentity, select_generation_sample
-from src.search_budget.targets import PolicyDistribution, midrank_quantiles, policy_kl, shadow_gain
+from src.search_budget.targets import PolicyDistribution, policy_entropy, policy_kl, shadow_gain, top_visit_share
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.checkpoint import CheckpointReference
 from src.util.frozen_model import FrozenModel
@@ -88,6 +90,7 @@ class LabelReplaySampleSource(FrozenModel):
 class LabelPositionSource(FrozenModel):
     identity: LabelPositionIdentity
     action_prefix: tuple[int, ...]
+    absolute_replay_row: int = Field(ge=0)
     replay: LabelReplaySampleSource
 
     @model_validator(mode='after')
@@ -98,7 +101,7 @@ class LabelPositionSource(FrozenModel):
 
 
 class LabelGenerationSource(FrozenModel):
-    schema_version: int = Field(default=2, ge=2, le=2)
+    schema_version: int = Field(default=3, ge=3, le=3)
     source_generation: int = Field(ge=0)
     population_position_count: int = Field(gt=0)
     baseline_new_visits: int = Field(gt=0)
@@ -120,28 +123,24 @@ class LabelGenerationSource(FrozenModel):
     def deep_visit_limit(self) -> int:
         return deep_label_visit_limit(self.baseline_new_visits)
 
+    @property
+    def checkpoint_visits(self) -> tuple[int, ...]:
+        return grid_checkpoint_visits(self.baseline_new_visits)
+
 
 class PredictionRecord(FrozenModel):
     identity: LabelPositionIdentity
-    search_budget_logit: float
-    predicted_quantile: float = Field(ge=0.0, le=1.0)
+    predicted_curve: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
 
     @model_validator(mode='after')
     def validate_prediction(self) -> PredictionRecord:
-        if not math.isfinite(self.search_budget_logit) or not math.isfinite(self.predicted_quantile):
-            raise ValueError('Search-budget predictions must be finite.')
-        if self.search_budget_logit >= 0.0:
-            expected = 1.0 / (1.0 + math.exp(-self.search_budget_logit))
-        else:
-            exponential = math.exp(self.search_budget_logit)
-            expected = exponential / (1.0 + exponential)
-        if not math.isclose(expected, self.predicted_quantile, rel_tol=0.0, abs_tol=1e-6):
-            raise ValueError('Bounded prediction must be the sigmoid of its raw logit.')
+        if any(not math.isfinite(value) for value in self.predicted_curve):
+            raise ValueError('Search-budget curve predictions must be finite.')
         return self
 
 
 class PredictionShardArtifact(FrozenModel):
-    schema_version: int = Field(default=1, ge=1, le=1)
+    schema_version: int = Field(default=2, ge=2, le=2)
     source_generation: int = Field(ge=0)
     shard_index: int = Field(ge=0)
     checkpoint_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -150,6 +149,7 @@ class PredictionShardArtifact(FrozenModel):
 
 class PolicyCheckpointRecord(FrozenModel):
     visits: int = Field(gt=0)
+    root_value: float = Field(ge=-1.0, le=1.0)
     policy_target_visits: SearchVisitCounts
 
 
@@ -174,7 +174,7 @@ class DeepSearchRecord(FrozenModel):
 
 
 class DeepSearchShardArtifact(FrozenModel):
-    schema_version: int = Field(default=1, ge=1, le=1)
+    schema_version: int = Field(default=2, ge=2, le=2)
     source_generation: int = Field(ge=0)
     shard_index: int = Field(ge=0)
     checkpoint_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -195,32 +195,25 @@ class DistributionSummary(FrozenModel):
     histogram_counts: tuple[int, int, int, int, int, int, int, int, int, int]
 
 
-class CurveValidationDiagnostics(FrozenModel):
-    generation_gain: float | None
-    mean_assigned_new_visits: float | None = Field(default=None, gt=0.0)
-    assigned_new_visits_variance: float | None = Field(default=None, ge=0.0)
-    mean_kl_from_deep: float | None = Field(default=None, ge=0.0)
-    exact_spend_residual: int | None
-
-
-class BucketGenerationDiagnostics(FrozenModel):
-    bucket_index: int = Field(ge=0, lt=CURVE_BUCKET_COUNT)
-    sample_count: int = Field(ge=0)
-    generation_marginal_utility: float | None
-    lower_mean_visits: float | None = Field(default=None, gt=0.0)
-    upper_mean_visits: float | None = Field(default=None, gt=0.0)
-    checkpoint_deduplication_count: int = Field(ge=0)
+class CurvePointDiagnostics(FrozenModel):
+    curve_index: int = Field(ge=0, lt=BUDGET_CURVE_POINTS)
+    grid_visits: int = Field(gt=0)
+    mean_target_log_kl: float
+    mean_predicted_log_kl: float
+    mean_absolute_error: float = Field(ge=0.0)
+    selected_count: int = Field(ge=0)
 
 
 @dataclass(frozen=True)
 class GenerationFinalization:
     replay_samples: tuple[ReplaySample, ...]
-    evidence: CurveGenerationEvidence
-    validation_diagnostics: CurveValidationDiagnostics
-    bucket_diagnostics: tuple[BucketGenerationDiagnostics, ...]
-    prediction_distribution: DistributionSummary
-    target_distribution: DistributionSummary
-    raw_kl_distribution: DistributionSummary
+    evidence: BudgetGenerationEvidence
+    curve_point_diagnostics: tuple[CurvePointDiagnostics, ...]
+    baseline_raw_kl_distribution: DistributionSummary
+    predicted_baseline_log_kl_distribution: DistributionSummary
+    target_baseline_log_kl_distribution: DistributionSummary
+    assigned_new_visits_variance: float
+    analysis_records: npt.NDArray[np.void]
 
 
 class ReplaySampleProvider(Protocol):
@@ -269,6 +262,7 @@ def build_generation_source(
             LabelPositionSource(
                 identity=identity,
                 action_prefix=by_identity[identity][0].action_ids[: identity.ply],
+                absolute_replay_row=by_identity[identity][0].first_absolute_replay_row + by_identity[identity][1],
                 replay=LabelReplaySampleSource.from_replay_sample(
                     sample_provider(by_identity[identity][0].first_absolute_replay_row + by_identity[identity][1])
                 ),
@@ -291,66 +285,10 @@ def prediction_map(
     return {record.identity: record for record in records}
 
 
-def candidate_allocations(
-    source: LabelGenerationSource,
-    predictions: dict[LabelPositionIdentity, PredictionRecord],
-    calibration: CurveCalibrationState,
-    probe_ratio: float,
-) -> tuple[CandidateBudgetSet, ...]:
-    positions = tuple(
-        AllocationPosition(position.identity, predictions[position.identity].predicted_quantile)
-        for position in source.selected_positions
-    )
-    allocations = [
-        allocate_generation_multiplier_vector(
-            positions,
-            source.baseline_new_visits,
-            flat_curve().multipliers,
-            CurveAllocationIdentity(CurveAllocationPurpose.FLAT),
-        )
-    ]
-    if calibration.pending_curve is not None:
-        allocations.append(
-            allocate_generation_multiplier_vector(
-                positions,
-                source.baseline_new_visits,
-                calibration.pending_curve.multipliers,
-                CurveAllocationIdentity(CurveAllocationPurpose.PENDING_VALIDATION),
-            )
-        )
-    for selected_bucket in range(CURVE_BUCKET_COUNT):
-        for purpose, upper in (
-            (CurveAllocationPurpose.PROBE_LOWER, False),
-            (CurveAllocationPurpose.PROBE_UPPER, True),
-        ):
-            allocations.append(
-                allocate_generation_multiplier_vector(
-                    positions,
-                    source.baseline_new_visits,
-                    probe_curve(calibration.shadow_curve, selected_bucket, probe_ratio, upper),
-                    CurveAllocationIdentity(purpose, selected_bucket),
-                )
-            )
-    return tuple(allocations)
-
-
-def checkpoint_visits_by_position(
-    source: LabelGenerationSource,
-    allocations: tuple[CandidateBudgetSet, ...],
-) -> dict[LabelPositionIdentity, tuple[int, ...]]:
-    visits: dict[LabelPositionIdentity, set[int]] = {
-        position.identity: {source.baseline_new_visits} for position in source.selected_positions
-    }
-    for allocation in allocations:
-        for budget in allocation.budgets:
-            visits[budget.identity].add(budget.assigned_new_visits)
-    return {identity: tuple(sorted(values)) for identity, values in visits.items()}
-
-
 def finalize_generation(
     source: LabelGenerationSource,
     predictions: dict[LabelPositionIdentity, PredictionRecord],
-    allocations: tuple[CandidateBudgetSet, ...],
+    policy: SearchBudgetPolicy,
     deep_artifacts: tuple[DeepSearchShardArtifact, ...],
     action_size: int,
     maximum_policy_entries: int,
@@ -362,148 +300,124 @@ def finalize_generation(
     if any(artifact.checkpoint_sha256 != source.checkpoint.inference_model_sha256 for artifact in deep_artifacts):
         raise ValueError('Deep-search artifacts do not use the source generation checkpoint.')
     deep_by_identity = {record.identity: record for record in deep_records}
-    flat_policies = tuple(
-        _policy_at(deep_by_identity[identity], source.baseline_new_visits, action_size) for identity in expected
-    )
-    deep_policies = tuple(
-        _policy_distribution(deep_by_identity[identity].final_policy_target_visits, action_size)
-        for identity in expected
-    )
-    raw_kl_values = tuple(policy_kl(deep, flat) for deep, flat in zip(deep_policies, flat_policies, strict=True))
-    if any(not math.isfinite(value) for value in raw_kl_values):
-        raise ValueError('Deep-label KL reconstruction must be finite.')
-    normalized_targets = midrank_quantiles(raw_kl_values)
     source_by_identity = {position.identity: position for position in source.selected_positions}
-    replay_samples = tuple(
-        _labelled_replay_sample(
-            source_by_identity[identity].replay.replay_sample(),
-            deep_by_identity[identity],
-            raw_kl,
-            normalized_target,
-            predictions[identity],
-            source,
-            maximum_policy_entries,
-        )
-        for identity, raw_kl, normalized_target in zip(expected, raw_kl_values, normalized_targets, strict=True)
-    )
-    prediction_values = tuple(predictions[identity].predicted_quantile for identity in expected)
-    allocations_by_identity = {allocation.identity: allocation for allocation in allocations}
-    pending_allocation = allocations_by_identity.get(CurveAllocationIdentity(CurveAllocationPurpose.PENDING_VALIDATION))
-    if pending_allocation is None:
-        generation_gain = None
-        pending_total = None
-        validation_diagnostics = CurveValidationDiagnostics(
-            generation_gain=None,
-            mean_assigned_new_visits=None,
-            assigned_new_visits_variance=None,
-            mean_kl_from_deep=None,
-            exact_spend_residual=None,
-        )
-    else:
-        pending_budgets = {budget.identity: budget.assigned_new_visits for budget in pending_allocation.budgets}
-        pending_policies = tuple(
-            _policy_at(deep_by_identity[identity], pending_budgets[identity], action_size) for identity in expected
-        )
-        generation_gain = shadow_gain(deep_policies, flat_policies, pending_policies)
-        pending_kl_values = tuple(
-            policy_kl(deep, candidate) for deep, candidate in zip(deep_policies, pending_policies, strict=True)
-        )
-        assigned_visits = tuple(pending_budgets[identity] for identity in expected)
-        pending_total = pending_allocation.total_assigned_new_visits
-        validation_diagnostics = CurveValidationDiagnostics(
-            generation_gain=generation_gain,
-            mean_assigned_new_visits=pending_total / len(expected),
-            assigned_new_visits_variance=pvariance(assigned_visits),
-            mean_kl_from_deep=fmean(pending_kl_values),
-            exact_spend_residual=pending_allocation.spend_error,
-        )
+    grid_visits = grid_visit_counts(source.baseline_new_visits)
 
-    bucket_evidence: list[BucketGenerationEvidence] = []
-    bucket_diagnostics: list[BucketGenerationDiagnostics] = []
-    for selected_bucket in range(CURVE_BUCKET_COUNT):
-        lower = allocations_by_identity[CurveAllocationIdentity(CurveAllocationPurpose.PROBE_LOWER, selected_bucket)]
-        upper = allocations_by_identity[CurveAllocationIdentity(CurveAllocationPurpose.PROBE_UPPER, selected_bucket)]
-        lower_budgets = {budget.identity: budget.assigned_new_visits for budget in lower.budgets}
-        upper_budgets = {budget.identity: budget.assigned_new_visits for budget in upper.budgets}
-        bucket_identities = tuple(
-            identity
-            for identity in expected
-            if bucket_index(predictions[identity].predicted_quantile) == selected_bucket
-        )
-        utilities: list[float] = []
-        deduplicated = 0
-        multiplier_interval = (
-            upper.allocation_multipliers[selected_bucket] - lower.allocation_multipliers[selected_bucket]
-        )
-        if multiplier_interval <= 0.0:
-            raise ValueError('Upper local probe multiplier must exceed its lower probe multiplier.')
-        for identity in bucket_identities:
-            lower_visits = lower_budgets[identity]
-            upper_visits = upper_budgets[identity]
-            if upper_visits == lower_visits:
-                deduplicated += 1
-            if upper_visits < lower_visits:
-                if lower_visits - upper_visits > 1:
-                    raise ValueError('Upper local probe is materially below its lower probe.')
-                deduplicated += 1
-                continue
-            deep_policy = _policy_distribution(deep_by_identity[identity].final_policy_target_visits, action_size)
-            lower_policy = _policy_at(deep_by_identity[identity], lower_visits, action_size)
-            upper_policy = _policy_at(deep_by_identity[identity], upper_visits, action_size)
-            utilities.append(
-                (policy_kl(deep_policy, lower_policy) - policy_kl(deep_policy, upper_policy)) / multiplier_interval
-            )
-        generation_utility = None if not utilities else fmean(utilities)
-        bucket_evidence.append(
-            BucketGenerationEvidence(
-                bucket_index=selected_bucket,
-                sample_count=len(utilities),
-                generation_marginal_utility=generation_utility,
-            )
-        )
-        bucket_diagnostics.append(
-            BucketGenerationDiagnostics(
-                bucket_index=selected_bucket,
-                sample_count=len(utilities),
-                generation_marginal_utility=generation_utility,
-                lower_mean_visits=None
-                if not bucket_identities
-                else fmean(lower_budgets[item] for item in bucket_identities),
-                upper_mean_visits=None
-                if not bucket_identities
-                else fmean(upper_budgets[item] for item in bucket_identities),
-                checkpoint_deduplication_count=deduplicated,
+    replay_samples: list[ReplaySample] = []
+    error_sums = [0.0] * BUDGET_CURVE_POINTS
+    target_sums = [0.0] * BUDGET_CURVE_POINTS
+    prediction_sums = [0.0] * BUDGET_CURVE_POINTS
+    selected_counts = [0] * BUDGET_CURVE_POINTS
+    deep_policies: list[PolicyDistribution] = []
+    flat_policies: list[PolicyDistribution] = []
+    assigned_policies: list[PolicyDistribution] = []
+    assigned_visits_values: list[int] = []
+    baseline_raw_kls: list[float] = []
+    predicted_baseline_log_kls: list[float] = []
+    target_baseline_log_kls: list[float] = []
+    analysis_records = np.zeros(len(expected), dtype=ANALYSIS_RECORD_DTYPE)
+
+    for row_index, identity in enumerate(expected):
+        deep = deep_by_identity[identity]
+        deep_policy = _policy_distribution(deep.final_policy_target_visits, action_size)
+        grid_policies = tuple(_policy_at(deep, visits, action_size) for visits in grid_visits)
+        raw_kls = tuple(policy_kl(deep_policy, grid_policy) for grid_policy in grid_policies)
+        if any(not math.isfinite(value) for value in raw_kls):
+            raise ValueError('Deep-label KL reconstruction must be finite.')
+        curve_label = log_kl_curve(raw_kls)
+        predicted = predictions[identity].predicted_curve
+        selected = select_budget_index(predicted, policy)
+        selected_counts[selected] += 1
+        assigned_visits_values.append(grid_visits[selected])
+        deep_policies.append(deep_policy)
+        flat_policies.append(grid_policies[BASELINE_CURVE_INDEX])
+        assigned_policies.append(grid_policies[selected])
+        baseline_raw_kls.append(raw_kls[BASELINE_CURVE_INDEX])
+        predicted_baseline_log_kls.append(predicted[BASELINE_CURVE_INDEX])
+        target_baseline_log_kls.append(curve_label[BASELINE_CURVE_INDEX])
+        for index in range(BUDGET_CURVE_POINTS):
+            error_sums[index] += abs(predicted[index] - curve_label[index])
+            target_sums[index] += curve_label[index]
+            prediction_sums[index] += predicted[index]
+        replay_samples.append(
+            _labelled_replay_sample(
+                source_by_identity[identity].replay.replay_sample(),
+                deep,
+                curve_label,
+                raw_kls[BASELINE_CURVE_INDEX],
+                source,
+                maximum_policy_entries,
             )
         )
+        record = analysis_records[row_index]
+        record['source_generation'] = source.source_generation
+        record['model_generation'] = source.checkpoint.generation
+        record['ply'] = identity.ply
+        record['first_absolute_replay_row'] = source_by_identity[identity].absolute_replay_row
+        record['baseline_visits'] = source.baseline_new_visits
+        record['policy_kl'] = raw_kls
+        record['value_error'] = tuple(
+            abs(_root_value_at(deep, visits) - deep.final_root_value) for visits in grid_visits
+        )
+        record['top_visit_share'] = top_visit_share(grid_policies[BASELINE_CURVE_INDEX])
+        record['policy_entropy'] = policy_entropy(grid_policies[BASELINE_CURVE_INDEX])
+        record['predicted_curve'] = predicted
+        record['deep_half_kl'] = raw_kls[HALF_DEEP_CURVE_INDEX]
+        record['assigned_visits'] = grid_visits[selected]
+        record['selected_index'] = selected
+
+    position_count = len(expected)
+    generation_gain = shadow_gain(tuple(deep_policies), tuple(flat_policies), tuple(assigned_policies))
+    evidence = BudgetGenerationEvidence(
+        position_count=position_count,
+        mean_absolute_curve_error=tuple(value / position_count for value in error_sums),
+        generation_gain=generation_gain,
+        median_baseline_log_kl=median(target_baseline_log_kls),
+        realized_mean_multiple=fmean(BUDGET_CURVE_MULTIPLES[index] for index in _selected_indices(selected_counts)),
+        realized_mean_assigned_visits=fmean(assigned_visits_values),
+        flat_mean_assigned_visits=float(source.baseline_new_visits),
+        selected_index_counts=tuple(selected_counts),
+    )
+    diagnostics = tuple(
+        CurvePointDiagnostics(
+            curve_index=index,
+            grid_visits=grid_visits[index],
+            mean_target_log_kl=target_sums[index] / position_count,
+            mean_predicted_log_kl=prediction_sums[index] / position_count,
+            mean_absolute_error=error_sums[index] / position_count,
+            selected_count=selected_counts[index],
+        )
+        for index in range(BUDGET_CURVE_POINTS)
+    )
     return GenerationFinalization(
-        replay_samples=replay_samples,
-        evidence=CurveGenerationEvidence(
-            bucket_evidence=tuple(bucket_evidence),
-            validated_curve=None
-            if pending_allocation is None
-            else _validated_curve_from_allocation(pending_allocation),
-            generation_gain=generation_gain,
-            total_assigned_new_visits=pending_total,
-            flat_total_new_visits=source.baseline_new_visits * len(expected),
-            position_count=len(expected),
-        ),
-        validation_diagnostics=validation_diagnostics,
-        bucket_diagnostics=tuple(bucket_diagnostics),
-        prediction_distribution=_distribution(prediction_values),
-        target_distribution=_distribution(normalized_targets),
-        raw_kl_distribution=_distribution(raw_kl_values),
+        replay_samples=tuple(replay_samples),
+        evidence=evidence,
+        curve_point_diagnostics=diagnostics,
+        baseline_raw_kl_distribution=_distribution(tuple(baseline_raw_kls)),
+        predicted_baseline_log_kl_distribution=_distribution(tuple(predicted_baseline_log_kls)),
+        target_baseline_log_kl_distribution=_distribution(tuple(target_baseline_log_kls)),
+        assigned_new_visits_variance=pvariance(assigned_visits_values) if position_count > 1 else 0.0,
+        analysis_records=analysis_records,
     )
 
 
-def _validated_curve_from_allocation(allocation: CandidateBudgetSet) -> SearchBudgetCurve:
-    return SearchBudgetCurve(multipliers=allocation.allocation_multipliers)
+def _selected_indices(selected_counts: list[int]) -> tuple[int, ...]:
+    return tuple(index for index, count in enumerate(selected_counts) for _ in range(count))
 
 
 def _policy_at(record: DeepSearchRecord, visits: int, action_size: int) -> PolicyDistribution:
+    return _policy_distribution(_checkpoint_at(record, visits).policy_target_visits, action_size)
+
+
+def _root_value_at(record: DeepSearchRecord, visits: int) -> float:
+    return _checkpoint_at(record, visits).root_value
+
+
+def _checkpoint_at(record: DeepSearchRecord, visits: int) -> PolicyCheckpointRecord:
     match = next((checkpoint for checkpoint in record.checkpoints if checkpoint.visits == visits), None)
     if match is None:
         raise ValueError(f'Deep-search record is missing required checkpoint {visits}.')
-    return _policy_distribution(match.policy_target_visits, action_size)
+    return match
 
 
 def _policy_distribution(visits: SearchVisitCounts, action_size: int) -> PolicyDistribution:
@@ -519,9 +433,8 @@ def _policy_distribution(visits: SearchVisitCounts, action_size: int) -> PolicyD
 def _labelled_replay_sample(
     base: ReplaySample,
     deep: DeepSearchRecord,
-    raw_kl: float,
-    normalized_target: float,
-    prediction: PredictionRecord,
+    curve_label: tuple[float, ...],
+    baseline_raw_kl: float,
     source: LabelGenerationSource,
     maximum_policy_entries: int,
 ) -> ReplaySample:
@@ -541,10 +454,8 @@ def _labelled_replay_sample(
         legal_action_ids=base.policy.legal_action_ids,
     )
     target = EligibleSearchBudgetTarget(
-        normalized_target=normalized_target,
-        raw_kl=raw_kl,
-        prediction_logit=prediction.search_budget_logit,
-        predicted_quantile=prediction.predicted_quantile,
+        curve=curve_label,
+        raw_kl=baseline_raw_kl,
         source_generation=source.source_generation,
         model_generation=source.checkpoint.generation,
         inference_model_sha256=source.checkpoint.inference_model_sha256,

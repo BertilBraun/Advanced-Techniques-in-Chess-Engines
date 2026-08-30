@@ -20,34 +20,30 @@ def test_search_budget_dashboard_is_compact_and_uses_dynamic_auxiliary_index() -
 
     assert tuple(category.title for category in categories) == (
         'Adaptive Search Overview',
-        'Adaptive Search - Scalar Head Diagnostics',
-        'Adaptive Search - Live Curve Calibration',
+        'Adaptive Search - Curve Head Diagnostics',
+        'Adaptive Search - Policy Calibration',
         'Adaptive Search - Label Pipeline',
         'Adaptive Search - Production Diagnostics',
     )
     overview = categories[0]
-    assert len(overview.charts) == 10
     assert tuple(chart.title for chart in overview.charts) == (
         'Validation gain (nats)',
-        'Relative validation gain (%)',
-        'Scalar-head learning',
-        'Label quantile mean',
-        'Label quantile variance',
-        'Visit allocation',
+        'Curve-head learning',
+        'Spend tracking',
+        'Realized mean multiple',
+        'Dual variable',
+        'Gate',
         'Exact spend residual',
-        'Curve multiplier range',
         'Label job outcome',
         'Label and replay volume',
     )
-    assert overview.charts[2].tags == (
+    assert overview.charts[1].tags == (
         'training_auxiliary/1-search-budget/loss',
         'training_auxiliary/1-search-budget/absolute_error_mean',
     )
-    live_curve = categories[2]
-    published = next(chart for chart in live_curve.charts if chart.title == 'Published curve')
-    assert published.tags == tuple(
-        f'search_budget/calibration/bucket_{index}/published_multiplier' for index in range(10)
-    )
+    calibration = categories[2]
+    sigma = next(chart for chart in calibration.charts if chart.title == 'Sigma by grid point')
+    assert sigma.tags == tuple(f'search_budget/curve_point_{index}/sigma' for index in range(10))
 
 
 def test_search_budget_dashboard_is_absent_without_search_budget_head() -> None:

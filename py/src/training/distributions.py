@@ -147,11 +147,20 @@ def _auxiliary_distribution(
                 prediction=_floats(eligible_predictions),
                 absolute_error=_floats(torch.abs(eligible_predictions - eligible_targets)),
             )
-        case 'future_search_value' | 'irreversible_progress' | 'search_budget':
+        case 'future_search_value' | 'irreversible_progress':
             eligible_predictions = prediction[eligible].squeeze(1)
-            if kind in {'irreversible_progress', 'search_budget'}:
+            if kind == 'irreversible_progress':
                 eligible_predictions = torch.sigmoid(eligible_predictions)
             eligible_targets = target[eligible].squeeze(1)
+            return ScalarAuxiliaryTrainingDistribution(
+                kind=kind,
+                target=_floats(eligible_targets),
+                prediction=_floats(eligible_predictions),
+                absolute_error=_floats(torch.abs(eligible_predictions - eligible_targets)),
+            )
+        case 'search_budget':
+            eligible_predictions = prediction[eligible].flatten()
+            eligible_targets = target[eligible].flatten()
             return ScalarAuxiliaryTrainingDistribution(
                 kind=kind,
                 target=_floats(eligible_targets),

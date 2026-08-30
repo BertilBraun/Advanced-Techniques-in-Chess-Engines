@@ -14,8 +14,8 @@ import pytest
 import src.self_play.process_runtime as process_runtime_module
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
-from src.search_budget.calibration import CurveDecisionReason, CurvePublication
-from src.search_budget.curve import SearchBudgetCurve, analytic_initial_curve, flat_curve
+from src.search_budget.calibration import BudgetDecisionReason, BudgetPolicyPublication
+from src.search_budget.policy import SearchBudgetPolicy, disabled_policy
 from src.self_play.process_runtime import self_play_worker_main
 from src.self_play.protocol import (
     PausedSelfPlayState,
@@ -76,8 +76,10 @@ class _Worker:
     def run_batch(self) -> None:
         pass
 
-    def refresh_published_model(self, checkpoint: CheckpointReference, search_budget_curve: SearchBudgetCurve) -> None:
-        assert search_budget_curve in {flat_curve(), analytic_initial_curve()}
+    def refresh_published_model(
+        self, checkpoint: CheckpointReference, search_budget_policy: SearchBudgetPolicy
+    ) -> None:
+        assert search_budget_policy in {disabled_policy(), _learned_policy()}
         self.generation = checkpoint.generation
 
     def update_resignation_policy(self, policy: PublishedResignationPolicy) -> None:
@@ -157,11 +159,15 @@ def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:
     return checkpoint_reference(tmp_path, generation, write_inference_model=True)
 
 
-def _publication(generation: int, adaptive: bool = False) -> CurvePublication:
-    return CurvePublication(
-        curve=analytic_initial_curve() if adaptive else flat_curve(),
+def _learned_policy() -> SearchBudgetPolicy:
+    return disabled_policy().model_copy(update={'apply_learned': True})
+
+
+def _publication(generation: int, adaptive: bool = False) -> BudgetPolicyPublication:
+    return BudgetPolicyPublication(
+        policy=_learned_policy() if adaptive else disabled_policy(),
         application_generation=generation,
-        decision_reason=CurveDecisionReason.VALIDATED_PENDING if adaptive else CurveDecisionReason.INITIAL,
+        decision_reason=BudgetDecisionReason.APPLIED if adaptive else BudgetDecisionReason.INITIAL,
     )
 
 
@@ -236,7 +242,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
 def _applied(
     worker_id: int,
     checkpoint: CheckpointReference,
-    search_budget: CurvePublication,
+    search_budget: BudgetPolicyPublication,
 ) -> RunningSelfPlayStateApplied:
     return RunningSelfPlayStateApplied(
         worker_id=worker_id,

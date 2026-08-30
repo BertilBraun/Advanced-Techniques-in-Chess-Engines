@@ -183,123 +183,52 @@ class TrainingReporter:
                     )
                 if event.ema_validation_gain is not None:
                     log_scalar('search_budget/calibration/ema_validation_gain', event.ema_validation_gain, generation)
-                _record_relative_validation_gain(event, generation)
-                if event.candidate_mean_assigned_new_visits is not None:
-                    log_scalar(
-                        'search_budget/calibration/candidate_mean_assigned_new_visits',
-                        event.candidate_mean_assigned_new_visits,
-                        generation,
-                    )
-                if event.candidate_assigned_new_visits_variance is not None:
-                    log_scalar(
-                        'search_budget/calibration/candidate_assigned_new_visits_variance',
-                        event.candidate_assigned_new_visits_variance,
-                        generation,
-                    )
-                if event.candidate_mean_kl_from_deep is not None:
-                    log_scalar(
-                        'search_budget/calibration/candidate_mean_kl_from_deep',
-                        event.candidate_mean_kl_from_deep,
-                        generation,
-                    )
-                if event.candidate_exact_spend_residual is not None:
-                    log_scalar(
-                        'search_budget/calibration/candidate_exact_spend_residual',
-                        event.candidate_exact_spend_residual,
-                        generation,
-                    )
+                log_scalar('search_budget/calibration/log_tau', event.log_tau, generation)
+                log_scalar('search_budget/calibration/realized_mean_multiple', event.realized_mean_multiple, generation)
                 log_scalar(
-                    'search_budget/calibration/minimum_published_multiplier',
-                    event.minimum_published_multiplier,
+                    'search_budget/calibration/realized_mean_assigned_visits',
+                    event.realized_mean_assigned_visits,
                     generation,
                 )
                 log_scalar(
-                    'search_budget/calibration/maximum_published_multiplier',
-                    event.maximum_published_multiplier,
+                    'search_budget/calibration/flat_mean_assigned_visits',
+                    event.flat_mean_assigned_visits,
                     generation,
                 )
                 log_scalar(
-                    'search_budget/calibration/published_mean_multiplier',
-                    sum(event.published_curve) / len(event.published_curve),
+                    'search_budget/calibration/assigned_new_visits_variance',
+                    event.assigned_new_visits_variance,
                     generation,
                 )
                 log_scalar(
-                    'search_budget/calibration/previous_published_mean_multiplier',
-                    sum(event.previous_published_curve) / len(event.previous_published_curve),
+                    'search_budget/calibration/published_apply_learned',
+                    int(event.published_apply_learned),
                     generation,
                 )
-                log_scalar(
-                    'search_budget/calibration/shadow_mean_multiplier',
-                    sum(event.shadow_curve) / len(event.shadow_curve),
-                    generation,
-                )
-                _record_curve_range('shadow', event.shadow_curve, generation)
-                if event.pending_curve is not None:
-                    log_scalar(
-                        'search_budget/calibration/pending_mean_multiplier',
-                        sum(event.pending_curve) / len(event.pending_curve),
-                        generation,
-                    )
-                    _record_curve_range('pending', event.pending_curve, generation)
-                if event.validated_curve is not None:
-                    log_scalar(
-                        'search_budget/calibration/validated_mean_multiplier',
-                        sum(event.validated_curve) / len(event.validated_curve),
-                        generation,
-                    )
-                    _record_curve_range('validated', event.validated_curve, generation)
                 log_scalar(
                     f'search_budget/calibration/decision_reason/{_metric_tag(event.decision_reason)}', 1, generation
                 )
+                for point in event.curve_points:
+                    prefix = f'search_budget/curve_point_{point.curve_index}'
+                    log_scalar(f'{prefix}/sigma', point.sigma, generation)
+                    log_scalar(f'{prefix}/grid_visits', point.grid_visits, generation)
+                    log_scalar(f'{prefix}/mean_target_log_kl', point.mean_target_log_kl, generation)
+                    log_scalar(f'{prefix}/mean_predicted_log_kl', point.mean_predicted_log_kl, generation)
+                    log_scalar(f'{prefix}/mean_absolute_error', point.mean_absolute_error, generation)
+                    log_scalar(f'{prefix}/selected_count', point.selected_count, generation)
+                for index, count in enumerate(event.selected_index_counts):
+                    log_scalar(f'search_budget/calibration/selected_index_{index}', count, generation)
                 _record_search_budget_distribution(
-                    'search_budget/label/prediction_quantile', event.prediction_distribution, generation
+                    'search_budget/label/baseline_raw_kl', event.baseline_raw_kl_distribution, generation
                 )
                 _record_search_budget_distribution(
-                    'search_budget/label/target_quantile', event.target_distribution, generation
-                )
-                _record_search_budget_distribution('search_budget/label/raw_kl', event.raw_kl_distribution, generation)
-                for bucket in event.buckets:
-                    prefix = f'search_budget/calibration/bucket_{bucket.bucket_index}'
-                    log_scalar(f'{prefix}/sample_count', bucket.sample_count, generation)
-                    log_scalar(f'{prefix}/empty', int(bucket.sample_count == 0), generation)
-                    if bucket.current_generation_utility is not None:
-                        log_scalar(
-                            f'{prefix}/generation_marginal_utility', bucket.current_generation_utility, generation
-                        )
-                    if bucket.ema_utility is not None:
-                        log_scalar(f'{prefix}/ema_marginal_utility', bucket.ema_utility, generation)
-                    log_scalar(f'{prefix}/shadow_multiplier', bucket.shadow_multiplier, generation)
-                    if bucket.pending_multiplier is not None:
-                        log_scalar(f'{prefix}/pending_multiplier', bucket.pending_multiplier, generation)
-                    if event.validated_curve is not None:
-                        log_scalar(
-                            f'{prefix}/validated_multiplier', event.validated_curve[bucket.bucket_index], generation
-                        )
-                    log_scalar(
-                        f'{prefix}/previous_published_multiplier',
-                        event.previous_published_curve[bucket.bucket_index],
-                        generation,
-                    )
-                    log_scalar(f'{prefix}/published_multiplier', bucket.published_multiplier, generation)
-                    log_scalar(f'{prefix}/raw_log_update', bucket.raw_log_update, generation)
-                    log_scalar(f'{prefix}/projection_adjustment', bucket.projection_adjustment, generation)
-                    if bucket.lower_mean_visits is not None:
-                        log_scalar(f'{prefix}/lower_mean_visits', bucket.lower_mean_visits, generation)
-                    if bucket.upper_mean_visits is not None:
-                        log_scalar(f'{prefix}/upper_mean_visits', bucket.upper_mean_visits, generation)
-                    log_scalar(
-                        f'{prefix}/checkpoint_deduplication_count',
-                        bucket.checkpoint_deduplication_count,
-                        generation,
-                    )
-                log_scalar(
-                    'search_budget/calibration/floor_share',
-                    event.prediction_distribution.histogram_counts[0] / event.prediction_distribution.count,
+                    'search_budget/label/predicted_baseline_log_kl',
+                    event.predicted_baseline_log_kl_distribution,
                     generation,
                 )
-                log_scalar(
-                    'search_budget/calibration/ceiling_share',
-                    event.prediction_distribution.histogram_counts[-1] / event.prediction_distribution.count,
+                _record_search_budget_distribution(
+                    'search_budget/label/target_baseline_log_kl',
+                    event.target_baseline_log_kl_distribution,
                     generation,
                 )
                 for condition in event.failed_eligibility_conditions:
@@ -307,8 +236,8 @@ class TrainingReporter:
             case FailedLabelJobReport():
                 log_scalar('search_budget/label/status/failed', 1, generation)
                 log_scalar(
-                    'search_budget/calibration/published_mean_multiplier',
-                    sum(event.published_curve) / len(event.published_curve),
+                    'search_budget/calibration/published_apply_learned',
+                    int(event.published_apply_learned),
                     generation,
                 )
                 log_scalar('search_budget/calibration/application_generation', event.application_generation, generation)
@@ -452,13 +381,26 @@ class TrainingReporter:
             generation,
             log_mean=True,
         )
-        _log_values('search_budget/production/prediction_logit', telemetry.search_budget_logits, generation)
         _log_values(
-            'search_budget/production/predicted_quantile',
-            telemetry.predicted_search_budgets,
+            'search_budget/production/predicted_baseline_log_kl',
+            telemetry.predicted_baseline_log_kls,
             generation,
             log_mean=True,
         )
+        selected = tuple(index for index in telemetry.selected_budget_indices if index >= 0)
+        for curve_index in range(10):
+            log_scalar(
+                f'search_budget/production/selected_index_{curve_index}',
+                sum(index == curve_index for index in selected),
+                generation,
+            )
+        if selected:
+            _log_values(
+                'search_budget/production/selected_index',
+                tuple(float(index) for index in selected),
+                generation,
+                log_mean=True,
+            )
         _log_values(
             'search_budget/production/parallel_searches', telemetry.parallel_searches, generation, log_mean=True
         )
@@ -598,30 +540,6 @@ def _record_search_budget_distribution(prefix: str, distribution: DistributionSu
     log_scalar(f'{prefix}/p90', distribution.p90, generation)
     for index, count in enumerate(distribution.histogram_counts):
         log_scalar(f'{prefix}/histogram_bin_{index}', count, generation)
-
-
-def _record_relative_validation_gain(event: GenerationLabelReport, generation: int) -> None:
-    if event.current_validation_gain is None or event.candidate_mean_kl_from_deep is None:
-        return
-    flat_mean_kl = event.candidate_mean_kl_from_deep + event.current_validation_gain
-    if flat_mean_kl <= 0.0:
-        return
-    log_scalar(
-        'search_budget/calibration/current_relative_validation_gain_percent',
-        100.0 * event.current_validation_gain / flat_mean_kl,
-        generation,
-    )
-    if event.ema_validation_gain is not None:
-        log_scalar(
-            'search_budget/calibration/ema_relative_validation_gain_percent',
-            100.0 * event.ema_validation_gain / flat_mean_kl,
-            generation,
-        )
-
-
-def _record_curve_range(name: str, curve: tuple[float, ...], generation: int) -> None:
-    log_scalar(f'search_budget/calibration/minimum_{name}_multiplier', min(curve), generation)
-    log_scalar(f'search_budget/calibration/maximum_{name}_multiplier', max(curve), generation)
 
 
 def _metric_tag(value: str) -> str:

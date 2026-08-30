@@ -14,6 +14,7 @@ from pydantic import Field, model_validator
 from src.replay.contracts import ReplaySample
 from src.replay.label_source import ReplayLabelGameLocator
 from src.replay.manager import LabelledReplayWritebackState
+from src.search_budget.analysis_log import analysis_log_path, append_analysis_records
 from src.search_budget.artifacts import (
     LabelShardManifest,
     LabelShardPhase,
@@ -22,20 +23,20 @@ from src.search_budget.artifacts import (
     write_persisted_model,
 )
 from src.search_budget.calibration import (
-    CurveCalibrationParameters,
-    CurveCalibrationState,
-    CurveDecisionReason,
-    CurvePublication,
+    BudgetCalibrationParameters,
+    BudgetCalibrationState,
+    BudgetDecisionReason,
+    BudgetPolicyPublication,
     initial_calibration_state,
     load_calibration_state_fail_closed,
     publication_for_generation,
     publish_fail_closed,
     save_calibration_state,
     update_calibration,
+    working_policy,
 )
 from src.search_budget.configuration import LabelArtifactRetention, SearchBudgetConfiguration
 from src.search_budget.labeling import (
-    BucketGenerationDiagnostics,
     DeepSearchShardArtifact,
     DistributionSummary,
     GenerationFinalization,
@@ -44,11 +45,10 @@ from src.search_budget.labeling import (
     PredictionShardArtifact,
     ReplaySampleProvider,
     build_generation_source,
-    candidate_allocations,
-    checkpoint_visits_by_position,
     finalize_generation,
     prediction_map,
 )
+from src.search_budget.policy import BUDGET_CURVE_MULTIPLES, BUDGET_CURVE_POINTS
 from src.search_budget.retention import (
     FailedLabelArtifactCleanupReceipt,
     LabelArtifactCleanupEvidence,
@@ -117,32 +117,28 @@ class LabelManagerState(FrozenModel):
             raise ValueError('Label jobs cannot originate after the highest started production generation.')
 
 
-class BucketFinalizationReport(FrozenModel):
-    bucket_index: int = Field(ge=0, lt=10)
-    sample_count: int = Field(ge=0)
-    current_generation_utility: float | None
-    ema_utility: float | None
-    shadow_multiplier: float = Field(gt=0.0)
-    pending_multiplier: float | None = Field(default=None, gt=0.0)
-    published_multiplier: float = Field(gt=0.0)
-    raw_log_update: float
-    projection_adjustment: float
-    lower_mean_visits: float | None = Field(default=None, gt=0.0)
-    upper_mean_visits: float | None = Field(default=None, gt=0.0)
-    checkpoint_deduplication_count: int = Field(ge=0)
+class CurvePointReport(FrozenModel):
+    curve_index: int = Field(ge=0, lt=BUDGET_CURVE_POINTS)
+    multiple: float = Field(gt=0.0)
+    grid_visits: int = Field(gt=0)
+    sigma: float = Field(gt=0.0)
+    mean_target_log_kl: float
+    mean_predicted_log_kl: float
+    mean_absolute_error: float = Field(ge=0.0)
+    selected_count: int = Field(ge=0)
 
 
 class GenerationLabelReport(FrozenModel):
-    schema_version: int = Field(default=1, ge=1, le=1)
+    schema_version: int = Field(default=2, ge=2, le=2)
     source_generation: int = Field(ge=0)
     model_generation: int = Field(ge=0)
     inference_model_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     population_position_count: int = Field(gt=0)
     selected_position_count: int = Field(gt=0)
-    prediction_distribution: DistributionSummary
-    target_distribution: DistributionSummary
-    raw_kl_distribution: DistributionSummary
-    buckets: tuple[BucketFinalizationReport, ...]
+    baseline_raw_kl_distribution: DistributionSummary
+    predicted_baseline_log_kl_distribution: DistributionSummary
+    target_baseline_log_kl_distribution: DistributionSummary
+    curve_points: tuple[CurvePointReport, ...]
     replay_samples_written: int = Field(gt=0)
     replay_write_applied: bool
     prediction_shard_seconds: float = Field(ge=0.0)
@@ -154,27 +150,23 @@ class GenerationLabelReport(FrozenModel):
     queued_generation_count: int = Field(ge=0)
     current_validation_gain: float | None
     ema_validation_gain: float | None
-    candidate_mean_assigned_new_visits: float | None = Field(default=None, gt=0.0)
-    candidate_assigned_new_visits_variance: float | None = Field(default=None, ge=0.0)
-    candidate_mean_kl_from_deep: float | None = Field(default=None, ge=0.0)
-    candidate_exact_spend_residual: int | None = None
-    previous_published_curve: tuple[float, ...] = Field(min_length=10, max_length=10)
-    validated_curve: tuple[float, ...] | None
-    shadow_curve: tuple[float, ...] = Field(min_length=10, max_length=10)
-    pending_curve: tuple[float, ...] | None
-    published_curve: tuple[float, ...] = Field(min_length=10, max_length=10)
-    minimum_published_multiplier: float = Field(gt=0.0)
-    maximum_published_multiplier: float = Field(gt=0.0)
+    log_tau: float
+    realized_mean_multiple: float = Field(gt=0.0)
+    realized_mean_assigned_visits: float = Field(gt=0.0)
+    flat_mean_assigned_visits: float = Field(gt=0.0)
+    assigned_new_visits_variance: float = Field(ge=0.0)
+    selected_index_counts: tuple[int, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
+    published_apply_learned: bool
     failed_eligibility_conditions: tuple[str, ...]
     application_generation: int = Field(ge=0)
     decision_reason: str
 
 
 class FailedLabelJobReport(FrozenModel):
-    schema_version: int = Field(default=1, ge=1, le=1)
+    schema_version: int = Field(default=2, ge=2, le=2)
     source_generation: int = Field(ge=0)
     failure: str = Field(min_length=1)
-    published_curve: tuple[float, ...] = Field(min_length=10, max_length=10)
+    published_apply_learned: bool
     application_generation: int = Field(ge=0)
     decision_reason: str
 
@@ -202,7 +194,7 @@ ManagerStateEvidence = PreservedManagerStateEvidence | UnavailableManagerStateEv
 
 class ManagerStateRecoveryReport(FrozenModel):
     schema_version: int = Field(default=1, ge=1, le=1)
-    decision_reason: CurveDecisionReason
+    decision_reason: BudgetDecisionReason
     failure: str = Field(min_length=1)
     evidence: ManagerStateEvidence = Field(discriminator='kind')
 
@@ -275,7 +267,7 @@ class SearchBudgetLabelManager:
         self.initial_first_unstarted_production_generation = initial_first_unstarted_production_generation
         self.prediction_worker = prediction_worker
         self.deep_search_worker = deep_search_worker
-        self._manager_state_failure_reason: CurveDecisionReason | None = None
+        self._manager_state_failure_reason: BudgetDecisionReason | None = None
         self._state = self._load_state()
         self._calibration = self._load_calibration()
         if self._manager_state_failure_reason is not None:
@@ -327,11 +319,11 @@ class SearchBudgetLabelManager:
         with self._condition:
             return tuple(job.source_generation for job in self._state.jobs)
 
-    def publication_for_generation(self, production_generation: int) -> CurvePublication:
+    def publication_for_generation(self, production_generation: int) -> BudgetPolicyPublication:
         with self._condition:
             return publication_for_generation(self._calibration, production_generation)
 
-    def publication_for_starting_generation(self, production_generation: int) -> CurvePublication:
+    def publication_for_starting_generation(self, production_generation: int) -> BudgetPolicyPublication:
         with self._condition:
             highest_started = self._state.highest_started_production_generation
             if production_generation < highest_started or production_generation > highest_started + 1:
@@ -484,15 +476,8 @@ class SearchBudgetLabelManager:
                 for manifest in prediction_manifests
             )
             by_identity = prediction_map(source, predictions)
-            allocations = candidate_allocations(
-                source,
-                by_identity,
-                self._calibration,
-                float(self.configuration.calibration.probe_ratio),
-            )
-            checkpoints = checkpoint_visits_by_position(source, allocations)
             self._set_status(job.source_generation, LabelJobStatus.DEEP_SEARCHING)
-            deep_manifests = self._run_deep_phase(source, shards, positions_by_identity, checkpoints)
+            deep_manifests = self._run_deep_phase(source, shards, positions_by_identity)
             validate_complete_shard_coverage(
                 tuple(position.identity for position in source.selected_positions),
                 deep_manifests,
@@ -502,10 +487,12 @@ class SearchBudgetLabelManager:
                 load_persisted_model(manifest.artifact_path, DeepSearchShardArtifact) for manifest in deep_manifests
             )
             self._set_status(job.source_generation, LabelJobStatus.FINALIZING)
+            with self._condition:
+                shadow_policy = working_policy(self._calibration)
             finalized = finalize_generation(
                 source,
                 by_identity,
-                allocations,
+                shadow_policy,
                 deep_artifacts,
                 self.action_size,
                 self.maximum_policy_entries,
@@ -515,6 +502,7 @@ class SearchBudgetLabelManager:
         writeback = self.replay_writer(source.source_generation, finalized.replay_samples)
         if writeback.row_count != len(finalized.replay_samples):
             raise ValueError('Replay writer did not acknowledge the complete finalized label generation.')
+        self._append_analysis_records(source.source_generation, finalized)
         with self._condition:
             first_unstarted = self._first_unstarted_production_generation
             update = update_calibration(
@@ -522,12 +510,7 @@ class SearchBudgetLabelManager:
                 source.source_generation,
                 finalized.evidence,
                 first_unstarted,
-                CurveCalibrationParameters(
-                    warmup_completed_generations=self.configuration.calibration.warmup_completed_source_generations,
-                    bucket_utility_ema_decay=self.configuration.calibration.bucket_utility_ema_decay,
-                    validation_gain_ema_decay=self.configuration.calibration.validation_gain_ema_decay,
-                    maximum_step_ratio=self.configuration.calibration.maximum_step_ratio,
-                ),
+                self._calibration_parameters(),
             )
             self._calibration = update.state
             save_calibration_state(self.calibration_path, self._calibration)
@@ -569,7 +552,6 @@ class SearchBudgetLabelManager:
         source: LabelGenerationSource,
         shards: tuple[tuple[LabelPositionIdentity, ...], ...],
         positions_by_identity: dict[LabelPositionIdentity, LabelPositionSource],
-        checkpoints: dict[LabelPositionIdentity, tuple[int, ...]],
     ) -> tuple[LabelShardManifest, ...]:
         tasks = tuple(
             DeepSearchShardTask(
@@ -578,7 +560,7 @@ class SearchBudgetLabelManager:
                 attempt=1,
                 checkpoint=source.checkpoint,
                 positions=tuple(positions_by_identity[identity] for identity in identities),
-                checkpoint_visits=tuple(checkpoints[identity] for identity in identities),
+                checkpoint_visits=tuple(source.checkpoint_visits for _ in identities),
                 deep_visit_limit=source.deep_visit_limit,
                 parallel_searches=self.configuration.labeling.parallel_searches,
                 artifact_path=self._phase_path(
@@ -631,10 +613,18 @@ class SearchBudgetLabelManager:
         prediction_manifests: tuple[LabelShardManifest, ...],
         deep_manifests: tuple[LabelShardManifest, ...],
     ) -> GenerationLabelReport:
-        diagnostics = {diagnostic.bucket_index: diagnostic for diagnostic in finalized.bucket_diagnostics}
-        buckets = tuple(
-            self._bucket_finalization_report(bucket.bucket_index, diagnostics[bucket.bucket_index])
-            for bucket in self._calibration.bucket_states
+        curve_points = tuple(
+            CurvePointReport(
+                curve_index=diagnostic.curve_index,
+                multiple=BUDGET_CURVE_MULTIPLES[diagnostic.curve_index],
+                grid_visits=diagnostic.grid_visits,
+                sigma=self._calibration.sigma[diagnostic.curve_index],
+                mean_target_log_kl=diagnostic.mean_target_log_kl,
+                mean_predicted_log_kl=diagnostic.mean_predicted_log_kl,
+                mean_absolute_error=diagnostic.mean_absolute_error,
+                selected_count=diagnostic.selected_count,
+            )
+            for diagnostic in finalized.curve_point_diagnostics
         )
         return GenerationLabelReport(
             source_generation=source.source_generation,
@@ -642,10 +632,10 @@ class SearchBudgetLabelManager:
             inference_model_sha256=source.checkpoint.inference_model_sha256,
             population_position_count=source.population_position_count,
             selected_position_count=len(source.selected_positions),
-            prediction_distribution=finalized.prediction_distribution,
-            target_distribution=finalized.target_distribution,
-            raw_kl_distribution=finalized.raw_kl_distribution,
-            buckets=buckets,
+            baseline_raw_kl_distribution=finalized.baseline_raw_kl_distribution,
+            predicted_baseline_log_kl_distribution=finalized.predicted_baseline_log_kl_distribution,
+            target_baseline_log_kl_distribution=finalized.target_baseline_log_kl_distribution,
+            curve_points=curve_points,
             replay_samples_written=writeback.row_count,
             replay_write_applied=writeback.applied,
             prediction_shard_seconds=sum(manifest.duration_seconds for manifest in prediction_manifests),
@@ -660,21 +650,13 @@ class SearchBudgetLabelManager:
             queued_generation_count=sum(job.status is LabelJobStatus.QUEUED for job in self._state.jobs),
             current_validation_gain=self._calibration.current_validation_gain,
             ema_validation_gain=self._calibration.ema_validation_gain,
-            candidate_mean_assigned_new_visits=finalized.validation_diagnostics.mean_assigned_new_visits,
-            candidate_assigned_new_visits_variance=finalized.validation_diagnostics.assigned_new_visits_variance,
-            candidate_mean_kl_from_deep=finalized.validation_diagnostics.mean_kl_from_deep,
-            candidate_exact_spend_residual=finalized.validation_diagnostics.exact_spend_residual,
-            previous_published_curve=self._calibration.previous_published_curve.multipliers,
-            validated_curve=(
-                None if finalized.evidence.validated_curve is None else finalized.evidence.validated_curve.multipliers
-            ),
-            shadow_curve=self._calibration.shadow_curve.multipliers,
-            pending_curve=None
-            if self._calibration.pending_curve is None
-            else self._calibration.pending_curve.multipliers,
-            published_curve=self._calibration.published_curve.multipliers,
-            minimum_published_multiplier=self._calibration.published_curve.minimum,
-            maximum_published_multiplier=self._calibration.published_curve.maximum,
+            log_tau=self._calibration.log_tau,
+            realized_mean_multiple=finalized.evidence.realized_mean_multiple,
+            realized_mean_assigned_visits=finalized.evidence.realized_mean_assigned_visits,
+            flat_mean_assigned_visits=finalized.evidence.flat_mean_assigned_visits,
+            assigned_new_visits_variance=finalized.assigned_new_visits_variance,
+            selected_index_counts=finalized.evidence.selected_index_counts,
+            published_apply_learned=self._calibration.published_policy.apply_learned,
             failed_eligibility_conditions=tuple(
                 failure.value for failure in self._calibration.failed_eligibility_conditions
             ),
@@ -682,29 +664,28 @@ class SearchBudgetLabelManager:
             decision_reason=self._calibration.decision_reason.value,
         )
 
-    def _bucket_finalization_report(
-        self,
-        bucket_index: int,
-        diagnostic: BucketGenerationDiagnostics,
-    ) -> BucketFinalizationReport:
-        state = self._calibration.bucket_states[bucket_index]
-        return BucketFinalizationReport(
-            bucket_index=bucket_index,
-            sample_count=diagnostic.sample_count,
-            current_generation_utility=diagnostic.generation_marginal_utility,
-            ema_utility=state.ema_utility,
-            shadow_multiplier=self._calibration.shadow_curve.multipliers[bucket_index],
-            pending_multiplier=(
-                None
-                if self._calibration.pending_curve is None
-                else self._calibration.pending_curve.multipliers[bucket_index]
-            ),
-            published_multiplier=self._calibration.published_curve.multipliers[bucket_index],
-            raw_log_update=state.raw_log_update,
-            projection_adjustment=state.projection_adjustment,
-            lower_mean_visits=diagnostic.lower_mean_visits,
-            upper_mean_visits=diagnostic.upper_mean_visits,
-            checkpoint_deduplication_count=diagnostic.checkpoint_deduplication_count,
+    def _append_analysis_records(self, source_generation: int, finalized: GenerationFinalization) -> None:
+        # Append-only diagnostics; a failure here must never fail the label job or affect training.
+        try:
+            append_analysis_records(
+                analysis_log_path(self.jobs_path, source_generation),
+                finalized.analysis_records,
+            )
+        except (OSError, ValueError) as error:
+            warn(
+                f'Search-budget analysis log append for source generation {source_generation} was not applied: '
+                f'{type(error).__name__}: {error}'
+            )
+
+    def _calibration_parameters(self) -> BudgetCalibrationParameters:
+        calibration = self.configuration.calibration
+        return BudgetCalibrationParameters(
+            warmup_completed_generations=calibration.warmup_completed_source_generations,
+            sigma_ema_decay=calibration.sigma_ema_decay,
+            validation_gain_ema_decay=calibration.validation_gain_ema_decay,
+            initial_tau=calibration.initial_tau,
+            tau_step_ratio=calibration.tau_step_ratio,
+            selection_threshold=calibration.selection_threshold,
         )
 
     def _cleanup_completed_jobs(self) -> None:
@@ -746,7 +727,7 @@ class SearchBudgetLabelManager:
             raise ValueError('Artifact cleanup requires a durably completed label manager job.')
         report_path = self._report_path(source_generation)
         report = load_persisted_model(report_path, GenerationLabelReport)
-        load_persisted_model(self.calibration_path, CurveCalibrationState)
+        load_persisted_model(self.calibration_path, BudgetCalibrationState)
         writeback_path = self.run_path / 'completed-games' / 'labelled-replay-writebacks.json'
         writebacks = load_persisted_model(writeback_path, LabelledReplayWritebackState)
         writeback = next(
@@ -777,7 +758,7 @@ class SearchBudgetLabelManager:
         report = FailedLabelJobReport(
             source_generation=source_generation,
             failure=f'{type(error).__name__}: {error}',
-            published_curve=self._calibration.published_curve.multipliers,
+            published_apply_learned=self._calibration.published_policy.apply_learned,
             application_generation=self._calibration.application_generation,
             decision_reason=self._calibration.decision_reason.value,
         )
@@ -897,7 +878,7 @@ class SearchBudgetLabelManager:
             raw_state = self.state_path.read_bytes()
         except OSError as error:
             self._record_manager_state_failure(
-                CurveDecisionReason.UNREADABLE_STATE,
+                BudgetDecisionReason.UNREADABLE_STATE,
                 f'{type(error).__name__}: {error}',
                 None,
             )
@@ -906,14 +887,14 @@ class SearchBudgetLabelManager:
             loaded = LabelManagerState.model_validate_json(raw_state)
         except ValueError as error:
             self._record_manager_state_failure(
-                CurveDecisionReason.UNREADABLE_STATE,
+                BudgetDecisionReason.UNREADABLE_STATE,
                 f'{type(error).__name__}: {error}',
                 raw_state,
             )
             return self._initial_manager_state()
         if loaded.configuration_sha256 != self.configuration_sha256:
             self._record_manager_state_failure(
-                CurveDecisionReason.INCOMPATIBLE_STATE,
+                BudgetDecisionReason.INCOMPATIBLE_STATE,
                 'Persisted label manager configuration digest does not match the active run configuration.',
                 raw_state,
             )
@@ -938,7 +919,7 @@ class SearchBudgetLabelManager:
 
     def _record_manager_state_failure(
         self,
-        reason: CurveDecisionReason,
+        reason: BudgetDecisionReason,
         failure: str,
         raw_state: bytes | None,
     ) -> None:
@@ -953,13 +934,14 @@ class SearchBudgetLabelManager:
         write_persisted_model(self.jobs_path / 'manager-state-recovery.json', report)
         self._manager_state_failure_reason = reason
 
-    def _load_calibration(self) -> CurveCalibrationState:
+    def _load_calibration(self) -> BudgetCalibrationState:
         if not self.calibration_path.exists():
-            return initial_calibration_state(self.configuration_sha256)
+            return initial_calibration_state(self.configuration_sha256, self._calibration_parameters())
         return load_calibration_state_fail_closed(
             self.calibration_path,
             self.configuration_sha256,
             self._first_unstarted_production_generation,
+            self._calibration_parameters(),
         )
 
     def _job_path(self, source_generation: int) -> Path:
@@ -974,7 +956,7 @@ class SearchBudgetLabelManager:
         return self._job_path(source_generation) / 'final-report.json'
 
 
-def _failure_decision_reason(error: BaseException) -> CurveDecisionReason:
+def _failure_decision_reason(error: BaseException) -> BudgetDecisionReason:
     if isinstance(error, InvalidLabelComputeError):
-        return CurveDecisionReason.INVALID_COMPUTE
-    return CurveDecisionReason.TERMINAL_FAILURE
+        return BudgetDecisionReason.INVALID_COMPUTE
+    return BudgetDecisionReason.TERMINAL_FAILURE

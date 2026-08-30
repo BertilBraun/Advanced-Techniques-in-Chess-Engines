@@ -20,18 +20,18 @@
 
 struct SelfPlaySearchParameters {
     std::uint32_t baseline_visits;
-    SearchBudgetCurve search_budget_curve;
+    SearchBudgetPolicy search_budget_policy;
     TreeSearchParameters tree_search;
     float dirichlet_alpha;
     float dirichlet_epsilon;
 
     SelfPlaySearchParameters(const std::uint32_t baselineVisits,
-                             SearchBudgetCurve searchBudgetCurve, TreeSearchParameters treeSearch,
+                             SearchBudgetPolicy searchBudgetPolicy, TreeSearchParameters treeSearch,
                              const float dirichletAlpha, const float dirichletEpsilon)
-        : baseline_visits(baselineVisits), search_budget_curve(std::move(searchBudgetCurve)),
+        : baseline_visits(baselineVisits), search_budget_policy(std::move(searchBudgetPolicy)),
           tree_search(treeSearch), dirichlet_alpha(dirichletAlpha),
           dirichlet_epsilon(dirichletEpsilon) {
-        static_cast<void>(PredictedSearchBudgetLimit(baseline_visits, search_budget_curve));
+        static_cast<void>(PredictedSearchBudgetLimit(baseline_visits, search_budget_policy));
     }
 
     [[nodiscard]] std::uint32_t initialArenaCapacity() const {
@@ -40,7 +40,7 @@ struct SelfPlaySearchParameters {
 
     [[nodiscard]] std::uint32_t maximumArenaCapacity() const {
         const std::uint64_t maximumSearches = maximumAdditionalVisits(
-            PredictedSearchBudgetLimit(baseline_visits, search_budget_curve));
+            PredictedSearchBudgetLimit(baseline_visits, search_budget_policy));
         return checkedArenaCapacity(maximumSearches, 16U);
     }
 
@@ -84,8 +84,8 @@ template <SearchGame Game> struct SelfPlaySearchResult {
     float network_root_value;
     float policy_correction;
     float value_correction;
-    float search_budget_logit;
-    float predicted_search_budget;
+    SearchBudgetCurvePrediction predicted_budget_curve;
+    int selected_budget_index;
     std::uint32_t assigned_additional_visits;
     std::uint32_t parallel_searches;
     std::int64_t spend_residual;
@@ -142,7 +142,7 @@ public:
                     ? SearchLimit{AdditionalSearchLimit(*request.assigned_additional_visits)}
                     : SearchLimit{
                           PredictedSearchBudgetLimit(m_searchParameters.baseline_visits,
-                                                     m_searchParameters.search_budget_curve)};
+                                                     m_searchParameters.search_budget_policy)};
             engineRequests.push_back({
                 .root = request.root,
                 .limit = limit,
@@ -170,8 +170,8 @@ public:
                 .network_root_value = searched.results[index].network_root_value,
                 .policy_correction = searched.results[index].policy_correction,
                 .value_correction = searched.results[index].value_correction,
-                .search_budget_logit = searched.results[index].search_budget_logit,
-                .predicted_search_budget = searched.results[index].predicted_search_budget,
+                .predicted_budget_curve = searched.results[index].predicted_budget_curve,
+                .selected_budget_index = searched.results[index].selected_budget_index,
                 .assigned_additional_visits = searched.results[index].assigned_additional_visits,
                 .parallel_searches = searched.results[index].parallel_searches,
                 .spend_residual = searched.results[index].spend_residual,

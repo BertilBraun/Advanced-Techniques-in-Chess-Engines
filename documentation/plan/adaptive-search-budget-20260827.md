@@ -1,6 +1,11 @@
 # Learned adaptive search budget with live curve calibration
 
-**Status:** implementation plan, revised 2026-08-28
+**Status:** superseded 2026-08-30 by `search-budget-curve-20260830.md`. Production measurement (v14 vs v15, v16)
+showed the scalar-quantile head with the live bucket multiplier curve delivered no gain at ~12% GPU cost; the
+replacement predicts the per-position log-KL curve directly. This document remains as the historical record of the
+implementation it replaced.
+
+**Original status:** implementation plan, revised 2026-08-28
 
 ## Decision
 

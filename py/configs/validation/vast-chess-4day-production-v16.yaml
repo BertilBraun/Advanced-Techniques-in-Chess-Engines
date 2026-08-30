@@ -183,7 +183,7 @@ training:
       recent_checkpoint_count: 22
       milestone_interval: 20
     search_budget:
-      curve_version: live_ema_ten_bucket_v1
+      curve_version: predicted_kl_curve_v1
       labeling:
         sample_fraction: '0.01'
         deep_search_multiple: 8
@@ -195,13 +195,12 @@ training:
         parallel_searches: 2
         artifact_retention: remove_bulky_after_finalization
       calibration:
-        bucket_count: 10
-        initializer_version: analytic_q5_v1
         warmup_completed_source_generations: 30
-        bucket_utility_ema_decay: '0.1'
+        sigma_ema_decay: '0.1'
         validation_gain_ema_decay: '0.2'
-        probe_ratio: '1.3'
-        maximum_step_ratio: '1.1'
+        initial_tau: '0.1'
+        tau_step_ratio: '1.05'
+        selection_threshold: '0.8'
       production:
         sequential_round_target: 200
         minimum_parallel_searches: 2

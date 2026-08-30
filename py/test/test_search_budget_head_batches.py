@@ -99,10 +99,8 @@ def _sample(normalized_target: float | None, marker: int) -> ReplaySample:
         IneligibleSearchBudgetTarget()
         if normalized_target is None
         else EligibleSearchBudgetTarget(
-            normalized_target=normalized_target,
+            curve=(normalized_target,) * 10,
             raw_kl=0.125,
-            prediction_logit=-0.5,
-            predicted_quantile=0.25,
             source_generation=1,
             model_generation=1,
             inference_model_sha256='a' * 64,

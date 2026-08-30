@@ -97,8 +97,8 @@ class _SearchBudgetHeadTotals:
 
     def accumulate(self, output: TrainingModelOutput, batch: TrainingBatch, loss: ObjectiveLoss) -> None:
         index = self.auxiliary_index
-        targets = batch.auxiliary_targets[index].detach().float().squeeze(1)
-        predictions = torch.sigmoid(output.auxiliary_logits[index].detach().float()).squeeze(1)
+        targets = batch.auxiliary_targets[index].detach().float().flatten()
+        predictions = output.auxiliary_logits[index].detach().float().flatten()
         self.sums.add_(
             torch.stack(
                 (
