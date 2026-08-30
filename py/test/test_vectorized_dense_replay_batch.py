@@ -115,11 +115,9 @@ def test_vectorized_dense_batch_preserves_every_auxiliary_variant() -> None:
             ReplayLegalMovesColumnViews(kind='legal_moves'),
             ReplaySearchBudgetColumnViews(
                 kind='search_budget',
-                value=np.asarray((0.2, 0.3), dtype=np.float32),
+                value=np.full((2, 10), 0.2, dtype=np.float32),
                 eligible=np.asarray((1, 0), dtype=np.uint8),
                 raw_kl=np.asarray((0.1, 0.0), dtype=np.float32),
-                prediction_logit=np.asarray((-0.5, 0.0), dtype=np.float32),
-                predicted_quantile=np.asarray((0.25, 0.0), dtype=np.float32),
                 source_generation=np.asarray((7, 0), dtype=np.uint32),
                 model_generation=np.asarray((8, 0), dtype=np.uint32),
                 inference_model_sha256=np.asarray(

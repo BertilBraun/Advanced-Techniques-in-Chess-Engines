@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
 
+import numpy as np
 import pytest
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlanePayload
@@ -17,9 +19,7 @@ from src.replay.contracts import (
 )
 from src.replay.label_source import ReplayLabelGameLocator
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
-from src.search_budget.allocation import CurveAllocationIdentity, CurveAllocationPurpose
 from src.search_budget.artifacts import load_persisted_model, write_persisted_model
-from src.search_budget.calibration import initial_calibration_state
 from src.search_budget.labeling import (
     DeepSearchRecord,
     DeepSearchShardArtifact,
@@ -29,9 +29,13 @@ from src.search_budget.labeling import (
     PolicyCheckpointRecord,
     PredictionRecord,
     build_generation_source,
-    candidate_allocations,
-    checkpoint_visits_by_position,
     finalize_generation,
+)
+from src.search_budget.policy import (
+    BASELINE_CURVE_INDEX,
+    BUDGET_CURVE_POINTS,
+    SearchBudgetPolicy,
+    grid_visit_counts,
 )
 from src.search_budget.sampling import LabelPositionIdentity
 from src.self_play.completed_game import (
@@ -70,8 +74,8 @@ def _observation(ply: int, model_generation: int) -> SearchObservation:
         network_root_value=0.0,
         policy_correction=0.0,
         value_correction=0.1,
-        search_budget_logit=0.0,
-        predicted_search_budget=0.5,
+        predicted_baseline_log_kl=0.0,
+        selected_budget_index=-1,
         assigned_additional_visits=10,
         parallel_searches=1,
         spend_residual=0,
@@ -147,6 +151,19 @@ def test_generation_source_samples_exact_floor_two_percent_deterministically(tmp
     assert len(first.selected_positions) == 2
     assert first.selected_positions == second.selected_positions
     assert first.deep_visit_limit == 4_800
+    assert first.checkpoint_visits == (75, 120, 200, 300, 400, 600, 900, 1200, 1800, 2400)
+
+
+def test_generation_source_records_each_selected_absolute_replay_row(tmp_path: Path) -> None:
+    game = _game(9, (4,) * 50)
+    label_games, samples = _label_games((game,))
+    source = build_generation_source(
+        4, label_games, _checkpoint(tmp_path, 4), 600, 123, Decimal(1), samples.__getitem__
+    )
+    assert source is not None
+    assert tuple(position.absolute_replay_row - 100 for position in source.selected_positions) == tuple(
+        position.identity.ply for position in source.selected_positions
+    )
 
 
 def test_cross_checkpoint_game_keeps_every_cohort_observation(tmp_path: Path) -> None:
@@ -230,7 +247,7 @@ def _sample(game: ReplayShardGameMetadata, observation_index: int) -> ReplaySamp
     )
 
 
-def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_path: Path) -> None:
+def _finalization_source(tmp_path: Path) -> LabelGenerationSource:
     game = _game(8, (4, 4, 4))
     positions = tuple(
         LabelPositionSource(
@@ -240,59 +257,80 @@ def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_
                 ply=index,
             ),
             action_prefix=game.action_ids[:index],
+            absolute_replay_row=100 + index,
             replay=LabelReplaySampleSource.from_replay_sample(_sample(game, index)),
         )
         for index in range(3)
     )
-    source = LabelGenerationSource(
+    return LabelGenerationSource(
         source_generation=4,
         population_position_count=150,
         baseline_new_visits=10,
         checkpoint=_checkpoint(tmp_path, 4),
         selected_positions=positions,
     )
-    predictions = {
-        position.identity: PredictionRecord(
-            identity=position.identity,
-            search_budget_logit=0.0,
-            predicted_quantile=0.5,
-        )
-        for position in positions
-    }
-    allocations = candidate_allocations(source, predictions, initial_calibration_state('a' * 64), 1.1)
-    checkpoints = checkpoint_visits_by_position(source, allocations)
+
+
+def _deep_artifact(source: LabelGenerationSource) -> DeepSearchShardArtifact:
+    # Every checkpoint below the deepest keeps a lopsided policy; the deepest checkpoint and the
+    # final policy agree, so the raw KL curve is flat until it drops to zero at the last grid point.
     records = tuple(
         DeepSearchRecord(
             identity=position.identity,
             checkpoints=tuple(
                 PolicyCheckpointRecord(
                     visits=visits,
+                    root_value=0.05 if visits < source.deep_visit_limit // 2 else 0.25,
                     policy_target_visits=SearchVisitCounts(
                         action_ids=(0, 1),
-                        visit_counts=(5, 5) if index == 1 else (9, 1),
+                        visit_counts=(40, 40) if visits == source.checkpoint_visits[-1] else (9, 1),
                     ),
                 )
-                for visits in checkpoints[position.identity]
+                for visits in source.checkpoint_visits
             ),
             final_policy_target_visits=SearchVisitCounts(action_ids=(0, 1), visit_counts=(40, 40)),
             final_root_value=0.25,
             starting_visits=0,
             final_visits=source.deep_visit_limit,
         )
-        for index, position in enumerate(positions)
+        for position in source.selected_positions
     )
-    artifact = DeepSearchShardArtifact(
-        source_generation=4,
+    return DeepSearchShardArtifact(
+        source_generation=source.source_generation,
         shard_index=0,
         checkpoint_sha256=source.checkpoint.inference_model_sha256,
         records=records,
     )
 
+
+def _predictions(
+    source: LabelGenerationSource,
+    curves: tuple[tuple[float, ...], ...],
+) -> dict[LabelPositionIdentity, PredictionRecord]:
+    return {
+        position.identity: PredictionRecord(identity=position.identity, predicted_curve=curve)
+        for position, curve in zip(source.selected_positions, curves, strict=True)
+    }
+
+
+def _policy() -> SearchBudgetPolicy:
+    return SearchBudgetPolicy(
+        sigma=(1.0,) * BUDGET_CURVE_POINTS,
+        log_tau=math.log(0.1),
+        selection_threshold=0.8,
+        apply_learned=True,
+    )
+
+
+def test_finalization_writes_log_kl_curve_targets_and_the_deep_policy(tmp_path: Path) -> None:
+    source = _finalization_source(tmp_path)
+    predictions = _predictions(source, ((5.0,) * BUDGET_CURVE_POINTS,) * 3)
+
     finalized = finalize_generation(
         source,
         predictions,
-        allocations,
-        (artifact,),
+        _policy(),
+        (_deep_artifact(source),),
         action_size=2,
         maximum_policy_entries=2,
     )
@@ -303,67 +341,95 @@ def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_
         for target in sample.auxiliary_targets
         if isinstance(target, EligibleSearchBudgetTarget)
     )
-    assert tuple(target.normalized_target for target in targets) == (0.75, 0.0, 0.75)
+    assert len(targets) == 3
+    shallow_kl = 0.5 * math.log(0.5 / 0.9) + 0.5 * math.log(0.5 / 0.1)
+    expected_curve = (math.log(shallow_kl + 1e-6),) * (BUDGET_CURVE_POINTS - 1) + (math.log(1e-6),)
+    for target in targets:
+        assert target.curve == pytest.approx(expected_curve)
+        assert target.raw_kl == pytest.approx(shallow_kl)
     assert all(sample.policy.visits.visit_counts == (40, 40) for sample in finalized.replay_samples)
     assert all(sample.root_value == 0.25 for sample in finalized.replay_samples)
-    assert finalized.validation_diagnostics.exact_spend_residual is None
-    assert finalized.evidence.validated_curve is None
-    assert sum(diagnostic.sample_count for diagnostic in finalized.bucket_diagnostics) == 3
-    assert finalized.bucket_diagnostics[5].generation_marginal_utility == 0.0
-    assert finalized.target_distribution.variance > 0.0
-    assert sum(finalized.target_distribution.histogram_counts) == 3
 
-    lower_identity = CurveAllocationIdentity(CurveAllocationPurpose.PROBE_LOWER, 5)
-    upper_identity = CurveAllocationIdentity(CurveAllocationPurpose.PROBE_UPPER, 5)
-    lower = next(allocation for allocation in allocations if allocation.identity == lower_identity)
-    upper = next(allocation for allocation in allocations if allocation.identity == upper_identity)
-    inverted_upper = replace(
-        upper,
-        budgets=(
-            replace(
-                upper.budgets[0],
-                assigned_new_visits=lower.budgets[0].assigned_new_visits - 1,
-            ),
-            *upper.budgets[1:],
-        ),
-    )
-    inverted_allocations = tuple(
-        inverted_upper if allocation.identity == upper_identity else allocation for allocation in allocations
-    )
-    rounded = finalize_generation(
+
+def test_finalization_measures_shadow_gain_and_selection_under_the_working_policy(tmp_path: Path) -> None:
+    source = _finalization_source(tmp_path)
+    # Two positions predict confidently cheap curves and select the cheapest grid point; one
+    # predicts a hard curve and falls back to the deepest grid point.
+    cheap = (-10.0,) * BUDGET_CURVE_POINTS
+    hard = (5.0,) * BUDGET_CURVE_POINTS
+    predictions = _predictions(source, (cheap, hard, cheap))
+
+    finalized = finalize_generation(
         source,
         predictions,
-        inverted_allocations,
-        (artifact,),
+        _policy(),
+        (_deep_artifact(source),),
         action_size=2,
         maximum_policy_entries=2,
     )
-    assert rounded.bucket_diagnostics[5].checkpoint_deduplication_count == 3
-    assert rounded.bucket_diagnostics[5].sample_count == 2
 
-    materially_inverted_upper = replace(
-        upper,
-        budgets=(
-            replace(
-                upper.budgets[0],
-                assigned_new_visits=lower.budgets[0].assigned_new_visits - 2,
-            ),
-            *upper.budgets[1:],
-        ),
-    )
-    with pytest.raises(ValueError, match='materially below'):
-        finalize_generation(
-            source,
-            predictions,
-            tuple(
-                materially_inverted_upper if allocation.identity == upper_identity else allocation
-                for allocation in allocations
-            ),
-            (artifact,),
-            action_size=2,
-            maximum_policy_entries=2,
+    grid = grid_visit_counts(source.baseline_new_visits)
+    evidence = finalized.evidence
+    assert evidence.selected_index_counts == (2, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+    assert evidence.realized_mean_multiple == pytest.approx((0.125 + 0.125 + 4.0) / 3)
+    assert evidence.realized_mean_assigned_visits == pytest.approx((grid[0] + grid[0] + grid[-1]) / 3)
+    assert evidence.flat_mean_assigned_visits == pytest.approx(10.0)
+    # The deepest checkpoint matches the deep policy while cheap checkpoints do not, so the one
+    # deep selection gains exactly one position's baseline KL over flat allocation.
+    shallow_kl = 0.5 * math.log(0.5 / 0.9) + 0.5 * math.log(0.5 / 0.1)
+    assert evidence.generation_gain == pytest.approx(shallow_kl / 3)
+    assert evidence.mean_absolute_curve_error == pytest.approx(
+        tuple(
+            (
+                2 * abs(-10.0 - math.log(shallow_kl + 1e-6)) + abs(5.0 - math.log(shallow_kl + 1e-6))
+                if index < BUDGET_CURVE_POINTS - 1
+                else 2 * abs(-10.0 - math.log(1e-6)) + abs(5.0 - math.log(1e-6))
+            )
+            / 3
+            for index in range(BUDGET_CURVE_POINTS)
         )
+    )
 
+
+def test_finalization_appends_one_analysis_record_per_labelled_position(tmp_path: Path) -> None:
+    source = _finalization_source(tmp_path)
+    cheap = (-10.0,) * BUDGET_CURVE_POINTS
+    hard = (5.0,) * BUDGET_CURVE_POINTS
+    predictions = _predictions(source, (cheap, hard, cheap))
+
+    finalized = finalize_generation(
+        source,
+        predictions,
+        _policy(),
+        (_deep_artifact(source),),
+        action_size=2,
+        maximum_policy_entries=2,
+    )
+
+    records = finalized.analysis_records
+    assert records.shape == (3,)
+    assert list(records['source_generation']) == [4, 4, 4]
+    assert list(records['ply']) == [0, 1, 2]
+    assert list(records['first_absolute_replay_row']) == [100, 101, 102]
+    assert list(records['baseline_visits']) == [10, 10, 10]
+    assert list(records['selected_index']) == [0, 9, 0]
+    grid = grid_visit_counts(10)
+    assert list(records['assigned_visits']) == [grid[0], grid[-1], grid[0]]
+    shallow_kl = 0.5 * math.log(0.5 / 0.9) + 0.5 * math.log(0.5 / 0.1)
+    assert records['policy_kl'][0][BASELINE_CURVE_INDEX] == pytest.approx(shallow_kl, rel=1e-6)
+    assert records['deep_half_kl'][0] == pytest.approx(0.0, abs=1e-9)
+    assert records['predicted_curve'][1][0] == pytest.approx(5.0)
+    # Checkpoints below half depth carry root value 0.05 against the deep 0.25.
+    assert records['value_error'][0][0] == pytest.approx(0.2, rel=1e-5)
+    assert records['value_error'][0][BUDGET_CURVE_POINTS - 1] == pytest.approx(0.0, abs=1e-9)
+    assert records['top_visit_share'][0] == pytest.approx(0.9)
+    assert records['policy_entropy'][0] == pytest.approx(-(0.9 * math.log(0.9) + 0.1 * math.log(0.1)), rel=1e-5)
+    assert records.dtype.itemsize <= 200
+
+
+def test_finalization_requires_exactly_one_search_budget_slot(tmp_path: Path) -> None:
+    source = _finalization_source(tmp_path)
+    predictions = _predictions(source, ((0.0,) * BUDGET_CURVE_POINTS,) * 3)
     invalid_positions = tuple(
         position.model_copy(
             update={
@@ -375,14 +441,45 @@ def test_finalization_ranks_all_generation_kl_values_and_writes_deep_policy(tmp_
                 )
             }
         )
-        for position in positions
+        for position in source.selected_positions
     )
     with pytest.raises(ValueError, match='exactly one'):
         finalize_generation(
             source.model_copy(update={'selected_positions': invalid_positions}),
             predictions,
-            allocations,
-            (artifact,),
+            _policy(),
+            (_deep_artifact(source),),
             action_size=2,
             maximum_policy_entries=2,
         )
+
+
+def test_finalization_rejects_a_missing_grid_checkpoint(tmp_path: Path) -> None:
+    source = _finalization_source(tmp_path)
+    predictions = _predictions(source, ((0.0,) * BUDGET_CURVE_POINTS,) * 3)
+    artifact = _deep_artifact(source)
+    truncated = DeepSearchShardArtifact(
+        source_generation=artifact.source_generation,
+        shard_index=artifact.shard_index,
+        checkpoint_sha256=artifact.checkpoint_sha256,
+        records=tuple(record.model_copy(update={'checkpoints': record.checkpoints[1:]}) for record in artifact.records),
+    )
+    with pytest.raises(ValueError, match='missing required checkpoint'):
+        finalize_generation(
+            source,
+            predictions,
+            _policy(),
+            (truncated,),
+            action_size=2,
+            maximum_policy_entries=2,
+        )
+
+
+def test_analysis_record_dtype_is_fixed_width_and_reasonably_small() -> None:
+    from src.search_budget.analysis_log import ANALYSIS_RECORD_DTYPE
+
+    assert ANALYSIS_RECORD_DTYPE.itemsize <= 200
+    assert ANALYSIS_RECORD_DTYPE['policy_kl'].shape == (BUDGET_CURVE_POINTS,)
+    assert ANALYSIS_RECORD_DTYPE['value_error'].shape == (BUDGET_CURVE_POINTS,)
+    assert ANALYSIS_RECORD_DTYPE['predicted_curve'].shape == (BUDGET_CURVE_POINTS,)
+    assert np.dtype(ANALYSIS_RECORD_DTYPE) is not None

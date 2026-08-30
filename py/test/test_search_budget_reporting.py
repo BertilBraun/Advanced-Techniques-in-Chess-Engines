@@ -4,12 +4,13 @@ import pytest
 import src.training.reporting as reporting_module
 from src.search_budget.labeling import DistributionSummary
 from src.search_budget.manager import (
-    BucketFinalizationReport,
+    CurvePointReport,
     FailedLabelJobReport,
     GenerationLabelReport,
     LabelManagerEvent,
     SkippedLabelJobReport,
 )
+from src.search_budget.policy import BUDGET_CURVE_MULTIPLES
 from src.training.coordinator import Coordinator
 from src.training.reporting import TrainingReporter
 
@@ -60,23 +61,19 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
         inference_model_sha256='1' * 64,
         population_position_count=500,
         selected_position_count=10,
-        prediction_distribution=_distribution(0.45),
-        target_distribution=_distribution(0.5),
-        raw_kl_distribution=_distribution(0.2),
-        buckets=tuple(
-            BucketFinalizationReport(
-                bucket_index=index,
-                sample_count=1,
-                current_generation_utility=0.01 * index,
-                ema_utility=0.02 * index,
-                shadow_multiplier=1.0,
-                pending_multiplier=1.0,
-                published_multiplier=1.0,
-                raw_log_update=0.001 * index,
-                projection_adjustment=0.0,
-                lower_mean_visits=550.0,
-                upper_mean_visits=650.0,
-                checkpoint_deduplication_count=0,
+        baseline_raw_kl_distribution=_distribution(0.2),
+        predicted_baseline_log_kl_distribution=_distribution(0.45),
+        target_baseline_log_kl_distribution=_distribution(0.5),
+        curve_points=tuple(
+            CurvePointReport(
+                curve_index=index,
+                multiple=BUDGET_CURVE_MULTIPLES[index],
+                grid_visits=75 + index,
+                sigma=1.0 + 0.1 * index,
+                mean_target_log_kl=-2.0 - 0.1 * index,
+                mean_predicted_log_kl=-1.9 - 0.1 * index,
+                mean_absolute_error=0.1 * (index + 1),
+                selected_count=1,
             )
             for index in range(10)
         ),
@@ -91,17 +88,13 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
         queued_generation_count=2,
         current_validation_gain=0.03,
         ema_validation_gain=0.02,
-        candidate_mean_assigned_new_visits=600.0,
-        candidate_assigned_new_visits_variance=25.0,
-        candidate_mean_kl_from_deep=0.15,
-        candidate_exact_spend_residual=0,
-        previous_published_curve=(1.0,) * 10,
-        validated_curve=(1.0,) * 10,
-        shadow_curve=(1.0,) * 10,
-        pending_curve=(1.0,) * 10,
-        published_curve=(1.0,) * 10,
-        minimum_published_multiplier=1.0,
-        maximum_published_multiplier=1.0,
+        log_tau=-2.3,
+        realized_mean_multiple=1.05,
+        realized_mean_assigned_visits=630.0,
+        flat_mean_assigned_visits=600.0,
+        assigned_new_visits_variance=25.0,
+        selected_index_counts=(1,) * 10,
+        published_apply_learned=False,
         failed_eligibility_conditions=('warmup',),
         application_generation=14,
         decision_reason='warmup',
@@ -111,40 +104,33 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
 
     assert scalars['search_budget/label/status/completed'] == (1, 12)
     assert scalars['search_budget/label/sample_fraction'] == pytest.approx((0.02, 12))
-    assert scalars['search_budget/label/raw_kl/mean'] == (0.2, 12)
-    assert scalars['search_budget/label/target_quantile/median'] == (0.5, 12)
-    assert scalars['search_budget/label/prediction_quantile/histogram_bin_9'] == (1, 12)
+    assert scalars['search_budget/label/baseline_raw_kl/mean'] == (0.2, 12)
+    assert scalars['search_budget/label/predicted_baseline_log_kl/mean'] == (0.45, 12)
+    assert scalars['search_budget/label/target_baseline_log_kl/median'] == (0.5, 12)
     assert scalars['search_budget/label/deep_search_retries'] == (2, 12)
-    assert scalars['search_budget/calibration/published_mean_multiplier'] == (1.0, 12)
-    assert scalars['search_budget/calibration/previous_published_mean_multiplier'] == (1.0, 12)
-    assert scalars['search_budget/calibration/shadow_mean_multiplier'] == (1.0, 12)
-    assert scalars['search_budget/calibration/pending_mean_multiplier'] == (1.0, 12)
-    assert scalars['search_budget/calibration/validated_mean_multiplier'] == (1.0, 12)
-    assert scalars['search_budget/calibration/floor_share'] == (0.1, 12)
-    assert scalars['search_budget/calibration/ceiling_share'] == (0.1, 12)
+    assert scalars['search_budget/calibration/log_tau'] == (-2.3, 12)
+    assert scalars['search_budget/calibration/realized_mean_multiple'] == (1.05, 12)
+    assert scalars['search_budget/calibration/realized_mean_assigned_visits'] == (630.0, 12)
+    assert scalars['search_budget/calibration/flat_mean_assigned_visits'] == (600.0, 12)
+    assert scalars['search_budget/calibration/assigned_new_visits_variance'] == (25.0, 12)
+    assert scalars['search_budget/calibration/published_apply_learned'] == (0, 12)
     assert scalars['search_budget/calibration/current_validation_gain'] == (0.03, 12)
     assert scalars['search_budget/calibration/ema_validation_gain'] == (0.02, 12)
-    assert scalars['search_budget/calibration/current_relative_validation_gain_percent'] == pytest.approx(
-        (100.0 / 6.0, 12)
-    )
-    assert scalars['search_budget/calibration/ema_relative_validation_gain_percent'] == pytest.approx((100.0 / 9.0, 12))
-    assert scalars['search_budget/calibration/candidate_exact_spend_residual'] == (0, 12)
     assert scalars['search_budget/calibration/application_generation'] == (14, 12)
     assert scalars['search_budget/calibration/decision_reason/warmup'] == (1, 12)
-    prefix = 'search_budget/calibration/bucket_9'
-    assert scalars[f'{prefix}/generation_marginal_utility'] == (0.09, 12)
-    assert scalars[f'{prefix}/ema_marginal_utility'] == (0.18, 12)
-    assert scalars[f'{prefix}/validated_multiplier'] == (1.0, 12)
-    assert scalars[f'{prefix}/previous_published_multiplier'] == (1.0, 12)
-    assert scalars[f'{prefix}/published_multiplier'] == (1.0, 12)
+    assert scalars['search_budget/calibration/selected_index_9'] == (1, 12)
+    prefix = 'search_budget/curve_point_9'
+    assert scalars[f'{prefix}/sigma'] == pytest.approx((1.9, 12))
+    assert scalars[f'{prefix}/grid_visits'] == (84, 12)
+    assert scalars[f'{prefix}/mean_target_log_kl'] == pytest.approx((-2.9, 12))
+    assert scalars[f'{prefix}/mean_predicted_log_kl'] == pytest.approx((-2.8, 12))
+    assert scalars[f'{prefix}/mean_absolute_error'] == pytest.approx((1.0, 12))
+    assert scalars[f'{prefix}/selected_count'] == (1, 12)
     assert scalars['search_budget/calibration/failed_eligibility/warmup'] == (1, 12)
-    assert scalars['search_budget/calibration/minimum_shadow_multiplier'] == (1.0, 12)
-    assert scalars['search_budget/calibration/maximum_pending_multiplier'] == (1.0, 12)
-    assert scalars['search_budget/calibration/minimum_validated_multiplier'] == (1.0, 12)
     assert histograms == {
-        'search_budget/label/prediction_quantile': (10, 12),
-        'search_budget/label/target_quantile': (10, 12),
-        'search_budget/label/raw_kl': (10, 12),
+        'search_budget/label/baseline_raw_kl': (10, 12),
+        'search_budget/label/predicted_baseline_log_kl': (10, 12),
+        'search_budget/label/target_baseline_log_kl': (10, 12),
     }
 
 
@@ -160,7 +146,7 @@ def test_failed_and_skipped_label_reports_publish_health_metrics(monkeypatch: py
         FailedLabelJobReport(
             source_generation=4,
             failure='RuntimeError: failed shard',
-            published_curve=(1.0,) * 10,
+            published_apply_learned=False,
             application_generation=6,
             decision_reason='terminal_failure',
         )
@@ -175,6 +161,7 @@ def test_failed_and_skipped_label_reports_publish_health_metrics(monkeypatch: py
     )
 
     assert scalars['search_budget/label/status/failed'] == (1, 4)
+    assert scalars['search_budget/calibration/published_apply_learned'] == (0, 4)
     assert scalars['search_budget/calibration/decision_reason/terminal_failure'] == (1, 4)
     assert scalars['search_budget/label/status/skipped'] == (1, 5)
     assert scalars['search_budget/label/sample_fraction'] == (0.0, 5)

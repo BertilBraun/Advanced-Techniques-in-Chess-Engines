@@ -7,8 +7,8 @@ from typing import cast
 import pytest
 import src.training.coordinator as coordinator_module
 from src.replay.manager import ReplayIngestion
-from src.search_budget.calibration import CurveDecisionReason, CurvePublication
-from src.search_budget.curve import flat_curve
+from src.search_budget.calibration import BudgetDecisionReason, BudgetPolicyPublication
+from src.search_budget.policy import disabled_policy
 from src.self_play.protocol import (
     RunningSelfPlayState,
     RunningSelfPlayStateApplied,
@@ -107,10 +107,10 @@ class _SearchBudgetLabelManager:
     closed: bool = False
     poll_calls: int = 0
 
-    def publication_for_generation(self, production_generation: int) -> CurvePublication:
+    def publication_for_generation(self, production_generation: int) -> BudgetPolicyPublication:
         return _publication(production_generation)
 
-    def publication_for_starting_generation(self, production_generation: int) -> CurvePublication:
+    def publication_for_starting_generation(self, production_generation: int) -> BudgetPolicyPublication:
         return _publication(production_generation)
 
     def poll(self) -> tuple[()]:
@@ -154,7 +154,7 @@ class _SelfPlayGroup:
     def supervise(
         self,
         checkpoint: CheckpointReference,
-        search_budget: CurvePublication,
+        search_budget: BudgetPolicyPublication,
         resignation_policy: PublishedResignationPolicy,
     ) -> SelfPlaySupervision:
         assert search_budget == _publication(checkpoint.generation)
@@ -238,11 +238,11 @@ class _Harness:
     self_play_group: _SelfPlayGroup
 
 
-def _publication(generation: int) -> CurvePublication:
-    return CurvePublication(
-        curve=flat_curve(),
+def _publication(generation: int) -> BudgetPolicyPublication:
+    return BudgetPolicyPublication(
+        policy=disabled_policy(),
         application_generation=generation,
-        decision_reason=CurveDecisionReason.INITIAL,
+        decision_reason=BudgetDecisionReason.INITIAL,
     )
 
 

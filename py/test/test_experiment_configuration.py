@@ -19,7 +19,7 @@ from src.experiment.configuration import (
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.training import ChessImplementation
 from src.games.go.configuration import GoExperimentConfiguration
-from src.search_budget.curve import flat_curve
+from src.search_budget.policy import disabled_policy
 from src.self_play.configuration import (
     EnabledForcedPlayoutConfiguration,
     SdpaBackend,
@@ -340,8 +340,8 @@ def test_early_termination_caps_maximum_game_plies_and_censors_cut_games() -> No
     assert configuration.chess.self_play.maximum_game_plies_at(0) == 80
     assert configuration.chess.self_play.maximum_game_plies_at(10) == 160
     assert configuration.chess.self_play.maximum_game_plies_at(50) == 600
-    assert implementation.self_play_parameters_at(0, flat_curve()).maximum_game_plies == 80
-    assert implementation.self_play_parameters_at(50, flat_curve()).maximum_game_plies == 600
+    assert implementation.self_play_parameters_at(0, disabled_policy()).maximum_game_plies == 80
+    assert implementation.self_play_parameters_at(50, disabled_policy()).maximum_game_plies == 600
     assert implementation.censor_remaining_game_length_on_cut_games is True
 
 
@@ -581,7 +581,7 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
-    assert experiment_configuration_sha256(frozen) == 'b40000ecf65defaaa8638cfe0f30469979f918c83d3bac7aed42ee93334cc0e4'
+    assert experiment_configuration_sha256(frozen) == 'f3f2c9d49fc89727c44220e267c08ae2dc4c1d90029b1bee144a344077eafb01'
 
 
 @pytest.mark.parametrize(
@@ -609,4 +609,4 @@ def test_cut_game_value_target_selects_whether_self_play_bootstraps(value_target
 
     implementation = ChessImplementation(configuration)
 
-    assert implementation.self_play_parameters_at(0, flat_curve()).bootstrap_cut_game_value is expected
+    assert implementation.self_play_parameters_at(0, disabled_policy()).bootstrap_cut_game_value is expected

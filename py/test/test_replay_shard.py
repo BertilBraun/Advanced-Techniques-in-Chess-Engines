@@ -107,10 +107,8 @@ def _sample(layout: ReplayLayout, generation: int) -> ReplaySample:
             case SearchBudgetHeadLayout():
                 auxiliary.append(
                     EligibleSearchBudgetTarget(
-                        normalized_target=0.4,
+                        curve=tuple(-3.0 + 0.1 * index for index in range(10)),
                         raw_kl=0.2,
-                        prediction_logit=-0.25,
-                        predicted_quantile=0.4,
                         source_generation=generation,
                         model_generation=generation,
                         inference_model_sha256='b' * 64,
@@ -166,8 +164,8 @@ def _observation() -> SearchObservation:
         network_root_value=0.15,
         policy_correction=0.1,
         value_correction=0.2,
-        search_budget_logit=0.25,
-        predicted_search_budget=0.56,
+        predicted_baseline_log_kl=0.25,
+        selected_budget_index=5,
         assigned_additional_visits=14,
         parallel_searches=1,
         spend_residual=0,

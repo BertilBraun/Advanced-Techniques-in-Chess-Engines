@@ -112,10 +112,8 @@ def _replay_sample(
 ) -> ReplaySample:
     budget_target = (
         EligibleSearchBudgetTarget(
-            normalized_target=0.5 * weight,
+            curve=(0.5 * weight,) * 10,
             raw_kl=0.25,
-            prediction_logit=0.0,
-            predicted_quantile=0.5,
             source_generation=0,
             model_generation=0,
             inference_model_sha256='0' * 64,

@@ -15,13 +15,12 @@ from src.replay.contracts import IneligibleSearchBudgetTarget, ReplaySample, Spa
 from src.replay.label_source import ReplayLabelGameLocator
 from src.replay.shard import ReplayShardGameMetadata, ReplayShardSourceGame
 from src.search_budget.artifacts import LabelShardManifest, LabelShardPhase
-from src.search_budget.calibration import CurveDecisionReason
+from src.search_budget.calibration import BudgetDecisionReason
 from src.search_budget.configuration import (
     DeepLabelingConfiguration,
     LabelArtifactRetention,
     SearchBudgetConfiguration,
 )
-from src.search_budget.curve import analytic_initial_curve, flat_curve
 from src.search_budget.labeling import LabelGenerationSource, LabelPositionSource, LabelReplaySampleSource
 from src.search_budget.manager import (
     InvalidLabelComputeError,
@@ -77,8 +76,8 @@ def _game() -> ReplayShardGameMetadata:
         network_root_value=0.0,
         policy_correction=0.0,
         value_correction=0.0,
-        search_budget_logit=0.0,
-        predicted_search_budget=0.5,
+        predicted_baseline_log_kl=0.0,
+        selected_budget_index=-1,
         assigned_additional_visits=10,
         parallel_searches=1,
         spend_residual=0,
@@ -133,6 +132,7 @@ def _position() -> LabelPositionSource:
             ply=0,
         ),
         action_prefix=(),
+        absolute_replay_row=0,
         replay=LabelReplaySampleSource.from_replay_sample(replay_sample),
     )
 
@@ -292,8 +292,8 @@ def test_unreadable_manager_state_constructs_fail_closed_and_preserves_evidence(
     manager = _manager(tmp_path, executor)
 
     publication = manager.publication_for_generation(2)
-    assert publication.curve == flat_curve()
-    assert publication.decision_reason is CurveDecisionReason.UNREADABLE_STATE
+    assert not publication.policy.apply_learned
+    assert publication.decision_reason is BudgetDecisionReason.UNREADABLE_STATE
     assert (jobs_path / 'manager-state-recovery.json').is_file()
     assert len(tuple(jobs_path.glob('manager-state-invalid-*.json'))) == 1
     manager.close()
@@ -368,18 +368,19 @@ def test_starting_generation_boundary_is_monotonic_durable_and_prevents_late_pub
     )
 
     started = manager.publication_for_starting_generation(1)
+    learned = manager._calibration.published_policy.model_copy(update={'apply_learned': True})
     manager._calibration = manager._calibration.model_copy(
         update={
-            'previous_published_curve': flat_curve(),
-            'published_curve': analytic_initial_curve(),
+            'previous_published_policy': manager._calibration.published_policy,
+            'published_policy': learned,
             'application_generation': manager._first_unstarted_production_generation,
         }
     )
 
-    assert started.curve == flat_curve()
-    assert manager.publication_for_generation(1).curve == flat_curve()
-    assert manager.publication_for_generation(2).curve == analytic_initial_curve()
-    assert manager.publication_for_starting_generation(1).curve == flat_curve()
+    assert not started.policy.apply_learned
+    assert not manager.publication_for_generation(1).policy.apply_learned
+    assert manager.publication_for_generation(2).policy.apply_learned
+    assert not manager.publication_for_starting_generation(1).policy.apply_learned
     with pytest.raises(ValueError, match='without gaps'):
         manager.publication_for_starting_generation(3)
     manager.close()
@@ -398,13 +399,13 @@ def test_starting_generation_boundary_is_monotonic_durable_and_prevents_late_pub
         configuration=SearchBudgetConfiguration(),
         executor=restarted_executor,
     )
-    assert restarted.publication_for_starting_generation(1).curve == flat_curve()
+    assert not restarted.publication_for_starting_generation(1).policy.apply_learned
     restarted.close()
 
 
 def test_invalid_reconstructed_compute_is_distinct_from_terminal_worker_failure() -> None:
-    assert _failure_decision_reason(InvalidLabelComputeError('bad checksum')) is CurveDecisionReason.INVALID_COMPUTE
-    assert _failure_decision_reason(RuntimeError('worker died')) is CurveDecisionReason.TERMINAL_FAILURE
+    assert _failure_decision_reason(InvalidLabelComputeError('bad checksum')) is BudgetDecisionReason.INVALID_COMPUTE
+    assert _failure_decision_reason(RuntimeError('worker died')) is BudgetDecisionReason.TERMINAL_FAILURE
 
 
 def test_cleanup_failure_after_durable_completion_does_not_reclassify_job(

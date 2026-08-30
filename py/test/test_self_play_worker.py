@@ -79,8 +79,8 @@ class FakeResult:
     network_root_value: float
     policy_correction: float
     value_correction: float
-    search_budget_logit: float
-    predicted_search_budget: float
+    predicted_budget_curve: list[float]
+    selected_budget_index: int
     assigned_additional_visits: int
     parallel_searches: int
     spend_residual: int
@@ -152,8 +152,8 @@ class FakeSearch:
                     network_root_value=self.root_value,
                     policy_correction=0.0,
                     value_correction=0.0,
-                    search_budget_logit=0.0,
-                    predicted_search_budget=0.5,
+                    predicted_budget_curve=[0.0] * 10,
+                    selected_budget_index=-1,
                     assigned_additional_visits=3,
                     parallel_searches=1,
                     spend_residual=self._spend_residual,
@@ -419,7 +419,7 @@ def test_worker_uses_learned_budget_search_for_every_position(tmp_path: Path) ->
 
     assert all(batch[0].assigned_additional_visits is None for batch in game.search.request_batches)
     assert [observation.assigned_additional_visits for observation in worker.active_games[0].observations] == [3, 3]
-    assert [observation.predicted_search_budget for observation in worker.active_games[0].observations] == [0.5, 0.5]
+    assert [observation.selected_budget_index for observation in worker.active_games[0].observations] == [-1, -1]
 
 
 def test_worker_selects_from_actual_visits_and_records_pruned_target_visits(tmp_path: Path) -> None:
@@ -570,8 +570,8 @@ def restart_source_game() -> CompletedSelfPlayGame:
                 network_root_value=0.0,
                 policy_correction=0.0,
                 value_correction=0.0,
-                search_budget_logit=0.0,
-                predicted_search_budget=0.5,
+                predicted_baseline_log_kl=0.0,
+                selected_budget_index=-1,
                 assigned_additional_visits=256,
                 parallel_searches=2,
                 spend_residual=0,
