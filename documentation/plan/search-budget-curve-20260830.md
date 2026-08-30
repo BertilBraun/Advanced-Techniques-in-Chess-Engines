@@ -20,16 +20,34 @@ targets live in replay as a ten-wide `AUXILIARY_VALUE` column following the next
 
 ## Allocation (native, per self-play position)
 
-1. Isotonic projection of the predicted curve: running minimum from the largest budget downward,
-   `yhat[k] = min(yhat[k], yhat[k+1])` for `k = 8..0`.
-2. `P[k] = Phi((log_tau - yhat[k]) / sigma[k])` with the standard normal CDF.
-3. Select the lowest `k` with `P[k] > theta` (theta 0.8); the deepest point when none qualifies.
+Lagrangian selection (2026-08-31, replacing the threshold rule, which offline replay on 220,814 v17
+positions measured at -6.7% of oracle gain versus +12.5% for the Lagrangian and +21.3% with a linear
+calibrator):
+
+1. Linear calibration of the predicted curve using cheap root observables:
+   `yhat_cal[k] = yhat[k] + b[k] + w[k] . f`, features
+   `f = (yhat[k], top_visit_share, policy_entropy, ply, baseline_visits)`. Coefficients are ridge-fitted
+   Python-side per label generation on a trailing window of analysis records (default 10 generations),
+   standardisation folded into the shipped values; zeros (identity) until the first fit, after a
+   non-finite fit, or when the fit does not reduce the in-window residual. Independently disableable via
+   `calibration.calibrator.enabled`.
+2. Isotonic projection of the calibrated curve: running minimum from the cheapest budget upward.
+3. `k* = argmin_k exp(yhat_cal_projected[k]) + lambda * multiples[k]`, ties to the cheapest k. Raw KL
+   space because the run-level objective is a sum of KLs, not of logs.
 4. Assigned visits `round(multiple_k * B)` with the running spend-error correction, clamped to `[1, 8B]`.
 
-`sigma[k]` is a per-grid-point EMA (decay 0.1, initialised 1.0) of the labelled `|yhat[k] - curve[k]|`.
-`log_tau` is a dual variable stepped by `clamp(log(realized_mean_multiple), +-log(1.05))` per finalized label
-generation so realized mean spend tracks the flat baseline. Both persist in the calibration state and cross the
-binding seam inside `SearchBudgetPolicy` (grid multiples, sigma, log_tau, theta, apply_learned).
+`lambda` is the dual variable holding realized mean spend at the flat baseline: seeded on the first
+label generation by bisecting the value whose Lagrangian selection on that generation's measured curves
+spends a mean multiple of 1.0, then stepped multiplicatively by `clamp(realized_mean_multiple,
+1/lambda_step_ratio, lambda_step_ratio)` (ratio 1.05) per finalized label generation. `sigma[k]`
+(per-grid-point EMA, decay 0.1, of `|yhat[k] - curve[k]|`) is no longer used for selection but stays
+computed and logged as the prediction-quality diagnostic. Lambda, calibrator coefficients and sigma
+persist in the calibration state; the binding seam inside `SearchBudgetPolicy` carries grid multiples,
+lagrange_multiplier, calibration_bias[10], calibration_weights[10][5] and apply_learned. Native computes
+top_visit_share and policy_entropy from the root's retained visit distribution (raw priors on a fresh
+root) and receives ply through the search request; the Python-side shadow selection during label
+finalization uses the baseline-policy features from the deep-search checkpoints, which is the basis the
+calibrator is fitted on.
 
 ## Safety gate
 
@@ -42,8 +60,8 @@ incompatible state publishes `apply_learned = false` (flat) to the next unstarte
 
 Per labelled position, one fixed-width numpy record (`analysis-generation-XXXXXXXX.np` under
 `search-budget-labels/`): identity, baseline, raw `policy_kl[10]`, `value_error[10]` (per-checkpoint root values are
-recorded natively), baseline top-visit share and entropy, `predicted_curve[10]`, `deep_half_kl`, assigned visits and
-selected index. Append-only; failures are logged and never affect the label job or training.
+recorded natively), baseline top-visit share and entropy, `predicted_curve[10]`, `calibrated_curve[10]`,
+`deep_half_kl`, assigned visits and selected index. Append-only; failures are logged and never affect the label job or training.
 
 ## Removed
 
@@ -51,8 +69,9 @@ The bucket multiplier curve and everything that existed only to learn it: analyt
 per-bucket marginal-utility EMAs, probe allocation purposes, shadow/pending/published curve lineages with delayed
 validation, the exact-mean generation allocator, `allocate_next_production_budget`, the native `SearchBudgetCurve`
 type, `probe_ratio` / `bucket_utility_ema_decay` / `initializer_version` / `maximum_step_ratio` configuration, and
-their telemetry and dashboards. Configurations v11-v17 carry the new `calibration` schema
-(`sigma_ema_decay`, `initial_tau`, `tau_step_ratio`, `selection_threshold`, warmup, gain-EMA decay).
+their telemetry and dashboards. Configurations v11-v18 carry the current `calibration` schema
+(`sigma_ema_decay`, `lambda_step_ratio`, warmup, gain-EMA decay, `calibrator` block); `initial_tau`,
+`tau_step_ratio` and `selection_threshold` were removed with the threshold rule.
 
 ## Evidence
 

@@ -198,9 +198,7 @@ training:
         warmup_completed_source_generations: 30
         sigma_ema_decay: '0.1'
         validation_gain_ema_decay: '0.2'
-        initial_tau: '0.1'
-        tau_step_ratio: '1.05'
-        selection_threshold: '0.8'
+        lambda_step_ratio: '1.05'
       production:
         sequential_round_target: 200
         minimum_parallel_searches: 2
