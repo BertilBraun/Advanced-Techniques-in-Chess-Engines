@@ -66,6 +66,7 @@ class FakeRequest:
     assigned_additional_visits: int | None = None
     policy_checkpoint_visits: list[int] | None = None
     parallel_searches: int | None = None
+    root_ply: int = 0
 
 
 @dataclass(frozen=True)
@@ -134,8 +135,9 @@ class FakeSearch:
         assigned_additional_visits: int | None = None,
         policy_checkpoint_visits: list[int] | None = None,
         parallel_searches: int | None = None,
+        root_ply: int = 0,
     ) -> FakeRequest:
-        return FakeRequest(root, assigned_additional_visits, policy_checkpoint_visits, parallel_searches)
+        return FakeRequest(root, assigned_additional_visits, policy_checkpoint_visits, parallel_searches, root_ply)
 
     def search(self, requests: list[FakeRequest], collect_statistics: bool = False) -> FakeBatch:
         assert not collect_statistics
@@ -418,6 +420,7 @@ def test_worker_uses_learned_budget_search_for_every_position(tmp_path: Path) ->
     worker.run_batch()
 
     assert all(batch[0].assigned_additional_visits is None for batch in game.search.request_batches)
+    assert [batch[0].root_ply for batch in game.search.request_batches] == [0, 1]
     assert [observation.assigned_additional_visits for observation in worker.active_games[0].observations] == [3, 3]
     assert [observation.selected_budget_index for observation in worker.active_games[0].observations] == [-1, -1]
 
