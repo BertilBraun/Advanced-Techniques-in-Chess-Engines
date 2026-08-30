@@ -4,6 +4,8 @@
 #include "search/SelfPlay.hpp"
 
 #include <array>
+#include <cmath>
+#include <limits>
 
 namespace {
 using ChessSelfPlaySearch = GameSelfPlaySearch<ChessGame>;
@@ -100,32 +102,45 @@ int runBatchedSearchTests() {
         require(!flatPolicy.apply_learned, "default search-budget policy is not flat");
         const std::array<double, 10> gridMultiples = {0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0,
                                                       1.0,   1.5, 2.0,       3.0, 4.0};
-        const std::array<double, 10> unitSigma = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
-        const SearchBudgetPolicy learnedPolicy(gridMultiples, unitSigma, 1.0, 0.8, true);
+        const std::array<double, 10> zeroBias{};
+        const SearchBudgetPolicy::CalibrationWeights zeroWeights{};
+        const SearchBudgetSelectionFeatures neutralFeatures = {
+            .top_visit_share = 1.0, .policy_entropy = 0.0, .ply = 0.0, .baseline_visits = 101.0};
+        const SearchBudgetPolicy learnedPolicy(gridMultiples, 1.0, zeroBias, zeroWeights, true);
         try {
             std::array<double, 10> nonIncreasing = gridMultiples;
             nonIncreasing[3] = nonIncreasing[2];
-            static_cast<void>(SearchBudgetPolicy(nonIncreasing, unitSigma, 0.0, 0.8, true));
+            static_cast<void>(SearchBudgetPolicy(nonIncreasing, 0.0, zeroBias, zeroWeights, true));
             throw std::runtime_error("non-increasing grid multiples unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         try {
             std::array<double, 10> withoutBaseline = gridMultiples;
             withoutBaseline[5] = 1.1;
-            static_cast<void>(SearchBudgetPolicy(withoutBaseline, unitSigma, 0.0, 0.8, true));
+            static_cast<void>(
+                SearchBudgetPolicy(withoutBaseline, 0.0, zeroBias, zeroWeights, true));
             throw std::runtime_error("grid without the flat multiple unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         try {
-            std::array<double, 10> zeroSigma = unitSigma;
-            zeroSigma[0] = 0.0;
-            static_cast<void>(SearchBudgetPolicy(gridMultiples, zeroSigma, 0.0, 0.8, true));
-            throw std::runtime_error("nonpositive sigma unexpectedly validated");
+            static_cast<void>(SearchBudgetPolicy(gridMultiples, -0.5, zeroBias, zeroWeights, true));
+            throw std::runtime_error("negative Lagrange multiplier unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         try {
-            static_cast<void>(SearchBudgetPolicy(gridMultiples, unitSigma, 0.0, 1.0, true));
-            throw std::runtime_error("unit selection threshold unexpectedly validated");
+            std::array<double, 10> invalidBias = zeroBias;
+            invalidBias[2] = std::numeric_limits<double>::quiet_NaN();
+            static_cast<void>(
+                SearchBudgetPolicy(gridMultiples, 0.0, invalidBias, zeroWeights, true));
+            throw std::runtime_error("non-finite calibration bias unexpectedly validated");
+        } catch (const std::invalid_argument &) {
+        }
+        try {
+            SearchBudgetPolicy::CalibrationWeights invalidWeights = zeroWeights;
+            invalidWeights[4][1] = std::numeric_limits<double>::infinity();
+            static_cast<void>(
+                SearchBudgetPolicy(gridMultiples, 0.0, zeroBias, invalidWeights, true));
+            throw std::runtime_error("non-finite calibration weight unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
 
@@ -138,35 +153,64 @@ int runBatchedSearchTests() {
 
         // A well-formed decreasing curve must survive the projection unchanged; a suffix minimum
         // would flatten it to its deepest value and reduce selection to a two-point rule.
-        const SearchBudgetCurvePrediction decreasingPrediction = {-1.0F, -1.4F, -1.9F, -2.3F, -2.6F,
-                                                                  -3.0F, -3.4F, -3.9F, -4.5F, -5.2F};
+        const SearchBudgetCurvePrediction decreasingPrediction = {
+            -1.0F, -1.4F, -1.9F, -2.3F, -2.6F, -3.0F, -3.4F, -3.9F, -4.5F, -5.2F};
         require(projectNonIncreasing(decreasingPrediction) == decreasingPrediction,
                 "a well-formed decreasing curve was not a fixed point of the projection");
 
-        // With log_tau = 1 and unit sigma, Phi(1) ~= 0.841 > 0.8 qualifies a zero prediction.
+        // A constant curve buys nothing from extra spend, so the Lagrangian argmin takes the
+        // cheapest grid point for any positive dual.
         SearchBudgetCurvePrediction cheapPrediction{};
-        require(selectBudgetIndex(learnedPolicy, cheapPrediction) == 0,
-                "a confidently cheap curve did not select the cheapest grid point");
-        SearchBudgetCurvePrediction hardPrediction;
-        hardPrediction.fill(5.0F);
-        require(selectBudgetIndex(learnedPolicy, hardPrediction) == 9,
-                "an unqualified curve did not fall back to the deepest grid point");
+        require(selectBudgetIndex(learnedPolicy, cheapPrediction, neutralFeatures) == 0,
+                "a flat curve did not select the cheapest grid point");
+        // With a zero dual the objective is exactly the projected KL: ties resolve cheapest.
+        const SearchBudgetPolicy freeSpendPolicy(gridMultiples, 0.0, zeroBias, zeroWeights, true);
+        require(selectBudgetIndex(freeSpendPolicy, cheapPrediction, neutralFeatures) == 0,
+                "an exact objective tie did not resolve to the cheapest grid point");
+        // exp(curve) = 10, 9, ..., 1 falls by one per grid point while the dual prices the extra
+        // multiples far below one unit of KL, so the deepest point minimises the Lagrangian.
+        const SearchBudgetPolicy cheapDualPolicy(gridMultiples, 0.1, zeroBias, zeroWeights, true);
+        SearchBudgetCurvePrediction steepPrediction;
+        for (const std::size_t index : range(steepPrediction.size())) {
+            steepPrediction[index] = std::log(10.0F - static_cast<float>(index));
+        }
+        require(selectBudgetIndex(cheapDualPolicy, steepPrediction, neutralFeatures) == 9,
+                "a steeply improving curve did not select the deepest grid point");
+        // The interior of the same curve wins once the dual prices the deep multiples above
+        // their marginal KL reduction.
+        const SearchBudgetPolicy pricedDualPolicy(gridMultiples, 2.5, zeroBias, zeroWeights, true);
+        require(selectBudgetIndex(pricedDualPolicy, steepPrediction, neutralFeatures) == 5,
+                "an interior Lagrangian optimum was not selected");
         SearchBudgetCurvePrediction dippingPrediction;
         dippingPrediction.fill(5.0F);
         dippingPrediction[6] = -3.0F;
         // The projection may only pull deeper points down to a cheaper point's level, never the
-        // reverse, so the dip qualifies at its own index and the cheaper points stay unqualified.
-        require(selectBudgetIndex(learnedPolicy, dippingPrediction) == 6,
+        // reverse, so the dip is the first point whose projected KL is cheap.
+        require(selectBudgetIndex(learnedPolicy, dippingPrediction, neutralFeatures) == 6,
                 "isotonic projection did not keep a dip at its own grid point");
-        // A constant projected curve leaves only sigma to separate grid points: wide sigma
-        // blocks the cheap points and the first tight point qualifies.
-        const std::array<double, 10> mixedSigma = {5.0, 5.0, 5.0, 5.0, 1.0,
-                                                   1.0, 1.0, 1.0, 1.0, 1.0};
-        const SearchBudgetPolicy mixedSigmaPolicy(gridMultiples, mixedSigma, -2.0, 0.8, true);
-        SearchBudgetCurvePrediction constantPrediction;
-        constantPrediction.fill(-4.0F);
-        require(selectBudgetIndex(mixedSigmaPolicy, constantPrediction) == 4,
-                "selection did not choose the lowest qualifying grid point");
+        // A calibration bias on the deepest point moves the argmin once the dual is small.
+        std::array<double, 10> deepBias{};
+        deepBias[9] = -3.0;
+        const SearchBudgetPolicy biasedPolicy(gridMultiples, 0.01, deepBias, zeroWeights, true);
+        require(selectBudgetIndex(biasedPolicy, cheapPrediction, neutralFeatures) == 9,
+                "a calibration bias did not steer the Lagrangian argmin");
+        // Feature weights enter the calibrated curve exactly as prediction + bias + w . f.
+        SearchBudgetPolicy::CalibrationWeights featureWeights{};
+        featureWeights[3] = {0.5, -1.0, 0.25, 0.01, -0.001};
+        std::array<double, 10> featureBias{};
+        featureBias[3] = 0.75;
+        const SearchBudgetPolicy calibratedPolicy(gridMultiples, 1.0, featureBias, featureWeights,
+                                                  true);
+        const SearchBudgetSelectionFeatures richFeatures = {
+            .top_visit_share = 0.6, .policy_entropy = 1.2, .ply = 40.0, .baseline_visits = 400.0};
+        SearchBudgetCurvePrediction calibrationInput{};
+        calibrationInput[3] = -2.0F;
+        const std::array<double, 10> calibrated =
+            calibrateBudgetCurve(calibratedPolicy, calibrationInput, richFeatures);
+        const double expectedThird =
+            -2.0 + 0.75 + 0.5 * -2.0 + -1.0 * 0.6 + 0.25 * 1.2 + 0.01 * 40.0 + -0.001 * 400.0;
+        require(std::abs(calibrated[3] - expectedThird) < 1e-12 && calibrated[0] == 0.0,
+                "curve calibration is not the documented affine feature map");
 
         const std::array<std::uint32_t, 5> budgets = {100, 300, 600, 1'600, 2'400};
         const std::array<std::uint32_t, 5> expectedParallelism = {2, 2, 4, 8, 16};
@@ -178,14 +222,16 @@ int runBatchedSearchTests() {
 
         SearchBudgetAllocator allocator;
         const PredictedSearchBudgetLimit learnedLimit(101, learnedPolicy);
-        const AssignedSearchBudget firstAssigned = allocator.assign(learnedLimit, cheapPrediction);
+        const AssignedSearchBudget firstAssigned =
+            allocator.assign(learnedLimit, cheapPrediction, neutralFeatures);
         require(firstAssigned.selected_index == 0 && firstAssigned.additional_visits == 13,
                 "first learned assignment did not round the cheapest grid budget");
         std::uint64_t assignedTotal = firstAssigned.additional_visits;
         constexpr std::uint32_t allocationCount = 10'000;
         for (const auto index : range(allocationCount - 1)) {
             static_cast<void>(index);
-            assignedTotal += allocator.assign(learnedLimit, cheapPrediction).additional_visits;
+            assignedTotal +=
+                allocator.assign(learnedLimit, cheapPrediction, neutralFeatures).additional_visits;
         }
         require(std::abs(static_cast<std::int64_t>(assignedTotal) -
                          static_cast<std::int64_t>(allocationCount) * 101) <= 8 * 101 + 1,
@@ -197,7 +243,8 @@ int runBatchedSearchTests() {
         const PredictedSearchBudgetLimit flatLimit(101, flatPolicy);
         for (const auto index : range(100)) {
             static_cast<void>(index);
-            const AssignedSearchBudget flatAssigned = allocator.assign(flatLimit, cheapPrediction);
+            const AssignedSearchBudget flatAssigned =
+                allocator.assign(flatLimit, cheapPrediction, neutralFeatures);
             require(flatAssigned.additional_visits == 101 && flatAssigned.selected_index == -1,
                     "flat policy did not assign exactly the baseline");
         }

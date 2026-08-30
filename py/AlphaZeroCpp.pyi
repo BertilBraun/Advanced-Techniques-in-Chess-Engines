@@ -63,6 +63,7 @@ __all__: list[str] = [
     'PredictedSearchBudgetLimit',
     'SdpaBackend',
     'SearchBudgetPolicy',
+    'SearchBudgetSelectionFeatures',
     'SearchCheckpoint',
     'SearchCheckpointDetail',
     'SearchStopReason',
@@ -74,6 +75,7 @@ __all__: list[str] = [
     'mirror_chess_action_id',
     'new_root',
     'new_root_with_history',
+    'calibrate_budget_curve',
     'select_budget_index',
     'search_parallelism',
 ]
@@ -300,6 +302,7 @@ class ChessSelfPlaySearch:
         add_root_noise: bool = True,
         force_root_playouts: bool = True,
         checkpoint_detail: SearchCheckpointDetail = ...,
+        root_ply: int = 0,
     ) -> ChessSelfPlaySearchRequest: ...
     def reset_spend_residual(self) -> None: ...
     def search(
@@ -333,9 +336,12 @@ class ChessSelfPlaySearchRequest:
         add_root_noise: bool = True,
         force_root_playouts: bool = True,
         checkpoint_detail: SearchCheckpointDetail = ...,
+        root_ply: int = 0,
     ) -> None: ...
     @property
     def add_root_noise(self) -> bool: ...
+    @property
+    def root_ply(self) -> int: ...
     @property
     def assigned_additional_visits(self) -> int | None: ...
     @property
@@ -709,6 +715,7 @@ class GoSelfPlaySearch7:
         add_root_noise: bool = True,
         force_root_playouts: bool = True,
         checkpoint_detail: SearchCheckpointDetail = ...,
+        root_ply: int = 0,
     ) -> GoSelfPlaySearchRequest7: ...
     def reset_spend_residual(self) -> None: ...
     def search(
@@ -742,6 +749,7 @@ class GoSelfPlaySearch9:
         add_root_noise: bool = True,
         force_root_playouts: bool = True,
         checkpoint_detail: SearchCheckpointDetail = ...,
+        root_ply: int = 0,
     ) -> GoSelfPlaySearchRequest9: ...
     def reset_spend_residual(self) -> None: ...
     def search(
@@ -779,9 +787,12 @@ class GoSelfPlaySearchRequest7:
         add_root_noise: bool = True,
         force_root_playouts: bool = True,
         checkpoint_detail: SearchCheckpointDetail = ...,
+        root_ply: int = 0,
     ) -> None: ...
     @property
     def add_root_noise(self) -> bool: ...
+    @property
+    def root_ply(self) -> int: ...
     @property
     def assigned_additional_visits(self) -> int | None: ...
     @property
@@ -805,9 +816,12 @@ class GoSelfPlaySearchRequest9:
         add_root_noise: bool = True,
         force_root_playouts: bool = True,
         checkpoint_detail: SearchCheckpointDetail = ...,
+        root_ply: int = 0,
     ) -> None: ...
     @property
     def add_root_noise(self) -> bool: ...
+    @property
+    def root_ply(self) -> int: ...
     @property
     def assigned_additional_visits(self) -> int | None: ...
     @property
@@ -1162,21 +1176,46 @@ class SearchBudgetPolicy:
     def __init__(
         self,
         multiples: typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)],
-        sigma: typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)],
-        log_tau: float,
-        selection_threshold: float,
+        lagrange_multiplier: float,
+        calibration_bias: typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)],
+        calibration_weights: typing.Annotated[
+            list[typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(5)]],
+            pybind11_stubgen.typing_ext.FixedSize(10),
+        ],
         apply_learned: bool,
     ) -> None: ...
     @property
     def multiples(self) -> typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)]: ...
     @property
-    def sigma(self) -> typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)]: ...
+    def lagrange_multiplier(self) -> float: ...
     @property
-    def log_tau(self) -> float: ...
+    def calibration_bias(self) -> typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)]: ...
     @property
-    def selection_threshold(self) -> float: ...
+    def calibration_weights(
+        self,
+    ) -> typing.Annotated[
+        list[typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(5)]],
+        pybind11_stubgen.typing_ext.FixedSize(10),
+    ]: ...
     @property
     def apply_learned(self) -> bool: ...
+
+class SearchBudgetSelectionFeatures:
+    def __init__(
+        self,
+        top_visit_share: float,
+        policy_entropy: float,
+        ply: float,
+        baseline_visits: float,
+    ) -> None: ...
+    @property
+    def top_visit_share(self) -> float: ...
+    @property
+    def policy_entropy(self) -> float: ...
+    @property
+    def ply(self) -> float: ...
+    @property
+    def baseline_visits(self) -> float: ...
 
 class SearchCheckpoint:
     @property
@@ -1317,7 +1356,13 @@ def new_root_with_history(starting_fen: str, moves_uci: list[str], arena_capacit
 def select_budget_index(
     policy: SearchBudgetPolicy,
     prediction: typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)],
+    features: SearchBudgetSelectionFeatures,
 ) -> int: ...
+def calibrate_budget_curve(
+    policy: SearchBudgetPolicy,
+    prediction: typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)],
+    features: SearchBudgetSelectionFeatures,
+) -> typing.Annotated[list[float], pybind11_stubgen.typing_ext.FixedSize(10)]: ...
 def search_parallelism(additional_visits: int) -> int: ...
 
 CHESS_ACTION_SIZE: int = 1880

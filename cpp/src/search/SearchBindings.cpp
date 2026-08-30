@@ -159,15 +159,30 @@ void bind_search(py::module_ &module) {
         .def(py::init<std::uint32_t>(), py::arg("additional_visits"))
         .def_readonly("additional_visits", &AdditionalSearchLimit::additional_visits);
     py::class_<SearchBudgetPolicy>(module, "SearchBudgetPolicy")
-        .def(py::init<std::array<double, SearchBudgetPolicy::CURVE_POINTS>,
-                      std::array<double, SearchBudgetPolicy::CURVE_POINTS>, double, double, bool>(),
-             py::arg("multiples"), py::arg("sigma"), py::arg("log_tau"),
-             py::arg("selection_threshold"), py::arg("apply_learned"))
+        .def(py::init<std::array<double, SearchBudgetPolicy::CURVE_POINTS>, double,
+                      std::array<double, SearchBudgetPolicy::CURVE_POINTS>,
+                      SearchBudgetPolicy::CalibrationWeights, bool>(),
+             py::arg("multiples"), py::arg("lagrange_multiplier"), py::arg("calibration_bias"),
+             py::arg("calibration_weights"), py::arg("apply_learned"))
         .def_readonly("multiples", &SearchBudgetPolicy::multiples)
-        .def_readonly("sigma", &SearchBudgetPolicy::sigma)
-        .def_readonly("log_tau", &SearchBudgetPolicy::log_tau)
-        .def_readonly("selection_threshold", &SearchBudgetPolicy::selection_threshold)
+        .def_readonly("lagrange_multiplier", &SearchBudgetPolicy::lagrange_multiplier)
+        .def_readonly("calibration_bias", &SearchBudgetPolicy::calibration_bias)
+        .def_readonly("calibration_weights", &SearchBudgetPolicy::calibration_weights)
         .def_readonly("apply_learned", &SearchBudgetPolicy::apply_learned);
+    py::class_<SearchBudgetSelectionFeatures>(module, "SearchBudgetSelectionFeatures")
+        .def(py::init([](const double topVisitShare, const double policyEntropy, const double ply,
+                         const double baselineVisits) {
+                 return SearchBudgetSelectionFeatures{.top_visit_share = topVisitShare,
+                                                      .policy_entropy = policyEntropy,
+                                                      .ply = ply,
+                                                      .baseline_visits = baselineVisits};
+             }),
+             py::arg("top_visit_share"), py::arg("policy_entropy"), py::arg("ply"),
+             py::arg("baseline_visits"))
+        .def_readonly("top_visit_share", &SearchBudgetSelectionFeatures::top_visit_share)
+        .def_readonly("policy_entropy", &SearchBudgetSelectionFeatures::policy_entropy)
+        .def_readonly("ply", &SearchBudgetSelectionFeatures::ply)
+        .def_readonly("baseline_visits", &SearchBudgetSelectionFeatures::baseline_visits);
     py::class_<PredictedSearchBudgetLimit>(module, "PredictedSearchBudgetLimit")
         .def(py::init<std::uint32_t, SearchBudgetPolicy>(), py::arg("baseline_visits"),
              py::arg("policy"))
@@ -175,10 +190,18 @@ void bind_search(py::module_ &module) {
         .def_readonly("policy", &PredictedSearchBudgetLimit::policy);
     module.def(
         "select_budget_index",
-        [](const SearchBudgetPolicy &policy, const SearchBudgetCurvePrediction &prediction) {
-            return selectBudgetIndex(policy, prediction);
+        [](const SearchBudgetPolicy &policy, const SearchBudgetCurvePrediction &prediction,
+           const SearchBudgetSelectionFeatures &features) {
+            return selectBudgetIndex(policy, prediction, features);
         },
-        py::arg("policy"), py::arg("prediction"));
+        py::arg("policy"), py::arg("prediction"), py::arg("features"));
+    module.def(
+        "calibrate_budget_curve",
+        [](const SearchBudgetPolicy &policy, const SearchBudgetCurvePrediction &prediction,
+           const SearchBudgetSelectionFeatures &features) {
+            return calibrateBudgetCurve(policy, prediction, features);
+        },
+        py::arg("policy"), py::arg("prediction"), py::arg("features"));
     module.def("search_parallelism", &searchParallelism, py::arg("additional_visits"));
     py::class_<GameSearchResult>(module, "GameSearchResult")
         .def_readonly("root_value", &GameSearchResult::root_value)

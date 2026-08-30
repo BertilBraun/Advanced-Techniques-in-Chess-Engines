@@ -71,7 +71,8 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
                  [](Root selectedRoot, const std::optional<std::uint32_t> assignedAdditionalVisits,
                     std::vector<std::uint32_t> policyCheckpointVisits,
                     const std::optional<std::uint32_t> parallelSearches, const bool addRootNoise,
-                    const bool forceRootPlayouts, const SearchCheckpointDetail checkpointDetail) {
+                    const bool forceRootPlayouts, const SearchCheckpointDetail checkpointDetail,
+                    const std::uint32_t rootPly) {
                      return Request{
                          .root = std::move(selectedRoot),
                          .assigned_additional_visits = assignedAdditionalVisits,
@@ -80,6 +81,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
                          .add_root_noise = addRootNoise,
                          .force_root_playouts = forceRootPlayouts,
                          .checkpoint_detail = checkpointDetail,
+                         .root_ply = rootPly,
                      };
                  }),
              py::arg("root"), py::arg("assigned_additional_visits") = std::nullopt,
@@ -87,14 +89,16 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
              py::arg("parallel_searches") = std::nullopt, py::arg("add_root_noise") = true,
              py::arg("force_root_playouts") = true,
              py::arg_v("checkpoint_detail", SearchCheckpointDetail::Scalars,
-                       "SearchCheckpointDetail.SCALARS"))
+                       "SearchCheckpointDetail.SCALARS"),
+             py::arg("root_ply") = 0)
         .def_readonly("root", &Request::root)
         .def_readonly("assigned_additional_visits", &Request::assigned_additional_visits)
         .def_readonly("policy_checkpoint_visits", &Request::policy_checkpoint_visits)
         .def_readonly("parallel_searches", &Request::parallel_searches)
         .def_readonly("add_root_noise", &Request::add_root_noise)
         .def_readonly("force_root_playouts", &Request::force_root_playouts)
-        .def_readonly("checkpoint_detail", &Request::checkpoint_detail);
+        .def_readonly("checkpoint_detail", &Request::checkpoint_detail)
+        .def_readonly("root_ply", &Request::root_ply);
     py::class_<Result>(module, names.result)
         .def_readonly("root_value", &Result::root_value)
         .def_readonly("highest_visited_child_action_id", &Result::highest_visited_child_action_id)
@@ -149,7 +153,8 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
                const std::optional<std::uint32_t> assignedAdditionalVisits,
                std::vector<std::uint32_t> policyCheckpointVisits,
                const std::optional<std::uint32_t> parallelSearches, const bool addRootNoise,
-               const bool forceRootPlayouts, const SearchCheckpointDetail checkpointDetail) {
+               const bool forceRootPlayouts, const SearchCheckpointDetail checkpointDetail,
+               const std::uint32_t rootPly) {
                 return Request{
                     .root = std::move(selectedRoot),
                     .assigned_additional_visits = assignedAdditionalVisits,
@@ -158,6 +163,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
                     .add_root_noise = addRootNoise,
                     .force_root_playouts = forceRootPlayouts,
                     .checkpoint_detail = checkpointDetail,
+                    .root_ply = rootPly,
                 };
             },
             py::arg("root"), py::arg("assigned_additional_visits") = std::nullopt,
@@ -165,7 +171,8 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
             py::arg("parallel_searches") = std::nullopt, py::arg("add_root_noise") = true,
             py::arg("force_root_playouts") = true,
             py::arg_v("checkpoint_detail", SearchCheckpointDetail::Scalars,
-                      "SearchCheckpointDetail.SCALARS"))
+                      "SearchCheckpointDetail.SCALARS"),
+            py::arg("root_ply") = 0)
         .def("search", &Search::search, py::arg("requests"), py::arg("collect_statistics") = false,
              py::call_guard<py::gil_scoped_release>())
         .def("refresh_model", &Search::refreshModel, py::arg("model_generation"),
