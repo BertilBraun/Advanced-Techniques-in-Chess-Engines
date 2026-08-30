@@ -170,9 +170,11 @@ class CompletedSelfPlayGame(FrozenModel):
             raise ValueError('Continuation games cannot terminate by resignation.')
 
 
-def publish_completed_self_play_game(inbox_path: Path, game: CompletedSelfPlayGame) -> Path:
+def publish_completed_self_play_game(
+    inbox_path: Path, game: CompletedSelfPlayGame, *, sync_directory: bool = True
+) -> Path:
     path = inbox_path / game.identity.file_name
     if path.exists():
         raise ValueError(f'Completed-game identity already exists: {path}')
-    write_text_atomically(path, game.model_dump_json() + '\n')
+    write_text_atomically(path, game.model_dump_json() + '\n', sync_directory=sync_directory)
     return path

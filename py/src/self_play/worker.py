@@ -29,6 +29,7 @@ from src.self_play.resignation import (
     PublishedResignationPolicy,
 )
 from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
+from src.util.atomic_file import fsync_directory
 from src.util.tensorboard import log_scalar
 
 if TYPE_CHECKING:
@@ -114,14 +115,20 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             raise RuntimeError('Batched self-play search returned the wrong result count.')
         self.completed_searches += batch.simulations_completed
         next_games: list[ActiveSelfPlayGame[NativeRootT]] = []
+        published = False
         for active_game, result in zip(self.active_games, batch.results, strict=True):
             completed = self._advance_game(active_game, result, parameters)
             if completed is None:
                 next_games.append(active_game)
             else:
                 self._archive_completed_game(completed, parameters)
-                publish_completed_self_play_game(self.inbox_path, completed)
+                publish_completed_self_play_game(self.inbox_path, completed, sync_directory=False)
+                published = True
                 next_games.append(self._new_game(search, parameters))
+        # A directory fsync costs as much as the file fsync, so the games finishing in one step
+        # share a single one instead of each paying its own.
+        if published:
+            fsync_directory(self.inbox_path)
         self.active_games = next_games
 
     def refresh_published_model(self, checkpoint: CheckpointReference, search_budget_curve: SearchBudgetCurve) -> None:
