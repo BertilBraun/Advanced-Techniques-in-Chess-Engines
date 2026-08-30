@@ -80,8 +80,7 @@ struct SearchBudgetPolicy {
         if (std::ranges::any_of(multiples, [](const double multiple) {
                 return !std::isfinite(multiple) || multiple <= 0.0;
             })) {
-            throw std::invalid_argument(
-                "Search-budget grid multiples must be finite and positive");
+            throw std::invalid_argument("Search-budget grid multiples must be finite and positive");
         }
         for (std::size_t index = 1; index < CURVE_POINTS; ++index) {
             if (multiples[index] <= multiples[index - 1]) {
@@ -93,9 +92,8 @@ struct SearchBudgetPolicy {
                                  [](const double multiple) { return multiple == 1.0; })) {
             throw std::invalid_argument("Search-budget grid must contain the flat multiple");
         }
-        if (std::ranges::any_of(sigma, [](const double value) {
-                return !std::isfinite(value) || value <= 0.0;
-            })) {
+        if (std::ranges::any_of(
+                sigma, [](const double value) { return !std::isfinite(value) || value <= 0.0; })) {
             throw std::invalid_argument("Search-budget sigma values must be finite and positive");
         }
         if (!std::isfinite(log_tau)) {
@@ -127,8 +125,7 @@ isotonicFromTop(SearchBudgetCurvePrediction values) {
 // point when none qualifies.
 [[nodiscard]] inline std::size_t selectBudgetIndex(const SearchBudgetPolicy &policy,
                                                    const SearchBudgetCurvePrediction &prediction) {
-    if (std::ranges::any_of(prediction,
-                            [](const float value) { return !std::isfinite(value); })) {
+    if (std::ranges::any_of(prediction, [](const float value) { return !std::isfinite(value); })) {
         throw std::invalid_argument("Search-budget curve predictions must be finite");
     }
     const SearchBudgetCurvePrediction projected = isotonicFromTop(prediction);
@@ -205,8 +202,7 @@ public:
             throw std::overflow_error("Search-budget spend ledger overflowed");
         }
         m_spendError += delta;
-        return {.additional_visits = assigned,
-                .selected_index = static_cast<int>(selectedIndex)};
+        return {.additional_visits = assigned, .selected_index = static_cast<int>(selectedIndex)};
     }
 
     [[nodiscard]] std::int64_t spendError() const noexcept { return m_spendError; }

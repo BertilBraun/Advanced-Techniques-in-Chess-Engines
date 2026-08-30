@@ -47,10 +47,10 @@ void expandRoot(GoTree &tree, const std::size_t edgeCount) {
     require(legalActions.size() >= edgeCount, "Go fixture does not have enough root actions");
     SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, {}};
     for (const auto index : range(edgeCount)) {
-        inference.actions.emplace_back(legalActions[index],
-                                      Go7Game::Encoding::actionId(legalActions[index],
-                                                                  tree.rootPosition()),
-                                      1.0F / static_cast<float>(edgeCount));
+        inference.actions.emplace_back(
+            legalActions[index],
+            Go7Game::Encoding::actionId(legalActions[index], tree.rootPosition()),
+            1.0F / static_cast<float>(edgeCount));
     }
     tree.expand(tree.rootIndex(), inference);
 }
@@ -191,9 +191,11 @@ bool reservedSubtreeStaysPreferred(const float virtualLossWeight) {
         Go7Game::legalActions(tree.position(firstChild));
     SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, {}};
     inference.actions.emplace_back(
-        legalActions[0], Go7Game::Encoding::actionId(legalActions[0], tree.position(firstChild)), 0.5F);
+        legalActions[0], Go7Game::Encoding::actionId(legalActions[0], tree.position(firstChild)),
+        0.5F);
     inference.actions.emplace_back(
-        legalActions[1], Go7Game::Encoding::actionId(legalActions[1], tree.position(firstChild)), 0.5F);
+        legalActions[1], Go7Game::Encoding::actionId(legalActions[1], tree.position(firstChild)),
+        0.5F);
     tree.expand(firstChild, inference);
     for (GameSearchEdge<Go7Game::Action> &edge : tree.root().children) {
         edge.prior = 0.5F;
@@ -239,9 +241,11 @@ void testRecursiveDiscount() {
         Go7Game::legalActions(tree.position(childIndex));
     SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, {}};
     inference.actions.emplace_back(
-        legalActions[0], Go7Game::Encoding::actionId(legalActions[0], tree.position(childIndex)), 0.5F);
+        legalActions[0], Go7Game::Encoding::actionId(legalActions[0], tree.position(childIndex)),
+        0.5F);
     inference.actions.emplace_back(
-        legalActions[1], Go7Game::Encoding::actionId(legalActions[1], tree.position(childIndex)), 0.5F);
+        legalActions[1], Go7Game::Encoding::actionId(legalActions[1], tree.position(childIndex)),
+        0.5F);
     tree.expand(childIndex, inference);
 
     tree.node(childIndex).children[0].prior = 1.0F;
@@ -447,10 +451,8 @@ int runGameSearchTreeTests() {
         testImportancePruningAndRematerialization();
         testFreshRootNoiseUsesRawPriors();
         exerciseTree<ChessGame>(Board{});
-        exerciseTree<Go7Game>(
-            GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}));
-        exerciseTree<Go9Game>(
-            GoPosition<9>(GoRules{.komi_half_points = 15, .maximum_moves = 324}));
+        exerciseTree<Go7Game>(GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}));
+        exerciseTree<Go9Game>(GoPosition<9>(GoRules{.komi_half_points = 15, .maximum_moves = 324}));
         for (const float rootValue : {-0.8F, 0.8F}) {
             const std::size_t zeroSelection = selectedRootEdgeAfterOneVisit(
                 rootValue, FirstPlayUrgencyParameters(FirstPlayUrgencyKind::Zero));

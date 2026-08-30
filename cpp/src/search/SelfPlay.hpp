@@ -26,9 +26,8 @@ struct SelfPlaySearchParameters {
     float dirichlet_epsilon;
 
     SelfPlaySearchParameters(const std::uint32_t baselineVisits,
-                             SearchBudgetPolicy searchBudgetPolicy,
-                             TreeSearchParameters treeSearch, const float dirichletAlpha,
-                             const float dirichletEpsilon)
+                             SearchBudgetPolicy searchBudgetPolicy, TreeSearchParameters treeSearch,
+                             const float dirichletAlpha, const float dirichletEpsilon)
         : baseline_visits(baselineVisits), search_budget_policy(std::move(searchBudgetPolicy)),
           tree_search(treeSearch), dirichlet_alpha(dirichletAlpha),
           dirichlet_epsilon(dirichletEpsilon) {

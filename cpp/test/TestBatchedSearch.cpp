@@ -25,12 +25,11 @@ std::filesystem::path createTestModel(const std::string &name, const float win, 
                              validOutput ? torch::tensor({win, draw}) : torch::tensor({win}),
                              false);
     model.register_buffer("outcome_buffer", torch::tensor({loss}));
-    model.register_buffer(
-        "search_budget_curve",
-        validBudgetWidth
-            ? torch::full({static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)},
-                          searchBudgetValue)
-            : torch::full({1}, searchBudgetValue));
+    model.register_buffer("search_budget_curve",
+                          validBudgetWidth
+                              ? torch::full({static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)},
+                                            searchBudgetValue)
+                              : torch::full({1}, searchBudgetValue));
     model.define(R"JIT(
         def forward(self, boards):
             batch_size = boards.size(0)
@@ -101,8 +100,7 @@ int runBatchedSearchTests() {
         require(!flatPolicy.apply_learned, "default search-budget policy is not flat");
         const std::array<double, 10> gridMultiples = {0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0,
                                                       1.0,   1.5, 2.0,       3.0, 4.0};
-        const std::array<double, 10> unitSigma = {1.0, 1.0, 1.0, 1.0, 1.0,
-                                                  1.0, 1.0, 1.0, 1.0, 1.0};
+        const std::array<double, 10> unitSigma = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
         const SearchBudgetPolicy learnedPolicy(gridMultiples, unitSigma, 1.0, 0.8, true);
         try {
             std::array<double, 10> nonIncreasing = gridMultiples;
@@ -182,12 +180,10 @@ int runBatchedSearchTests() {
             assignedTotal += allocator.assign(learnedLimit, cheapPrediction).additional_visits;
         }
         require(std::abs(static_cast<std::int64_t>(assignedTotal) -
-                         static_cast<std::int64_t>(allocationCount) * 101) <=
-                    8 * 101 + 1,
+                         static_cast<std::int64_t>(allocationCount) * 101) <= 8 * 101 + 1,
                 "constantly cheap predictions violated cumulative mean-spend accounting");
-        require(allocator.spendError() ==
-                    static_cast<std::int64_t>(assignedTotal) -
-                        static_cast<std::int64_t>(allocationCount) * 101,
+        require(allocator.spendError() == static_cast<std::int64_t>(assignedTotal) -
+                                              static_cast<std::int64_t>(allocationCount) * 101,
                 "spend ledger does not equal assigned-minus-baseline");
         const std::int64_t errorBeforeFlat = allocator.spendError();
         const PredictedSearchBudgetLimit flatLimit(101, flatPolicy);
@@ -269,8 +265,8 @@ int runBatchedSearchTests() {
                     retainedResult.final_visits == 32,
                 "retained root treated the assigned budget as an absolute visit limit");
 
-        const SelfPlaySearchParameters learnedParameters(16, learnedPolicy,
-                                                         treeSearchParameters(), 0.3F, 0.0F);
+        const SelfPlaySearchParameters learnedParameters(16, learnedPolicy, treeSearchParameters(),
+                                                         0.3F, 0.0F);
         ChessSelfPlaySearch learnedSearch(runtimeParameters, learnedParameters,
                                           inferenceParameters);
         const auto learnedResult =
@@ -336,11 +332,10 @@ int runBatchedSearchTests() {
         search.refreshModel(8, updatedModelPath.string());
         require(search.modelGeneration() == 8, "refresh did not publish its model generation");
         const auto updated = search.search({productionRequest(search)}).results.front();
-        require(std::ranges::all_of(updated.predicted_budget_curve,
-                                    [](const float value) {
-                                        return std::abs(value - 2.0F) < 1e-7F;
-                                    }),
-                "model refresh did not update the predicted budget curve");
+        require(
+            std::ranges::all_of(updated.predicted_budget_curve,
+                                [](const float value) { return std::abs(value - 2.0F) < 1e-7F; }),
+            "model refresh did not update the predicted budget curve");
         try {
             search.refreshModel(9, invalidModelPath.string());
             throw std::runtime_error("invalid model refresh unexpectedly succeeded");

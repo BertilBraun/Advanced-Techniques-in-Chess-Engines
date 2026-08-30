@@ -360,9 +360,9 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
                                  stagingOptions),
         .outcomes = torch::empty(
             {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.outcomes)}, stagingOptions),
-        .search_budgets = torch::empty({tensorSize(m_maximumBatchSize),
-                                        static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)},
-                                       stagingOptions),
+        .search_budgets = torch::empty(
+            {tensorSize(m_maximumBatchSize), static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)},
+            stagingOptions),
     };
     captureBatchGraphs();
 }
@@ -560,9 +560,9 @@ InferenceOutput InferenceRunner::createOutputBuffer() const {
                                  options),
         .outcomes = torch::empty(
             {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.outcomes)}, options),
-        .search_budgets = torch::empty({tensorSize(m_maximumBatchSize),
-                                        static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)},
-                                       options),
+        .search_budgets = torch::empty(
+            {tensorSize(m_maximumBatchSize), static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)},
+            options),
     };
 }
 
