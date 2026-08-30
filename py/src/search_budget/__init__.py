@@ -33,8 +33,8 @@ from src.search_budget.policy import (
     disabled_policy,
     grid_checkpoint_visits,
     grid_visit_counts,
-    isotonic_from_top,
     log_kl_curve,
+    project_non_increasing,
     select_budget_index,
     standard_normal_cdf,
 )
@@ -63,7 +63,7 @@ __all__ = [
     'grid_checkpoint_visits',
     'grid_visit_counts',
     'initial_calibration_state',
-    'isotonic_from_top',
+    'project_non_increasing',
     'load_calibration_state_fail_closed',
     'load_persisted_model',
     'log_kl_curve',

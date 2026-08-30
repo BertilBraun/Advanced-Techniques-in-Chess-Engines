@@ -5,7 +5,7 @@ from base64 import b64decode, b64encode
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from fractions import Fraction
-from statistics import fmean, pvariance
+from statistics import fmean, median, pvariance
 from typing import Protocol
 
 import numpy as np
@@ -372,6 +372,7 @@ def finalize_generation(
         position_count=position_count,
         mean_absolute_curve_error=tuple(value / position_count for value in error_sums),
         generation_gain=generation_gain,
+        median_baseline_log_kl=median(target_baseline_log_kls),
         realized_mean_multiple=fmean(BUDGET_CURVE_MULTIPLES[index] for index in _selected_indices(selected_counts)),
         realized_mean_assigned_visits=fmean(assigned_visits_values),
         flat_mean_assigned_visits=float(source.baseline_new_visits),

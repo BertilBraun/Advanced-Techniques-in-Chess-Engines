@@ -107,12 +107,13 @@ struct SearchBudgetPolicy {
     }
 };
 
-// Running minimum from the largest budget downward: more search never predicts more error.
+// Running minimum from the cheapest budget upward, so more search never predicts more error.
+// Sweeping the other way takes a suffix minimum, which is nondecreasing and would flatten an
+// already well-formed curve to its deepest value.
 [[nodiscard]] inline SearchBudgetCurvePrediction
-isotonicFromTop(SearchBudgetCurvePrediction values) {
-    for (std::size_t offset = 1; offset < values.size(); ++offset) {
-        const std::size_t index = values.size() - 1 - offset;
-        values[index] = std::min(values[index], values[index + 1]);
+projectNonIncreasing(SearchBudgetCurvePrediction values) {
+    for (std::size_t index = 1; index < values.size(); ++index) {
+        values[index] = std::min(values[index], values[index - 1]);
     }
     return values;
 }
@@ -128,7 +129,7 @@ isotonicFromTop(SearchBudgetCurvePrediction values) {
     if (std::ranges::any_of(prediction, [](const float value) { return !std::isfinite(value); })) {
         throw std::invalid_argument("Search-budget curve predictions must be finite");
     }
-    const SearchBudgetCurvePrediction projected = isotonicFromTop(prediction);
+    const SearchBudgetCurvePrediction projected = projectNonIncreasing(prediction);
     for (std::size_t index = 0; index < projected.size(); ++index) {
         const double probability = standardNormalCdf(
             (policy.log_tau - static_cast<double>(projected[index])) / policy.sigma[index]);

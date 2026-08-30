@@ -28,11 +28,13 @@ def evidence(
     gain: float = 0.05,
     realized_mean_multiple: float = 1.0,
     errors: tuple[float, ...] = (0.5,) * BUDGET_CURVE_POINTS,
+    median_baseline_log_kl: float = -1.5,
 ) -> BudgetGenerationEvidence:
     return BudgetGenerationEvidence(
         position_count=4,
         mean_absolute_curve_error=errors,
         generation_gain=gain,
+        median_baseline_log_kl=median_baseline_log_kl,
         realized_mean_multiple=realized_mean_multiple,
         realized_mean_assigned_visits=600.0 * realized_mean_multiple,
         flat_mean_assigned_visits=600.0,
@@ -73,18 +75,35 @@ def test_sigma_updates_with_ema_decay_from_unit_initialisation() -> None:
     assert updated.sigma == pytest.approx((0.9 * 1.0 + 0.1 * 2.0,) * 10)
 
 
-def test_log_tau_moves_toward_lower_spend_when_realized_multiple_is_high() -> None:
+def test_the_first_generation_seeds_log_tau_from_the_measured_baseline_curve() -> None:
     state = initial_calibration_state(CONFIGURATION_SHA)
-    overspend = update_calibration(state, 0, evidence(realized_mean_multiple=1.02), 1, parameters()).state
-    assert overspend.log_tau == pytest.approx(state.log_tau + math.log(1.02))
+    seeded = update_calibration(state, 0, evidence(median_baseline_log_kl=-1.75), 1, parameters()).state
+    assert seeded.log_tau == pytest.approx(-1.75)
+
+
+def test_log_tau_moves_toward_lower_spend_when_realized_multiple_is_high() -> None:
+    seeded = update_calibration(initial_calibration_state(CONFIGURATION_SHA), 0, evidence(), 1, parameters()).state
+    overspend = update_calibration(seeded, 1, evidence(realized_mean_multiple=1.02), 2, parameters()).state
+    assert overspend.log_tau == pytest.approx(seeded.log_tau + math.log(1.02))
 
 
 def test_log_tau_step_is_bounded_to_the_configured_ratio() -> None:
-    state = initial_calibration_state(CONFIGURATION_SHA)
-    surge = update_calibration(state, 0, evidence(realized_mean_multiple=4.0), 1, parameters()).state
-    collapse = update_calibration(state, 0, evidence(realized_mean_multiple=0.2), 1, parameters()).state
-    assert surge.log_tau == pytest.approx(state.log_tau + math.log(1.05))
-    assert collapse.log_tau == pytest.approx(state.log_tau - math.log(1.05))
+    seeded = update_calibration(initial_calibration_state(CONFIGURATION_SHA), 0, evidence(), 1, parameters()).state
+    surge = update_calibration(seeded, 1, evidence(realized_mean_multiple=4.0), 2, parameters()).state
+    collapse = update_calibration(seeded, 1, evidence(realized_mean_multiple=0.2), 2, parameters()).state
+    assert surge.log_tau == pytest.approx(seeded.log_tau + math.log(1.05))
+    assert collapse.log_tau == pytest.approx(seeded.log_tau - math.log(1.05))
+
+
+def test_unconverged_spend_keeps_the_gate_closed_even_with_positive_gain() -> None:
+    # A positive gain while mean spend still sits far above baseline only says that a larger budget
+    # beats a smaller one, so it must not be allowed to open the gate.
+    state = completed_state(40, warmup=5)
+    overspending = update_calibration(
+        state, 40, evidence(gain=0.5, realized_mean_multiple=3.0), 41, parameters(warmup=5)
+    ).state
+    assert BudgetEligibilityFailure.UNCONVERGED_SPEND in overspending.failed_eligibility_conditions
+    assert not overspending.published_policy.apply_learned
 
 
 def test_warmup_keeps_the_gate_closed_while_calibration_progresses() -> None:

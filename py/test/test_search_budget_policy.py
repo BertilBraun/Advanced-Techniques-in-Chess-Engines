@@ -13,8 +13,8 @@ from src.search_budget.policy import (
     disabled_policy,
     grid_checkpoint_visits,
     grid_visit_counts,
-    isotonic_from_top,
     log_kl_curve,
+    project_non_increasing,
     select_budget_index,
     standard_normal_cdf,
 )
@@ -64,9 +64,16 @@ def test_curve_label_is_log_of_kl_plus_epsilon() -> None:
     assert log_kl_curve(kl_values) == tuple(math.log(value + 1e-6) for value in kl_values)
 
 
-def test_isotonic_projection_is_running_minimum_from_largest_budget_downward() -> None:
+def test_isotonic_projection_is_running_minimum_from_cheapest_budget_upward() -> None:
     values = (5.0, 1.0, 4.0, 2.0, 3.0, 2.0, 9.0, 0.0, 8.0, 7.0)
-    assert isotonic_from_top(values) == (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.0, 7.0)
+    assert project_non_increasing(values) == (5.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0)
+
+
+def test_a_well_formed_decreasing_curve_survives_the_projection_unchanged() -> None:
+    # A suffix minimum would flatten this to its deepest value, reducing selection to a two-point
+    # rule keyed on the 4x prediction and discarding the curve the head exists to predict.
+    curve = (-1.0, -1.4, -1.9, -2.3, -2.6, -3.0, -3.4, -3.9, -4.5, -5.2)
+    assert project_non_increasing(curve) == curve
 
 
 def test_selection_takes_the_lowest_grid_point_whose_sigma_supports_confidence() -> None:
@@ -89,10 +96,12 @@ def test_selection_confidence_uses_the_standard_normal_cdf_against_theta() -> No
     assert standard_normal_cdf(1.0) == pytest.approx(0.8413447, abs=1e-6)
 
 
-def test_a_deep_budget_dip_propagates_to_cheaper_budgets_through_isotonic_projection() -> None:
+def test_a_cheap_budget_dip_propagates_to_deeper_budgets_through_isotonic_projection() -> None:
+    # The projection may only pull deeper points down to a cheaper point's level, never the reverse:
+    # a position that already looks converged cheaply cannot be made to look worse by more search.
     prediction = [5.0] * BUDGET_CURVE_POINTS
     prediction[6] = -3.0
-    assert select_budget_index(tuple(prediction), learned_policy()) == 0
+    assert select_budget_index(tuple(prediction), learned_policy()) == 6
 
 
 def test_wide_sigma_dilutes_confidence_and_pushes_selection_deeper() -> None:

@@ -27,6 +27,7 @@ class BudgetEligibilityFailure(str, Enum):
     WARMUP = 'warmup'
     NON_POSITIVE_CURRENT_GAIN = 'non_positive_current_gain'
     NON_POSITIVE_EMA_GAIN = 'non_positive_ema_gain'
+    UNCONVERGED_SPEND = 'unconverged_spend'
 
 
 _FAIL_CLOSED_REASONS = frozenset(
@@ -70,6 +71,7 @@ class BudgetGenerationEvidence(FrozenModel):
         max_length=BUDGET_CURVE_POINTS,
     )
     generation_gain: float
+    median_baseline_log_kl: float
     realized_mean_multiple: float = Field(gt=0.0)
     realized_mean_assigned_visits: float = Field(gt=0.0)
     flat_mean_assigned_visits: float = Field(gt=0.0)
@@ -84,6 +86,8 @@ class BudgetGenerationEvidence(FrozenModel):
             raise ValueError('Curve-error evidence must be finite and nonnegative.')
         if not math.isfinite(self.generation_gain):
             raise ValueError('Generation validation gain must be finite.')
+        if not math.isfinite(self.median_baseline_log_kl):
+            raise ValueError('Median baseline log KL must be finite.')
         if not math.isfinite(self.realized_mean_multiple):
             raise ValueError('Realized mean multiple must be finite.')
         if any(count < 0 for count in self.selected_index_counts):
@@ -194,8 +198,14 @@ def update_calibration(
         for previous, error in zip(state.sigma, evidence.mean_absolute_curve_error, strict=True)
     )
     maximum_step = math.log(float(parameters.tau_step_ratio))
-    tau_step = min(max(math.log(evidence.realized_mean_multiple), -maximum_step), maximum_step)
-    log_tau = state.log_tau + tau_step
+    if not state.finalized_source_generations:
+        # The first label generation is the first sight of the curve's scale. Seeding the dual here
+        # avoids spending the warmup walking an arbitrary initial tau back at the bounded step rate,
+        # during which a positive gain would only mean that more search beats less.
+        log_tau = evidence.median_baseline_log_kl
+    else:
+        tau_step = min(max(math.log(evidence.realized_mean_multiple), -maximum_step), maximum_step)
+        log_tau = state.log_tau + tau_step
 
     current_gain = evidence.generation_gain
     if state.ema_validation_gain is None:
@@ -205,7 +215,9 @@ def update_calibration(
         ema_gain = (1.0 - gain_decay) * state.ema_validation_gain + gain_decay * current_gain
 
     completed_count = len(state.finalized_source_generations) + 1
-    failures = _eligibility_failures(current_gain, ema_gain, completed_count, parameters)
+    failures = _eligibility_failures(
+        current_gain, ema_gain, completed_count, evidence.realized_mean_multiple, parameters
+    )
     published = SearchBudgetPolicy(
         sigma=sigma,
         log_tau=log_tau,
@@ -301,10 +313,14 @@ def _initial_log_tau(parameters: BudgetCalibrationParameters) -> float:
     return math.log(float(parameters.initial_tau))
 
 
+SPEND_CONVERGENCE_BAND = (0.95, 1.05)
+
+
 def _eligibility_failures(
     current_gain: float,
     ema_gain: float,
     completed_count: int,
+    realized_mean_multiple: float,
     parameters: BudgetCalibrationParameters,
 ) -> tuple[BudgetEligibilityFailure, ...]:
     failures: list[BudgetEligibilityFailure] = []
@@ -314,4 +330,9 @@ def _eligibility_failures(
         failures.append(BudgetEligibilityFailure.NON_POSITIVE_CURRENT_GAIN)
     if ema_gain <= 0.0:
         failures.append(BudgetEligibilityFailure.NON_POSITIVE_EMA_GAIN)
+    # Until the dual has pulled mean spend back to the baseline, a positive gain only says that a
+    # larger budget beats a smaller one, so it is no evidence that the ordering is worth anything.
+    low, high = SPEND_CONVERGENCE_BAND
+    if not low <= realized_mean_multiple <= high:
+        failures.append(BudgetEligibilityFailure.UNCONVERGED_SPEND)
     return tuple(failures)

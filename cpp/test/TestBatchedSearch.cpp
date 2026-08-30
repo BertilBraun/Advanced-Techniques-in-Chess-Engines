@@ -131,10 +131,17 @@ int runBatchedSearchTests() {
 
         const SearchBudgetCurvePrediction unsortedPrediction = {5.0F, 1.0F, 4.0F, 2.0F, 3.0F,
                                                                 2.0F, 9.0F, 0.0F, 8.0F, 7.0F};
-        const SearchBudgetCurvePrediction expectedProjection = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
-                                                                0.0F, 0.0F, 0.0F, 7.0F, 7.0F};
-        require(isotonicFromTop(unsortedPrediction) == expectedProjection,
-                "isotonic projection is not the running minimum from the largest budget downward");
+        const SearchBudgetCurvePrediction expectedProjection = {5.0F, 1.0F, 1.0F, 1.0F, 1.0F,
+                                                                1.0F, 1.0F, 0.0F, 0.0F, 0.0F};
+        require(projectNonIncreasing(unsortedPrediction) == expectedProjection,
+                "isotonic projection is not the running minimum from the cheapest budget upward");
+
+        // A well-formed decreasing curve must survive the projection unchanged; a suffix minimum
+        // would flatten it to its deepest value and reduce selection to a two-point rule.
+        const SearchBudgetCurvePrediction decreasingPrediction = {-1.0F, -1.4F, -1.9F, -2.3F, -2.6F,
+                                                                  -3.0F, -3.4F, -3.9F, -4.5F, -5.2F};
+        require(projectNonIncreasing(decreasingPrediction) == decreasingPrediction,
+                "a well-formed decreasing curve was not a fixed point of the projection");
 
         // With log_tau = 1 and unit sigma, Phi(1) ~= 0.841 > 0.8 qualifies a zero prediction.
         SearchBudgetCurvePrediction cheapPrediction{};

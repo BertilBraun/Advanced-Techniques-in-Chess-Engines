@@ -62,13 +62,17 @@ def log_kl_curve(kl_values: tuple[float, ...]) -> tuple[float, ...]:
     return tuple(math.log(value + LOG_KL_EPSILON) for value in kl_values)
 
 
-def isotonic_from_top(values: tuple[float, ...]) -> tuple[float, ...]:
-    """Running minimum from the largest budget downward: more search never predicts more error."""
+def project_non_increasing(values: tuple[float, ...]) -> tuple[float, ...]:
+    """Running minimum from the cheapest budget upward, so more search never predicts more error.
+
+    Sweeping the other way takes a suffix minimum, which is nondecreasing and therefore flattens an
+    already well-formed curve to its deepest value.
+    """
     if len(values) != BUDGET_CURVE_POINTS:
         raise ValueError('Isotonic projection requires one value per grid point.')
     projected = list(values)
-    for index in range(BUDGET_CURVE_POINTS - 2, -1, -1):
-        projected[index] = min(projected[index], projected[index + 1])
+    for index in range(1, BUDGET_CURVE_POINTS):
+        projected[index] = min(projected[index], projected[index - 1])
     return tuple(projected)
 
 
@@ -81,7 +85,7 @@ def select_budget_index(predicted_curve: tuple[float, ...], policy: SearchBudget
         raise ValueError('Budget selection requires one prediction per grid point.')
     if any(not math.isfinite(value) for value in predicted_curve):
         raise ValueError('Budget selection requires finite predictions.')
-    projected = isotonic_from_top(predicted_curve)
+    projected = project_non_increasing(predicted_curve)
     for index in range(BUDGET_CURVE_POINTS):
         probability = standard_normal_cdf((policy.log_tau - projected[index]) / policy.sigma[index])
         if probability > policy.selection_threshold:
