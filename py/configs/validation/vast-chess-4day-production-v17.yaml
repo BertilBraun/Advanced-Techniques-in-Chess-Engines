@@ -202,6 +202,9 @@ training:
         validation_gain_ema_decay: '0.2'
         probe_ratio: '1.3'
         maximum_step_ratio: '1.1'
+      head_training:
+        dedicated_batches: false
+        interval_optimizer_steps: 50
       production:
         sequential_round_target: 200
         minimum_parallel_searches: 2
