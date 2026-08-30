@@ -15,7 +15,11 @@ from pydantic import Field, model_validator
 from src.games.contracts import WdlTarget
 from src.replay.columnar import ReplayColumnArray, ReplayColumnViews, build_column_views, flatten_column_views
 from src.replay.layout import ReplayColumnDescriptor, ReplayLayout
-from src.self_play.completed_game import CompletedSelfPlayGame, GameIdentity, SearchObservation, TerminationReason
+from src.self_play.completed_game import (
+    GameIdentity,
+    SealedSearchObservation,
+    TerminationReason,
+)
 from src.util.atomic_file import fsync_directory, write_text_atomically
 from src.util.frozen_model import FrozenModel
 
@@ -47,7 +51,7 @@ class ReplayShardGameMetadata(FrozenModel):
     is_resignation_continuation: bool
     resignation_threshold: float | None = Field(default=None, ge=-1.0, lt=0.0)
     final_wdl: WdlTarget
-    observations: tuple[SearchObservation, ...]
+    observations: tuple[SealedSearchObservation, ...]
     policies_truncated: int = Field(ge=0)
     retained_visit_mass: int = Field(ge=0)
     discarded_visit_mass: int = Field(ge=0)
@@ -68,19 +72,6 @@ class ReplayShardGameMetadata(FrozenModel):
             raise ValueError('An unplayed final observation cannot select an action.')
         if self.termination_reason is TerminationReason.RESIGNATION and self.is_resignation_continuation:
             raise ValueError('Replay shard continuation games cannot terminate by resignation.')
-
-    def completed_game(self) -> CompletedSelfPlayGame:
-        return CompletedSelfPlayGame(
-            identity=self.source.identity,
-            created_at_seconds=self.created_at_seconds,
-            generation_seconds=self.generation_seconds,
-            action_ids=self.action_ids,
-            observations=self.observations,
-            final_wdl=self.final_wdl,
-            termination_reason=self.termination_reason,
-            is_resignation_continuation=self.is_resignation_continuation,
-            resignation_threshold=self.resignation_threshold,
-        )
 
 
 class SealedReplayShardManifest(FrozenModel):

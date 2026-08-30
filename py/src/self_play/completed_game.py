@@ -90,12 +90,14 @@ class SearchStopReason(str, Enum):
     PREDICTED_BUDGET = 'predicted_budget'
 
 
-class SearchObservation(FrozenModel):
-    model_config = ConfigDict(frozen=True, extra='forbid', arbitrary_types_allowed=True)
+class SealedSearchObservation(FrozenModel):
+    # Sealed shards carry the policy target in their binary columns, so the manifest keeps only these
+    # scalars. Revalidating narrows a full SearchObservation to this projection on assignment, so a
+    # manifest built in memory equals the same manifest read back from disk.
+    model_config = ConfigDict(frozen=True, extra='ignore', arbitrary_types_allowed=True, revalidate_instances='always')
 
     ply: int = Field(ge=0)
     model_generation: int = Field(ge=0)
-    policy_target_visits: SearchVisitCounts
     root_value: float
     highest_visited_child_action_id: int = Field(ge=0)
     highest_visited_child_visit_count: int = Field(gt=0)
@@ -126,6 +128,12 @@ class SearchObservation(FrozenModel):
             raise ValueError('Final visits must equal retained starting visits plus the assigned additional budget.')
         if not isfinite(self.search_budget_logit):
             raise ValueError('Search-budget logits must be finite.')
+
+
+class SearchObservation(SealedSearchObservation):
+    model_config = ConfigDict(frozen=True, extra='forbid', arbitrary_types_allowed=True)
+
+    policy_target_visits: SearchVisitCounts
 
 
 class CompletedSelfPlayGame(FrozenModel):
