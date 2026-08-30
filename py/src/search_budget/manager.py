@@ -697,7 +697,8 @@ class SearchBudgetLabelManager:
         with self._condition:
             previous_generations = self._calibration.finalized_source_generations
         window: list[npt.NDArray[np.void]] = []
-        for generation in previous_generations[-(configuration.window_generations - 1) :]:
+        previous_count = configuration.window_generations - 1
+        for generation in previous_generations[-previous_count:] if previous_count > 0 else ():
             path = analysis_log_path(self.jobs_path, generation)
             try:
                 window.append(read_analysis_records(path))
