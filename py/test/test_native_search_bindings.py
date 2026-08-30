@@ -9,7 +9,7 @@ from AlphaZeroCpp import FirstPlayUrgencyKind, FirstPlayUrgencyParameters, TreeS
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.training import ChessImplementation
-from src.search_budget.curve import analytic_initial_curve
+from src.search_budget.policy import BUDGET_CURVE_MULTIPLES, SearchBudgetPolicy
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
 
@@ -56,11 +56,21 @@ def test_resolved_virtual_loss_weight_reaches_the_native_search_parameters() -> 
     configuration = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     assert isinstance(configuration, ChessExperimentConfiguration)
     implementation = ChessImplementation(configuration)
-    curve = analytic_initial_curve()
-    resolved = replace(implementation.self_play_parameters_at(0, curve), virtual_loss_weight=0.25)
+    policy = SearchBudgetPolicy(
+        sigma=tuple(0.5 + 0.1 * index for index in range(10)),
+        log_tau=-2.25,
+        selection_threshold=0.8,
+        apply_learned=True,
+    )
+    resolved = replace(implementation.self_play_parameters_at(0, policy), virtual_loss_weight=0.25)
 
     native_parameters = implementation.native_search_parameters(resolved)
 
     assert native_parameters.tree_search.virtual_loss_weight == pytest.approx(0.25)
     assert native_parameters.baseline_visits == resolved.baseline_visits
-    assert tuple(native_parameters.search_budget_curve.multipliers) == pytest.approx(curve.multipliers)
+    native_policy = native_parameters.search_budget_policy
+    assert tuple(native_policy.multiples) == pytest.approx(BUDGET_CURVE_MULTIPLES)
+    assert tuple(native_policy.sigma) == pytest.approx(policy.sigma)
+    assert native_policy.log_tau == pytest.approx(-2.25)
+    assert native_policy.selection_threshold == pytest.approx(0.8)
+    assert native_policy.apply_learned is True

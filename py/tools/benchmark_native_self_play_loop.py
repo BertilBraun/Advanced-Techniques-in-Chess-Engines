@@ -9,7 +9,7 @@ from pathlib import Path
 
 import AlphaZeroCpp as native
 import torch
-from src.search_budget.curve import analytic_initial_curve, flat_curve
+from src.search_budget.policy import BUDGET_CURVE_MULTIPLES, disabled_policy
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class LoopArguments:
     games: int
     parallel_searches: int
     baseline_visits: int
-    analytic_search_budget_curve: bool
+    learned_search_budget_policy: bool
     retained_root_visit_fraction: float
     inference_workers: int
     inference_batch_size: int
@@ -59,8 +59,8 @@ class StubNetwork(torch.nn.Module):
         loss = 0.9 - win
         draw = torch.full_like(win, 0.1)
         outcomes = torch.stack((win, draw, loss), dim=1)
-        search_budget_logits = torch.zeros((batch, 1), dtype=torch.float32)
-        return logits, outcomes, search_budget_logits
+        search_budget_curves = torch.zeros((batch, 10), dtype=torch.float32)
+        return logits, outcomes, search_budget_curves
 
 
 def write_stub_model(destination: Path, hidden: int) -> Path:
@@ -79,10 +79,16 @@ def search_parameters(arguments: LoopArguments) -> native.SelfPlaySearchParamete
         0.99,
         0.5,
     )
-    curve = analytic_initial_curve() if arguments.analytic_search_budget_curve else flat_curve()
+    policy = disabled_policy().model_copy(update={'apply_learned': arguments.learned_search_budget_policy})
     return native.SelfPlaySearchParameters(
         arguments.baseline_visits,
-        native.SearchBudgetCurve(list(curve.multipliers)),
+        native.SearchBudgetPolicy(
+            list(BUDGET_CURVE_MULTIPLES),
+            list(policy.sigma),
+            policy.log_tau,
+            policy.selection_threshold,
+            policy.apply_learned,
+        ),
         tree,
         0.3,
         0.25,
@@ -210,8 +216,8 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
                 result.network_root_value,
                 result.policy_correction,
                 result.value_correction,
-                result.search_budget_logit,
-                result.predicted_search_budget,
+                result.predicted_budget_curve[5],
+                float(result.selected_budget_index),
                 result.assigned_additional_visits,
                 result.parallel_searches,
                 result.spend_residual,
@@ -258,7 +264,7 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
             'games': arguments.games,
             'parallel_searches': arguments.parallel_searches,
             'baseline_visits': arguments.baseline_visits,
-            'search_budget_curve': 'analytic_q5_v1' if arguments.analytic_search_budget_curve else 'flat',
+            'search_budget_policy': 'learned' if arguments.learned_search_budget_policy else 'flat',
             'inference_workers': arguments.inference_workers,
             'inference_batch_size': arguments.inference_batch_size,
             'inference_hidden': arguments.inference_hidden,
@@ -309,7 +315,7 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
     parser.add_argument('--games', type=int, default=128)
     parser.add_argument('--parallel-searches', type=int, default=2)
     parser.add_argument('--baseline-visits', type=int, default=250)
-    parser.add_argument('--analytic-search-budget-curve', action='store_true')
+    parser.add_argument('--learned-search-budget-policy', action='store_true')
     parser.add_argument('--retained-root-visit-fraction', type=float, default=0.6)
     parser.add_argument('--inference-workers', type=int, default=2)
     parser.add_argument('--inference-batch-size', type=int, default=256)
@@ -336,7 +342,7 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
         games=namespace.games,
         parallel_searches=namespace.parallel_searches,
         baseline_visits=namespace.baseline_visits,
-        analytic_search_budget_curve=namespace.analytic_search_budget_curve,
+        learned_search_budget_policy=namespace.learned_search_budget_policy,
         retained_root_visit_fraction=namespace.retained_root_visit_fraction,
         inference_workers=namespace.inference_workers,
         inference_batch_size=namespace.inference_batch_size,
