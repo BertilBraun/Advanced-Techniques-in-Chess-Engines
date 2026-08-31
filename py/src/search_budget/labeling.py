@@ -293,6 +293,14 @@ def prediction_map(
     return {record.identity: record for record in records}
 
 
+_MAXIMUM_SELECTION_LOG_KL = 50.0
+
+
+def _selection_raw_kl_curve(corrected_log_kl_curve: tuple[float, ...]) -> tuple[float, ...]:
+    """The head output is unbounded, so cap the exponent rather than let one row overflow to inf."""
+    return tuple(math.exp(min(value, _MAXIMUM_SELECTION_LOG_KL)) for value in corrected_log_kl_curve)
+
+
 def finalize_generation(
     source: LabelGenerationSource,
     predictions: dict[LabelPositionIdentity, PredictionRecord],
@@ -322,6 +330,7 @@ def finalize_generation(
     assigned_policies: list[PolicyDistribution] = []
     assigned_visits_values: list[int] = []
     target_raw_kl_curves: list[tuple[float, ...]] = []
+    selection_raw_kl_curves: list[tuple[float, ...]] = []
     baseline_raw_kls: list[float] = []
     predicted_baseline_log_kls: list[float] = []
     target_baseline_log_kls: list[float] = []
@@ -349,6 +358,7 @@ def finalize_generation(
         selected_counts[selected] += 1
         assigned_visits_values.append(grid_visits[selected])
         target_raw_kl_curves.append(raw_kls)
+        selection_raw_kl_curves.append(_selection_raw_kl_curve(corrected))
         deep_policies.append(deep_policy)
         flat_policies.append(grid_policies[BASELINE_CURVE_INDEX])
         assigned_policies.append(grid_policies[selected])
@@ -397,6 +407,7 @@ def finalize_generation(
         mean_absolute_curve_error=tuple(value / position_count for value in error_sums),
         generation_gain=generation_gain,
         target_raw_kl_curves=tuple(target_raw_kl_curves),
+        selection_raw_kl_curves=tuple(selection_raw_kl_curves),
         realized_mean_multiple=fmean(BUDGET_CURVE_MULTIPLES[index] for index in _selected_indices(selected_counts)),
         realized_mean_assigned_visits=fmean(assigned_visits_values),
         flat_mean_assigned_visits=float(source.baseline_new_visits),

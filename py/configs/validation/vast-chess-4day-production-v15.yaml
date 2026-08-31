@@ -198,7 +198,8 @@ training:
         warmup_completed_source_generations: 100000
         sigma_ema_decay: '0.1'
         validation_gain_ema_decay: '0.2'
-        lambda_step_ratio: '1.05'
+        lambda_trust_ratio: '2.0'
+        lambda_reseed_ratio: '100.0'
       production:
         sequential_round_target: 200
         minimum_parallel_searches: 2

@@ -34,12 +34,14 @@ def evidence(
     realized_mean_multiple: float = 1.0,
     errors: tuple[float, ...] = (0.5,) * BUDGET_CURVE_POINTS,
     curves: tuple[tuple[float, ...], ...] = (STEEP_CURVE, STEEP_CURVE, FLAT_CURVE, FLAT_CURVE),
+    selection_curves: tuple[tuple[float, ...], ...] | None = None,
 ) -> BudgetGenerationEvidence:
     return BudgetGenerationEvidence(
         position_count=len(curves),
         mean_absolute_curve_error=errors,
         generation_gain=gain,
         target_raw_kl_curves=curves,
+        selection_raw_kl_curves=curves if selection_curves is None else selection_curves,
         realized_mean_multiple=realized_mean_multiple,
         realized_mean_assigned_visits=600.0 * realized_mean_multiple,
         flat_mean_assigned_visits=600.0,
@@ -110,40 +112,51 @@ def test_lambda_seeding_returns_zero_when_even_free_spend_stays_at_baseline() ->
     assert solve_spend_matched_lagrange_multiplier((FLAT_CURVE, FLAT_CURVE)) == 0.0
 
 
-def test_the_first_generation_seeds_lambda_from_the_measured_curves() -> None:
+def test_the_first_generation_seeds_lambda_from_the_selection_curves() -> None:
     state = initial_calibration_state(CONFIGURATION_SHA)
-    seeded = update_calibration(state, 0, evidence(), 1, parameters()).state
+    selection = (STEEP_CURVE, STEEP_CURVE)
+    seeded = update_calibration(
+        state, 0, evidence(curves=(FLAT_CURVE, FLAT_CURVE), selection_curves=selection), 1, parameters()
+    ).state
+    assert seeded.lagrange_multiplier == pytest.approx(solve_spend_matched_lagrange_multiplier(selection))
+
+
+def test_lambda_ignores_the_measured_curves_when_selection_sees_different_ones() -> None:
+    state = initial_calibration_state(CONFIGURATION_SHA)
+    seeded = update_calibration(
+        state,
+        0,
+        evidence(curves=(FLAT_CURVE, FLAT_CURVE), selection_curves=(STEEP_CURVE, STEEP_CURVE)),
+        1,
+        parameters(),
+    ).state
     assert seeded.lagrange_multiplier == pytest.approx(
-        solve_spend_matched_lagrange_multiplier(evidence().target_raw_kl_curves)
+        solve_spend_matched_lagrange_multiplier((STEEP_CURVE, STEEP_CURVE))
     )
 
 
-def test_lambda_rises_when_realized_spend_exceeds_baseline() -> None:
+def test_lambda_tracks_the_solved_value_within_the_trust_region() -> None:
     seeded = update_calibration(initial_calibration_state(CONFIGURATION_SHA), 0, evidence(), 1, parameters()).state
-    overspend = update_calibration(seeded, 1, evidence(realized_mean_multiple=1.02), 2, parameters()).state
-    assert overspend.lagrange_multiplier == pytest.approx(seeded.lagrange_multiplier * 1.02)
+    tracked = update_calibration(seeded, 1, evidence(), 2, parameters()).state
+    assert tracked.lagrange_multiplier == pytest.approx(seeded.lagrange_multiplier)
 
 
-def test_lambda_falls_when_realized_spend_undershoots_baseline() -> None:
-    seeded = update_calibration(initial_calibration_state(CONFIGURATION_SHA), 0, evidence(), 1, parameters()).state
-    undershoot = update_calibration(seeded, 1, evidence(realized_mean_multiple=0.98), 2, parameters()).state
-    assert undershoot.lagrange_multiplier == pytest.approx(seeded.lagrange_multiplier * 0.98)
-
-
-def test_lambda_step_is_bounded_to_the_configured_ratio() -> None:
-    seeded = update_calibration(initial_calibration_state(CONFIGURATION_SHA), 0, evidence(), 1, parameters()).state
-    surge = update_calibration(seeded, 1, evidence(realized_mean_multiple=4.0), 2, parameters()).state
-    collapse = update_calibration(seeded, 1, evidence(realized_mean_multiple=0.2), 2, parameters()).state
-    assert surge.lagrange_multiplier == pytest.approx(seeded.lagrange_multiplier * 1.05)
-    assert collapse.lagrange_multiplier == pytest.approx(seeded.lagrange_multiplier / 1.05)
-
-
-def test_a_zero_seeded_lambda_can_still_ratchet_upward() -> None:
+def test_lambda_movement_is_bounded_to_the_trust_ratio() -> None:
     state = initial_calibration_state(CONFIGURATION_SHA)
-    seeded = update_calibration(state, 0, evidence(curves=(FLAT_CURVE, FLAT_CURVE)), 1, parameters()).state
-    assert seeded.lagrange_multiplier == 0.0
-    raised = update_calibration(seeded, 1, evidence(realized_mean_multiple=2.0), 2, parameters()).state
-    assert raised.lagrange_multiplier > 0.0
+    seeded = update_calibration(state, 0, evidence(), 1, parameters()).state
+    nudged = tuple(tuple(value * 8.0 for value in curve) for curve in evidence().selection_raw_kl_curves)
+    stepped = update_calibration(seeded, 1, evidence(selection_curves=nudged), 2, parameters()).state
+    assert stepped.lagrange_multiplier == pytest.approx(seeded.lagrange_multiplier * 2.0)
+
+
+def test_a_stale_lambda_reseeds_instead_of_crawling_toward_its_solution() -> None:
+    state = initial_calibration_state(CONFIGURATION_SHA)
+    flat = (FLAT_CURVE, FLAT_CURVE)
+    stale = update_calibration(state, 0, evidence(curves=flat, selection_curves=flat), 1, parameters()).state
+    assert stale.lagrange_multiplier == 0.0
+    selection = (STEEP_CURVE, STEEP_CURVE)
+    recovered = update_calibration(stale, 1, evidence(curves=flat, selection_curves=selection), 2, parameters()).state
+    assert recovered.lagrange_multiplier == pytest.approx(solve_spend_matched_lagrange_multiplier(selection))
 
 
 def test_the_fitted_corrector_reference_is_published_with_the_policy() -> None:
@@ -274,6 +287,7 @@ def test_evidence_requires_one_measured_curve_per_position() -> None:
             mean_absolute_curve_error=(0.5,) * BUDGET_CURVE_POINTS,
             generation_gain=0.0,
             target_raw_kl_curves=(STEEP_CURVE,),
+            selection_raw_kl_curves=(STEEP_CURVE,),
             realized_mean_multiple=1.0,
             realized_mean_assigned_visits=600.0,
             flat_mean_assigned_visits=600.0,
@@ -282,8 +296,8 @@ def test_evidence_requires_one_measured_curve_per_position() -> None:
 
 
 def test_parameters_reject_invalid_configuration() -> None:
-    with pytest.raises(ValueError, match='lambda step ratio'):
-        BudgetCalibrationParameters(lambda_step_ratio=Decimal(1))
+    with pytest.raises(ValueError, match='lambda trust ratio'):
+        BudgetCalibrationParameters(lambda_trust_ratio=Decimal(1))
     with pytest.raises(ValueError, match='warm-up'):
         BudgetCalibrationParameters(warmup_completed_generations=0)
 

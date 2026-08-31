@@ -42,7 +42,8 @@ class BudgetPolicyCalibrationConfiguration(FrozenModel):
     warmup_completed_source_generations: int = Field(default=30, gt=0)
     sigma_ema_decay: Decimal = Field(default=Decimal('0.1'), gt=Decimal(0), le=Decimal(1))
     validation_gain_ema_decay: Decimal = Field(default=Decimal('0.2'), gt=Decimal(0), le=Decimal(1))
-    lambda_step_ratio: Decimal = Field(default=Decimal('1.05'), gt=Decimal(1))
+    lambda_trust_ratio: Decimal = Field(default=Decimal('2.0'), gt=Decimal(1))
+    lambda_reseed_ratio: Decimal = Field(default=Decimal('100.0'), gt=Decimal(1))
     corrector: BudgetCurveCorrectorConfiguration = BudgetCurveCorrectorConfiguration()
 
 

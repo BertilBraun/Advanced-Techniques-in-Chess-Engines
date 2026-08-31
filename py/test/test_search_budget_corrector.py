@@ -152,3 +152,24 @@ def test_the_network_standardises_with_its_folded_buffers() -> None:
         expected = network.layers(torch.ones((1, CORRECTOR_INPUT_FEATURES)))
         actual = network(raw)
     assert torch.allclose(actual, expected)
+
+
+def test_a_baseline_visits_step_outside_the_window_cannot_explode_the_correction() -> None:
+    """`baseline_visits` is constant within a fitting window, so its standardised scale must not vanish."""
+    fit = fit_curve_corrector(_synthetic_records())
+    assert fit.network is not None
+    corrector = LoadedCurveCorrector(torch.jit.script(fit.network))
+    predicted = (-2.0,) * BUDGET_CURVE_POINTS
+    stepped = corrector(
+        predicted,
+        BudgetSelectionFeatures(
+            top_visit_share=0.5,
+            policy_entropy=1.5,
+            ply=40,
+            baseline_visits=500,
+            source_generation=13,
+        ),
+    )
+    assert all(abs(corrected - base) <= 2.0 for corrected, base in zip(stepped, predicted, strict=True))
+    constant_feature_scales = fit.network.feature_scale[-2:]
+    assert float(constant_feature_scales.min()) >= 0.05 * min(400.0, 12.0)

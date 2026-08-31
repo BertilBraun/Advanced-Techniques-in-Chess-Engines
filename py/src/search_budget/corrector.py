@@ -23,14 +23,19 @@ CORRECTOR_TRAINING_EPOCHS = 30
 CORRECTOR_BATCH_SIZE = 4096
 CORRECTOR_LEARNING_RATE = 1e-3
 CORRECTOR_HOLDOUT_STRIDE = 5
+CORRECTOR_MAXIMUM_CORRECTION = 2.0
 _MINIMUM_FEATURE_SCALE = 1e-6
+_RELATIVE_FEATURE_SCALE_FLOOR = 0.05
 
 
 class CurveCorrectorNetwork(torch.nn.Module):
     """Additive log-KL curve correction; standardisation is folded in so native applies it raw."""
 
+    __constants__ = ['maximum_correction']
+
     def __init__(self) -> None:
         super().__init__()
+        self.maximum_correction = CORRECTOR_MAXIMUM_CORRECTION
         self.register_buffer('feature_mean', torch.zeros(CORRECTOR_INPUT_FEATURES))
         self.register_buffer('feature_scale', torch.ones(CORRECTOR_INPUT_FEATURES))
         self.layers = torch.nn.Sequential(
@@ -42,7 +47,8 @@ class CurveCorrectorNetwork(torch.nn.Module):
         )
 
     def forward(self, features: torch.Tensor) -> torch.Tensor:
-        return self.layers((features - self.feature_mean) / self.feature_scale)
+        standardised = (features - self.feature_mean) / self.feature_scale
+        return self.layers(standardised).clamp(-self.maximum_correction, self.maximum_correction)
 
 
 @dataclass(frozen=True)
@@ -52,6 +58,17 @@ class CorrectorFit:
     rejection_reason: str | None
     uncorrected_holdout_residual: float
     corrected_holdout_residual: float
+
+
+def _feature_scale(training_features: torch.Tensor) -> torch.Tensor:
+    """A feature that is constant across the window must not standardise to a near-zero divisor.
+
+    `baseline_visits` and `source_generation` are constant within a fitting window, so an absolute
+    floor turns the first out-of-window value into a z-score of ~1e8 and the correction explodes.
+    """
+    scale = training_features.std(dim=0, unbiased=False)
+    relative_floor = training_features.abs().mean(dim=0) * _RELATIVE_FEATURE_SCALE_FLOOR
+    return torch.maximum(scale, relative_floor).clamp_min(_MINIMUM_FEATURE_SCALE)
 
 
 def corrector_input_features(records: npt.NDArray[np.void]) -> npt.NDArray[np.float32]:
@@ -119,9 +136,8 @@ def fit_curve_corrector(records: npt.NDArray[np.void], random_seed: int = 0) -> 
         network = CurveCorrectorNetwork()
     with torch.no_grad():
         mean = training_features.mean(dim=0)
-        scale = training_features.std(dim=0, unbiased=False).clamp_min(_MINIMUM_FEATURE_SCALE)
         network.feature_mean.copy_(mean)
-        network.feature_scale.copy_(scale)
+        network.feature_scale.copy_(_feature_scale(training_features))
 
     generator = torch.Generator().manual_seed(random_seed)
     optimizer = torch.optim.Adam(network.parameters(), lr=CORRECTOR_LEARNING_RATE)
@@ -153,15 +169,21 @@ def fit_curve_corrector(records: npt.NDArray[np.void], random_seed: int = 0) -> 
 
 def _rejection_reason(network: CurveCorrectorNetwork, uncorrected: float, corrected: float) -> str | None:
     """A corrector that makes predictions worse must not reach production, so fail toward identity."""
-    tensors = (*network.parameters(), *network.buffers())
-    if any(not torch.isfinite(tensor).all() for tensor in tensors):
+    if not _has_finite_tensors(network):
         return 'the fitted corrector has a non-finite parameter'
     if not math.isfinite(corrected) or not math.isfinite(uncorrected) or corrected >= uncorrected:
         return 'the fitted corrector does not improve the held-out residual'
     return None
 
 
+def _has_finite_tensors(network: CurveCorrectorNetwork) -> bool:
+    return all(bool(torch.isfinite(tensor).all()) for tensor in (*network.parameters(), *network.buffers()))
+
+
 def export_corrector(network: CurveCorrectorNetwork, path: Path) -> str:
+    # The output clamp would mask a non-finite parameter from the probe below, so check the tensors.
+    if not _has_finite_tensors(network):
+        raise ValueError('A curve corrector must have finite parameters and buffers.')
     network.eval()
     scripted = torch.jit.script(network)
     buffer = io.BytesIO()
