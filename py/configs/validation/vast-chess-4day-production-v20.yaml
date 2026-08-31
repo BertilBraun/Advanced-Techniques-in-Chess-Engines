@@ -5,7 +5,9 @@ run:
   stage: clean_retrain
   requires_explicit_approval: true
   resume:
-    mode: random_initialization
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/validation/vast-chess-4day-production-v20/checkpoint_76.json
+    generation: 76
   hardware:
     provider_name: vast.ai
     offer_id: '48571853'
