@@ -4,8 +4,9 @@ from decimal import Decimal
 from enum import Enum
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from src.util.frozen_model import FrozenModel
+from src.util.generation_schedule import ConstantSchedule, DecimalGenerationSchedule, defined_schedule_values
 
 
 class LabelArtifactRetention(str, Enum):
@@ -14,7 +15,7 @@ class LabelArtifactRetention(str, Enum):
 
 
 class DeepLabelingConfiguration(FrozenModel):
-    sample_fraction: Decimal = Field(default=Decimal('0.02'), gt=Decimal(0), le=Decimal(1))
+    sample_fraction: DecimalGenerationSchedule = ConstantSchedule[Decimal](value=Decimal('0.02'))
     deep_search_multiple: int = Field(default=8, gt=1)
     maximum_unstarted_generation_lag: int = Field(default=2, ge=0)
     persisted_shard_size: int = Field(default=512, gt=0, le=512)
@@ -23,6 +24,13 @@ class DeepLabelingConfiguration(FrozenModel):
     outstanding_inference_batches: int = Field(default=2, ge=1, le=2)
     parallel_searches: int = Field(default=2, gt=0)
     artifact_retention: LabelArtifactRetention = LabelArtifactRetention.RETAIN_ALL
+
+    @model_validator(mode='after')
+    def validate_sample_fractions(self) -> DeepLabelingConfiguration:
+        for value in defined_schedule_values(self.sample_fraction):
+            if not Decimal(0) < value <= Decimal(1):
+                raise ValueError('Every label sample fraction must lie in (0, 1].')
+        return self
 
 
 class BudgetCurveCorrectorConfiguration(FrozenModel):

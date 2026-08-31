@@ -185,7 +185,15 @@ training:
     search_budget:
       curve_version: predicted_kl_curve_v1
       labeling:
-        sample_fraction: '0.005'
+        sample_fraction:
+          kind: staged
+          stages:
+          - start_generation: 0
+            value: '0.02'
+          - start_generation: 170
+            value: '0.01'
+          - start_generation: 340
+            value: '0.005'
         deep_search_multiple: 8
         maximum_unstarted_generation_lag: 2
         persisted_shard_size: 512

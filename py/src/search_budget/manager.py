@@ -367,7 +367,7 @@ class SearchBudgetLabelManager:
             checkpoint,
             baseline_new_visits,
             run_seed,
-            self.configuration.labeling.sample_fraction,
+            self.configuration.labeling.sample_fraction.value_at(source_generation),
             self.sample_provider,
         )
         if source is None:

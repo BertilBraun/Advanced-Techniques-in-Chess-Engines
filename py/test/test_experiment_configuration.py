@@ -81,7 +81,7 @@ def test_v13_configuration_is_standalone_and_uses_compact_label_sampling_setting
     assert 'extends' not in payload
     assert configuration.run.run_name == 'vast-chess-4day-production-v13'
     assert configuration.run.tensorboard_run_directory == 'vast-chess-4day-production-v13'
-    assert configuration.training.lifecycle.search_budget.labeling.sample_fraction == Decimal('0.005')
+    assert configuration.training.lifecycle.search_budget.labeling.sample_fraction.value_at(0) == Decimal('0.005')
     assert configuration.training.lifecycle.search_budget.production.minimum_parallel_searches == 2
 
 
@@ -610,3 +610,49 @@ def test_cut_game_value_target_selects_whether_self_play_bootstraps(value_target
     implementation = ChessImplementation(configuration)
 
     assert implementation.self_play_parameters_at(0, disabled_policy()).bootstrap_cut_game_value is expected
+
+
+def test_v19_configuration_stages_the_label_sample_fraction() -> None:
+    path = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'vast-chess-4day-production-v19.yaml'
+    payload = yaml.safe_load(path.read_text(encoding='utf-8'))
+    configuration = load_experiment_configuration(path)
+
+    assert 'extends' not in payload
+    assert configuration.run.run_name == 'vast-chess-4day-production-v19'
+    labeling = configuration.training.lifecycle.search_budget.labeling
+    assert labeling.sample_fraction.value_at(0) == Decimal('0.02')
+    assert labeling.sample_fraction.value_at(169) == Decimal('0.02')
+    assert labeling.sample_fraction.value_at(170) == Decimal('0.01')
+    assert labeling.sample_fraction.value_at(339) == Decimal('0.01')
+    assert labeling.sample_fraction.value_at(340) == Decimal('0.005')
+    assert labeling.sample_fraction.value_at(1000) == Decimal('0.005')
+    assert labeling.deep_search_multiple == 8
+    corrector = configuration.training.lifecycle.search_budget.calibration.corrector
+    assert corrector.enabled and corrector.window_generations == 10
+    calibration = configuration.training.lifecycle.search_budget.calibration
+    assert calibration.warmup_completed_source_generations == 30
+    assert configuration.training.lifecycle.search_budget.head_training.dedicated_batches is False
+
+
+def test_a_scalar_sample_fraction_wraps_into_a_constant_schedule() -> None:
+    from src.search_budget.configuration import DeepLabelingConfiguration
+
+    configuration = DeepLabelingConfiguration.model_validate({'sample_fraction': '0.005'})
+    assert configuration.sample_fraction.value_at(0) == Decimal('0.005')
+    assert configuration.sample_fraction.value_at(500) == Decimal('0.005')
+    with pytest.raises(ValueError, match='plain value'):
+        DeepLabelingConfiguration.model_validate({'sample_fraction': {'kind': 'constant', 'value': '0.005'}})
+    with pytest.raises(ValueError, match='lie in'):
+        DeepLabelingConfiguration.model_validate({'sample_fraction': '1.5'})
+    with pytest.raises(ValueError, match='lie in'):
+        DeepLabelingConfiguration.model_validate(
+            {
+                'sample_fraction': {
+                    'kind': 'staged',
+                    'stages': [
+                        {'start_generation': 0, 'value': '0.02'},
+                        {'start_generation': 100, 'value': '2.0'},
+                    ],
+                }
+            }
+        )
