@@ -159,35 +159,47 @@ void bind_search(py::module_ &module) {
         .def(py::init<std::uint32_t>(), py::arg("additional_visits"))
         .def_readonly("additional_visits", &AdditionalSearchLimit::additional_visits);
     py::class_<SearchBudgetPolicy>(module, "SearchBudgetPolicy")
-        .def(py::init<std::array<double, SearchBudgetPolicy::CURVE_POINTS>, double,
-                      std::array<double, SearchBudgetPolicy::CURVE_POINTS>,
-                      SearchBudgetPolicy::CalibrationWeights, bool>(),
-             py::arg("multiples"), py::arg("lagrange_multiplier"), py::arg("calibration_bias"),
-             py::arg("calibration_weights"), py::arg("apply_learned"))
+        .def(py::init([](const std::array<double, SearchBudgetPolicy::CURVE_POINTS> &multiples,
+                         const double lagrangeMultiplier, const std::string &correctorPath,
+                         const bool applyLearned) {
+                 std::shared_ptr<const SearchBudgetCurveCorrector> corrector;
+                 if (!correctorPath.empty()) {
+                     corrector = std::make_shared<SearchBudgetCurveCorrector>(correctorPath);
+                 }
+                 return SearchBudgetPolicy(multiples, lagrangeMultiplier, std::move(corrector),
+                                           applyLearned);
+             }),
+             py::arg("multiples"), py::arg("lagrange_multiplier"), py::arg("corrector_path"),
+             py::arg("apply_learned"))
         .def_readonly("multiples", &SearchBudgetPolicy::multiples)
         .def_readonly("lagrange_multiplier", &SearchBudgetPolicy::lagrange_multiplier)
-        .def_readonly("calibration_bias", &SearchBudgetPolicy::calibration_bias)
-        .def_readonly("calibration_weights", &SearchBudgetPolicy::calibration_weights)
+        .def_property_readonly("has_corrector",
+                               [](const SearchBudgetPolicy &policy) {
+                                   return policy.corrector != nullptr;
+                               })
         .def_readonly("apply_learned", &SearchBudgetPolicy::apply_learned);
     py::class_<SearchBudgetSelectionFeatures>(module, "SearchBudgetSelectionFeatures")
         .def(py::init([](const double topVisitShare, const double policyEntropy, const double ply,
-                         const double baselineVisits) {
+                         const double baselineVisits, const double sourceGeneration) {
                  return SearchBudgetSelectionFeatures{.top_visit_share = topVisitShare,
                                                       .policy_entropy = policyEntropy,
                                                       .ply = ply,
-                                                      .baseline_visits = baselineVisits};
+                                                      .baseline_visits = baselineVisits,
+                                                      .source_generation = sourceGeneration};
              }),
              py::arg("top_visit_share"), py::arg("policy_entropy"), py::arg("ply"),
-             py::arg("baseline_visits"))
+             py::arg("baseline_visits"), py::arg("source_generation"))
         .def_readonly("top_visit_share", &SearchBudgetSelectionFeatures::top_visit_share)
         .def_readonly("policy_entropy", &SearchBudgetSelectionFeatures::policy_entropy)
         .def_readonly("ply", &SearchBudgetSelectionFeatures::ply)
-        .def_readonly("baseline_visits", &SearchBudgetSelectionFeatures::baseline_visits);
+        .def_readonly("baseline_visits", &SearchBudgetSelectionFeatures::baseline_visits)
+        .def_readonly("source_generation", &SearchBudgetSelectionFeatures::source_generation);
     py::class_<PredictedSearchBudgetLimit>(module, "PredictedSearchBudgetLimit")
-        .def(py::init<std::uint32_t, SearchBudgetPolicy>(), py::arg("baseline_visits"),
-             py::arg("policy"))
+        .def(py::init<std::uint32_t, SearchBudgetPolicy, std::uint64_t>(),
+             py::arg("baseline_visits"), py::arg("policy"), py::arg("model_generation") = 0)
         .def_readonly("baseline_visits", &PredictedSearchBudgetLimit::baseline_visits)
-        .def_readonly("policy", &PredictedSearchBudgetLimit::policy);
+        .def_readonly("policy", &PredictedSearchBudgetLimit::policy)
+        .def_readonly("model_generation", &PredictedSearchBudgetLimit::model_generation);
     module.def(
         "select_budget_index",
         [](const SearchBudgetPolicy &policy, const SearchBudgetCurvePrediction &prediction,
@@ -196,10 +208,10 @@ void bind_search(py::module_ &module) {
         },
         py::arg("policy"), py::arg("prediction"), py::arg("features"));
     module.def(
-        "calibrate_budget_curve",
+        "correct_budget_curve",
         [](const SearchBudgetPolicy &policy, const SearchBudgetCurvePrediction &prediction,
            const SearchBudgetSelectionFeatures &features) {
-            return calibrateBudgetCurve(policy, prediction, features);
+            return correctBudgetCurve(policy, prediction, features);
         },
         py::arg("policy"), py::arg("prediction"), py::arg("features"));
     module.def("search_parallelism", &searchParallelism, py::arg("additional_visits"));
@@ -216,6 +228,8 @@ void bind_search(py::module_ &module) {
         .def_readonly("policy_correction", &GameSearchResult::policy_correction)
         .def_readonly("value_correction", &GameSearchResult::value_correction)
         .def_readonly("predicted_budget_curve", &GameSearchResult::predicted_budget_curve)
+        .def_readonly("root_prior_top_share", &GameSearchResult::root_prior_top_share)
+        .def_readonly("root_prior_entropy", &GameSearchResult::root_prior_entropy)
         .def_readonly("selected_budget_index", &GameSearchResult::selected_budget_index)
         .def_readonly("assigned_additional_visits", &GameSearchResult::assigned_additional_visits)
         .def_readonly("parallel_searches", &GameSearchResult::parallel_searches)

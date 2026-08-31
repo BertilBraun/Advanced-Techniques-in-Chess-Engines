@@ -2,8 +2,11 @@
 
 #include "games/GameConcepts.hpp"
 #include "search/InferenceTypes.hpp"
+#include "search/SearchBudgetCorrector.hpp"
 #include "search/SearchTree.hpp"
 #include "search/tree/TreeSearchParameters.hpp"
+
+#include <memory>
 
 #include <algorithm>
 #include <array>
@@ -61,29 +64,23 @@ struct AdditionalSearchLimit {
 
 struct SearchBudgetPolicy {
     static constexpr std::size_t CURVE_POINTS = SEARCH_BUDGET_CURVE_POINTS;
-    // Per grid point: the point's own raw prediction, top visit share, policy entropy, ply,
-    // baseline visits.
-    static constexpr std::size_t CALIBRATION_FEATURES = 5;
-    using CalibrationWeights = std::array<std::array<double, CALIBRATION_FEATURES>, CURVE_POINTS>;
 
     std::array<double, CURVE_POINTS> multiples;
     double lagrange_multiplier;
-    std::array<double, CURVE_POINTS> calibration_bias;
-    CalibrationWeights calibration_weights;
+    // Null corrector applies the predicted curve unchanged (identity correction).
+    std::shared_ptr<const SearchBudgetCurveCorrector> corrector;
     bool apply_learned;
 
     SearchBudgetPolicy()
-        : multiples{0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5, 2.0, 3.0, 4.0},
-          lagrange_multiplier(0.0), calibration_bias{}, calibration_weights{},
-          apply_learned(false) {}
+        : multiples{0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5, 2.0},
+          lagrange_multiplier(0.0), corrector(nullptr), apply_learned(false) {}
 
     SearchBudgetPolicy(std::array<double, CURVE_POINTS> gridMultiples,
                        const double lagrangeMultiplier,
-                       std::array<double, CURVE_POINTS> calibrationBias,
-                       CalibrationWeights calibrationWeights, const bool applyLearned)
+                       std::shared_ptr<const SearchBudgetCurveCorrector> curveCorrector,
+                       const bool applyLearned)
         : multiples(gridMultiples), lagrange_multiplier(lagrangeMultiplier),
-          calibration_bias(calibrationBias), calibration_weights(calibrationWeights),
-          apply_learned(applyLearned) {
+          corrector(std::move(curveCorrector)), apply_learned(applyLearned) {
         if (std::ranges::any_of(multiples, [](const double multiple) {
                 return !std::isfinite(multiple) || multiple <= 0.0;
             })) {
@@ -103,24 +100,7 @@ struct SearchBudgetPolicy {
             throw std::invalid_argument(
                 "The search-budget Lagrange multiplier must be finite and nonnegative");
         }
-        if (std::ranges::any_of(calibration_bias,
-                                [](const double value) { return !std::isfinite(value); })) {
-            throw std::invalid_argument("Search-budget calibration biases must be finite");
-        }
-        for (const std::array<double, CALIBRATION_FEATURES> &row : calibration_weights) {
-            if (std::ranges::any_of(row,
-                                    [](const double value) { return !std::isfinite(value); })) {
-                throw std::invalid_argument("Search-budget calibration weights must be finite");
-            }
-        }
     }
-};
-
-struct SearchBudgetSelectionFeatures {
-    double top_visit_share;
-    double policy_entropy;
-    double ply;
-    double baseline_visits;
 };
 
 // Running minimum from the cheapest budget upward, so more search never predicts more error.
@@ -135,27 +115,30 @@ projectNonIncreasing(SearchBudgetCurvePrediction values) {
 }
 
 [[nodiscard]] inline std::array<double, SearchBudgetPolicy::CURVE_POINTS>
-calibrateBudgetCurve(const SearchBudgetPolicy &policy,
-                     const SearchBudgetCurvePrediction &prediction,
-                     const SearchBudgetSelectionFeatures &features) {
+correctBudgetCurve(const SearchBudgetPolicy &policy, const SearchBudgetCurvePrediction &prediction,
+                   const SearchBudgetSelectionFeatures &features) {
     if (std::ranges::any_of(prediction, [](const float value) { return !std::isfinite(value); })) {
         throw std::invalid_argument("Search-budget curve predictions must be finite");
     }
-    const std::array<double, 4> shared = {features.top_visit_share, features.policy_entropy,
-                                          features.ply, features.baseline_visits};
+    const std::array<double, 5> shared = {features.top_visit_share, features.policy_entropy,
+                                          features.ply, features.baseline_visits,
+                                          features.source_generation};
     if (std::ranges::any_of(shared, [](const double value) { return !std::isfinite(value); })) {
         throw std::invalid_argument("Search-budget selection features must be finite");
     }
-    std::array<double, SearchBudgetPolicy::CURVE_POINTS> calibrated{};
-    for (std::size_t index = 0; index < calibrated.size(); ++index) {
-        const std::array<double, SearchBudgetPolicy::CALIBRATION_FEATURES> &weights =
-            policy.calibration_weights[index];
-        const double predicted = static_cast<double>(prediction[index]);
-        calibrated[index] = predicted + policy.calibration_bias[index] + weights[0] * predicted +
-                            weights[1] * shared[0] + weights[2] * shared[1] +
-                            weights[3] * shared[2] + weights[4] * shared[3];
+    std::array<double, SearchBudgetPolicy::CURVE_POINTS> corrected{};
+    if (policy.corrector == nullptr) {
+        for (std::size_t index = 0; index < corrected.size(); ++index) {
+            corrected[index] = static_cast<double>(prediction[index]);
+        }
+        return corrected;
     }
-    return calibrated;
+    const std::array<double, SearchBudgetPolicy::CURVE_POINTS> corrections =
+        policy.corrector->correction(prediction, features);
+    for (std::size_t index = 0; index < corrected.size(); ++index) {
+        corrected[index] = static_cast<double>(prediction[index]) + corrections[index];
+    }
+    return corrected;
 }
 
 // Lagrangian selection: the grid point minimising predicted raw KL plus dual-priced spend. The
@@ -165,7 +148,7 @@ calibrateBudgetCurve(const SearchBudgetPolicy &policy,
                                                    const SearchBudgetCurvePrediction &prediction,
                                                    const SearchBudgetSelectionFeatures &features) {
     std::array<double, SearchBudgetPolicy::CURVE_POINTS> projected =
-        calibrateBudgetCurve(policy, prediction, features);
+        correctBudgetCurve(policy, prediction, features);
     for (std::size_t index = 1; index < projected.size(); ++index) {
         projected[index] = std::min(projected[index], projected[index - 1]);
     }
@@ -185,10 +168,13 @@ calibrateBudgetCurve(const SearchBudgetPolicy &policy,
 struct PredictedSearchBudgetLimit {
     std::uint32_t baseline_visits;
     SearchBudgetPolicy policy;
+    std::uint64_t model_generation;
 
-    PredictedSearchBudgetLimit() : baseline_visits(1), policy() {}
-    PredictedSearchBudgetLimit(const std::uint32_t baselineVisits, SearchBudgetPolicy budgetPolicy)
-        : baseline_visits(baselineVisits), policy(std::move(budgetPolicy)) {
+    PredictedSearchBudgetLimit() : baseline_visits(1), policy(), model_generation(0) {}
+    PredictedSearchBudgetLimit(const std::uint32_t baselineVisits, SearchBudgetPolicy budgetPolicy,
+                               const std::uint64_t modelGeneration = 0)
+        : baseline_visits(baselineVisits), policy(std::move(budgetPolicy)),
+          model_generation(modelGeneration) {
         if (baseline_visits == 0) {
             throw std::invalid_argument("Predicted search-budget baseline must be positive");
         }
@@ -288,6 +274,10 @@ struct GameSearchResult {
     float policy_correction;
     float value_correction;
     SearchBudgetCurvePrediction predicted_budget_curve;
+    // Raw-prior root features: the root-time selection basis reproducible on a fresh root,
+    // recorded so analysis can compare it against post-search feature values.
+    float root_prior_top_share;
+    float root_prior_entropy;
     int selected_budget_index;
     std::uint32_t assigned_additional_visits;
     std::uint32_t parallel_searches;

@@ -119,6 +119,8 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def_readonly("policy_correction", &Result::policy_correction)
         .def_readonly("value_correction", &Result::value_correction)
         .def_readonly("predicted_budget_curve", &Result::predicted_budget_curve)
+        .def_readonly("root_prior_top_share", &Result::root_prior_top_share)
+        .def_readonly("root_prior_entropy", &Result::root_prior_entropy)
         .def_readonly("selected_budget_index", &Result::selected_budget_index)
         .def_readonly("assigned_additional_visits", &Result::assigned_additional_visits)
         .def_readonly("parallel_searches", &Result::parallel_searches)
