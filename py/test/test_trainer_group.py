@@ -23,6 +23,7 @@ from src.replay.contracts import (
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
+from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
@@ -113,7 +114,7 @@ def _replay_sample(
 ) -> ReplaySample:
     budget_target = (
         EligibleSearchBudgetTarget(
-            curve=(0.5 * weight,) * 10,
+            curve=(0.5 * weight,) * BUDGET_CURVE_POINTS,
             raw_kl=0.25,
             source_generation=0,
             model_generation=0,

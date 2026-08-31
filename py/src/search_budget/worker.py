@@ -110,6 +110,8 @@ class ConfiguredLabelWorkerRuntime:
             PredictionRecord(
                 identity=source.identity,
                 predicted_curve=tuple(result.predicted_budget_curve),
+                root_prior_top_share=result.root_prior_top_share,
+                root_prior_entropy=result.root_prior_entropy,
             )
             for source, result in zip(positions, results, strict=True)
         )

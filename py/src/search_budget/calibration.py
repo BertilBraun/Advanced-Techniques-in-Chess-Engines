@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass
 from decimal import Decimal
@@ -7,11 +8,9 @@ from enum import Enum
 from pathlib import Path
 
 from pydantic import Field, ValidationError, model_validator
-from src.search_budget.calibrator import IDENTITY_CALIBRATOR, CalibratorCoefficients
 from src.search_budget.policy import (
     BUDGET_CURVE_MULTIPLES,
     BUDGET_CURVE_POINTS,
-    CALIBRATION_FEATURE_COUNT,
     SearchBudgetPolicy,
     project_non_increasing,
 )
@@ -35,6 +34,19 @@ class BudgetEligibilityFailure(str, Enum):
     NON_POSITIVE_CURRENT_GAIN = 'non_positive_current_gain'
     NON_POSITIVE_EMA_GAIN = 'non_positive_ema_gain'
     UNCONVERGED_SPEND = 'unconverged_spend'
+
+
+@dataclass(frozen=True)
+class CorrectorReference:
+    path: Path | None
+    sha256: str | None
+
+    def __post_init__(self) -> None:
+        if (self.path is None) != (self.sha256 is None):
+            raise ValueError('A corrector reference requires both its path and its digest.')
+
+
+IDENTITY_CORRECTOR_REFERENCE = CorrectorReference(path=None, sha256=None)
 
 
 _FAIL_CLOSED_REASONS = frozenset(
@@ -104,16 +116,13 @@ class BudgetGenerationEvidence(FrozenModel):
 
 
 class BudgetCalibrationState(FrozenModel):
-    schema_version: int = Field(default=4, ge=4, le=4)
+    schema_version: int = Field(default=5, ge=5, le=5)
     configuration_sha256: str = Field(min_length=64, max_length=64)
     finalized_source_generations: tuple[int, ...]
     sigma: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
     lagrange_multiplier: float
-    calibration_bias: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
-    calibration_weights: tuple[tuple[float, ...], ...] = Field(
-        min_length=BUDGET_CURVE_POINTS,
-        max_length=BUDGET_CURVE_POINTS,
-    )
+    corrector_path: Path | None
+    corrector_sha256: str | None
     current_validation_gain: float | None
     ema_validation_gain: float | None
     realized_mean_multiple: float | None
@@ -131,11 +140,8 @@ class BudgetCalibrationState(FrozenModel):
             raise ValueError('Persisted sigma values must be finite and positive.')
         if not math.isfinite(self.lagrange_multiplier) or self.lagrange_multiplier < 0.0:
             raise ValueError('The persisted Lagrange multiplier must be finite and nonnegative.')
-        if any(not math.isfinite(value) for value in self.calibration_bias):
-            raise ValueError('Persisted calibration biases must be finite.')
-        for row in self.calibration_weights:
-            if len(row) != CALIBRATION_FEATURE_COUNT or any(not math.isfinite(value) for value in row):
-                raise ValueError('Persisted calibration weights must be finite with one value per feature.')
+        if (self.corrector_path is None) != (self.corrector_sha256 is None):
+            raise ValueError('A persisted corrector reference requires both its path and its digest.')
         if any(
             value is not None and not math.isfinite(value)
             for value in (self.current_validation_gain, self.ema_validation_gain, self.realized_mean_multiple)
@@ -159,8 +165,8 @@ class CalibrationUpdate:
 def initial_calibration_state(configuration_sha256: str) -> BudgetCalibrationState:
     policy = SearchBudgetPolicy(
         lagrange_multiplier=0.0,
-        calibration_bias=IDENTITY_CALIBRATOR.bias,
-        calibration_weights=IDENTITY_CALIBRATOR.weights,
+        corrector_path=None,
+        corrector_sha256=None,
         apply_learned=False,
     )
     return BudgetCalibrationState(
@@ -168,8 +174,8 @@ def initial_calibration_state(configuration_sha256: str) -> BudgetCalibrationSta
         finalized_source_generations=(),
         sigma=(1.0,) * BUDGET_CURVE_POINTS,
         lagrange_multiplier=0.0,
-        calibration_bias=IDENTITY_CALIBRATOR.bias,
-        calibration_weights=IDENTITY_CALIBRATOR.weights,
+        corrector_path=None,
+        corrector_sha256=None,
         current_validation_gain=None,
         ema_validation_gain=None,
         realized_mean_multiple=None,
@@ -182,11 +188,11 @@ def initial_calibration_state(configuration_sha256: str) -> BudgetCalibrationSta
 
 
 def working_policy(state: BudgetCalibrationState) -> SearchBudgetPolicy:
-    """The learned rule as the calibrator sees it, used for shadow allocation whatever the gate says."""
+    """The learned rule as the calibration loop sees it, used for shadow allocation whatever the gate says."""
     return SearchBudgetPolicy(
         lagrange_multiplier=state.lagrange_multiplier,
-        calibration_bias=state.calibration_bias,
-        calibration_weights=state.calibration_weights,
+        corrector_path=state.corrector_path,
+        corrector_sha256=state.corrector_sha256,
         apply_learned=True,
     )
 
@@ -240,7 +246,7 @@ def update_calibration(
     evidence: BudgetGenerationEvidence,
     first_unstarted_production_generation: int,
     parameters: BudgetCalibrationParameters = BudgetCalibrationParameters(),
-    calibrator: CalibratorCoefficients = IDENTITY_CALIBRATOR,
+    corrector: CorrectorReference = IDENTITY_CORRECTOR_REFERENCE,
 ) -> CalibrationUpdate:
     if source_generation < 0:
         raise ValueError('Source generation must be nonnegative.')
@@ -277,8 +283,8 @@ def update_calibration(
     )
     published = SearchBudgetPolicy(
         lagrange_multiplier=lagrange_multiplier,
-        calibration_bias=calibrator.bias,
-        calibration_weights=calibrator.weights,
+        corrector_path=corrector.path,
+        corrector_sha256=corrector.sha256,
         apply_learned=not failures,
     )
     if not failures:
@@ -293,8 +299,8 @@ def update_calibration(
         finalized_source_generations=(*state.finalized_source_generations, source_generation),
         sigma=sigma,
         lagrange_multiplier=lagrange_multiplier,
-        calibration_bias=calibrator.bias,
-        calibration_weights=calibrator.weights,
+        corrector_path=corrector.path,
+        corrector_sha256=corrector.sha256,
         current_validation_gain=current_gain,
         ema_validation_gain=ema_gain,
         realized_mean_multiple=evidence.realized_mean_multiple,
@@ -356,6 +362,25 @@ def load_calibration_state_fail_closed(
             first_unstarted_production_generation,
             BudgetDecisionReason.INCOMPATIBLE_STATE,
         )
+    # A dangling corrector reference would crash native policy loading at the next generation
+    # start, so a state whose corrector artifact is gone or altered fails closed instead.
+    for path, sha256 in (
+        (state.corrector_path, state.corrector_sha256),
+        (state.published_policy.corrector_path, state.published_policy.corrector_sha256),
+        (state.previous_published_policy.corrector_path, state.previous_published_policy.corrector_sha256),
+    ):
+        if path is None:
+            continue
+        try:
+            content = path.read_bytes()
+        except OSError:
+            content = None
+        if content is None or hashlib.sha256(content).hexdigest() != sha256:
+            return publish_fail_closed(
+                initial_calibration_state(expected_configuration_sha256),
+                first_unstarted_production_generation,
+                BudgetDecisionReason.UNREADABLE_STATE,
+            )
     return state
 
 

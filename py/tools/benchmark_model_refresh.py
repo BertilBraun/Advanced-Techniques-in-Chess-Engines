@@ -219,7 +219,7 @@ def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
     )
     search_parameters = SelfPlaySearchParameters(
         baseline_visits=arguments.searches,
-        search_budget_policy=SearchBudgetPolicy(list(BUDGET_CURVE_MULTIPLES), [1.0] * 10, 0.0, 0.8, False),
+        search_budget_policy=SearchBudgetPolicy(list(BUDGET_CURVE_MULTIPLES), 0.0, '', False),
         tree_search=TreeSearchParameters(
             exploration_constant=2.0,
             first_play_urgency=FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO),

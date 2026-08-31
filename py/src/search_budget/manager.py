@@ -25,10 +25,12 @@ from src.search_budget.artifacts import (
     write_persisted_model,
 )
 from src.search_budget.calibration import (
+    IDENTITY_CORRECTOR_REFERENCE,
     BudgetCalibrationParameters,
     BudgetCalibrationState,
     BudgetDecisionReason,
     BudgetPolicyPublication,
+    CorrectorReference,
     initial_calibration_state,
     load_calibration_state_fail_closed,
     publication_for_generation,
@@ -37,8 +39,8 @@ from src.search_budget.calibration import (
     update_calibration,
     working_policy,
 )
-from src.search_budget.calibrator import IDENTITY_CALIBRATOR, CalibratorCoefficients, fit_linear_calibrator
 from src.search_budget.configuration import LabelArtifactRetention, SearchBudgetConfiguration
+from src.search_budget.corrector import LoadedCurveCorrector, export_corrector, fit_curve_corrector
 from src.search_budget.labeling import (
     DeepSearchShardArtifact,
     DistributionSummary,
@@ -51,7 +53,13 @@ from src.search_budget.labeling import (
     finalize_generation,
     prediction_map,
 )
-from src.search_budget.policy import BUDGET_CURVE_MULTIPLES, BUDGET_CURVE_POINTS
+from src.search_budget.policy import (
+    BUDGET_CURVE_MULTIPLES,
+    BUDGET_CURVE_POINTS,
+    CurveCorrection,
+    SearchBudgetPolicy,
+    identity_correction,
+)
 from src.search_budget.retention import (
     FailedLabelArtifactCleanupReceipt,
     LabelArtifactCleanupEvidence,
@@ -132,7 +140,7 @@ class CurvePointReport(FrozenModel):
 
 
 class GenerationLabelReport(FrozenModel):
-    schema_version: int = Field(default=3, ge=3, le=3)
+    schema_version: int = Field(default=4, ge=4, le=4)
     source_generation: int = Field(ge=0)
     model_generation: int = Field(ge=0)
     inference_model_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -154,7 +162,8 @@ class GenerationLabelReport(FrozenModel):
     current_validation_gain: float | None
     ema_validation_gain: float | None
     lagrange_multiplier: float = Field(ge=0.0)
-    calibrator_applied: bool
+    corrector_applied: bool
+    corrector_sha256: str | None
     realized_mean_multiple: float = Field(gt=0.0)
     realized_mean_assigned_visits: float = Field(gt=0.0)
     flat_mean_assigned_visits: float = Field(gt=0.0)
@@ -358,7 +367,7 @@ class SearchBudgetLabelManager:
             checkpoint,
             baseline_new_visits,
             run_seed,
-            self.configuration.labeling.sample_fraction,
+            self.configuration.labeling.sample_fraction.value_at(source_generation),
             self.sample_provider,
         )
         if source is None:
@@ -500,6 +509,7 @@ class SearchBudgetLabelManager:
                 deep_artifacts,
                 self.action_size,
                 self.maximum_policy_entries,
+                self._shadow_correction(shadow_policy),
             )
         except ValueError as error:
             raise InvalidLabelComputeError(str(error)) from error
@@ -507,7 +517,7 @@ class SearchBudgetLabelManager:
         if writeback.row_count != len(finalized.replay_samples):
             raise ValueError('Replay writer did not acknowledge the complete finalized label generation.')
         self._append_analysis_records(source.source_generation, finalized)
-        calibrator, calibrator_applied = self._fit_calibrator(source.source_generation, finalized.analysis_records)
+        corrector, corrector_applied = self._fit_corrector(source.source_generation, finalized.analysis_records)
         with self._condition:
             first_unstarted = self._first_unstarted_production_generation
             update = update_calibration(
@@ -516,7 +526,7 @@ class SearchBudgetLabelManager:
                 finalized.evidence,
                 first_unstarted,
                 self._calibration_parameters(),
-                calibrator,
+                corrector,
             )
             self._calibration = update.state
             save_calibration_state(self.calibration_path, self._calibration)
@@ -526,7 +536,7 @@ class SearchBudgetLabelManager:
             writeback,
             prediction_manifests,
             deep_manifests,
-            calibrator_applied,
+            corrector_applied,
         )
         write_persisted_model(self._report_path(source.source_generation), report)
         self._set_status(job.source_generation, LabelJobStatus.COMPLETED)
@@ -619,7 +629,7 @@ class SearchBudgetLabelManager:
         writeback: ReplayWritebackResult,
         prediction_manifests: tuple[LabelShardManifest, ...],
         deep_manifests: tuple[LabelShardManifest, ...],
-        calibrator_applied: bool,
+        corrector_applied: bool,
     ) -> GenerationLabelReport:
         curve_points = tuple(
             CurvePointReport(
@@ -659,7 +669,8 @@ class SearchBudgetLabelManager:
             current_validation_gain=self._calibration.current_validation_gain,
             ema_validation_gain=self._calibration.ema_validation_gain,
             lagrange_multiplier=self._calibration.lagrange_multiplier,
-            calibrator_applied=calibrator_applied,
+            corrector_applied=corrector_applied,
+            corrector_sha256=self._calibration.corrector_sha256,
             realized_mean_multiple=finalized.evidence.realized_mean_multiple,
             realized_mean_assigned_visits=finalized.evidence.realized_mean_assigned_visits,
             flat_mean_assigned_visits=finalized.evidence.flat_mean_assigned_visits,
@@ -686,14 +697,26 @@ class SearchBudgetLabelManager:
                 f'{type(error).__name__}: {error}'
             )
 
-    def _fit_calibrator(
+    def _shadow_correction(self, shadow_policy: SearchBudgetPolicy) -> CurveCorrection:
+        if shadow_policy.corrector_path is None:
+            return identity_correction
+        return LoadedCurveCorrector.load(shadow_policy.corrector_path, shadow_policy.corrector_sha256)
+
+    def _previous_corrector(self) -> CorrectorReference:
+        with self._condition:
+            return CorrectorReference(
+                path=self._calibration.corrector_path,
+                sha256=self._calibration.corrector_sha256,
+            )
+
+    def _fit_corrector(
         self,
         source_generation: int,
         current_records: npt.NDArray[np.void],
-    ) -> tuple[CalibratorCoefficients, bool]:
-        configuration = self.configuration.calibration.calibrator
+    ) -> tuple[CorrectorReference, bool]:
+        configuration = self.configuration.calibration.corrector
         if not configuration.enabled:
-            return IDENTITY_CALIBRATOR, False
+            return IDENTITY_CORRECTOR_REFERENCE, False
         with self._condition:
             previous_generations = self._calibration.finalized_source_generations
         window: list[npt.NDArray[np.void]] = []
@@ -704,24 +727,34 @@ class SearchBudgetLabelManager:
                 window.append(read_analysis_records(path))
             except (OSError, ValueError) as error:
                 warn(
-                    f'Search-budget calibrator skipped the analysis log for source generation {generation}: '
+                    f'Search-budget corrector skipped the analysis log for source generation {generation}: '
                     f'{type(error).__name__}: {error}'
                 )
         window.append(current_records)
         try:
-            fit = fit_linear_calibrator(np.concatenate(window), float(configuration.ridge_coefficient))
-        except (ValueError, np.linalg.LinAlgError) as error:
+            fit = fit_curve_corrector(np.concatenate(window))
+        except (ValueError, RuntimeError) as error:
             warn(
-                f'Search-budget calibrator fit for source generation {source_generation} failed and ships '
-                f'the identity calibration: {type(error).__name__}: {error}'
+                f'Search-budget corrector fit for source generation {source_generation} failed and keeps '
+                f'the previous corrector: {type(error).__name__}: {error}'
             )
-            return IDENTITY_CALIBRATOR, False
-        if not fit.applied:
+            return self._previous_corrector(), False
+        if not fit.applied or fit.network is None:
             warn(
-                f'Search-budget calibrator fit for source generation {source_generation} was rejected and ships '
-                f'the identity calibration: {fit.rejection_reason}'
+                f'Search-budget corrector fit for source generation {source_generation} was rejected and keeps '
+                f'the previous corrector: {fit.rejection_reason}'
             )
-        return fit.coefficients, fit.applied
+            return self._previous_corrector(), False
+        corrector_path = self.jobs_path / f'corrector-generation-{source_generation:08d}.jit.pt'
+        try:
+            corrector_sha256 = export_corrector(fit.network, corrector_path)
+        except (OSError, ValueError, RuntimeError) as error:
+            warn(
+                f'Search-budget corrector export for source generation {source_generation} failed and keeps '
+                f'the previous corrector: {type(error).__name__}: {error}'
+            )
+            return self._previous_corrector(), False
+        return CorrectorReference(path=corrector_path, sha256=corrector_sha256), True
 
     def _calibration_parameters(self) -> BudgetCalibrationParameters:
         calibration = self.configuration.calibration

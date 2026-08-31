@@ -89,6 +89,7 @@ public:
         for (const RootTask &task : tasks) {
             const Root &root = task.root;
             const auto &node = root.tree().root();
+            const auto [rootPriorTopShare, rootPriorEntropy] = rootPriorFeatures(node);
             GameSearchResult result{
                 .root_value = node.visits == 0 ? 0.0F : node.value_sum / node.visits,
                 .highest_visited_child_action_id = -1,
@@ -100,6 +101,8 @@ public:
                 .policy_correction = 0.0F,
                 .value_correction = 0.0F,
                 .predicted_budget_curve = node.search_budget_curve,
+                .root_prior_top_share = rootPriorTopShare,
+                .root_prior_entropy = rootPriorEntropy,
                 .selected_budget_index = task.selected_budget_index,
                 .assigned_additional_visits = task.assigned_additional_visits,
                 .parallel_searches = task.parallel_searches,
@@ -425,11 +428,38 @@ private:
         }
     }
 
+    // Normalized raw-prior top share and entropy of the root: the pre-search basis a fresh root
+    // exposes, recorded on every result for the analysis log.
+    template <typename Node>
+    [[nodiscard]] static std::pair<float, float> rootPriorFeatures(const Node &node) {
+        if (node.children.empty()) {
+            return {1.0F, 0.0F};
+        }
+        double priorTotal = 0.0;
+        for (const auto &edge : node.children) {
+            priorTotal += static_cast<double>(edge.raw_prior);
+        }
+        double topShare = 0.0;
+        double entropy = 0.0;
+        for (const auto &edge : node.children) {
+            const double probability = priorTotal > 0.0
+                                           ? static_cast<double>(edge.raw_prior) / priorTotal
+                                           : 1.0 / static_cast<double>(node.children.size());
+            topShare = std::max(topShare, probability);
+            if (probability > 0.0) {
+                entropy -= probability * std::log(probability);
+            }
+        }
+        return {static_cast<float>(topShare), static_cast<float>(entropy)};
+    }
+
     // Top visit share and policy entropy of the root's current policy distribution: the retained
     // visit distribution when tree reuse left one, otherwise the raw network priors. This mirrors
-    // the baseline-policy features the calibrator was fitted on as closely as the root allows.
+    // the baseline-policy features the corrector was fitted on as closely as the root allows,
+    // using only information available before the search runs.
     [[nodiscard]] static SearchBudgetSelectionFeatures
-    rootSelectionFeatures(const RootTask &task, const double baselineVisits) {
+    rootSelectionFeatures(const RootTask &task, const double baselineVisits,
+                          const double sourceGeneration) {
         const auto &rootNode = task.root.tree().root();
         std::uint64_t totalVisits = 0;
         for (const auto &edge : rootNode.children) {
@@ -460,6 +490,7 @@ private:
             .policy_entropy = entropy,
             .ply = static_cast<double>(task.root_ply),
             .baseline_visits = baselineVisits,
+            .source_generation = sourceGeneration,
         };
     }
 
@@ -481,7 +512,8 @@ private:
             const auto &limit = std::get<PredictedSearchBudgetLimit>(task.limit);
             const AssignedSearchBudget assigned = allocator->assign(
                 limit, task.root.tree().root().search_budget_curve,
-                rootSelectionFeatures(task, static_cast<double>(limit.baseline_visits)));
+                rootSelectionFeatures(task, static_cast<double>(limit.baseline_visits),
+                                      static_cast<double>(limit.model_generation)));
             task.assigned_additional_visits = assigned.additional_visits;
             task.selected_budget_index = assigned.selected_index;
             task.spend_residual = allocator->spendError();

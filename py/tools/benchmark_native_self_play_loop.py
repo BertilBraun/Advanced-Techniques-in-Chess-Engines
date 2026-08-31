@@ -59,7 +59,7 @@ class StubNetwork(torch.nn.Module):
         loss = 0.9 - win
         draw = torch.full_like(win, 0.1)
         outcomes = torch.stack((win, draw, loss), dim=1)
-        search_budget_curves = torch.zeros((batch, 10), dtype=torch.float32)
+        search_budget_curves = torch.zeros((batch, 8), dtype=torch.float32)
         return logits, outcomes, search_budget_curves
 
 
@@ -85,8 +85,7 @@ def search_parameters(arguments: LoopArguments) -> native.SelfPlaySearchParamete
         native.SearchBudgetPolicy(
             list(BUDGET_CURVE_MULTIPLES),
             policy.lagrange_multiplier,
-            list(policy.calibration_bias),
-            [list(row) for row in policy.calibration_weights],
+            '' if policy.corrector_path is None else str(policy.corrector_path),
             policy.apply_learned,
         ),
         tree,

@@ -4,8 +4,9 @@ from decimal import Decimal
 from enum import Enum
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from src.util.frozen_model import FrozenModel
+from src.util.generation_schedule import ConstantSchedule, DecimalGenerationSchedule, defined_schedule_values
 
 
 class LabelArtifactRetention(str, Enum):
@@ -14,7 +15,7 @@ class LabelArtifactRetention(str, Enum):
 
 
 class DeepLabelingConfiguration(FrozenModel):
-    sample_fraction: Decimal = Field(default=Decimal('0.02'), gt=Decimal(0), le=Decimal(1))
+    sample_fraction: DecimalGenerationSchedule = ConstantSchedule[Decimal](value=Decimal('0.02'))
     deep_search_multiple: int = Field(default=8, gt=1)
     maximum_unstarted_generation_lag: int = Field(default=2, ge=0)
     persisted_shard_size: int = Field(default=512, gt=0, le=512)
@@ -24,11 +25,17 @@ class DeepLabelingConfiguration(FrozenModel):
     parallel_searches: int = Field(default=2, gt=0)
     artifact_retention: LabelArtifactRetention = LabelArtifactRetention.RETAIN_ALL
 
+    @model_validator(mode='after')
+    def validate_sample_fractions(self) -> DeepLabelingConfiguration:
+        for value in defined_schedule_values(self.sample_fraction):
+            if not Decimal(0) < value <= Decimal(1):
+                raise ValueError('Every label sample fraction must lie in (0, 1].')
+        return self
 
-class BudgetCurveCalibratorConfiguration(FrozenModel):
+
+class BudgetCurveCorrectorConfiguration(FrozenModel):
     enabled: bool = True
     window_generations: int = Field(default=10, gt=0)
-    ridge_coefficient: Decimal = Field(default=Decimal('1.0'), gt=Decimal(0))
 
 
 class BudgetPolicyCalibrationConfiguration(FrozenModel):
@@ -36,7 +43,7 @@ class BudgetPolicyCalibrationConfiguration(FrozenModel):
     sigma_ema_decay: Decimal = Field(default=Decimal('0.1'), gt=Decimal(0), le=Decimal(1))
     validation_gain_ema_decay: Decimal = Field(default=Decimal('0.2'), gt=Decimal(0), le=Decimal(1))
     lambda_step_ratio: Decimal = Field(default=Decimal('1.05'), gt=Decimal(1))
-    calibrator: BudgetCurveCalibratorConfiguration = BudgetCurveCalibratorConfiguration()
+    corrector: BudgetCurveCorrectorConfiguration = BudgetCurveCorrectorConfiguration()
 
 
 class ProductionAllocationConfiguration(FrozenModel):

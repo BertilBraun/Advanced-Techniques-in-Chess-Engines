@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Generic, Literal, TypeAlias, TypeVar
 
@@ -151,6 +152,7 @@ FloatScheduleModel: TypeAlias = (
 IntegerScheduleModel: TypeAlias = (
     ConstantSchedule[int] | StagedSchedule[int] | LinearSchedule[int] | GeometricSchedule[int]
 )
+DecimalScheduleModel: TypeAlias = ConstantSchedule[Decimal] | StagedSchedule[Decimal]
 
 
 def _wrap_float_constant(value: JsonValue | FloatScheduleModel) -> JsonValue | FloatScheduleModel:
@@ -177,6 +179,18 @@ def _wrap_integer_constant(value: JsonValue | IntegerScheduleModel) -> JsonValue
             return value
 
 
+def _wrap_decimal_constant(value: JsonValue | DecimalScheduleModel) -> JsonValue | DecimalScheduleModel:
+    match value:
+        case bool():
+            return value
+        case int() | float() | str() | Decimal():
+            return ConstantSchedule[Decimal](value=value)
+        case Mapping() if value.get('kind') == 'constant':
+            raise ValueError('Write a constant decimal schedule as its plain value.')
+        case _:
+            return value
+
+
 FloatGenerationSchedule: TypeAlias = Annotated[
     Annotated[FloatScheduleModel, Field(discriminator='kind')],
     BeforeValidator(_wrap_float_constant),
@@ -184,6 +198,10 @@ FloatGenerationSchedule: TypeAlias = Annotated[
 IntegerGenerationSchedule: TypeAlias = Annotated[
     Annotated[IntegerScheduleModel, Field(discriminator='kind')],
     BeforeValidator(_wrap_integer_constant),
+]
+DecimalGenerationSchedule: TypeAlias = Annotated[
+    Annotated[DecimalScheduleModel, Field(discriminator='kind')],
+    BeforeValidator(_wrap_decimal_constant),
 ]
 
 

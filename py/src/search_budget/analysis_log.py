@@ -17,8 +17,12 @@ ANALYSIS_RECORD_DTYPE = np.dtype(
         ('value_error', '<f4', (BUDGET_CURVE_POINTS,)),
         ('top_visit_share', '<f4'),
         ('policy_entropy', '<f4'),
+        # Root-time approximations actually available at selection (raw-prior based on a fresh
+        # root), logged beside the post-search values so the deployment gap stays measurable.
+        ('root_prior_top_share', '<f4'),
+        ('root_prior_entropy', '<f4'),
         ('predicted_curve', '<f4', (BUDGET_CURVE_POINTS,)),
-        ('calibrated_curve', '<f4', (BUDGET_CURVE_POINTS,)),
+        ('corrected_curve', '<f4', (BUDGET_CURVE_POINTS,)),
         ('deep_half_kl', '<f4'),
         ('assigned_visits', '<u4'),
         ('selected_index', '<u4'),

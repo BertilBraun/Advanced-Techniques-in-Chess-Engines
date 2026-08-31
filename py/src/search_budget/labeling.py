@@ -26,13 +26,15 @@ from src.search_budget.policy import (
     BASELINE_CURVE_INDEX,
     BUDGET_CURVE_MULTIPLES,
     BUDGET_CURVE_POINTS,
-    HALF_DEEP_CURVE_INDEX,
     BudgetSelectionFeatures,
+    CurveCorrection,
     SearchBudgetPolicy,
-    calibrate_curve,
+    corrected_curve,
     deep_label_visit_limit,
     grid_checkpoint_visits,
     grid_visit_counts,
+    half_deep_visit_count,
+    identity_correction,
     log_kl_curve,
     select_budget_index,
 )
@@ -133,16 +135,20 @@ class LabelGenerationSource(FrozenModel):
 class PredictionRecord(FrozenModel):
     identity: LabelPositionIdentity
     predicted_curve: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
+    root_prior_top_share: float = Field(gt=0.0, le=1.0)
+    root_prior_entropy: float = Field(ge=0.0)
 
     @model_validator(mode='after')
     def validate_prediction(self) -> PredictionRecord:
         if any(not math.isfinite(value) for value in self.predicted_curve):
             raise ValueError('Search-budget curve predictions must be finite.')
+        if not math.isfinite(self.root_prior_top_share) or not math.isfinite(self.root_prior_entropy):
+            raise ValueError('Root-prior selection features must be finite.')
         return self
 
 
 class PredictionShardArtifact(FrozenModel):
-    schema_version: int = Field(default=2, ge=2, le=2)
+    schema_version: int = Field(default=3, ge=3, le=3)
     source_generation: int = Field(ge=0)
     shard_index: int = Field(ge=0)
     checkpoint_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -294,6 +300,7 @@ def finalize_generation(
     deep_artifacts: tuple[DeepSearchShardArtifact, ...],
     action_size: int,
     maximum_policy_entries: int,
+    correction: CurveCorrection = identity_correction,
 ) -> GenerationFinalization:
     deep_records = tuple(record for artifact in deep_artifacts for record in artifact.records)
     expected = tuple(position.identity for position in source.selected_positions)
@@ -328,15 +335,17 @@ def finalize_generation(
         if any(not math.isfinite(value) for value in raw_kls):
             raise ValueError('Deep-label KL reconstruction must be finite.')
         curve_label = log_kl_curve(raw_kls)
-        predicted = predictions[identity].predicted_curve
+        prediction = predictions[identity]
+        predicted = prediction.predicted_curve
         features = BudgetSelectionFeatures(
             top_visit_share=top_visit_share(grid_policies[BASELINE_CURVE_INDEX]),
             policy_entropy=policy_entropy(grid_policies[BASELINE_CURVE_INDEX]),
             ply=identity.ply,
             baseline_visits=source.baseline_new_visits,
+            source_generation=source.source_generation,
         )
-        calibrated = calibrate_curve(predicted, policy, features)
-        selected = select_budget_index(predicted, policy, features)
+        corrected = corrected_curve(predicted, features, correction)
+        selected = select_budget_index(predicted, policy, features, correction)
         selected_counts[selected] += 1
         assigned_visits_values.append(grid_visits[selected])
         target_raw_kl_curves.append(raw_kls)
@@ -372,9 +381,12 @@ def finalize_generation(
         )
         record['top_visit_share'] = features.top_visit_share
         record['policy_entropy'] = features.policy_entropy
+        record['root_prior_top_share'] = prediction.root_prior_top_share
+        record['root_prior_entropy'] = prediction.root_prior_entropy
         record['predicted_curve'] = predicted
-        record['calibrated_curve'] = calibrated
-        record['deep_half_kl'] = raw_kls[HALF_DEEP_CURVE_INDEX]
+        record['corrected_curve'] = corrected
+        half_deep_policy = _policy_at(deep, half_deep_visit_count(source.baseline_new_visits), action_size)
+        record['deep_half_kl'] = policy_kl(deep_policy, half_deep_policy)
         record['assigned_visits'] = grid_visits[selected]
         record['selected_index'] = selected
 

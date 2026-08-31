@@ -473,3 +473,102 @@ def test_cleanup_failure_after_durable_completion_does_not_reclassify_job(
     assert manager._calibration == calibration_before
     assert not manager._report_path(1).exists()
     manager.close()
+
+
+def _corrector_manager(path: Path, executor: ThreadPoolExecutor, enabled: bool) -> SearchBudgetLabelManager:
+    from src.search_budget.configuration import (
+        BudgetCurveCorrectorConfiguration,
+        BudgetPolicyCalibrationConfiguration,
+    )
+
+    return SearchBudgetLabelManager(
+        run_path=path,
+        configuration_sha256='1' * 64,
+        device_ids=(0,),
+        runtime_factory=_unused_runtime_factory,
+        action_size=2,
+        maximum_policy_entries=2,
+        sample_provider=_UnusedSampleProvider(),
+        replay_writer=_unused_replay_writer,
+        initial_first_unstarted_production_generation=2,
+        configuration=SearchBudgetConfiguration(
+            calibration=BudgetPolicyCalibrationConfiguration(
+                corrector=BudgetCurveCorrectorConfiguration(enabled=enabled)
+            )
+        ),
+        executor=executor,
+    )
+
+
+def _learnable_analysis_records(count: int = 512) -> object:
+    import numpy as np
+    from test_helpers.search_budget_records import analysis_records
+
+    random = np.random.default_rng(5)
+    predicted = random.normal(-2.0, 1.0, size=(count, 8))
+    top_visit_share = random.uniform(0.2, 1.0, size=count)
+    policy_entropy = random.uniform(0.0, 3.0, size=count)
+    ply = random.integers(0, 200, size=count)
+    residual = 0.5 + 0.3 * predicted - 1.5 * top_visit_share[:, None] + 0.4 * policy_entropy[:, None]
+    return analysis_records(predicted, predicted + residual, top_visit_share, policy_entropy, ply)
+
+
+def test_a_disabled_corrector_configuration_ships_the_identity_reference(tmp_path: Path) -> None:
+    from src.search_budget.calibration import IDENTITY_CORRECTOR_REFERENCE
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    manager = _corrector_manager(tmp_path, executor, enabled=False)
+    try:
+        reference, applied = manager._fit_corrector(0, _learnable_analysis_records())
+        assert reference == IDENTITY_CORRECTOR_REFERENCE
+        assert not applied
+    finally:
+        manager.close()
+        executor.shutdown()
+
+
+def test_a_successful_corrector_fit_publishes_a_digest_matched_artifact(tmp_path: Path) -> None:
+    import hashlib as hashlib_module
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    manager = _corrector_manager(tmp_path, executor, enabled=True)
+    try:
+        reference, applied = manager._fit_corrector(0, _learnable_analysis_records())
+        assert applied
+        assert reference.path is not None and reference.path.is_file()
+        assert reference.path.name == 'corrector-generation-00000000.jit.pt'
+        assert hashlib_module.sha256(reference.path.read_bytes()).hexdigest() == reference.sha256
+    finally:
+        manager.close()
+        executor.shutdown()
+
+
+def test_a_rejected_corrector_fit_keeps_the_previously_published_reference(tmp_path: Path) -> None:
+    import numpy as np
+    from test_helpers.search_budget_records import analysis_records
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    manager = _corrector_manager(tmp_path, executor, enabled=True)
+    try:
+        previous, applied = manager._fit_corrector(0, _learnable_analysis_records())
+        assert applied
+        manager._calibration = manager._calibration.model_copy(
+            update={'corrector_path': previous.path, 'corrector_sha256': previous.sha256}
+        )
+        random = np.random.default_rng(6)
+        count = 512
+        predicted = random.normal(-2.0, 1.0, size=(count, 8))
+        # Targets equal predictions exactly, so no correction can improve the held-out residual.
+        perfect = analysis_records(
+            predicted,
+            predicted,
+            random.uniform(0.2, 1.0, size=count),
+            random.uniform(0.0, 3.0, size=count),
+            random.integers(0, 200, size=count),
+        )
+        kept, applied_again = manager._fit_corrector(1, perfect)
+        assert not applied_again
+        assert kept == previous
+    finally:
+        manager.close()
+        executor.shutdown()

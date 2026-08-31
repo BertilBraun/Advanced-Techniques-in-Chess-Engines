@@ -86,6 +86,8 @@ template <SearchGame Game> struct SelfPlaySearchResult {
     float policy_correction;
     float value_correction;
     SearchBudgetCurvePrediction predicted_budget_curve;
+    float root_prior_top_share;
+    float root_prior_entropy;
     int selected_budget_index;
     std::uint32_t assigned_additional_visits;
     std::uint32_t parallel_searches;
@@ -141,9 +143,9 @@ public:
             const SearchLimit limit =
                 request.assigned_additional_visits.has_value()
                     ? SearchLimit{AdditionalSearchLimit(*request.assigned_additional_visits)}
-                    : SearchLimit{
-                          PredictedSearchBudgetLimit(m_searchParameters.baseline_visits,
-                                                     m_searchParameters.search_budget_policy)};
+                    : SearchLimit{PredictedSearchBudgetLimit(
+                          m_searchParameters.baseline_visits,
+                          m_searchParameters.search_budget_policy, m_search->modelGeneration())};
             engineRequests.push_back({
                 .root = request.root,
                 .limit = limit,
@@ -173,6 +175,8 @@ public:
                 .policy_correction = searched.results[index].policy_correction,
                 .value_correction = searched.results[index].value_correction,
                 .predicted_budget_curve = searched.results[index].predicted_budget_curve,
+                .root_prior_top_share = searched.results[index].root_prior_top_share,
+                .root_prior_entropy = searched.results[index].root_prior_entropy,
                 .selected_budget_index = searched.results[index].selected_budget_index,
                 .assigned_additional_visits = searched.results[index].assigned_additional_visits,
                 .parallel_searches = searched.results[index].parallel_searches,

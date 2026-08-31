@@ -148,7 +148,7 @@ class LegalMovesHeadLayout:
 @dataclass(frozen=True)
 class SearchBudgetHeadLayout:
     kind: Literal['search_budget']
-    output_size: Literal[10] = 10
+    output_size: Literal[8] = 8
 
 
 AuxiliaryHeadLayout: TypeAlias = (

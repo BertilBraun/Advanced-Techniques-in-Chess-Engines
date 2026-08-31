@@ -34,8 +34,6 @@ from src.search_budget.labeling import (
 from src.search_budget.policy import (
     BASELINE_CURVE_INDEX,
     BUDGET_CURVE_POINTS,
-    IDENTITY_CALIBRATION_BIAS,
-    IDENTITY_CALIBRATION_WEIGHTS,
     SearchBudgetPolicy,
     grid_visit_counts,
 )
@@ -153,7 +151,7 @@ def test_generation_source_samples_exact_floor_two_percent_deterministically(tmp
     assert len(first.selected_positions) == 2
     assert first.selected_positions == second.selected_positions
     assert first.deep_visit_limit == 4_800
-    assert first.checkpoint_visits == (75, 120, 200, 300, 400, 600, 900, 1200, 1800, 2400)
+    assert first.checkpoint_visits == (75, 120, 200, 300, 400, 600, 900, 1200, 2400)
 
 
 def test_generation_source_records_each_selected_absolute_replay_row(tmp_path: Path) -> None:
@@ -274,18 +272,20 @@ def _finalization_source(tmp_path: Path) -> LabelGenerationSource:
 
 
 def _deep_artifact(source: LabelGenerationSource) -> DeepSearchShardArtifact:
-    # Every checkpoint below the deepest keeps a lopsided policy; the deepest checkpoint and the
-    # final policy agree, so the raw KL curve is flat until it drops to zero at the last grid point.
+    # Every checkpoint below the deepest grid point keeps a lopsided policy; the deepest grid point
+    # and the half-deep diagnostic checkpoint agree with the final policy, so the raw KL curve is
+    # flat until it drops to zero at the last grid point and deep_half_kl is exactly zero.
+    deepest_grid_visits = 2 * source.baseline_new_visits
     records = tuple(
         DeepSearchRecord(
             identity=position.identity,
             checkpoints=tuple(
                 PolicyCheckpointRecord(
                     visits=visits,
-                    root_value=0.05 if visits < source.deep_visit_limit // 2 else 0.25,
+                    root_value=0.05 if visits < deepest_grid_visits else 0.25,
                     policy_target_visits=SearchVisitCounts(
                         action_ids=(0, 1),
-                        visit_counts=(40, 40) if visits == source.checkpoint_visits[-1] else (9, 1),
+                        visit_counts=(40, 40) if visits >= deepest_grid_visits else (9, 1),
                     ),
                 )
                 for visits in source.checkpoint_visits
@@ -310,7 +310,12 @@ def _predictions(
     curves: tuple[tuple[float, ...], ...],
 ) -> dict[LabelPositionIdentity, PredictionRecord]:
     return {
-        position.identity: PredictionRecord(identity=position.identity, predicted_curve=curve)
+        position.identity: PredictionRecord(
+            identity=position.identity,
+            predicted_curve=curve,
+            root_prior_top_share=0.7,
+            root_prior_entropy=0.6,
+        )
         for position, curve in zip(source.selected_positions, curves, strict=True)
     }
 
@@ -318,8 +323,8 @@ def _predictions(
 def _policy() -> SearchBudgetPolicy:
     return SearchBudgetPolicy(
         lagrange_multiplier=0.1,
-        calibration_bias=IDENTITY_CALIBRATION_BIAS,
-        calibration_weights=IDENTITY_CALIBRATION_WEIGHTS,
+        corrector_path=None,
+        corrector_sha256=None,
         apply_learned=True,
     )
 
@@ -377,8 +382,8 @@ def test_finalization_measures_shadow_gain_and_selection_under_the_working_polic
 
     grid = grid_visit_counts(source.baseline_new_visits)
     evidence = finalized.evidence
-    assert evidence.selected_index_counts == (2, 0, 0, 0, 0, 0, 0, 0, 0, 1)
-    assert evidence.realized_mean_multiple == pytest.approx((0.125 + 0.125 + 4.0) / 3)
+    assert evidence.selected_index_counts == (2, 0, 0, 0, 0, 0, 0, 1)
+    assert evidence.realized_mean_multiple == pytest.approx((0.125 + 0.125 + 2.0) / 3)
     assert evidence.realized_mean_assigned_visits == pytest.approx((grid[0] + grid[0] + grid[-1]) / 3)
     assert evidence.flat_mean_assigned_visits == pytest.approx(10.0)
     # The deepest checkpoint matches the deep policy while cheap checkpoints do not, so the one
@@ -423,15 +428,17 @@ def test_finalization_appends_one_analysis_record_per_labelled_position(tmp_path
     assert list(records['ply']) == [0, 1, 2]
     assert list(records['first_absolute_replay_row']) == [100, 101, 102]
     assert list(records['baseline_visits']) == [10, 10, 10]
-    assert list(records['selected_index']) == [0, 9, 0]
+    assert list(records['selected_index']) == [0, 7, 0]
     grid = grid_visit_counts(10)
     assert list(records['assigned_visits']) == [grid[0], grid[-1], grid[0]]
     shallow_kl = 0.5 * math.log(0.5 / 0.9) + 0.5 * math.log(0.5 / 0.1)
     assert records['policy_kl'][0][BASELINE_CURVE_INDEX] == pytest.approx(shallow_kl, rel=1e-6)
     assert records['deep_half_kl'][0] == pytest.approx(0.0, abs=1e-9)
     assert records['predicted_curve'][1][0] == pytest.approx(math.log(10.0))
-    # The working policy carries the identity calibration, so the logged calibrated curve matches.
-    assert records['calibrated_curve'][1][0] == pytest.approx(math.log(10.0))
+    # The working policy carries the identity correction, so the logged corrected curve matches.
+    assert records['corrected_curve'][1][0] == pytest.approx(math.log(10.0))
+    assert records['root_prior_top_share'][0] == pytest.approx(0.7)
+    assert records['root_prior_entropy'][0] == pytest.approx(0.6)
     # Checkpoints below half depth carry root value 0.05 against the deep 0.25.
     assert records['value_error'][0][0] == pytest.approx(0.2, rel=1e-5)
     assert records['value_error'][0][BUDGET_CURVE_POINTS - 1] == pytest.approx(0.0, abs=1e-9)
@@ -495,5 +502,5 @@ def test_analysis_record_dtype_is_fixed_width_and_reasonably_small() -> None:
     assert ANALYSIS_RECORD_DTYPE['policy_kl'].shape == (BUDGET_CURVE_POINTS,)
     assert ANALYSIS_RECORD_DTYPE['value_error'].shape == (BUDGET_CURVE_POINTS,)
     assert ANALYSIS_RECORD_DTYPE['predicted_curve'].shape == (BUDGET_CURVE_POINTS,)
-    assert ANALYSIS_RECORD_DTYPE['calibrated_curve'].shape == (BUDGET_CURVE_POINTS,)
+    assert ANALYSIS_RECORD_DTYPE['corrected_curve'].shape == (BUDGET_CURVE_POINTS,)
     assert np.dtype(ANALYSIS_RECORD_DTYPE) is not None
