@@ -173,10 +173,9 @@ void bind_search(py::module_ &module) {
              py::arg("apply_learned"))
         .def_readonly("multiples", &SearchBudgetPolicy::multiples)
         .def_readonly("lagrange_multiplier", &SearchBudgetPolicy::lagrange_multiplier)
-        .def_property_readonly("has_corrector",
-                               [](const SearchBudgetPolicy &policy) {
-                                   return policy.corrector != nullptr;
-                               })
+        .def_property_readonly(
+            "has_corrector",
+            [](const SearchBudgetPolicy &policy) { return policy.corrector != nullptr; })
         .def_readonly("apply_learned", &SearchBudgetPolicy::apply_learned);
     py::class_<SearchBudgetSelectionFeatures>(module, "SearchBudgetSelectionFeatures")
         .def(py::init([](const double topVisitShare, const double policyEntropy, const double ply,

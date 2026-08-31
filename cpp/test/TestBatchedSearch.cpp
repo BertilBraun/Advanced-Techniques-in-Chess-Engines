@@ -115,8 +115,8 @@ int runBatchedSearchTests() {
     try {
         const SearchBudgetPolicy flatPolicy;
         require(!flatPolicy.apply_learned, "default search-budget policy is not flat");
-        const std::array<double, 8> gridMultiples = {0.125, 0.2, 1.0 / 3.0, 0.5,
-                                                     2.0 / 3.0, 1.0, 1.5, 2.0};
+        const std::array<double, 8> gridMultiples = {0.125,     0.2, 1.0 / 3.0, 0.5,
+                                                     2.0 / 3.0, 1.0, 1.5,       2.0};
         require(gridMultiples == flatPolicy.multiples,
                 "default grid is not the narrowed 0.125-2x eight-point grid");
         const SearchBudgetSelectionFeatures neutralFeatures = {.top_visit_share = 1.0,
@@ -192,13 +192,13 @@ int runBatchedSearchTests() {
 
         // A linear TorchScript corrector applies exactly correction[k] = weight[k] . input with
         // the documented input order: curve, top share, entropy, ply, baseline, generation.
-        torch::Tensor correctorWeight = torch::zeros(
-            {static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS),
-             static_cast<std::int64_t>(SearchBudgetCurveCorrector::FEATURE_COUNT)});
-        correctorWeight[3][3] = 0.5;   // the point's own prediction
-        correctorWeight[3][8] = -1.0;  // top visit share
-        correctorWeight[3][9] = 0.25;  // policy entropy
-        correctorWeight[3][10] = 0.01; // ply
+        torch::Tensor correctorWeight =
+            torch::zeros({static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS),
+                          static_cast<std::int64_t>(SearchBudgetCurveCorrector::FEATURE_COUNT)});
+        correctorWeight[3][3] = 0.5;     // the point's own prediction
+        correctorWeight[3][8] = -1.0;    // top visit share
+        correctorWeight[3][9] = 0.25;    // policy entropy
+        correctorWeight[3][10] = 0.01;   // ply
         correctorWeight[3][11] = -0.001; // baseline visits
         correctorWeight[3][12] = 0.002;  // source generation
         const std::filesystem::path linearCorrectorPath =
@@ -215,17 +215,16 @@ int runBatchedSearchTests() {
         correctionInput[3] = -2.0F;
         const std::array<double, 8> corrected =
             correctBudgetCurve(correctedPolicy, correctionInput, richFeatures);
-        const double expectedThird =
-            -2.0 + 0.5 * -2.0 + -1.0 * 0.6 + 0.25 * 1.2 + 0.01 * 40.0 + -0.001 * 400.0 +
-            0.002 * 25.0;
+        const double expectedThird = -2.0 + 0.5 * -2.0 + -1.0 * 0.6 + 0.25 * 1.2 + 0.01 * 40.0 +
+                                     -0.001 * 400.0 + 0.002 * 25.0;
         require(std::abs(corrected[3] - expectedThird) < 1e-6 && corrected[0] == 0.0,
                 "curve correction is not the corrector output added to the prediction");
         std::filesystem::remove(linearCorrectorPath);
 
         // A corrector steering the deepest point down moves the Lagrangian argmin there.
-        torch::Tensor deepWeight = torch::zeros(
-            {static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS),
-             static_cast<std::int64_t>(SearchBudgetCurveCorrector::FEATURE_COUNT)});
+        torch::Tensor deepWeight =
+            torch::zeros({static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS),
+                          static_cast<std::int64_t>(SearchBudgetCurveCorrector::FEATURE_COUNT)});
         deepWeight[7][8] = -3.0; // -3 log-KL on the deepest point at top share one
         const std::filesystem::path deepCorrectorPath = createCorrectorModel("deep", deepWeight);
         const SearchBudgetPolicy deepCorrectedPolicy(
@@ -247,10 +246,10 @@ int runBatchedSearchTests() {
             std::filesystem::remove(narrowCorrectorPath);
         }
         // A corrector with non-finite parameters must fail its load-time probe.
-        torch::Tensor infiniteWeight = torch::full(
-            {static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS),
-             static_cast<std::int64_t>(SearchBudgetCurveCorrector::FEATURE_COUNT)},
-            std::numeric_limits<float>::infinity());
+        torch::Tensor infiniteWeight =
+            torch::full({static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS),
+                         static_cast<std::int64_t>(SearchBudgetCurveCorrector::FEATURE_COUNT)},
+                        std::numeric_limits<float>::infinity());
         const std::filesystem::path infiniteCorrectorPath =
             createCorrectorModel("infinite", infiniteWeight);
         try {

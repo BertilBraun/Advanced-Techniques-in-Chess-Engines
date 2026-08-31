@@ -72,8 +72,8 @@ struct SearchBudgetPolicy {
     bool apply_learned;
 
     SearchBudgetPolicy()
-        : multiples{0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5, 2.0},
-          lagrange_multiplier(0.0), corrector(nullptr), apply_learned(false) {}
+        : multiples{0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5, 2.0}, lagrange_multiplier(0.0),
+          corrector(nullptr), apply_learned(false) {}
 
     SearchBudgetPolicy(std::array<double, CURVE_POINTS> gridMultiples,
                        const double lagrangeMultiplier,

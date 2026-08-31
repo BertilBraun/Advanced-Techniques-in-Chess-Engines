@@ -442,9 +442,9 @@ private:
         double topShare = 0.0;
         double entropy = 0.0;
         for (const auto &edge : node.children) {
-            const double probability =
-                priorTotal > 0.0 ? static_cast<double>(edge.raw_prior) / priorTotal
-                                 : 1.0 / static_cast<double>(node.children.size());
+            const double probability = priorTotal > 0.0
+                                           ? static_cast<double>(edge.raw_prior) / priorTotal
+                                           : 1.0 / static_cast<double>(node.children.size());
             topShare = std::max(topShare, probability);
             if (probability > 0.0) {
                 entropy -= probability * std::log(probability);
