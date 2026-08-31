@@ -57,9 +57,9 @@ def test_resolved_virtual_loss_weight_reaches_the_native_search_parameters() -> 
     assert isinstance(configuration, ChessExperimentConfiguration)
     implementation = ChessImplementation(configuration)
     policy = SearchBudgetPolicy(
-        sigma=tuple(0.5 + 0.1 * index for index in range(10)),
-        log_tau=-2.25,
-        selection_threshold=0.8,
+        lagrange_multiplier=0.4,
+        calibration_bias=tuple(0.01 * index for index in range(10)),
+        calibration_weights=tuple(tuple(0.001 * (row + column) for column in range(5)) for row in range(10)),
         apply_learned=True,
     )
     resolved = replace(implementation.self_play_parameters_at(0, policy), virtual_loss_weight=0.25)
@@ -70,7 +70,64 @@ def test_resolved_virtual_loss_weight_reaches_the_native_search_parameters() -> 
     assert native_parameters.baseline_visits == resolved.baseline_visits
     native_policy = native_parameters.search_budget_policy
     assert tuple(native_policy.multiples) == pytest.approx(BUDGET_CURVE_MULTIPLES)
-    assert tuple(native_policy.sigma) == pytest.approx(policy.sigma)
-    assert native_policy.log_tau == pytest.approx(-2.25)
-    assert native_policy.selection_threshold == pytest.approx(0.8)
+    assert native_policy.lagrange_multiplier == pytest.approx(0.4)
+    assert tuple(native_policy.calibration_bias) == pytest.approx(policy.calibration_bias)
+    for native_row, python_row in zip(native_policy.calibration_weights, policy.calibration_weights, strict=True):
+        assert tuple(native_row) == pytest.approx(python_row)
     assert native_policy.apply_learned is True
+
+
+def _float32(value: float) -> float:
+    import numpy as np
+
+    return float(np.float32(value))
+
+
+def test_native_and_python_budget_selection_agree_on_identical_inputs() -> None:
+    import random
+
+    from AlphaZeroCpp import SearchBudgetPolicy as NativeSearchBudgetPolicy
+    from AlphaZeroCpp import SearchBudgetSelectionFeatures
+    from AlphaZeroCpp import calibrate_budget_curve as native_calibrate
+    from AlphaZeroCpp import select_budget_index as native_select
+    from src.search_budget.policy import BudgetSelectionFeatures, calibrate_curve, select_budget_index
+
+    generator = random.Random(20260830)
+    for _ in range(250):
+        # The native curve is float32, so feed values that are exact in both precisions.
+        prediction = tuple(_float32(generator.uniform(-8.0, 4.0)) for _ in range(10))
+        bias = tuple(generator.uniform(-0.5, 0.5) for _ in range(10))
+        weights = tuple(tuple(generator.uniform(-0.05, 0.05) for _ in range(5)) for _ in range(10))
+        lagrange_multiplier = generator.uniform(0.0, 2.0)
+        python_policy = SearchBudgetPolicy(
+            lagrange_multiplier=lagrange_multiplier,
+            calibration_bias=bias,
+            calibration_weights=weights,
+            apply_learned=True,
+        )
+        native_policy = NativeSearchBudgetPolicy(
+            list(BUDGET_CURVE_MULTIPLES),
+            lagrange_multiplier,
+            list(bias),
+            [list(row) for row in weights],
+            True,
+        )
+        ply = generator.randrange(0, 300)
+        baseline_visits = generator.choice((300, 400, 600))
+        python_features = BudgetSelectionFeatures(
+            top_visit_share=_float32(generator.uniform(0.05, 1.0)),
+            policy_entropy=_float32(generator.uniform(0.0, 4.0)),
+            ply=ply,
+            baseline_visits=baseline_visits,
+        )
+        native_features = SearchBudgetSelectionFeatures(
+            top_visit_share=python_features.top_visit_share,
+            policy_entropy=python_features.policy_entropy,
+            ply=float(ply),
+            baseline_visits=float(baseline_visits),
+        )
+        assert native_select(native_policy, list(prediction), native_features) == select_budget_index(
+            prediction, python_policy, python_features
+        )
+        native_curve = native_calibrate(native_policy, list(prediction), native_features)
+        assert tuple(native_curve) == pytest.approx(calibrate_curve(prediction, python_policy, python_features))

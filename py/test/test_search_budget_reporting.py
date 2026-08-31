@@ -88,7 +88,8 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
         queued_generation_count=2,
         current_validation_gain=0.03,
         ema_validation_gain=0.02,
-        log_tau=-2.3,
+        lagrange_multiplier=0.4,
+        calibrator_applied=True,
         realized_mean_multiple=1.05,
         realized_mean_assigned_visits=630.0,
         flat_mean_assigned_visits=600.0,
@@ -108,7 +109,8 @@ def test_completed_deep_label_report_is_fully_published_to_tensorboard(
     assert scalars['search_budget/label/predicted_baseline_log_kl/mean'] == (0.45, 12)
     assert scalars['search_budget/label/target_baseline_log_kl/median'] == (0.5, 12)
     assert scalars['search_budget/label/deep_search_retries'] == (2, 12)
-    assert scalars['search_budget/calibration/log_tau'] == (-2.3, 12)
+    assert scalars['search_budget/calibration/lagrange_multiplier'] == (0.4, 12)
+    assert scalars['search_budget/calibration/calibrator_applied'] == (1, 12)
     assert scalars['search_budget/calibration/realized_mean_multiple'] == (1.05, 12)
     assert scalars['search_budget/calibration/realized_mean_assigned_visits'] == (630.0, 12)
     assert scalars['search_budget/calibration/flat_mean_assigned_visits'] == (600.0, 12)

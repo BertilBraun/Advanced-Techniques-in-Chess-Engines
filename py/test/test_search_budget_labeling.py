@@ -34,6 +34,8 @@ from src.search_budget.labeling import (
 from src.search_budget.policy import (
     BASELINE_CURVE_INDEX,
     BUDGET_CURVE_POINTS,
+    IDENTITY_CALIBRATION_BIAS,
+    IDENTITY_CALIBRATION_WEIGHTS,
     SearchBudgetPolicy,
     grid_visit_counts,
 )
@@ -315,11 +317,16 @@ def _predictions(
 
 def _policy() -> SearchBudgetPolicy:
     return SearchBudgetPolicy(
-        sigma=(1.0,) * BUDGET_CURVE_POINTS,
-        log_tau=math.log(0.1),
-        selection_threshold=0.8,
+        lagrange_multiplier=0.1,
+        calibration_bias=IDENTITY_CALIBRATION_BIAS,
+        calibration_weights=IDENTITY_CALIBRATION_WEIGHTS,
         apply_learned=True,
     )
+
+
+def _hard_curve() -> tuple[float, ...]:
+    # exp(curve) falls by a whole unit of KL per grid point, so a 0.1 dual sends it deepest.
+    return tuple(math.log(10.0 - index) for index in range(BUDGET_CURVE_POINTS))
 
 
 def test_finalization_writes_log_kl_curve_targets_and_the_deep_policy(tmp_path: Path) -> None:
@@ -356,7 +363,7 @@ def test_finalization_measures_shadow_gain_and_selection_under_the_working_polic
     # Two positions predict confidently cheap curves and select the cheapest grid point; one
     # predicts a hard curve and falls back to the deepest grid point.
     cheap = (-10.0,) * BUDGET_CURVE_POINTS
-    hard = (5.0,) * BUDGET_CURVE_POINTS
+    hard = _hard_curve()
     predictions = _predictions(source, (cheap, hard, cheap))
 
     finalized = finalize_generation(
@@ -378,23 +385,27 @@ def test_finalization_measures_shadow_gain_and_selection_under_the_working_polic
     # deep selection gains exactly one position's baseline KL over flat allocation.
     shallow_kl = 0.5 * math.log(0.5 / 0.9) + 0.5 * math.log(0.5 / 0.1)
     assert evidence.generation_gain == pytest.approx(shallow_kl / 3)
+    hard = _hard_curve()
     assert evidence.mean_absolute_curve_error == pytest.approx(
         tuple(
             (
-                2 * abs(-10.0 - math.log(shallow_kl + 1e-6)) + abs(5.0 - math.log(shallow_kl + 1e-6))
+                2 * abs(-10.0 - math.log(shallow_kl + 1e-6)) + abs(hard[index] - math.log(shallow_kl + 1e-6))
                 if index < BUDGET_CURVE_POINTS - 1
-                else 2 * abs(-10.0 - math.log(1e-6)) + abs(5.0 - math.log(1e-6))
+                else 2 * abs(-10.0 - math.log(1e-6)) + abs(hard[index] - math.log(1e-6))
             )
             / 3
             for index in range(BUDGET_CURVE_POINTS)
         )
+    )
+    assert evidence.target_raw_kl_curves[0] == pytest.approx(
+        (shallow_kl,) * (BUDGET_CURVE_POINTS - 1) + (0.0,), abs=1e-9
     )
 
 
 def test_finalization_appends_one_analysis_record_per_labelled_position(tmp_path: Path) -> None:
     source = _finalization_source(tmp_path)
     cheap = (-10.0,) * BUDGET_CURVE_POINTS
-    hard = (5.0,) * BUDGET_CURVE_POINTS
+    hard = _hard_curve()
     predictions = _predictions(source, (cheap, hard, cheap))
 
     finalized = finalize_generation(
@@ -418,13 +429,15 @@ def test_finalization_appends_one_analysis_record_per_labelled_position(tmp_path
     shallow_kl = 0.5 * math.log(0.5 / 0.9) + 0.5 * math.log(0.5 / 0.1)
     assert records['policy_kl'][0][BASELINE_CURVE_INDEX] == pytest.approx(shallow_kl, rel=1e-6)
     assert records['deep_half_kl'][0] == pytest.approx(0.0, abs=1e-9)
-    assert records['predicted_curve'][1][0] == pytest.approx(5.0)
+    assert records['predicted_curve'][1][0] == pytest.approx(math.log(10.0))
+    # The working policy carries the identity calibration, so the logged calibrated curve matches.
+    assert records['calibrated_curve'][1][0] == pytest.approx(math.log(10.0))
     # Checkpoints below half depth carry root value 0.05 against the deep 0.25.
     assert records['value_error'][0][0] == pytest.approx(0.2, rel=1e-5)
     assert records['value_error'][0][BUDGET_CURVE_POINTS - 1] == pytest.approx(0.0, abs=1e-9)
     assert records['top_visit_share'][0] == pytest.approx(0.9)
     assert records['policy_entropy'][0] == pytest.approx(-(0.9 * math.log(0.9) + 0.1 * math.log(0.1)), rel=1e-5)
-    assert records.dtype.itemsize <= 200
+    assert records.dtype.itemsize <= 224
 
 
 def test_finalization_requires_exactly_one_search_budget_slot(tmp_path: Path) -> None:
@@ -478,8 +491,9 @@ def test_finalization_rejects_a_missing_grid_checkpoint(tmp_path: Path) -> None:
 def test_analysis_record_dtype_is_fixed_width_and_reasonably_small() -> None:
     from src.search_budget.analysis_log import ANALYSIS_RECORD_DTYPE
 
-    assert ANALYSIS_RECORD_DTYPE.itemsize <= 200
+    assert ANALYSIS_RECORD_DTYPE.itemsize <= 224
     assert ANALYSIS_RECORD_DTYPE['policy_kl'].shape == (BUDGET_CURVE_POINTS,)
     assert ANALYSIS_RECORD_DTYPE['value_error'].shape == (BUDGET_CURVE_POINTS,)
     assert ANALYSIS_RECORD_DTYPE['predicted_curve'].shape == (BUDGET_CURVE_POINTS,)
+    assert ANALYSIS_RECORD_DTYPE['calibrated_curve'].shape == (BUDGET_CURVE_POINTS,)
     assert np.dtype(ANALYSIS_RECORD_DTYPE) is not None

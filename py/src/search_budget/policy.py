@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 from pydantic import Field, model_validator
 from src.util.frozen_model import FrozenModel
@@ -11,29 +12,57 @@ BASELINE_CURVE_INDEX = BUDGET_CURVE_MULTIPLES.index(1.0)
 HALF_DEEP_CURVE_INDEX = BUDGET_CURVE_MULTIPLES.index(4.0)
 LOG_KL_EPSILON = 1e-6
 
+# Per grid point: the point's own raw prediction, top visit share, policy entropy, ply, baseline visits.
+CALIBRATION_FEATURE_COUNT = 5
+
+IDENTITY_CALIBRATION_BIAS: tuple[float, ...] = (0.0,) * BUDGET_CURVE_POINTS
+IDENTITY_CALIBRATION_WEIGHTS: tuple[tuple[float, ...], ...] = tuple(
+    (0.0,) * CALIBRATION_FEATURE_COUNT for _ in range(BUDGET_CURVE_POINTS)
+)
+
+
+@dataclass(frozen=True)
+class BudgetSelectionFeatures:
+    top_visit_share: float
+    policy_entropy: float
+    ply: int
+    baseline_visits: int
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.top_visit_share) or not math.isfinite(self.policy_entropy):
+            raise ValueError('Budget selection features must be finite.')
+        if self.ply < 0 or self.baseline_visits <= 0:
+            raise ValueError('Budget selection features require a nonnegative ply and positive baseline visits.')
+
 
 class SearchBudgetPolicy(FrozenModel):
-    sigma: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
-    log_tau: float
-    selection_threshold: float
+    lagrange_multiplier: float
+    calibration_bias: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
+    calibration_weights: tuple[tuple[float, ...], ...] = Field(
+        min_length=BUDGET_CURVE_POINTS,
+        max_length=BUDGET_CURVE_POINTS,
+    )
     apply_learned: bool
 
     @model_validator(mode='after')
     def validate_policy(self) -> SearchBudgetPolicy:
-        if any(not math.isfinite(value) or value <= 0.0 for value in self.sigma):
-            raise ValueError('Search-budget sigma values must be finite and positive.')
-        if not math.isfinite(self.log_tau):
-            raise ValueError('Search-budget log tau must be finite.')
-        if not math.isfinite(self.selection_threshold) or not 0.0 < self.selection_threshold < 1.0:
-            raise ValueError('Search-budget selection threshold must lie strictly in (0, 1).')
+        if not math.isfinite(self.lagrange_multiplier) or self.lagrange_multiplier < 0.0:
+            raise ValueError('The search-budget Lagrange multiplier must be finite and nonnegative.')
+        if any(not math.isfinite(value) for value in self.calibration_bias):
+            raise ValueError('Search-budget calibration biases must be finite.')
+        for row in self.calibration_weights:
+            if len(row) != CALIBRATION_FEATURE_COUNT:
+                raise ValueError('Search-budget calibration weights need one coefficient per feature.')
+            if any(not math.isfinite(value) for value in row):
+                raise ValueError('Search-budget calibration weights must be finite.')
         return self
 
 
 def disabled_policy() -> SearchBudgetPolicy:
     return SearchBudgetPolicy(
-        sigma=(1.0,) * BUDGET_CURVE_POINTS,
-        log_tau=0.0,
-        selection_threshold=0.8,
+        lagrange_multiplier=0.0,
+        calibration_bias=IDENTITY_CALIBRATION_BIAS,
+        calibration_weights=IDENTITY_CALIBRATION_WEIGHTS,
         apply_learned=False,
     )
 
@@ -76,18 +105,43 @@ def project_non_increasing(values: tuple[float, ...]) -> tuple[float, ...]:
     return tuple(projected)
 
 
-def standard_normal_cdf(value: float) -> float:
-    return 0.5 * (1.0 + math.erf(value / math.sqrt(2.0)))
-
-
-def select_budget_index(predicted_curve: tuple[float, ...], policy: SearchBudgetPolicy) -> int:
+def calibrate_curve(
+    predicted_curve: tuple[float, ...],
+    policy: SearchBudgetPolicy,
+    features: BudgetSelectionFeatures,
+) -> tuple[float, ...]:
     if len(predicted_curve) != BUDGET_CURVE_POINTS:
-        raise ValueError('Budget selection requires one prediction per grid point.')
+        raise ValueError('Curve calibration requires one prediction per grid point.')
     if any(not math.isfinite(value) for value in predicted_curve):
-        raise ValueError('Budget selection requires finite predictions.')
-    projected = project_non_increasing(predicted_curve)
+        raise ValueError('Curve calibration requires finite predictions.')
+    return tuple(
+        predicted_curve[index]
+        + policy.calibration_bias[index]
+        + policy.calibration_weights[index][0] * predicted_curve[index]
+        + policy.calibration_weights[index][1] * features.top_visit_share
+        + policy.calibration_weights[index][2] * features.policy_entropy
+        + policy.calibration_weights[index][3] * float(features.ply)
+        + policy.calibration_weights[index][4] * float(features.baseline_visits)
+        for index in range(BUDGET_CURVE_POINTS)
+    )
+
+
+def select_budget_index(
+    predicted_curve: tuple[float, ...],
+    policy: SearchBudgetPolicy,
+    features: BudgetSelectionFeatures,
+) -> int:
+    """Lagrangian selection: the grid point minimising predicted raw KL plus dual-priced spend.
+
+    The objective works in raw KL space because the run-level quantity being minimised is a sum of
+    KLs, not of logs. Ties go to the cheapest grid point.
+    """
+    projected = project_non_increasing(calibrate_curve(predicted_curve, policy, features))
+    best_index = 0
+    best_objective = math.inf
     for index in range(BUDGET_CURVE_POINTS):
-        probability = standard_normal_cdf((policy.log_tau - projected[index]) / policy.sigma[index])
-        if probability > policy.selection_threshold:
-            return index
-    return BUDGET_CURVE_POINTS - 1
+        objective = math.exp(projected[index]) + policy.lagrange_multiplier * BUDGET_CURVE_MULTIPLES[index]
+        if objective < best_objective:
+            best_objective = objective
+            best_index = index
+    return best_index

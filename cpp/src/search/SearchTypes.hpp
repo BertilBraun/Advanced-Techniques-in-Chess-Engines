@@ -61,22 +61,29 @@ struct AdditionalSearchLimit {
 
 struct SearchBudgetPolicy {
     static constexpr std::size_t CURVE_POINTS = SEARCH_BUDGET_CURVE_POINTS;
+    // Per grid point: the point's own raw prediction, top visit share, policy entropy, ply,
+    // baseline visits.
+    static constexpr std::size_t CALIBRATION_FEATURES = 5;
+    using CalibrationWeights = std::array<std::array<double, CALIBRATION_FEATURES>, CURVE_POINTS>;
+
     std::array<double, CURVE_POINTS> multiples;
-    std::array<double, CURVE_POINTS> sigma;
-    double log_tau;
-    double selection_threshold;
+    double lagrange_multiplier;
+    std::array<double, CURVE_POINTS> calibration_bias;
+    CalibrationWeights calibration_weights;
     bool apply_learned;
 
     SearchBudgetPolicy()
         : multiples{0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5, 2.0, 3.0, 4.0},
-          sigma{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0}, log_tau(0.0),
-          selection_threshold(0.8), apply_learned(false) {}
+          lagrange_multiplier(0.0), calibration_bias{}, calibration_weights{},
+          apply_learned(false) {}
 
     SearchBudgetPolicy(std::array<double, CURVE_POINTS> gridMultiples,
-                       std::array<double, CURVE_POINTS> sigmaValues, const double logTau,
-                       const double selectionThreshold, const bool applyLearned)
-        : multiples(gridMultiples), sigma(sigmaValues), log_tau(logTau),
-          selection_threshold(selectionThreshold), apply_learned(applyLearned) {
+                       const double lagrangeMultiplier,
+                       std::array<double, CURVE_POINTS> calibrationBias,
+                       CalibrationWeights calibrationWeights, const bool applyLearned)
+        : multiples(gridMultiples), lagrange_multiplier(lagrangeMultiplier),
+          calibration_bias(calibrationBias), calibration_weights(calibrationWeights),
+          apply_learned(applyLearned) {
         if (std::ranges::any_of(multiples, [](const double multiple) {
                 return !std::isfinite(multiple) || multiple <= 0.0;
             })) {
@@ -92,19 +99,28 @@ struct SearchBudgetPolicy {
                                  [](const double multiple) { return multiple == 1.0; })) {
             throw std::invalid_argument("Search-budget grid must contain the flat multiple");
         }
-        if (std::ranges::any_of(
-                sigma, [](const double value) { return !std::isfinite(value) || value <= 0.0; })) {
-            throw std::invalid_argument("Search-budget sigma values must be finite and positive");
-        }
-        if (!std::isfinite(log_tau)) {
-            throw std::invalid_argument("Search-budget log tau must be finite");
-        }
-        if (!std::isfinite(selection_threshold) || selection_threshold <= 0.0 ||
-            selection_threshold >= 1.0) {
+        if (!std::isfinite(lagrange_multiplier) || lagrange_multiplier < 0.0) {
             throw std::invalid_argument(
-                "Search-budget selection threshold must lie strictly in (0, 1)");
+                "The search-budget Lagrange multiplier must be finite and nonnegative");
+        }
+        if (std::ranges::any_of(calibration_bias,
+                                [](const double value) { return !std::isfinite(value); })) {
+            throw std::invalid_argument("Search-budget calibration biases must be finite");
+        }
+        for (const std::array<double, CALIBRATION_FEATURES> &row : calibration_weights) {
+            if (std::ranges::any_of(row,
+                                    [](const double value) { return !std::isfinite(value); })) {
+                throw std::invalid_argument("Search-budget calibration weights must be finite");
+            }
         }
     }
+};
+
+struct SearchBudgetSelectionFeatures {
+    double top_visit_share;
+    double policy_entropy;
+    double ply;
+    double baseline_visits;
 };
 
 // Running minimum from the cheapest budget upward, so more search never predicts more error.
@@ -118,26 +134,52 @@ projectNonIncreasing(SearchBudgetCurvePrediction values) {
     return values;
 }
 
-[[nodiscard]] inline double standardNormalCdf(const double value) {
-    return 0.5 * (1.0 + std::erf(value / std::sqrt(2.0)));
-}
-
-// Lowest grid point whose projected predicted log KL is confidently below log tau; the deepest
-// point when none qualifies.
-[[nodiscard]] inline std::size_t selectBudgetIndex(const SearchBudgetPolicy &policy,
-                                                   const SearchBudgetCurvePrediction &prediction) {
+[[nodiscard]] inline std::array<double, SearchBudgetPolicy::CURVE_POINTS>
+calibrateBudgetCurve(const SearchBudgetPolicy &policy,
+                     const SearchBudgetCurvePrediction &prediction,
+                     const SearchBudgetSelectionFeatures &features) {
     if (std::ranges::any_of(prediction, [](const float value) { return !std::isfinite(value); })) {
         throw std::invalid_argument("Search-budget curve predictions must be finite");
     }
-    const SearchBudgetCurvePrediction projected = projectNonIncreasing(prediction);
+    const std::array<double, 4> shared = {features.top_visit_share, features.policy_entropy,
+                                          features.ply, features.baseline_visits};
+    if (std::ranges::any_of(shared, [](const double value) { return !std::isfinite(value); })) {
+        throw std::invalid_argument("Search-budget selection features must be finite");
+    }
+    std::array<double, SearchBudgetPolicy::CURVE_POINTS> calibrated{};
+    for (std::size_t index = 0; index < calibrated.size(); ++index) {
+        const std::array<double, SearchBudgetPolicy::CALIBRATION_FEATURES> &weights =
+            policy.calibration_weights[index];
+        const double predicted = static_cast<double>(prediction[index]);
+        calibrated[index] = predicted + policy.calibration_bias[index] + weights[0] * predicted +
+                            weights[1] * shared[0] + weights[2] * shared[1] +
+                            weights[3] * shared[2] + weights[4] * shared[3];
+    }
+    return calibrated;
+}
+
+// Lagrangian selection: the grid point minimising predicted raw KL plus dual-priced spend. The
+// objective works in raw KL space because the run-level quantity being minimised is a sum of KLs,
+// not of logs. Ties go to the cheapest grid point.
+[[nodiscard]] inline std::size_t selectBudgetIndex(const SearchBudgetPolicy &policy,
+                                                   const SearchBudgetCurvePrediction &prediction,
+                                                   const SearchBudgetSelectionFeatures &features) {
+    std::array<double, SearchBudgetPolicy::CURVE_POINTS> projected =
+        calibrateBudgetCurve(policy, prediction, features);
+    for (std::size_t index = 1; index < projected.size(); ++index) {
+        projected[index] = std::min(projected[index], projected[index - 1]);
+    }
+    std::size_t bestIndex = 0;
+    double bestObjective = std::numeric_limits<double>::infinity();
     for (std::size_t index = 0; index < projected.size(); ++index) {
-        const double probability = standardNormalCdf(
-            (policy.log_tau - static_cast<double>(projected[index])) / policy.sigma[index]);
-        if (probability > policy.selection_threshold) {
-            return index;
+        const double objective =
+            std::exp(projected[index]) + policy.lagrange_multiplier * policy.multiples[index];
+        if (objective < bestObjective) {
+            bestObjective = objective;
+            bestIndex = index;
         }
     }
-    return projected.size() - 1;
+    return bestIndex;
 }
 
 struct PredictedSearchBudgetLimit {
@@ -176,7 +218,8 @@ struct AssignedSearchBudget {
 class SearchBudgetAllocator {
 public:
     [[nodiscard]] AssignedSearchBudget assign(const PredictedSearchBudgetLimit &limit,
-                                              const SearchBudgetCurvePrediction &prediction) {
+                                              const SearchBudgetCurvePrediction &prediction,
+                                              const SearchBudgetSelectionFeatures &features) {
         if (!limit.policy.apply_learned) {
             return {.additional_visits = limit.baseline_visits, .selected_index = -1};
         }
@@ -186,7 +229,7 @@ public:
         if (maximumVisits > std::numeric_limits<std::uint32_t>::max()) {
             throw std::overflow_error("Predicted search budget exceeds the visit range");
         }
-        const std::size_t selectedIndex = selectBudgetIndex(limit.policy, prediction);
+        const std::size_t selectedIndex = selectBudgetIndex(limit.policy, prediction, features);
         const double ideal =
             static_cast<double>(limit.baseline_visits) * limit.policy.multiples[selectedIndex];
         const double corrected = ideal - static_cast<double>(m_spendError);
@@ -264,6 +307,7 @@ template <SearchGame Game> struct GameSearchRequest {
     SearchCheckpointDetail checkpoint_detail = SearchCheckpointDetail::Scalars;
     std::vector<std::uint32_t> policy_checkpoint_visits;
     std::optional<std::uint32_t> parallel_searches;
+    std::uint32_t root_ply = 0;
 };
 
 struct GameSearchBatchResult {

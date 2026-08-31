@@ -72,6 +72,7 @@ template <SearchGame Game> struct SelfPlaySearchRequest {
     bool add_root_noise;
     bool force_root_playouts;
     SearchCheckpointDetail checkpoint_detail = SearchCheckpointDetail::Scalars;
+    std::uint32_t root_ply = 0;
 };
 
 template <SearchGame Game> struct SelfPlaySearchResult {
@@ -151,6 +152,7 @@ public:
                 .checkpoint_detail = request.checkpoint_detail,
                 .policy_checkpoint_visits = request.policy_checkpoint_visits,
                 .parallel_searches = request.parallel_searches,
+                .root_ply = request.root_ply,
             });
         }
         GameSearchBatchResult searched =

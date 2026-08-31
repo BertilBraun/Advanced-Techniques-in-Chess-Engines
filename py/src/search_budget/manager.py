@@ -10,11 +10,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Literal, Protocol, TypeAlias
 
+import numpy as np
+import numpy.typing as npt
 from pydantic import Field, model_validator
 from src.replay.contracts import ReplaySample
 from src.replay.label_source import ReplayLabelGameLocator
 from src.replay.manager import LabelledReplayWritebackState
-from src.search_budget.analysis_log import analysis_log_path, append_analysis_records
+from src.search_budget.analysis_log import analysis_log_path, append_analysis_records, read_analysis_records
 from src.search_budget.artifacts import (
     LabelShardManifest,
     LabelShardPhase,
@@ -35,6 +37,7 @@ from src.search_budget.calibration import (
     update_calibration,
     working_policy,
 )
+from src.search_budget.calibrator import IDENTITY_CALIBRATOR, CalibratorCoefficients, fit_linear_calibrator
 from src.search_budget.configuration import LabelArtifactRetention, SearchBudgetConfiguration
 from src.search_budget.labeling import (
     DeepSearchShardArtifact,
@@ -129,7 +132,7 @@ class CurvePointReport(FrozenModel):
 
 
 class GenerationLabelReport(FrozenModel):
-    schema_version: int = Field(default=2, ge=2, le=2)
+    schema_version: int = Field(default=3, ge=3, le=3)
     source_generation: int = Field(ge=0)
     model_generation: int = Field(ge=0)
     inference_model_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -150,7 +153,8 @@ class GenerationLabelReport(FrozenModel):
     queued_generation_count: int = Field(ge=0)
     current_validation_gain: float | None
     ema_validation_gain: float | None
-    log_tau: float
+    lagrange_multiplier: float = Field(ge=0.0)
+    calibrator_applied: bool
     realized_mean_multiple: float = Field(gt=0.0)
     realized_mean_assigned_visits: float = Field(gt=0.0)
     flat_mean_assigned_visits: float = Field(gt=0.0)
@@ -503,6 +507,7 @@ class SearchBudgetLabelManager:
         if writeback.row_count != len(finalized.replay_samples):
             raise ValueError('Replay writer did not acknowledge the complete finalized label generation.')
         self._append_analysis_records(source.source_generation, finalized)
+        calibrator, calibrator_applied = self._fit_calibrator(source.source_generation, finalized.analysis_records)
         with self._condition:
             first_unstarted = self._first_unstarted_production_generation
             update = update_calibration(
@@ -511,6 +516,7 @@ class SearchBudgetLabelManager:
                 finalized.evidence,
                 first_unstarted,
                 self._calibration_parameters(),
+                calibrator,
             )
             self._calibration = update.state
             save_calibration_state(self.calibration_path, self._calibration)
@@ -520,6 +526,7 @@ class SearchBudgetLabelManager:
             writeback,
             prediction_manifests,
             deep_manifests,
+            calibrator_applied,
         )
         write_persisted_model(self._report_path(source.source_generation), report)
         self._set_status(job.source_generation, LabelJobStatus.COMPLETED)
@@ -612,6 +619,7 @@ class SearchBudgetLabelManager:
         writeback: ReplayWritebackResult,
         prediction_manifests: tuple[LabelShardManifest, ...],
         deep_manifests: tuple[LabelShardManifest, ...],
+        calibrator_applied: bool,
     ) -> GenerationLabelReport:
         curve_points = tuple(
             CurvePointReport(
@@ -650,7 +658,8 @@ class SearchBudgetLabelManager:
             queued_generation_count=sum(job.status is LabelJobStatus.QUEUED for job in self._state.jobs),
             current_validation_gain=self._calibration.current_validation_gain,
             ema_validation_gain=self._calibration.ema_validation_gain,
-            log_tau=self._calibration.log_tau,
+            lagrange_multiplier=self._calibration.lagrange_multiplier,
+            calibrator_applied=calibrator_applied,
             realized_mean_multiple=finalized.evidence.realized_mean_multiple,
             realized_mean_assigned_visits=finalized.evidence.realized_mean_assigned_visits,
             flat_mean_assigned_visits=finalized.evidence.flat_mean_assigned_visits,
@@ -677,15 +686,50 @@ class SearchBudgetLabelManager:
                 f'{type(error).__name__}: {error}'
             )
 
+    def _fit_calibrator(
+        self,
+        source_generation: int,
+        current_records: npt.NDArray[np.void],
+    ) -> tuple[CalibratorCoefficients, bool]:
+        configuration = self.configuration.calibration.calibrator
+        if not configuration.enabled:
+            return IDENTITY_CALIBRATOR, False
+        with self._condition:
+            previous_generations = self._calibration.finalized_source_generations
+        window: list[npt.NDArray[np.void]] = []
+        previous_count = configuration.window_generations - 1
+        for generation in previous_generations[-previous_count:] if previous_count > 0 else ():
+            path = analysis_log_path(self.jobs_path, generation)
+            try:
+                window.append(read_analysis_records(path))
+            except (OSError, ValueError) as error:
+                warn(
+                    f'Search-budget calibrator skipped the analysis log for source generation {generation}: '
+                    f'{type(error).__name__}: {error}'
+                )
+        window.append(current_records)
+        try:
+            fit = fit_linear_calibrator(np.concatenate(window), float(configuration.ridge_coefficient))
+        except (ValueError, np.linalg.LinAlgError) as error:
+            warn(
+                f'Search-budget calibrator fit for source generation {source_generation} failed and ships '
+                f'the identity calibration: {type(error).__name__}: {error}'
+            )
+            return IDENTITY_CALIBRATOR, False
+        if not fit.applied:
+            warn(
+                f'Search-budget calibrator fit for source generation {source_generation} was rejected and ships '
+                f'the identity calibration: {fit.rejection_reason}'
+            )
+        return fit.coefficients, fit.applied
+
     def _calibration_parameters(self) -> BudgetCalibrationParameters:
         calibration = self.configuration.calibration
         return BudgetCalibrationParameters(
             warmup_completed_generations=calibration.warmup_completed_source_generations,
             sigma_ema_decay=calibration.sigma_ema_decay,
             validation_gain_ema_decay=calibration.validation_gain_ema_decay,
-            initial_tau=calibration.initial_tau,
-            tau_step_ratio=calibration.tau_step_ratio,
-            selection_threshold=calibration.selection_threshold,
+            lambda_step_ratio=calibration.lambda_step_ratio,
         )
 
     def _cleanup_completed_jobs(self) -> None:
@@ -936,12 +980,11 @@ class SearchBudgetLabelManager:
 
     def _load_calibration(self) -> BudgetCalibrationState:
         if not self.calibration_path.exists():
-            return initial_calibration_state(self.configuration_sha256, self._calibration_parameters())
+            return initial_calibration_state(self.configuration_sha256)
         return load_calibration_state_fail_closed(
             self.calibration_path,
             self.configuration_sha256,
             self._first_unstarted_production_generation,
-            self._calibration_parameters(),
         )
 
     def _job_path(self, source_generation: int) -> Path:

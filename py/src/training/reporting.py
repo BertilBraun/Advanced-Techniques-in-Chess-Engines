@@ -183,7 +183,8 @@ class TrainingReporter:
                     )
                 if event.ema_validation_gain is not None:
                     log_scalar('search_budget/calibration/ema_validation_gain', event.ema_validation_gain, generation)
-                log_scalar('search_budget/calibration/log_tau', event.log_tau, generation)
+                log_scalar('search_budget/calibration/lagrange_multiplier', event.lagrange_multiplier, generation)
+                log_scalar('search_budget/calibration/calibrator_applied', int(event.calibrator_applied), generation)
                 log_scalar('search_budget/calibration/realized_mean_multiple', event.realized_mean_multiple, generation)
                 log_scalar(
                     'search_budget/calibration/realized_mean_assigned_visits',

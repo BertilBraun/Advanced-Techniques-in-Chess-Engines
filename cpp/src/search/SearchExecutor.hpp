@@ -244,6 +244,7 @@ private:
     struct RootTask {
         Root root;
         std::uint32_t starting_visits;
+        std::uint32_t root_ply;
         SearchLimit limit;
         std::uint32_t maximum_visits;
         std::uint32_t assigned_additional_visits;
@@ -348,6 +349,7 @@ private:
         RootTask task{
             .root = request.root,
             .starting_visits = startingVisits,
+            .root_ply = request.root_ply,
             .limit = request.limit,
             .maximum_visits = maximumVisitLimit,
             .assigned_additional_visits = assignedAdditional,
@@ -423,6 +425,44 @@ private:
         }
     }
 
+    // Top visit share and policy entropy of the root's current policy distribution: the retained
+    // visit distribution when tree reuse left one, otherwise the raw network priors. This mirrors
+    // the baseline-policy features the calibrator was fitted on as closely as the root allows.
+    [[nodiscard]] static SearchBudgetSelectionFeatures
+    rootSelectionFeatures(const RootTask &task, const double baselineVisits) {
+        const auto &rootNode = task.root.tree().root();
+        std::uint64_t totalVisits = 0;
+        for (const auto &edge : rootNode.children) {
+            totalVisits += edge.visits;
+        }
+        double topShare = 1.0;
+        double entropy = 0.0;
+        if (!rootNode.children.empty()) {
+            topShare = 0.0;
+            double priorTotal = 0.0;
+            for (const auto &edge : rootNode.children) {
+                priorTotal += static_cast<double>(edge.raw_prior);
+            }
+            for (const auto &edge : rootNode.children) {
+                const double probability =
+                    totalVisits > 0
+                        ? static_cast<double>(edge.visits) / static_cast<double>(totalVisits)
+                        : (priorTotal > 0.0 ? static_cast<double>(edge.raw_prior) / priorTotal
+                                            : 1.0 / static_cast<double>(rootNode.children.size()));
+                topShare = std::max(topShare, probability);
+                if (probability > 0.0) {
+                    entropy -= probability * std::log(probability);
+                }
+            }
+        }
+        return {
+            .top_visit_share = topShare,
+            .policy_entropy = entropy,
+            .ply = static_cast<double>(task.root_ply),
+            .baseline_visits = baselineVisits,
+        };
+    }
+
     static void assignReadyPredictedBudgets(std::vector<RootTask> &tasks, std::size_t &budgetCursor,
                                             SearchBudgetAllocator *allocator) {
         if (allocator == nullptr) {
@@ -439,8 +479,9 @@ private:
                 return;
             }
             const auto &limit = std::get<PredictedSearchBudgetLimit>(task.limit);
-            const AssignedSearchBudget assigned =
-                allocator->assign(limit, task.root.tree().root().search_budget_curve);
+            const AssignedSearchBudget assigned = allocator->assign(
+                limit, task.root.tree().root().search_budget_curve,
+                rootSelectionFeatures(task, static_cast<double>(limit.baseline_visits)));
             task.assigned_additional_visits = assigned.additional_visits;
             task.selected_budget_index = assigned.selected_index;
             task.spend_residual = allocator->spendError();

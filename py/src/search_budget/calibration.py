@@ -7,7 +7,14 @@ from enum import Enum
 from pathlib import Path
 
 from pydantic import Field, ValidationError, model_validator
-from src.search_budget.policy import BUDGET_CURVE_POINTS, SearchBudgetPolicy
+from src.search_budget.calibrator import IDENTITY_CALIBRATOR, CalibratorCoefficients
+from src.search_budget.policy import (
+    BUDGET_CURVE_MULTIPLES,
+    BUDGET_CURVE_POINTS,
+    CALIBRATION_FEATURE_COUNT,
+    SearchBudgetPolicy,
+    project_non_increasing,
+)
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 
@@ -45,9 +52,7 @@ class BudgetCalibrationParameters:
     warmup_completed_generations: int = 30
     sigma_ema_decay: Decimal = Decimal('0.1')
     validation_gain_ema_decay: Decimal = Decimal('0.2')
-    initial_tau: Decimal = Decimal('0.1')
-    tau_step_ratio: Decimal = Decimal('1.05')
-    selection_threshold: Decimal = Decimal('0.8')
+    lambda_step_ratio: Decimal = Decimal('1.05')
 
     def __post_init__(self) -> None:
         if self.warmup_completed_generations <= 0:
@@ -56,12 +61,8 @@ class BudgetCalibrationParameters:
             raise ValueError('Sigma EMA decay must lie in (0, 1].')
         if not Decimal(0) < self.validation_gain_ema_decay <= Decimal(1):
             raise ValueError('Validation-gain EMA decay must lie in (0, 1].')
-        if self.initial_tau <= Decimal(0):
-            raise ValueError('The initial tau threshold must be positive.')
-        if self.tau_step_ratio <= Decimal(1):
-            raise ValueError('The per-generation tau step ratio must exceed one.')
-        if not Decimal(0) < self.selection_threshold < Decimal(1):
-            raise ValueError('The selection threshold must lie strictly in (0, 1).')
+        if self.lambda_step_ratio <= Decimal(1):
+            raise ValueError('The per-generation lambda step ratio must exceed one.')
 
 
 class BudgetGenerationEvidence(FrozenModel):
@@ -71,7 +72,7 @@ class BudgetGenerationEvidence(FrozenModel):
         max_length=BUDGET_CURVE_POINTS,
     )
     generation_gain: float
-    median_baseline_log_kl: float
+    target_raw_kl_curves: tuple[tuple[float, ...], ...] = Field(min_length=1)
     realized_mean_multiple: float = Field(gt=0.0)
     realized_mean_assigned_visits: float = Field(gt=0.0)
     flat_mean_assigned_visits: float = Field(gt=0.0)
@@ -86,8 +87,13 @@ class BudgetGenerationEvidence(FrozenModel):
             raise ValueError('Curve-error evidence must be finite and nonnegative.')
         if not math.isfinite(self.generation_gain):
             raise ValueError('Generation validation gain must be finite.')
-        if not math.isfinite(self.median_baseline_log_kl):
-            raise ValueError('Median baseline log KL must be finite.')
+        if len(self.target_raw_kl_curves) != self.position_count:
+            raise ValueError('Measured raw-KL curves must cover every labelled position exactly once.')
+        for curve in self.target_raw_kl_curves:
+            if len(curve) != BUDGET_CURVE_POINTS:
+                raise ValueError('Every measured raw-KL curve requires one value per grid point.')
+            if any(not math.isfinite(value) or value < 0.0 for value in curve):
+                raise ValueError('Measured raw-KL curves must be finite and nonnegative.')
         if not math.isfinite(self.realized_mean_multiple):
             raise ValueError('Realized mean multiple must be finite.')
         if any(count < 0 for count in self.selected_index_counts):
@@ -98,11 +104,16 @@ class BudgetGenerationEvidence(FrozenModel):
 
 
 class BudgetCalibrationState(FrozenModel):
-    schema_version: int = Field(default=3, ge=3, le=3)
+    schema_version: int = Field(default=4, ge=4, le=4)
     configuration_sha256: str = Field(min_length=64, max_length=64)
     finalized_source_generations: tuple[int, ...]
     sigma: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
-    log_tau: float
+    lagrange_multiplier: float
+    calibration_bias: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
+    calibration_weights: tuple[tuple[float, ...], ...] = Field(
+        min_length=BUDGET_CURVE_POINTS,
+        max_length=BUDGET_CURVE_POINTS,
+    )
     current_validation_gain: float | None
     ema_validation_gain: float | None
     realized_mean_multiple: float | None
@@ -118,8 +129,13 @@ class BudgetCalibrationState(FrozenModel):
             raise ValueError('Finalized source generations must be unique and increasing.')
         if any(not math.isfinite(value) or value <= 0.0 for value in self.sigma):
             raise ValueError('Persisted sigma values must be finite and positive.')
-        if not math.isfinite(self.log_tau):
-            raise ValueError('Persisted log tau must be finite.')
+        if not math.isfinite(self.lagrange_multiplier) or self.lagrange_multiplier < 0.0:
+            raise ValueError('The persisted Lagrange multiplier must be finite and nonnegative.')
+        if any(not math.isfinite(value) for value in self.calibration_bias):
+            raise ValueError('Persisted calibration biases must be finite.')
+        for row in self.calibration_weights:
+            if len(row) != CALIBRATION_FEATURE_COUNT or any(not math.isfinite(value) for value in row):
+                raise ValueError('Persisted calibration weights must be finite with one value per feature.')
         if any(
             value is not None and not math.isfinite(value)
             for value in (self.current_validation_gain, self.ema_validation_gain, self.realized_mean_multiple)
@@ -140,21 +156,20 @@ class CalibrationUpdate:
     applied: bool
 
 
-def initial_calibration_state(
-    configuration_sha256: str,
-    parameters: BudgetCalibrationParameters = BudgetCalibrationParameters(),
-) -> BudgetCalibrationState:
+def initial_calibration_state(configuration_sha256: str) -> BudgetCalibrationState:
     policy = SearchBudgetPolicy(
-        sigma=(1.0,) * BUDGET_CURVE_POINTS,
-        log_tau=_initial_log_tau(parameters),
-        selection_threshold=float(parameters.selection_threshold),
+        lagrange_multiplier=0.0,
+        calibration_bias=IDENTITY_CALIBRATOR.bias,
+        calibration_weights=IDENTITY_CALIBRATOR.weights,
         apply_learned=False,
     )
     return BudgetCalibrationState(
         configuration_sha256=configuration_sha256,
         finalized_source_generations=(),
-        sigma=policy.sigma,
-        log_tau=policy.log_tau,
+        sigma=(1.0,) * BUDGET_CURVE_POINTS,
+        lagrange_multiplier=0.0,
+        calibration_bias=IDENTITY_CALIBRATOR.bias,
+        calibration_weights=IDENTITY_CALIBRATOR.weights,
         current_validation_gain=None,
         ema_validation_gain=None,
         realized_mean_multiple=None,
@@ -169,11 +184,54 @@ def initial_calibration_state(
 def working_policy(state: BudgetCalibrationState) -> SearchBudgetPolicy:
     """The learned rule as the calibrator sees it, used for shadow allocation whatever the gate says."""
     return SearchBudgetPolicy(
-        sigma=state.sigma,
-        log_tau=state.log_tau,
-        selection_threshold=state.published_policy.selection_threshold,
+        lagrange_multiplier=state.lagrange_multiplier,
+        calibration_bias=state.calibration_bias,
+        calibration_weights=state.calibration_weights,
         apply_learned=True,
     )
+
+
+def solve_spend_matched_lagrange_multiplier(
+    target_raw_kl_curves: tuple[tuple[float, ...], ...],
+    bisection_iterations: int = 60,
+) -> float:
+    """The dual value whose Lagrangian selection spends a mean multiple of one on measured curves.
+
+    Seeding from the measured curves puts the dual at its operating point immediately instead of
+    walking an arbitrary constant there at the bounded step rate over dozens of generations.
+    """
+    if not target_raw_kl_curves:
+        raise ValueError('Lagrange seeding requires at least one measured curve.')
+    projected_curves = tuple(project_non_increasing(curve) for curve in target_raw_kl_curves)
+
+    def mean_multiple(multiplier: float) -> float:
+        total = 0.0
+        for curve in projected_curves:
+            best_index = 0
+            best_objective = math.inf
+            for index in range(BUDGET_CURVE_POINTS):
+                objective = curve[index] + multiplier * BUDGET_CURVE_MULTIPLES[index]
+                if objective < best_objective:
+                    best_objective = objective
+                    best_index = index
+            total += BUDGET_CURVE_MULTIPLES[best_index]
+        return total / len(projected_curves)
+
+    low = 0.0
+    if mean_multiple(low) <= 1.0:
+        return low
+    high = 1.0
+    for _ in range(bisection_iterations):
+        if mean_multiple(high) <= 1.0:
+            break
+        high *= 2.0
+    for _ in range(bisection_iterations):
+        midpoint = 0.5 * (low + high)
+        if mean_multiple(midpoint) > 1.0:
+            low = midpoint
+        else:
+            high = midpoint
+    return high
 
 
 def update_calibration(
@@ -182,6 +240,7 @@ def update_calibration(
     evidence: BudgetGenerationEvidence,
     first_unstarted_production_generation: int,
     parameters: BudgetCalibrationParameters = BudgetCalibrationParameters(),
+    calibrator: CalibratorCoefficients = IDENTITY_CALIBRATOR,
 ) -> CalibrationUpdate:
     if source_generation < 0:
         raise ValueError('Source generation must be nonnegative.')
@@ -197,15 +256,13 @@ def update_calibration(
         (1.0 - sigma_decay) * previous + sigma_decay * max(error, 1e-9)
         for previous, error in zip(state.sigma, evidence.mean_absolute_curve_error, strict=True)
     )
-    maximum_step = math.log(float(parameters.tau_step_ratio))
+    step_ratio = float(parameters.lambda_step_ratio)
     if not state.finalized_source_generations:
-        # The first label generation is the first sight of the curve's scale. Seeding the dual here
-        # avoids spending the warmup walking an arbitrary initial tau back at the bounded step rate,
-        # during which a positive gain would only mean that more search beats less.
-        log_tau = evidence.median_baseline_log_kl
+        lagrange_multiplier = solve_spend_matched_lagrange_multiplier(evidence.target_raw_kl_curves)
     else:
-        tau_step = min(max(math.log(evidence.realized_mean_multiple), -maximum_step), maximum_step)
-        log_tau = state.log_tau + tau_step
+        step = min(max(evidence.realized_mean_multiple, 1.0 / step_ratio), step_ratio)
+        # The floor lets a dual that seeded at exactly zero still ratchet up out of it.
+        lagrange_multiplier = max(state.lagrange_multiplier, 1e-12) * step
 
     current_gain = evidence.generation_gain
     if state.ema_validation_gain is None:
@@ -219,9 +276,9 @@ def update_calibration(
         current_gain, ema_gain, completed_count, evidence.realized_mean_multiple, parameters
     )
     published = SearchBudgetPolicy(
-        sigma=sigma,
-        log_tau=log_tau,
-        selection_threshold=float(parameters.selection_threshold),
+        lagrange_multiplier=lagrange_multiplier,
+        calibration_bias=calibrator.bias,
+        calibration_weights=calibrator.weights,
         apply_learned=not failures,
     )
     if not failures:
@@ -235,7 +292,9 @@ def update_calibration(
         configuration_sha256=state.configuration_sha256,
         finalized_source_generations=(*state.finalized_source_generations, source_generation),
         sigma=sigma,
-        log_tau=log_tau,
+        lagrange_multiplier=lagrange_multiplier,
+        calibration_bias=calibrator.bias,
+        calibration_weights=calibrator.weights,
         current_validation_gain=current_gain,
         ema_validation_gain=ema_gain,
         realized_mean_multiple=evidence.realized_mean_multiple,
@@ -282,19 +341,18 @@ def load_calibration_state_fail_closed(
     path: Path,
     expected_configuration_sha256: str,
     first_unstarted_production_generation: int,
-    parameters: BudgetCalibrationParameters = BudgetCalibrationParameters(),
 ) -> BudgetCalibrationState:
     try:
         state = BudgetCalibrationState.model_validate_json(path.read_text(encoding='utf-8'))
     except (OSError, UnicodeError, ValidationError):
         return publish_fail_closed(
-            initial_calibration_state(expected_configuration_sha256, parameters),
+            initial_calibration_state(expected_configuration_sha256),
             first_unstarted_production_generation,
             BudgetDecisionReason.UNREADABLE_STATE,
         )
     if state.configuration_sha256 != expected_configuration_sha256:
         return publish_fail_closed(
-            initial_calibration_state(expected_configuration_sha256, parameters),
+            initial_calibration_state(expected_configuration_sha256),
             first_unstarted_production_generation,
             BudgetDecisionReason.INCOMPATIBLE_STATE,
         )
@@ -307,10 +365,6 @@ def publication_for_generation(state: BudgetCalibrationState, production_generat
         application_generation=state.application_generation,
         decision_reason=state.decision_reason,
     )
-
-
-def _initial_log_tau(parameters: BudgetCalibrationParameters) -> float:
-    return math.log(float(parameters.initial_tau))
 
 
 SPEND_CONVERGENCE_BAND = (0.95, 1.05)

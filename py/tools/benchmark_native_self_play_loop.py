@@ -84,9 +84,9 @@ def search_parameters(arguments: LoopArguments) -> native.SelfPlaySearchParamete
         arguments.baseline_visits,
         native.SearchBudgetPolicy(
             list(BUDGET_CURVE_MULTIPLES),
-            list(policy.sigma),
-            policy.log_tau,
-            policy.selection_threshold,
+            policy.lagrange_multiplier,
+            list(policy.calibration_bias),
+            [list(row) for row in policy.calibration_weights],
             policy.apply_learned,
         ),
         tree,

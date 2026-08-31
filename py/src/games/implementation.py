@@ -177,9 +177,9 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
             baseline_visits=parameters.baseline_visits,
             search_budget_policy=NativeSearchBudgetPolicy(
                 list(BUDGET_CURVE_MULTIPLES),
-                list(policy.sigma),
-                policy.log_tau,
-                policy.selection_threshold,
+                policy.lagrange_multiplier,
+                list(policy.calibration_bias),
+                [list(row) for row in policy.calibration_weights],
                 policy.apply_learned,
             ),
             tree_search=TreeSearchParameters(
