@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 import src.training.reporting as reporting_module
 from src.experiment.configuration import load_experiment_configuration
+from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.training.reporting import TrainingReporter
 from src.training.search_budget_tensorboard import search_budget_tensorboard_categories
 from src.training.targets import LegalMovesHeadLayout, SearchBudgetHeadLayout
@@ -32,7 +33,7 @@ def test_search_budget_dashboard_is_compact_and_uses_dynamic_auxiliary_index() -
         'Spend tracking',
         'Realized mean multiple',
         'Dual variable',
-        'Calibrator applied',
+        'Corrector applied',
         'Gate',
         'Exact spend residual',
         'Label job outcome',
@@ -44,7 +45,7 @@ def test_search_budget_dashboard_is_compact_and_uses_dynamic_auxiliary_index() -
     )
     calibration = categories[2]
     sigma = next(chart for chart in calibration.charts if chart.title == 'Sigma by grid point')
-    assert sigma.tags == tuple(f'search_budget/curve_point_{index}/sigma' for index in range(10))
+    assert sigma.tags == tuple(f'search_budget/curve_point_{index}/sigma' for index in range(BUDGET_CURVE_POINTS))
 
 
 def test_search_budget_dashboard_is_absent_without_search_budget_head() -> None:

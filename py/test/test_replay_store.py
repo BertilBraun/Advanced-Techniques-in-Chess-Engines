@@ -44,6 +44,7 @@ from src.replay.store import (
     ReplayStore,
     encode_replay_rows,
 )
+from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.targets import (
     FutureSearchValueHeadLayout,
@@ -235,7 +236,7 @@ def _all_auxiliary_sample(layout: ReplayLayout, generation: int, eligible: bool)
             EligibleLegalMovesTarget(),
             (
                 EligibleSearchBudgetTarget(
-                    curve=tuple(-2.0 - 0.25 * index for index in range(10)),
+                    curve=tuple(-2.0 - 0.25 * index for index in range(BUDGET_CURVE_POINTS)),
                     raw_kl=0.125,
                     source_generation=generation,
                     model_generation=generation,
@@ -301,7 +302,7 @@ def test_direct_column_encoding_matches_transitional_rows_and_zeroes_inactive_pa
     encoded_rows = encode_replay_rows(layout, samples)
 
     assert hashlib.sha256(encoded_rows.tobytes()).hexdigest() == (
-        '568efcb2d110ea88852b3dd18eee955b12ff970e30fde60b563d654842a2d44c'
+        'faf3d9ea00817813815230d867f6ba4eb151f185aceaaa8c63f413aa2573383b'
     )
     for column in flatten_column_views(layout, columns):
         np.testing.assert_array_equal(column.values, encoded_rows[column.descriptor.key.name])

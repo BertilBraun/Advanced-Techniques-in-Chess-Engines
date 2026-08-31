@@ -36,6 +36,7 @@ from src.replay.shard import (
     write_replay_shard,
 )
 from src.replay.store import encode_replay_rows
+from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.self_play.completed_game import (
     GameIdentity,
     SearchObservation,
@@ -107,7 +108,7 @@ def _sample(layout: ReplayLayout, generation: int) -> ReplaySample:
             case SearchBudgetHeadLayout():
                 auxiliary.append(
                     EligibleSearchBudgetTarget(
-                        curve=tuple(-3.0 + 0.1 * index for index in range(10)),
+                        curve=tuple(-3.0 + 0.1 * index for index in range(BUDGET_CURVE_POINTS)),
                         raw_kl=0.2,
                         source_generation=generation,
                         model_generation=generation,

@@ -19,6 +19,7 @@ from src.replay.contracts import (
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
+from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.training.network import DensePolicyHeadConfiguration, Network, NetworkParams
@@ -99,7 +100,7 @@ def _sample(normalized_target: float | None, marker: int) -> ReplaySample:
         IneligibleSearchBudgetTarget()
         if normalized_target is None
         else EligibleSearchBudgetTarget(
-            curve=(normalized_target,) * 10,
+            curve=(normalized_target,) * BUDGET_CURVE_POINTS,
             raw_kl=0.125,
             source_generation=1,
             model_generation=1,

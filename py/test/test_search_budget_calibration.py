@@ -11,6 +11,7 @@ from src.search_budget.calibration import (
     BudgetDecisionReason,
     BudgetEligibilityFailure,
     BudgetGenerationEvidence,
+    CorrectorReference,
     initial_calibration_state,
     load_calibration_state_fail_closed,
     publication_for_generation,
@@ -20,7 +21,6 @@ from src.search_budget.calibration import (
     update_calibration,
     working_policy,
 )
-from src.search_budget.calibrator import CalibratorCoefficients
 from src.search_budget.policy import BUDGET_CURVE_MULTIPLES, BUDGET_CURVE_POINTS
 
 CONFIGURATION_SHA = 'c' * 64
@@ -43,7 +43,7 @@ def evidence(
         realized_mean_multiple=realized_mean_multiple,
         realized_mean_assigned_visits=600.0 * realized_mean_multiple,
         flat_mean_assigned_visits=600.0,
-        selected_index_counts=(len(curves), 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        selected_index_counts=(len(curves), 0, 0, 0, 0, 0, 0, 0),
     )
 
 
@@ -71,13 +71,13 @@ def mean_multiple_at(curves: tuple[tuple[float, ...], ...], multiplier: float) -
     return total / len(curves)
 
 
-def test_initial_state_publishes_flat_with_unit_sigma_and_identity_calibration() -> None:
+def test_initial_state_publishes_flat_with_unit_sigma_and_identity_correction() -> None:
     state = initial_calibration_state(CONFIGURATION_SHA)
     assert not state.published_policy.apply_learned
     assert state.sigma == (1.0,) * BUDGET_CURVE_POINTS
     assert state.lagrange_multiplier == 0.0
-    assert state.calibration_bias == (0.0,) * BUDGET_CURVE_POINTS
-    assert all(row == (0.0,) * 5 for row in state.calibration_weights)
+    assert state.corrector_path is None
+    assert state.corrector_sha256 is None
     assert state.decision_reason is BudgetDecisionReason.INITIAL
 
 
@@ -86,14 +86,14 @@ def test_working_policy_applies_the_learned_rule_regardless_of_the_gate() -> Non
     policy = working_policy(state)
     assert policy.apply_learned
     assert policy.lagrange_multiplier == state.lagrange_multiplier
-    assert policy.calibration_bias == state.calibration_bias
-    assert policy.calibration_weights == state.calibration_weights
+    assert policy.corrector_path == state.corrector_path
+    assert policy.corrector_sha256 == state.corrector_sha256
 
 
 def test_sigma_updates_with_ema_decay_from_unit_initialisation() -> None:
     state = initial_calibration_state(CONFIGURATION_SHA)
-    updated = update_calibration(state, 0, evidence(errors=(2.0,) * 10), 1, parameters()).state
-    assert updated.sigma == pytest.approx((0.9 * 1.0 + 0.1 * 2.0,) * 10)
+    updated = update_calibration(state, 0, evidence(errors=(2.0,) * BUDGET_CURVE_POINTS), 1, parameters()).state
+    assert updated.sigma == pytest.approx((0.9 * 1.0 + 0.1 * 2.0,) * BUDGET_CURVE_POINTS)
 
 
 def test_lambda_seeding_bisects_to_the_boundary_of_unit_mean_spend() -> None:
@@ -146,16 +146,13 @@ def test_a_zero_seeded_lambda_can_still_ratchet_upward() -> None:
     assert raised.lagrange_multiplier > 0.0
 
 
-def test_fitted_calibrator_coefficients_are_published_with_the_policy() -> None:
+def test_the_fitted_corrector_reference_is_published_with_the_policy() -> None:
     state = initial_calibration_state(CONFIGURATION_SHA)
-    calibrator = CalibratorCoefficients(
-        bias=tuple(0.1 * index for index in range(BUDGET_CURVE_POINTS)),
-        weights=tuple((0.01, 0.02, 0.03, 0.04, 0.05) for _ in range(BUDGET_CURVE_POINTS)),
-    )
-    updated = update_calibration(state, 0, evidence(), 1, parameters(), calibrator).state
-    assert updated.published_policy.calibration_bias == calibrator.bias
-    assert updated.published_policy.calibration_weights == calibrator.weights
-    assert working_policy(updated).calibration_bias == calibrator.bias
+    corrector = CorrectorReference(path=Path('corrector-generation-00000000.jit.pt'), sha256='a' * 64)
+    updated = update_calibration(state, 0, evidence(), 1, parameters(), corrector).state
+    assert updated.published_policy.corrector_path == corrector.path
+    assert updated.published_policy.corrector_sha256 == corrector.sha256
+    assert working_policy(updated).corrector_path == corrector.path
 
 
 def test_unconverged_spend_keeps_the_gate_closed_even_with_positive_gain() -> None:
@@ -254,7 +251,7 @@ def test_unreadable_state_fails_closed_to_flat(tmp_path: Path) -> None:
 def test_a_previous_schema_state_fails_closed_as_unreadable(tmp_path: Path) -> None:
     state = completed_state(2)
     path = tmp_path / 'calibration-state.json'
-    payload = state.model_dump_json().replace('"schema_version":4', '"schema_version":3')
+    payload = state.model_dump_json().replace('"schema_version":5', '"schema_version":4')
     path.write_text(payload, encoding='utf-8')
     loaded = load_calibration_state_fail_closed(path, CONFIGURATION_SHA, 3)
     assert not loaded.published_policy.apply_learned
@@ -280,7 +277,7 @@ def test_evidence_requires_one_measured_curve_per_position() -> None:
             realized_mean_multiple=1.0,
             realized_mean_assigned_visits=600.0,
             flat_mean_assigned_visits=600.0,
-            selected_index_counts=(2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            selected_index_counts=(2, 0, 0, 0, 0, 0, 0, 0),
         )
 
 
@@ -296,3 +293,41 @@ def test_seeded_lambda_is_finite_and_reasonable_for_production_scale_curves() ->
     seeded = solve_spend_matched_lagrange_multiplier(curves)
     assert math.isfinite(seeded)
     assert mean_multiple_at(curves, seeded) <= 1.0
+
+
+def test_a_dangling_corrector_reference_fails_closed_on_load(tmp_path: Path) -> None:
+    state = completed_state(2)
+    corrector = CorrectorReference(path=tmp_path / 'missing.jit.pt', sha256='a' * 64)
+    updated = update_calibration(state, 2, evidence(), 3, parameters(), corrector).state
+    path = tmp_path / 'calibration-state.json'
+    save_calibration_state(path, updated)
+    loaded = load_calibration_state_fail_closed(path, CONFIGURATION_SHA, 3)
+    assert not loaded.published_policy.apply_learned
+    assert loaded.decision_reason is BudgetDecisionReason.UNREADABLE_STATE
+
+
+def test_a_matching_corrector_artifact_round_trips_through_disk(tmp_path: Path) -> None:
+    import hashlib
+
+    artifact = tmp_path / 'corrector.jit.pt'
+    artifact.write_bytes(b'corrector-bytes')
+    corrector = CorrectorReference(path=artifact, sha256=hashlib.sha256(b'corrector-bytes').hexdigest())
+    state = update_calibration(completed_state(2), 2, evidence(), 3, parameters(), corrector).state
+    path = tmp_path / 'calibration-state.json'
+    save_calibration_state(path, state)
+    assert load_calibration_state_fail_closed(path, CONFIGURATION_SHA, 3) == state
+
+
+def test_an_altered_corrector_artifact_fails_closed_on_load(tmp_path: Path) -> None:
+    import hashlib
+
+    artifact = tmp_path / 'corrector.jit.pt'
+    artifact.write_bytes(b'corrector-bytes')
+    corrector = CorrectorReference(path=artifact, sha256=hashlib.sha256(b'corrector-bytes').hexdigest())
+    state = update_calibration(completed_state(2), 2, evidence(), 3, parameters(), corrector).state
+    path = tmp_path / 'calibration-state.json'
+    save_calibration_state(path, state)
+    artifact.write_bytes(b'altered-bytes')
+    loaded = load_calibration_state_fail_closed(path, CONFIGURATION_SHA, 3)
+    assert not loaded.published_policy.apply_learned
+    assert loaded.decision_reason is BudgetDecisionReason.UNREADABLE_STATE

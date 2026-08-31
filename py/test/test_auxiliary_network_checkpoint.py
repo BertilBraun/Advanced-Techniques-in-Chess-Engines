@@ -114,10 +114,10 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     assert any(name.startswith('auxiliary_head_modules.') for name in training_state)
     assert manifest.network == model.checkpoint_definition()
     assert all(not name.startswith('auxiliary_head_modules.') for name, _ in inference_model.named_parameters())
-    assert tuple(output.shape for output in loaded_output.auxiliary_logits) == ((2, 10), (2, 1), (2, 10))
+    assert tuple(output.shape for output in loaded_output.auxiliary_logits) == ((2, 10), (2, 1), (2, 8))
     assert inference_policy.shape == (2, 10)
     assert inference_wdl.shape == (2, 3)
-    assert inference_search_budget.shape == (2, 10)
+    assert inference_search_budget.shape == (2, 8)
     torch.testing.assert_close(inference_search_budget, loaded_output.auxiliary_logits[2])
     torch.testing.assert_close(inference_policy, training_policy_logits)
     torch.testing.assert_close(inference_wdl, torch.softmax(training_wdl_logits, dim=1))
@@ -178,7 +178,7 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
     torch.testing.assert_close(loaded_training_output.auxiliary_logits[0], expected_training_output.auxiliary_logits[0])
     torch.testing.assert_close(inference_policy, expected_policy)
     torch.testing.assert_close(inference_wdl, expected_wdl)
-    torch.testing.assert_close(inference_search_budget, torch.zeros((2, 10)))
+    torch.testing.assert_close(inference_search_budget, torch.zeros((2, 8)))
 
 
 @pytest.mark.parametrize(
