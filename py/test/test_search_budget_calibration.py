@@ -264,7 +264,7 @@ def test_unreadable_state_fails_closed_to_flat(tmp_path: Path) -> None:
 def test_a_previous_schema_state_fails_closed_as_unreadable(tmp_path: Path) -> None:
     state = completed_state(2)
     path = tmp_path / 'calibration-state.json'
-    payload = state.model_dump_json().replace('"schema_version":5', '"schema_version":4')
+    payload = state.model_dump_json().replace('"schema_version":6', '"schema_version":5')
     path.write_text(payload, encoding='utf-8')
     loaded = load_calibration_state_fail_closed(path, CONFIGURATION_SHA, 3)
     assert not loaded.published_policy.apply_learned
@@ -345,3 +345,26 @@ def test_an_altered_corrector_artifact_fails_closed_on_load(tmp_path: Path) -> N
     loaded = load_calibration_state_fail_closed(path, CONFIGURATION_SHA, 3)
     assert not loaded.published_policy.apply_learned
     assert loaded.decision_reason is BudgetDecisionReason.UNREADABLE_STATE
+
+
+def test_oscillating_spend_keeps_the_gate_open_while_its_average_holds() -> None:
+    state = completed_state(4, warmup=2)
+    for generation, multiple in enumerate((1.25, 0.80, 1.20, 0.85), start=4):
+        update = update_calibration(
+            state, generation, evidence(realized_mean_multiple=multiple), generation + 1, parameters()
+        )
+        state = update.state
+    assert state.ema_realized_mean_multiple == pytest.approx(1.0, abs=0.05)
+    assert BudgetEligibilityFailure.UNCONVERGED_SPEND not in state.failed_eligibility_conditions
+    assert state.published_policy.apply_learned
+
+
+def test_sustained_spend_drift_still_closes_the_gate() -> None:
+    state = completed_state(4, warmup=2)
+    for generation in range(4, 20):
+        state = update_calibration(
+            state, generation, evidence(realized_mean_multiple=1.6), generation + 1, parameters()
+        ).state
+    assert state.ema_realized_mean_multiple > 1.05
+    assert BudgetEligibilityFailure.UNCONVERGED_SPEND in state.failed_eligibility_conditions
+    assert not state.published_policy.apply_learned
