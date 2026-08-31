@@ -66,6 +66,7 @@ class BudgetCalibrationParameters:
     warmup_completed_generations: int = 30
     sigma_ema_decay: Decimal = Decimal('0.1')
     validation_gain_ema_decay: Decimal = Decimal('0.2')
+    spend_ema_decay: Decimal = Decimal('0.2')
     lambda_trust_ratio: Decimal = Decimal('2.0')
     lambda_reseed_ratio: Decimal = Decimal('100.0')
 
@@ -76,6 +77,8 @@ class BudgetCalibrationParameters:
             raise ValueError('Sigma EMA decay must lie in (0, 1].')
         if not Decimal(0) < self.validation_gain_ema_decay <= Decimal(1):
             raise ValueError('Validation-gain EMA decay must lie in (0, 1].')
+        if not Decimal(0) < self.spend_ema_decay <= Decimal(1):
+            raise ValueError('Spend EMA decay must lie in (0, 1].')
         if self.lambda_trust_ratio <= Decimal(1):
             raise ValueError('The per-generation lambda trust ratio must exceed one.')
         if self.lambda_reseed_ratio <= self.lambda_trust_ratio:
@@ -126,7 +129,7 @@ class BudgetGenerationEvidence(FrozenModel):
 
 
 class BudgetCalibrationState(FrozenModel):
-    schema_version: int = Field(default=5, ge=5, le=5)
+    schema_version: int = Field(default=6, ge=6, le=6)
     configuration_sha256: str = Field(min_length=64, max_length=64)
     finalized_source_generations: tuple[int, ...]
     sigma: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
@@ -136,6 +139,7 @@ class BudgetCalibrationState(FrozenModel):
     current_validation_gain: float | None
     ema_validation_gain: float | None
     realized_mean_multiple: float | None
+    ema_realized_mean_multiple: float | None
     previous_published_policy: SearchBudgetPolicy
     published_policy: SearchBudgetPolicy
     application_generation: int = Field(ge=0)
@@ -154,7 +158,12 @@ class BudgetCalibrationState(FrozenModel):
             raise ValueError('A persisted corrector reference requires both its path and its digest.')
         if any(
             value is not None and not math.isfinite(value)
-            for value in (self.current_validation_gain, self.ema_validation_gain, self.realized_mean_multiple)
+            for value in (
+                self.current_validation_gain,
+                self.ema_validation_gain,
+                self.realized_mean_multiple,
+                self.ema_realized_mean_multiple,
+            )
         ):
             raise ValueError('Persisted calibration statistics must be finite.')
         return self
@@ -189,6 +198,7 @@ def initial_calibration_state(configuration_sha256: str) -> BudgetCalibrationSta
         current_validation_gain=None,
         ema_validation_gain=None,
         realized_mean_multiple=None,
+        ema_realized_mean_multiple=None,
         previous_published_policy=policy,
         published_policy=policy,
         application_generation=0,
@@ -304,10 +314,16 @@ def update_calibration(
         gain_decay = float(parameters.validation_gain_ema_decay)
         ema_gain = (1.0 - gain_decay) * state.ema_validation_gain + gain_decay * current_gain
 
+    if state.ema_realized_mean_multiple is None:
+        ema_multiple = evidence.realized_mean_multiple
+    else:
+        spend_decay = float(parameters.spend_ema_decay)
+        ema_multiple = (
+            1.0 - spend_decay
+        ) * state.ema_realized_mean_multiple + spend_decay * evidence.realized_mean_multiple
+
     completed_count = len(state.finalized_source_generations) + 1
-    failures = _eligibility_failures(
-        current_gain, ema_gain, completed_count, evidence.realized_mean_multiple, parameters
-    )
+    failures = _eligibility_failures(current_gain, ema_gain, completed_count, ema_multiple, parameters)
     published = SearchBudgetPolicy(
         lagrange_multiplier=lagrange_multiplier,
         corrector_path=corrector.path,
@@ -331,6 +347,7 @@ def update_calibration(
         current_validation_gain=current_gain,
         ema_validation_gain=ema_gain,
         realized_mean_multiple=evidence.realized_mean_multiple,
+        ema_realized_mean_multiple=ema_multiple,
         previous_published_policy=previous_published,
         published_policy=published,
         application_generation=first_unstarted_production_generation,
@@ -426,7 +443,7 @@ def _eligibility_failures(
     current_gain: float,
     ema_gain: float,
     completed_count: int,
-    realized_mean_multiple: float,
+    ema_realized_mean_multiple: float,
     parameters: BudgetCalibrationParameters,
 ) -> tuple[BudgetEligibilityFailure, ...]:
     failures: list[BudgetEligibilityFailure] = []
@@ -436,9 +453,9 @@ def _eligibility_failures(
         failures.append(BudgetEligibilityFailure.NON_POSITIVE_CURRENT_GAIN)
     if ema_gain <= 0.0:
         failures.append(BudgetEligibilityFailure.NON_POSITIVE_EMA_GAIN)
-    # Until the dual has pulled mean spend back to the baseline, a positive gain only says that a
-    # larger budget beats a smaller one, so it is no evidence that the ordering is worth anything.
+    # Selection for a generation runs on the previous generation's dual, so instantaneous spend
+    # oscillates around the target even when the dual is right; the constraint is on the average.
     low, high = SPEND_CONVERGENCE_BAND
-    if not low <= realized_mean_multiple <= high:
+    if not low <= ema_realized_mean_multiple <= high:
         failures.append(BudgetEligibilityFailure.UNCONVERGED_SPEND)
     return tuple(failures)

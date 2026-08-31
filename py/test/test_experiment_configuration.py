@@ -581,7 +581,7 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
-    assert experiment_configuration_sha256(frozen) == '53812b733e3872694241b5402bc763f67ed3b6431bd5995e86cb465c7c3de218'
+    assert experiment_configuration_sha256(frozen) == 'e961a34adc66fc35e2454b92a3c5df45b52c6f6b5bd87d6a41c09deece3be237'
 
 
 @pytest.mark.parametrize(

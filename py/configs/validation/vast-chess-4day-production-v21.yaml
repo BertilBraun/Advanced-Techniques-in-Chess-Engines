@@ -1,7 +1,7 @@
-# Fully materialized v19 production configuration; intentionally does not extend another file.
+# Fully materialized v21 production configuration; intentionally does not extend another file.
 run:
-  run_name: vast-chess-4day-production-v19
-  tensorboard_run_directory: vast-chess-4day-production-v19
+  run_name: vast-chess-4day-production-v21
+  tensorboard_run_directory: vast-chess-4day-production-v21
   stage: clean_retrain
   requires_explicit_approval: true
   resume:
@@ -23,7 +23,7 @@ run:
     dependency_lock_sha256: 11074667d5b9e5075faee3d75817f2fbe1af8b863299ed27acd14809f939c484
     minimum_open_file_soft_limit: 65536
 training:
-  save_path: py/training_data/validation/vast-chess-4day-production-v19
+  save_path: py/training_data/validation/vast-chess-4day-production-v21
   trainer:
     global_batch_size: 2048
     local_batch_size: 256
@@ -223,7 +223,7 @@ training:
     hourly_price: 0.72
     maximum_cost: null
     maximum_wall_time_seconds: 345600.0
-    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v19.stop
+    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v21.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
     minimum_free_disk_gib: 1.0
