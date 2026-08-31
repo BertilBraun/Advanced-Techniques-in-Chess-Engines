@@ -762,7 +762,8 @@ class SearchBudgetLabelManager:
             warmup_completed_generations=calibration.warmup_completed_source_generations,
             sigma_ema_decay=calibration.sigma_ema_decay,
             validation_gain_ema_decay=calibration.validation_gain_ema_decay,
-            lambda_step_ratio=calibration.lambda_step_ratio,
+            lambda_trust_ratio=calibration.lambda_trust_ratio,
+            lambda_reseed_ratio=calibration.lambda_reseed_ratio,
         )
 
     def _cleanup_completed_jobs(self) -> None:

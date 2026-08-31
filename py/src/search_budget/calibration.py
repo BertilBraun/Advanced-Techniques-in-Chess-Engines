@@ -48,6 +48,8 @@ class CorrectorReference:
 
 IDENTITY_CORRECTOR_REFERENCE = CorrectorReference(path=None, sha256=None)
 
+_MINIMUM_TRACKED_LAGRANGE_MULTIPLIER = 1e-12
+
 
 _FAIL_CLOSED_REASONS = frozenset(
     {
@@ -64,7 +66,8 @@ class BudgetCalibrationParameters:
     warmup_completed_generations: int = 30
     sigma_ema_decay: Decimal = Decimal('0.1')
     validation_gain_ema_decay: Decimal = Decimal('0.2')
-    lambda_step_ratio: Decimal = Decimal('1.05')
+    lambda_trust_ratio: Decimal = Decimal('2.0')
+    lambda_reseed_ratio: Decimal = Decimal('100.0')
 
     def __post_init__(self) -> None:
         if self.warmup_completed_generations <= 0:
@@ -73,8 +76,10 @@ class BudgetCalibrationParameters:
             raise ValueError('Sigma EMA decay must lie in (0, 1].')
         if not Decimal(0) < self.validation_gain_ema_decay <= Decimal(1):
             raise ValueError('Validation-gain EMA decay must lie in (0, 1].')
-        if self.lambda_step_ratio <= Decimal(1):
-            raise ValueError('The per-generation lambda step ratio must exceed one.')
+        if self.lambda_trust_ratio <= Decimal(1):
+            raise ValueError('The per-generation lambda trust ratio must exceed one.')
+        if self.lambda_reseed_ratio <= self.lambda_trust_ratio:
+            raise ValueError('The lambda reseed ratio must exceed the trust ratio.')
 
 
 class BudgetGenerationEvidence(FrozenModel):
@@ -85,6 +90,7 @@ class BudgetGenerationEvidence(FrozenModel):
     )
     generation_gain: float
     target_raw_kl_curves: tuple[tuple[float, ...], ...] = Field(min_length=1)
+    selection_raw_kl_curves: tuple[tuple[float, ...], ...] = Field(min_length=1)
     realized_mean_multiple: float = Field(gt=0.0)
     realized_mean_assigned_visits: float = Field(gt=0.0)
     flat_mean_assigned_visits: float = Field(gt=0.0)
@@ -99,13 +105,17 @@ class BudgetGenerationEvidence(FrozenModel):
             raise ValueError('Curve-error evidence must be finite and nonnegative.')
         if not math.isfinite(self.generation_gain):
             raise ValueError('Generation validation gain must be finite.')
-        if len(self.target_raw_kl_curves) != self.position_count:
-            raise ValueError('Measured raw-KL curves must cover every labelled position exactly once.')
-        for curve in self.target_raw_kl_curves:
-            if len(curve) != BUDGET_CURVE_POINTS:
-                raise ValueError('Every measured raw-KL curve requires one value per grid point.')
-            if any(not math.isfinite(value) or value < 0.0 for value in curve):
-                raise ValueError('Measured raw-KL curves must be finite and nonnegative.')
+        for curves, subject in (
+            (self.target_raw_kl_curves, 'Measured'),
+            (self.selection_raw_kl_curves, 'Selection'),
+        ):
+            if len(curves) != self.position_count:
+                raise ValueError(f'{subject} raw-KL curves must cover every labelled position exactly once.')
+            for curve in curves:
+                if len(curve) != BUDGET_CURVE_POINTS:
+                    raise ValueError(f'Every {subject.lower()} raw-KL curve requires one value per grid point.')
+                if any(not math.isfinite(value) or value < 0.0 for value in curve):
+                    raise ValueError(f'{subject} raw-KL curves must be finite and nonnegative.')
         if not math.isfinite(self.realized_mean_multiple):
             raise ValueError('Realized mean multiple must be finite.')
         if any(count < 0 for count in self.selected_index_counts):
@@ -198,17 +208,18 @@ def working_policy(state: BudgetCalibrationState) -> SearchBudgetPolicy:
 
 
 def solve_spend_matched_lagrange_multiplier(
-    target_raw_kl_curves: tuple[tuple[float, ...], ...],
+    raw_kl_curves: tuple[tuple[float, ...], ...],
     bisection_iterations: int = 60,
 ) -> float:
-    """The dual value whose Lagrangian selection spends a mean multiple of one on measured curves.
+    """The dual value whose Lagrangian selection spends a mean multiple of one on the given curves.
 
-    Seeding from the measured curves puts the dual at its operating point immediately instead of
-    walking an arbitrary constant there at the bounded step rate over dozens of generations.
+    Solve on the curves selection actually sees. Measured curves carry exact plateaus wherever the
+    checkpointed visit distribution stops changing, and ties resolve to the cheaper index, so a dual
+    solved on them sits orders of magnitude below the one the smooth predicted curves need.
     """
-    if not target_raw_kl_curves:
-        raise ValueError('Lagrange seeding requires at least one measured curve.')
-    projected_curves = tuple(project_non_increasing(curve) for curve in target_raw_kl_curves)
+    if not raw_kl_curves:
+        raise ValueError('Lagrange solving requires at least one curve.')
+    projected_curves = tuple(project_non_increasing(curve) for curve in raw_kl_curves)
 
     def mean_multiple(multiplier: float) -> float:
         total = 0.0
@@ -240,6 +251,28 @@ def solve_spend_matched_lagrange_multiplier(
     return high
 
 
+def _tracked_lagrange_multiplier(
+    state: BudgetCalibrationState,
+    evidence: BudgetGenerationEvidence,
+    parameters: BudgetCalibrationParameters,
+) -> float:
+    """Re-solve the dual every generation against the curves selection sees, inside a trust region.
+
+    A bounded per-generation step cannot cross the decades between a dual solved on a random network
+    and the one a trained network needs, so a value that far from its solution is replaced outright
+    rather than walked toward.
+    """
+    solved = solve_spend_matched_lagrange_multiplier(evidence.selection_raw_kl_curves)
+    if not state.finalized_source_generations:
+        return solved
+    previous = max(state.lagrange_multiplier, _MINIMUM_TRACKED_LAGRANGE_MULTIPLIER)
+    reseed_ratio = float(parameters.lambda_reseed_ratio)
+    if not previous / reseed_ratio <= max(solved, _MINIMUM_TRACKED_LAGRANGE_MULTIPLIER) <= previous * reseed_ratio:
+        return solved
+    trust_ratio = float(parameters.lambda_trust_ratio)
+    return min(max(solved, previous / trust_ratio), previous * trust_ratio)
+
+
 def update_calibration(
     state: BudgetCalibrationState,
     source_generation: int,
@@ -262,13 +295,7 @@ def update_calibration(
         (1.0 - sigma_decay) * previous + sigma_decay * max(error, 1e-9)
         for previous, error in zip(state.sigma, evidence.mean_absolute_curve_error, strict=True)
     )
-    step_ratio = float(parameters.lambda_step_ratio)
-    if not state.finalized_source_generations:
-        lagrange_multiplier = solve_spend_matched_lagrange_multiplier(evidence.target_raw_kl_curves)
-    else:
-        step = min(max(evidence.realized_mean_multiple, 1.0 / step_ratio), step_ratio)
-        # The floor lets a dual that seeded at exactly zero still ratchet up out of it.
-        lagrange_multiplier = max(state.lagrange_multiplier, 1e-12) * step
+    lagrange_multiplier = _tracked_lagrange_multiplier(state, evidence, parameters)
 
     current_gain = evidence.generation_gain
     if state.ema_validation_gain is None:

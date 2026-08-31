@@ -1,7 +1,7 @@
-# Fully materialized v13 production configuration; intentionally does not extend another file.
+# Fully materialized v20 production configuration; intentionally does not extend another file.
 run:
-  run_name: vast-chess-4day-production-v13
-  tensorboard_run_directory: vast-chess-4day-production-v13
+  run_name: vast-chess-4day-production-v20
+  tensorboard_run_directory: vast-chess-4day-production-v20
   stage: clean_retrain
   requires_explicit_approval: true
   resume:
@@ -23,7 +23,7 @@ run:
     dependency_lock_sha256: 11074667d5b9e5075faee3d75817f2fbe1af8b863299ed27acd14809f939c484
     minimum_open_file_soft_limit: 65536
 training:
-  save_path: py/training_data/validation/vast-chess-4day-production-v13
+  save_path: py/training_data/validation/vast-chess-4day-production-v20
   trainer:
     global_batch_size: 2048
     local_batch_size: 256
@@ -185,7 +185,15 @@ training:
     search_budget:
       curve_version: predicted_kl_curve_v1
       labeling:
-        sample_fraction: '0.005'
+        sample_fraction:
+          kind: staged
+          stages:
+          - start_generation: 0
+            value: '0.02'
+          - start_generation: 170
+            value: '0.01'
+          - start_generation: 340
+            value: '0.005'
         deep_search_multiple: 8
         maximum_unstarted_generation_lag: 2
         persisted_shard_size: 512
@@ -200,6 +208,12 @@ training:
         validation_gain_ema_decay: '0.2'
         lambda_trust_ratio: '2.0'
         lambda_reseed_ratio: '100.0'
+        corrector:
+          enabled: true
+          window_generations: 10
+      head_training:
+        dedicated_batches: false
+        interval_optimizer_steps: 50
       production:
         sequential_round_target: 200
         minimum_parallel_searches: 2
@@ -208,7 +222,7 @@ training:
     hourly_price: 0.72
     maximum_cost: null
     maximum_wall_time_seconds: 345600.0
-    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v13.stop
+    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v20.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
     minimum_free_disk_gib: 1.0
@@ -556,9 +570,9 @@ chess:
         kind: staged
         stages:
         - start_generation: 0
-          value: 200
-        - start_generation: 10
           value: 300
+        - start_generation: 10
+          value: 400
         - start_generation: 30
           value: 400
         - start_generation: 50
