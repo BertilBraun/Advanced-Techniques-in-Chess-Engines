@@ -1,24 +1,26 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 from src.util.frozen_model import FrozenModel
 
-BUDGET_CURVE_MULTIPLES: tuple[float, ...] = (0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5, 2.0, 3.0, 4.0)
-BUDGET_CURVE_POINTS = 10
+BUDGET_CURVE_MULTIPLES: tuple[float, ...] = (0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5, 2.0)
+BUDGET_CURVE_POINTS = 8
 BASELINE_CURVE_INDEX = BUDGET_CURVE_MULTIPLES.index(1.0)
-HALF_DEEP_CURVE_INDEX = BUDGET_CURVE_MULTIPLES.index(4.0)
 LOG_KL_EPSILON = 1e-6
 
-# Per grid point: the point's own raw prediction, top visit share, policy entropy, ply, baseline visits.
-CALIBRATION_FEATURE_COUNT = 5
+# The label-quality diagnostic compares the deep policy against its own half-way checkpoint, which
+# sits above the narrowed grid and is checkpointed separately.
+HALF_DEEP_VISIT_MULTIPLE = 4
 
-IDENTITY_CALIBRATION_BIAS: tuple[float, ...] = (0.0,) * BUDGET_CURVE_POINTS
-IDENTITY_CALIBRATION_WEIGHTS: tuple[tuple[float, ...], ...] = tuple(
-    (0.0,) * CALIBRATION_FEATURE_COUNT for _ in range(BUDGET_CURVE_POINTS)
-)
+# Corrector inputs: the full predicted curve, then top visit share, policy entropy, ply, baseline
+# visits, source generation. Native builds the identical vector; the order is a binding contract.
+CORRECTOR_SHARED_FEATURE_COUNT = 5
+CORRECTOR_INPUT_FEATURES = BUDGET_CURVE_POINTS + CORRECTOR_SHARED_FEATURE_COUNT
 
 
 @dataclass(frozen=True)
@@ -27,42 +29,51 @@ class BudgetSelectionFeatures:
     policy_entropy: float
     ply: int
     baseline_visits: int
+    source_generation: int
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.top_visit_share) or not math.isfinite(self.policy_entropy):
             raise ValueError('Budget selection features must be finite.')
-        if self.ply < 0 or self.baseline_visits <= 0:
-            raise ValueError('Budget selection features require a nonnegative ply and positive baseline visits.')
+        if self.ply < 0 or self.baseline_visits <= 0 or self.source_generation < 0:
+            raise ValueError(
+                'Budget selection features require a nonnegative ply and source generation and positive '
+                'baseline visits.'
+            )
+
+
+CurveCorrection = Callable[[tuple[float, ...], BudgetSelectionFeatures], tuple[float, ...]]
+
+
+def identity_correction(predicted_curve: tuple[float, ...], features: BudgetSelectionFeatures) -> tuple[float, ...]:
+    return predicted_curve
 
 
 class SearchBudgetPolicy(FrozenModel):
     lagrange_multiplier: float
-    calibration_bias: tuple[float, ...] = Field(min_length=BUDGET_CURVE_POINTS, max_length=BUDGET_CURVE_POINTS)
-    calibration_weights: tuple[tuple[float, ...], ...] = Field(
-        min_length=BUDGET_CURVE_POINTS,
-        max_length=BUDGET_CURVE_POINTS,
-    )
+    corrector_path: Path | None
+    corrector_sha256: str | None
     apply_learned: bool
 
     @model_validator(mode='after')
     def validate_policy(self) -> SearchBudgetPolicy:
         if not math.isfinite(self.lagrange_multiplier) or self.lagrange_multiplier < 0.0:
             raise ValueError('The search-budget Lagrange multiplier must be finite and nonnegative.')
-        if any(not math.isfinite(value) for value in self.calibration_bias):
-            raise ValueError('Search-budget calibration biases must be finite.')
-        for row in self.calibration_weights:
-            if len(row) != CALIBRATION_FEATURE_COUNT:
-                raise ValueError('Search-budget calibration weights need one coefficient per feature.')
-            if any(not math.isfinite(value) for value in row):
-                raise ValueError('Search-budget calibration weights must be finite.')
+        if (self.corrector_path is None) != (self.corrector_sha256 is None):
+            raise ValueError('A search-budget corrector reference requires both its path and its digest.')
+        if self.corrector_sha256 is not None and not _is_sha256(self.corrector_sha256):
+            raise ValueError('A search-budget corrector digest must be 64 lowercase hex characters.')
         return self
+
+
+def _is_sha256(digest: str) -> bool:
+    return len(digest) == 64 and all(character in '0123456789abcdef' for character in digest)
 
 
 def disabled_policy() -> SearchBudgetPolicy:
     return SearchBudgetPolicy(
         lagrange_multiplier=0.0,
-        calibration_bias=IDENTITY_CALIBRATION_BIAS,
-        calibration_weights=IDENTITY_CALIBRATION_WEIGHTS,
+        corrector_path=None,
+        corrector_sha256=None,
         apply_learned=False,
     )
 
@@ -73,6 +84,12 @@ def deep_label_visit_limit(baseline_new_visits: int) -> int:
     return 8 * baseline_new_visits
 
 
+def half_deep_visit_count(baseline_new_visits: int) -> int:
+    if baseline_new_visits <= 0:
+        raise ValueError('Baseline new visits must be positive.')
+    return HALF_DEEP_VISIT_MULTIPLE * baseline_new_visits
+
+
 def grid_visit_counts(baseline_new_visits: int) -> tuple[int, ...]:
     if baseline_new_visits <= 0:
         raise ValueError('Baseline new visits must be positive.')
@@ -80,7 +97,7 @@ def grid_visit_counts(baseline_new_visits: int) -> tuple[int, ...]:
 
 
 def grid_checkpoint_visits(baseline_new_visits: int) -> tuple[int, ...]:
-    return tuple(sorted(set(grid_visit_counts(baseline_new_visits))))
+    return tuple(sorted({*grid_visit_counts(baseline_new_visits), half_deep_visit_count(baseline_new_visits)}))
 
 
 def log_kl_curve(kl_values: tuple[float, ...]) -> tuple[float, ...]:
@@ -105,38 +122,33 @@ def project_non_increasing(values: tuple[float, ...]) -> tuple[float, ...]:
     return tuple(projected)
 
 
-def calibrate_curve(
+def corrected_curve(
     predicted_curve: tuple[float, ...],
-    policy: SearchBudgetPolicy,
     features: BudgetSelectionFeatures,
+    correction: CurveCorrection = identity_correction,
 ) -> tuple[float, ...]:
     if len(predicted_curve) != BUDGET_CURVE_POINTS:
-        raise ValueError('Curve calibration requires one prediction per grid point.')
+        raise ValueError('Curve correction requires one prediction per grid point.')
     if any(not math.isfinite(value) for value in predicted_curve):
-        raise ValueError('Curve calibration requires finite predictions.')
-    return tuple(
-        predicted_curve[index]
-        + policy.calibration_bias[index]
-        + policy.calibration_weights[index][0] * predicted_curve[index]
-        + policy.calibration_weights[index][1] * features.top_visit_share
-        + policy.calibration_weights[index][2] * features.policy_entropy
-        + policy.calibration_weights[index][3] * float(features.ply)
-        + policy.calibration_weights[index][4] * float(features.baseline_visits)
-        for index in range(BUDGET_CURVE_POINTS)
-    )
+        raise ValueError('Curve correction requires finite predictions.')
+    corrected = correction(predicted_curve, features)
+    if len(corrected) != BUDGET_CURVE_POINTS or any(not math.isfinite(value) for value in corrected):
+        raise ValueError('A curve correction must produce one finite value per grid point.')
+    return corrected
 
 
 def select_budget_index(
     predicted_curve: tuple[float, ...],
     policy: SearchBudgetPolicy,
     features: BudgetSelectionFeatures,
+    correction: CurveCorrection = identity_correction,
 ) -> int:
     """Lagrangian selection: the grid point minimising predicted raw KL plus dual-priced spend.
 
     The objective works in raw KL space because the run-level quantity being minimised is a sum of
     KLs, not of logs. Ties go to the cheapest grid point.
     """
-    projected = project_non_increasing(calibrate_curve(predicted_curve, policy, features))
+    projected = project_non_increasing(corrected_curve(predicted_curve, features, correction))
     best_index = 0
     best_objective = math.inf
     for index in range(BUDGET_CURVE_POINTS):

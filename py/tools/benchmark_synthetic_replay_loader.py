@@ -36,6 +36,7 @@ from src.replay.contracts import (
 )
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
+from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.self_play.completed_game import SearchVisitCounts, TerminationReason
 from src.training.batch import TrainingBatch
 from src.training.targets import (
@@ -236,7 +237,7 @@ def _sample(state: _SyntheticChessState, row: int) -> ReplaySample:
             else IneligibleScalarAuxiliaryTarget(kind='irreversible_progress'),
             EligibleLegalMovesTarget(),
             EligibleSearchBudgetTarget(
-                curve=tuple(float(row % 7) / 6.0 - 0.1 * index for index in range(10)),
+                curve=tuple(float(row % 7) / 6.0 - 0.1 * index for index in range(BUDGET_CURVE_POINTS)),
                 raw_kl=float(row % 11) / 10.0,
                 source_generation=row % 100,
                 model_generation=row % 100,

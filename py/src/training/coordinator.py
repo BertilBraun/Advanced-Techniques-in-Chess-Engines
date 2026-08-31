@@ -397,7 +397,7 @@ class Coordinator:
                         f'Finalized search-budget label generation {event.source_generation}: '
                         f'{event.replay_samples_written} replay samples, decision={event.decision_reason}, '
                         f'learned={event.published_apply_learned}, lambda={event.lagrange_multiplier:.4f}, '
-                        f'calibrator={event.calibrator_applied}, '
+                        f'corrector={event.corrector_applied}, '
                         f'mean_multiple={event.realized_mean_multiple:.4f} '
                         f'for production generation {event.application_generation}.'
                     )
