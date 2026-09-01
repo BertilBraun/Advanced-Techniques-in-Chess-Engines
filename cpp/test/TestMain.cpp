@@ -14,6 +14,7 @@ struct NativeTestSuite {
 
 constexpr std::array testSuites = {
     NativeTestSuite{.name = "BatchedSearch", .run = runBatchedSearchTests},
+    NativeTestSuite{.name = "SearchStopping", .run = runSearchStoppingTests},
     NativeTestSuite{.name = "BitBoard", .run = runBitBoardTests},
     NativeTestSuite{.name = "BoardLegalMovesCache", .run = runBoardLegalMovesCacheTests},
     NativeTestSuite{.name = "ChessEncoding", .run = runChessEncodingTests},

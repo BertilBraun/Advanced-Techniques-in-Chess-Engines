@@ -72,7 +72,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
                     std::vector<std::uint32_t> policyCheckpointVisits,
                     const std::optional<std::uint32_t> parallelSearches, const bool addRootNoise,
                     const bool forceRootPlayouts, const SearchCheckpointDetail checkpointDetail,
-                    const std::uint32_t rootPly) {
+                    const std::uint32_t rootPly, const bool audit) {
                      return Request{
                          .root = std::move(selectedRoot),
                          .assigned_additional_visits = assignedAdditionalVisits,
@@ -82,6 +82,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
                          .force_root_playouts = forceRootPlayouts,
                          .checkpoint_detail = checkpointDetail,
                          .root_ply = rootPly,
+                         .audit = audit,
                      };
                  }),
              py::arg("root"), py::arg("assigned_additional_visits") = std::nullopt,
@@ -90,7 +91,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
              py::arg("force_root_playouts") = true,
              py::arg_v("checkpoint_detail", SearchCheckpointDetail::Scalars,
                        "SearchCheckpointDetail.SCALARS"),
-             py::arg("root_ply") = 0)
+             py::arg("root_ply") = 0, py::arg("audit") = false)
         .def_readonly("root", &Request::root)
         .def_readonly("assigned_additional_visits", &Request::assigned_additional_visits)
         .def_readonly("policy_checkpoint_visits", &Request::policy_checkpoint_visits)
@@ -98,7 +99,8 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def_readonly("add_root_noise", &Request::add_root_noise)
         .def_readonly("force_root_playouts", &Request::force_root_playouts)
         .def_readonly("checkpoint_detail", &Request::checkpoint_detail)
-        .def_readonly("root_ply", &Request::root_ply);
+        .def_readonly("root_ply", &Request::root_ply)
+        .def_readonly("audit", &Request::audit);
     py::class_<Result>(module, names.result)
         .def_readonly("root_value", &Result::root_value)
         .def_readonly("highest_visited_child_action_id", &Result::highest_visited_child_action_id)
@@ -118,13 +120,12 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def_readonly("network_root_value", &Result::network_root_value)
         .def_readonly("policy_correction", &Result::policy_correction)
         .def_readonly("value_correction", &Result::value_correction)
-        .def_readonly("predicted_budget_curve", &Result::predicted_budget_curve)
-        .def_readonly("root_prior_top_share", &Result::root_prior_top_share)
-        .def_readonly("root_prior_entropy", &Result::root_prior_entropy)
-        .def_readonly("selected_budget_index", &Result::selected_budget_index)
-        .def_readonly("assigned_additional_visits", &Result::assigned_additional_visits)
+        .def_readonly("stop_checkpoint_index", &Result::stop_checkpoint_index)
+        .def_readonly("stop_probabilities", &Result::stop_probabilities)
+        .def_readonly("guard_movements", &Result::guard_movements)
+        .def_readonly("stop_verdicts", &Result::stop_verdicts)
+        .def_readonly("stop_features", &Result::stop_features)
         .def_readonly("parallel_searches", &Result::parallel_searches)
-        .def_readonly("spend_residual", &Result::spend_residual)
         .def_readonly("starting_visits", &Result::starting_visits)
         .def_readonly("final_visits", &Result::final_visits)
         .def_readonly("stop_reason", &Result::stop_reason)
@@ -156,7 +157,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
                std::vector<std::uint32_t> policyCheckpointVisits,
                const std::optional<std::uint32_t> parallelSearches, const bool addRootNoise,
                const bool forceRootPlayouts, const SearchCheckpointDetail checkpointDetail,
-               const std::uint32_t rootPly) {
+               const std::uint32_t rootPly, const bool audit) {
                 return Request{
                     .root = std::move(selectedRoot),
                     .assigned_additional_visits = assignedAdditionalVisits,
@@ -166,6 +167,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
                     .force_root_playouts = forceRootPlayouts,
                     .checkpoint_detail = checkpointDetail,
                     .root_ply = rootPly,
+                    .audit = audit,
                 };
             },
             py::arg("root"), py::arg("assigned_additional_visits") = std::nullopt,
@@ -174,14 +176,12 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
             py::arg("force_root_playouts") = true,
             py::arg_v("checkpoint_detail", SearchCheckpointDetail::Scalars,
                       "SearchCheckpointDetail.SCALARS"),
-            py::arg("root_ply") = 0)
+            py::arg("root_ply") = 0, py::arg("audit") = false)
         .def("search", &Search::search, py::arg("requests"), py::arg("collect_statistics") = false,
              py::call_guard<py::gil_scoped_release>())
         .def("refresh_model", &Search::refreshModel, py::arg("model_generation"),
              py::arg("model_path"), py::call_guard<py::gil_scoped_release>())
         .def("update_search_schedule", &Search::updateSearchSchedule, py::arg("search_parameters"))
-        .def("reset_spend_residual", &Search::resetSpendResidual)
-        .def_property_readonly("spend_residual", &Search::spendResidual)
         .def_property_readonly("model_generation", &Search::modelGeneration)
         .def("inference_statistics", &Search::inferenceStatistics);
 

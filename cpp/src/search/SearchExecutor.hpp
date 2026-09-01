@@ -8,6 +8,7 @@
 #include "util/py.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -23,6 +24,25 @@
 #include <vector>
 
 // Runs the optimized multi-root MCTS loop, overlapping tree work with inference batches.
+
+inline constexpr double STOP_POLICY_PROBABILITY_FLOOR = 1e-6;
+inline constexpr double STOP_PROBABILITY_UNEVALUATED = -1.0;
+
+// KL(reference || approximate) with the same floor semantics as
+// src/search_stopping/targets.py::policy_kl (zero-mass reference terms skipped).
+[[nodiscard]] inline double stopPolicyKl(const std::vector<double> &reference,
+                                         const std::vector<double> &approximate) {
+    double divergence = 0.0;
+    for (std::size_t index = 0; index < reference.size(); ++index) {
+        if (reference[index] == 0.0) {
+            continue;
+        }
+        divergence += reference[index] *
+                      std::log(std::max(STOP_POLICY_PROBABILITY_FLOOR, reference[index]) /
+                               std::max(STOP_POLICY_PROBABILITY_FLOOR, approximate[index]));
+    }
+    return std::max(0.0, divergence);
+}
 
 template <SearchGame Game> class BatchedSearchExecutor {
 public:
@@ -48,8 +68,7 @@ public:
     }
 
     [[nodiscard]] GameSearchBatchResult
-    searchDetailed(const std::vector<GameSearchRequest<Game>> &requests,
-                   SearchBudgetAllocator *budgetAllocator = nullptr) {
+    searchDetailed(const std::vector<GameSearchRequest<Game>> &requests) {
         ScopedNanosecondTimer searchTimer(m_searchWallNanoseconds);
         if (requests.empty()) {
             throw std::invalid_argument("Batched search requires roots and simulations");
@@ -59,16 +78,9 @@ public:
         for (const GameSearchRequest<Game> &request : requests) {
             tasks.push_back(createTask(request));
         }
-        if (budgetAllocator == nullptr && std::ranges::any_of(tasks, [](const RootTask &task) {
-                return !task.budget_assigned;
-            })) {
-            throw std::invalid_argument("Predicted search limits require a budget allocator");
-        }
-        std::size_t budgetCursor = 0;
         std::size_t completionCursor = 0;
         try {
             while (true) {
-                assignReadyPredictedBudgets(tasks, budgetCursor, budgetAllocator);
                 const std::optional<std::size_t> workerIndex = freeWorker();
                 if (workerIndex.has_value() && issueBatch(tasks, *workerIndex)) {
                     continue;
@@ -89,7 +101,6 @@ public:
         for (const RootTask &task : tasks) {
             const Root &root = task.root;
             const auto &node = root.tree().root();
-            const auto [rootPriorTopShare, rootPriorEntropy] = rootPriorFeatures(node);
             GameSearchResult result{
                 .root_value = node.visits == 0 ? 0.0F : node.value_sum / node.visits,
                 .highest_visited_child_action_id = -1,
@@ -100,16 +111,16 @@ public:
                 .network_root_value = 0.0F,
                 .policy_correction = 0.0F,
                 .value_correction = 0.0F,
-                .predicted_budget_curve = node.search_budget_curve,
-                .root_prior_top_share = rootPriorTopShare,
-                .root_prior_entropy = rootPriorEntropy,
-                .selected_budget_index = task.selected_budget_index,
-                .assigned_additional_visits = task.assigned_additional_visits,
+                .stop_checkpoint_index = task.stop_checkpoint_index,
+                .stop_probabilities = task.stop_probabilities,
+                .guard_movements = task.guard_movements,
+                .stop_verdicts = task.stop_verdicts,
+                .stop_features = task.stop_features,
                 .parallel_searches = task.parallel_searches,
-                .spend_residual = task.spend_residual,
                 .starting_visits = task.starting_visits,
                 .final_visits = root.visits(),
-                .stop_reason = task.stop_reason,
+                .stop_reason = task.stopped_by_learned_rule ? SearchStopReason::LearnedEarlyStop
+                                                            : task.natural_stop_reason,
                 .checkpoints = task.checkpoints,
             };
             result.search_visits.reserve(node.children.size());
@@ -244,28 +255,42 @@ public:
     }
 
 private:
+    // Root state at the previous checkpoint (or the zeroth checkpoint at starting visits): the
+    // basis for the movement guard and the temporal features. Raw cumulative edge visits are kept
+    // beside the pruned policy-target distribution because forced-playout pruning is not
+    // cumulative and the latest-segment feature must difference raw counts (plan review defect F).
+    struct PreviousCheckpointState {
+        std::vector<double> policy_target;
+        std::vector<std::uint32_t> raw_visits;
+        double root_value;
+        bool captured = false;
+    };
+
     struct RootTask {
         Root root;
         std::uint32_t starting_visits;
         std::uint32_t root_ply;
         SearchLimit limit;
         std::uint32_t maximum_visits;
-        std::uint32_t assigned_additional_visits;
-        int selected_budget_index;
         std::uint32_t parallel_searches;
-        std::int64_t spend_residual;
         std::size_t checkpoint_cursor;
         std::uint32_t in_flight;
         bool noise_pending;
         bool count_root_initialization;
         bool force_root_playouts;
-        bool budget_assigned;
         bool selection_blocked;
         bool stopped;
-        SearchStopReason stop_reason;
+        bool stopped_by_learned_rule;
+        SearchStopReason natural_stop_reason;
         SearchCheckpointDetail checkpoint_detail;
         std::vector<std::uint32_t> policy_checkpoint_visits;
         std::vector<SearchCheckpoint> checkpoints;
+        PreviousCheckpointState previous_checkpoint;
+        int stop_checkpoint_index;
+        std::vector<double> stop_probabilities;
+        std::vector<double> guard_movements;
+        std::vector<std::uint8_t> stop_verdicts;
+        std::vector<StopPredictorFeatures> stop_features;
     };
 
     struct PendingLeaf {
@@ -323,9 +348,22 @@ private:
         const std::uint32_t startingVisits = request.root.visits();
         const auto *fixed = std::get_if<FixedSearchLimit>(&request.limit);
         const auto *additional = std::get_if<AdditionalSearchLimit>(&request.limit);
-        const bool predicted = std::holds_alternative<PredictedSearchBudgetLimit>(request.limit);
+        const auto *stoppable = std::get_if<StoppableSearchLimit>(&request.limit);
         if (fixed != nullptr && fixed->visits <= startingVisits) {
             throw std::invalid_argument("Fixed search limit must exceed retained root visits");
+        }
+        if (stoppable != nullptr) {
+            if (stoppable->searchesToCap()) {
+                if (request.policy_checkpoint_visits.size() !=
+                    stoppable->policy.checkpoint_multiples.size()) {
+                    throw std::invalid_argument(
+                        "A capped stoppable search requires one checkpoint visit count per "
+                        "configured checkpoint multiple");
+                }
+            } else if (!request.policy_checkpoint_visits.empty()) {
+                throw std::invalid_argument(
+                    "A closed stop policy runs flat and takes no checkpoints");
+            }
         }
         const std::uint32_t maximumAdditional = maximumAdditionalVisits(request.limit);
         const std::uint64_t maximumVisits64 =
@@ -342,42 +380,55 @@ private:
                 "Policy checkpoints must follow retained visits and not exceed the search limit");
         }
         const std::uint32_t assignedAdditional =
-            fixed != nullptr ? fixed->visits - startingVisits
-                             : (additional != nullptr ? additional->additional_visits : 0U);
-        const std::uint32_t parallelSearches = request.parallel_searches.value_or(
-            predicted ? 16U : searchParallelism(assignedAdditional));
+            fixed != nullptr ? fixed->visits - startingVisits : maximumAdditional;
+        const std::uint32_t parallelSearches =
+            request.parallel_searches.value_or(searchParallelism(assignedAdditional));
         if (parallelSearches == 0 || parallelSearches > 16U) {
             throw std::invalid_argument("Per-search parallelism must be between one and 16");
         }
+        const std::size_t checkpointCount = request.policy_checkpoint_visits.size();
         RootTask task{
             .root = request.root,
             .starting_visits = startingVisits,
             .root_ply = request.root_ply,
             .limit = request.limit,
             .maximum_visits = maximumVisitLimit,
-            .assigned_additional_visits = assignedAdditional,
-            .selected_budget_index = -1,
             .parallel_searches = parallelSearches,
-            .spend_residual = 0,
             .checkpoint_cursor = 0,
             .in_flight = 0,
             .noise_pending = request.add_root_noise && !request.root.tree().root().expanded(),
             .count_root_initialization = request.count_root_initialization,
             .force_root_playouts = request.force_root_playouts,
-            .budget_assigned = !predicted,
             .selection_blocked = false,
             .stopped = false,
-            .stop_reason = fixed != nullptr
-                               ? SearchStopReason::FixedLimit
-                               : (additional != nullptr ? SearchStopReason::AdditionalVisits
-                                                        : SearchStopReason::PredictedBudget),
+            .stopped_by_learned_rule = false,
+            .natural_stop_reason =
+                fixed != nullptr
+                    ? SearchStopReason::FixedLimit
+                    : (additional != nullptr
+                           ? SearchStopReason::AdditionalVisits
+                           : (stoppable->searchesToCap() ? SearchStopReason::CapReached
+                                                         : SearchStopReason::AdditionalVisits)),
             .checkpoint_detail = request.checkpoint_detail,
             .policy_checkpoint_visits = request.policy_checkpoint_visits,
             .checkpoints = {},
+            .previous_checkpoint = {},
+            .stop_checkpoint_index = -1,
+            .stop_probabilities =
+                std::vector<double>(checkpointCount, STOP_PROBABILITY_UNEVALUATED),
+            .guard_movements = std::vector<double>(checkpointCount, 0.0),
+            .stop_verdicts = std::vector<std::uint8_t>(checkpointCount, 0),
+            .stop_features = {},
         };
         task.root.tree().prepareForSearch(task.maximum_visits, task.parallel_searches);
         if (request.add_root_noise && task.root.tree().root().expanded()) {
             addNoise(task.root);
+        }
+        // Zeroth checkpoint (plan review defect D): a warm root's movement guard and temporal
+        // features difference against the retained distribution at starting visits, not the prior.
+        if (stoppable != nullptr && stoppable->searchesToCap() &&
+            task.root.tree().root().expanded() && startingVisits > 0) {
+            capturePreviousCheckpoint(task);
         }
         return task;
     }
@@ -414,123 +465,195 @@ private:
         };
     }
 
+    [[nodiscard]] std::vector<double> policyTargetDistribution(const RootTask &task) const {
+        const std::vector<std::uint32_t> policyVisits = task.root.tree().policyTargetVisits(
+            m_searchParameters.tree_search.exploration_constant, task.force_root_playouts);
+        double total = 0.0;
+        for (const std::uint32_t visits : policyVisits) {
+            total += static_cast<double>(visits);
+        }
+        std::vector<double> distribution(policyVisits.size(), 0.0);
+        if (total > 0.0) {
+            for (const auto index : range(policyVisits.size())) {
+                distribution[index] = static_cast<double>(policyVisits[index]) / total;
+            }
+        }
+        return distribution;
+    }
+
+    [[nodiscard]] static std::vector<double> priorDistribution(const RootTask &task) {
+        const auto &rootNode = task.root.tree().root();
+        double priorTotal = 0.0;
+        for (const auto &edge : rootNode.children) {
+            priorTotal += static_cast<double>(edge.raw_prior);
+        }
+        std::vector<double> prior(rootNode.children.size(), 0.0);
+        for (const auto index : range(rootNode.children.size())) {
+            prior[index] =
+                priorTotal > 0.0
+                    ? static_cast<double>(rootNode.children[index].raw_prior) / priorTotal
+                    : 1.0 / static_cast<double>(rootNode.children.size());
+        }
+        return prior;
+    }
+
+    void capturePreviousCheckpoint(RootTask &task) const {
+        const auto &rootNode = task.root.tree().root();
+        PreviousCheckpointState state;
+        state.policy_target = policyTargetDistribution(task);
+        state.raw_visits.reserve(rootNode.children.size());
+        for (const auto &edge : rootNode.children) {
+            state.raw_visits.push_back(edge.visits);
+        }
+        state.root_value = rootNode.visits == 0 ? 0.0
+                                                : static_cast<double>(rootNode.value_sum) /
+                                                      static_cast<double>(rootNode.visits);
+        state.captured = true;
+        task.previous_checkpoint = std::move(state);
+    }
+
+    // Fresh-root fallback for the zeroth checkpoint: the raw prior stands in for the previous
+    // distribution and the network value for the previous root value.
+    void ensurePreviousCheckpoint(RootTask &task) const {
+        if (task.previous_checkpoint.captured) {
+            return;
+        }
+        const auto &rootNode = task.root.tree().root();
+        if (!rootNode.network_outcome.has_value()) {
+            throw std::logic_error("Stop features require an expanded root");
+        }
+        PreviousCheckpointState state;
+        state.policy_target = priorDistribution(task);
+        state.raw_visits.assign(rootNode.children.size(), 0);
+        state.root_value = static_cast<double>(rootNode.network_outcome->expectedValue());
+        state.captured = true;
+        task.previous_checkpoint = std::move(state);
+    }
+
+    // The 17-feature stop-predictor input; a binding contract with
+    // src/search_stopping/features.py::STOP_PREDICTOR_FEATURE_NAMES.
+    [[nodiscard]] StopPredictorFeatures stopFeatures(const RootTask &task,
+                                                     const StoppableSearchLimit &limit,
+                                                     const std::size_t checkpointIndex,
+                                                     const std::vector<double> &current,
+                                                     const double currentRootValue) const {
+        const auto &rootNode = task.root.tree().root();
+        const std::vector<double> prior = priorDistribution(task);
+        const PreviousCheckpointState &previous = task.previous_checkpoint;
+
+        double topShare = 0.0;
+        double secondShare = 0.0;
+        double entropy = 0.0;
+        for (const double probability : current) {
+            if (probability > topShare) {
+                secondShare = topShare;
+                topShare = probability;
+            } else if (probability > secondShare) {
+                secondShare = probability;
+            }
+            if (probability > 0.0) {
+                entropy -= probability * std::log(probability);
+            }
+        }
+
+        // Latest-segment distribution over raw cumulative visits (plan review defect F).
+        double segmentTopShare = topShare;
+        double segmentTotal = 0.0;
+        std::vector<double> segment(current.size(), 0.0);
+        for (const auto index : range(rootNode.children.size())) {
+            const double delta =
+                static_cast<double>(rootNode.children[index].visits) -
+                static_cast<double>(previous.raw_visits.size() > index ? previous.raw_visits[index]
+                                                                       : 0U);
+            segment[index] = std::max(0.0, delta);
+            segmentTotal += segment[index];
+        }
+        if (segmentTotal > 0.0) {
+            segmentTopShare = 0.0;
+            for (const double weight : segment) {
+                segmentTopShare = std::max(segmentTopShare, weight / segmentTotal);
+            }
+        }
+
+        double priorTopShare = 0.0;
+        double priorEntropy = 0.0;
+        for (const double probability : prior) {
+            priorTopShare = std::max(priorTopShare, probability);
+            if (probability > 0.0) {
+                priorEntropy -= probability * std::log(probability);
+            }
+        }
+
+        const double networkRootValue =
+            static_cast<double>(rootNode.network_outcome->expectedValue());
+        const double baseline = static_cast<double>(limit.baseline_visits);
+        return {
+            topShare,
+            entropy,
+            topShare - secondShare,
+            stopPolicyKl(current, prior),
+            stopPolicyKl(current, previous.policy_target),
+            segmentTopShare,
+            currentRootValue,
+            currentRootValue - previous.root_value,
+            currentRootValue - networkRootValue,
+            priorTopShare,
+            priorEntropy,
+            static_cast<double>(rootNode.children.size()),
+            static_cast<double>(task.root_ply),
+            baseline,
+            static_cast<double>(limit.model_generation),
+            limit.policy.checkpoint_multiples[checkpointIndex],
+            static_cast<double>(task.starting_visits) / baseline,
+        };
+    }
+
+    void evaluateStopCheckpoint(RootTask &task, const std::size_t checkpointIndex) {
+        const auto *stoppable = std::get_if<StoppableSearchLimit>(&task.limit);
+        if (stoppable == nullptr || !stoppable->searchesToCap()) {
+            return;
+        }
+        ensurePreviousCheckpoint(task);
+        const std::vector<double> current = policyTargetDistribution(task);
+        const auto &rootNode = task.root.tree().root();
+        const double currentRootValue =
+            rootNode.visits == 0
+                ? 0.0
+                : static_cast<double>(rootNode.value_sum) / static_cast<double>(rootNode.visits);
+        const StopPredictorFeatures features =
+            stopFeatures(task, *stoppable, checkpointIndex, current, currentRootValue);
+        task.stop_features.push_back(features);
+        const StopCheckpointEvaluation evaluation =
+            evaluateStopRule(stoppable->policy, checkpointIndex, features);
+        task.guard_movements[checkpointIndex] = evaluation.guard_movement;
+        if (evaluation.predictor_evaluated) {
+            task.stop_probabilities[checkpointIndex] = evaluation.uncertainty;
+        }
+        const bool wouldStop = evaluation.would_stop;
+        task.stop_verdicts[checkpointIndex] = wouldStop ? 1 : 0;
+        if (wouldStop && stoppable->policy.apply_learned && !stoppable->shadow_only) {
+            task.stopped = true;
+            task.stopped_by_learned_rule = true;
+            task.stop_checkpoint_index = static_cast<int>(checkpointIndex);
+        }
+        capturePreviousCheckpoint(task);
+    }
+
     void updateCheckpointsAndStop(RootTask &task) {
-        if (!task.budget_assigned || task.in_flight != 0 || task.stopped) {
+        if (task.in_flight != 0 || task.stopped) {
             return;
         }
         while (task.checkpoint_cursor < task.policy_checkpoint_visits.size() &&
                task.root.visits() == task.policy_checkpoint_visits[task.checkpoint_cursor]) {
             task.checkpoints.push_back(checkpoint(task));
+            evaluateStopCheckpoint(task, task.checkpoint_cursor);
             ++task.checkpoint_cursor;
+            if (task.stopped) {
+                return;
+            }
         }
         if (task.root.visits() >= task.maximum_visits) {
             task.stopped = true;
-        }
-    }
-
-    // Normalized raw-prior top share and entropy of the root: the pre-search basis a fresh root
-    // exposes, recorded on every result for the analysis log.
-    template <typename Node>
-    [[nodiscard]] static std::pair<float, float> rootPriorFeatures(const Node &node) {
-        if (node.children.empty()) {
-            return {1.0F, 0.0F};
-        }
-        double priorTotal = 0.0;
-        for (const auto &edge : node.children) {
-            priorTotal += static_cast<double>(edge.raw_prior);
-        }
-        double topShare = 0.0;
-        double entropy = 0.0;
-        for (const auto &edge : node.children) {
-            const double probability = priorTotal > 0.0
-                                           ? static_cast<double>(edge.raw_prior) / priorTotal
-                                           : 1.0 / static_cast<double>(node.children.size());
-            topShare = std::max(topShare, probability);
-            if (probability > 0.0) {
-                entropy -= probability * std::log(probability);
-            }
-        }
-        return {static_cast<float>(topShare), static_cast<float>(entropy)};
-    }
-
-    // Top visit share and policy entropy of the root's current policy distribution: the retained
-    // visit distribution when tree reuse left one, otherwise the raw network priors. This mirrors
-    // the baseline-policy features the corrector was fitted on as closely as the root allows,
-    // using only information available before the search runs.
-    [[nodiscard]] static SearchBudgetSelectionFeatures
-    rootSelectionFeatures(const RootTask &task, const double baselineVisits,
-                          const double sourceGeneration) {
-        const auto &rootNode = task.root.tree().root();
-        std::uint64_t totalVisits = 0;
-        for (const auto &edge : rootNode.children) {
-            totalVisits += edge.visits;
-        }
-        double topShare = 1.0;
-        double entropy = 0.0;
-        if (!rootNode.children.empty()) {
-            topShare = 0.0;
-            double priorTotal = 0.0;
-            for (const auto &edge : rootNode.children) {
-                priorTotal += static_cast<double>(edge.raw_prior);
-            }
-            for (const auto &edge : rootNode.children) {
-                const double probability =
-                    totalVisits > 0
-                        ? static_cast<double>(edge.visits) / static_cast<double>(totalVisits)
-                        : (priorTotal > 0.0 ? static_cast<double>(edge.raw_prior) / priorTotal
-                                            : 1.0 / static_cast<double>(rootNode.children.size()));
-                topShare = std::max(topShare, probability);
-                if (probability > 0.0) {
-                    entropy -= probability * std::log(probability);
-                }
-            }
-        }
-        return {
-            .top_visit_share = topShare,
-            .policy_entropy = entropy,
-            .ply = static_cast<double>(task.root_ply),
-            .baseline_visits = baselineVisits,
-            .source_generation = sourceGeneration,
-        };
-    }
-
-    static void assignReadyPredictedBudgets(std::vector<RootTask> &tasks, std::size_t &budgetCursor,
-                                            SearchBudgetAllocator *allocator) {
-        if (allocator == nullptr) {
-            return;
-        }
-        while (budgetCursor < tasks.size()) {
-            RootTask &task = tasks[budgetCursor];
-            if (task.budget_assigned) {
-                task.spend_residual = allocator->spendError();
-                ++budgetCursor;
-                continue;
-            }
-            if (!task.root.tree().root().expanded()) {
-                return;
-            }
-            const auto &limit = std::get<PredictedSearchBudgetLimit>(task.limit);
-            const AssignedSearchBudget assigned = allocator->assign(
-                limit, task.root.tree().root().search_budget_curve,
-                rootSelectionFeatures(task, static_cast<double>(limit.baseline_visits),
-                                      static_cast<double>(limit.model_generation)));
-            task.assigned_additional_visits = assigned.additional_visits;
-            task.selected_budget_index = assigned.selected_index;
-            task.spend_residual = allocator->spendError();
-            const std::uint64_t finalVisits =
-                static_cast<std::uint64_t>(task.starting_visits) + task.assigned_additional_visits;
-            if (finalVisits > std::numeric_limits<std::uint32_t>::max()) {
-                throw std::overflow_error("Assigned search budget exceeds the visit range");
-            }
-            task.maximum_visits = static_cast<std::uint32_t>(finalVisits);
-            if (!task.policy_checkpoint_visits.empty() &&
-                task.policy_checkpoint_visits.back() > task.maximum_visits) {
-                throw std::invalid_argument(
-                    "Policy checkpoint exceeds the predicted search budget");
-            }
-            task.parallel_searches = searchParallelism(task.assigned_additional_visits);
-            task.budget_assigned = true;
-            ++budgetCursor;
         }
     }
 
@@ -578,9 +701,6 @@ private:
             if (!task.root.tree().root().expanded()) {
                 m_nextTask = (index + 1) % tasks.size();
                 return index;
-            }
-            if (!task.budget_assigned) {
-                continue;
             }
             const std::uint32_t schedulingLimit =
                 task.checkpoint_cursor < task.policy_checkpoint_visits.size()

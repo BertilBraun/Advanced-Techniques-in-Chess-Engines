@@ -1,6 +1,7 @@
 #pragma once
 
 int runBatchedSearchTests();
+int runSearchStoppingTests();
 int runBitBoardTests();
 int runBoardLegalMovesCacheTests();
 int runChessEncodingTests();

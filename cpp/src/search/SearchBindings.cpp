@@ -2,6 +2,7 @@
 
 #include "search/Analysis.hpp"
 #include "search/InferenceConfiguration.hpp"
+#include "search/SearchStopPredictor.hpp"
 #include "search/SearchTypes.hpp"
 #include "search/SelfPlay.hpp"
 #include <pybind11/operators.h>
@@ -144,7 +145,8 @@ void bind_search(py::module_ &module) {
     py::enum_<SearchStopReason>(module, "SearchStopReason")
         .value("FIXED_LIMIT", SearchStopReason::FixedLimit)
         .value("ADDITIONAL_VISITS", SearchStopReason::AdditionalVisits)
-        .value("PREDICTED_BUDGET", SearchStopReason::PredictedBudget);
+        .value("CAP_REACHED", SearchStopReason::CapReached)
+        .value("LEARNED_EARLY_STOP", SearchStopReason::LearnedEarlyStop);
     py::enum_<SearchCheckpointDetail>(module, "SearchCheckpointDetail")
         .value("SCALARS", SearchCheckpointDetail::Scalars)
         .value("POLICIES", SearchCheckpointDetail::Policies);
@@ -158,61 +160,53 @@ void bind_search(py::module_ &module) {
     py::class_<AdditionalSearchLimit>(module, "AdditionalSearchLimit")
         .def(py::init<std::uint32_t>(), py::arg("additional_visits"))
         .def_readonly("additional_visits", &AdditionalSearchLimit::additional_visits);
-    py::class_<SearchBudgetPolicy>(module, "SearchBudgetPolicy")
-        .def(py::init([](const std::array<double, SearchBudgetPolicy::CURVE_POINTS> &multiples,
-                         const double lagrangeMultiplier, const std::string &correctorPath,
-                         const bool applyLearned) {
-                 std::shared_ptr<const SearchBudgetCurveCorrector> corrector;
-                 if (!correctorPath.empty()) {
-                     corrector = std::make_shared<SearchBudgetCurveCorrector>(correctorPath);
+    module.attr("STOP_PREDICTOR_FEATURE_COUNT") = STOP_PREDICTOR_FEATURE_COUNT;
+    py::class_<SearchStopPolicy>(module, "SearchStopPolicy")
+        .def(py::init([](std::vector<double> checkpointMultiples, std::vector<double> thresholds,
+                         const double movementGuardEpsilon, const double capMultiple,
+                         const std::string &predictorPath, const bool applyLearned) {
+                 std::shared_ptr<const SearchStopPredictor> predictor;
+                 if (!predictorPath.empty()) {
+                     predictor = std::make_shared<SearchStopPredictor>(predictorPath);
                  }
-                 return SearchBudgetPolicy(multiples, lagrangeMultiplier, std::move(corrector),
-                                           applyLearned);
+                 return SearchStopPolicy(std::move(checkpointMultiples), std::move(thresholds),
+                                         movementGuardEpsilon, capMultiple, std::move(predictor),
+                                         applyLearned);
              }),
-             py::arg("multiples"), py::arg("lagrange_multiplier"), py::arg("corrector_path"),
+             py::arg("checkpoint_multiples"), py::arg("thresholds"),
+             py::arg("movement_guard_epsilon"), py::arg("cap_multiple"), py::arg("predictor_path"),
              py::arg("apply_learned"))
-        .def_readonly("multiples", &SearchBudgetPolicy::multiples)
-        .def_readonly("lagrange_multiplier", &SearchBudgetPolicy::lagrange_multiplier)
+        .def_readonly("checkpoint_multiples", &SearchStopPolicy::checkpoint_multiples)
+        .def_readonly("thresholds", &SearchStopPolicy::thresholds)
+        .def_readonly("movement_guard_epsilon", &SearchStopPolicy::movement_guard_epsilon)
+        .def_readonly("cap_multiple", &SearchStopPolicy::cap_multiple)
         .def_property_readonly(
-            "has_corrector",
-            [](const SearchBudgetPolicy &policy) { return policy.corrector != nullptr; })
-        .def_readonly("apply_learned", &SearchBudgetPolicy::apply_learned);
-    py::class_<SearchBudgetSelectionFeatures>(module, "SearchBudgetSelectionFeatures")
-        .def(py::init([](const double topVisitShare, const double policyEntropy, const double ply,
-                         const double baselineVisits, const double sourceGeneration) {
-                 return SearchBudgetSelectionFeatures{.top_visit_share = topVisitShare,
-                                                      .policy_entropy = policyEntropy,
-                                                      .ply = ply,
-                                                      .baseline_visits = baselineVisits,
-                                                      .source_generation = sourceGeneration};
-             }),
-             py::arg("top_visit_share"), py::arg("policy_entropy"), py::arg("ply"),
-             py::arg("baseline_visits"), py::arg("source_generation"))
-        .def_readonly("top_visit_share", &SearchBudgetSelectionFeatures::top_visit_share)
-        .def_readonly("policy_entropy", &SearchBudgetSelectionFeatures::policy_entropy)
-        .def_readonly("ply", &SearchBudgetSelectionFeatures::ply)
-        .def_readonly("baseline_visits", &SearchBudgetSelectionFeatures::baseline_visits)
-        .def_readonly("source_generation", &SearchBudgetSelectionFeatures::source_generation);
-    py::class_<PredictedSearchBudgetLimit>(module, "PredictedSearchBudgetLimit")
-        .def(py::init<std::uint32_t, SearchBudgetPolicy, std::uint64_t>(),
-             py::arg("baseline_visits"), py::arg("policy"), py::arg("model_generation") = 0)
-        .def_readonly("baseline_visits", &PredictedSearchBudgetLimit::baseline_visits)
-        .def_readonly("policy", &PredictedSearchBudgetLimit::policy)
-        .def_readonly("model_generation", &PredictedSearchBudgetLimit::model_generation);
+            "has_predictor",
+            [](const SearchStopPolicy &policy) { return policy.predictor != nullptr; })
+        .def_readonly("apply_learned", &SearchStopPolicy::apply_learned);
+    py::class_<StoppableSearchLimit>(module, "StoppableSearchLimit")
+        .def(py::init<std::uint32_t, SearchStopPolicy, std::uint64_t, bool>(),
+             py::arg("baseline_visits"), py::arg("policy"), py::arg("model_generation") = 0,
+             py::arg("shadow_only") = false)
+        .def_readonly("baseline_visits", &StoppableSearchLimit::baseline_visits)
+        .def_readonly("policy", &StoppableSearchLimit::policy)
+        .def_readonly("model_generation", &StoppableSearchLimit::model_generation)
+        .def_readonly("shadow_only", &StoppableSearchLimit::shadow_only)
+        .def_property_readonly("searches_to_cap", &StoppableSearchLimit::searchesToCap)
+        .def_property_readonly("cap_additional_visits", &StoppableSearchLimit::capAdditionalVisits);
+    py::class_<StopCheckpointEvaluation>(module, "StopCheckpointEvaluation")
+        .def_readonly("guard_movement", &StopCheckpointEvaluation::guard_movement)
+        .def_readonly("uncertainty", &StopCheckpointEvaluation::uncertainty)
+        .def_readonly("guard_passed", &StopCheckpointEvaluation::guard_passed)
+        .def_readonly("predictor_evaluated", &StopCheckpointEvaluation::predictor_evaluated)
+        .def_readonly("would_stop", &StopCheckpointEvaluation::would_stop);
     module.def(
-        "select_budget_index",
-        [](const SearchBudgetPolicy &policy, const SearchBudgetCurvePrediction &prediction,
-           const SearchBudgetSelectionFeatures &features) {
-            return selectBudgetIndex(policy, prediction, features);
+        "evaluate_stop_rule",
+        [](const SearchStopPolicy &policy, const std::size_t checkpointIndex,
+           const StopPredictorFeatures &features) {
+            return evaluateStopRule(policy, checkpointIndex, features);
         },
-        py::arg("policy"), py::arg("prediction"), py::arg("features"));
-    module.def(
-        "correct_budget_curve",
-        [](const SearchBudgetPolicy &policy, const SearchBudgetCurvePrediction &prediction,
-           const SearchBudgetSelectionFeatures &features) {
-            return correctBudgetCurve(policy, prediction, features);
-        },
-        py::arg("policy"), py::arg("prediction"), py::arg("features"));
+        py::arg("policy"), py::arg("checkpoint_index"), py::arg("features"));
     module.def("search_parallelism", &searchParallelism, py::arg("additional_visits"));
     py::class_<GameSearchResult>(module, "GameSearchResult")
         .def_readonly("root_value", &GameSearchResult::root_value)
@@ -226,13 +220,12 @@ void bind_search(py::module_ &module) {
         .def_readonly("network_root_value", &GameSearchResult::network_root_value)
         .def_readonly("policy_correction", &GameSearchResult::policy_correction)
         .def_readonly("value_correction", &GameSearchResult::value_correction)
-        .def_readonly("predicted_budget_curve", &GameSearchResult::predicted_budget_curve)
-        .def_readonly("root_prior_top_share", &GameSearchResult::root_prior_top_share)
-        .def_readonly("root_prior_entropy", &GameSearchResult::root_prior_entropy)
-        .def_readonly("selected_budget_index", &GameSearchResult::selected_budget_index)
-        .def_readonly("assigned_additional_visits", &GameSearchResult::assigned_additional_visits)
+        .def_readonly("stop_checkpoint_index", &GameSearchResult::stop_checkpoint_index)
+        .def_readonly("stop_probabilities", &GameSearchResult::stop_probabilities)
+        .def_readonly("guard_movements", &GameSearchResult::guard_movements)
+        .def_readonly("stop_verdicts", &GameSearchResult::stop_verdicts)
+        .def_readonly("stop_features", &GameSearchResult::stop_features)
         .def_readonly("parallel_searches", &GameSearchResult::parallel_searches)
-        .def_readonly("spend_residual", &GameSearchResult::spend_residual)
         .def_readonly("starting_visits", &GameSearchResult::starting_visits)
         .def_readonly("final_visits", &GameSearchResult::final_visits)
         .def_readonly("stop_reason", &GameSearchResult::stop_reason)
@@ -255,11 +248,11 @@ void bind_search(py::module_ &module) {
         .def_readonly("exploration_constant", &AnalysisParameters::exploration_constant)
         .def_readonly("inference", &AnalysisParameters::inference);
     py::class_<SelfPlaySearchParameters>(module, "SelfPlaySearchParameters")
-        .def(py::init<std::uint32_t, SearchBudgetPolicy, TreeSearchParameters, float, float>(),
-             py::arg("baseline_visits"), py::arg("search_budget_policy"), py::arg("tree_search"),
+        .def(py::init<std::uint32_t, SearchStopPolicy, TreeSearchParameters, float, float>(),
+             py::arg("baseline_visits"), py::arg("search_stop_policy"), py::arg("tree_search"),
              py::arg("dirichlet_alpha"), py::arg("dirichlet_epsilon"))
         .def_readwrite("baseline_visits", &SelfPlaySearchParameters::baseline_visits)
-        .def_readwrite("search_budget_policy", &SelfPlaySearchParameters::search_budget_policy)
+        .def_readwrite("search_stop_policy", &SelfPlaySearchParameters::search_stop_policy)
         .def_readwrite("tree_search", &SelfPlaySearchParameters::tree_search)
         .def_readwrite("dirichlet_alpha", &SelfPlaySearchParameters::dirichlet_alpha)
         .def_readwrite("dirichlet_epsilon", &SelfPlaySearchParameters::dirichlet_epsilon);

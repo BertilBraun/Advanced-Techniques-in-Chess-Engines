@@ -20,18 +20,18 @@
 
 struct SelfPlaySearchParameters {
     std::uint32_t baseline_visits;
-    SearchBudgetPolicy search_budget_policy;
+    SearchStopPolicy search_stop_policy;
     TreeSearchParameters tree_search;
     float dirichlet_alpha;
     float dirichlet_epsilon;
 
-    SelfPlaySearchParameters(const std::uint32_t baselineVisits,
-                             SearchBudgetPolicy searchBudgetPolicy, TreeSearchParameters treeSearch,
-                             const float dirichletAlpha, const float dirichletEpsilon)
-        : baseline_visits(baselineVisits), search_budget_policy(std::move(searchBudgetPolicy)),
+    SelfPlaySearchParameters(const std::uint32_t baselineVisits, SearchStopPolicy searchStopPolicy,
+                             TreeSearchParameters treeSearch, const float dirichletAlpha,
+                             const float dirichletEpsilon)
+        : baseline_visits(baselineVisits), search_stop_policy(std::move(searchStopPolicy)),
           tree_search(treeSearch), dirichlet_alpha(dirichletAlpha),
           dirichlet_epsilon(dirichletEpsilon) {
-        static_cast<void>(PredictedSearchBudgetLimit(baseline_visits, search_budget_policy));
+        static_cast<void>(StoppableSearchLimit(baseline_visits, search_stop_policy));
     }
 
     [[nodiscard]] std::uint32_t initialArenaCapacity() const {
@@ -39,8 +39,10 @@ struct SelfPlaySearchParameters {
     }
 
     [[nodiscard]] std::uint32_t maximumArenaCapacity() const {
+        // Audit searches run to the cap even under a closed policy, so the arena always reserves
+        // for the cap rather than for the published policy's own limit.
         const std::uint64_t maximumSearches = maximumAdditionalVisits(
-            PredictedSearchBudgetLimit(baseline_visits, search_budget_policy));
+            StoppableSearchLimit(baseline_visits, search_stop_policy, 0, true));
         return checkedArenaCapacity(maximumSearches, 16U);
     }
 
@@ -73,6 +75,9 @@ template <SearchGame Game> struct SelfPlaySearchRequest {
     bool force_root_playouts;
     SearchCheckpointDetail checkpoint_detail = SearchCheckpointDetail::Scalars;
     std::uint32_t root_ply = 0;
+    // Audit positions record the stop rule's verdicts and always search to the cap, never
+    // stopping early: the label source of the adaptive-stopping loop.
+    bool audit = false;
 };
 
 template <SearchGame Game> struct SelfPlaySearchResult {
@@ -85,13 +90,12 @@ template <SearchGame Game> struct SelfPlaySearchResult {
     float network_root_value;
     float policy_correction;
     float value_correction;
-    SearchBudgetCurvePrediction predicted_budget_curve;
-    float root_prior_top_share;
-    float root_prior_entropy;
-    int selected_budget_index;
-    std::uint32_t assigned_additional_visits;
+    int stop_checkpoint_index;
+    std::vector<double> stop_probabilities;
+    std::vector<double> guard_movements;
+    std::vector<std::uint8_t> stop_verdicts;
+    std::vector<StopPredictorFeatures> stop_features;
     std::uint32_t parallel_searches;
-    std::int64_t spend_residual;
     std::uint32_t starting_visits;
     std::uint32_t final_visits;
     SearchStopReason stop_reason;
@@ -143,9 +147,9 @@ public:
             const SearchLimit limit =
                 request.assigned_additional_visits.has_value()
                     ? SearchLimit{AdditionalSearchLimit(*request.assigned_additional_visits)}
-                    : SearchLimit{PredictedSearchBudgetLimit(
-                          m_searchParameters.baseline_visits,
-                          m_searchParameters.search_budget_policy, m_search->modelGeneration())};
+                    : SearchLimit{StoppableSearchLimit(m_searchParameters.baseline_visits,
+                                                       m_searchParameters.search_stop_policy,
+                                                       m_search->modelGeneration(), request.audit)};
             engineRequests.push_back({
                 .root = request.root,
                 .limit = limit,
@@ -157,8 +161,7 @@ public:
                 .root_ply = request.root_ply,
             });
         }
-        GameSearchBatchResult searched =
-            m_search->searchDetailed(engineRequests, &m_budgetAllocator);
+        GameSearchBatchResult searched = m_search->searchDetailed(engineRequests);
         std::vector<Result> results;
         results.reserve(requests.size());
         for (const auto index : range(requests.size())) {
@@ -174,13 +177,12 @@ public:
                 .network_root_value = searched.results[index].network_root_value,
                 .policy_correction = searched.results[index].policy_correction,
                 .value_correction = searched.results[index].value_correction,
-                .predicted_budget_curve = searched.results[index].predicted_budget_curve,
-                .root_prior_top_share = searched.results[index].root_prior_top_share,
-                .root_prior_entropy = searched.results[index].root_prior_entropy,
-                .selected_budget_index = searched.results[index].selected_budget_index,
-                .assigned_additional_visits = searched.results[index].assigned_additional_visits,
+                .stop_checkpoint_index = searched.results[index].stop_checkpoint_index,
+                .stop_probabilities = std::move(searched.results[index].stop_probabilities),
+                .guard_movements = std::move(searched.results[index].guard_movements),
+                .stop_verdicts = std::move(searched.results[index].stop_verdicts),
+                .stop_features = std::move(searched.results[index].stop_features),
                 .parallel_searches = searched.results[index].parallel_searches,
-                .spend_residual = searched.results[index].spend_residual,
                 .starting_visits = searched.results[index].starting_visits,
                 .final_visits = searched.results[index].final_visits,
                 .stop_reason = searched.results[index].stop_reason,
@@ -200,16 +202,6 @@ public:
     [[nodiscard]] std::uint32_t arenaCapacity() const {
         const std::shared_lock lock(m_operationMutex);
         return m_arenaCapacity;
-    }
-
-    [[nodiscard]] std::int64_t spendResidual() const {
-        const std::shared_lock lock(m_operationMutex);
-        return m_budgetAllocator.spendError();
-    }
-
-    void resetSpendResidual() {
-        const std::unique_lock lock(m_operationMutex);
-        m_budgetAllocator.reset();
     }
 
     [[nodiscard]] std::uint64_t modelGeneration() const {
@@ -252,7 +244,6 @@ private:
     std::uint32_t m_arenaCapacity;
     BatchedInferenceParameters m_inferenceParameters;
     std::unique_ptr<BatchedGameSearch<Game>> m_search;
-    SearchBudgetAllocator m_budgetAllocator;
     mutable std::shared_mutex m_operationMutex;
 
     [[nodiscard]] static BatchedSearchParameters

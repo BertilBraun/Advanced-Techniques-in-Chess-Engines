@@ -45,9 +45,8 @@ public:
     }
 
     [[nodiscard]] GameSearchBatchResult
-    searchDetailed(const std::vector<GameSearchRequest<Game>> &requests,
-                   SearchBudgetAllocator *budgetAllocator = nullptr) {
-        return m_executor.searchDetailed(requests, budgetAllocator);
+    searchDetailed(const std::vector<GameSearchRequest<Game>> &requests) {
+        return m_executor.searchDetailed(requests);
     }
 
     [[nodiscard]] std::vector<SearchInferenceResult<Game>>

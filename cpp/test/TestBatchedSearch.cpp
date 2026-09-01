@@ -19,33 +19,54 @@ TreeSearchParameters treeSearchParameters(const float explorationConstant = 1.5F
 }
 
 std::filesystem::path createTestModel(const std::string &name, const float win, const float draw,
-                                      const float loss, const float searchBudgetValue = 0.0F,
-                                      const bool validOutput = true,
-                                      const bool validBudgetWidth = true) {
+                                      const float loss, const bool validOutput = true,
+                                      const bool legacyThreeTensorOutput = false) {
     torch::jit::script::Module model("batched_search_test");
     model.register_parameter("outcome_parameter",
                              validOutput ? torch::tensor({win, draw}) : torch::tensor({win}),
                              false);
     model.register_buffer("outcome_buffer", torch::tensor({loss}));
-    model.register_buffer("search_budget_curve",
-                          validBudgetWidth
-                              ? torch::full({static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS)},
-                                            searchBudgetValue)
-                              : torch::full({1}, searchBudgetValue));
-    model.define(R"JIT(
-        def forward(self, boards):
-            batch_size = boards.size(0)
-            policies = torch.zeros((batch_size, )JIT" +
-                 std::to_string(ChessEncoding::actionCount) + R"JIT(), device=boards.device)
-            outcome = torch.cat((self.outcome_parameter, self.outcome_buffer))
-            outcomes = outcome.unsqueeze(0).repeat((batch_size, 1))
-            search_budgets = self.search_budget_curve.unsqueeze(0).repeat((batch_size, 1))
-            return policies, outcomes, search_budgets
-    )JIT");
+    if (legacyThreeTensorOutput) {
+        model.define(R"JIT(
+            def forward(self, boards):
+                batch_size = boards.size(0)
+                policies = torch.zeros((batch_size, )JIT" +
+                     std::to_string(ChessEncoding::actionCount) + R"JIT(), device=boards.device)
+                outcome = torch.cat((self.outcome_parameter, self.outcome_buffer))
+                outcomes = outcome.unsqueeze(0).repeat((batch_size, 1))
+                legacy = torch.zeros((batch_size, 8), device=boards.device)
+                return policies, outcomes, legacy
+        )JIT");
+    } else {
+        model.define(R"JIT(
+            def forward(self, boards):
+                batch_size = boards.size(0)
+                policies = torch.zeros((batch_size, )JIT" +
+                     std::to_string(ChessEncoding::actionCount) + R"JIT(), device=boards.device)
+                outcome = torch.cat((self.outcome_parameter, self.outcome_buffer))
+                outcomes = outcome.unsqueeze(0).repeat((batch_size, 1))
+                return policies, outcomes
+        )JIT");
+    }
     const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path path =
         std::filesystem::temp_directory_path() /
         ("batched-search-test-" + name + "-" + std::to_string(uniqueSuffix) + ".jit.pt");
+    model.save(path.string());
+    return path;
+}
+
+std::filesystem::path createStopPredictorModel(const std::string &name, const float uncertainty) {
+    torch::jit::script::Module model("stop_predictor_test");
+    model.register_buffer("uncertainty", torch::tensor({uncertainty}));
+    model.define(R"JIT(
+        def forward(self, features):
+            return self.uncertainty.unsqueeze(0).repeat((features.size(0), 1))
+    )JIT");
+    const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() /
+        ("stop-predictor-test-" + name + "-" + std::to_string(uniqueSuffix) + ".jit.pt");
     model.save(path.string());
     return path;
 }
@@ -56,30 +77,33 @@ void require(const bool condition, const std::string &message) {
     }
 }
 
-std::filesystem::path createCorrectorModel(const std::string &name, const torch::Tensor &weight) {
-    torch::jit::script::Module model("budget_corrector_test");
-    model.register_buffer("weight", weight);
-    model.define(R"JIT(
-        def forward(self, features):
-            return torch.matmul(features, self.weight.t())
-    )JIT");
-    const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
-    const std::filesystem::path path =
-        std::filesystem::temp_directory_path() /
-        ("budget-corrector-test-" + name + "-" + std::to_string(uniqueSuffix) + ".jit.pt");
-    model.save(path.string());
-    return path;
+// A published closed policy still carries the configured checkpoint multiples so audit searches
+// can run to the cap and record labels while the gate is closed.
+SearchStopPolicy closedPolicy() {
+    return SearchStopPolicy({0.5, 1.0, 1.5}, {0.0, 0.0, 0.0}, 100.0, 2.0, nullptr, false);
+}
+
+SearchStopPolicy openPolicy(const std::filesystem::path &predictorPath,
+                            std::vector<double> thresholds,
+                            const double movementGuardEpsilon = 100.0,
+                            std::vector<double> multiples = {0.5, 1.0, 1.5}) {
+    return SearchStopPolicy(std::move(multiples), std::move(thresholds), movementGuardEpsilon, 2.0,
+                            std::make_shared<SearchStopPredictor>(predictorPath.string()), true);
 }
 
 ChessSelfPlaySearchRequest productionRequest(ChessSelfPlaySearch &search,
-                                             const std::size_t maximumCapacity = 0) {
+                                             std::vector<std::uint32_t> checkpoints = {},
+                                             const bool audit = false) {
     return {
-        .root = search.newRoot(Board{}, maximumCapacity),
+        .root = search.newRoot(Board{}),
         .assigned_additional_visits = std::nullopt,
-        .policy_checkpoint_visits = {},
+        .policy_checkpoint_visits = std::move(checkpoints),
         .parallel_searches = std::nullopt,
         .add_root_noise = false,
         .force_root_playouts = false,
+        .checkpoint_detail = SearchCheckpointDetail::Policies,
+        .root_ply = 0,
+        .audit = audit,
     };
 }
 
@@ -106,326 +130,178 @@ int runBatchedSearchTests() {
     Stockfish::Position::init();
     const std::filesystem::path modelPath =
         createTestModel("initial", 1.0F / 3.0F, 1.0F / 3.0F, 1.0F / 3.0F);
-    const std::filesystem::path updatedModelPath =
-        createTestModel("updated", 0.8F, 0.15F, 0.05F, 2.0F);
+    const std::filesystem::path updatedModelPath = createTestModel("updated", 0.8F, 0.15F, 0.05F);
     const std::filesystem::path invalidModelPath =
-        createTestModel("invalid", 0.5F, 0.5F, 0.0F, 0.0F, false);
-    const std::filesystem::path narrowBudgetModelPath =
-        createTestModel("narrow-budget", 0.5F, 0.5F, 0.0F, 0.0F, true, false);
+        createTestModel("invalid", 0.5F, 0.0F, 0.5F, false);
+    const std::filesystem::path legacyModelPath =
+        createTestModel("legacy", 0.5F, 0.25F, 0.25F, true, true);
+    const std::filesystem::path certainPredictorPath = createStopPredictorModel("certain", 0.0F);
+    const std::filesystem::path uncertainPredictorPath =
+        createStopPredictorModel("uncertain", 1.0F);
+    const auto cleanup = [&]() {
+        std::filesystem::remove(modelPath);
+        std::filesystem::remove(updatedModelPath);
+        std::filesystem::remove(invalidModelPath);
+        std::filesystem::remove(legacyModelPath);
+        std::filesystem::remove(certainPredictorPath);
+        std::filesystem::remove(uncertainPredictorPath);
+    };
     try {
-        const SearchBudgetPolicy flatPolicy;
-        require(!flatPolicy.apply_learned, "default search-budget policy is not flat");
-        const std::array<double, 8> gridMultiples = {0.125,     0.2, 1.0 / 3.0, 0.5,
-                                                     2.0 / 3.0, 1.0, 1.5,       2.0};
-        require(gridMultiples == flatPolicy.multiples,
-                "default grid is not the narrowed 0.125-2x eight-point grid");
-        const SearchBudgetSelectionFeatures neutralFeatures = {.top_visit_share = 1.0,
-                                                               .policy_entropy = 0.0,
-                                                               .ply = 0.0,
-                                                               .baseline_visits = 101.0,
-                                                               .source_generation = 7.0};
-        const SearchBudgetPolicy learnedPolicy(gridMultiples, 1.0, nullptr, true);
+        {
+            const SearchStopPolicy closed = closedPolicy();
+            require(!closed.apply_learned, "the default stop policy is not closed");
+            const StoppableSearchLimit closedLimit(16, closed);
+            require(!closedLimit.searchesToCap() && closedLimit.capAdditionalVisits() == 16,
+                    "a closed policy did not collapse the cap to the baseline");
+            const StoppableSearchLimit auditLimit(16, closed, 0, true);
+            require(auditLimit.searchesToCap() && auditLimit.capAdditionalVisits() == 32,
+                    "an audit search under a closed policy did not search to the cap");
+        }
         try {
-            std::array<double, 8> nonIncreasing = gridMultiples;
-            nonIncreasing[3] = nonIncreasing[2];
-            static_cast<void>(SearchBudgetPolicy(nonIncreasing, 0.0, nullptr, true));
-            throw std::runtime_error("non-increasing grid multiples unexpectedly validated");
+            static_cast<void>(SearchStopPolicy({0.5, 0.5}, {0.1, 0.1}, 0.05, 2.0, nullptr, false));
+            throw std::runtime_error("non-increasing checkpoint multiples validated");
         } catch (const std::invalid_argument &) {
         }
         try {
-            std::array<double, 8> withoutBaseline = gridMultiples;
-            withoutBaseline[5] = 1.1;
-            static_cast<void>(SearchBudgetPolicy(withoutBaseline, 0.0, nullptr, true));
-            throw std::runtime_error("grid without the flat multiple unexpectedly validated");
+            static_cast<void>(SearchStopPolicy({0.5, 2.5}, {0.1, 0.1}, 0.05, 2.0, nullptr, false));
+            throw std::runtime_error("a checkpoint above the cap validated");
         } catch (const std::invalid_argument &) {
         }
         try {
-            static_cast<void>(SearchBudgetPolicy(gridMultiples, -0.5, nullptr, true));
-            throw std::runtime_error("negative Lagrange multiplier unexpectedly validated");
-        } catch (const std::invalid_argument &) {
-        }
-
-        const SearchBudgetCurvePrediction unsortedPrediction = {5.0F, 1.0F, 4.0F, 2.0F,
-                                                                3.0F, 2.0F, 9.0F, 0.0F};
-        const SearchBudgetCurvePrediction expectedProjection = {5.0F, 1.0F, 1.0F, 1.0F,
-                                                                1.0F, 1.0F, 1.0F, 0.0F};
-        require(projectNonIncreasing(unsortedPrediction) == expectedProjection,
-                "isotonic projection is not the running minimum from the cheapest budget upward");
-
-        // A well-formed decreasing curve must survive the projection unchanged; a suffix minimum
-        // would flatten it to its deepest value and reduce selection to a two-point rule.
-        const SearchBudgetCurvePrediction decreasingPrediction = {-1.0F, -1.4F, -1.9F, -2.3F,
-                                                                  -2.6F, -3.0F, -3.4F, -3.9F};
-        require(projectNonIncreasing(decreasingPrediction) == decreasingPrediction,
-                "a well-formed decreasing curve was not a fixed point of the projection");
-
-        // A constant curve buys nothing from extra spend, so the Lagrangian argmin takes the
-        // cheapest grid point for any positive dual.
-        SearchBudgetCurvePrediction cheapPrediction{};
-        require(selectBudgetIndex(learnedPolicy, cheapPrediction, neutralFeatures) == 0,
-                "a flat curve did not select the cheapest grid point");
-        // With a zero dual the objective is exactly the projected KL: ties resolve cheapest.
-        const SearchBudgetPolicy freeSpendPolicy(gridMultiples, 0.0, nullptr, true);
-        require(selectBudgetIndex(freeSpendPolicy, cheapPrediction, neutralFeatures) == 0,
-                "an exact objective tie did not resolve to the cheapest grid point");
-        // exp(curve) = 10, 9, ..., 3 falls by one per grid point while the dual prices the extra
-        // multiples far below one unit of KL, so the deepest point minimises the Lagrangian.
-        const SearchBudgetPolicy cheapDualPolicy(gridMultiples, 0.1, nullptr, true);
-        SearchBudgetCurvePrediction steepPrediction;
-        for (const std::size_t index : range(steepPrediction.size())) {
-            steepPrediction[index] = std::log(10.0F - static_cast<float>(index));
-        }
-        require(selectBudgetIndex(cheapDualPolicy, steepPrediction, neutralFeatures) == 7,
-                "a steeply improving curve did not select the deepest grid point");
-        // The interior of the same curve wins once the dual prices the deep multiples above
-        // their marginal KL reduction.
-        const SearchBudgetPolicy pricedDualPolicy(gridMultiples, 2.5, nullptr, true);
-        require(selectBudgetIndex(pricedDualPolicy, steepPrediction, neutralFeatures) == 5,
-                "an interior Lagrangian optimum was not selected");
-        SearchBudgetCurvePrediction dippingPrediction;
-        dippingPrediction.fill(5.0F);
-        dippingPrediction[6] = -3.0F;
-        // The projection may only pull deeper points down to a cheaper point's level, never the
-        // reverse, so the dip is the first point whose projected KL is cheap.
-        require(selectBudgetIndex(learnedPolicy, dippingPrediction, neutralFeatures) == 6,
-                "isotonic projection did not keep a dip at its own grid point");
-
-        // A linear TorchScript corrector applies exactly correction[k] = weight[k] . input with
-        // the documented input order: curve, top share, entropy, ply, baseline, generation.
-        torch::Tensor correctorWeight =
-            torch::zeros({static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS),
-                          static_cast<std::int64_t>(SearchBudgetCurveCorrector::FEATURE_COUNT)});
-        correctorWeight[3][3] = 0.5;     // the point's own prediction
-        correctorWeight[3][8] = -1.0;    // top visit share
-        correctorWeight[3][9] = 0.25;    // policy entropy
-        correctorWeight[3][10] = 0.01;   // ply
-        correctorWeight[3][11] = -0.001; // baseline visits
-        correctorWeight[3][12] = 0.002;  // source generation
-        const std::filesystem::path linearCorrectorPath =
-            createCorrectorModel("linear", correctorWeight);
-        const SearchBudgetPolicy correctedPolicy(
-            gridMultiples, 1.0,
-            std::make_shared<SearchBudgetCurveCorrector>(linearCorrectorPath.string()), true);
-        const SearchBudgetSelectionFeatures richFeatures = {.top_visit_share = 0.6,
-                                                            .policy_entropy = 1.2,
-                                                            .ply = 40.0,
-                                                            .baseline_visits = 400.0,
-                                                            .source_generation = 25.0};
-        SearchBudgetCurvePrediction correctionInput{};
-        correctionInput[3] = -2.0F;
-        const std::array<double, 8> corrected =
-            correctBudgetCurve(correctedPolicy, correctionInput, richFeatures);
-        const double expectedThird = -2.0 + 0.5 * -2.0 + -1.0 * 0.6 + 0.25 * 1.2 + 0.01 * 40.0 +
-                                     -0.001 * 400.0 + 0.002 * 25.0;
-        require(std::abs(corrected[3] - expectedThird) < 1e-6 && corrected[0] == 0.0,
-                "curve correction is not the corrector output added to the prediction");
-        std::filesystem::remove(linearCorrectorPath);
-
-        // A corrector steering the deepest point down moves the Lagrangian argmin there.
-        torch::Tensor deepWeight =
-            torch::zeros({static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS),
-                          static_cast<std::int64_t>(SearchBudgetCurveCorrector::FEATURE_COUNT)});
-        deepWeight[7][8] = -3.0; // -3 log-KL on the deepest point at top share one
-        const std::filesystem::path deepCorrectorPath = createCorrectorModel("deep", deepWeight);
-        const SearchBudgetPolicy deepCorrectedPolicy(
-            gridMultiples, 0.01,
-            std::make_shared<SearchBudgetCurveCorrector>(deepCorrectorPath.string()), true);
-        require(selectBudgetIndex(deepCorrectedPolicy, cheapPrediction, neutralFeatures) == 7,
-                "a corrector did not steer the Lagrangian argmin");
-        std::filesystem::remove(deepCorrectorPath);
-
-        // A corrector whose output is not one value per grid point must fail at load.
-        const std::filesystem::path narrowCorrectorPath = createCorrectorModel(
-            "narrow", torch::zeros({1, static_cast<std::int64_t>(
-                                           SearchBudgetCurveCorrector::FEATURE_COUNT)}));
-        try {
-            static_cast<void>(SearchBudgetCurveCorrector(narrowCorrectorPath.string()));
-            std::filesystem::remove(narrowCorrectorPath);
-            throw std::runtime_error("narrow corrector output unexpectedly validated");
-        } catch (const std::invalid_argument &) {
-            std::filesystem::remove(narrowCorrectorPath);
-        }
-        // A corrector with non-finite parameters must fail its load-time probe.
-        torch::Tensor infiniteWeight =
-            torch::full({static_cast<std::int64_t>(SEARCH_BUDGET_CURVE_POINTS),
-                         static_cast<std::int64_t>(SearchBudgetCurveCorrector::FEATURE_COUNT)},
-                        std::numeric_limits<float>::infinity());
-        const std::filesystem::path infiniteCorrectorPath =
-            createCorrectorModel("infinite", infiniteWeight);
-        try {
-            static_cast<void>(SearchBudgetCurveCorrector(infiniteCorrectorPath.string()));
-            std::filesystem::remove(infiniteCorrectorPath);
-            throw std::runtime_error("non-finite corrector unexpectedly validated");
-        } catch (const std::invalid_argument &) {
-            std::filesystem::remove(infiniteCorrectorPath);
-        }
-        try {
-            static_cast<void>(SearchBudgetCurveCorrector("/nonexistent/corrector.jit.pt"));
-            throw std::runtime_error("missing corrector file unexpectedly validated");
+            static_cast<void>(SearchStopPolicy({0.5}, {0.1}, 0.05, 2.0, nullptr, true));
+            throw std::runtime_error("an applied policy without a predictor validated");
         } catch (const std::invalid_argument &) {
         }
 
         const std::array<std::uint32_t, 5> budgets = {100, 300, 600, 1'600, 2'400};
         const std::array<std::uint32_t, 5> expectedParallelism = {2, 2, 4, 8, 16};
-        for (const std::size_t index : range(budgets.size())) {
+        for (std::size_t index = 0; index < budgets.size(); ++index) {
             require(searchParallelism(budgets[index]) == expectedParallelism[index],
-                    "production parallelism mapping changed");
+                    "search parallelism schedule changed");
         }
-        require(searchParallelism(100'000) == 16, "production parallelism exceeded its cap");
-
-        SearchBudgetAllocator allocator;
-        const PredictedSearchBudgetLimit learnedLimit(101, learnedPolicy);
-        const AssignedSearchBudget firstAssigned =
-            allocator.assign(learnedLimit, cheapPrediction, neutralFeatures);
-        require(firstAssigned.selected_index == 0 && firstAssigned.additional_visits == 13,
-                "first learned assignment did not round the cheapest grid budget");
-        std::uint64_t assignedTotal = firstAssigned.additional_visits;
-        constexpr std::uint32_t allocationCount = 10'000;
-        for (const auto index : range(allocationCount - 1)) {
-            static_cast<void>(index);
-            assignedTotal +=
-                allocator.assign(learnedLimit, cheapPrediction, neutralFeatures).additional_visits;
-        }
-        require(std::abs(static_cast<std::int64_t>(assignedTotal) -
-                         static_cast<std::int64_t>(allocationCount) * 101) <= 8 * 101 + 1,
-                "constantly cheap predictions violated cumulative mean-spend accounting");
-        require(allocator.spendError() == static_cast<std::int64_t>(assignedTotal) -
-                                              static_cast<std::int64_t>(allocationCount) * 101,
-                "spend ledger does not equal assigned-minus-baseline");
-        const std::int64_t errorBeforeFlat = allocator.spendError();
-        const PredictedSearchBudgetLimit flatLimit(101, flatPolicy);
-        for (const auto index : range(100)) {
-            static_cast<void>(index);
-            const AssignedSearchBudget flatAssigned =
-                allocator.assign(flatLimit, cheapPrediction, neutralFeatures);
-            require(flatAssigned.additional_visits == 101 && flatAssigned.selected_index == -1,
-                    "flat policy did not assign exactly the baseline");
-        }
-        require(allocator.spendError() == errorBeforeFlat,
-                "flat policy mutated the learned spend ledger");
-        require(maximumAdditionalVisits(learnedLimit) == 808,
-                "predicted search capacity did not use the eight-times-baseline cap");
 
         const InferenceConfiguration runtimeParameters(0, modelPath.string(), InferenceDevice::Cpu);
-        const SelfPlaySearchParameters searchParameters(16, flatPolicy, treeSearchParameters(),
+        const SelfPlaySearchParameters searchParameters(16, closedPolicy(), treeSearchParameters(),
                                                         0.3F, 0.0F);
         const BatchedInferenceParameters inferenceParameters(2, 8, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
-        const auto baselineSizedRoot = search.newRoot(Board{});
-        require(baselineSizedRoot.tree().capacity() == 19 &&
-                    baselineSizedRoot.tree().maximumCapacity() == 145,
-                "production root arena capacities were " +
-                    std::to_string(baselineSizedRoot.tree().capacity()) + "/" +
-                    std::to_string(baselineSizedRoot.tree().maximumCapacity()));
-        const auto grownArenaResult = search.search({{
-            .root = baselineSizedRoot,
-            .assigned_additional_visits = 24,
-            .policy_checkpoint_visits = {},
-            .parallel_searches = 2,
-            .add_root_noise = false,
-            .force_root_playouts = false,
-        }});
-        require(grownArenaResult.results.front().root.tree().capacity() == 38 &&
-                    grownArenaResult.results.front().root.tree().maximumCapacity() == 145,
-                "production root did not grow within its configured adaptive-search bound");
-        const auto predictionRoot = search.newRoot(Board{}, 3);
-        require(predictionRoot.tree().maximumCapacity() == 3,
-                "per-root capacity did not constrain the initial arena allocation");
-        const auto tightDeepSearch = search.search({{
-            .root = search.newRoot(Board{}, 19),
-            .assigned_additional_visits = 16,
-            .policy_checkpoint_visits = {},
-            .parallel_searches = 2,
-            .add_root_noise = false,
-            .force_root_playouts = true,
-        }});
-        require(tightDeepSearch.results.front().final_visits == 16,
-                "deep-label arena bound did not reserve parallel-search and reroot slots");
-        std::vector<ChessSelfPlaySearchRequest> productionRequests = {productionRequest(search),
-                                                                      productionRequest(search)};
-        const auto production = search.search(productionRequests, true);
-        require(production.simulations_completed == 32 && production.results.size() == 2,
-                "flat predicted allocation completed the wrong total visits");
-        for (const auto &result : production.results) {
-            require(result.assigned_additional_visits == 16 && result.starting_visits == 0 &&
-                        result.final_visits == 16,
-                    "predicted allocation did not expose additional-visit semantics");
-            require(result.parallel_searches == 2,
-                    "small predicted budget used the wrong parallelism");
-            require(result.selected_budget_index == -1,
-                    "flat allocation reported a learned grid selection");
-            require(std::ranges::all_of(result.predicted_budget_curve,
-                                        [](const float value) { return value == 0.0F; }),
-                    "native root did not preserve the predicted budget curve");
+
+        // The fail-closed identity: a closed stoppable production search must be bit-identical
+        // to a flat additional-visit search of the baseline.
+        const auto closedResult = search.search({productionRequest(search)}).results.front();
+        const auto flatResult = search.search({fixedRequest(search, 16, {}, 2)}).results.front();
+        require(closedResult.final_visits == 16 && closedResult.starting_visits == 0,
+                "closed policy did not run flat to the baseline");
+        require(closedResult.stop_reason == SearchStopReason::AdditionalVisits &&
+                    flatResult.stop_reason == SearchStopReason::AdditionalVisits,
+                "closed policy did not report the flat stop reason");
+        require(closedResult.stop_checkpoint_index == -1 && closedResult.checkpoints.empty() &&
+                    closedResult.stop_features.empty(),
+                "closed policy evaluated the stop rule");
+        require(closedResult.final_visits == flatResult.final_visits &&
+                    closedResult.root_value == flatResult.root_value,
+                "closed stoppable search diverged from the flat baseline search");
+        try {
+            static_cast<void>(search.search({productionRequest(search, {8})}));
+            throw std::runtime_error("closed policy accepted checkpoints");
+        } catch (const std::invalid_argument &) {
         }
 
-        ChessSelfPlaySearchRequest retained{
-            .root = production.results.front().root,
-            .assigned_additional_visits = std::nullopt,
-            .policy_checkpoint_visits = {},
-            .parallel_searches = std::nullopt,
-            .add_root_noise = false,
-            .force_root_playouts = false,
-        };
-        const auto retainedResult = search.search({retained}).results.front();
-        require(retainedResult.starting_visits == 16 &&
-                    retainedResult.assigned_additional_visits == 16 &&
-                    retainedResult.final_visits == 32,
-                "retained root treated the assigned budget as an absolute visit limit");
+        // Shadow audit: runs to the cap, records verdicts at every checkpoint, never stops.
+        const auto auditResult =
+            search.search({productionRequest(search, {8, 16, 24}, true)}).results.front();
+        require(auditResult.final_visits == 32 &&
+                    auditResult.stop_reason == SearchStopReason::CapReached,
+                "audit search did not run to the cap");
+        require(auditResult.checkpoints.size() == 3 && auditResult.stop_features.size() == 3 &&
+                    auditResult.guard_movements.size() == 3 &&
+                    auditResult.stop_checkpoint_index == -1,
+                "audit search did not record every checkpoint evaluation");
+        require(std::ranges::all_of(auditResult.stop_probabilities,
+                                    [](const double value) { return value == -1.0; }),
+                "audit search under a closed policy evaluated a predictor");
+        for (const StopPredictorFeatures &features : auditResult.stop_features) {
+            require(std::ranges::all_of(features,
+                                        [](const double value) { return std::isfinite(value); }),
+                    "audit checkpoint features were not finite");
+        }
+        // Feature contract spot checks: warmth is zero on a fresh root, the checkpoint multiple
+        // is echoed, and the legal-move count matches the initial position.
+        require(auditResult.stop_features[0][16] == 0.0 &&
+                    auditResult.stop_features[1][15] == 1.0 &&
+                    auditResult.stop_features[0][11] == 20.0,
+                "audit checkpoint features broke the binding contract");
 
-        const SelfPlaySearchParameters learnedParameters(16, learnedPolicy, treeSearchParameters(),
-                                                         0.3F, 0.0F);
-        ChessSelfPlaySearch learnedSearch(runtimeParameters, learnedParameters,
+        // A certain predictor behind a permissive guard stops at the first checkpoint.
+        const SelfPlaySearchParameters openParameters(
+            16, openPolicy(certainPredictorPath, {0.5, 0.5, 0.5}), treeSearchParameters(), 0.3F,
+            0.0F);
+        ChessSelfPlaySearch openSearch(runtimeParameters, openParameters, inferenceParameters);
+        const auto stoppedResult =
+            openSearch.search({productionRequest(openSearch, {8, 16, 24})}).results.front();
+        require(stoppedResult.stop_reason == SearchStopReason::LearnedEarlyStop &&
+                    stoppedResult.stop_checkpoint_index == 0 && stoppedResult.final_visits == 8,
+                "a certain predictor did not stop at the first checkpoint");
+        require(stoppedResult.checkpoints.size() == 1 && stoppedResult.stop_verdicts[0] == 1,
+                "an early-stopped search recorded checkpoints past its stop");
+
+        // The same open policy in shadow mode records the verdict but completes the cap.
+        const auto shadowResult =
+            openSearch.search({productionRequest(openSearch, {8, 16, 24}, true)}).results.front();
+        require(shadowResult.final_visits == 32 && shadowResult.stop_checkpoint_index == -1 &&
+                    shadowResult.stop_verdicts[0] == 1,
+                "shadow mode did not record the verdict while completing the cap");
+
+        // An uncertain predictor never stops and the search reaches the cap.
+        const SelfPlaySearchParameters cautiousParameters(
+            16, openPolicy(uncertainPredictorPath, {0.5, 0.5, 0.5}), treeSearchParameters(), 0.3F,
+            0.0F);
+        ChessSelfPlaySearch cautiousSearch(runtimeParameters, cautiousParameters,
+                                           inferenceParameters);
+        const auto cautiousResult =
+            cautiousSearch.search({productionRequest(cautiousSearch, {8, 16, 24})}).results.front();
+        require(cautiousResult.stop_reason == SearchStopReason::CapReached &&
+                    cautiousResult.final_visits == 32,
+                "an uncertain predictor stopped a search");
+
+        // A tiny movement guard blocks stopping even for a certain predictor.
+        const SelfPlaySearchParameters guardedParameters(
+            16, openPolicy(certainPredictorPath, {0.5, 0.5, 0.5}, 1e-12), treeSearchParameters(),
+            0.3F, 0.0F);
+        ChessSelfPlaySearch guardedSearch(runtimeParameters, guardedParameters,
                                           inferenceParameters);
-        const auto learnedResult =
-            learnedSearch.search({productionRequest(learnedSearch)}).results.front();
-        // The test model predicts a zero curve, which qualifies the cheapest grid point.
-        require(learnedResult.selected_budget_index == 0 &&
-                    learnedResult.assigned_additional_visits == 2,
-                "learned policy did not select and round the cheapest grid budget");
-        require(learnedResult.spend_residual == learnedSearch.spendResidual(),
-                "predicted request did not expose its exact post-assignment spend residual");
-        const std::int64_t residualBeforeExplicit = learnedSearch.spendResidual();
-        const auto explicitResult =
-            learnedSearch.search({fixedRequest(learnedSearch, 50, {}, 1)}).results.front();
-        require(explicitResult.spend_residual == residualBeforeExplicit &&
-                    learnedSearch.spendResidual() == residualBeforeExplicit,
-                "explicit deep-label budget mutated the production spend ledger");
+        const auto guardedResult =
+            guardedSearch.search({productionRequest(guardedSearch, {8, 16, 24})}).results.front();
+        require(guardedResult.stop_reason == SearchStopReason::CapReached &&
+                    std::ranges::all_of(guardedResult.stop_probabilities,
+                                        [](const double value) { return value == -1.0; }),
+                "the movement guard did not block the predictor");
 
+        // Checkpoint exactness under parallelism, retained-root growth and validation.
         std::vector<ChessSelfPlaySearchRequest> heterogeneous;
         for (const std::uint32_t budget : budgets) {
             heterogeneous.push_back(fixedRequest(search, budget));
         }
         const auto heterogeneousResults = search.search(heterogeneous);
-        for (const std::size_t index : range(budgets.size())) {
-            require(heterogeneousResults.results[index].assigned_additional_visits ==
-                            budgets[index] &&
+        for (std::size_t index = 0; index < budgets.size(); ++index) {
+            require(heterogeneousResults.results[index].final_visits == budgets[index] &&
                         heterogeneousResults.results[index].parallel_searches ==
-                            expectedParallelism[index] &&
-                        heterogeneousResults.results[index].final_visits == budgets[index],
-                    "simultaneous heterogeneous search lost its per-request budget or parallelism");
+                            expectedParallelism[index],
+                    "simultaneous heterogeneous search lost its per-request budget");
         }
-
         const auto checkpointResult =
-            search.search({fixedRequest(search, 80, {20, 40, 80}, 1)}).results.front();
+            search.search({fixedRequest(search, 80, {20, 40, 80}, 4)}).results.front();
         require(checkpointResult.checkpoints.size() == 3 &&
                     checkpointResult.checkpoints[0].visits == 20 &&
                     checkpointResult.checkpoints[1].visits == 40 &&
                     checkpointResult.checkpoints[2].visits == 80,
-                "continued search did not return every requested policy checkpoint");
+                "continued search did not return every requested policy checkpoint exactly");
         require(std::ranges::all_of(checkpointResult.checkpoints,
                                     [](const SearchCheckpoint &checkpoint) {
-                                        return !checkpoint.policy_target_visits.empty();
+                                        return !checkpoint.policy_target_visits.empty() &&
+                                               std::isfinite(checkpoint.root_value);
                                     }),
                 "policy checkpoint detail omitted a requested policy snapshot");
-        require(std::ranges::all_of(checkpointResult.checkpoints,
-                                    [](const SearchCheckpoint &checkpoint) {
-                                        return std::isfinite(checkpoint.root_value) &&
-                                               checkpoint.root_value >= -1.0F &&
-                                               checkpoint.root_value <= 1.0F;
-                                    }),
-                "policy checkpoints did not record a bounded root value");
-
         try {
             static_cast<void>(search.search({fixedRequest(search, 80, {40, 20}, 1)}));
             throw std::runtime_error("unsorted checkpoint request unexpectedly validated");
@@ -437,35 +313,43 @@ int runBatchedSearchTests() {
         } catch (const std::invalid_argument &) {
         }
 
+        // Retained root: an audit on a warm root captures the zeroth checkpoint at starting
+        // visits, so warmth and the movement basis reflect the retained tree.
+        ChessSelfPlaySearchRequest retained{
+            .root = checkpointResult.root,
+            .assigned_additional_visits = std::nullopt,
+            .policy_checkpoint_visits = {88, 96, 104},
+            .parallel_searches = std::nullopt,
+            .add_root_noise = false,
+            .force_root_playouts = false,
+            .checkpoint_detail = SearchCheckpointDetail::Policies,
+            .root_ply = 12,
+            .audit = true,
+        };
+        const auto warmResult = search.search({retained}).results.front();
+        require(warmResult.starting_visits == 80 && warmResult.final_visits == 112,
+                "warm audit did not search the cap in additional visits");
+        require(warmResult.stop_features[0][16] == 5.0 && warmResult.stop_features[0][12] == 12.0,
+                "warm audit features did not carry warmth and ply");
+
         search.refreshModel(8, updatedModelPath.string());
         require(search.modelGeneration() == 8, "refresh did not publish its model generation");
-        const auto updated = search.search({productionRequest(search)}).results.front();
-        require(
-            std::ranges::all_of(updated.predicted_budget_curve,
-                                [](const float value) { return std::abs(value - 2.0F) < 1e-7F; }),
-            "model refresh did not update the predicted budget curve");
         try {
             search.refreshModel(9, invalidModelPath.string());
             throw std::runtime_error("invalid model refresh unexpectedly succeeded");
         } catch (const std::invalid_argument &) {
         }
         try {
-            search.refreshModel(9, narrowBudgetModelPath.string());
-            throw std::runtime_error("narrow search-budget head unexpectedly validated");
+            search.refreshModel(9, legacyModelPath.string());
+            throw std::runtime_error("a legacy three-tensor model unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }
         require(search.modelGeneration() == 8,
                 "failed refresh published an unvalidated model generation");
     } catch (...) {
-        std::filesystem::remove(modelPath);
-        std::filesystem::remove(updatedModelPath);
-        std::filesystem::remove(invalidModelPath);
-        std::filesystem::remove(narrowBudgetModelPath);
+        cleanup();
         throw;
     }
-    std::filesystem::remove(modelPath);
-    std::filesystem::remove(updatedModelPath);
-    std::filesystem::remove(invalidModelPath);
-    std::filesystem::remove(narrowBudgetModelPath);
+    cleanup();
     return 0;
 }

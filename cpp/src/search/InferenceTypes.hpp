@@ -13,10 +13,6 @@
 enum class WdlIndex : std::size_t { Win = 0, Draw = 1, Loss = 2, Count = 3 };
 inline constexpr std::size_t WDL_OUTPUT_SIZE = static_cast<std::size_t>(WdlIndex::Count);
 
-// One predicted log-KL value per search-budget grid point.
-inline constexpr std::size_t SEARCH_BUDGET_CURVE_POINTS = 8;
-using SearchBudgetCurvePrediction = std::array<float, SEARCH_BUDGET_CURVE_POINTS>;
-
 struct WdlPrediction {
     float win;
     float draw;
@@ -41,7 +37,6 @@ template <SearchGame Game> struct SearchInferenceResult {
 
     std::vector<ScoredAction<Action>> actions;
     WdlPrediction outcome;
-    SearchBudgetCurvePrediction search_budget_curve;
 
     [[nodiscard]] float value() const noexcept { return outcome.expectedValue(); }
 };

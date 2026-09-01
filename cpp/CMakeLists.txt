@@ -211,6 +211,7 @@ if (BUILD_TESTING)
             NativeTests
             test/TestMain.cpp
             test/TestBatchedSearch.cpp
+            test/TestSearchStopping.cpp
             test/TestBitBoard.cpp
             test/TestBoardLegalMovesCache.cpp
             test/TestChessEncoding.cpp
@@ -227,7 +228,7 @@ if (BUILD_TESTING)
             src/games/chess/encoding/ChessPolicyEncoding.cpp
             src/games/chess/presentation/ChessSearchPresentation.cpp
             src/search/InferencePipeline.cpp
-            src/search/SearchBudgetCorrector.cpp
+            src/search/SearchStopPredictor.cpp
             "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
             "${stockfish_SOURCE_DIR}/src/memory.cpp"
             "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -248,7 +249,7 @@ add_executable(
         src/games/chess/encoding/ChessEncoding.cpp
         src/games/chess/encoding/ChessPolicyEncoding.cpp
         src/search/InferencePipeline.cpp
-        src/search/SearchBudgetCorrector.cpp
+        src/search/SearchStopPredictor.cpp
         src/games/chess/implementation/ChessAction.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"

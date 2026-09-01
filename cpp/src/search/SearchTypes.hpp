@@ -2,19 +2,17 @@
 
 #include "games/GameConcepts.hpp"
 #include "search/InferenceTypes.hpp"
-#include "search/SearchBudgetCorrector.hpp"
+#include "search/SearchStopPredictor.hpp"
 #include "search/SearchTree.hpp"
 #include "search/tree/TreeSearchParameters.hpp"
 
 #include <memory>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <numeric>
 #include <optional>
 #include <ranges>
 #include <stdexcept>
@@ -30,7 +28,7 @@ struct GameSearchVisit {
     bool operator==(const GameSearchVisit &) const = default;
 };
 
-enum class SearchStopReason { FixedLimit, AdditionalVisits, PredictedBudget };
+enum class SearchStopReason { FixedLimit, AdditionalVisits, CapReached, LearnedEarlyStop };
 enum class SearchCheckpointDetail { Scalars, Policies };
 
 struct SearchCheckpoint {
@@ -62,127 +60,104 @@ struct AdditionalSearchLimit {
     }
 };
 
-struct SearchBudgetPolicy {
-    static constexpr std::size_t CURVE_POINTS = SEARCH_BUDGET_CURVE_POINTS;
-
-    std::array<double, CURVE_POINTS> multiples;
-    double lagrange_multiplier;
-    // Null corrector applies the predicted curve unchanged (identity correction).
-    std::shared_ptr<const SearchBudgetCurveCorrector> corrector;
+// Learned early stopping (adaptive-stopping plan, sections 5 and 6). There is exactly one closed
+// state: apply_learned == false is a flat search to the baseline — no checkpoints, no cap. An
+// open policy may attenuate individual checkpoints (threshold 0 stops nothing there) but always
+// caps at cap_multiple times the baseline.
+struct SearchStopPolicy {
+    std::vector<double> checkpoint_multiples;
+    std::vector<double> thresholds;
+    double movement_guard_epsilon;
+    double cap_multiple;
+    std::shared_ptr<const SearchStopPredictor> predictor;
     bool apply_learned;
 
-    SearchBudgetPolicy()
-        : multiples{0.125, 0.2, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5, 2.0}, lagrange_multiplier(0.0),
-          corrector(nullptr), apply_learned(false) {}
+    SearchStopPolicy()
+        : checkpoint_multiples(), thresholds(), movement_guard_epsilon(1e-3), cap_multiple(2.0),
+          predictor(nullptr), apply_learned(false) {}
 
-    SearchBudgetPolicy(std::array<double, CURVE_POINTS> gridMultiples,
-                       const double lagrangeMultiplier,
-                       std::shared_ptr<const SearchBudgetCurveCorrector> curveCorrector,
-                       const bool applyLearned)
-        : multiples(gridMultiples), lagrange_multiplier(lagrangeMultiplier),
-          corrector(std::move(curveCorrector)), apply_learned(applyLearned) {
-        if (std::ranges::any_of(multiples, [](const double multiple) {
+    SearchStopPolicy(std::vector<double> checkpointMultiples, std::vector<double> stopThresholds,
+                     const double movementGuardEpsilon, const double capMultiple,
+                     std::shared_ptr<const SearchStopPredictor> stopPredictor,
+                     const bool applyLearned)
+        : checkpoint_multiples(std::move(checkpointMultiples)),
+          thresholds(std::move(stopThresholds)), movement_guard_epsilon(movementGuardEpsilon),
+          cap_multiple(capMultiple), predictor(std::move(stopPredictor)),
+          apply_learned(applyLearned) {
+        if (thresholds.size() != checkpoint_multiples.size()) {
+            throw std::invalid_argument(
+                "A stop policy requires one threshold per checkpoint multiple");
+        }
+        if (std::ranges::any_of(checkpoint_multiples, [](const double multiple) {
                 return !std::isfinite(multiple) || multiple <= 0.0;
             })) {
-            throw std::invalid_argument("Search-budget grid multiples must be finite and positive");
+            throw std::invalid_argument("Stop checkpoint multiples must be finite and positive");
         }
-        for (std::size_t index = 1; index < CURVE_POINTS; ++index) {
-            if (multiples[index] <= multiples[index - 1]) {
+        for (std::size_t index = 1; index < checkpoint_multiples.size(); ++index) {
+            if (checkpoint_multiples[index] <= checkpoint_multiples[index - 1]) {
                 throw std::invalid_argument(
-                    "Search-budget grid multiples must be strictly increasing");
+                    "Stop checkpoint multiples must be strictly increasing");
             }
         }
-        if (std::ranges::none_of(multiples,
-                                 [](const double multiple) { return multiple == 1.0; })) {
-            throw std::invalid_argument("Search-budget grid must contain the flat multiple");
+        if (!std::isfinite(cap_multiple) || cap_multiple <= 1.0) {
+            throw std::invalid_argument("The stop cap multiple must be finite and above one");
         }
-        if (!std::isfinite(lagrange_multiplier) || lagrange_multiplier < 0.0) {
+        if (!checkpoint_multiples.empty() && checkpoint_multiples.back() >= cap_multiple) {
             throw std::invalid_argument(
-                "The search-budget Lagrange multiplier must be finite and nonnegative");
+                "Stop checkpoint multiples must lie strictly below the cap multiple");
+        }
+        if (std::ranges::any_of(thresholds, [](const double threshold) {
+                return !std::isfinite(threshold) || threshold < 0.0 || threshold > 1.0;
+            })) {
+            throw std::invalid_argument("Stop thresholds must be probabilities in [0, 1]");
+        }
+        if (!std::isfinite(movement_guard_epsilon) || movement_guard_epsilon <= 0.0) {
+            throw std::invalid_argument("The movement guard epsilon must be finite and positive");
+        }
+        if (apply_learned && (predictor == nullptr || checkpoint_multiples.empty())) {
+            throw std::invalid_argument(
+                "An applied stop policy requires a predictor and checkpoints");
         }
     }
 };
 
-// Running minimum from the cheapest budget upward, so more search never predicts more error.
-// Sweeping the other way takes a suffix minimum, which is nondecreasing and would flatten an
-// already well-formed curve to its deepest value.
-[[nodiscard]] inline SearchBudgetCurvePrediction
-projectNonIncreasing(SearchBudgetCurvePrediction values) {
-    for (std::size_t index = 1; index < values.size(); ++index) {
-        values[index] = std::min(values[index], values[index - 1]);
-    }
-    return values;
-}
-
-[[nodiscard]] inline std::array<double, SearchBudgetPolicy::CURVE_POINTS>
-correctBudgetCurve(const SearchBudgetPolicy &policy, const SearchBudgetCurvePrediction &prediction,
-                   const SearchBudgetSelectionFeatures &features) {
-    if (std::ranges::any_of(prediction, [](const float value) { return !std::isfinite(value); })) {
-        throw std::invalid_argument("Search-budget curve predictions must be finite");
-    }
-    const std::array<double, 5> shared = {features.top_visit_share, features.policy_entropy,
-                                          features.ply, features.baseline_visits,
-                                          features.source_generation};
-    if (std::ranges::any_of(shared, [](const double value) { return !std::isfinite(value); })) {
-        throw std::invalid_argument("Search-budget selection features must be finite");
-    }
-    std::array<double, SearchBudgetPolicy::CURVE_POINTS> corrected{};
-    if (policy.corrector == nullptr) {
-        for (std::size_t index = 0; index < corrected.size(); ++index) {
-            corrected[index] = static_cast<double>(prediction[index]);
-        }
-        return corrected;
-    }
-    const std::array<double, SearchBudgetPolicy::CURVE_POINTS> corrections =
-        policy.corrector->correction(prediction, features);
-    for (std::size_t index = 0; index < corrected.size(); ++index) {
-        corrected[index] = static_cast<double>(prediction[index]) + corrections[index];
-    }
-    return corrected;
-}
-
-// Lagrangian selection: the grid point minimising predicted raw KL plus dual-priced spend. The
-// objective works in raw KL space because the run-level quantity being minimised is a sum of KLs,
-// not of logs. Ties go to the cheapest grid point.
-[[nodiscard]] inline std::size_t selectBudgetIndex(const SearchBudgetPolicy &policy,
-                                                   const SearchBudgetCurvePrediction &prediction,
-                                                   const SearchBudgetSelectionFeatures &features) {
-    std::array<double, SearchBudgetPolicy::CURVE_POINTS> projected =
-        correctBudgetCurve(policy, prediction, features);
-    for (std::size_t index = 1; index < projected.size(); ++index) {
-        projected[index] = std::min(projected[index], projected[index - 1]);
-    }
-    std::size_t bestIndex = 0;
-    double bestObjective = std::numeric_limits<double>::infinity();
-    for (std::size_t index = 0; index < projected.size(); ++index) {
-        const double objective =
-            std::exp(projected[index]) + policy.lagrange_multiplier * policy.multiples[index];
-        if (objective < bestObjective) {
-            bestObjective = objective;
-            bestIndex = index;
-        }
-    }
-    return bestIndex;
-}
-
-struct PredictedSearchBudgetLimit {
+struct StoppableSearchLimit {
     std::uint32_t baseline_visits;
-    SearchBudgetPolicy policy;
+    SearchStopPolicy policy;
     std::uint64_t model_generation;
+    // Audit positions evaluate and record the stop rule but never obey it, and always search to
+    // the cap even under a closed policy: they are the label source.
+    bool shadow_only;
 
-    PredictedSearchBudgetLimit() : baseline_visits(1), policy(), model_generation(0) {}
-    PredictedSearchBudgetLimit(const std::uint32_t baselineVisits, SearchBudgetPolicy budgetPolicy,
-                               const std::uint64_t modelGeneration = 0)
-        : baseline_visits(baselineVisits), policy(std::move(budgetPolicy)),
-          model_generation(modelGeneration) {
+    StoppableSearchLimit()
+        : baseline_visits(1), policy(), model_generation(0), shadow_only(false) {}
+    StoppableSearchLimit(const std::uint32_t baselineVisits, SearchStopPolicy stopPolicy,
+                         const std::uint64_t modelGeneration = 0, const bool shadowOnly = false)
+        : baseline_visits(baselineVisits), policy(std::move(stopPolicy)),
+          model_generation(modelGeneration), shadow_only(shadowOnly) {
         if (baseline_visits == 0) {
-            throw std::invalid_argument("Predicted search-budget baseline must be positive");
+            throw std::invalid_argument("Stoppable search baseline must be positive");
         }
+    }
+
+    [[nodiscard]] bool searchesToCap() const noexcept {
+        return policy.apply_learned || shadow_only;
+    }
+
+    [[nodiscard]] std::uint32_t capAdditionalVisits() const {
+        if (!searchesToCap()) {
+            return baseline_visits;
+        }
+        const double capped =
+            std::floor(policy.cap_multiple * static_cast<double>(baseline_visits) + 0.5);
+        if (capped > static_cast<double>(std::numeric_limits<std::uint32_t>::max())) {
+            throw std::overflow_error("Stop cap exceeds the visit range");
+        }
+        return static_cast<std::uint32_t>(capped);
     }
 };
 
-using SearchLimit =
-    std::variant<FixedSearchLimit, AdditionalSearchLimit, PredictedSearchBudgetLimit>;
+using SearchLimit = std::variant<FixedSearchLimit, AdditionalSearchLimit, StoppableSearchLimit>;
 
 [[nodiscard]] inline std::uint32_t searchParallelism(const std::uint32_t additionalVisits) {
     if (additionalVisits == 0) {
@@ -196,52 +171,6 @@ using SearchLimit =
     return std::min(parallelSearches, 16U);
 }
 
-struct AssignedSearchBudget {
-    std::uint32_t additional_visits;
-    int selected_index;
-};
-
-class SearchBudgetAllocator {
-public:
-    [[nodiscard]] AssignedSearchBudget assign(const PredictedSearchBudgetLimit &limit,
-                                              const SearchBudgetCurvePrediction &prediction,
-                                              const SearchBudgetSelectionFeatures &features) {
-        if (!limit.policy.apply_learned) {
-            return {.additional_visits = limit.baseline_visits, .selected_index = -1};
-        }
-        constexpr std::uint64_t maximumBaselineMultiple = 8;
-        const std::uint64_t maximumVisits =
-            static_cast<std::uint64_t>(limit.baseline_visits) * maximumBaselineMultiple;
-        if (maximumVisits > std::numeric_limits<std::uint32_t>::max()) {
-            throw std::overflow_error("Predicted search budget exceeds the visit range");
-        }
-        const std::size_t selectedIndex = selectBudgetIndex(limit.policy, prediction, features);
-        const double ideal =
-            static_cast<double>(limit.baseline_visits) * limit.policy.multiples[selectedIndex];
-        const double corrected = ideal - static_cast<double>(m_spendError);
-        const double rounded =
-            std::clamp(std::floor(corrected + 0.5), 1.0, static_cast<double>(maximumVisits));
-        if (rounded < 1.0 || rounded > std::numeric_limits<std::uint32_t>::max()) {
-            throw std::overflow_error("Predicted search budget is outside the visit range");
-        }
-        const auto assigned = static_cast<std::uint32_t>(rounded);
-        const std::int64_t delta =
-            static_cast<std::int64_t>(assigned) - static_cast<std::int64_t>(limit.baseline_visits);
-        if ((delta > 0 && m_spendError > std::numeric_limits<std::int64_t>::max() - delta) ||
-            (delta < 0 && m_spendError < std::numeric_limits<std::int64_t>::min() - delta)) {
-            throw std::overflow_error("Search-budget spend ledger overflowed");
-        }
-        m_spendError += delta;
-        return {.additional_visits = assigned, .selected_index = static_cast<int>(selectedIndex)};
-    }
-
-    [[nodiscard]] std::int64_t spendError() const noexcept { return m_spendError; }
-    void reset() noexcept { m_spendError = 0; }
-
-private:
-    std::int64_t m_spendError = 0;
-};
-
 [[nodiscard]] inline std::uint32_t maximumAdditionalVisits(const SearchLimit &limit) {
     return std::visit(
         [](const auto &selected) -> std::uint32_t {
@@ -251,16 +180,43 @@ private:
             } else if constexpr (std::is_same_v<Limit, AdditionalSearchLimit>) {
                 return selected.additional_visits;
             } else {
-                constexpr std::uint64_t maximumBaselineMultiple = 8;
-                const std::uint64_t maximum =
-                    static_cast<std::uint64_t>(selected.baseline_visits) * maximumBaselineMultiple;
-                if (maximum > std::numeric_limits<std::uint32_t>::max()) {
-                    throw std::overflow_error("Predicted search budget exceeds the visit range");
-                }
-                return static_cast<std::uint32_t>(maximum);
+                return selected.capAdditionalVisits();
             }
         },
         limit);
+}
+
+struct StopCheckpointEvaluation {
+    double guard_movement;
+    double uncertainty;
+    bool guard_passed;
+    bool predictor_evaluated;
+    bool would_stop;
+};
+
+// The stop rule at one checkpoint: the observational guard first (feature 5, the measured
+// movement KL, must already be below the guard epsilon — a visibly moving distribution can never
+// stop, whatever the predictor says), then the predictor against the checkpoint threshold.
+[[nodiscard]] inline StopCheckpointEvaluation
+evaluateStopRule(const SearchStopPolicy &policy, const std::size_t checkpointIndex,
+                 const StopPredictorFeatures &features) {
+    if (checkpointIndex >= policy.thresholds.size()) {
+        throw std::invalid_argument("Stop evaluation requires a configured checkpoint index");
+    }
+    constexpr std::size_t movementFeatureIndex = 4;
+    StopCheckpointEvaluation evaluation{
+        .guard_movement = features[movementFeatureIndex],
+        .uncertainty = -1.0,
+        .guard_passed = features[movementFeatureIndex] < policy.movement_guard_epsilon,
+        .predictor_evaluated = false,
+        .would_stop = false,
+    };
+    if (evaluation.guard_passed && policy.predictor != nullptr) {
+        evaluation.uncertainty = policy.predictor->uncertainty(features);
+        evaluation.predictor_evaluated = true;
+        evaluation.would_stop = evaluation.uncertainty < policy.thresholds[checkpointIndex];
+    }
+    return evaluation;
 }
 
 struct GameSearchResult {
@@ -273,15 +229,12 @@ struct GameSearchResult {
     float network_root_value;
     float policy_correction;
     float value_correction;
-    SearchBudgetCurvePrediction predicted_budget_curve;
-    // Raw-prior root features: the root-time selection basis reproducible on a fresh root,
-    // recorded so analysis can compare it against post-search feature values.
-    float root_prior_top_share;
-    float root_prior_entropy;
-    int selected_budget_index;
-    std::uint32_t assigned_additional_visits;
+    int stop_checkpoint_index;
+    std::vector<double> stop_probabilities;
+    std::vector<double> guard_movements;
+    std::vector<std::uint8_t> stop_verdicts;
+    std::vector<StopPredictorFeatures> stop_features;
     std::uint32_t parallel_searches;
-    std::int64_t spend_residual;
     std::uint32_t starting_visits;
     std::uint32_t final_visits;
     SearchStopReason stop_reason;
