@@ -163,7 +163,6 @@ class FakeSearch:
                     network_root_value=self.root_value,
                     policy_correction=0.0,
                     value_correction=0.0,
-                    predicted_budget_curve=[0.0] * 10,
                     stop_checkpoint_index=-1,
                     parallel_searches=1,
                     starting_visits=0,
