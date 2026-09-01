@@ -14,8 +14,8 @@ import pytest
 import src.self_play.process_runtime as process_runtime_module
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
-from src.search_budget.calibration import BudgetDecisionReason, BudgetPolicyPublication
-from src.search_budget.policy import SearchBudgetPolicy, disabled_policy
+from src.search_stopping.calibration import StopDecisionReason, StopPolicyPublication
+from src.search_stopping.policy import SearchStopPolicy, flat_stop_policy
 from src.self_play.process_runtime import self_play_worker_main
 from src.self_play.protocol import (
     PausedSelfPlayState,
@@ -76,10 +76,8 @@ class _Worker:
     def run_batch(self) -> None:
         pass
 
-    def refresh_published_model(
-        self, checkpoint: CheckpointReference, search_budget_policy: SearchBudgetPolicy
-    ) -> None:
-        assert search_budget_policy in {disabled_policy(), _learned_policy()}
+    def refresh_published_model(self, checkpoint: CheckpointReference, search_stop_policy: SearchStopPolicy) -> None:
+        assert not search_stop_policy.apply_learned
         self.generation = checkpoint.generation
 
     def update_resignation_policy(self, policy: PublishedResignationPolicy) -> None:
@@ -87,9 +85,6 @@ class _Worker:
 
     def snapshot_statistics(self) -> None:
         assert self.generation == 0
-
-    def search_budget_spend_residual(self) -> int:
-        return -1
 
     def close(self) -> None:
         pass
@@ -159,15 +154,11 @@ def _checkpoint(tmp_path: Path, generation: int) -> CheckpointReference:
     return checkpoint_reference(tmp_path, generation, write_inference_model=True)
 
 
-def _learned_policy() -> SearchBudgetPolicy:
-    return disabled_policy().model_copy(update={'apply_learned': True})
-
-
-def _publication(generation: int, adaptive: bool = False) -> BudgetPolicyPublication:
-    return BudgetPolicyPublication(
-        policy=_learned_policy() if adaptive else disabled_policy(),
+def _publication(generation: int) -> StopPolicyPublication:
+    return StopPolicyPublication(
+        policy=flat_stop_policy(),
         application_generation=generation,
-        decision_reason=BudgetDecisionReason.APPLIED if adaptive else BudgetDecisionReason.INITIAL,
+        decision_reason=StopDecisionReason.INITIAL,
     )
 
 
@@ -208,7 +199,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     )
     process.start()
 
-    parent.send(RunningSelfPlayState(checkpoint=_checkpoint(tmp_path, 0), search_budget=_publication(0)))
+    parent.send(RunningSelfPlayState(checkpoint=_checkpoint(tmp_path, 0), search_stopping=_publication(0)))
     first = parent.recv()
     assert type(first) is RunningSelfPlayStateApplied
     assert first.loaded_generation == 0
@@ -218,7 +209,7 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     parent.send(
         RunningSelfPlayState(
             checkpoint=_checkpoint(tmp_path, 1),
-            search_budget=_publication(1, True),
+            search_stopping=_publication(1),
             completed_generation_statistics=StatisticsLevel.DETAILED,
         )
     )
@@ -227,7 +218,6 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
     assert transitioned.loaded_generation == 1
     assert transitioned.completed_generation_statistics is not None
     assert transitioned.completed_generation_statistics.completed_generation == 0
-    assert transitioned.completed_generation_statistics.search_budget_spend_residual == -1
 
     parent.send(StoppedSelfPlayState())
     stopped = parent.recv()
@@ -242,13 +232,13 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
 def _applied(
     worker_id: int,
     checkpoint: CheckpointReference,
-    search_budget: BudgetPolicyPublication,
+    search_stopping: StopPolicyPublication,
 ) -> RunningSelfPlayStateApplied:
     return RunningSelfPlayStateApplied(
         worker_id=worker_id,
         loaded_generation=checkpoint.generation,
         loaded_inference_model_sha256=checkpoint.inference_model_sha256,
-        search_budget=search_budget,
+        search_stopping=search_stopping,
         completed_generation_statistics=None,
     )
 
@@ -285,7 +275,7 @@ def test_group_restarts_only_exited_workers_at_active_checkpoint(
     assert group.supervise(checkpoint, search_budget, policy) == SelfPlaySupervision((), ())
     assert group.supervise(checkpoint, search_budget, policy) == SelfPlaySupervision((1,), ())
     assert exited_connection.closed
-    assert replacement_connection.sent == [RunningSelfPlayState(checkpoint=checkpoint, search_budget=search_budget)]
+    assert replacement_connection.sent == [RunningSelfPlayState(checkpoint=checkpoint, search_stopping=search_budget)]
 
 
 def test_group_abandons_a_restart_whose_handshake_never_answers(
@@ -337,7 +327,7 @@ def test_group_retires_a_worker_that_does_not_answer_an_applied_state(tmp_path: 
     connections = [_Connection(_applied(0, checkpoint, search_budget)), _Connection()]
     group = _group(connections, [_Process(alive=True), _Process(alive=True)])
 
-    responses = group.apply((RunningSelfPlayState(checkpoint=checkpoint, search_budget=search_budget),) * 2)
+    responses = group.apply((RunningSelfPlayState(checkpoint=checkpoint, search_stopping=search_budget),) * 2)
 
     assert [response.worker_id for response in responses] == [0]
     assert group.live_worker_count == 1
@@ -349,7 +339,7 @@ def test_group_applies_state_only_to_selected_workers(tmp_path: Path) -> None:
     connections = [_Connection(_applied(worker_id, checkpoint, search_budget)) for worker_id in range(4)]
     group = _group(connections, [_Process(alive=True) for _ in range(4)])
 
-    desired_state = RunningSelfPlayState(checkpoint=checkpoint, search_budget=search_budget)
+    desired_state = RunningSelfPlayState(checkpoint=checkpoint, search_stopping=search_budget)
     responses = group.apply_to_workers((1, 3), desired_state)
 
     assert [response.worker_id for response in responses] == [1, 3]

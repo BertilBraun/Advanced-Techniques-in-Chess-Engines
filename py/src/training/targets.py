@@ -5,7 +5,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 from src.util.frozen_model import FrozenModel
-from src.util.generation_schedule import ConstantSchedule, FloatGenerationSchedule, defined_schedule_values
+from src.util.generation_schedule import FloatGenerationSchedule, defined_schedule_values
 
 
 class NextPolicyTargetConfiguration(FrozenModel):
@@ -68,24 +68,12 @@ class LegalMovesTargetConfiguration(FrozenModel):
         return self
 
 
-class SearchBudgetTargetConfiguration(FrozenModel):
-    kind: Literal['search_budget'] = 'search_budget'
-    loss_weight: FloatGenerationSchedule = ConstantSchedule[float](value=0.2)
-
-    @model_validator(mode='after')
-    def validate_loss_weight(self) -> SearchBudgetTargetConfiguration:
-        if any(value < 0.0 for value in defined_schedule_values(self.loss_weight)):
-            raise ValueError('Auxiliary loss weight must remain nonnegative.')
-        return self
-
-
 AuxiliaryTargetConfiguration: TypeAlias = Annotated[
     NextPolicyTargetConfiguration
     | RemainingGameLengthTargetConfiguration
     | FutureSearchValueTargetConfiguration
     | IrreversibleProgressTargetConfiguration
-    | LegalMovesTargetConfiguration
-    | SearchBudgetTargetConfiguration,
+    | LegalMovesTargetConfiguration,
     Field(discriminator='kind'),
 ]
 
@@ -145,33 +133,13 @@ class LegalMovesHeadLayout:
             raise ValueError('Legal-moves action size must be positive.')
 
 
-@dataclass(frozen=True)
-class SearchBudgetHeadLayout:
-    kind: Literal['search_budget']
-    output_size: Literal[8] = 8
-
-
 AuxiliaryHeadLayout: TypeAlias = (
     NextPolicyHeadLayout
     | RemainingGameLengthHeadLayout
     | FutureSearchValueHeadLayout
     | IrreversibleProgressHeadLayout
     | LegalMovesHeadLayout
-    | SearchBudgetHeadLayout
 )
-
-
-def search_budget_auxiliary_index(auxiliary_heads: tuple[AuxiliaryHeadLayout, ...]) -> int | None:
-    indices: list[int] = []
-    for index, head in enumerate(auxiliary_heads):
-        match head:
-            case SearchBudgetHeadLayout():
-                indices.append(index)
-    if not indices:
-        return None
-    if len(indices) > 1:
-        raise ValueError('A training layout may contain at most one search-budget head.')
-    return indices[0]
 
 
 def auxiliary_head_output_size(head: AuxiliaryHeadLayout) -> int:
@@ -186,8 +154,6 @@ def auxiliary_head_output_size(head: AuxiliaryHeadLayout) -> int:
             return output_size
         case LegalMovesHeadLayout(action_size=action_size):
             return action_size
-        case SearchBudgetHeadLayout(output_size=output_size):
-            return output_size
 
 
 @dataclass(frozen=True)
@@ -237,6 +203,4 @@ def build_training_target_layout(
                 )
             case LegalMovesTargetConfiguration():
                 heads.append(LegalMovesHeadLayout(kind='legal_moves', action_size=action_size))
-            case SearchBudgetTargetConfiguration():
-                heads.append(SearchBudgetHeadLayout(kind='search_budget'))
     return TrainingTargetLayout(action_size=action_size, wdl_size=3, auxiliary_heads=tuple(heads))

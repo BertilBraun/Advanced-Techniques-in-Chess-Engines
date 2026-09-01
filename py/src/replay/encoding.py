@@ -9,7 +9,6 @@ from src.replay.columnar import (
     ReplayNextPolicyColumnViews,
     ReplayPolicyColumnViews,
     ReplayScalarColumnViews,
-    ReplaySearchBudgetColumnViews,
     build_column_views,
     flatten_column_views,
 )
@@ -18,11 +17,9 @@ from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
-    EligibleSearchBudgetTarget,
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
-    IneligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -33,7 +30,6 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchBudgetHeadLayout,
 )
 
 
@@ -114,27 +110,6 @@ def _encode_sample(
                 IneligibleScalarAuxiliaryTarget(),
                 ReplayScalarColumnViews(),
             ):
-                destination.eligible[row_index] = 0
-            case (
-                SearchBudgetHeadLayout(),
-                EligibleSearchBudgetTarget(
-                    curve=curve,
-                    raw_kl=raw_kl,
-                    source_generation=source_generation,
-                    model_generation=model_generation,
-                    inference_model_sha256=inference_model_sha256,
-                ),
-                ReplaySearchBudgetColumnViews(),
-            ):
-                destination.value[row_index] = curve
-                destination.eligible[row_index] = 1
-                destination.raw_kl[row_index] = raw_kl
-                destination.source_generation[row_index] = source_generation
-                destination.model_generation[row_index] = model_generation
-                destination.inference_model_sha256[row_index] = np.frombuffer(
-                    inference_model_sha256.encode('ascii'), dtype=np.uint8
-                )
-            case SearchBudgetHeadLayout(), IneligibleSearchBudgetTarget(), ReplaySearchBudgetColumnViews():
                 destination.eligible[row_index] = 0
             case LegalMovesHeadLayout(), EligibleLegalMovesTarget(), ReplayLegalMovesColumnViews():
                 pass

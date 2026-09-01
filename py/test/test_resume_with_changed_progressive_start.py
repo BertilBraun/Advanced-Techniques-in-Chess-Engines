@@ -38,7 +38,7 @@ from src.util.atomic_file import write_text_atomically
 from test_helpers.checkpoints import materialized_checkpoint
 from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_CONFIG_DIRECTORY
 
-PRODUCTION_CONFIGURATION_PATH = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'vast-chess-4day-production-v8.yaml'
+PRODUCTION_CONFIGURATION_PATH = REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-optimal.yaml'
 ELEVEN_HOURS_SECONDS = 11.0 * 3600.0
 SIXTEEN_HOURS_SECONDS = 16.0 * 3600.0
 LOWERED_START_DAYS = Decimal('0.667')
@@ -57,8 +57,10 @@ def _production_configuration() -> ChessExperimentConfiguration:
 
 def _with_second_rung_start(configuration: ExperimentConfiguration, days: Decimal) -> ExperimentConfiguration:
     sizing = configuration.training.progressive_model_sizing
-    first, second = sizing.models
-    lowered = sizing.model_copy(update={'models': (first, second.model_copy(update={'training_start_days': days}))})
+    first, second, *rest = sizing.models
+    lowered = sizing.model_copy(
+        update={'models': (first, second.model_copy(update={'training_start_days': days}), *rest)}
+    )
     return configuration.model_copy(
         update={'training': configuration.training.model_copy(update={'progressive_model_sizing': lowered})}
     )
@@ -94,17 +96,17 @@ def test_lowering_the_second_rung_changes_the_approval_configuration_sha256() ->
 def test_second_rung_is_ineligible_at_eleven_hours_and_eligible_at_sixteen() -> None:
     sizing = _with_second_rung_start(_production_configuration(), LOWERED_START_DAYS).training.progressive_model_sizing
 
-    assert sizing.eligible_model_ids(ELEVEN_HOURS_SECONDS) == ('chess-cnn-12x128-dense4',)
+    assert sizing.eligible_model_ids(ELEVEN_HOURS_SECONDS) == ('chess-attention-1m',)
     assert sizing.eligible_model_ids(SIXTEEN_HOURS_SECONDS + 60.0) == (
-        'chess-cnn-12x128-dense4',
-        'chess-cnn-14x152-dense4',
+        'chess-attention-1m',
+        'chess-attention-2m',
     )
 
 
 def test_original_second_rung_is_ineligible_at_sixteen_hours() -> None:
     sizing = _production_configuration().training.progressive_model_sizing
 
-    assert sizing.eligible_model_ids(SIXTEEN_HOURS_SECONDS + 60.0) == ('chess-cnn-12x128-dense4',)
+    assert sizing.eligible_model_ids(SIXTEEN_HOURS_SECONDS + 60.0) == ('chess-attention-1m',)
 
 
 def _progressive_store(path: Path, sizing: ProgressiveModelSizingConfiguration) -> ProgressiveTrainingStateStore:
@@ -123,7 +125,7 @@ def test_progressive_state_reopens_under_the_lowered_threshold(tmp_path: Path) -
 
     assert state_path.read_text(encoding='utf-8') == persisted
     assert after.state == before.state
-    assert after.state.active_model_id == 'chess-cnn-12x128-dense4'
+    assert after.state.active_model_id == 'chess-attention-1m'
 
 
 def test_restarted_quantum_admits_the_second_rung_once_elapsed_passes_the_lowered_threshold(tmp_path: Path) -> None:
@@ -140,7 +142,7 @@ def test_restarted_quantum_admits_the_second_rung_once_elapsed_passes_the_lowere
 
     before = _progressive_store(state_path, original.training.progressive_model_sizing)
     pending_before = before.begin_quantum(ELEVEN_HOURS_SECONDS, replay, 115_000, 500)
-    assert pending_before.required_model_ids == ('chess-cnn-12x128-dense4',)
+    assert pending_before.required_model_ids == ('chess-attention-1m',)
 
     # A checkpoint-safe stop happens between quanta, so the persisted state carries no pending quantum.
     write_text_atomically(
@@ -153,7 +155,7 @@ def test_restarted_quantum_admits_the_second_rung_once_elapsed_passes_the_lowere
     )
     pending_after = after.begin_quantum(SIXTEEN_HOURS_SECONDS + 60.0, replay, 115_500, 500)
 
-    assert pending_after.required_model_ids == ('chess-cnn-12x128-dense4', 'chess-cnn-14x152-dense4')
+    assert pending_after.required_model_ids == ('chess-attention-1m', 'chess-attention-2m')
 
 
 def test_pending_quantum_from_an_unclean_stop_pins_the_old_rung_set(tmp_path: Path) -> None:
@@ -175,7 +177,7 @@ def test_pending_quantum_from_an_unclean_stop_pins_the_old_rung_set(tmp_path: Pa
     )
     pending_after = after.begin_quantum(SIXTEEN_HOURS_SECONDS + 60.0, replay, 115_000, 500)
 
-    assert pending_after.required_model_ids == ('chess-cnn-12x128-dense4',)
+    assert pending_after.required_model_ids == ('chess-attention-1m',)
 
 
 def test_pending_quantum_rejects_a_changed_replay_batch_across_restart(tmp_path: Path) -> None:

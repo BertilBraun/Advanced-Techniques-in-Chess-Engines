@@ -13,7 +13,6 @@ from src.training.targets import (
     LegalMovesTargetConfiguration,
     NextPolicyTargetConfiguration,
     RemainingGameLengthTargetConfiguration,
-    SearchBudgetTargetConfiguration,
 )
 from src.util.frozen_model import FrozenModel
 from torch.nn import functional
@@ -83,23 +82,12 @@ class ResolvedLegalMovesLoss(FrozenModel):
     weight: float = Field(ge=0.0)
 
 
-class ResolvedSearchBudgetLoss(FrozenModel):
-    kind: Literal['search_budget'] = 'search_budget'
-    weight: float = Field(ge=0.0)
-    dedicated_batches: bool = False
-
-    @property
-    def main_batch_weight(self) -> float:
-        return 0.0 if self.dedicated_batches else self.weight
-
-
 ResolvedAuxiliaryLoss: TypeAlias = Annotated[
     ResolvedNextPolicyLoss
     | ResolvedRemainingGameLengthLoss
     | ResolvedFutureSearchValueLoss
     | ResolvedIrreversibleProgressLoss
-    | ResolvedLegalMovesLoss
-    | ResolvedSearchBudgetLoss,
+    | ResolvedLegalMovesLoss,
     Field(discriminator='kind'),
 ]
 
@@ -107,7 +95,6 @@ ResolvedAuxiliaryLoss: TypeAlias = Annotated[
 def resolve_auxiliary_losses(
     targets: tuple[AuxiliaryTargetConfiguration, ...],
     model_generation: int,
-    search_budget_dedicated_batches: bool,
 ) -> tuple[ResolvedAuxiliaryLoss, ...]:
     losses: list[ResolvedAuxiliaryLoss] = []
     for target in targets:
@@ -130,23 +117,7 @@ def resolve_auxiliary_losses(
                 losses.append(ResolvedIrreversibleProgressLoss(weight=loss_weight.value_at(model_generation)))
             case LegalMovesTargetConfiguration(loss_weight=loss_weight):
                 losses.append(ResolvedLegalMovesLoss(weight=loss_weight.value_at(model_generation)))
-            case SearchBudgetTargetConfiguration(loss_weight=loss_weight):
-                losses.append(
-                    ResolvedSearchBudgetLoss(
-                        weight=loss_weight.value_at(model_generation),
-                        dedicated_batches=search_budget_dedicated_batches,
-                    )
-                )
     return tuple(losses)
-
-
-def auxiliary_batch_weight(configuration: ResolvedAuxiliaryLoss, search_budget_labelled_batch: bool) -> float:
-    """The search-budget head learns only from fully labelled batches; the handful of labelled rows elsewhere is noise."""
-    match configuration:
-        case ResolvedSearchBudgetLoss():
-            return configuration.weight if search_budget_labelled_batch else configuration.main_batch_weight
-        case _:
-            return configuration.weight
 
 
 class ResolvedTrainingObjective(FrozenModel):
@@ -159,7 +130,6 @@ class ResolvedTrainingObjective(FrozenModel):
         self,
         output: TrainingModelOutput,
         batch: TrainingBatch,
-        search_budget_labelled_batch: bool = False,
     ) -> ObjectiveLoss:
         auxiliary_count = len(self.auxiliary_losses)
         if not (
@@ -191,7 +161,7 @@ class ResolvedTrainingObjective(FrozenModel):
         )
         total = self.policy_loss_weight * policy_loss + self.value_loss_weight * wdl_loss
         for configuration, loss in zip(self.auxiliary_losses, auxiliary_losses):
-            total = total + auxiliary_batch_weight(configuration, search_budget_labelled_batch) * loss
+            total = total + configuration.weight * loss
         return ObjectiveLoss(policy=policy_loss, wdl=wdl_loss, auxiliary=auxiliary_losses, total=total)
 
     @staticmethod
@@ -222,18 +192,6 @@ class ResolvedTrainingObjective(FrozenModel):
                     target,
                     reduction='none',
                 ).squeeze(1)
-            case ResolvedSearchBudgetLoss():
-                eligible_rows = eligibility.to(dtype=torch.bool)
-                rows = torch.zeros(prediction.shape[0], dtype=prediction.dtype, device=prediction.device)
-                rows[eligible_rows] = (
-                    functional.smooth_l1_loss(
-                        prediction[eligible_rows],
-                        target[eligible_rows],
-                        reduction='none',
-                    )
-                    .mean(dim=1)
-                    .to(dtype=rows.dtype)
-                )
             case ResolvedLegalMovesLoss():
                 element_loss = functional.binary_cross_entropy_with_logits(
                     prediction,

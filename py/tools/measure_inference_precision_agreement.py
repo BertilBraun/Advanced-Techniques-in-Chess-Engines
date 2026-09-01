@@ -78,7 +78,6 @@ class AgreementArguments:
 class ModelOutputs:
     policy_logits: Tensor
     wdl_probabilities: Tensor
-    search_budget_logits: Tensor
 
 
 class VariantAgreement(FrozenModel):
@@ -92,7 +91,6 @@ class VariantAgreement(FrozenModel):
     maximum_policy_kl_divergence: float = Field(ge=0.0)
     value_mean_absolute_error: float = Field(ge=0.0)
     value_maximum_absolute_error: float = Field(ge=0.0)
-    search_budget_logit_mean_absolute_error: float = Field(ge=0.0)
 
 
 class PrecisionAgreementReport(FrozenModel):
@@ -140,9 +138,6 @@ def measure_agreement(
     legal_agreement = reference_log_probabilities.argmax(dim=1) == candidate_log_probabilities.argmax(dim=1)
     unrestricted_agreement = reference.policy_logits.argmax(dim=1) == candidate.policy_logits.argmax(dim=1)
     value_error = (expected_value(reference.wdl_probabilities) - expected_value(candidate.wdl_probabilities)).abs()
-    search_budget_error = (
-        reference.search_budget_logits.to(torch.float64) - candidate.search_budget_logits.to(torch.float64)
-    ).abs()
 
     return VariantAgreement(
         precision=precision,
@@ -155,7 +150,6 @@ def measure_agreement(
         maximum_policy_kl_divergence=float(kl_divergence.max()),
         value_mean_absolute_error=float(value_error.mean()),
         value_maximum_absolute_error=float(value_error.max()),
-        search_budget_logit_mean_absolute_error=float(search_budget_error.mean()),
     )
 
 
@@ -200,7 +194,6 @@ def run_variant(
 
     policy_batches: list[Tensor] = []
     wdl_batches: list[Tensor] = []
-    search_budget_batches: list[Tensor] = []
     with torch.inference_mode():
         for start in range(0, states.shape[0], batch_size):
             batch = (
@@ -208,14 +201,12 @@ def run_variant(
                 .to(device=device, dtype=precision.torch_dtype)
                 .to(memory_format=memory_format.torch_memory_format)
             )
-            policy_logits, wdl_probabilities, search_budget_logits = frozen(batch)
+            policy_logits, wdl_probabilities = frozen(batch)
             policy_batches.append(policy_logits.float().cpu())
             wdl_batches.append(wdl_probabilities.float().cpu())
-            search_budget_batches.append(search_budget_logits.float().cpu())
     return ModelOutputs(
         policy_logits=torch.cat(policy_batches),
         wdl_probabilities=torch.cat(wdl_batches),
-        search_budget_logits=torch.cat(search_budget_batches).flatten(),
     )
 
 

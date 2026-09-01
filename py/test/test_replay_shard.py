@@ -18,7 +18,6 @@ from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
-    EligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -36,7 +35,6 @@ from src.replay.shard import (
     write_replay_shard,
 )
 from src.replay.store import encode_replay_rows
-from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.self_play.completed_game import (
     GameIdentity,
     SearchObservation,
@@ -50,7 +48,6 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchBudgetHeadLayout,
     TrainingTargetLayout,
 )
 
@@ -79,7 +76,6 @@ def _layout(game: str) -> ReplayLayout:
                 FutureSearchValueHeadLayout(kind='future_search_value', ply_offset=2, smooth_l1_beta=0.1),
                 IrreversibleProgressHeadLayout(kind='irreversible_progress', horizon_plies=4),
                 LegalMovesHeadLayout(kind='legal_moves', action_size=state.action_size),
-                SearchBudgetHeadLayout(kind='search_budget'),
             ),
         ),
         maximum_policy_entries=8,
@@ -105,16 +101,6 @@ def _sample(layout: ReplayLayout, generation: int) -> ReplaySample:
                 auxiliary.append(EligibleScalarAuxiliaryTarget(kind='irreversible_progress', value=0.75))
             case LegalMovesHeadLayout():
                 auxiliary.append(EligibleLegalMovesTarget())
-            case SearchBudgetHeadLayout():
-                auxiliary.append(
-                    EligibleSearchBudgetTarget(
-                        curve=tuple(-3.0 + 0.1 * index for index in range(BUDGET_CURVE_POINTS)),
-                        raw_kl=0.2,
-                        source_generation=generation,
-                        model_generation=generation,
-                        inference_model_sha256='b' * 64,
-                    )
-                )
     return ReplaySample(
         encoded_state=layout.packed_planes.value(bytes([generation + 1]) * layout.packed_planes.payload_bytes),
         policy=policy,
@@ -165,14 +151,11 @@ def _observation() -> SearchObservation:
         network_root_value=0.15,
         policy_correction=0.1,
         value_correction=0.2,
-        predicted_baseline_log_kl=0.25,
-        selected_budget_index=5,
-        assigned_additional_visits=14,
+        stop_checkpoint_index=-1,
         parallel_searches=1,
-        spend_residual=0,
         starting_visits=2,
         final_visits=16,
-        stop_reason=SearchStopReason.PREDICTED_BUDGET,
+        stop_reason=SearchStopReason.CAP_REACHED,
     )
 
 

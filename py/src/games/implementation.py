@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
-from src.search_budget.policy import BUDGET_CURVE_MULTIPLES, SearchBudgetPolicy, disabled_policy
+from src.search_stopping.policy import SearchStopPolicy, flat_stop_policy
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
 from src.self_play.native_configuration import native_execution_options
 from src.self_play.parameters import (
@@ -39,7 +39,7 @@ def resolved_evaluation_parameters(
     parameters = replace(
         baseline,
         baseline_visits=configuration.searches_per_move,
-        search_budget_policy=disabled_policy(),
+        search_stop_policy=flat_stop_policy(),
         forced_playout_coefficient=0.0,
         exploration_constant=configuration.resolved_exploration_constant,
         first_play_urgency=(
@@ -121,7 +121,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
     def self_play_parameters_at(
         self,
         model_generation: int,
-        search_budget_policy: SearchBudgetPolicy,
+        search_stop_policy: SearchStopPolicy,
     ) -> ResolvedSelfPlayParameters:
         raise NotImplementedError
 
@@ -158,7 +158,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
             TreeSearchParameters,
         )
         from AlphaZeroCpp import (
-            SearchBudgetPolicy as NativeSearchBudgetPolicy,
+            SearchStopPolicy as NativeSearchStopPolicy,
         )
 
         match parameters.first_play_urgency:
@@ -172,13 +172,15 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
                     reduction,
                 )
 
-        policy = parameters.search_budget_policy
+        policy = parameters.search_stop_policy
         return SelfPlaySearchParameters(
             baseline_visits=parameters.baseline_visits,
-            search_budget_policy=NativeSearchBudgetPolicy(
-                list(BUDGET_CURVE_MULTIPLES),
-                policy.lagrange_multiplier,
-                '' if policy.corrector_path is None else str(policy.corrector_path),
+            search_stop_policy=NativeSearchStopPolicy(
+                list(policy.checkpoint_multiples),
+                list(policy.thresholds),
+                policy.movement_guard_epsilon,
+                policy.cap_multiple,
+                '' if policy.predictor_path is None else str(policy.predictor_path),
                 policy.apply_learned,
             ),
             tree_search=TreeSearchParameters(

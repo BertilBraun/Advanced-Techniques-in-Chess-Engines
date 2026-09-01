@@ -47,6 +47,19 @@ def _is_sha256(digest: str) -> bool:
     return len(digest) == 64 and all(character in '0123456789abcdef' for character in digest)
 
 
+def flat_stop_policy() -> SearchStopPolicy:
+    """A closed policy with no checkpoint set: for evaluation and other always-flat searches."""
+    return SearchStopPolicy(
+        checkpoint_multiples=(),
+        thresholds=(),
+        movement_guard_epsilon=1e-3,
+        cap_multiple=2.0,
+        predictor_path=None,
+        predictor_sha256=None,
+        apply_learned=False,
+    )
+
+
 def closed_policy(configuration: SearchStoppingConfiguration) -> SearchStopPolicy:
     """The one fail-closed state: a flat search to the baseline — no checkpoints, no cap, no 2x burn."""
     return SearchStopPolicy(

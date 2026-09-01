@@ -25,7 +25,7 @@ from src.training.reporting import TrainingReporter
 from src.training.targets import TrainingTargetLayout
 from src.training.telemetry import (
     completed_game_length_telemetry,
-    search_budget_telemetry,
+    search_stopping_telemetry,
     training_lifecycle_telemetry,
 )
 from test_helpers.checkpoints import checkpoint_reference
@@ -104,13 +104,13 @@ def test_completed_game_length_telemetry_omits_empty_windows() -> None:
     assert completed_game_length_telemetry(()) is None
 
 
-def test_search_budget_telemetry_omits_windows_without_observations() -> None:
+def test_search_stopping_telemetry_omits_windows_without_observations() -> None:
     games = (IngestedCompletedGame(length_plies=10, termination_reason=TerminationReason.NATURAL),)
 
-    assert search_budget_telemetry(games) is None
+    assert search_stopping_telemetry(games) is None
 
 
-def test_search_budget_telemetry_reports_prediction_allocation_and_residual() -> None:
+def test_search_stopping_telemetry_reports_prediction_allocation_and_residual() -> None:
     observation = SearchObservation(
         ply=0,
         model_generation=50,
@@ -125,14 +125,11 @@ def test_search_budget_telemetry_reports_prediction_allocation_and_residual() ->
         network_root_value=0.1,
         policy_correction=0.3,
         value_correction=0.06,
-        predicted_baseline_log_kl=0.85,
-        selected_budget_index=5,
-        assigned_additional_visits=700,
+        stop_checkpoint_index=-1,
         parallel_searches=4,
-        spend_residual=-2,
         starting_visits=100,
         final_visits=800,
-        stop_reason=SearchStopReason.PREDICTED_BUDGET,
+        stop_reason=SearchStopReason.CAP_REACHED,
     )
     games = (
         IngestedCompletedGame(
@@ -142,18 +139,15 @@ def test_search_budget_telemetry_reports_prediction_allocation_and_residual() ->
         ),
     )
 
-    telemetry = search_budget_telemetry(games)
+    telemetry = search_stopping_telemetry(games)
 
     assert telemetry is not None
     assert telemetry.baseline_visits == (800,)
-    assert telemetry.assigned_additional_visits == (700,)
-    assert telemetry.predicted_baseline_log_kls == (0.85,)
-    assert telemetry.selected_budget_indices == (5,)
+    assert telemetry.stop_checkpoint_indices == (-1,)
     assert telemetry.parallel_searches == (4,)
-    assert telemetry.spend_residuals == (-2,)
     assert telemetry.starting_visits == (100,)
     assert telemetry.final_visits == (800,)
-    assert dict(telemetry.stop_reasons)[SearchStopReason.PREDICTED_BUDGET] == 1
+    assert dict(telemetry.stop_reasons)[SearchStopReason.CAP_REACHED] == 1
 
 
 def test_training_reporter_logs_completed_game_length_window(monkeypatch: pytest.MonkeyPatch) -> None:

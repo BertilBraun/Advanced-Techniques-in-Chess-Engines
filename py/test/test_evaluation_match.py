@@ -84,11 +84,10 @@ class FakeGame:
 
 
 class FixedPolicyModel(torch.nn.Module):
-    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         policy = torch.tensor((0.1, 0.9), device=inputs.device).expand(inputs.shape[0], 2)
         value = torch.tensor((0.2, 0.6, 0.2), device=inputs.device).expand(inputs.shape[0], 3)
-        search_budget_curve = torch.zeros((inputs.shape[0], 10), device=inputs.device)
-        return policy, value, search_budget_curve
+        return policy, value
 
 
 def _checkpoint() -> CheckpointReference:

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Literal, TypeAlias
 
-from src.search_budget.policy import SearchBudgetPolicy
+from src.search_stopping.policy import SearchStopPolicy
 
 
 @dataclass(frozen=True)
@@ -78,7 +78,7 @@ FirstPlayUrgencyParameters: TypeAlias = (
 class ResolvedSelfPlayParameters:
     start_position: StartPositionParameters
     baseline_visits: int
-    search_budget_policy: SearchBudgetPolicy
+    search_stop_policy: SearchStopPolicy
     forced_playout_coefficient: float
     exploration_constant: float
     first_play_urgency: FirstPlayUrgencyParameters

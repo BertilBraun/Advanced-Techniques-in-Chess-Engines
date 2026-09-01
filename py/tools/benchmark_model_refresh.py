@@ -16,11 +16,10 @@ from AlphaZeroCpp import (
     FirstPlayUrgencyKind,
     FirstPlayUrgencyParameters,
     InferenceConfiguration,
-    SearchBudgetPolicy,
+    SearchStopPolicy,
     SelfPlaySearchParameters,
     TreeSearchParameters,
 )
-from src.search_budget.policy import BUDGET_CURVE_MULTIPLES
 from src.self_play.configuration import SdpaBackend
 from src.self_play.native_configuration import native_sdpa_backend
 from src.util.atomic_file import write_text_atomically
@@ -219,7 +218,7 @@ def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
     )
     search_parameters = SelfPlaySearchParameters(
         baseline_visits=arguments.searches,
-        search_budget_policy=SearchBudgetPolicy(list(BUDGET_CURVE_MULTIPLES), 0.0, '', False),
+        search_stop_policy=SearchStopPolicy([], [], 0.001, 2.0, '', False),
         tree_search=TreeSearchParameters(
             exploration_constant=2.0,
             first_play_urgency=FirstPlayUrgencyParameters(FirstPlayUrgencyKind.ZERO),

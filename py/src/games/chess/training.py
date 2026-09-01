@@ -8,7 +8,7 @@ from src.games.chess.configuration import ChessExperimentConfiguration, ChessSel
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.implementation import GameImplementation, resolved_evaluation_parameters
 from src.games.representation import NetworkDimensions
-from src.search_budget.policy import SearchBudgetPolicy, disabled_policy
+from src.search_stopping.policy import SearchStopPolicy, flat_stop_policy
 from src.self_play.configuration import BatchedInferenceParams
 from src.self_play.native_search import NativeSelfPlaySearch
 from src.self_play.parameters import (
@@ -65,7 +65,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
     def self_play_parameters_at(
         self,
         model_generation: int,
-        search_budget_policy: SearchBudgetPolicy,
+        search_stop_policy: SearchStopPolicy,
     ) -> ResolvedSelfPlayParameters:
         configuration = self.self_play_configuration
         objective = self.configuration.chess.objective
@@ -73,7 +73,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         return replace(
             configuration.resolve(
                 model_generation,
-                search_budget_policy,
+                search_stop_policy,
                 configuration.maximum_game_plies_at(model_generation),
                 objective.effective_search_value_discount_per_ply.value_at(model_generation),
             ),
@@ -122,7 +122,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
     ) -> ResolvedSelfPlayParameters:
         """Evaluation inherits the self-play first-play urgency; only the listed fields are overridden."""
         return resolved_evaluation_parameters(
-            self.self_play_parameters_at(model_generation, disabled_policy()),
+            self.self_play_parameters_at(model_generation, flat_stop_policy()),
             configuration,
             model_generation,
             tree_search,
@@ -161,6 +161,5 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             auxiliary_losses=resolve_auxiliary_losses(
                 configuration.auxiliary_targets,
                 model_generation,
-                self.configuration.training.lifecycle.search_budget.head_training.dedicated_batches,
             ),
         )

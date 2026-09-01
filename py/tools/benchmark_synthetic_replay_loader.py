@@ -26,17 +26,14 @@ from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
-    EligibleSearchBudgetTarget,
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
-    IneligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
-from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.self_play.completed_game import SearchVisitCounts, TerminationReason
 from src.training.batch import TrainingBatch
 from src.training.targets import (
@@ -45,7 +42,6 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchBudgetHeadLayout,
     TrainingTargetLayout,
     auxiliary_head_output_size,
 )
@@ -177,7 +173,6 @@ def _layout(state: _SyntheticChessState) -> ReplayLayout:
             FutureSearchValueHeadLayout(kind='future_search_value', ply_offset=4, smooth_l1_beta=0.5),
             IrreversibleProgressHeadLayout(kind='irreversible_progress', horizon_plies=8),
             LegalMovesHeadLayout(kind='legal_moves', action_size=ACTION_SIZE),
-            SearchBudgetHeadLayout(kind='search_budget'),
         ),
     )
     return ReplayLayout(
@@ -236,13 +231,6 @@ def _sample(state: _SyntheticChessState, row: int) -> ReplaySample:
             if eligible
             else IneligibleScalarAuxiliaryTarget(kind='irreversible_progress'),
             EligibleLegalMovesTarget(),
-            EligibleSearchBudgetTarget(
-                curve=tuple(float(row % 7) / 6.0 - 0.1 * index for index in range(BUDGET_CURVE_POINTS)),
-                raw_kl=float(row % 11) / 10.0,
-                source_generation=row % 100,
-                model_generation=row % 100,
-                inference_model_sha256='0' * 64,
-            ),
         ),
         sample_weight=float(row % 4 + 1),
         source_model_generation=row % 100,
@@ -335,9 +323,6 @@ def _object_reference_batch(
                 case EligibleScalarAuxiliaryTarget(value=value):
                     auxiliary[target_index][output_row, 0] = value
                     auxiliary_eligibility[target_index][output_row] = True
-                case EligibleSearchBudgetTarget(curve=curve):
-                    auxiliary[target_index][output_row, :] = curve
-                    auxiliary_eligibility[target_index][output_row] = True
                 case EligibleLegalMovesTarget():
                     transformed = permutation[np.asarray(sample.policy.legal_action_ids, dtype=np.uint16)]
                     auxiliary[target_index][output_row, transformed] = 1.0
@@ -347,7 +332,6 @@ def _object_reference_batch(
                     IneligibleNextPolicyTarget()
                     | IneligibleRemainingGameLengthTarget()
                     | IneligibleScalarAuxiliaryTarget()
-                    | IneligibleSearchBudgetTarget()
                 ):
                     pass
     return TrainingBatch(

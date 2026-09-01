@@ -13,7 +13,6 @@ from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
     ResolvedTrainingParameters,
-    SearchBudgetHeadStatistics,
     StopTrainerCommand,
     TrainerQuantum,
     TrainerResponse,
@@ -134,7 +133,6 @@ class TrainerGroup:
             ),
             elapsed_seconds=max(result.elapsed_seconds for result in results),
             distributions=distributions,
-            search_budget_head=_aggregate_search_budget_head(results),
         )
 
     def close(self) -> None:
@@ -206,26 +204,6 @@ def _available_tcp_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(('127.0.0.1', 0))
         return int(listener.getsockname()[1])
-
-
-def _aggregate_search_budget_head(
-    results: tuple[RankTrainingResult, ...],
-) -> SearchBudgetHeadStatistics | None:
-    statistics = tuple(result.search_budget_head for result in results if result.search_budget_head is not None)
-    if not statistics:
-        return None
-    if len(statistics) != len(results):
-        raise RuntimeError('Trainer ranks disagree about search-budget head training.')
-    return statistics[0].model_copy(
-        update={
-            'loss': _mean(tuple(entry.loss for entry in statistics)),
-            'target_mean': _mean(tuple(entry.target_mean for entry in statistics)),
-            'target_standard_deviation': _mean(tuple(entry.target_standard_deviation for entry in statistics)),
-            'prediction_mean': _mean(tuple(entry.prediction_mean for entry in statistics)),
-            'prediction_standard_deviation': _mean(tuple(entry.prediction_standard_deviation for entry in statistics)),
-            'absolute_error_mean': _mean(tuple(entry.absolute_error_mean for entry in statistics)),
-        }
-    )
 
 
 def _mean(values: tuple[float, ...]) -> float:

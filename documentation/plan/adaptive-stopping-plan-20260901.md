@@ -708,6 +708,15 @@ publish + report), `retention.py`, `configuration.py` (replaced by `SearchStoppi
 | `SelfPlay.hpp`, `SelfPlayBindings.hpp` | policy type swap, allocator removal, audit flag, result fields (5.4). |
 | `Analysis.hpp`, `SearchEngine.hpp`, benchmark tools, native-gated tests | mechanical follow-through on the seam (the recent commits `c1246cae`/`b3038e03` show the touch set). |
 
+Execution note (2026-09-01): the inventory above was executed on the `adaptive-stopping` branch.
+Two additional deletions fell out during execution — `py/src/replay/label_source.py` and the whole
+replay label-cohort/labelled-writeback machinery in `py/src/replay/manager.py` (journal, cohort
+shards, write-back receipts), which existed only to feed the deleted label pipeline — and one of
+the two approved-but-deferred master fixes (with-replacement labelled batches) dissolved with the
+labelled-batch machinery itself. `py/tools/search_budget.py` survives untouched: despite the name
+it is the evaluation-engine search budget (fixed/timed searches per move), unrelated to the
+deleted subsystem.
+
 Flip-harness note: no encoding or action-id change anywhere in this plan, so the colour-symmetry
 harness is not triggered; it runs anyway before the production stage as standard hygiene.
 

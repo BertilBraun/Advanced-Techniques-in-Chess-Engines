@@ -9,7 +9,6 @@ from typing import TypeAlias
 import numpy as np
 from pydantic import Field, model_validator
 from src.games.representation import PackedPlaneLayout
-from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.training.targets import (
     AuxiliaryHeadLayout,
     FutureSearchValueHeadLayout,
@@ -17,7 +16,6 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchBudgetHeadLayout,
     TrainingTargetLayout,
 )
 from src.util.frozen_model import FrozenModel
@@ -66,10 +64,6 @@ class ReplayColumnKind(str, Enum):
     AUXILIARY_LEGAL_ACTION_IDS = 'auxiliary_legal_action_ids'
     AUXILIARY_VALUE = 'auxiliary_value'
     AUXILIARY_ELIGIBLE = 'auxiliary_eligible'
-    AUXILIARY_RAW_KL = 'auxiliary_raw_kl'
-    AUXILIARY_SOURCE_GENERATION = 'auxiliary_source_generation'
-    AUXILIARY_MODEL_GENERATION = 'auxiliary_model_generation'
-    AUXILIARY_INFERENCE_MODEL_SHA256 = 'auxiliary_inference_model_sha256'
     SAMPLE_WEIGHT = 'sample_weight'
     SOURCE_MODEL_GENERATION = 'source_model_generation'
     SOURCE_TIMESTAMP = 'source_timestamp'
@@ -216,35 +210,6 @@ class ReplayLayout(FrozenModel):
                             ),
                         )
                     )
-                case SearchBudgetHeadLayout():
-                    descriptors.extend(
-                        (
-                            ReplayColumnDescriptor(
-                                ReplayColumnKey(ReplayColumnKind.AUXILIARY_VALUE, index),
-                                ReplayElementType.FLOAT32,
-                                (BUDGET_CURVE_POINTS,),
-                            ),
-                            ReplayColumnDescriptor(
-                                ReplayColumnKey(ReplayColumnKind.AUXILIARY_ELIGIBLE, index), ReplayElementType.UINT8
-                            ),
-                            ReplayColumnDescriptor(
-                                ReplayColumnKey(ReplayColumnKind.AUXILIARY_RAW_KL, index), ReplayElementType.FLOAT32
-                            ),
-                            ReplayColumnDescriptor(
-                                ReplayColumnKey(ReplayColumnKind.AUXILIARY_SOURCE_GENERATION, index),
-                                ReplayElementType.UINT32,
-                            ),
-                            ReplayColumnDescriptor(
-                                ReplayColumnKey(ReplayColumnKind.AUXILIARY_MODEL_GENERATION, index),
-                                ReplayElementType.UINT32,
-                            ),
-                            ReplayColumnDescriptor(
-                                ReplayColumnKey(ReplayColumnKind.AUXILIARY_INFERENCE_MODEL_SHA256, index),
-                                ReplayElementType.UINT8,
-                                (64,),
-                            ),
-                        )
-                    )
                 case LegalMovesHeadLayout():
                     # Legal-moves targets are derived from the primary legal-action columns.
                     pass
@@ -316,5 +281,3 @@ def _head_digest_fields(head: AuxiliaryHeadLayout) -> dict[str, int | float | st
             return {'kind': head.kind, 'output_size': 1, 'horizon_plies': horizon_plies}
         case LegalMovesHeadLayout(action_size=action_size):
             return {'kind': head.kind, 'action_size': action_size}
-        case SearchBudgetHeadLayout():
-            return {'kind': head.kind, 'output_size': BUDGET_CURVE_POINTS}

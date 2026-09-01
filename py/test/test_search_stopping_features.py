@@ -12,7 +12,7 @@ from src.search_stopping.features import (
     checkpoint_feature_vector,
 )
 from src.search_stopping.labels import CheckpointObservation
-from src.search_stopping.records import append_audit_records, audit_record_dtype, read_audit_records
+from src.search_stopping.records import append_records, audit_record_dtype, read_records
 from src.search_stopping.sampling import AuditPositionIdentity, is_audit_position
 from src.search_stopping.targets import PolicyDistribution
 
@@ -66,9 +66,9 @@ def test_audit_records_round_trip(tmp_path: Path) -> None:
     records['ply'] = (10, 20, 30)
     records['kl_to_final'][:, 2] = 0.5
     path = tmp_path / 'audit-generation-00000001.np'
-    append_audit_records(path, records, checkpoint_count=5)
-    append_audit_records(path, records, checkpoint_count=5)
-    loaded = read_audit_records(path, checkpoint_count=5)
+    append_records(path, records, dtype)
+    append_records(path, records, dtype)
+    loaded = read_records(path, dtype)
     assert loaded.shape == (6,)
     assert loaded['kl_to_final'][0, 2] == pytest.approx(0.5)
 
@@ -76,7 +76,7 @@ def test_audit_records_round_trip(tmp_path: Path) -> None:
 def test_audit_records_reject_a_mismatched_dtype(tmp_path: Path) -> None:
     records = np.zeros(1, dtype=audit_record_dtype(4))
     with pytest.raises(ValueError, match='dtype'):
-        append_audit_records(tmp_path / 'audit.np', records, checkpoint_count=5)
+        append_records(tmp_path / 'audit.np', records, audit_record_dtype(5))
 
 
 def test_audit_sampling_is_deterministic_and_near_the_requested_fraction() -> None:

@@ -67,7 +67,6 @@ def test_credit_ledger_persists_only_approximate_counters_and_active_checkpoint(
             training_samples_per_second=1.0,
             elapsed_seconds=1.0,
             distributions=_empty_distributions(),
-            search_budget_head=None,
         ),
     )
     ledger.commit_quantum(result)

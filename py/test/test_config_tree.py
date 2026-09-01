@@ -7,7 +7,13 @@ from src.experiment.configuration import load_experiment_configuration
 from src.experiment_queue.configuration import load_queue_configuration
 
 CONFIGURATION_ROOT = Path(__file__).resolve().parents[1] / 'configs'
-EXPERIMENT_FILES = sorted(path for path in CONFIGURATION_ROOT.rglob('*.yaml') if 'queues' not in path.parts)
+# archive-pre-stopping holds pre-rework configurations kept for the historical record; they no
+# longer resolve under the search-stopping schema and are excluded by design.
+EXPERIMENT_FILES = sorted(
+    path
+    for path in CONFIGURATION_ROOT.rglob('*.yaml')
+    if 'queues' not in path.parts and 'archive-pre-stopping' not in path.parts
+)
 QUEUE_FILES = sorted((CONFIGURATION_ROOT / 'queues').glob('*.yaml'))
 
 

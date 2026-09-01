@@ -93,7 +93,6 @@ def _outputs(policy_logits: list[list[float]], wins: list[float], corrections: l
     return ModelOutputs(
         policy_logits=torch.tensor(policy_logits, dtype=torch.float32),
         wdl_probabilities=torch.stack((win, torch.zeros_like(win), 1.0 - win), dim=1),
-        search_budget_logits=torch.tensor(corrections, dtype=torch.float32),
     )
 
 
@@ -112,7 +111,6 @@ def test_identical_outputs_agree_exactly() -> None:
     assert agreement.legal_top1_agreement == 1.0
     assert agreement.mean_policy_kl_divergence == pytest.approx(0.0, abs=1e-12)
     assert agreement.value_mean_absolute_error == pytest.approx(0.0, abs=1e-12)
-    assert agreement.search_budget_logit_mean_absolute_error == pytest.approx(0.0, abs=1e-12)
 
 
 def test_illegal_actions_cannot_win_the_top1_comparison() -> None:

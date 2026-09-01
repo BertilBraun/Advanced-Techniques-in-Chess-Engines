@@ -147,14 +147,11 @@ def _game(game_number: int, *, assigned_additional_visits: int = 13) -> Complete
             network_root_value=0.1,
             policy_correction=0.2,
             value_correction=0.075,
-            predicted_baseline_log_kl=-0.4,
-            selected_budget_index=5,
-            assigned_additional_visits=assigned_additional_visits,
+            stop_checkpoint_index=-1,
             parallel_searches=1,
-            spend_residual=0,
             starting_visits=0,
             final_visits=assigned_additional_visits,
-            stop_reason=SearchStopReason.PREDICTED_BUDGET,
+            stop_reason=SearchStopReason.CAP_REACHED,
         )
         for ply, selected_action in enumerate(actions)
     )

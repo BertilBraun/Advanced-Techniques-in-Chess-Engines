@@ -22,7 +22,6 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchBudgetHeadLayout,
 )
 from src.util.frozen_model import FrozenModel
 from torch import Tensor, nn
@@ -343,11 +342,6 @@ class Network(nn.Module):
         fuse_conv_batchnorm(self)
 
 
-class ZeroSearchBudgetHead(nn.Module):
-    def forward(self, features: Tensor) -> Tensor:
-        return torch.zeros((features.shape[0], 8), dtype=features.dtype, device=features.device)
-
-
 class InferenceNetwork(nn.Module):
     def __init__(self, training_model: Network) -> None:
         super().__init__()
@@ -356,14 +350,13 @@ class InferenceNetwork(nn.Module):
         self.finish_block = copy.deepcopy(training_model.finish_block)
         self.policy_head = copy.deepcopy(training_model.policy_head)
         self.value_head = copy.deepcopy(training_model.value_head)
-        self.searchBudgetHead = copy.deepcopy(_search_budget_head(training_model))
         self.network_definition = NetworkDefinition(
             architecture=training_model.network_args,
             dimensions=training_model.dimensions,
-            auxiliary_heads=tuple(head for head in training_model.auxiliary_heads if head.kind == 'search_budget'),
+            auxiliary_heads=(),
         )
 
-    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
         features = self.start_block(inputs)
         for block in self.backbone:
             features = block(features)
@@ -371,7 +364,6 @@ class InferenceNetwork(nn.Module):
         return (
             self.policy_head(features),
             torch.softmax(self.value_head(features), dim=1),
-            self.searchBudgetHead(features),
         )
 
     @torch.jit.unused
@@ -444,7 +436,7 @@ def _probe_policy_logits(inference_model: InferenceNetwork, probe_states: Tensor
     was_training = inference_model.training
     inference_model.eval()
     with torch.no_grad():
-        policy_logits, _, _ = inference_model(probe_states.to(device=device, dtype=torch.float32))
+        policy_logits, _ = inference_model(probe_states.to(device=device, dtype=torch.float32))
     inference_model.train(was_training)
     return policy_logits.double().cpu()
 
@@ -531,14 +523,6 @@ def _conv_batchnorm_groups(module: nn.Sequential) -> list[list[str]]:
         else:
             index += 1
     return groups
-
-
-def _search_budget_head(training_model: Network) -> nn.Module:
-    for index, head in enumerate(training_model.auxiliary_heads):
-        match head:
-            case SearchBudgetHeadLayout():
-                return training_model.auxiliary_head_modules[index]
-    return ZeroSearchBudgetHead()
 
 
 class PolicyPlaneHead(nn.Module):
@@ -814,8 +798,6 @@ def _build_auxiliary_head(
                 policy_configuration,
                 plane_hidden_channels=POLICY_PLANE_AUXILIARY_HIDDEN_CHANNELS,
             )
-        case SearchBudgetHeadLayout(output_size=output_size):
-            return _build_scalar_auxiliary_head(input_channels, row_count, column_count, output_size)
 
 
 def _initialize_attention_trunk(

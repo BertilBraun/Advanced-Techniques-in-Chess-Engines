@@ -7,8 +7,8 @@ from typing import cast
 import pytest
 import src.training.coordinator as coordinator_module
 from src.replay.manager import ReplayIngestion
-from src.search_budget.calibration import BudgetDecisionReason, BudgetPolicyPublication
-from src.search_budget.policy import disabled_policy
+from src.search_stopping.calibration import StopDecisionReason, StopPolicyPublication
+from src.search_stopping.policy import flat_stop_policy
 from src.self_play.protocol import (
     RunningSelfPlayState,
     RunningSelfPlayStateApplied,
@@ -103,22 +103,9 @@ class _EvaluationManager:
 
 
 @dataclass
-class _SearchBudgetLabelManager:
-    closed: bool = False
-    poll_calls: int = 0
-
-    def publication_for_generation(self, production_generation: int) -> BudgetPolicyPublication:
+class _SearchStoppingManager:
+    def publication_for_generation(self, production_generation: int) -> StopPolicyPublication:
         return _publication(production_generation)
-
-    def publication_for_starting_generation(self, production_generation: int) -> BudgetPolicyPublication:
-        return _publication(production_generation)
-
-    def poll(self) -> tuple[()]:
-        self.poll_calls += 1
-        return ()
-
-    def close(self) -> None:
-        self.closed = True
 
 
 @dataclass
@@ -154,10 +141,10 @@ class _SelfPlayGroup:
     def supervise(
         self,
         checkpoint: CheckpointReference,
-        search_budget: BudgetPolicyPublication,
+        search_stopping: StopPolicyPublication,
         resignation_policy: PublishedResignationPolicy,
     ) -> SelfPlaySupervision:
-        assert search_budget == _publication(checkpoint.generation)
+        assert search_stopping == _publication(checkpoint.generation)
         del checkpoint, resignation_policy
         index = min(self.supervise_calls, len(self.supervisions) - 1)
         self.supervise_calls += 1
@@ -169,7 +156,7 @@ class _SelfPlayGroup:
     ) -> tuple[SelfPlayStateApplied, ...]:
         for desired_state in desired_states:
             if isinstance(desired_state, RunningSelfPlayState):
-                assert desired_state.search_budget == _publication(desired_state.checkpoint.generation)
+                assert desired_state.search_stopping == _publication(desired_state.checkpoint.generation)
         return tuple(
             cast(
                 SelfPlayStateApplied,
@@ -177,7 +164,7 @@ class _SelfPlayGroup:
                     worker_id=worker_id,
                     loaded_generation=self.checkpoint.generation,
                     loaded_inference_model_sha256=self.checkpoint.inference_model_sha256,
-                    search_budget=_publication(self.checkpoint.generation),
+                    search_stopping=_publication(self.checkpoint.generation),
                     completed_generation_statistics=None,
                 ),
             )
@@ -238,11 +225,11 @@ class _Harness:
     self_play_group: _SelfPlayGroup
 
 
-def _publication(generation: int) -> BudgetPolicyPublication:
-    return BudgetPolicyPublication(
-        policy=disabled_policy(),
+def _publication(generation: int) -> StopPolicyPublication:
+    return StopPolicyPublication(
+        policy=flat_stop_policy(),
         application_generation=generation,
-        decision_reason=BudgetDecisionReason.INITIAL,
+        decision_reason=StopDecisionReason.INITIAL,
     )
 
 
@@ -266,8 +253,7 @@ def _harness(
     coordinator.self_play_group = self_play_group  # type: ignore[assignment]
     coordinator.self_play_health = SelfPlayHealthMonitor(WORKER_COUNT, grace_seconds=grace_seconds)
     coordinator.evaluation_manager = _EvaluationManager()  # type: ignore[assignment]
-    coordinator.search_budget_label_manager = _SearchBudgetLabelManager()  # type: ignore[assignment]
-    coordinator.label_sample_provider = _LabelSampleProvider()  # type: ignore[assignment]
+    coordinator.search_stopping_manager = _SearchStoppingManager()  # type: ignore[assignment]
     coordinator.training_session = _TrainingSession()  # type: ignore[assignment]
     coordinator.run_limit_monitor = _RunLimitMonitor(run_limit_reason)  # type: ignore[assignment]
     coordinator.resignation_calibrator = None

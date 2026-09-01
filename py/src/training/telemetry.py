@@ -45,35 +45,39 @@ class CompletedGameLengthTelemetry:
 
 
 @dataclass(frozen=True)
-class SearchBudgetTelemetry:
+class SearchStoppingTelemetry:
     baseline_visits: tuple[int, ...]
     final_visits: tuple[int, ...]
-    assigned_additional_visits: tuple[int, ...]
-    predicted_baseline_log_kls: tuple[float, ...]
-    selected_budget_indices: tuple[int, ...]
-    parallel_searches: tuple[int, ...]
-    spend_residuals: tuple[int, ...]
     starting_visits: tuple[int, ...]
+    stop_checkpoint_indices: tuple[int, ...]
+    parallel_searches: tuple[int, ...]
     policy_corrections: tuple[float, ...]
     value_corrections: tuple[float, ...]
     stop_reasons: tuple[tuple[SearchStopReason, int], ...]
 
+    @property
+    def realized_mean_spend(self) -> float:
+        spends = tuple(
+            (final - starting) / baseline
+            for final, starting, baseline in zip(
+                self.final_visits, self.starting_visits, self.baseline_visits, strict=True
+            )
+        )
+        return sum(spends) / len(spends)
 
-def search_budget_telemetry(
+
+def search_stopping_telemetry(
     games: tuple[IngestedCompletedGame, ...],
-) -> SearchBudgetTelemetry | None:
+) -> SearchStoppingTelemetry | None:
     observations = tuple(observation for game in games for observation in game.observations)
     if not observations:
         return None
-    return SearchBudgetTelemetry(
+    return SearchStoppingTelemetry(
         baseline_visits=tuple(observation.baseline_visits for observation in observations),
         final_visits=tuple(observation.final_visits for observation in observations),
-        assigned_additional_visits=tuple(observation.assigned_additional_visits for observation in observations),
-        predicted_baseline_log_kls=tuple(observation.predicted_baseline_log_kl for observation in observations),
-        selected_budget_indices=tuple(observation.selected_budget_index for observation in observations),
-        parallel_searches=tuple(observation.parallel_searches for observation in observations),
-        spend_residuals=tuple(observation.spend_residual for observation in observations),
         starting_visits=tuple(observation.starting_visits for observation in observations),
+        stop_checkpoint_indices=tuple(observation.stop_checkpoint_index for observation in observations),
+        parallel_searches=tuple(observation.parallel_searches for observation in observations),
         policy_corrections=tuple(observation.policy_correction for observation in observations),
         value_corrections=tuple(observation.value_correction for observation in observations),
         stop_reasons=tuple(

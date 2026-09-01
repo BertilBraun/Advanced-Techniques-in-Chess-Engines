@@ -8,8 +8,8 @@ import numpy as np
 import torch
 from src.experiment.configuration import load_experiment_configuration_json
 from src.games.composition import create_game_implementation
-from src.search_budget.calibration import BudgetPolicyPublication
-from src.search_budget.policy import SearchBudgetPolicy
+from src.search_stopping.calibration import StopPolicyPublication
+from src.search_stopping.policy import SearchStopPolicy
 from src.self_play.protocol import (
     PausedSelfPlayState,
     RunningSelfPlayState,
@@ -32,7 +32,7 @@ class SelfPlayProcessRuntime:
         self.worker_id = worker_id
         self.loaded_generation: int | None = None
         self.loaded_sha256: str | None = None
-        self.loaded_search_budget_policy: SearchBudgetPolicy | None = None
+        self.loaded_search_stop_policy: SearchStopPolicy | None = None
         self.completed_search_batches = 0
         self.running = False
 
@@ -55,13 +55,13 @@ class SelfPlayProcessRuntime:
         self._validate_checkpoint_transition(checkpoint, desired_state.completed_generation_statistics)
         statistics = self._completed_generation_statistics(desired_state.completed_generation_statistics)
         self.worker.update_resignation_policy(desired_state.resignation_policy)
-        self._load_checkpoint(checkpoint, desired_state.search_budget)
+        self._load_checkpoint(checkpoint, desired_state.search_stopping)
         self.running = True
         return RunningSelfPlayStateApplied(
             worker_id=self.worker_id,
             loaded_generation=checkpoint.generation,
             loaded_inference_model_sha256=checkpoint.inference_model_sha256,
-            search_budget=desired_state.search_budget,
+            search_stopping=desired_state.search_stopping,
             completed_generation_statistics=statistics,
         )
 
@@ -84,28 +84,27 @@ class SelfPlayProcessRuntime:
         if statistics_level is None:
             return None
         assert self.loaded_generation is not None
-        search_budget_spend_residual = self.worker.search_budget_spend_residual()
+
         if statistics_level is StatisticsLevel.DETAILED:
             self.worker.snapshot_statistics()
         statistics = SelfPlayStatistics(
             completed_generation=self.loaded_generation,
             level=statistics_level,
             completed_search_batches=self.completed_search_batches,
-            search_budget_spend_residual=search_budget_spend_residual,
         )
         self.completed_search_batches = 0
         return statistics
 
-    def _load_checkpoint(self, checkpoint: CheckpointReference, search_budget: BudgetPolicyPublication) -> None:
+    def _load_checkpoint(self, checkpoint: CheckpointReference, search_stopping: StopPolicyPublication) -> None:
         if checkpoint.generation == self.loaded_generation:
-            if search_budget.policy != self.loaded_search_budget_policy:
-                raise ValueError('A started self-play generation cannot change its published search-budget policy.')
+            if search_stopping.policy != self.loaded_search_stop_policy:
+                raise ValueError('A started self-play generation cannot change its published stop policy.')
             return
         checkpoint.validate_inference_model()
-        self.worker.refresh_published_model(checkpoint, search_budget.policy)
+        self.worker.refresh_published_model(checkpoint, search_stopping.policy)
         self.loaded_generation = checkpoint.generation
         self.loaded_sha256 = checkpoint.inference_model_sha256
-        self.loaded_search_budget_policy = search_budget.policy
+        self.loaded_search_stop_policy = search_stopping.policy
 
 
 def self_play_worker_main(

@@ -1,14 +1,27 @@
 from __future__ import annotations
 
+import hashlib
 import time
 from dataclasses import dataclass, field
+from fractions import Fraction
 from pathlib import Path
 from typing import TYPE_CHECKING, Generic
 from uuid import uuid4
 
 import numpy as np
 from src.games.contracts import WdlTarget
-from src.search_budget.policy import BASELINE_CURVE_INDEX, SearchBudgetPolicy
+from src.search_stopping.policy import SearchStopPolicy, cap_visit_count, checkpoint_visit_counts
+from src.search_stopping.records import (
+    ANCHOR_RECORD_DTYPE,
+    PAIRED_FLOOR_RECORD_DTYPE,
+    anchor_log_path,
+    append_records,
+    audit_log_path,
+    audit_record_dtype,
+    paired_floor_log_path,
+)
+from src.search_stopping.sampling import AuditPositionIdentity, is_audit_position
+from src.search_stopping.targets import PolicyDistribution, policy_kl
 from src.self_play.completed_game import (
     CompletedSelfPlayGame,
     GameIdentity,
@@ -30,7 +43,21 @@ from src.self_play.resignation import (
 )
 from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
 from src.util.atomic_file import fsync_directory
+from src.util.log import error as log_error
 from src.util.tensorboard import log_scalar
+
+
+def _game_group_key(game_identity: str) -> int:
+    return int.from_bytes(hashlib.sha256(game_identity.encode('utf-8')).digest()[:8], 'big')
+
+
+@dataclass(frozen=True)
+class _AuditPlan:
+    identity: AuditPositionIdentity
+    checkpoint_visits: list[int]
+    paired: bool
+    anchored: bool
+
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import InferenceStatistics
@@ -46,10 +73,34 @@ def _stop_reason_from_native(native_stop_reason: object) -> SearchStopReason:
             return SearchStopReason.FIXED_LIMIT
         case NativeSearchStopReason.ADDITIONAL_VISITS:
             return SearchStopReason.ADDITIONAL_VISITS
-        case NativeSearchStopReason.PREDICTED_BUDGET:
-            return SearchStopReason.PREDICTED_BUDGET
+        case NativeSearchStopReason.CAP_REACHED:
+            return SearchStopReason.CAP_REACHED
+        case NativeSearchStopReason.LEARNED_EARLY_STOP:
+            return SearchStopReason.LEARNED_EARLY_STOP
         case unknown:
             raise ValueError(f'Unknown native search stop reason: {unknown!r}')
+
+
+def _dense_distributions(
+    sparse_policies: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
+) -> tuple[PolicyDistribution, ...]:
+    action_ids = sorted({action for actions, _ in sparse_policies for action in actions})
+    index_of = {action: index for index, action in enumerate(action_ids)}
+    distributions = []
+    for actions, counts in sparse_policies:
+        total = float(sum(counts))
+        probabilities = [0.0] * len(action_ids)
+        for action, count in zip(actions, counts, strict=True):
+            probabilities[index_of[action]] = count / total
+        distributions.append(PolicyDistribution(probabilities=tuple(probabilities)))
+    return tuple(distributions)
+
+
+def _sparse_policy(visits: object) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    return (
+        tuple(visit.action_id for visit in visits),
+        tuple(visit.visit_count for visit in visits),
+    )
 
 
 @dataclass
@@ -69,7 +120,6 @@ class ActiveSelfPlayGame(Generic[NativeRootT]):
 class SelfPlayStatisticsSnapshot:
     model_generation: int
     completed_searches: int
-    search_budget_spend_residual: int
     inference: InferenceStatistics
 
 
@@ -103,20 +153,44 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         self.restart_starts = 0
         self.empty_restart_fallbacks = 0
         self.resignation_policy = PublishedResignationPolicy()
+        self.stopping_configuration = game.training.lifecycle.search_stopping
+        self.stopping_path = inbox_path.parents[1] / 'search-stopping'
+        self.audit_fraction = Fraction(self.stopping_configuration.audit_sample_fraction)
+        self.paired_audit_fraction = Fraction(self.stopping_configuration.paired_audit_fraction)
+        self.anchor_fraction = Fraction(self.stopping_configuration.anchor_fraction)
 
     def run_batch(self) -> None:
         search, parameters = self._loaded_runtime()
         requests: list[NativeRequestT] = []
-        for active_game in self.active_games:
+        audit_plans: dict[int, _AuditPlan] = {}
+        for game_index, active_game in enumerate(self.active_games):
             active_game.root.discount(parameters.retained_root_visit_fraction)
-            requests.append(search.request(active_game.root, root_ply=len(active_game.action_ids)))
+            plan = self._audit_plan(active_game, parameters)
+            if plan is None:
+                requests.append(search.request(active_game.root, root_ply=len(active_game.action_ids)))
+                continue
+            audit_plans[game_index] = plan
+            requests.append(
+                search.request(
+                    active_game.root,
+                    policy_checkpoint_visits=plan.checkpoint_visits,
+                    checkpoint_detail=self._policies_detail(),
+                    root_ply=len(active_game.action_ids),
+                    audit=True,
+                )
+            )
+        extra_requests, extra_owners = self._extra_audit_requests(search, parameters, audit_plans)
+        requests.extend(extra_requests)
         batch = search.search(requests, collect_statistics=False)
-        if len(batch.results) != len(self.active_games):
+        if len(batch.results) != len(self.active_games) + len(extra_requests):
             raise RuntimeError('Batched self-play search returned the wrong result count.')
+        results = batch.results
+        self._record_audits(parameters, audit_plans, results, extra_owners)
+        game_results = results[: len(self.active_games)]
         self.completed_searches += batch.simulations_completed
         next_games: list[ActiveSelfPlayGame[NativeRootT]] = []
         published = False
-        for active_game, result in zip(self.active_games, batch.results, strict=True):
+        for active_game, result in zip(self.active_games, game_results, strict=True):
             completed = self._advance_game(active_game, result, parameters)
             if completed is None:
                 next_games.append(active_game)
@@ -131,17 +205,14 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             fsync_directory(self.inbox_path)
         self.active_games = next_games
 
-    def refresh_published_model(
-        self, checkpoint: CheckpointReference, search_budget_policy: SearchBudgetPolicy
-    ) -> None:
-        parameters = self.game.self_play_parameters_at(checkpoint.generation, search_budget_policy)
+    def refresh_published_model(self, checkpoint: CheckpointReference, search_stop_policy: SearchStopPolicy) -> None:
+        parameters = self.game.self_play_parameters_at(checkpoint.generation, search_stop_policy)
         if self.search is None:
             self.search = self.game.create_native_search(self.device_id, checkpoint, parameters)
             capacity_changed = False
         else:
             self.search.refresh_model(checkpoint.generation, str(checkpoint.inference_model_path))
             capacity_changed = self.search.update_search_schedule(self.game.native_search_parameters(parameters))
-        self.search.reset_spend_residual()
         self.parameters = parameters
         self.model_generation = checkpoint.generation
         self._prepare_restart_archive(parameters)
@@ -171,13 +242,8 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         return SelfPlayStatisticsSnapshot(
             model_generation=self.model_generation,
             completed_searches=self.completed_searches,
-            search_budget_spend_residual=search.spend_residual,
             inference=inference,
         )
-
-    def search_budget_spend_residual(self) -> int:
-        search, _ = self._loaded_runtime()
-        return search.spend_residual
 
     def _new_game(
         self,
@@ -292,11 +358,8 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             network_root_value=result.network_root_value,
             policy_correction=result.policy_correction,
             value_correction=result.value_correction,
-            predicted_baseline_log_kl=result.predicted_budget_curve[BASELINE_CURVE_INDEX],
-            selected_budget_index=result.selected_budget_index,
-            assigned_additional_visits=result.assigned_additional_visits,
+            stop_checkpoint_index=result.stop_checkpoint_index,
             parallel_searches=result.parallel_searches,
-            spend_residual=result.spend_residual,
             starting_visits=result.starting_visits,
             final_visits=result.final_visits,
             stop_reason=_stop_reason_from_native(result.stop_reason),
@@ -398,6 +461,169 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             is_resignation_continuation=is_continuation,
             resignation_threshold=self.resignation_policy.threshold,
         )
+
+    def _audit_plan(
+        self,
+        active_game: ActiveSelfPlayGame[NativeRootT],
+        parameters: ResolvedSelfPlayParameters,
+    ) -> _AuditPlan | None:
+        policy = parameters.search_stop_policy
+        if not policy.checkpoint_multiples or self.model_generation is None:
+            return None
+        identity = AuditPositionIdentity(
+            source_generation=self.model_generation,
+            game_identity=active_game.identity.archive_key,
+            ply=len(active_game.action_ids),
+        )
+        run_seed = self.game.training.random_seed
+        if not is_audit_position(identity, run_seed, self.audit_fraction):
+            return None
+        starting_visits = active_game.root.visits
+        relative = checkpoint_visit_counts(tuple(policy.checkpoint_multiples), parameters.baseline_visits)
+        return _AuditPlan(
+            identity=identity,
+            checkpoint_visits=[starting_visits + visits for visits in relative],
+            paired=is_audit_position(identity, run_seed + 1, self.paired_audit_fraction),
+            anchored=is_audit_position(identity, run_seed + 2, self.anchor_fraction),
+        )
+
+    @staticmethod
+    def _policies_detail() -> object:
+        from AlphaZeroCpp import SearchCheckpointDetail
+
+        return SearchCheckpointDetail.POLICIES
+
+    def _extra_audit_requests(
+        self,
+        search: NativeSearchT,
+        parameters: ResolvedSelfPlayParameters,
+        audit_plans: dict[int, _AuditPlan],
+    ) -> tuple[list[NativeRequestT], list[tuple[int, str]]]:
+        cap_visits = cap_visit_count(parameters.search_stop_policy.cap_multiple, parameters.baseline_visits)
+        anchor_visits = int(round(self.stopping_configuration.anchor_visit_multiple * parameters.baseline_visits))
+        extra_requests: list[NativeRequestT] = []
+        extra_owners: list[tuple[int, str]] = []
+        for game_index, plan in audit_plans.items():
+            position = self.active_games[game_index].root.position
+            if plan.paired:
+                for _ in range(2):
+                    extra_requests.append(
+                        search.request(
+                            search.new_root(position, maximum_capacity=cap_visits + 64),
+                            assigned_additional_visits=cap_visits,
+                        )
+                    )
+                    extra_owners.append((game_index, 'paired'))
+            if plan.anchored:
+                extra_requests.append(
+                    search.request(
+                        search.new_root(position, maximum_capacity=anchor_visits + 64),
+                        assigned_additional_visits=anchor_visits,
+                        add_root_noise=False,
+                    )
+                )
+                extra_owners.append((game_index, 'anchor'))
+        return extra_requests, extra_owners
+
+    def _record_audits(
+        self,
+        parameters: ResolvedSelfPlayParameters,
+        audit_plans: dict[int, _AuditPlan],
+        results: list[NativeResultT],
+        extra_owners: list[tuple[int, str]],
+    ) -> None:
+        if not audit_plans:
+            return
+        try:
+            extras: dict[int, dict[str, list[NativeResultT]]] = {}
+            for (game_index, kind), result in zip(extra_owners, results[len(self.active_games) :], strict=True):
+                extras.setdefault(game_index, {}).setdefault(kind, []).append(result)
+            for game_index, plan in audit_plans.items():
+                self._append_audit_records(
+                    plan,
+                    parameters,
+                    results[game_index],
+                    extras.get(game_index, {}),
+                )
+        except Exception:
+            log_error('Audit recording failed; self-play continues without this batch of audits.')
+
+    def _append_audit_records(
+        self,
+        plan: _AuditPlan,
+        parameters: ResolvedSelfPlayParameters,
+        result: NativeResultT,
+        extras: dict[str, list[NativeResultT]],
+    ) -> None:
+        checkpoint_count = len(plan.checkpoint_visits)
+        checkpoints = list(result.checkpoints)
+        if len(checkpoints) != checkpoint_count:
+            raise RuntimeError('Audit search returned an unexpected checkpoint count.')
+        sparse = tuple(_sparse_policy(checkpoint.policy_target_visits) for checkpoint in checkpoints) + (
+            _sparse_policy(result.policy_target_visits),
+        )
+        distributions = _dense_distributions(sparse)
+        final_distribution = distributions[-1]
+        final_argmax = max(
+            range(len(final_distribution.probabilities)), key=final_distribution.probabilities.__getitem__
+        )
+        dtype = audit_record_dtype(checkpoint_count)
+        record = np.zeros(1, dtype=dtype)
+        row = record[0]
+        row['source_generation'] = plan.identity.source_generation
+        row['model_generation'] = plan.identity.source_generation
+        row['game_key'] = _game_group_key(plan.identity.game_identity)
+        row['ply'] = plan.identity.ply
+        row['baseline_visits'] = parameters.baseline_visits
+        row['starting_visits'] = result.starting_visits
+        row['final_visits'] = result.final_visits
+        row['final_root_value'] = result.root_value
+        for index, checkpoint in enumerate(checkpoints):
+            distribution = distributions[index]
+            row['kl_to_final'][index] = policy_kl(final_distribution, distribution)
+            row['value_gap'][index] = abs(checkpoint.root_value - result.root_value)
+            checkpoint_argmax = max(range(len(distribution.probabilities)), key=distribution.probabilities.__getitem__)
+            row['argmax_swap'][index] = checkpoint_argmax != final_argmax
+            row['guard_movement'][index] = result.guard_movements[index]
+            row['stop_probability'][index] = result.stop_probabilities[index]
+            row['would_stop'][index] = result.stop_verdicts[index]
+            row['features'][index] = result.stop_features[index]
+        append_records(
+            audit_log_path(self.stopping_path, plan.identity.source_generation, self.worker_id),
+            record,
+            dtype,
+        )
+        paired = extras.get('paired', [])
+        if len(paired) == 2:
+            first, second = _dense_distributions(
+                (_sparse_policy(paired[0].policy_target_visits), _sparse_policy(paired[1].policy_target_visits))
+            )
+            floor_record = np.zeros(1, dtype=PAIRED_FLOOR_RECORD_DTYPE)
+            floor_record[0]['source_generation'] = plan.identity.source_generation
+            floor_record[0]['ply'] = plan.identity.ply
+            floor_record[0]['baseline_visits'] = parameters.baseline_visits
+            floor_record[0]['kl_symmetric'] = 0.5 * (policy_kl(first, second) + policy_kl(second, first))
+            floor_record[0]['value_gap'] = abs(paired[0].root_value - paired[1].root_value)
+            append_records(
+                paired_floor_log_path(self.stopping_path, plan.identity.source_generation, self.worker_id),
+                floor_record,
+                PAIRED_FLOOR_RECORD_DTYPE,
+            )
+        anchors = extras.get('anchor', [])
+        if anchors:
+            anchor_distribution, capped_distribution = _dense_distributions(
+                (_sparse_policy(anchors[0].policy_target_visits), _sparse_policy(result.policy_target_visits))
+            )
+            anchor_record = np.zeros(1, dtype=ANCHOR_RECORD_DTYPE)
+            anchor_record[0]['source_generation'] = plan.identity.source_generation
+            anchor_record[0]['ply'] = plan.identity.ply
+            anchor_record[0]['baseline_visits'] = parameters.baseline_visits
+            anchor_record[0]['kl_anchor_to_capped'] = policy_kl(anchor_distribution, capped_distribution)
+            append_records(
+                anchor_log_path(self.stopping_path, plan.identity.source_generation, self.worker_id),
+                anchor_record,
+                ANCHOR_RECORD_DTYPE,
+            )
 
     def _loaded_runtime(self) -> tuple[NativeSearchT, ResolvedSelfPlayParameters]:
         if self.search is None or self.parameters is None:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import time
 import traceback
 from dataclasses import dataclass
@@ -14,28 +13,21 @@ from src.evaluation.process import resolve_project_path
 from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration_json
 from src.games.composition import create_game_implementation
 from src.games.implementation import GameImplementation
-from src.replay.batch_loader import MappedReplayBatchLoader, SearchBudgetLabelledBatches
-from src.training.batch import TrainingBatch, TrainingModelOutput
+from src.replay.batch_loader import MappedReplayBatchLoader
+from src.training.batch import TrainingModelOutput
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.checkpoint.persistence import load_model_and_optimizer, save_model_and_optimizer
 from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
 from src.training.distributions import (
-    AuxiliaryTrainingDistribution,
     TrainingDistributionSnapshot,
     capture_training_distributions,
 )
 from src.training.network import POLICY_PRIOR_PROBE_POSITIONS, Network
-from src.training.objective import (
-    ObjectiveLoss,
-    ResolvedTrainingObjective,
-    auxiliary_batch_weight,
-)
-from src.training.targets import search_budget_auxiliary_index
+from src.training.objective import ObjectiveLoss, ResolvedTrainingObjective
 from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
-    SearchBudgetHeadStatistics,
     StopTrainerCommand,
     TrainerCommand,
     TrainerStartup,
@@ -87,70 +79,9 @@ class _DeviceLossTotals:
 
 
 @dataclass(frozen=True)
-class _SearchBudgetHeadTotals:
-    auxiliary_index: int
-    sums: torch.Tensor
-
-    @staticmethod
-    def empty(auxiliary_index: int, device: torch.device) -> _SearchBudgetHeadTotals:
-        return _SearchBudgetHeadTotals(auxiliary_index, torch.zeros(8, device=device))
-
-    def accumulate(self, output: TrainingModelOutput, batch: TrainingBatch, loss: ObjectiveLoss) -> None:
-        index = self.auxiliary_index
-        targets = batch.auxiliary_targets[index].detach().float().flatten()
-        predictions = output.auxiliary_logits[index].detach().float().flatten()
-        self.sums.add_(
-            torch.stack(
-                (
-                    loss.auxiliary[index].detach().float(),
-                    targets.sum(),
-                    (targets * targets).sum(),
-                    predictions.sum(),
-                    (predictions * predictions).sum(),
-                    (predictions - targets).abs().sum(),
-                    torch.full((), float(targets.shape[0]), device=targets.device),
-                    torch.ones((), device=targets.device),
-                )
-            )
-        )
-
-    def resolve(self, labelled_pool_rows: int) -> SearchBudgetHeadStatistics:
-        (
-            loss_sum,
-            target_sum,
-            target_square_sum,
-            prediction_sum,
-            prediction_square_sum,
-            absolute_error_sum,
-            row_count,
-            batch_count,
-        ) = (float(value) for value in self.sums.cpu())
-        rows = row_count if row_count > 0.0 else 1.0
-        batches = batch_count if batch_count > 0.0 else 1.0
-        target_mean = target_sum / rows
-        prediction_mean = prediction_sum / rows
-        return SearchBudgetHeadStatistics(
-            auxiliary_index=self.auxiliary_index,
-            labelled_pool_rows=labelled_pool_rows,
-            labelled_batches=int(batch_count),
-            loss=loss_sum / batches,
-            target_mean=target_mean,
-            target_standard_deviation=_standard_deviation(target_square_sum, target_mean, rows),
-            prediction_mean=prediction_mean,
-            prediction_standard_deviation=_standard_deviation(prediction_square_sum, prediction_mean, rows),
-            absolute_error_mean=absolute_error_sum / rows,
-        )
-
-
-def _standard_deviation(square_sum: float, mean: float, rows: float) -> float:
-    return math.sqrt(max(square_sum / rows - mean * mean, 0.0))
-
-
-@dataclass(frozen=True)
 class _TrainingBatchResult:
     totals: _DeviceLossTotals
     distributions: TrainingDistributionSnapshot | None
-    search_budget_head: SearchBudgetHeadStatistics | None
 
 
 def _initialize_rank(
@@ -311,7 +242,6 @@ def _train_batches(
     completed_optimizer_steps: int,
     replay_prefetch_depth: int,
     gradient_probe_interval_steps: int,
-    search_budget_auxiliary: int | None,
 ) -> _TrainingBatchResult:
     totals = _DeviceLossTotals(
         policy=torch.zeros((), device=device),
@@ -322,15 +252,9 @@ def _train_batches(
         term_trunk_gradients=torch.zeros(2 + len(objective.auxiliary_losses), device=device),
         term_trunk_gradient_probes=torch.zeros((), device=device),
     )
-    head_totals = (
-        None if search_budget_auxiliary is None else _SearchBudgetHeadTotals.empty(search_budget_auxiliary, device)
-    )
     distributions = None
-    head_distribution = None
-    labelled_snapshot = None
     with loader.prefetch(device, uses_cuda, replay_prefetch_depth) as prefetched_batches:
         for batch_index, batch in enumerate(prefetched_batches):
-            labelled_batch = loader.is_labelled_batch(batch_index)
             learning_rate = warmup_scaled_learning_rate(
                 base_learning_rate,
                 warmup_optimizer_steps,
@@ -345,25 +269,17 @@ def _train_batches(
                 enabled=precision is TrainingPrecision.BFLOAT16,
             ):
                 output = distributed_model(batch.states)
-                loss = objective.calculate_loss(output, batch, search_budget_labelled_batch=labelled_batch)
-            if collect_distributions and ((head_distribution is None) if labelled_batch else (distributions is None)):
-                snapshot = capture_training_distributions(
+                loss = objective.calculate_loss(output, batch)
+            if collect_distributions and distributions is None:
+                distributions = capture_training_distributions(
                     output,
                     batch,
                     objective,
                     source_generation,
                     time.time(),
                 )
-                if labelled_batch:
-                    assert search_budget_auxiliary is not None
-                    head_distribution = snapshot.auxiliary[search_budget_auxiliary]
-                    labelled_snapshot = snapshot
-                else:
-                    distributions = snapshot
             if gradient_probe_interval_steps > 0 and batch_index % gradient_probe_interval_steps == 0:
-                totals.term_trunk_gradients.add_(
-                    _term_trunk_gradients(objective, loss, output.features, labelled_batch)
-                )
+                totals.term_trunk_gradients.add_(_term_trunk_gradients(objective, loss, output.features))
                 totals.term_trunk_gradient_probes.add_(1.0)
             loss.total.backward()
             gradient_norm = torch.nn.utils.clip_grad_norm_(distributed_model.parameters(), maximum_gradient_norm)
@@ -374,46 +290,20 @@ def _train_batches(
             totals.gradient_norm.add_(gradient_norm.detach())
             if loss.auxiliary:
                 totals.auxiliary.add_(torch.stack(tuple(auxiliary.detach() for auxiliary in loss.auxiliary)))
-            if labelled_batch and head_totals is not None:
-                head_totals.accumulate(output, batch, loss)
-    head_statistics = None if head_totals is None else head_totals.resolve(loader.labelled_pool_rows)
-    # A quantum whose every batch is labelled would otherwise report no distributions at all.
-    if distributions is None:
-        distributions = labelled_snapshot
-    if head_distribution is not None and distributions is not None:
-        assert search_budget_auxiliary is not None
-        distributions = _with_search_budget_head_distribution(
-            distributions,
-            search_budget_auxiliary,
-            head_distribution,
-        )
-    return _TrainingBatchResult(totals, distributions, head_statistics)
-
-
-def _with_search_budget_head_distribution(
-    distributions: TrainingDistributionSnapshot,
-    auxiliary_index: int,
-    head_distribution: AuxiliaryTrainingDistribution,
-) -> TrainingDistributionSnapshot:
-    """An ordinary batch holds a handful of labelled rows, so the head's histograms come from a labelled batch."""
-    auxiliary = tuple(
-        head_distribution if index == auxiliary_index else entry for index, entry in enumerate(distributions.auxiliary)
-    )
-    return distributions.model_copy(update={'auxiliary': auxiliary})
+    return _TrainingBatchResult(totals, distributions)
 
 
 def _term_trunk_gradients(
     objective: ResolvedTrainingObjective,
     loss: ObjectiveLoss,
     features: torch.Tensor,
-    search_budget_labelled_batch: bool,
 ) -> torch.Tensor:
     """Norm of each weighted term's gradient at the shared trunk, so terms are comparable across heads."""
     weighted = (
         objective.policy_loss_weight * loss.policy,
         objective.value_loss_weight * loss.wdl,
         *(
-            auxiliary_batch_weight(configuration, search_budget_labelled_batch) * value
+            configuration.weight * value
             for configuration, value in zip(objective.auxiliary_losses, loss.auxiliary, strict=True)
         ),
     )
@@ -478,7 +368,6 @@ def train_rank_quantum(
         command.target_progress.completed_optimizer_steps - command.source_progress.completed_optimizer_steps
     )
     uses_cuda = configuration.training.topology.trainer.device_type == 'cuda'
-    labelled_batches = _labelled_batch_plan(configuration, command)
     loader = MappedReplayBatchLoader(
         replay=command.replay,
         state=game.state,
@@ -489,7 +378,6 @@ def train_rank_quantum(
         rank=rank,
         sampler_seed=configuration.training.random_seed,
         pin_memory=uses_cuda,
-        labelled_batches=labelled_batches,
     )
     training_result = _train_batches(
         loader,
@@ -507,7 +395,6 @@ def train_rank_quantum(
         completed_optimizer_steps=command.source_progress.completed_optimizer_steps,
         replay_prefetch_depth=configuration.training.trainer.replay_prefetch_depth,
         gradient_probe_interval_steps=configuration.training.trainer.gradient_probe_interval_steps,
-        search_budget_auxiliary=None if labelled_batches is None else labelled_batches.auxiliary_index,
     )
     totals = _resolve_loss_totals(training_result.totals)
     checkpoint = _save_rank_checkpoint(rank, model, optimizer, command, save_path)
@@ -518,43 +405,11 @@ def train_rank_quantum(
         completed_optimizer_steps=command.target_progress.completed_optimizer_steps,
         policy_loss=totals.policy / divisor,
         wdl_loss=totals.wdl / divisor,
-        auxiliary_losses=_auxiliary_losses_with_head_batches(
-            tuple(value / divisor for value in totals.auxiliary),
-            training_result.search_budget_head,
-        ),
+        auxiliary_losses=tuple(value / divisor for value in totals.auxiliary),
         total_loss=totals.total / divisor,
         gradient_norm=totals.gradient_norm / divisor,
         term_trunk_gradients=totals.term_trunk_gradients,
         elapsed_seconds=time.perf_counter() - started_at,
         checkpoint=checkpoint,
         distributions=training_result.distributions,
-        search_budget_head=training_result.search_budget_head,
-    )
-
-
-def _labelled_batch_plan(
-    configuration: ExperimentConfiguration,
-    command: TrainQuantumCommand,
-) -> SearchBudgetLabelledBatches | None:
-    head_training = configuration.training.lifecycle.search_budget.head_training
-    if not head_training.dedicated_batches:
-        return None
-    auxiliary_index = search_budget_auxiliary_index(command.replay.layout.targets.auxiliary_heads)
-    if auxiliary_index is None:
-        return None
-    return SearchBudgetLabelledBatches(
-        auxiliary_index=auxiliary_index,
-        interval_optimizer_steps=head_training.interval_optimizer_steps,
-    )
-
-
-def _auxiliary_losses_with_head_batches(
-    losses: tuple[float, ...],
-    head_statistics: SearchBudgetHeadStatistics | None,
-) -> tuple[float, ...]:
-    if head_statistics is None:
-        return losses
-    return tuple(
-        head_statistics.loss if index == head_statistics.auxiliary_index else value
-        for index, value in enumerate(losses)
     )

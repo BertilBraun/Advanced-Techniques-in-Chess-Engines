@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -19,7 +18,7 @@ from src.experiment.configuration import (
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.training import ChessImplementation
 from src.games.go.configuration import GoExperimentConfiguration
-from src.search_budget.policy import disabled_policy
+from src.search_stopping.policy import flat_stop_policy
 from src.self_play.configuration import (
     EnabledForcedPlayoutConfiguration,
     SdpaBackend,
@@ -42,8 +41,6 @@ from test_helpers.chess_configuration import (
 from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_CONFIG_DIRECTORY
 
 OPTIMAL_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-optimal.yaml'
-V12_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'vast-chess-4day-production-v12.yaml'
-V13_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'vast-chess-4day-production-v13.yaml'
 
 
 def test_experiment_fixtures_use_the_current_contract_and_dependency_lock() -> None:
@@ -62,27 +59,6 @@ def test_every_screening_configuration_parses() -> None:
     paths = tuple(sorted((REPOSITORY_CONFIG_DIRECTORY / 'screening').rglob('*.yaml')))
 
     assert all(load_experiment_configuration(path) for path in paths)
-
-
-def test_v12_configuration_is_standalone_and_uses_two_minimum_parallel_searches() -> None:
-    payload = yaml.safe_load(V12_CHESS_EXPERIMENT_PATH.read_text(encoding='utf-8'))
-    configuration = load_experiment_configuration(V12_CHESS_EXPERIMENT_PATH)
-
-    assert 'extends' not in payload
-    assert configuration.run.run_name == 'vast-chess-4day-production-v12'
-    assert configuration.run.tensorboard_run_directory == 'vast-chess-4day-production-v12'
-    assert configuration.training.lifecycle.search_budget.production.minimum_parallel_searches == 2
-
-
-def test_v13_configuration_is_standalone_and_uses_compact_label_sampling_settings() -> None:
-    payload = yaml.safe_load(V13_CHESS_EXPERIMENT_PATH.read_text(encoding='utf-8'))
-    configuration = load_experiment_configuration(V13_CHESS_EXPERIMENT_PATH)
-
-    assert 'extends' not in payload
-    assert configuration.run.run_name == 'vast-chess-4day-production-v13'
-    assert configuration.run.tensorboard_run_directory == 'vast-chess-4day-production-v13'
-    assert configuration.training.lifecycle.search_budget.labeling.sample_fraction.value_at(0) == Decimal('0.005')
-    assert configuration.training.lifecycle.search_budget.production.minimum_parallel_searches == 2
 
 
 def test_optimal_chess_experiment_uses_conservative_search_and_parallel_materialization() -> None:
@@ -132,7 +108,6 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
         'future_search_value',
         'irreversible_progress',
         'legal_moves',
-        'search_budget',
     )
     assert tuple(target.loss_weight.value_at(0) for target in auxiliary_targets) == (
         0.05,
@@ -140,7 +115,6 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
         0.025,
         0.0125,
         0.0125,
-        0.2,
     )
     remaining_game_length = auxiliary_targets[1]
     assert isinstance(remaining_game_length, RemainingGameLengthTargetConfiguration)
@@ -174,23 +148,6 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
         (model.network.num_layers, model.network.embedding_size) for model in progressive_model_sizing.models
     ) == ((8, 128), (10, 160), (15, 192))
     assert configuration.training.initial_model == progressive_model_sizing.models[0]
-
-
-@pytest.mark.parametrize('search_budget_count', (0, 2))
-def test_learned_search_budget_requires_exactly_one_target(
-    search_budget_count: int,
-) -> None:
-    candidate = yaml.safe_load(OPTIMAL_CHESS_EXPERIMENT_PATH.read_text(encoding='utf-8'))
-    targets = candidate['chess']['objective']['auxiliary_targets']
-    without_search_budget = tuple(target for target in targets if target['kind'] != 'search_budget')
-    search_budget = {'kind': 'search_budget', 'loss_weight': 0.2}
-    candidate['chess']['objective']['auxiliary_targets'] = [
-        *without_search_budget,
-        *[search_budget] * search_budget_count,
-    ]
-
-    with pytest.raises(ValidationError, match='requires exactly one search-budget target'):
-        ChessExperimentConfiguration.model_validate(candidate)
 
 
 @pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))
@@ -340,8 +297,8 @@ def test_early_termination_caps_maximum_game_plies_and_censors_cut_games() -> No
     assert configuration.chess.self_play.maximum_game_plies_at(0) == 80
     assert configuration.chess.self_play.maximum_game_plies_at(10) == 160
     assert configuration.chess.self_play.maximum_game_plies_at(50) == 600
-    assert implementation.self_play_parameters_at(0, disabled_policy()).maximum_game_plies == 80
-    assert implementation.self_play_parameters_at(50, disabled_policy()).maximum_game_plies == 600
+    assert implementation.self_play_parameters_at(0, flat_stop_policy()).maximum_game_plies == 80
+    assert implementation.self_play_parameters_at(50, flat_stop_policy()).maximum_game_plies == 600
     assert implementation.censor_remaining_game_length_on_cut_games is True
 
 
@@ -581,7 +538,9 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
-    assert experiment_configuration_sha256(frozen) == 'e961a34adc66fc35e2454b92a3c5df45b52c6f6b5bd87d6a41c09deece3be237'
+    # Re-pinned 2026-09-01: the learned-early-stopping rework replaced the search_budget schema
+    # with search_stopping, so every pre-rework experiment_configuration_sha256 changed with it.
+    assert experiment_configuration_sha256(frozen) == 'd5dc5b2d4125919c6ac55108babe57f07cc9d2c71762587601c3a55553bfb121'
 
 
 @pytest.mark.parametrize(
@@ -589,70 +548,17 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     (('search_root_value', True), ('material', False)),
 )
 def test_cut_game_value_target_selects_whether_self_play_bootstraps(value_target: str, expected: bool) -> None:
-    path = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'vast-chess-4day-production-v6.yaml'
-    configuration = load_chess_experiment_configuration(path)
-    early_termination = configuration.chess.self_play.early_termination
-    assert early_termination is not None
-    configuration = configuration.model_copy(
-        update={
-            'chess': configuration.chess.model_copy(
-                update={
-                    'self_play': configuration.chess.self_play.model_copy(
-                        update={
-                            'early_termination': early_termination.model_copy(update={'value_target': value_target})
-                        }
-                    )
-                }
-            )
-        }
-    )
+    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
+    candidate['chess']['self_play']['early_termination'] = {
+        'maximum_game_plies': {
+            'kind': 'staged',
+            'stages': [{'start_generation': 0, 'value': 80}],
+        },
+        'censor_remaining_game_length_target': True,
+        'value_target': value_target,
+    }
+    configuration = ChessExperimentConfiguration.model_validate(candidate)
 
     implementation = ChessImplementation(configuration)
 
-    assert implementation.self_play_parameters_at(0, disabled_policy()).bootstrap_cut_game_value is expected
-
-
-def test_v19_configuration_stages_the_label_sample_fraction() -> None:
-    path = REPOSITORY_CONFIG_DIRECTORY / 'validation' / 'vast-chess-4day-production-v19.yaml'
-    payload = yaml.safe_load(path.read_text(encoding='utf-8'))
-    configuration = load_experiment_configuration(path)
-
-    assert 'extends' not in payload
-    assert configuration.run.run_name == 'vast-chess-4day-production-v19'
-    labeling = configuration.training.lifecycle.search_budget.labeling
-    assert labeling.sample_fraction.value_at(0) == Decimal('0.02')
-    assert labeling.sample_fraction.value_at(169) == Decimal('0.02')
-    assert labeling.sample_fraction.value_at(170) == Decimal('0.01')
-    assert labeling.sample_fraction.value_at(339) == Decimal('0.01')
-    assert labeling.sample_fraction.value_at(340) == Decimal('0.005')
-    assert labeling.sample_fraction.value_at(1000) == Decimal('0.005')
-    assert labeling.deep_search_multiple == 8
-    corrector = configuration.training.lifecycle.search_budget.calibration.corrector
-    assert corrector.enabled and corrector.window_generations == 10
-    calibration = configuration.training.lifecycle.search_budget.calibration
-    assert calibration.warmup_completed_source_generations == 30
-    assert configuration.training.lifecycle.search_budget.head_training.dedicated_batches is False
-
-
-def test_a_scalar_sample_fraction_wraps_into_a_constant_schedule() -> None:
-    from src.search_budget.configuration import DeepLabelingConfiguration
-
-    configuration = DeepLabelingConfiguration.model_validate({'sample_fraction': '0.005'})
-    assert configuration.sample_fraction.value_at(0) == Decimal('0.005')
-    assert configuration.sample_fraction.value_at(500) == Decimal('0.005')
-    with pytest.raises(ValueError, match='plain value'):
-        DeepLabelingConfiguration.model_validate({'sample_fraction': {'kind': 'constant', 'value': '0.005'}})
-    with pytest.raises(ValueError, match='lie in'):
-        DeepLabelingConfiguration.model_validate({'sample_fraction': '1.5'})
-    with pytest.raises(ValueError, match='lie in'):
-        DeepLabelingConfiguration.model_validate(
-            {
-                'sample_fraction': {
-                    'kind': 'staged',
-                    'stages': [
-                        {'start_generation': 0, 'value': '0.02'},
-                        {'start_generation': 100, 'value': '2.0'},
-                    ],
-                }
-            }
-        )
+    assert implementation.self_play_parameters_at(0, flat_stop_policy()).bootstrap_cut_game_value is expected

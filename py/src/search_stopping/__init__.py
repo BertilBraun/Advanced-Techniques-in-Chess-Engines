@@ -40,10 +40,14 @@ from src.search_stopping.predictor import (
     fit_stop_predictor,
 )
 from src.search_stopping.records import (
-    append_audit_records,
+    ANCHOR_RECORD_DTYPE,
+    PAIRED_FLOOR_RECORD_DTYPE,
+    anchor_log_path,
+    append_records,
     audit_log_path,
     audit_record_dtype,
-    read_audit_records,
+    paired_floor_log_path,
+    read_records,
 )
 from src.search_stopping.sampling import AuditPositionIdentity, is_audit_position
 from src.search_stopping.solver import (
@@ -78,9 +82,13 @@ __all__ = [
     'StopPredictorFit',
     'StopPredictorNetwork',
     'ThresholdSolution',
-    'append_audit_records',
+    'ANCHOR_RECORD_DTYPE',
+    'PAIRED_FLOOR_RECORD_DTYPE',
+    'anchor_log_path',
+    'append_records',
     'audit_log_path',
     'audit_record_dtype',
+    'paired_floor_log_path',
     'cap_visit_count',
     'checkpoint_feature_vector',
     'checkpoint_stop_labels',
@@ -97,7 +105,7 @@ __all__ = [
     'publication_for_generation',
     'publish_fail_closed',
     'published_policy_for_generation',
-    'read_audit_records',
+    'read_records',
     'save_calibration_state',
     'solve_noise_floor_anchored_eps',
     'solve_thresholds',

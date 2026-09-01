@@ -87,7 +87,8 @@ class TerminationReason(str, Enum):
 class SearchStopReason(str, Enum):
     FIXED_LIMIT = 'fixed_limit'
     ADDITIONAL_VISITS = 'additional_visits'
-    PREDICTED_BUDGET = 'predicted_budget'
+    CAP_REACHED = 'cap_reached'
+    LEARNED_EARLY_STOP = 'learned_early_stop'
 
 
 class SealedSearchObservation(FrozenModel):
@@ -108,11 +109,8 @@ class SealedSearchObservation(FrozenModel):
     network_root_value: float = Field(ge=-1.0, le=1.0)
     policy_correction: float = Field(ge=0.0, le=1.0)
     value_correction: float = Field(ge=0.0, le=1.0)
-    predicted_baseline_log_kl: float
-    selected_budget_index: int = Field(ge=-1, lt=10)
-    assigned_additional_visits: int = Field(gt=0)
+    stop_checkpoint_index: int = Field(ge=-1, lt=16)
     parallel_searches: int = Field(gt=0, le=16)
-    spend_residual: int
     starting_visits: int = Field(ge=0)
     final_visits: int = Field(gt=0)
     stop_reason: SearchStopReason
@@ -124,10 +122,6 @@ class SealedSearchObservation(FrozenModel):
             raise ValueError('Highest-visited child Q must be finite and lie in [-1, 1].')
         if self.final_visits < self.starting_visits:
             raise ValueError('Final root visits cannot precede retained starting visits.')
-        if self.final_visits - self.starting_visits != self.assigned_additional_visits:
-            raise ValueError('Final visits must equal retained starting visits plus the assigned additional budget.')
-        if not isfinite(self.predicted_baseline_log_kl):
-            raise ValueError('Predicted baseline log KL must be finite.')
 
 
 class SearchObservation(SealedSearchObservation):
@@ -137,7 +131,7 @@ class SearchObservation(SealedSearchObservation):
 
 
 class CompletedSelfPlayGame(FrozenModel):
-    schema_version: Literal[7] = 7
+    schema_version: Literal[8] = 8
     identity: GameIdentity
     created_at_seconds: float = Field(ge=0.0)
     generation_seconds: float = Field(ge=0.0)
