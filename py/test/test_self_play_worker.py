@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import cast
 from uuid import UUID
@@ -51,6 +52,7 @@ class FakeRoot:
     position: FakePosition
     is_terminal: bool = False
     reset_count: int = 0
+    visits: int = 0
 
     def play(self, action_id: int) -> None:
         assert action_id in (0, 1, 2)
@@ -768,3 +770,86 @@ def test_cut_game_falls_back_to_adjudication_when_bootstrapping_is_disabled(tmp_
 
     completed = CompletedSelfPlayGame.model_validate_json(next(tmp_path.glob('*.json')).read_text(encoding='utf-8'))
     assert completed.final_wdl == WdlTarget(win=0.0, draw=1.0, loss=0.0)
+
+
+def _open_stop_policy() -> SearchStopPolicy:
+    return SearchStopPolicy(
+        checkpoint_multiples=(1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5),
+        thresholds=(0.1, 0.1, 0.1, 0.1, 0.1),
+        movement_guard_epsilon=0.05,
+        cap_multiple=2.0,
+        predictor_path=Path('stop-predictor.jit.pt'),
+        predictor_sha256='0' * 64,
+        apply_learned=True,
+    )
+
+
+def _closed_capable_policy() -> SearchStopPolicy:
+    return SearchStopPolicy(
+        checkpoint_multiples=(1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5),
+        thresholds=(0.0,) * 5,
+        movement_guard_epsilon=0.05,
+        cap_multiple=2.0,
+        predictor_path=None,
+        predictor_sha256=None,
+        apply_learned=False,
+    )
+
+
+def test_applied_policy_requests_carry_the_full_checkpoint_set(tmp_path: Path) -> None:
+    """The v21 crash-loop regression: under an applied policy the native contract requires one
+    checkpoint visit count per configured multiple on EVERY capped request, not only on audits."""
+    game = FakeGame()
+    worker = SelfPlayWorker(
+        game=cast('GameImplementation', game),
+        parallel_game_count=3,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path / 'completed-games' / 'inbox',
+    )
+    worker.refresh_published_model(checkpoint(tmp_path, 0), _open_stop_policy())
+    worker.run_batch()
+
+    policy = _open_stop_policy()
+    for request in worker.search.request_batches[0][:3]:  # type: ignore[union-attr]
+        visits = request.policy_checkpoint_visits
+        assert visits is not None and len(visits) == len(policy.checkpoint_multiples)
+        assert visits == sorted(set(visits)) and visits[0] > 0
+
+
+def test_closed_policy_non_audit_requests_carry_no_checkpoints(tmp_path: Path) -> None:
+    game = FakeGame()
+    worker = SelfPlayWorker(
+        game=cast('GameImplementation', game),
+        parallel_game_count=3,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path / 'completed-games' / 'inbox',
+    )
+    worker.audit_fraction = Fraction(0)  # deterministically no audits
+    worker.refresh_published_model(checkpoint(tmp_path, 0), _closed_capable_policy())
+    worker.run_batch()
+
+    for request in worker.search.request_batches[0]:  # type: ignore[union-attr]
+        assert not request.policy_checkpoint_visits
+
+
+def test_audit_requests_under_a_closed_policy_still_search_to_the_cap(tmp_path: Path) -> None:
+    game = FakeGame()
+    worker = SelfPlayWorker(
+        game=cast('GameImplementation', game),
+        parallel_game_count=3,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path / 'completed-games' / 'inbox',
+    )
+    worker.audit_fraction = Fraction(1)  # deterministically all audits
+    worker.paired_audit_fraction = Fraction(0)
+    worker.anchor_fraction = Fraction(0)
+    worker.refresh_published_model(checkpoint(tmp_path, 0), _closed_capable_policy())
+    worker.run_batch()
+
+    policy = _closed_capable_policy()
+    for request in worker.search.request_batches[0][:3]:  # type: ignore[union-attr]
+        visits = request.policy_checkpoint_visits
+        assert visits is not None and len(visits) == len(policy.checkpoint_multiples)

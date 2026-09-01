@@ -167,7 +167,16 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             active_game.root.discount(parameters.retained_root_visit_fraction)
             plan = self._audit_plan(active_game, parameters)
             if plan is None:
-                requests.append(search.request(active_game.root, root_ply=len(active_game.action_ids)))
+                # An applied stop policy caps every search, and the native contract requires one
+                # checkpoint visit count per configured multiple on every capped request — not
+                # only on audits. Scalars detail suffices: the stop rule reads the live tree.
+                requests.append(
+                    search.request(
+                        active_game.root,
+                        policy_checkpoint_visits=self._stop_checkpoint_visits(active_game, parameters),
+                        root_ply=len(active_game.action_ids),
+                    )
+                )
                 continue
             audit_plans[game_index] = plan
             requests.append(
@@ -461,6 +470,20 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             is_resignation_continuation=is_continuation,
             resignation_threshold=self.resignation_policy.threshold,
         )
+
+    def _stop_checkpoint_visits(
+        self,
+        active_game: ActiveSelfPlayGame[NativeRootT],
+        parameters: ResolvedSelfPlayParameters,
+    ) -> list[int]:
+        """Absolute checkpoint visits for a capped search; empty exactly when the policy is
+        closed, matching the native contract in both directions."""
+        policy = parameters.search_stop_policy
+        if not policy.apply_learned:
+            return []
+        starting_visits = active_game.root.visits
+        relative = checkpoint_visit_counts(tuple(policy.checkpoint_multiples), parameters.baseline_visits)
+        return [starting_visits + visits for visits in relative]
 
     def _audit_plan(
         self,
