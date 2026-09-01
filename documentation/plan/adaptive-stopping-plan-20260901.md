@@ -53,8 +53,10 @@ one of the three production-killing defects (config pin, inverted isotonic proje
 The retired system cheapened positions where a *predicted* curve looked flat — prediction error was
 large (best corrector: 32.9% of oracle out-of-fold), nothing verified the prediction on the affected
 position, and the damage (prior-like targets) was invisible to its own proxy. This design inverts
-that: a position is stopped only when its own tree's distribution has been **observed** to have
-stopped moving (a hard measured guard, section 5.2) *and* a predictor certifies it will stay within
+that: a position is stopped only when its own tree's distribution has been observed to have
+stopped moving over the last checkpoint interval (a measured necessary-condition filter, section
+5.2 — not a guarantee: a monotone drift passes every local check while accumulating total drift,
+which is exactly why the predictor and labels exist) *and* a predictor certifies it will stay within
 eps of the full-budget distribution — a property that is directly verified on every audit position,
 with an asymmetric threshold driving false stops toward zero. A true stop saves a bounded quantity
 (some fraction of one search); a false stop injects a degraded policy target whose cost compounds
@@ -224,13 +226,13 @@ be an O2 finding, not a generation-30 surprise. Stage O2 therefore must produce,
 4. the **realized** spend / effective-compute curve for a trained predictor behind the guard, held to
    the false-stop ceiling, at several eps values — the curve the launch eps is actually read from.
 
-**Can eps be tuned during a run? No.** `eps_pi` defines the label semantics: every label in the
-trailing window, every published predictor, and every calibrated threshold is conditioned on it.
-Changing it mid-run silently invalidates the window (labels computed under two definitions mix in one
-fit) and re-poses the class-balance the thresholds were calibrated against. The online knob is `beta`
-via the self-tuning threshold calibrator (section 6); `eps_pi`/`eps_v` are explicit configuration
-keys with **no defaults** (missing key = error, per the repo configuration rule), fixed for the life
-of a run, changed only between runs against a new config SHA.
+**Can eps be tuned during a run? Yes — and it is the run's one adaptive quantity** (user
+decision, superseding this plan's earlier "no"). The earlier argument assumed a window of baked
+labels; in fact the audit records store the raw per-checkpoint KLs and value gaps, so any eps can
+relabel the whole window for free and nothing mixes. Section 6 specifies the per-generation
+one-shot solve that pins realized mean spend at 1.0, clamped to `[eps_pi_minimum, eps_pi_maximum]`
+— the clamp, not the solve, carries the quality guarantee, so O2's job shifts from choosing eps to
+choosing the **clamp and beta**. `eps_v` and the movement guard epsilon stay fixed per run.
 
 ### 3.3 Ground truth generation and training-data collection
 
@@ -246,10 +248,32 @@ an append-only per-generation numpy file (the `analysis_log.py` pattern, new dty
 per checkpoint, predictor output `u_i`, shadow verdicts, argmax-swap flags, final visits). Failures
 log and never affect self-play — same contract as today's analysis log.
 
+**External anchor (review defect C).** The reference `pi_2B` is produced by the model being
+trained, at visit counts (600–1200 new visits) that straddle the ~800-playout threshold below which
+search barely leaves the prior. If the model collapses toward its prior on a class of positions,
+the reference collapses with it: KLs shrink, labels certify stopping as safe, and realized
+false-stop telemetry reads clean — the v20 failure mode made invisible to its own instruments. The
+deleted 8x machinery was the only measurement outside that loop, so a vestigial anchor replaces it:
+for ~5% of audit positions, the self-play worker additionally runs a fresh-root, noise-free search
+at `4B` on the same position after the audit search completes, recording only
+`KL(pi_4B || pi_capped_target)`. Cost ≈ 0.05 × audit_fraction × 2 extra search multiples ≈ +0.2%
+visits. The tracked alarm is the *absolute* level and trend of that KL among stop-eligible
+positions — an outside-the-loop drift detector, not a label source.
+
 Because audits ride live searches, labels come from the production distribution (with tree reuse,
 noise, current model) — no train/deploy gap. `sample_fraction` ~0.01–0.02 gives 5,000–15,000 audit
 positions per generation at v20 game rates, i.e. 20,000–60,000 labelled checkpoint examples per
 generation; a 10-generation trailing window is ample for a 2×64 MLP.
+
+**Window segmentation at `baseline_visits` schedule steps (review defect G).** When the staged
+schedule raises `B` (300→…→800→1000), the reference `pi_2B` deepens and every KL in the labels
+shrinks systematically, so a window spanning a step mixes two label distributions and a fixed eps
+is effectively loosened — the same mixing section 3.2 forbids for eps itself. The trailing window
+therefore never crosses a `baseline_visits` schedule step: at a step it resets and the predictor,
+the eps solve and the thresholds recalibrate on post-step data only (the warmup evidence minimum
+applies again, during which the policy is `closed`). The eps solve re-derives eps on post-step data
+automatically; the clamp `[eps_pi_minimum, eps_pi_maximum]` stays per-run, and a step whose solved
+eps saturates the clamp is flagged in the generation report for the between-runs judgment.
 
 Cost of auditing: checkpoint capture with `Policies` detail is memory and serialization only (the
 policy-target vector K times for ~1–2% of positions); the schedulable-task drain at checkpoints
@@ -285,8 +309,8 @@ Per checkpoint `c_i`, all computable from the root node and the previous checkpo
 | 2 | entropy of current policy-target distribution | ditto |
 | 3 | top1−top2 share gap | separates "one clear move" from "two contenders" |
 | 4 | `KL(pi_{c_i} || raw prior)` | how far search has moved off the prior — the KataGo deviation measure |
-| 5 | `KL(pi_{c_i} || pi_{c_{i-1}})` | recent movement: the finite-difference version of the very quantity being predicted (DS-MCTS temporal channels, collapsed to a scalar); for `i = 1` use the prior as the previous distribution |
-| 6 | top share of the *latest-segment* distribution `(n_i·pi_{c_i} − n_{i-1}·pi_{c_{i-1}})/(n_i−n_{i-1})` | DS-MCTS channels 4–6, scalarized: is the recent search still choosing the leader |
+| 5 | `KL(pi_{c_i} || pi_{c_{i-1}})` | recent movement: the finite-difference version of the very quantity being predicted (DS-MCTS temporal channels, collapsed to a scalar). For `i = 1` the previous distribution is a **zeroth checkpoint `c_0` captured at `starting_visits`** — the retained warm-root distribution, or the raw prior only on a genuinely fresh root. (Review defect D: comparing against the prior on a warm root fails the guard for exactly the converged-but-prior-disagreeing positions — the most valuable true stops — and biases early stops toward prior-shaped targets.) |
+| 6 | top share of the *latest-segment* distribution `(n_i·N_{c_i} − n_{i-1}·N_{c_{i-1}})/(n_i−n_{i-1})` over **raw cumulative visit counts** retained on the task | DS-MCTS channels 4–6, scalarized: is the recent search still choosing the leader. Review defect F: forced-playout-pruned `policyTargetVisits` are not cumulative (a move pruned at `c_i` but present at `c_{i-1}` yields negative mass), so the task retains the raw per-child visit counts of the previous checkpoint — never the pruned normalization — for this feature. |
 | 7 | `V(s,c_i)` | value context |
 | 8 | `V(s,c_i) − V(s,c_{i-1})` | value trend |
 | 9 | `V(s,c_i) −` network root value | how much search has corrected the static eval |
@@ -297,6 +321,7 @@ Per checkpoint `c_i`, all computable from the root node and the previous checkpo
 | 14 | `baseline_visits` (B) | proven feature |
 | 15 | model generation | proven feature; standardization folded into the export as in the corrector |
 | 16 | checkpoint multiple `m_i` | see below |
+| 17 | root warmth `starting_visits / B` | review defect D: the vector carries `m_i`, `B`, ply and generation but no measure of how warm the reused root is, and warmth changes what a checkpoint at `m_i·B` *new* visits means; scale-freeness was already given up by including `m_i` |
 
 On including `m_i`: DS-MCTS deliberately excludes `n` and `Nmax` so one model trained at a single
 checkpoint generalizes to others and to larger `Nmax`. We do not need that generalization — labels
@@ -311,16 +336,19 @@ majority per checkpoint); decided by the Stage-O data, not up front.
 ### 4.3 Training, validation, export
 
 Fit Python-side per generation on the trailing audit window (default 10 generations), BCE loss, Adam
-1e-3, batch 4096, ≤30 epochs, fixed-stride holdout — the `fit_curve_corrector` /`export_corrector`
-machinery in `src/search_budget/corrector.py` carries over nearly line-for-line (different feature
-vector, BCE head, sigmoid clamp instead of correction clamp). Fail-closed rejection rules, extending
-the corrector's:
+1e-3, batch 4096, ≤30 epochs — the `fit_curve_corrector` /`export_corrector` machinery in
+`src/search_budget/corrector.py` carries over nearly line-for-line (different feature vector, BCE
+head, sigmoid clamp instead of correction clamp), with one deliberate departure: **the holdout is
+split by game identity, not by row stride** (review defect E). One audit search yields K sibling
+examples with deterministically nested labels (`U_i` is monotone in `i`), and positions of one game
+are correlated; a stride split puts siblings on both sides and inflates the holdout gate, the
+publish decision and the O2 curves. Fail-closed rejection rules, extending the corrector's:
 
 - any non-finite parameter or buffer → reject;
 - holdout BCE not better than predicting the window base rate → reject;
-- **operational check:** at the thresholds that Stage C calibration would publish, the holdout
-  false-stop rate must be ≤ β and the implied visit saving ≥ a configured floor (a predictor that
-  saves nothing must not be published just because its BCE improved);
+- **operational check:** at the thresholds the section-6 solve would publish, the holdout
+  false-stop rate must be ≤ beta and the implied visit saving ≥ a configured floor (a predictor
+  that saves nothing must not be published just because its BCE improved);
 - on rejection the previous published predictor (or "never stop") stays referenced and the rejection
   is logged — identical contract to the corrector's.
 
@@ -340,8 +368,8 @@ struct SearchStopPolicy {
     std::vector<double> thresholds;                // same length; u < thr[i] stops at checkpoint i
     double movement_guard_epsilon;                 // observed KL(pi_ci || pi_c(i-1)) must be below this
     double cap_multiple;                           // fixed Nmax as a multiple of B; 2.0 at launch
-    std::shared_ptr<const SearchStopPredictor> predictor;  // null => never stop
-    bool apply_learned;                            // false => run to cap? no: run to baseline, flat
+    std::shared_ptr<const SearchStopPredictor> predictor;  // null only with apply_learned=false
+    bool apply_learned;                            // false = CLOSED: flat search to B, no cap
 };
 
 struct StoppableSearchLimit {                      // replaces PredictedSearchBudgetLimit
@@ -352,11 +380,22 @@ struct StoppableSearchLimit {                      // replaces PredictedSearchBu
 };
 ```
 
-Validation in constructors mirrors `SearchBudgetPolicy`'s (finite, ordered, `apply_learned` with a
-null predictor or empty thresholds ⇒ behaves as flat — the fail-closed identity). Note the
-fail-closed direction carefully: **`apply_learned = false` means a flat search to `B`**, not an
-uncapped search to `2B` — the closed gate must reproduce the baseline configuration exactly, and the
-2x cap exists only when the stop rule that pays for it is active.
+Validation in constructors mirrors `SearchBudgetPolicy`'s (finite, ordered). **There is exactly one
+closed state and one name for it** (review defect B — under a 2x cap, "never stop" is ambiguous
+between two states whose spends differ 2x, the inverted-projection defect class):
+
+- **`closed` = `apply_learned = false`**: a flat search to `B`, no checkpoints, no cap, bit-identical
+  to the baseline configuration. This is the *only* fail-closed state; every structural failure,
+  the warmup period, and the calibrator's global fallback all land here. It never spends 2x.
+- **`attenuated at checkpoint i`** = `apply_learned = true` with `thresholds[i] = 0`: checkpoint `i`
+  stops nothing but the cap and other checkpoints stay active. This is a *degraded open* state, is
+  never called "closed", and is only reachable while at least one checkpoint still has a safe
+  threshold — the calibrator publishes `closed` outright when none does, because an open policy
+  that stops nothing anywhere is a ~2x compute burn, not a safe default.
+
+Audit searches are the one exception: they run to the cap by explicit request even under a `closed`
+policy, because labels and the warmup re-derivation (section 10) need them — at the audit fraction
+that is ≤ +2% visits, not 2x.
 
 ### 5.2 Executor changes (`cpp/src/search/SearchExecutor.hpp`)
 
@@ -372,11 +411,15 @@ Insert the stop decision there: when a checkpoint at index `i` is captured and t
 previous checkpoint's distribution, which it already stores in `task.checkpoints`), and:
 
 1. **Observational guard first:** if the measured movement `KL(pi_{c_i} || pi_{c_{i-1}})` is not
-   below `movement_guard_epsilon`, the position cannot stop at `c_i` — no predictor call. This keeps
-   the verifiability property partially *unconditional*: a stop always implies the distribution was
-   observed to have already settled over the last checkpoint interval; the predictor only certifies
-   that it stays settled. A predictor gone wrong can therefore never stop a position whose
-   distribution is visibly still moving — the exact v20 failure channel.
+   below `movement_guard_epsilon`, the position cannot stop at `c_i` — no predictor call. For
+   `i = 1` the previous distribution is the zeroth checkpoint at `starting_visits` (review defect
+   D), so a warm root's guard measures movement of *this* search, not disagreement with the prior.
+   The guard is a cheap necessary-condition filter, no more: KL is quadratic in small perturbations,
+   so a monotonically drifting search passes every local check while accumulating large total
+   drift, and mass that moves and returns between checkpoints is invisible to it. What it does
+   buy: a predictor gone wrong can never stop a position whose distribution is *visibly* still
+   moving over the last interval — one concrete v20 failure channel, not all of them. The labels,
+   the ceiling on false stops and the external anchor carry the actual safety argument.
 2. Otherwise evaluate the predictor; non-shadow and `u < thresholds[i]` → `task.stopped = true`,
    `stop_reason = SearchStopReason::LearnedEarlyStop`, record `stop_checkpoint_index = i`.
 3. Always record the guard value and `u` into per-checkpoint vectors on the task, returned in the
@@ -428,64 +471,63 @@ production A/B.
 
 ---
 
-## 6. Self-tuning threshold calibration and policy publication
+## 6. Spend-pinned eps, fixed beta, and policy publication
 
-**No online spend controller — by design, argued against once and settled.** The 2x cap
-reintroduces the possibility of overspend, which is where the instinct for a per-generation dual
-comes from. That instinct is rejected: three of the four run-killing defects in this subsystem's
-history (inverted projection, stale dual, and the config pin's blast radius) lived in exactly that
-control loop, and the oracle table says the chosen eps already centers mean spend at ≈0.96 without
-any controller. Spend is measured and reported per generation; if a run drifts materially from unit
-spend, `eps` or the cap is changed **between runs** with the change recorded against the config SHA.
-The only online quantities are the thresholds, and they are quality-calibrated, not spend-calibrated.
+**One adaptive quantity (user decision, revision 2 of defect B).** An earlier draft fixed `eps_pi`
+for the life of a run and added a self-tuning per-checkpoint threshold calibrator on the
+resignation pattern. Both halves are superseded. Two coupled adaptive loops on one system —
+eps moving the certainty definition while beta moves the thresholds — interact (loosening eps
+shifts the false-stop base rate, which moves beta, which moves spend, which moves eps), and the
+premise that eps cannot move mid-run was simply wrong: the audit records store the **raw**
+per-checkpoint `KL`-to-reference and value gaps, not labels, so relabelling the entire trailing
+window under a new eps is a free recomputation on stored numbers — no new searches, no mixed
+window. The design is therefore:
 
-**The asymmetry that sets β.** A true stop at checkpoint `m_i` saves `(2 − m_i)·B` visits — bounded,
-worth a fraction of one search. A false stop writes a policy target that is ≥ eps away from what the
-search would have produced, on a position the guard-plus-predictor judged settled — i.e. exactly the
-prior-shaped corruption that KataGo predicts and v20 exhibited, whose cost compounds through the next
-generation's training and is *not* bounded by one search. v20 quantifies the exchange rate: an
-aggregate of such corruptions more than cancelled a 1.22x compute equivalent (≥60 Elo). The
-threshold policy follows: positive-class ("keep searching") recall is driven toward 100% and the
-saving is whatever survives, never the reverse. DS-MCTS uses the same asymmetric tuning for the
-weaker reason that one bad move loses a game — our reason is that one bad target outlives the game.
+- **`eps_pi` is solved per generation** to target realized mean spend 1.0, as a **one-shot solve
+  on the recorded audit window** — for each candidate eps, relabel the window, re-solve the
+  thresholds (below), simulate stopping, and read off the spend; bisect. `spend(eps)` is monotone
+  (a larger eps certifies more positions, which stop more and extend less), so the solve is
+  well-posed. This is structurally the lambda lesson from v20 — solve on the data selection
+  actually sees, never step a ratchet — not a feedback controller.
+- **Clamped to `[eps_pi_minimum, eps_pi_maximum]`**, both explicit configuration keys with no
+  defaults, chosen from the O2 curves. `eps_pi_maximum` is the hard quality floor and is never
+  crossed: pinning spend trades the fixed-eps design's quality guarantee for a cadence guarantee,
+  and unbounded that is exactly the v20 failure mode with a green dashboard (positions get harder,
+  eps loosens itself, targets silently degrade). At saturation eps stays at `eps_pi_maximum`, the
+  spend shortfall is reported in the generation report, and the circuit breaker (6.2) still bounds
+  realized spend. `eps_v` and `movement_guard_epsilon` stay **fixed** per run — tuning several
+  epsilons against one spend target is under-determined, and the value clause is a coarse
+  drift-catch, not an operating point.
+- **`beta` (`false_stop_rate_ceiling`) is a fixed configured value** chosen from the O2 curves
+  (initial suggestion 0.01). Per checkpoint, per generation, the threshold is a **stateless
+  solve**, cheapest checkpoint first on the simulated-survivor population: the largest threshold
+  whose trigger count is ≥ `minimum_evidence_trigger_count` and whose one-sided binomial upper
+  bound on the false-stop rate (`src/util/binomial.py::one_sided_binomial_upper_bound`, at
+  `confidence_level`) is ≤ beta. A checkpoint with no qualifying threshold is *attenuated*
+  (threshold 0, stops nothing) while other checkpoints still stop; when **no checkpoint anywhere**
+  qualifies — or the predictor is rejected — the publication is the `closed` policy (flat to `B`),
+  never an open policy that stops nothing, which under the 2x cap would silently double spend.
+  There is no walk-back state machine, no candidate grid stepping, no relaxation schedule and no
+  journal: the resignation-mirror calibrator, its state, its telemetry and its tests are deleted
+  from the design. What survives of it is the binomial bound and the asymmetric principle above.
+- **Configuration keys** (explicit, no implicit defaults): `eps_pi_minimum`, `eps_pi_maximum`,
+  `false_stop_rate_ceiling`, `minimum_evidence_trigger_count`, `confidence_level`,
+  `first_production_generation` (the warmup: the policy publishes `closed` until enough audit
+  generations exist — suggest 10) and `maximum_realized_mean_spend` (the circuit breaker, 6.2).
 
-### 6.1 Self-tuning thresholds on the calibrated-resignation pattern (user decision)
+Ordering within a generation: the predictor is refit once under the previous generation's eps
+(its `u` is a ranking, robust to small eps drift); the eps solve then reuses that predictor's
+recorded `u` values across candidate eps, and the published thresholds are the solve's output at
+the chosen eps. The realized false-stop rate remains **measured** and reported, bucketed by ply
+and entropy (section 8), even though beta is fixed — it is the primary quality telemetry and the
+trigger for changing `eps_pi_maximum` between runs.
 
-There is **no hard kill switch inside the run**. The precedent is the resignation calibrator
-(`py/src/self_play/resignation.py`, `kind: calibrated`): when its false-nonloss rate crosses a
-ceiling it walks its threshold back promptly, and relaxes it again slowly when the evidence says it
-is safe — it never kills resignations outright. The stop-threshold controller mirrors that
-implementation's structure, naming and telemetry rather than inventing a new one:
-
-- **Candidate grid** of stop thresholds per checkpoint (`candidate_threshold_minimum/maximum/step`,
-  validated as an integral grid exactly as `CalibratedResignationConfiguration.validate_candidate_grid`).
-- **Evidence:** every audit position scores *all* candidates at once (which candidates would have
-  stopped it, and whether its label says `U_i = 1`) — the analog of `CandidateAuditEvidence` /
-  `TriggeredContinuationGame`, evaluated on the simulated survivor population per checkpoint
-  (cheapest first, since the population reaching checkpoint `i` is conditioned on not stopping
-  earlier — the one place the stop calibrator differs structurally from resignation's flat grid).
-- **Selection per generation**, mirroring `ResignationCalibrator._recalibrate`
-  (`resignation.py:277-334`): a candidate is *safe* when its trigger count ≥
-  `minimum_evidence_trigger_count` and its **one-sided binomial upper bound** on the false-stop rate
-  (`one_sided_binomial_upper_bound`, `resignation.py:116`, at `confidence_level`) is ≤
-  `false_stop_rate_ceiling`. Tightening to the safe target is immediate; relaxation is bounded by
-  `maximum_relaxation_per_generation`, grid-snapped, at most once per generation. No safe candidate
-  ⇒ the checkpoint's threshold falls to the never-stop end of the grid — stopping quietly attenuates
-  instead of the run gating off.
-- **Configuration keys** (explicit, no implicit defaults): `false_stop_rate_ceiling` (initial
-  suggestion 0.01), `candidate_threshold_step`, `minimum_evidence_trigger_count`,
-  `confidence_level`, `maximum_relaxation_per_generation`, `first_production_generation` (the warmup:
-  thresholds publish as never-stop until enough audit generations exist — suggest 10, much less than
-  the old 30 since labels are no longer starved by an 8x deep-search budget). Telemetry mirrors
-  `ResignationDiagnostics`: selected threshold + safety flag, trigger counts, false-stop count/rate/
-  upper bound, average stop checkpoint, saved-visit totals — per checkpoint.
-
-What the self-tuner can and cannot do, stated so nobody mistakes one for the other: it controls the
-false-stop **rate** — the target-corruption channel. It cannot tell us the mechanism is **worth**
-anything: 0% false stops at 1.02x effective compute passes every ceiling and is still a failure.
-Worth is decided *offline*, once, by the Stage-O2 go/no-go bar (≥1.40x, section 10) before any
-production run is spent; inside the run the only worth-tracking is telemetry (section 8) feeding the
-between-runs decision.
+What this loop can and cannot do, stated so nobody mistakes one for the other: it holds spend at
+1.0 within the quality clamp and holds false stops under beta. It cannot tell us the mechanism is
+**worth** anything: 0% false stops at 1.02x effective compute passes every ceiling and is still a
+failure. Worth is decided *offline*, once, by the Stage-O2 go/no-go bar (≥1.40x, section 10)
+before any production run is spent; inside the run the only worth-tracking is telemetry (section
+8) feeding the between-runs decision.
 
 ### 6.2 Publication
 
@@ -494,11 +536,19 @@ checkpoint, movement_guard_epsilon, predictor path+sha256, apply_learned}` for t
 generation through the existing publication state machine
 (`src/search_budget/calibration.py::publish_fail_closed`, `publication_for_generation`,
 `load_calibration_state_fail_closed` — the one calibration structure that survives deletion,
-reworked payload). Fail-closed applies only to **structural** failures — unreadable or
-sha-mismatched state (the config-pin defect class), a predictor that fails its load probe, an audit
-pipeline lagging beyond `maximum_unstarted_generation_lag` — and publishes never-stop thresholds
-(bit-identical to flat, tested). Rate excursions are *not* structural failures; they are handled by
-the calibrator's walk-back above.
+reworked payload). Fail-closed publishes the `closed` policy (flat to `B`, bit-identical, tested)
+and applies to **structural** failures — unreadable or sha-mismatched state (the config-pin defect
+class), a predictor that fails its load probe, an audit pipeline lagging beyond
+`maximum_unstarted_generation_lag`. Rate excursions are *not* structural failures; they are handled
+by the calibrator's walk-back above.
+
+**Spend circuit breaker (review defect B): a bound, not a controller.** Configuration key
+`maximum_realized_mean_spend` (suggest 1.3): if a finalized generation's realized mean visit
+multiple exceeds it, the next publication is `closed` regardless of threshold safety, with decision
+reason `SPEND_BREAKER`, until a subsequent calibration produces thresholds whose *simulated* spend
+on the window is back under the limit. This is a one-sided safety bound evaluated on a measurement,
+with no target, no stepping and no state — it does not reintroduce the dual; it converts "a human
+notices the 2x burn between runs" into "the run caps its own downside at one generation".
 
 The three historical defects, addressed by construction: **config pin** — same sha-guarded state
 loading, re-evaluated every generation rather than latched; **inverted isotonic projection** — there
@@ -556,9 +606,10 @@ not considered: it blurs the A/B interpretation, and `use` vs `exclude` brackets
   claim is better targets at equal throughput (this is where the predecessor's +10.7% KL evaporated).
 - **Training-data quality:** realized `KL(pi_N || pi_stop-would-have)` distribution on audit
   positions (mean, p95), realized false-stop rate (overall + bucketed), argmax-swap rate among
-  stop-eligible audits, and fraction of stopped targets whose `KL(pi_stop || raw prior)` is below the
-  window median (drift-toward-prior watch: if the stopped population's prior-deviation collapses,
-  targets are degrading even if eps holds).
+  stop-eligible audits, and the external-anchor series `KL(pi_4B || pi_capped_target)` (section
+  3.3) in absolute terms — the drift-toward-prior watch. (An earlier draft watched
+  `KL(pi_stop || raw prior)` against the *window median*; review defect C: a relative watch drifts
+  with the collapse it is meant to detect, so the anchor is absolute and outside the training loop.)
 - **Run-level:** the per-generation yardstick and the 64-search Stockfish ladder at matched
   wall-clock against a concurrently launched flat control — the only metric on which the idea is
   ultimately judged (v13–v18 lesson: retire only on Elo evidence, and never accept KL-proxy wins as
@@ -645,14 +696,27 @@ hour.** Two parts.
   deep-search shard artifacts (full checkpoint distributions) were removed on-node by
   `artifact_retention: remove_bulky_after_finalization` in every fetched archive and in live v20's
   config, so exact 2B-referenced labels cannot be computed from data we currently hold.
-- **O2, ~1 GPU-hour, needs user authorization:** a short collection job on the current node — the
-  existing deep-label machinery pointed at recent v20 replay with `deep_search_multiple: 2` (search
-  to the 2B cap), checkpoints at the candidate multiples, `retention: retain_all`, plus the
-  paired-seed noise-floor runs (3.2), ~5,000 positions each. Output fetched via
-  `run_control.sh preserve/fetch`. This re-derives the oracle table at the true `pi_2B` reference
-  (the 8x-referenced table overstates KLs, so the 2B-frame eligible mass will be somewhat larger),
-  validates eps 0.10 against the noise floor, fixes the checkpoint subset and guard epsilon, and
-  measures predictor recall/false-stop trade-offs on exact labels.
+- **O2, ~1 GPU-hour, authorized and collected 2026-09-01:** a standalone driver on the node (a
+  scratch script, *not* the deep-label machinery — that machinery hard-rejects root noise and warm
+  roots, `labeling.py:177` / `worker.py:251`, which is review defect A) ran 37,000 single + 5,000
+  paired positions from recent v20 replay games at generation-365 settings (B=800): fresh root,
+  **root noise ON, forced playouts ON**, searched to the 2B cap with the policy-target distribution
+  recorded at 9 checkpoints (0.125…1.75×B). The paired searches differ only in their Dirichlet
+  noise draws, so the noise floor is measured with noise, as it must be.
+
+  **O2's scope is fresh-root feasibility (review defect A, resolution (b)).** Production searches
+  run on warm roots (0.6 retained visit fraction) with noise; `m_i·B` *new* visits on a warm root
+  is a different evidence level than on a fresh root, varying per position. Rather than modifying
+  the production worker contract before the mechanism has earned it, the fresh-root O2 numbers
+  gate only whether to *build and try* (the go/no-go below), and every deployed operating quantity
+  is re-derived in the true production frame during Stage-P warmup, where it is free: warmup audits
+  are full production searches (warm root, noise, current model) run to the cap with labels but no
+  stopping. **Warmup re-derivation gate:** before `apply_learned` first publishes true, the
+  warm-frame audit stream must reproduce the O2-derived eligible-mass-vs-eps curve and noise floor
+  within a stated tolerance (suggest: warm-frame eligible mass at the chosen eps within ±30%
+  relative of the O2 curve, and the warm-frame noise-floor median not above the chosen eps); if it
+  does not, eps and the guard epsilon are re-chosen from the warm-frame curves — the O2 frame is
+  never deployed, only used to decide whether deployment is worth attempting.
 
 **Go/no-go gate on the offline study — the only place a "worth it" bar exists (user decision:
 no kill switch inside a run; runtime quality control is the self-tuning calibrator of section 6.1,
@@ -664,14 +728,18 @@ at mean spend in [0.9, 1.1]** (i.e. capture ≥ ~45% of the oracle's gain over f
 system's 26.5% of its oracle). Below that, the mechanism cannot clear the bar the retired system
 failed even if targets are perfectly clean — Stage P is not spent, the study is written up, and the
 adaptive-search line is retired (final run on v13/v17-era configurations). This bar is evaluated
-exactly once, offline; it does not exist inside the run. Everything before Stage P costs at most one
+exactly once, offline, on the fresh-frame O2 data (it decides whether to build, and its verdict is
+re-checked by the warm-frame warmup re-derivation gate before stopping first activates); it does
+not exist inside the run — runtime quality control is the calibrator, and the runtime spend bound
+is the circuit breaker (section 6.2). Everything before Stage P costs at most one
 authorized GPU-hour plus local compute.
 
 **Stage U — Python unit tests** (`py/test/test_search_stopping_*.py`, importlib mode): label
 extraction from checkpoint records including the future-max clause; eps boundary semantics; the
-threshold calibrator mirrored on the resignation-calibrator tests (candidate-grid evidence
-accounting on the sequential survivor population, binomial upper bound, immediate tighten vs
-step-bounded relax, no-safe-candidate fallback to never-stop); predictor-fit rejection rules;
+stateless threshold solve (survivor-sequential evidence accounting, binomial upper bound,
+minimum-evidence and attenuation semantics, global fallback to the `closed` policy); the eps solve
+(relabel-the-window equivalence, spend monotonicity, clamp saturation and its report); the spend
+circuit breaker; predictor-fit rejection rules;
 publication state machine fail-closed transitions (unreadable state, sha mismatch, lag) —
 parametrized over the failure modes.
 
@@ -687,10 +755,12 @@ node, recorded under `documentation/benchmarks/`.
 
 **Stage P — production A/B, user-authorized.** One stopping run (`use` targets) against one flat
 control at matched wall-clock on the 8× RTX 4070 SUPER node, judged on the per-generation yardstick
-and the 64-search ladder. Thresholds publish as never-stop for the first ~10 audit generations by
-construction (`first_production_generation`). If the stopping run trails, the `exclude` fallback is
-implemented as a code change (section 7) and rerun once. If both trail, the idea is retired on Elo
-evidence, the findings memory updated, and the final run uses v13/v17-era configurations.
+and the 64-search ladder. The policy publishes `closed` (flat to `B`) for the warmup generations
+by construction (`first_production_generation`); only audit searches run to the cap during warmup,
+and the warmup re-derivation gate (Stage O2 section above) must pass before `apply_learned` first
+publishes true. If the stopping run trails, the `exclude` fallback is implemented as a code change
+(section 7) and rerun once. If both trail, the idea is retired on Elo evidence, the findings memory
+updated, and the final run uses v13/v17-era configurations.
 
 Branch: `adaptive-stopping`, rebased on `master`, feature-sized commits after validation, merged only
 after the Stage-P acceptance. The two approved-but-deferred master fixes (with-replacement labelled
@@ -708,8 +778,11 @@ batches, duplicate ladder-Elo write) intersect this work — the labelled-batche
    go/no-go gate and the Stage-P A/B are designed to reach that verdict at minimum cost.
 2. **The 2B-referenced labels may look materially different from the 8x-referenced table** (both
    directions: eligible mass grows because the reference is nearer, but the gain-vs-flat also
-   shrinks for the same reason). The eps recommendation is provisional until O2 re-derives the
-   table; O2 exists precisely so no production decision rests on the 8x frame.
+   shrinks for the same reason), and the O2 data is additionally in the fresh-root frame while
+   production is warm-root (review defect A). The eps recommendation is provisional until O2
+   re-derives the table, and the deployed values are provisional until the warm-frame warmup
+   re-derivation passes; no production decision rests on the 8x frame, and no *activation*
+   decision rests on the fresh-root frame.
 3. **Spend variance does not convert to cadence cleanly.** Mean spend 1.0 with high per-move
    variance changes batching patterns (stopped moves free pipeline slots that extended moves
    consume unevenly); the drain overhead (≤2% budget) eats from the same account. Stage N measures
@@ -739,10 +812,25 @@ predictor; audits ride live self-play; 3→2-tensor contract break accepted; Sta
 resignation pattern instead of any runtime kill; `use` for stopped policy targets with no
 configuration key; old subsystem deleted outright; five-checkpoint set confirmed by the subset table.
 
+Defect B revision 2 (user, 2026-09-01): `eps_pi` becomes the single adaptive quantity — a
+per-generation one-shot solve on the recorded audit window pinning mean spend at 1.0, clamped to
+`[eps_pi_minimum, eps_pi_maximum]` with the clamp as the hard quality floor; beta fixed from the O2
+curves; the resignation-mirror threshold calibrator deleted (stateless per-generation threshold
+solve remains); the canonical `closed` state and the spend circuit breaker stand.
+
+Adversarial-review round (2026-09-01, post-acceptance): defect A resolved as (b) — O2 stays
+fresh-root feasibility (collected with noise ON), warm-frame re-derivation gates activation; defect
+B resolved by the single `closed` state, calibrator fallback routing and the spend circuit breaker
+(sections 5.1, 6.1, 6.2); C external 4B anchor (3.3, 8); D zeroth checkpoint + warmth feature
+(4.2, 5.2); E holdout split by game (4.3); F raw cumulative visits for the segment feature (4.2);
+G window segmentation at schedule steps (3.3); H guard framing corrected (1.1, 5.2).
+
 Open, resolved by Stage O2 evidence rather than by fiat:
 
-1. `eps_pi` / `eps_v` (section 3.2: chosen from the 2B-referenced oracle table, the noise floor, and
-   the realized predictor curves; 0.10 is provisional and the launch value will likely be higher).
+1. The eps clamp `[eps_pi_minimum, eps_pi_maximum]`, `eps_v` and `beta` (section 3.2/6: chosen
+   from the 2B-referenced oracle table, the noise floor and the realized predictor curves; the
+   solved eps will live inside the clamp, and under a false-stop ceiling it will sit higher than
+   the oracle table's 0.10 unit-spend point).
 2. Whether the checkpoint subset table survives re-derivation at the 2B reference (section 2).
 3. The go/no-go verdict itself (≥ 1.40x at ≤1% realized false stops, section 10) — user calls it
    after seeing the O2 numbers.
