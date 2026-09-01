@@ -448,7 +448,9 @@ def test_worker_uses_learned_budget_search_for_every_position(tmp_path: Path) ->
 
     assert all(batch[0].assigned_additional_visits is None for batch in game.search.request_batches)
     assert [batch[0].root_ply for batch in game.search.request_batches] == [0, 1]
-    assert [observation.assigned_additional_visits for observation in worker.active_games[0].observations] == [3, 3]
+    assert [
+        observation.final_visits - observation.starting_visits for observation in worker.active_games[0].observations
+    ] == [3, 3]
     assert [observation.stop_checkpoint_index for observation in worker.active_games[0].observations] == [-1, -1]
 
 
@@ -668,7 +670,7 @@ def test_restart_root_uses_learned_budget_and_plays_reserved_candidate(tmp_path:
 
     active_game = worker.active_games[0]
     assert active_game.action_ids == [1]
-    assert active_game.observations[0].assigned_additional_visits == 3
+    assert active_game.observations[0].final_visits - active_game.observations[0].starting_visits == 3
     assert active_game.observations[0].selected_action_id == 1
     assert worker.restart_starts == 1
     worker.close()
