@@ -94,7 +94,9 @@ training:
       eps_pi_maximum: 0.3
       eps_v: 0.3
       movement_guard_epsilon: 0.05
-      false_stop_rate_ceiling: 0.1
+      excess_cost_ceiling: 0.25
+      catastrophic_excess_multiple: 5.0
+      catastrophic_stop_ceiling: 0.02
       minimum_evidence_trigger_count: 100
       confidence_level: 0.95
       first_production_generation: 10

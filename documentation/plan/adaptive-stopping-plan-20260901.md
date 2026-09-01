@@ -527,23 +527,51 @@ window. The design is therefore:
   data favors ≤0.75, the spend data 1.0); `eps_v` and `movement_guard_epsilon` stay fixed per run.
 - **The clamp `[eps_pi_minimum, eps_pi_maximum]`** guards against a corrupted or drifting floor
   measurement in either direction; clamping is reported in the generation report.
-- **`beta` (`false_stop_rate_ceiling`) is a fixed configured value** chosen from the O2 curves
-  (initial suggestion 0.10: under instantaneous labels beta is the literal rate of stops whose
-  written target exceeds eps, and the O2 holdout frontier puts flat-equivalent quality at
-  beta ≈ 0.10, spend ≈ 0.75; 0.01 was measured unreachable — thresholds collapse and the cap
-  makes spend exceed 1). Per checkpoint, per generation, the threshold is a **stateless
-  solve**, cheapest checkpoint first on the simulated-survivor population: the largest threshold
-  whose trigger count is ≥ `minimum_evidence_trigger_count` and whose one-sided binomial upper
-  bound on the false-stop rate (`src/util/binomial.py::one_sided_binomial_upper_bound`, at
-  `confidence_level`) is ≤ beta. A checkpoint with no qualifying threshold is *attenuated*
+- **The admission criterion is a cost ceiling, not a false-stop rate** (revised 2026-09-01 on v21
+  audit evidence). The rate criterion priced every false stop equally, but the harm is not equal:
+  on the v21 window the mean KL(final‖checkpoint) among false stops falls from 0.20 nats at the
+  1/3x checkpoint to 0.02 nats at 1.5x — a factor of ~10 — so a rate ceiling systematically
+  over-restricts the cheap late checkpoints and under-restricts the expensive early one. The
+  measured consequence: 36% of positions ran past 1.0x while only 15.5% were genuinely
+  unconverged, realized spend 1.03 versus ~0.85 achievable. The solve now prices each admitted
+  stop by its **excess cost** `max(0, KL(final‖checkpoint) − eps)` — zero for a correct stop,
+  proportional to actual target damage for a false one. Four design decisions:
+  1. *Bound form*: the mean-excess criterion uses a one-sided normal-approximation upper
+     confidence bound (`mean + z·SE` at `confidence_level`, minimum `minimum_evidence_trigger_count`
+     triggers). It remains an upper bound, never the sample mean; the CLT carries it at the
+     enforced sample sizes (≥100, typically thousands).
+  2. *Tail guard*: the v21 audit window is heavy-tailed — individual admitted stops reach ~60x eps
+     with p99 near 5x eps while the mean stays bounded — exactly where a normal-approximation mean
+     bound is weakest. A secondary admission condition therefore bounds the catastrophe **rate**:
+     the exact one-sided binomial upper bound on `P(excess > catastrophic_excess_multiple × eps)`
+     must be ≤ `catastrophic_stop_ceiling` (5x eps and 0.02 initially; the old rate rule's own
+     realized catastrophe rate was 0.9%, so 0.02 as an upper bound holds the status-quo tail while
+     the mean ceiling does the pricing — 0.01 was measured to bind everywhere and dominate the
+     cost criterion entirely, defeating the change).
+  3. *Scale*: the ceiling is **relative to eps** (`excess_cost_ceiling × eps`, suggestion 0.25),
+     because the cost itself is defined as excess over eps; a scalar nats ceiling would decouple
+     from the noise floor the labels are anchored to and go stale as eps moves.
+  4. *`false_stop_rate_ceiling` is deleted outright*, not retained as a secondary guard: the rate
+     it bounded is exactly what the cost criterion re-prices, so keeping both would reimpose the
+     mispricing through the back door; the tail guard bounds a different event (catastrophes).
+  Measured on the v21 window (25,219 audited positions, generations 118–127, eps 0.0891), same
+  refit predictor: rate rule beta=0.10 — spend 0.926, mean excess 0.199 eps, P(>5 eps) 0.91%;
+  cost rule 0.25/5x/0.02 — spend 0.909, mean excess 0.192 eps, P(>5 eps) 0.87%. Weakly dominant
+  on all three axes; live v21 realized spend was 1.03.
+  Per checkpoint, per generation, the threshold remains a **stateless solve**, cheapest
+  checkpoint first on the simulated-survivor population: the largest threshold with trigger count
+  ≥ `minimum_evidence_trigger_count` satisfying both bounds. A checkpoint with no qualifying
+  threshold is *attenuated*
   (threshold 0, stops nothing) while other checkpoints still stop; when **no checkpoint anywhere**
   qualifies — or the predictor is rejected — the publication is the `closed` policy (flat to `B`),
   never an open policy that stops nothing, which under the 2x cap would silently double spend.
   There is no walk-back state machine, no candidate grid stepping, no relaxation schedule and no
   journal: the resignation-mirror calibrator, its state, its telemetry and its tests are deleted
-  from the design. What survives of it is the binomial bound and the asymmetric principle above.
+  from the design. What survives of it is the binomial bound (now on catastrophes) and the
+  asymmetric principle above.
 - **Configuration keys** (explicit, no implicit defaults): `eps_pi_minimum`, `eps_pi_maximum`,
-  `false_stop_rate_ceiling`, `minimum_evidence_trigger_count`, `confidence_level`,
+  `excess_cost_ceiling`, `catastrophic_excess_multiple`, `catastrophic_stop_ceiling`,
+  `minimum_evidence_trigger_count`, `confidence_level`,
   `first_production_generation` (the warmup: the policy publishes `closed` until enough audit
   generations exist — suggest 10) and `maximum_realized_mean_spend` (the circuit breaker, 6.2).
 
@@ -551,11 +579,11 @@ Ordering within a generation: the predictor is refit once under the previous gen
 (its `u` is a ranking, robust to small eps drift); the eps solve then reuses that predictor's
 recorded `u` values across candidate eps, and the published thresholds are the solve's output at
 the chosen eps. The realized false-stop rate remains **measured** and reported, bucketed by ply
-and entropy (section 8), even though beta is fixed — it is the primary quality telemetry and the
-trigger for changing `eps_pi_maximum` between runs.
+and entropy (section 8), even though the ceilings are fixed — it is the primary quality telemetry
+and the trigger for changing `eps_pi_maximum` between runs.
 
 What this loop can and cannot do, stated so nobody mistakes one for the other: it holds spend at
-1.0 within the quality clamp and holds false stops under beta. It cannot tell us the mechanism is
+1.0 within the quality clamp and holds the cost of false stops under the ceilings. It cannot tell us the mechanism is
 **worth** anything: 0% false stops at 1.02x effective compute passes every ceiling and is still a
 failure. Worth is decided *offline*, once, by the Stage-O2 go/no-go bar (≥1.40x, section 10)
 before any production run is spent; inside the run the only worth-tracking is telemetry (section

@@ -19,7 +19,9 @@ class SearchStoppingConfiguration(FrozenModel):
     eps_pi_maximum: float = Field(gt=0.0)
     eps_v: float = Field(gt=0.0)
     movement_guard_epsilon: float = Field(gt=0.0)
-    false_stop_rate_ceiling: float = Field(gt=0.0, lt=1.0)
+    excess_cost_ceiling: float = Field(gt=0.0)
+    catastrophic_excess_multiple: float = Field(gt=1.0)
+    catastrophic_stop_ceiling: float = Field(gt=0.0, lt=1.0)
     minimum_evidence_trigger_count: int = Field(gt=0)
     confidence_level: float = Field(gt=0.0, lt=1.0)
     first_production_generation: int = Field(ge=0)
@@ -56,6 +58,10 @@ class SearchStoppingConfiguration(FrozenModel):
             raise ValueError('The value epsilon must be finite.')
         if not math.isfinite(self.movement_guard_epsilon):
             raise ValueError('The movement guard epsilon must be finite.')
+        if not math.isfinite(self.excess_cost_ceiling):
+            raise ValueError('The excess-cost ceiling must be finite.')
+        if not math.isfinite(self.catastrophic_excess_multiple):
+            raise ValueError('The catastrophic excess multiple must be finite.')
         if not math.isfinite(self.maximum_realized_mean_spend) or self.maximum_realized_mean_spend > self.cap_multiple:
             raise ValueError('The spend circuit-breaker limit must be finite and at most the cap multiple.')
         return self

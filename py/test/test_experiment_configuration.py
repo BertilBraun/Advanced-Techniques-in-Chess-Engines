@@ -539,8 +539,8 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
     # Re-pinned 2026-09-01: the learned-early-stopping rework replaced the search_budget schema
-    # with search_stopping, so every pre-rework experiment_configuration_sha256 changed with it.
-    assert experiment_configuration_sha256(frozen) == 'd5dc5b2d4125919c6ac55108babe57f07cc9d2c71762587601c3a55553bfb121'
+    # with search_stopping and the cost-ceiling solve keys, so every earlier recorded sha changed with them.
+    assert experiment_configuration_sha256(frozen) == 'cbb78b4cfe7cd64a03924b3a29c8fe5806359d5c28c83a484594dd06e3562921'
 
 
 @pytest.mark.parametrize(

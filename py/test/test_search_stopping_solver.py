@@ -26,7 +26,9 @@ def _configuration(**overrides: object) -> SearchStoppingConfiguration:
         'eps_pi_maximum': 0.5,
         'eps_v': 0.3,
         'movement_guard_epsilon': 0.05,
-        'false_stop_rate_ceiling': 0.05,
+        'excess_cost_ceiling': 0.25,
+        'catastrophic_excess_multiple': 5.0,
+        'catastrophic_stop_ceiling': 0.05,
         'minimum_evidence_trigger_count': 5,
         'confidence_level': 0.5,
         'first_production_generation': 10,
@@ -63,35 +65,82 @@ def test_threshold_solve_separates_certain_from_uncertain_positions() -> None:
     kl[: count // 2, :] = 0.5  # first half truly uncertain at every checkpoint
     probability = np.full((count, 2), 0.9)
     probability[count // 2 :, :] = 0.1  # predictor is confident exactly on the certain half
-    solution = solve_thresholds(
-        _arrays(kl, probability=probability),
-        uncertain_labels(_arrays(kl), 0.1, 0.3),
-        _configuration(),
-    )
+    solution = solve_thresholds(_arrays(kl, probability=probability), _configuration(), eps_pi=0.1)
     assert not solution.checkpoints[0].attenuated
     assert solution.checkpoints[0].false_stop_count == 0
+    assert solution.checkpoints[0].mean_excess_cost == pytest.approx(0.0)
     assert solution.simulated_mean_spend == pytest.approx(0.5 * 0.5 + 0.5 * 2.0)
 
 
 def test_threshold_solve_attenuates_without_minimum_evidence() -> None:
     kl = np.zeros((3, 2))
-    solution = solve_thresholds(_arrays(kl), uncertain_labels(_arrays(kl), 0.1, 0.3), _configuration())
+    solution = solve_thresholds(_arrays(kl), _configuration(), eps_pi=0.1)
     assert all(checkpoint.attenuated for checkpoint in solution.checkpoints)
     assert not solution.any_checkpoint_open
     assert solution.simulated_mean_spend == pytest.approx(2.0)
 
 
-def test_threshold_solve_respects_the_false_stop_ceiling() -> None:
+def test_threshold_solve_attenuates_when_the_cost_bound_exceeds_the_ceiling() -> None:
     count = 100
     kl = np.zeros((count, 2))
-    kl[::2, :] = 0.5  # half uncertain, interleaved
+    kl[::2, :] = 0.5  # half badly wrong, interleaved
     probability = np.full((count, 2), 0.5)  # predictor cannot separate them
     solution = solve_thresholds(
         _arrays(kl, probability=probability),
-        uncertain_labels(_arrays(kl), 0.1, 0.3),
-        _configuration(false_stop_rate_ceiling=0.01, confidence_level=0.95),
+        _configuration(confidence_level=0.95, catastrophic_stop_ceiling=0.9),
+        eps_pi=0.1,
     )
     assert all(checkpoint.attenuated for checkpoint in solution.checkpoints)
+
+
+def test_cost_criterion_admits_cheap_false_stops_the_rate_criterion_would_reject() -> None:
+    count = 200
+    kl = np.full((count, 2), 0.11)  # every stop is a false stop, but barely: excess 0.01 = 0.1 eps
+    probability = np.zeros((count, 2))
+    solution = solve_thresholds(
+        _arrays(kl, probability=probability),
+        _configuration(confidence_level=0.95),
+        eps_pi=0.1,
+    )
+    assert not solution.checkpoints[0].attenuated
+    assert solution.checkpoints[0].false_stop_count == solution.checkpoints[0].trigger_count
+    assert solution.simulated_mean_spend == pytest.approx(0.5)
+
+
+def test_admission_uses_the_upper_bound_not_the_sample_mean() -> None:
+    generator = np.random.default_rng(11)
+    count = 400
+    kl = np.zeros((count, 2))
+    # Mean excess sits exactly at the budget, so any positive z-score must reject.
+    kl[:, :] = 0.1 + generator.uniform(0.0, 0.05, size=(count, 2))
+    probability = np.zeros((count, 2))
+    arrays = _arrays(kl, probability=probability)
+    budget = float(np.maximum(0.0, kl[:, 0] - 0.1).mean()) * 1.000001 / 0.1
+    tolerant = solve_thresholds(arrays, _configuration(excess_cost_ceiling=budget, confidence_level=0.5), eps_pi=0.1)
+    strict = solve_thresholds(arrays, _configuration(excess_cost_ceiling=budget, confidence_level=0.99), eps_pi=0.1)
+    assert not tolerant.checkpoints[0].attenuated
+    assert strict.checkpoints[0].attenuated
+    assert tolerant.checkpoints[0].excess_cost_upper_bound >= tolerant.checkpoints[0].mean_excess_cost
+
+
+def test_tail_guard_rejects_rare_catastrophic_stops_the_mean_bound_admits() -> None:
+    count = 1000
+    kl = np.zeros((count, 2))
+    kl[::50, :] = 4.0  # 2% of stops are catastrophic (40x eps) yet the mean excess is only 0.8 eps
+    probability = np.zeros((count, 2))
+    arrays = _arrays(kl, probability=probability)
+    guarded = solve_thresholds(
+        arrays,
+        _configuration(excess_cost_ceiling=1.5, catastrophic_stop_ceiling=0.01, confidence_level=0.95),
+        eps_pi=0.1,
+    )
+    unguarded = solve_thresholds(
+        arrays,
+        _configuration(excess_cost_ceiling=1.5, catastrophic_stop_ceiling=0.5, confidence_level=0.95),
+        eps_pi=0.1,
+    )
+    assert guarded.checkpoints[0].attenuated
+    assert not unguarded.checkpoints[0].attenuated
 
 
 def test_guard_failure_excludes_positions_from_stopping() -> None:
@@ -99,11 +148,7 @@ def test_guard_failure_excludes_positions_from_stopping() -> None:
     kl = np.zeros((count, 2))
     guard = np.full((count, 2), 1.0)  # movement above the guard epsilon everywhere
     probability = np.zeros((count, 2))
-    solution = solve_thresholds(
-        _arrays(kl, guard=guard, probability=probability),
-        uncertain_labels(_arrays(kl), 0.1, 0.3),
-        _configuration(),
-    )
+    solution = solve_thresholds(_arrays(kl, guard=guard, probability=probability), _configuration(), eps_pi=0.1)
     assert solution.simulated_mean_spend == pytest.approx(2.0)
     assert all(fraction == 0.0 for fraction in solution.simulated_stop_fraction)
 
@@ -112,11 +157,7 @@ def test_stopped_positions_leave_the_survivor_population() -> None:
     count = 20
     kl = np.zeros((count, 2))
     probability = np.zeros((count, 2))
-    solution = solve_thresholds(
-        _arrays(kl, probability=probability),
-        uncertain_labels(_arrays(kl), 0.1, 0.3),
-        _configuration(),
-    )
+    solution = solve_thresholds(_arrays(kl, probability=probability), _configuration(), eps_pi=0.1)
     assert solution.simulated_stop_fraction[0] == pytest.approx(1.0)
     assert solution.simulated_stop_fraction[1] == pytest.approx(0.0)
     assert solution.simulated_mean_spend == pytest.approx(0.5)
@@ -158,7 +199,6 @@ def test_simulated_spend_is_monotone_nonincreasing_in_eps() -> None:
     arrays = _arrays(kl, probability=probability)
     configuration = _configuration(minimum_evidence_trigger_count=10)
     spends = [
-        solve_thresholds(arrays, uncertain_labels(arrays, eps, 0.3), configuration).simulated_mean_spend
-        for eps in (0.02, 0.05, 0.1, 0.2, 0.4)
+        solve_thresholds(arrays, configuration, eps_pi=eps).simulated_mean_spend for eps in (0.02, 0.05, 0.1, 0.2, 0.4)
     ]
     assert spends == sorted(spends, reverse=True)
