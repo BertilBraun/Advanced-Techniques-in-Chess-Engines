@@ -749,7 +749,7 @@ def test_cut_game_bootstraps_its_value_from_the_last_search_root_value(tmp_path:
     trailing = completed.observations[-1]
     assert trailing.ply == len(completed.action_ids)
     assert trailing.selected_action_id is None
-    assert trailing.assigned_additional_visits == 3
+    assert trailing.final_visits - trailing.starting_visits == 3
     assert completed.final_wdl == WdlTarget.from_scalar(trailing.root_value)
 
 
