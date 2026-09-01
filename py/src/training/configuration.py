@@ -232,9 +232,20 @@ class TrainingArgs(FrozenModel):
         if self.lifecycle.replay.maximum_policy_entries > action_size:
             raise ValueError('Maximum retained policy entries cannot exceed the game action count.')
         search = self_play.search
-        anchor_multiple = self.lifecycle.search_stopping.anchor_visit_multiple
+        stopping = self.lifecycle.search_stopping
         if any(
-            baseline_visits * anchor_multiple > 65_535
+            baseline_visits * stopping.anchor_visit_multiple > 65_535
             for baseline_visits in defined_schedule_values(search.baseline_visits)
         ):
             raise ValueError('Anchor search visits must fit uint16 replay storage.')
+        # A baseline at which the checkpoint multiples collapse to duplicate visit counts cannot
+        # satisfy the native capped-search contract; fail at configuration load, not in a worker.
+        from src.search_stopping.policy import checkpoint_visit_counts
+
+        for baseline_visits in defined_schedule_values(search.baseline_visits):
+            try:
+                checkpoint_visit_counts(tuple(stopping.checkpoint_multiples), int(baseline_visits))
+            except ValueError as error:
+                raise ValueError(
+                    f'Stop checkpoints are not distinct at scheduled baseline {baseline_visits}: {error}'
+                ) from error

@@ -773,9 +773,10 @@ def test_cut_game_falls_back_to_adjudication_when_bootstrapping_is_disabled(tmp_
 
 
 def _open_stop_policy() -> SearchStopPolicy:
+    # Multiples that stay distinct at the fake game's baseline of three visits.
     return SearchStopPolicy(
-        checkpoint_multiples=(1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5),
-        thresholds=(0.1, 0.1, 0.1, 0.1, 0.1),
+        checkpoint_multiples=(1.0 / 3.0, 2.0 / 3.0, 1.0, 1.5),
+        thresholds=(0.1, 0.1, 0.1, 0.1),
         movement_guard_epsilon=0.05,
         cap_multiple=2.0,
         predictor_path=Path('stop-predictor.jit.pt'),
@@ -786,8 +787,8 @@ def _open_stop_policy() -> SearchStopPolicy:
 
 def _closed_capable_policy() -> SearchStopPolicy:
     return SearchStopPolicy(
-        checkpoint_multiples=(1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5),
-        thresholds=(0.0,) * 5,
+        checkpoint_multiples=(1.0 / 3.0, 2.0 / 3.0, 1.0, 1.5),
+        thresholds=(0.0,) * 4,
         movement_guard_epsilon=0.05,
         cap_multiple=2.0,
         predictor_path=None,
