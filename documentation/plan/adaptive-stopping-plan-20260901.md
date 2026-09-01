@@ -558,6 +558,18 @@ window. The design is therefore:
   refit predictor: rate rule beta=0.10 — spend 0.926, mean excess 0.199 eps, P(>5 eps) 0.91%;
   cost rule 0.25/5x/0.02 — spend 0.909, mean excess 0.192 eps, P(>5 eps) 0.87%. Weakly dominant
   on all three axes; live v21 realized spend was 1.03.
+  The ceiling is the quality/throughput operating point, not a safety formality: v21 telemetry
+  over generations 129–142 shows the solve equilibrates AT its ceiling by construction — the
+  fraction of written targets over eps rose to sit exactly at the old beta=0.10 while spend fell
+  1.03 to 0.84, converting every predictor improvement into more stopping instead of better
+  targets. The same window carries v21's first absolute Elo decline (14400s bucket, 1572, −64 vs
+  v17), so parity with live behaviour is not the target. The measured frontier on the v21 window
+  (ceiling: spend / frac written targets over eps / mean written KL): 0.15: 1.040 / 4.7% / 0.031;
+  0.20: 0.962 / 6.6% / 0.039; 0.25: 0.909 / 7.7% / 0.045; 0.30: 0.871 / 9.3% / 0.051;
+  0.35: 0.820 / 11.4% / 0.057. The shipped 0.25 sits strictly below the live error trajectory
+  (8.7–11.5% over the window) while still spending under 1.0, and — unlike the rate rule — its
+  equilibrium error mass is forced into barely-over-eps stops (mean excess bounded at 0.25 eps).
+  If the Elo correlation firms up, 0.20 is the next point down the frontier.
   Per checkpoint, per generation, the threshold remains a **stateless solve**, cheapest
   checkpoint first on the simulated-survivor population: the largest threshold with trigger count
   ≥ `minimum_evidence_trigger_count` satisfying both bounds. A checkpoint with no qualifying
