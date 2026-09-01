@@ -9,8 +9,6 @@ from src.search_stopping.configuration import SearchStoppingConfiguration
 from src.util.binomial import one_sided_binomial_upper_bound
 
 _ATTENUATED_THRESHOLD = 0.0
-_EPS_SOLVE_ITERATIONS = 40
-_UNIT_SPEND_TARGET = 1.0
 
 
 @dataclass(frozen=True)
@@ -44,12 +42,11 @@ class AuditWindowArrays:
 
 
 def uncertain_labels(arrays: AuditWindowArrays, eps_pi: float, eps_v: float) -> npt.NDArray[np.bool_]:
-    """Section 3.1 with the future-max clause, evaluated on the raw window measurements."""
+    """Section 3.1: instantaneous exceedance on the raw window measurements — the written target
+    of a stop is the current distribution, so this is the harm event a false stop realizes."""
     if eps_pi <= 0.0 or eps_v <= 0.0:
         raise ValueError('Label epsilons must be positive.')
-    future_kl = np.maximum.accumulate(arrays.kl_to_final[:, ::-1], axis=1)[:, ::-1]
-    future_gap = np.maximum.accumulate(arrays.value_gap[:, ::-1], axis=1)[:, ::-1]
-    return (future_kl >= eps_pi) | (future_gap >= eps_v)
+    return (arrays.kl_to_final >= eps_pi) | (arrays.value_gap >= eps_v)
 
 
 @dataclass(frozen=True)
@@ -166,40 +163,33 @@ def _largest_safe_threshold(
 @dataclass(frozen=True)
 class EpsSolution:
     eps_pi: float
-    saturated_at_maximum: bool
+    measured_noise_floor: float
+    clamped: bool
     thresholds: ThresholdSolution
 
 
-def solve_spend_pinned_eps(
+def solve_noise_floor_anchored_eps(
     arrays: AuditWindowArrays,
+    paired_floor_divergences: npt.NDArray[np.float64],
     configuration: SearchStoppingConfiguration,
 ) -> EpsSolution:
-    """One-shot solve for the eps whose simulated stopping spends a mean multiple of 1.0.
-
-    `spend(eps)` is monotone nonincreasing (a larger eps certifies more positions), so bisection is
-    well-posed. The result is clamped to the configured quality clamp; saturation at the maximum
-    means unit spend is unreachable without crossing the quality floor and is reported, never
-    crossed.
-    """
-
-    def spend_at(eps_pi: float) -> ThresholdSolution:
-        return solve_thresholds(arrays, uncertain_labels(arrays, eps_pi, configuration.eps_v), configuration)
-
-    at_maximum = spend_at(configuration.eps_pi_maximum)
-    if at_maximum.simulated_mean_spend > _UNIT_SPEND_TARGET:
-        return EpsSolution(eps_pi=configuration.eps_pi_maximum, saturated_at_maximum=True, thresholds=at_maximum)
-    at_minimum = spend_at(configuration.eps_pi_minimum)
-    if at_minimum.simulated_mean_spend <= _UNIT_SPEND_TARGET:
-        return EpsSolution(eps_pi=configuration.eps_pi_minimum, saturated_at_maximum=False, thresholds=at_minimum)
-    low = configuration.eps_pi_minimum
-    high = configuration.eps_pi_maximum
-    for _ in range(_EPS_SOLVE_ITERATIONS):
-        midpoint = (low + high) / 2.0
-        if spend_at(midpoint).simulated_mean_spend > _UNIT_SPEND_TARGET:
-            low = midpoint
-        else:
-            high = midpoint
-    solution = spend_at(high)
-    if not math.isfinite(solution.simulated_mean_spend):
-        raise ValueError('The eps solve produced a non-finite simulated spend.')
-    return EpsSolution(eps_pi=high, saturated_at_maximum=False, thresholds=solution)
+    """eps is anchored to the measured cross-seed noise floor of the capped target, never to a
+    spend target: eps = clamp(noise_floor_multiple * median paired-seed KL, [minimum, maximum]).
+    Spend is an output of the threshold solve, reported and bounded above by the circuit breaker
+    only — spend falling well below one is the win, not a fault."""
+    if paired_floor_divergences.size == 0:
+        raise ValueError('The eps anchor requires paired-audit noise-floor measurements.')
+    if not np.isfinite(paired_floor_divergences).all() or bool((paired_floor_divergences < 0.0).any()):
+        raise ValueError('Paired noise-floor divergences must be finite and nonnegative.')
+    measured_floor = float(np.median(paired_floor_divergences))
+    anchored = configuration.noise_floor_multiple * measured_floor
+    eps_pi = min(max(anchored, configuration.eps_pi_minimum), configuration.eps_pi_maximum)
+    if not math.isfinite(eps_pi) or eps_pi <= 0.0:
+        raise ValueError('The anchored eps must be finite and positive.')
+    thresholds = solve_thresholds(arrays, uncertain_labels(arrays, eps_pi, configuration.eps_v), configuration)
+    return EpsSolution(
+        eps_pi=eps_pi,
+        measured_noise_floor=measured_floor,
+        clamped=eps_pi != anchored,
+        thresholds=thresholds,
+    )

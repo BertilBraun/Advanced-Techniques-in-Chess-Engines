@@ -9,6 +9,8 @@ from src.util.frozen_model import FrozenModel
 
 class SearchStoppingConfiguration(FrozenModel):
     audit_sample_fraction: Decimal
+    paired_audit_fraction: Decimal
+    noise_floor_multiple: float = Field(gt=0.0)
     anchor_fraction: Decimal
     anchor_visit_multiple: float = Field(gt=1.0)
     checkpoint_multiples: tuple[float, ...] = Field(min_length=1)
@@ -31,6 +33,10 @@ class SearchStoppingConfiguration(FrozenModel):
             raise ValueError('The audit sample fraction must lie in (0, 1].')
         if not Decimal(0) <= self.anchor_fraction <= Decimal(1):
             raise ValueError('The anchor fraction must lie in [0, 1].')
+        if not Decimal(0) < self.paired_audit_fraction <= Decimal(1):
+            raise ValueError('The paired-audit fraction must lie in (0, 1].')
+        if not math.isfinite(self.noise_floor_multiple):
+            raise ValueError('The noise-floor multiple must be finite.')
         if any(not math.isfinite(multiple) or multiple <= 0.0 for multiple in self.checkpoint_multiples):
             raise ValueError('Checkpoint multiples must be finite and positive.')
         for index in range(1, len(self.checkpoint_multiples)):

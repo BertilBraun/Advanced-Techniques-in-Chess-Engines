@@ -7,7 +7,7 @@
 
 // The stop-predictor input contract (adaptive-stopping plan section 4.2). Order is a binding
 // contract with src/search_stopping/features.py::STOP_PREDICTOR_FEATURE_NAMES.
-inline constexpr std::size_t STOP_PREDICTOR_FEATURE_COUNT = 17;
+inline constexpr std::size_t STOP_PREDICTOR_FEATURE_COUNT = 19;
 using StopPredictorFeatures = std::array<double, STOP_PREDICTOR_FEATURE_COUNT>;
 
 // TorchScript stop predictor published by the Python calibration loop. Output is the probability

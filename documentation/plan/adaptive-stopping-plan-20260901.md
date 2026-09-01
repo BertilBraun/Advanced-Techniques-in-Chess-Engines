@@ -87,9 +87,17 @@ reason its claims are modest:
   raising Nmax to 4000 while averaging 1584. The search therefore runs to a **fixed cap of 2x
   baseline** unless stopped earlier — stopping is the mechanism, extension is the payoff.
 
-The retire-only-on-Elo rule from the v13–v18 findings still applies to the final decision, but the
-entry gate is Stage O: a realizable predictor must demonstrably approach the ceiling under the
-quality constraint before any production time is spent.
+**Value proposition, corrected twice by measurement (2026-09-01).** The O2 noise floor moved the
+objective from "better targets at equal compute" to "equal-quality targets at lower compute", and
+the trained-predictor holdout then bounded what is realizable: the oracle's 0.49 spend at eps =
+floor is not reachable at acceptable false-stop rates — the group-split holdout frontier is
+**spend ≈ 0.75 at beta ≈ 0.10** with written targets flat-equivalent (mean 0.056 vs flat's own
+0.049 gap to the reference; p90 0.093 ≤ floor median), i.e. **~1.3x search throughput**, with
+Amdahl on top of that before it becomes generation cadence. Guard-only stopping (no predictor)
+was measured and fails badly (16–41% of stops exceed eps); the predictor earns its place. The
+retire-only-on-Elo rule from the v13–v18 findings still applies to the final decision, but the
+entry gate is Stage O: the realizable rule must clear the throughput bar of section 10 before any
+production time is spent.
 
 ---
 
@@ -161,9 +169,17 @@ For each checkpoint index `i`, the position is **uncertain at `c_i`** — label 
 "keep searching" — iff
 
 ```text
-U_i = 1  ⟺  max_{j ∈ {i, …, K}} KL(pi(.|s,N) || pi(.|s,c_j)) ≥ eps_pi
-            ∨  max_{j ∈ {i, …, K}} |V(s,c_j) − V(s,N)| ≥ eps_v
+U_i = 1  ⟺  KL(pi(.|s,N) || pi(.|s,c_i)) ≥ eps_pi  ∨  |V(s,c_i) − V(s,N)| ≥ eps_v
 ```
+
+(Instantaneous exceedance — revised 2026-09-01 from the O2 measurement. The earlier draft used
+DS-MCTS's future-max clause, `max over j ≥ i`; for a *stopping* objective it is the wrong event:
+the written target of a stop is the current distribution, later wandering that returns never
+enters it, and the continuation's endpoint is exactly what `KL(pi_N || pi_ci)` already measures.
+O2 measured the two labels indistinguishable for the realizable rule (holdout spend 1.361 vs
+1.365), and the instantaneous form makes beta the literal corrupted-target rate:
+`false stop ≡ written target ≥ eps from the reference`. The future-max flag stays in the audit
+records as a diagnostic.)
 
 with `KL` computed exactly as `src/search_budget/targets.py::policy_kl` (floor 1e-6, zero-mass terms
 of the reference skipped). One audit position yields `K` labelled examples (one per checkpoint), all
@@ -178,12 +194,12 @@ Design notes, in order of importance:
   relative mass is still shifting: the argmax may be stable-ish while the 60/40 vs 45/55 split — which
   is the training target — is not). `KL(pi_N || pi_{c_j})` with the *full-search* distribution as the
   reference weights exactly the mass the training loss weights.
-- **Why the max over remaining checkpoints, not just `j = i`.** This is DS-MCTS's third observation
-  discretized onto our grid: a distribution can sit near `pi_N` at `c_i` and wander away before
-  returning (forced playouts and Dirichlet noise make this real at low visit counts). Without the
-  future clause the label says "close now", which is not "safe to stop now". The sup over all
-  `n' ≥ n` is unobservable; the max over the recorded checkpoints is the computable lower bound, and
-  it is exactly the set of states a stopped search could have been stopped in.
+- **Why instantaneous, not the future-max clause.** "Close now" *is* "safe to stop now" for this
+  objective: stopping writes the current distribution and plays from it — there is no future in
+  the stopped branch, and divergence-then-return between checkpoints affects neither the written
+  target nor the `pi_N` endpoint the KL already compares against. The future clause protects
+  DS-MCTS's play-time criterion (the action chosen after *continuing*), not ours, and it inflates
+  measured false stops with harmless cases.
 - **Should argmax stability be an additional term?** Recommendation: **no term, but a tracked
   diagnostic.** Self-play move *selection* samples from the distribution, so a small-KL argmax swap
   changes the played game no more than temperature sampling already does, and the training target is
@@ -208,6 +224,24 @@ KLs shrink somewhat) makes the trade-off concrete rather than principled-but-vag
 | 0.05 | 1.279 | +35.6% | 1.43x |
 | 0.10 | 0.956 | +26.7% | **1.64x** |
 | 0.20 | 0.642 | +6.4% | 1.72x |
+
+**Superseded 2026-09-01 by the O2 measurement — eps is anchored to the noise floor, not to
+spend.** The O2 cross-seed floor (two capped searches differing only in noise seed) has median
+0.103; pinning spend at 1.0 would force eps ≈ 0.02, demanding targets eight times more
+reproducible than the target's own seed noise and discarding the entire saving, while at eps ≈
+the floor the oracle spends 0.49 for a written-target perturbation below reseeding the same
+search. Therefore: `eps_pi = clamp(noise_floor_multiple × median live paired-audit floor,
+[eps_pi_minimum, eps_pi_maximum])`, with the floor measured continuously from a
+`paired_audit_fraction` of audit positions searched twice with independent noise (fresh-root
+pairs — an approximation in the warm frame, re-checked at the warmup gate). **Spend is an output**,
+reported per generation and bounded from above only by the circuit breaker (section 6.2) — spend
+falling toward 0.5 is the win, not a fault. A per-position eps (predicting each position's own
+floor) was evaluated on O2 and rejected: at matched spend it is equal-or-worse on written KL
+(0.061 vs 0.056) and argmax swaps (10.2% vs 9.9%), and excess swaps concentrate in *high*-floor
+murky positions that per-position eps loosens further, not in the sharp positions it was meant to
+protect (swap rate by predicted-floor quartile: 6.3/10.2/13.5/9.5%).
+
+The paragraph below is retained for the record of the earlier (superseded) design:
 
 **eps is an output of Stage O2, not an input of this plan.** The 0.10 row is the *provisional*
 working point — it is the unit-spend point of the oracle table and the reason the design centers on
@@ -322,6 +356,8 @@ Per checkpoint `c_i`, all computable from the root node and the previous checkpo
 | 15 | model generation | proven feature; standardization folded into the export as in the corrector |
 | 16 | checkpoint multiple `m_i` | see below |
 | 17 | root warmth `starting_visits / B` | review defect D: the vector carries `m_i`, `B`, ply and generation but no measure of how warm the reused root is, and warmth changes what a checkpoint at `m_i·B` *new* visits means; scale-freeness was already given up by including `m_i` |
+| 18 | support count of the checkpoint distribution | strongest single predictor of the position's noise floor in the O2 pair study (Spearman +0.49); free at a checkpoint |
+| 19 | top-3 share of the checkpoint distribution | floor-study addition; with 1 and 3 it summarizes the head of the distribution (raw top-k vectors were considered and rejected: scalars already saturate the recoverable signal, per the v17–v19 ablations and the O2 per-position study) |
 
 On including `m_i`: DS-MCTS deliberately excludes `n` and `Nmax` so one model trained at a single
 checkpoint generalizes to others and to larger `Nmax`. We do not need that generalization — labels
@@ -483,23 +519,19 @@ per-checkpoint `KL`-to-reference and value gaps, not labels, so relabelling the 
 window under a new eps is a free recomputation on stored numbers — no new searches, no mixed
 window. The design is therefore:
 
-- **`eps_pi` is solved per generation** to target realized mean spend 1.0, as a **one-shot solve
-  on the recorded audit window** — for each candidate eps, relabel the window, re-solve the
-  thresholds (below), simulate stopping, and read off the spend; bisect. `spend(eps)` is monotone
-  (a larger eps certifies more positions, which stop more and extend less), so the solve is
-  well-posed. This is structurally the lambda lesson from v20 — solve on the data selection
-  actually sees, never step a ratchet — not a feedback controller.
-- **Clamped to `[eps_pi_minimum, eps_pi_maximum]`**, both explicit configuration keys with no
-  defaults, chosen from the O2 curves. `eps_pi_maximum` is the hard quality floor and is never
-  crossed: pinning spend trades the fixed-eps design's quality guarantee for a cadence guarantee,
-  and unbounded that is exactly the v20 failure mode with a green dashboard (positions get harder,
-  eps loosens itself, targets silently degrade). At saturation eps stays at `eps_pi_maximum`, the
-  spend shortfall is reported in the generation report, and the circuit breaker (6.2) still bounds
-  realized spend. `eps_v` and `movement_guard_epsilon` stay **fixed** per run — tuning several
-  epsilons against one spend target is under-determined, and the value clause is a coarse
-  drift-catch, not an operating point.
+- **`eps_pi` is anchored per generation to the measured noise floor** (superseding the earlier
+  spend-pinned solve — see section 3.2): `eps_pi = clamp(noise_floor_multiple × median paired-audit
+  cross-seed KL, [eps_pi_minimum, eps_pi_maximum])`, computed by
+  `solver.solve_noise_floor_anchored_eps` on the trailing window. Spend is an output, bounded
+  above only. `noise_floor_multiple` is the single tuned scalar (O2 suggests 0.5–1.0; the argmax
+  data favors ≤0.75, the spend data 1.0); `eps_v` and `movement_guard_epsilon` stay fixed per run.
+- **The clamp `[eps_pi_minimum, eps_pi_maximum]`** guards against a corrupted or drifting floor
+  measurement in either direction; clamping is reported in the generation report.
 - **`beta` (`false_stop_rate_ceiling`) is a fixed configured value** chosen from the O2 curves
-  (initial suggestion 0.01). Per checkpoint, per generation, the threshold is a **stateless
+  (initial suggestion 0.10: under instantaneous labels beta is the literal rate of stops whose
+  written target exceeds eps, and the O2 holdout frontier puts flat-equivalent quality at
+  beta ≈ 0.10, spend ≈ 0.75; 0.01 was measured unreachable — thresholds collapse and the cap
+  makes spend exceed 1). Per checkpoint, per generation, the threshold is a **stateless
   solve**, cheapest checkpoint first on the simulated-survivor population: the largest threshold
   whose trigger count is ≥ `minimum_evidence_trigger_count` and whose one-sided binomial upper
   bound on the false-stop rate (`src/util/binomial.py::one_sided_binomial_upper_bound`, at
@@ -718,20 +750,17 @@ hour.** Two parts.
   does not, eps and the guard epsilon are re-chosen from the warm-frame curves — the O2 frame is
   never deployed, only used to decide whether deployment is worth attempting.
 
-**Go/no-go gate on the offline study — the only place a "worth it" bar exists (user decision:
-no kill switch inside a run; runtime quality control is the self-tuning calibrator of section 6.1,
-which attenuates, never kills).** The oracle is 1.64x effective compute at unit spend, and 1.22x
-live *already lost* — the realizable rule must land well inside that corridor to be worth a
-production run at all. On held-out O2 generations, the trained predictor behind the observational
-guard, at thresholds giving realized false-stop rate ≤ 1%, must achieve **≥ 1.40x effective compute
-at mean spend in [0.9, 1.1]** (i.e. capture ≥ ~45% of the oracle's gain over flat, vs the retired
-system's 26.5% of its oracle). Below that, the mechanism cannot clear the bar the retired system
-failed even if targets are perfectly clean — Stage P is not spent, the study is written up, and the
-adaptive-search line is retired (final run on v13/v17-era configurations). This bar is evaluated
-exactly once, offline, on the fresh-frame O2 data (it decides whether to build, and its verdict is
-re-checked by the warm-frame warmup re-derivation gate before stopping first activates); it does
-not exist inside the run — runtime quality control is the calibrator, and the runtime spend bound
-is the circuit breaker (section 6.2). Everything before Stage P costs at most one
+**Go/no-go gate — throughput axis (revised 2026-09-01 with the O2 measurement; the earlier
+1.40x-effective-compute bar was framed on the quality axis and is superseded).** Evaluated at the
+warm-frame warmup re-derivation gate before `apply_learned` first publishes true: **realized mean
+spend ≤ 0.80** with (a) realized `P(written ≥ eps | stop) ≤ 0.10`, (b) p90 written ≤ the live
+paired-audit floor median, and (c) mean written ≤ 1.25 × mean `KL(pi_2B || pi_B)` (flat
+equivalence within 25%). 0.80 is chosen because the fresh-frame O2 holdout already delivers 0.75
+under (a)–(b), leaving margin for warm-frame surprises, and anything above 0.80 is <1.25x search
+throughput — below the complexity bar. If the gate fails, Stage P is not spent, the study is
+written up, and the adaptive-search line is retired (final run on v13/v17-era configurations).
+This bar exists once, at the gate; inside the run the quality control is the threshold solve and
+the spend bound is the circuit breaker (6.2). Everything before Stage P costs at most one
 authorized GPU-hour plus local compute.
 
 **Stage U — Python unit tests** (`py/test/test_search_stopping_*.py`, importlib mode): label
@@ -824,6 +853,17 @@ B resolved by the single `closed` state, calibrator fallback routing and the spe
 (sections 5.1, 6.1, 6.2); C external 4B anchor (3.3, 8); D zeroth checkpoint + warmth feature
 (4.2, 5.2); E holdout split by game (4.3); F raw cumulative visits for the segment feature (4.2);
 G window segmentation at schedule steps (3.3); H guard framing corrected (1.1, 5.2).
+
+O2-driven course corrections (2026-09-01, all measured on the fetched O2 data): labels switched
+to instantaneous exceedance (future-max kept as diagnostic); eps anchored to the live cross-seed
+noise floor with spend as an output; beta suggestion 0.10; go/no-go moved to the throughput axis
+(spend ≤ 0.80 with quality conditions); cap = 2B retained on the reference-noise argument (floor
+0.103 at 2B vs 0.141 at B); guard-only stopping measured and rejected (16–41% exceedance);
+**per-position eps (second floor head) evaluated and rejected** — the floor is predictable
+(held-out Spearman 0.61, R² 0.53) but at matched spend the per-position frontier is equal-or-worse
+on written KL and argmax swaps, and the swap excess sits in high-floor positions that per-position
+eps loosens further; support-count and top-3-share joined the feature vector (17 → 19), raw top-k
+vectors rejected.
 
 Open, resolved by Stage O2 evidence rather than by fiat:
 

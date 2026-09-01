@@ -543,16 +543,23 @@ private:
 
         double topShare = 0.0;
         double secondShare = 0.0;
+        double thirdShare = 0.0;
         double entropy = 0.0;
+        double supportCount = 0.0;
         for (const double probability : current) {
             if (probability > topShare) {
+                thirdShare = secondShare;
                 secondShare = topShare;
                 topShare = probability;
             } else if (probability > secondShare) {
+                thirdShare = secondShare;
                 secondShare = probability;
+            } else if (probability > thirdShare) {
+                thirdShare = probability;
             }
             if (probability > 0.0) {
                 entropy -= probability * std::log(probability);
+                supportCount += 1.0;
             }
         }
 
@@ -605,6 +612,8 @@ private:
             static_cast<double>(limit.model_generation),
             limit.policy.checkpoint_multiples[checkpointIndex],
             static_cast<double>(task.starting_visits) / baseline,
+            supportCount,
+            thirdShare,
         };
     }
 

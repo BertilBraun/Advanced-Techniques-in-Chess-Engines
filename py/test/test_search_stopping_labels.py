@@ -35,9 +35,10 @@ def test_converged_checkpoints_are_certain() -> None:
     assert [label.uncertain for label in labels] == [False, False]
 
 
-def test_future_max_clause_marks_early_checkpoint_uncertain_when_a_later_one_diverges() -> None:
+def test_later_divergence_stays_certain_instantaneously_but_flags_the_future_diagnostic() -> None:
     labels = checkpoint_stop_labels(_record((NEAR_FINAL, FAR_FROM_FINAL), FINAL), eps_pi=0.05, eps_v=0.5)
-    assert [label.uncertain for label in labels] == [True, True]
+    assert [label.uncertain for label in labels] == [False, True]
+    assert [label.future_uncertain for label in labels] == [True, True]
 
 
 def test_divergence_before_a_checkpoint_does_not_affect_it() -> None:

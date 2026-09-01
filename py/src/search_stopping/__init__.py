@@ -51,7 +51,7 @@ from src.search_stopping.solver import (
     CheckpointThresholdSolution,
     EpsSolution,
     ThresholdSolution,
-    solve_spend_pinned_eps,
+    solve_noise_floor_anchored_eps,
     solve_thresholds,
     uncertain_labels,
 )
@@ -99,7 +99,7 @@ __all__ = [
     'published_policy_for_generation',
     'read_audit_records',
     'save_calibration_state',
-    'solve_spend_pinned_eps',
+    'solve_noise_floor_anchored_eps',
     'solve_thresholds',
     'top_visit_share',
     'uncertain_labels',

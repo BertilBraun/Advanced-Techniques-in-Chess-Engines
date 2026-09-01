@@ -21,6 +21,8 @@ CONFIGURATION_SHA = 'a' * 64
 def _configuration() -> SearchStoppingConfiguration:
     return SearchStoppingConfiguration(
         audit_sample_fraction=Decimal('0.01'),
+        paired_audit_fraction=Decimal('0.1'),
+        noise_floor_multiple=1.0,
         anchor_fraction=Decimal('0.05'),
         anchor_visit_multiple=4.0,
         checkpoint_multiples=(1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0, 1.5),

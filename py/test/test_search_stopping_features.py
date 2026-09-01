@@ -49,6 +49,8 @@ def test_feature_vector_matches_golden_values() -> None:
     assert vector[8] == pytest.approx(0.15)  # value minus network
     assert vector[15] == pytest.approx(0.5)  # checkpoint multiple
     assert vector[16] == pytest.approx(0.3)  # root warmth 240/800
+    assert vector[17] == pytest.approx(3.0)  # support count
+    assert vector[18] == pytest.approx(0.1)  # top-3 share
 
 
 def test_fresh_root_uses_the_prior_as_previous_distribution() -> None:

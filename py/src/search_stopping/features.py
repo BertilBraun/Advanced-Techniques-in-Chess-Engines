@@ -26,6 +26,8 @@ STOP_PREDICTOR_FEATURE_NAMES = (
     'model_generation',
     'checkpoint_multiple',
     'root_warmth',
+    'support_count',
+    'top3_share',
 )
 STOP_PREDICTOR_FEATURE_COUNT = len(STOP_PREDICTOR_FEATURE_NAMES)
 
@@ -54,6 +56,11 @@ class CheckpointFeatureContext:
 def _top_two_gap(policy: PolicyDistribution) -> float:
     ordered = sorted(policy.probabilities, reverse=True)
     return ordered[0] - (ordered[1] if len(ordered) > 1 else 0.0)
+
+
+def _third_share(policy: PolicyDistribution) -> float:
+    ordered = sorted(policy.probabilities, reverse=True)
+    return ordered[2] if len(ordered) > 2 else 0.0
 
 
 def _segment_distribution(
@@ -104,6 +111,8 @@ def checkpoint_feature_vector(
         float(context.model_generation),
         checkpoint_multiple,
         context.starting_visits / context.baseline_visits,
+        float(sum(probability > 0.0 for probability in current.policy.probabilities)),
+        _third_share(current.policy),
     )
     if any(not math.isfinite(value) for value in vector):
         raise ValueError('Stop-predictor features must be finite.')

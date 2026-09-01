@@ -7,7 +7,7 @@ import pytest
 from src.search_stopping.configuration import SearchStoppingConfiguration
 from src.search_stopping.solver import (
     AuditWindowArrays,
-    solve_spend_pinned_eps,
+    solve_noise_floor_anchored_eps,
     solve_thresholds,
     uncertain_labels,
 )
@@ -16,6 +16,8 @@ from src.search_stopping.solver import (
 def _configuration(**overrides: object) -> SearchStoppingConfiguration:
     values: dict[str, object] = {
         'audit_sample_fraction': Decimal('0.01'),
+        'paired_audit_fraction': Decimal('0.1'),
+        'noise_floor_multiple': 1.0,
         'anchor_fraction': Decimal('0.05'),
         'anchor_visit_multiple': 4.0,
         'checkpoint_multiples': (0.5, 1.0),
@@ -49,10 +51,10 @@ def _arrays(
     )
 
 
-def test_uncertain_labels_apply_the_future_max_clause() -> None:
+def test_uncertain_labels_are_instantaneous_exceedance() -> None:
     kl = np.array([[0.005, 0.2], [0.2, 0.005], [0.005, 0.005]])
     labels = uncertain_labels(_arrays(kl), eps_pi=0.1, eps_v=0.3)
-    assert labels.tolist() == [[True, True], [True, False], [False, False]]
+    assert labels.tolist() == [[False, True], [True, False], [False, False]]
 
 
 def test_threshold_solve_separates_certain_from_uncertain_positions() -> None:
@@ -120,35 +122,33 @@ def test_stopped_positions_leave_the_survivor_population() -> None:
     assert solution.simulated_mean_spend == pytest.approx(0.5)
 
 
-def test_eps_solve_finds_the_unit_spend_operating_point() -> None:
-    generator = np.random.default_rng(7)
-    count = 4000
-    # Position difficulty spreads over [0, 0.4]; predictor u tracks difficulty tightly.
-    difficulty = generator.uniform(0.0, 0.4, size=count)
-    kl = np.stack([difficulty, difficulty], axis=1)
-    probability = np.clip(np.stack([difficulty, difficulty], axis=1) * 2.0 + 0.05, 0.0, 1.0)
-    arrays = _arrays(kl, probability=probability)
-    solution = solve_spend_pinned_eps(arrays, _configuration(minimum_evidence_trigger_count=20))
-    assert not solution.saturated_at_maximum
-    assert solution.thresholds.simulated_mean_spend == pytest.approx(1.0, abs=0.05)
+def test_eps_anchors_to_the_measured_noise_floor() -> None:
+    kl = np.zeros((100, 2))
+    floors = np.full(500, 0.12)
+    solution = solve_noise_floor_anchored_eps(_arrays(kl), floors, _configuration())
+    assert solution.eps_pi == pytest.approx(0.12)
+    assert solution.measured_noise_floor == pytest.approx(0.12)
+    assert not solution.clamped
 
 
-def test_eps_solve_saturates_at_the_quality_floor_when_unit_spend_is_unreachable() -> None:
-    count = 100
-    kl = np.full((count, 2), 0.9)  # nothing ever converges
-    solution = solve_spend_pinned_eps(_arrays(kl), _configuration())
-    assert solution.saturated_at_maximum
-    assert solution.eps_pi == pytest.approx(0.5)
-    assert solution.thresholds.simulated_mean_spend == pytest.approx(2.0)
+def test_eps_anchor_clamps_at_both_ends() -> None:
+    kl = np.zeros((100, 2))
+    low = solve_noise_floor_anchored_eps(_arrays(kl), np.full(9, 0.001), _configuration())
+    high = solve_noise_floor_anchored_eps(_arrays(kl), np.full(9, 5.0), _configuration())
+    assert low.eps_pi == pytest.approx(0.01) and low.clamped
+    assert high.eps_pi == pytest.approx(0.5) and high.clamped
 
 
-def test_eps_solve_clamps_at_the_minimum_when_everything_converges() -> None:
-    count = 100
-    kl = np.zeros((count, 2))
-    probability = np.zeros((count, 2))
-    solution = solve_spend_pinned_eps(_arrays(kl, probability=probability), _configuration())
-    assert not solution.saturated_at_maximum
-    assert solution.eps_pi == pytest.approx(0.01)
+def test_eps_anchor_scales_with_the_configured_multiple() -> None:
+    kl = np.zeros((100, 2))
+    solution = solve_noise_floor_anchored_eps(_arrays(kl), np.full(9, 0.2), _configuration(noise_floor_multiple=0.75))
+    assert solution.eps_pi == pytest.approx(0.15)
+
+
+def test_eps_anchor_requires_paired_measurements() -> None:
+    kl = np.zeros((100, 2))
+    with pytest.raises(ValueError, match='paired-audit'):
+        solve_noise_floor_anchored_eps(_arrays(kl), np.array([]), _configuration())
 
 
 def test_simulated_spend_is_monotone_nonincreasing_in_eps() -> None:

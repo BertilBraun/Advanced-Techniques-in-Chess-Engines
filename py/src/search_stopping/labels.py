@@ -33,6 +33,7 @@ class CheckpointStopLabel:
     kl_to_final: float
     value_gap: float
     uncertain: bool
+    future_uncertain: bool
     argmax_swap: bool
 
 
@@ -41,8 +42,11 @@ def checkpoint_stop_labels(
     eps_pi: float,
     eps_v: float,
 ) -> tuple[CheckpointStopLabel, ...]:
-    """Section 3.1 of the adaptive-stopping plan: uncertain at c_i iff any remaining checkpoint
-    (the future-max clause) diverges from the cap distribution by at least eps in policy or value."""
+    """Section 3.1 of the adaptive-stopping plan: uncertain at c_i iff the checkpoint distribution
+    itself diverges from the cap reference by at least eps in policy or value. The written target
+    of a stop is the current distribution, so instantaneous exceedance is the harm event; the
+    DS-MCTS future-max clause is recorded as a diagnostic only (O2 measured it indistinguishable
+    for the realizable rule, and it inflates false stops with harmless wandering)."""
     if not math.isfinite(eps_pi) or eps_pi <= 0.0 or not math.isfinite(eps_v) or eps_v <= 0.0:
         raise ValueError('Label epsilons must be finite and positive.')
     divergences = tuple(policy_kl(record.final_policy, checkpoint.policy) for checkpoint in record.checkpoints)
@@ -59,7 +63,8 @@ def checkpoint_stop_labels(
             CheckpointStopLabel(
                 kl_to_final=divergences[index],
                 value_gap=value_gaps[index],
-                uncertain=future_kl >= eps_pi or future_gap >= eps_v,
+                uncertain=divergences[index] >= eps_pi or value_gaps[index] >= eps_v,
+                future_uncertain=future_kl >= eps_pi or future_gap >= eps_v,
                 argmax_swap=_argmax(record.checkpoints[index].policy) != final_argmax,
             )
         )
