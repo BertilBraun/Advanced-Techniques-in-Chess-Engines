@@ -38,7 +38,6 @@ from src.training.objective import (
 from src.training.targets import (
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchBudgetHeadLayout,
     build_training_target_layout,
 )
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
@@ -119,7 +118,7 @@ def test_root_game_implementation_owns_state_and_fixed_target_layout(
     assert implementation.state.augmentation_count == expected_augmentations
     assert implementation.target_layout.action_size == expected_action_size
     assert implementation.target_layout.wdl_size == 3
-    assert implementation.target_layout.auxiliary_heads == (SearchBudgetHeadLayout(kind='search_budget'),)
+    assert implementation.target_layout.auxiliary_heads == ()
 
 
 def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> None:
@@ -199,10 +198,6 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
                     'ply_offset': 3,
                     'loss_weight': 0.1,
                 },
-                {
-                    'kind': 'search_budget',
-                    'loss_weight': 0.2,
-                },
             ]
         }
     )
@@ -211,7 +206,6 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
     assert layout.auxiliary_heads == (
         NextPolicyHeadLayout(kind='next_policy', action_size=1_880, ply_offset=1),
         NextPolicyHeadLayout(kind='next_policy', action_size=1_880, ply_offset=3),
-        SearchBudgetHeadLayout(kind='search_budget'),
     )
 
     chess_configuration = configuration.chess.validated_copy(update={'objective': objective.model_dump(mode='json')})
