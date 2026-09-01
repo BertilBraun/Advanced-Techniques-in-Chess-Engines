@@ -3,7 +3,6 @@ from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager
 from hashlib import sha256
-from math import exp, isfinite, lgamma, log, log1p
 from pathlib import Path
 from typing import Annotated, Iterator, Literal, TypeAlias
 
@@ -11,6 +10,7 @@ from pydantic import Field, model_validator
 from src.games.contracts import WdlTarget
 from src.self_play.completed_game import CompletedSelfPlayGame, SearchObservation, TerminationReason
 from src.util.atomic_file import write_text_atomically
+from src.util.binomial import one_sided_binomial_upper_bound
 from src.util.frozen_model import FrozenModel
 
 
@@ -111,27 +111,6 @@ class ResignationDiagnostics(FrozenModel):
     actual_resignations: int
     average_trigger_ply: float | None
     average_saved_plies: float | None
-
-
-def one_sided_binomial_upper_bound(false_nonlosses: int, trigger_count: int, confidence_level: float) -> float:
-    if trigger_count <= 0:
-        return 1.0
-    if not 0 <= false_nonlosses <= trigger_count:
-        raise ValueError('False nonlosses must lie between zero and the trigger count.')
-    if not 0.0 < confidence_level < 1.0:
-        raise ValueError('Confidence level must lie in (0, 1).')
-    if false_nonlosses == trigger_count:
-        return 1.0
-    target_probability = 1.0 - confidence_level
-    lower = false_nonlosses / trigger_count
-    upper = 1.0
-    for _ in range(80):
-        midpoint = (lower + upper) / 2.0
-        if _binomial_cumulative_probability(false_nonlosses, trigger_count, midpoint) > target_probability:
-            lower = midpoint
-        else:
-            upper = midpoint
-    return upper
 
 
 def resignation_predicate(observation: SearchObservation, threshold: float) -> bool:
@@ -495,23 +474,3 @@ def _selected_total(
             continue
         total += candidate.trigger_ply if field == 'trigger_ply' else candidate.saved_plies
     return total
-
-
-def _binomial_cumulative_probability(maximum_false_nonlosses: int, trials: int, probability: float) -> float:
-    if probability <= 0.0:
-        return 1.0
-    if probability >= 1.0:
-        return 0.0
-    logarithms = tuple(
-        lgamma(trials + 1)
-        - lgamma(false_nonlosses + 1)
-        - lgamma(trials - false_nonlosses + 1)
-        + false_nonlosses * log(probability)
-        + (trials - false_nonlosses) * log1p(-probability)
-        for false_nonlosses in range(maximum_false_nonlosses + 1)
-    )
-    maximum = max(logarithms)
-    result = exp(maximum) * sum(exp(item - maximum) for item in logarithms)
-    if not isfinite(result):
-        raise ValueError('Binomial confidence calculation produced a non-finite result.')
-    return result
