@@ -19,6 +19,7 @@ class SelfPlayStatistics(FrozenModel):
     completed_generation: int
     level: StatisticsLevel
     completed_search_batches: int
+    completed_searches: int
 
 
 class RunningSelfPlayState(FrozenModel):

@@ -34,6 +34,7 @@ class SelfPlayProcessRuntime:
         self.loaded_sha256: str | None = None
         self.loaded_search_stop_policy: SearchStopPolicy | None = None
         self.completed_search_batches = 0
+        self.reported_searches = 0
         self.running = False
         self._pending_activation: tuple[CheckpointReference, StopPolicyPublication] | None = None
 
@@ -92,8 +93,10 @@ class SelfPlayProcessRuntime:
             completed_generation=self.loaded_generation,
             level=statistics_level,
             completed_search_batches=self.completed_search_batches,
+            completed_searches=self.worker.completed_searches - self.reported_searches,
         )
         self.completed_search_batches = 0
+        self.reported_searches = self.worker.completed_searches
         return statistics
 
     def _stage_checkpoint(self, checkpoint: CheckpointReference, search_stopping: StopPolicyPublication) -> None:
