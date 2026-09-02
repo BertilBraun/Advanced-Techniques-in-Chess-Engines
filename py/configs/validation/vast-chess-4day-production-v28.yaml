@@ -1,9 +1,9 @@
-# v21: learned-early-stopping production run (adaptive-stopping plan, commit f3686de4).
-# Fully materialized; intentionally does not extend another file. Fresh start: the stopping rework
-# changed the replay layout and inference contract, so no pre-rework checkpoint can be resumed.
+# v27: final four-day production run. Identical to v23 except the previous-20m/-40m/-60m
+# previous-checkpoint evaluations are dropped (every Stockfish rung and the 1200 s cadence
+# are unchanged). Fully materialized; intentionally does not extend another file.
 run:
-  run_name: vast-chess-pause-probe-600v-16run
-  tensorboard_run_directory: vast-chess-pause-probe-600v-16run
+  run_name: vast-chess-4day-production-v28
+  tensorboard_run_directory: vast-chess-4day-production-v28
   stage: clean_retrain
   requires_explicit_approval: true
   resume:
@@ -25,7 +25,7 @@ run:
     dependency_lock_sha256: 11074667d5b9e5075faee3d75817f2fbe1af8b863299ed27acd14809f939c484
     minimum_open_file_soft_limit: 65536
 training:
-  save_path: py/training_data/validation/vast-chess-pause-probe-600v-16run
+  save_path: py/training_data/validation/vast-chess-4day-production-v28
   trainer:
     global_batch_size: 2048
     local_batch_size: 256
@@ -188,7 +188,7 @@ training:
       eps_pi_maximum: 0.3
       eps_v: 0.3
       movement_guard_epsilon: 0.05
-      excess_cost_ceiling: 0.15
+      excess_cost_ceiling: 0.25
       catastrophic_excess_multiple: 5.0
       catastrophic_stop_ceiling: 0.02
       minimum_evidence_trigger_count: 100
@@ -200,8 +200,8 @@ training:
   limits:
     hourly_price: 0.72
     maximum_cost: null
-    maximum_wall_time_seconds: 3300.0
-    manual_stop_file: /workspace/run-control/stop/vast-chess-pause-probe-600v-16run.stop
+    maximum_wall_time_seconds: 345600.0
+    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v28.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
     minimum_free_disk_gib: 1.0
@@ -220,6 +220,34 @@ training:
         kind: convolutional
         num_layers: 12
         hidden_size: 128
+        residual_context:
+          kind: global_pooling
+          placement: every_second_block
+    - model_id: chess-cnn-14x160-fromto
+      training_start_days: '0.667'
+      network:
+        policy_head:
+          kind: chess_from_to_attention_v1
+          key_size: 128
+        num_value_channels: 2
+        value_fc_size: 48
+        kind: convolutional
+        num_layers: 14
+        hidden_size: 160
+        residual_context:
+          kind: global_pooling
+          placement: every_second_block
+    - model_id: chess-cnn-19x176-fromto
+      training_start_days: '2.0'
+      network:
+        policy_head:
+          kind: chess_from_to_attention_v1
+          key_size: 128
+        num_value_channels: 2
+        value_fc_size: 48
+        kind: convolutional
+        num_layers: 19
+        hidden_size: 176
         residual_context:
           kind: global_pooling
           placement: every_second_block
@@ -258,57 +286,6 @@ evaluation:
   definitions:
   - kind: fixed_dataset
     definition_id: fixed-dataset
-  - opening_pair_count: 50
-    maximum_game_plies: 300
-    first_generation: 0
-    final_generation: null
-    kind: previous_checkpoint
-    definition_id: previous-20m
-    boundary_offset: 1
-    boundary_parity: every
-    search:
-      searches_per_move: 64
-      parallel_searches: 1
-      exploration_constant: auto
-      inference:
-        inference_workers: 1
-        inference_batch_size: 64
-        outstanding_batches_per_worker: 1
-        sdpa_backend: memory_efficient
-  - opening_pair_count: 50
-    maximum_game_plies: 300
-    first_generation: 0
-    final_generation: null
-    kind: previous_checkpoint
-    definition_id: previous-40m
-    boundary_offset: 2
-    boundary_parity: every
-    search:
-      searches_per_move: 64
-      parallel_searches: 1
-      exploration_constant: auto
-      inference:
-        inference_workers: 1
-        inference_batch_size: 64
-        outstanding_batches_per_worker: 1
-        sdpa_backend: memory_efficient
-  - opening_pair_count: 50
-    maximum_game_plies: 300
-    first_generation: 0
-    final_generation: null
-    kind: previous_checkpoint
-    definition_id: previous-60m
-    boundary_offset: 3
-    boundary_parity: every
-    search:
-      searches_per_move: 64
-      parallel_searches: 1
-      exploration_constant: auto
-      inference:
-        inference_workers: 1
-        inference_batch_size: 64
-        outstanding_batches_per_worker: 1
-        sdpa_backend: memory_efficient
   - opening_pair_count: 50
     maximum_game_plies: 300
     first_generation: 0
@@ -521,7 +498,23 @@ chess:
         kind: staged
         stages:
         - start_generation: 0
+          value: 300
+        - start_generation: 10
+          value: 400
+        - start_generation: 30
+          value: 400
+        - start_generation: 50
+          value: 500
+        - start_generation: 90
           value: 600
+        - start_generation: 180
+          value: 700
+        - start_generation: 250
+          value: 800
+        - start_generation: 550
+          value: 1000
+        - start_generation: 1200
+          value: 1200
       virtual_loss_weight: 1.0
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
