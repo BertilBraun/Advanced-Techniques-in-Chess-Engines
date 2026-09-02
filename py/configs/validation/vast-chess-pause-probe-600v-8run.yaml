@@ -231,6 +231,10 @@ training:
         residual_context:
           kind: global_pooling
           placement: every_second_block
+    promotion:
+      decay: 0.8
+      warmup_quanta: 10
+      maximum_relative_loss: 1.01
 evaluation:
   cadence_seconds: 1200
   job_timeout_seconds: 1800.0
