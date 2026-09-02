@@ -16,6 +16,7 @@ from src.training.checkpoint.contracts import read_checkpoint_manifest
 from src.training.configuration import TrainingCompilation, TrainingPrecision
 from src.training.progress import TrainingProgress
 from src.training.trainer import TrainerGroup
+from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 
@@ -127,14 +128,24 @@ def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
     replay_store.close()
 
     started_at = time.perf_counter()
-    trainer_group = TrainerGroup(benchmark_configuration, game, checkpoint)
+    trainer_group = TrainerGroup(
+        benchmark_configuration,
+        game,
+        TrainerStartup(
+            network=benchmark_configuration.training.initial_model.network,
+            save_path=benchmark_directory,
+            starting_generation=checkpoint.generation,
+        ),
+    )
     try:
         progress = TrainingProgress(
             completed_optimizer_steps=arguments.checkpoint_generation * arguments.optimizer_steps,
             optimizer_steps_per_generation=arguments.optimizer_steps,
         )
         for _ in range(arguments.quantum_count):
-            result = trainer_group.train_quantum(replay, progress)
+            result = trainer_group.train_quantum(
+                TrainerQuantum(replay=replay, model_progress=progress, replay_source_progress=progress)
+            )
             progress = progress.next_generation
     finally:
         trainer_group.close()
@@ -152,7 +163,7 @@ def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
         replay_rows=replay.size,
         initialization_and_training_seconds=elapsed_seconds,
         training_quantum_seconds=result.statistics.elapsed_seconds,
-        replay_rows_per_second=result.statistics.replay_rows_per_second,
+        replay_rows_per_second=result.statistics.training_samples_per_second,
         training_samples_per_second=result.statistics.training_samples_per_second,
         output_checkpoint_generation=result.checkpoint.generation,
     )
