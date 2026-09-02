@@ -124,6 +124,12 @@ def load_optimizer(
         raise
 
     optimizer.load_state_dict(data)
+    # map_location puts AdamW step counters on the GPU; foreach AdamW then syncs once per parameter per
+    # optimizer step reading them back. Fresh optimizers keep steps on CPU, so restore that layout.
+    for state in optimizer.state.values():
+        step = state.get('step')
+        if isinstance(step, torch.Tensor) and step.device.type != 'cpu':
+            state['step'] = step.cpu()
     return optimizer
 
 
