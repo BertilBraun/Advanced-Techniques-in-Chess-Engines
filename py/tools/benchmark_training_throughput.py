@@ -125,6 +125,21 @@ def _stage_checkpoint(source: CheckpointReference, destination: Path) -> Checkpo
     return staged
 
 
+def _paused_worker_ids(device_ids: tuple[int, ...], running_count: int) -> tuple[int, ...]:
+    """Spread the running workers over the GPUs the way production does. DDP runs at the speed of its
+    slowest rank, so leaving consecutive worker IDs running piles them onto the first GPUs and the
+    trainer measures that skew rather than the self-play load."""
+    by_device: dict[int, list[int]] = {}
+    for worker_id, device_id in enumerate(device_ids):
+        by_device.setdefault(device_id, []).append(worker_id)
+    ordered: list[int] = []
+    for slot in range(max(len(workers) for workers in by_device.values())):
+        for device_id in sorted(by_device):
+            if slot < len(by_device[device_id]):
+                ordered.append(by_device[device_id][slot])
+    return tuple(sorted(ordered[running_count:]))
+
+
 def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
     configuration = load_experiment_configuration(arguments.resolved_configuration)
     world_size = len(arguments.device_ids)
@@ -197,7 +212,11 @@ def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
     )
     self_play_group = SelfPlayGroup(game) if arguments.self_play_workers else None
     paused_worker_ids = (
-        () if self_play_group is None else tuple(range(arguments.self_play_workers, self_play_group.worker_count))
+        ()
+        if self_play_group is None
+        else _paused_worker_ids(
+            benchmark_configuration.training.topology.self_play.device_ids, arguments.self_play_workers
+        )
     )
 
     def activate(active_checkpoint: CheckpointReference, collect: bool) -> int:
