@@ -16,7 +16,7 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
 from src.search_stopping.calibration import StopDecisionReason, StopPolicyPublication
 from src.search_stopping.policy import SearchStopPolicy, flat_stop_policy
-from src.self_play.process_runtime import self_play_worker_main
+from src.self_play.process_runtime import SelfPlayProcessRuntime, self_play_worker_main
 from src.self_play.protocol import (
     PausedSelfPlayState,
     RunningSelfPlayState,
@@ -26,6 +26,7 @@ from src.self_play.protocol import (
     StoppedSelfPlayStateApplied,
 )
 from src.self_play.resignation import PublishedResignationPolicy
+from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
 from src.training.configuration import SelfPlayTopologyParams
 from src.training.self_play_group import SelfPlayGroup, SelfPlaySupervision, SelfPlayWorkerSlot
@@ -227,6 +228,26 @@ def test_worker_applies_duplex_desired_states_and_reports_transition_statistics(
 
     assert not process.is_alive()
     assert observed_tensorboard_states == [True]
+
+
+def test_refresh_defers_the_model_load_until_after_the_reply(tmp_path: Path) -> None:
+    worker = _Worker(cast(GameImplementation, _Game(tmp_path)), 2, 0, 0, tmp_path)
+    runtime = SelfPlayProcessRuntime(cast(SelfPlayWorker, worker), worker_id=0)
+
+    first = runtime.apply(RunningSelfPlayState(checkpoint=_checkpoint(tmp_path, 0), search_stopping=_publication(0)))
+    assert type(first) is RunningSelfPlayStateApplied
+    assert worker.generation == 0  # the first load backs the handshake, so it precedes the reply
+
+    refreshed = runtime.apply(
+        RunningSelfPlayState(checkpoint=_checkpoint(tmp_path, 1), search_stopping=_publication(1))
+    )
+    assert type(refreshed) is RunningSelfPlayStateApplied
+    assert refreshed.loaded_generation == 1
+    assert worker.generation == 0
+
+    runtime.complete_pending_activation()
+    assert worker.generation == 1
+    assert runtime.loaded_generation == 1
 
 
 def _applied(

@@ -35,6 +35,7 @@ class SelfPlayProcessRuntime:
         self.loaded_search_stop_policy: SearchStopPolicy | None = None
         self.completed_search_batches = 0
         self.running = False
+        self._pending_activation: tuple[CheckpointReference, StopPolicyPublication] | None = None
 
     def run_batch(self) -> None:
         self.worker.run_batch()
@@ -55,7 +56,7 @@ class SelfPlayProcessRuntime:
         self._validate_checkpoint_transition(checkpoint, desired_state.completed_generation_statistics)
         statistics = self._completed_generation_statistics(desired_state.completed_generation_statistics)
         self.worker.update_resignation_policy(desired_state.resignation_policy)
-        self._load_checkpoint(checkpoint, desired_state.search_stopping)
+        self._stage_checkpoint(checkpoint, desired_state.search_stopping)
         self.running = True
         return RunningSelfPlayStateApplied(
             worker_id=self.worker_id,
@@ -95,12 +96,28 @@ class SelfPlayProcessRuntime:
         self.completed_search_batches = 0
         return statistics
 
-    def _load_checkpoint(self, checkpoint: CheckpointReference, search_stopping: StopPolicyPublication) -> None:
+    def _stage_checkpoint(self, checkpoint: CheckpointReference, search_stopping: StopPolicyPublication) -> None:
+        assert self._pending_activation is None
         if checkpoint.generation == self.loaded_generation:
             if search_stopping.policy != self.loaded_search_stop_policy:
                 raise ValueError('A started self-play generation cannot change its published stop policy.')
             return
         checkpoint.validate_inference_model()
+        if self.loaded_generation is None:
+            # The first load backs the startup and restart handshakes, so it must prove itself
+            # before the reply; later refreshes reply first to free the coordinator.
+            self._activate_checkpoint(checkpoint, search_stopping)
+        else:
+            self._pending_activation = (checkpoint, search_stopping)
+
+    def complete_pending_activation(self) -> None:
+        if self._pending_activation is None:
+            return
+        checkpoint, search_stopping = self._pending_activation
+        self._pending_activation = None
+        self._activate_checkpoint(checkpoint, search_stopping)
+
+    def _activate_checkpoint(self, checkpoint: CheckpointReference, search_stopping: StopPolicyPublication) -> None:
         self.worker.refresh_published_model(checkpoint, search_stopping.policy)
         self.loaded_generation = checkpoint.generation
         self.loaded_sha256 = checkpoint.inference_model_sha256
@@ -141,6 +158,9 @@ def self_play_worker_main(
                 if applied_state is None:
                     continue
                 connection.send(applied_state)
+                # The model load happens after the reply so the coordinator does not wait on
+                # torch::jit::load, but before the next batch so no game runs on the old model.
+                runtime.complete_pending_activation()
                 match applied_state:
                     case StoppedSelfPlayStateApplied():
                         return
