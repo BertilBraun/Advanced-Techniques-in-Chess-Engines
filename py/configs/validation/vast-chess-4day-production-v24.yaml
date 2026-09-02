@@ -1,6 +1,6 @@
-# v21: learned-early-stopping production run (adaptive-stopping plan, commit f3686de4).
-# Fully materialized; intentionally does not extend another file. Fresh start: the stopping rework
-# changed the replay layout and inference contract, so no pre-rework checkpoint can be resumed.
+# v24: final four-day production run. Identical to v23 except the previous-20m/-40m/-60m
+# previous-checkpoint evaluations are dropped (every Stockfish rung and the 1200 s cadence
+# are unchanged). Fully materialized; intentionally does not extend another file.
 run:
   run_name: vast-chess-4day-production-v24
   tensorboard_run_directory: vast-chess-4day-production-v24
@@ -109,35 +109,27 @@ training:
       parallel_games_per_process: 512
       tensorboard_processes: 1
       node_ids_to_pause_during_training:
-      - 0
       - 1
       - 2
       - 3
-      - 4
       - 5
       - 6
       - 7
-      - 8
       - 9
       - 10
       - 11
-      - 12
       - 13
       - 14
       - 15
-      - 16
       - 17
       - 18
       - 19
-      - 20
       - 21
       - 22
       - 23
-      - 24
       - 25
       - 26
       - 27
-      - 28
       - 29
       - 30
       - 31
@@ -302,57 +294,6 @@ evaluation:
   definitions:
   - kind: fixed_dataset
     definition_id: fixed-dataset
-  - opening_pair_count: 50
-    maximum_game_plies: 300
-    first_generation: 0
-    final_generation: null
-    kind: previous_checkpoint
-    definition_id: previous-20m
-    boundary_offset: 1
-    boundary_parity: every
-    search:
-      searches_per_move: 64
-      parallel_searches: 1
-      exploration_constant: auto
-      inference:
-        inference_workers: 1
-        inference_batch_size: 64
-        outstanding_batches_per_worker: 1
-        sdpa_backend: memory_efficient
-  - opening_pair_count: 50
-    maximum_game_plies: 300
-    first_generation: 0
-    final_generation: null
-    kind: previous_checkpoint
-    definition_id: previous-40m
-    boundary_offset: 2
-    boundary_parity: every
-    search:
-      searches_per_move: 64
-      parallel_searches: 1
-      exploration_constant: auto
-      inference:
-        inference_workers: 1
-        inference_batch_size: 64
-        outstanding_batches_per_worker: 1
-        sdpa_backend: memory_efficient
-  - opening_pair_count: 50
-    maximum_game_plies: 300
-    first_generation: 0
-    final_generation: null
-    kind: previous_checkpoint
-    definition_id: previous-60m
-    boundary_offset: 3
-    boundary_parity: every
-    search:
-      searches_per_move: 64
-      parallel_searches: 1
-      exploration_constant: auto
-      inference:
-        inference_workers: 1
-        inference_batch_size: 64
-        outstanding_batches_per_worker: 1
-        sdpa_backend: memory_efficient
   - opening_pair_count: 50
     maximum_game_plies: 300
     first_generation: 0
