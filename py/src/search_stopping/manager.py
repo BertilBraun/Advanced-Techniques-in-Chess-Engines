@@ -19,7 +19,9 @@ from src.search_stopping.policy import SearchStopPolicy, closed_policy
 from src.search_stopping.predictor import LoadedStopPredictor, export_stop_predictor, fit_stop_predictor
 from src.search_stopping.records import (
     PAIRED_FLOOR_RECORD_DTYPE,
+    audit_log_path,
     audit_record_dtype,
+    paired_floor_log_path,
     read_records,
 )
 from src.search_stopping.solver import AuditWindowArrays, solve_noise_floor_anchored_eps
@@ -57,11 +59,20 @@ class SearchStoppingManager:
         configuration: SearchStoppingConfiguration,
         configuration_sha256: str,
         first_unstarted_production_generation: int,
+        worker_count: int,
     ) -> None:
+        if worker_count <= 0:
+            raise ValueError('Stop calibration requires at least one self-play worker.')
         self.configuration = configuration
         self.configuration_sha256 = configuration_sha256
+        self.worker_count = worker_count
         self.stopping_path = run_path / 'search-stopping'
         self.state_path = self.stopping_path / 'stop-calibration.json'
+        # A generation's record files are complete once every worker has activated the next
+        # checkpoint, which happens before that generation is finalized — so the parsed arrays
+        # can be cached for the trailing window instead of re-read every generation.
+        self._audit_cache: dict[int, npt.NDArray[np.void] | None] = {}
+        self._floor_cache: dict[int, npt.NDArray[np.float64] | None] = {}
         self.state: StopCalibrationState = load_calibration_state_fail_closed(
             self.state_path,
             configuration,
@@ -216,20 +227,13 @@ class SearchStoppingManager:
         return list(range(oldest, source_generation + 1))
 
     def _load_audit_window(self, window: list[int]) -> npt.NDArray[np.void] | None:
-        dtype = audit_record_dtype(len(self.configuration.checkpoint_multiples))
+        self._evict_outside(window)
         chunks: list[npt.NDArray[np.void]] = []
         current_baseline: int | None = None
         for generation in reversed(window):
-            generation_chunks = []
-            pattern = f'audit-generation-{generation:08d}-worker-*.np'
-            for path in sorted(self.stopping_path.glob(pattern)):
-                try:
-                    generation_chunks.append(read_records(path, dtype))
-                except ValueError:
-                    log_error(f'Skipping unreadable audit log: {path}')
-            if not generation_chunks:
+            merged = self._generation_audit_records(generation)
+            if merged is None:
                 continue
-            merged = np.concatenate(generation_chunks)
             baseline = int(merged['baseline_visits'][0])
             if current_baseline is None:
                 current_baseline = baseline
@@ -243,17 +247,60 @@ class SearchStoppingManager:
         return np.concatenate(chunks)
 
     def _load_paired_floors(self, window: list[int]) -> npt.NDArray[np.float64]:
-        values = []
-        for generation in window:
-            pattern = f'paired-floor-generation-{generation:08d}-worker-*.np'
-            for path in sorted(self.stopping_path.glob(pattern)):
-                try:
-                    values.append(read_records(path, PAIRED_FLOOR_RECORD_DTYPE)['kl_symmetric'])
-                except ValueError:
-                    log_error(f'Skipping unreadable paired-floor log: {path}')
+        self._evict_outside(window)
+        values = [floors for generation in window if (floors := self._generation_paired_floors(generation)) is not None]
         if not values:
             return np.array([], dtype=np.float64)
-        return np.concatenate(values).astype(np.float64)
+        return np.concatenate(values)
+
+    def _generation_audit_records(self, generation: int) -> npt.NDArray[np.void] | None:
+        if generation not in self._audit_cache:
+            dtype = audit_record_dtype(len(self.configuration.checkpoint_multiples))
+            paths = self._record_paths(
+                generation,
+                [audit_log_path(self.stopping_path, generation, worker_id) for worker_id in range(self.worker_count)],
+                f'audit-generation-{generation:08d}-worker-*.np',
+            )
+            generation_chunks = []
+            for path in paths:
+                try:
+                    generation_chunks.append(read_records(path, dtype))
+                except ValueError:
+                    log_error(f'Skipping unreadable audit log: {path}')
+            self._audit_cache[generation] = np.concatenate(generation_chunks) if generation_chunks else None
+        return self._audit_cache[generation]
+
+    def _generation_paired_floors(self, generation: int) -> npt.NDArray[np.float64] | None:
+        if generation not in self._floor_cache:
+            paths = self._record_paths(
+                generation,
+                [
+                    paired_floor_log_path(self.stopping_path, generation, worker_id)
+                    for worker_id in range(self.worker_count)
+                ],
+                f'paired-floor-generation-{generation:08d}-worker-*.np',
+            )
+            values = []
+            for path in paths:
+                try:
+                    values.append(read_records(path, PAIRED_FLOOR_RECORD_DTYPE)['kl_symmetric'].astype(np.float64))
+                except ValueError:
+                    log_error(f'Skipping unreadable paired-floor log: {path}')
+            self._floor_cache[generation] = np.concatenate(values) if values else None
+        return self._floor_cache[generation]
+
+    def _record_paths(self, generation: int, constructed: list[Path], fallback_pattern: str) -> list[Path]:
+        """Worker ids are dense and reused across restarts, so the constructed paths cover every
+        file; the glob remains only for a resumed run whose worker count shrank."""
+        existing = [path for path in constructed if path.exists()]
+        if existing:
+            return existing
+        return sorted(self.stopping_path.glob(fallback_pattern))
+
+    def _evict_outside(self, window: list[int]) -> None:
+        retained = set(window)
+        self._audit_cache = {g: v for g, v in self._audit_cache.items() if g in retained}
+        self._floor_cache = {g: v for g, v in self._floor_cache.items() if g in retained}
 
     def _publish(
         self,

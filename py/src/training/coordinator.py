@@ -103,6 +103,7 @@ class Coordinator:
             configuration=training.lifecycle.search_stopping,
             configuration_sha256=experiment_configuration_sha256(self.configuration),
             first_unstarted_production_generation=self.ledger.model_generation + 1,
+            worker_count=len(training.topology.self_play.device_ids),
         )
         self.self_play_group = SelfPlayGroup(game)
         self.self_play_health = SelfPlayHealthMonitor(self.self_play_group.worker_count)
