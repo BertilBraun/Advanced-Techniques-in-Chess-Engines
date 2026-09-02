@@ -3,7 +3,7 @@
 # changed the replay layout and inference contract, so no pre-rework checkpoint can be resumed.
 run:
   run_name: vast-chess-pause-probe-600v-16run
-  tensorboard_run_directory: vast-chess-4day-production-v26
+  tensorboard_run_directory: vast-chess-pause-probe-600v-16run
   stage: clean_retrain
   requires_explicit_approval: true
   resume:
@@ -25,7 +25,7 @@ run:
     dependency_lock_sha256: 11074667d5b9e5075faee3d75817f2fbe1af8b863299ed27acd14809f939c484
     minimum_open_file_soft_limit: 65536
 training:
-  save_path: py/training_data/validation/vast-chess-4day-production-v26
+  save_path: py/training_data/validation/vast-chess-pause-probe-600v-16run
   trainer:
     global_batch_size: 2048
     local_batch_size: 256
@@ -201,7 +201,7 @@ training:
     hourly_price: 0.72
     maximum_cost: null
     maximum_wall_time_seconds: 3300.0
-    manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v26.stop
+    manual_stop_file: /workspace/run-control/stop/vast-chess-pause-probe-600v-16run.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
     minimum_free_disk_gib: 1.0
@@ -223,38 +223,6 @@ training:
         residual_context:
           kind: global_pooling
           placement: every_second_block
-    - model_id: chess-cnn-14x160-fromto
-      training_start_days: '0.667'
-      network:
-        policy_head:
-          kind: chess_from_to_attention_v1
-          key_size: 128
-        num_value_channels: 2
-        value_fc_size: 48
-        kind: convolutional
-        num_layers: 14
-        hidden_size: 160
-        residual_context:
-          kind: global_pooling
-          placement: every_second_block
-    - model_id: chess-cnn-19x176-fromto
-      training_start_days: '2.0'
-      network:
-        policy_head:
-          kind: chess_from_to_attention_v1
-          key_size: 128
-        num_value_channels: 2
-        value_fc_size: 48
-        kind: convolutional
-        num_layers: 19
-        hidden_size: 176
-        residual_context:
-          kind: global_pooling
-          placement: every_second_block
-    promotion:
-      decay: 0.8
-      warmup_quanta: 10
-      maximum_relative_loss: 1.01
 evaluation:
   cadence_seconds: 1200
   job_timeout_seconds: 1800.0
