@@ -55,7 +55,7 @@ training:
       - start_generation: 1500
         value: 0.0015
     warmup_optimizer_steps: 1000
-    gradient_probe_interval_steps: 100
+    gradient_probe_interval_steps: 0
     max_grad_norm: 0.5
     duplicate_multiplicity_weight_cap: null
   topology:
