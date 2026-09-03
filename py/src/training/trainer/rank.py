@@ -253,6 +253,7 @@ def _train_batches(
         term_trunk_gradient_probes=torch.zeros((), device=device),
     )
     distributions = None
+    trunk_parameters = _trunk_parameters(distributed_model) if gradient_probe_interval_steps > 0 else ()
     with loader.prefetch(device, uses_cuda, replay_prefetch_depth) as prefetched_batches:
         for batch_index, batch in enumerate(prefetched_batches):
             learning_rate = warmup_scaled_learning_rate(
@@ -279,7 +280,7 @@ def _train_batches(
                     time.time(),
                 )
             if gradient_probe_interval_steps > 0 and batch_index % gradient_probe_interval_steps == 0:
-                totals.term_trunk_gradients.add_(_term_trunk_gradients(objective, loss, output.features))
+                totals.term_trunk_gradients.add_(_term_trunk_gradients(objective, loss, trunk_parameters))
                 totals.term_trunk_gradient_probes.add_(1.0)
             loss.total.backward()
             gradient_norm = torch.nn.utils.clip_grad_norm_(distributed_model.parameters(), maximum_gradient_norm)
@@ -293,12 +294,31 @@ def _train_batches(
     return _TrainingBatchResult(totals, distributions)
 
 
+TRUNK_PARAMETER_PREFIXES = ('start_block', 'backbone', 'finish_block')
+
+
+def _trunk_parameters(distributed_model: DistributedDataParallel) -> tuple[torch.Tensor, ...]:
+    parameters = tuple(
+        parameter
+        for name, parameter in distributed_model.named_parameters()
+        if parameter.requires_grad and any(prefix in name for prefix in TRUNK_PARAMETER_PREFIXES)
+    )
+    if not parameters:
+        raise RuntimeError('The gradient probe found no trunk parameters; the trunk naming must have changed.')
+    return parameters
+
+
 def _term_trunk_gradients(
     objective: ResolvedTrainingObjective,
     loss: ObjectiveLoss,
-    features: torch.Tensor,
+    trunk_parameters: tuple[torch.Tensor, ...],
 ) -> torch.Tensor:
-    """Norm of each weighted term's gradient at the shared trunk, so terms are comparable across heads."""
+    """Norm of each weighted term's gradient at the shared trunk, so terms are comparable across heads.
+
+    Taken at the trunk parameters, not the feature activation: torch.compile returns that activation as
+    a sibling graph output with no autograd path from the loss, so the probe recorded zeros for every
+    term of every compiled run.
+    """
     weighted = (
         objective.policy_loss_weight * loss.policy,
         objective.value_loss_weight * loss.wdl,
@@ -309,8 +329,8 @@ def _term_trunk_gradients(
     )
     norms = []
     for term in weighted:
-        (gradient,) = torch.autograd.grad(term, features, retain_graph=True, allow_unused=True)
-        norms.append(torch.zeros((), device=features.device) if gradient is None else gradient.detach().norm())
+        gradients = torch.autograd.grad(term, trunk_parameters, retain_graph=True, allow_unused=False)
+        norms.append(torch.sqrt(sum(gradient.detach().pow(2).sum() for gradient in gradients)))
     return torch.stack(norms)
 
 

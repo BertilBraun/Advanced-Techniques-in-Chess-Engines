@@ -2,56 +2,67 @@ from __future__ import annotations
 
 import pytest
 import torch
-from src.training.objective import ObjectiveLoss, ResolvedNextPolicyLoss, ResolvedTrainingObjective
-from src.training.trainer.rank import _term_trunk_gradients
+from src.games.representation import NetworkDimensions
+from src.training.network import (
+    DisabledResidualContext,
+    GoPointPassPolicyHeadConfiguration,
+    Network,
+    NetworkParams,
+)
+from src.training.trainer.rank import _trunk_parameters
 
 
-def _objective(policy_weight: float, value_weight: float, auxiliary_weight: float) -> ResolvedTrainingObjective:
-    return ResolvedTrainingObjective(
-        policy_loss_weight=policy_weight,
-        value_loss_weight=value_weight,
-        root_value_blend=0.0,
-        auxiliary_losses=(ResolvedNextPolicyLoss(weight=auxiliary_weight),),
+def _network() -> Network:
+    parameters = NetworkParams(
+        num_layers=2,
+        hidden_size=8,
+        residual_context=DisabledResidualContext(),
+        policy_head=GoPointPassPolicyHeadConfiguration(),
+        num_value_channels=2,
+        value_fc_size=8,
     )
+    dimensions = NetworkDimensions(channels=3, rows=3, columns=3, actions=10)
+    return Network(parameters, torch.device('cpu'), dimensions)
 
 
-def _loss(features: torch.Tensor) -> ObjectiveLoss:
-    policy = (features * 2.0).sum()
-    wdl = (features * 1.0).sum()
-    auxiliary = (features * 4.0).sum()
-    return ObjectiveLoss(policy=policy, wdl=wdl, auxiliary=(auxiliary,), total=policy + wdl + auxiliary)
+def test_trunk_parameters_exclude_the_heads() -> None:
+    network = _network()
+    selected = {id(parameter) for parameter in _trunk_parameters(network)}
+    head_parameters = {
+        id(parameter) for module in (network.policy_head, network.value_head) for parameter in module.parameters()
+    }
+    assert selected
+    assert not (selected & head_parameters)
 
 
-def test_trunk_gradients_scale_with_the_loss_weight() -> None:
-    features = torch.ones((4, 8), requires_grad=True)
-    gradients = _term_trunk_gradients(_objective(1.0, 0.5, 0.25), _loss(features), features)
-
-    root = torch.tensor(32.0).sqrt()
-    assert gradients.tolist() == pytest.approx(
-        [float(2.0 * root), float(0.5 * root), float(0.25 * 4.0 * root)], rel=1e-5
-    )
+def test_trunk_parameters_cover_every_trunk_module() -> None:
+    network = _network()
+    selected = {id(parameter) for parameter in _trunk_parameters(network)}
+    for module in (network.start_block, network.backbone, network.finish_block):
+        for parameter in module.parameters():
+            assert id(parameter) in selected
 
 
-def test_a_zero_weight_term_contributes_no_trunk_gradient() -> None:
-    features = torch.ones((4, 8), requires_grad=True)
-    gradients = _term_trunk_gradients(_objective(1.0, 1.0, 0.0), _loss(features), features)
+def test_trunk_parameters_reject_a_renamed_trunk() -> None:
+    """The probe must fail loudly rather than report zeros if the trunk is renamed."""
 
-    assert gradients[2].item() == pytest.approx(0.0)
+    class Renamed(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.stem = torch.nn.Linear(4, 4)
 
-
-def test_trunk_gradients_report_one_entry_per_loss_term() -> None:
-    features = torch.ones((2, 3), requires_grad=True)
-    gradients = _term_trunk_gradients(_objective(1.0, 1.0, 0.1), _loss(features), features)
-
-    assert gradients.shape == (3,)
+    with pytest.raises(RuntimeError, match='no trunk parameters'):
+        _trunk_parameters(Renamed())
 
 
-def test_the_probe_leaves_the_graph_usable_for_the_real_backward() -> None:
-    features = torch.ones((4, 8), requires_grad=True)
-    loss = _loss(features)
-
-    _term_trunk_gradients(_objective(1.0, 1.0, 1.0), loss, features)
-    loss.total.backward()
-
-    assert features.grad is not None
-    assert features.grad.abs().sum().item() > 0.0
+def test_each_loss_term_produces_a_distinct_nonzero_trunk_gradient() -> None:
+    network = _network()
+    trunk = _trunk_parameters(network)
+    torch.manual_seed(0)
+    output = network.training_output(torch.randn((4, 3, 3, 3)))
+    norms = []
+    for logits in (output.policy_logits, output.wdl_logits):
+        gradients = torch.autograd.grad(logits.square().mean(), trunk, retain_graph=True, allow_unused=False)
+        norms.append(float(torch.sqrt(sum(gradient.pow(2).sum() for gradient in gradients))))
+    assert all(norm > 0.0 for norm in norms)
+    assert norms[0] != norms[1]

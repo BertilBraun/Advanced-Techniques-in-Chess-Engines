@@ -73,9 +73,10 @@ class _Worker:
     ) -> None:
         del game, parallel_game_count, worker_id, device_id, inbox_path
         self.generation: int | None = None
+        self.completed_searches = 0
 
     def run_batch(self) -> None:
-        pass
+        self.completed_searches += 1
 
     def refresh_published_model(self, checkpoint: CheckpointReference, search_stop_policy: SearchStopPolicy) -> None:
         assert not search_stop_policy.apply_learned
