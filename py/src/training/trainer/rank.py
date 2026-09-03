@@ -106,6 +106,9 @@ def _initialize_rank(
         world_size=world_size,
     )
     initial_checkpoint_exists = checkpoint_manifest_path(startup.starting_generation, startup.save_path).exists()
+    # training.random_seed reached the self-play workers and the evaluation dataset but never the
+    # network, so every run drew different initial weights and no run was reproducible.
+    torch.manual_seed(configuration.training.random_seed)
     model, optimizer = load_model_and_optimizer(
         startup.starting_generation,
         startup.network,
