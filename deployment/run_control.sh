@@ -424,26 +424,52 @@ command_fetch() {
     local ssh_destination="${RUN_CONTROL_SSH_DESTINATION:?set RUN_CONTROL_SSH_DESTINATION, e.g. root@HOST}"
     local ssh_port="${RUN_CONTROL_SSH_PORT:-22}"
     local remote_archive_root="${RUN_CONTROL_REMOTE_ARCHIVE_ROOT:-/workspace/alphazero-engine/.codex-diagnostics}"
-    local ssh_command="ssh -p ${ssh_port}"
-    if [[ -n "${RUN_CONTROL_SSH_KEY:-}" ]]; then
-        ssh_command="${ssh_command} -i ${RUN_CONTROL_SSH_KEY}"
-    fi
+    local shard_bytes="${RUN_CONTROL_FETCH_SHARD_BYTES:-40m}"
+    local attempts="${RUN_CONTROL_FETCH_ATTEMPTS:-5}"
+
+    local ssh_options=(-o StrictHostKeyChecking=no -o ServerAliveInterval=15)
+    [[ -n "${RUN_CONTROL_SSH_KEY:-}" ]] && ssh_options+=(-i "${RUN_CONTROL_SSH_KEY}")
+
+    # rsync is unavailable on some workstations and a single large scp is dropped by some hosts, so the
+    # archive is tarred on the node, split, and each shard retried independently.
+    local remote_ssh=(ssh "${ssh_options[@]}" -p "${ssh_port}" "${ssh_destination}")
+    local names
+    names="$("${remote_ssh[@]}" "ls -d ${remote_archive_root}/${run_name}-*/ 2>/dev/null | xargs -r -n1 basename")"
+    [[ -n "${names}" ]] || fail "no archive for '${run_name}' under ${remote_archive_root}"
 
     mkdir -p "${destination}"
-    rsync -a --info=stats1 -e "${ssh_command}" \
-        "${ssh_destination}:${remote_archive_root}/${run_name}-*" "${destination}/"
+    local name
+    for name in ${names}; do
+        local stem="/tmp/run-control-fetch-${name}"
+        "${remote_ssh[@]}" "rm -f ${stem}.tar ${stem}.part*; tar -C ${remote_archive_root} -cf ${stem}.tar ${name} && split -b ${shard_bytes} -d ${stem}.tar ${stem}.part && rm -f ${stem}.tar"             || fail "could not stage ${name} on the node"
+        local parts
+        parts="$("${remote_ssh[@]}" "ls ${stem}.part* | xargs -n1 basename")"
 
-    local archive verified=0
-    for archive in "${destination}/${run_name}"-*/; do
-        [[ -d "${archive}" ]] || continue
-        (
-            cd "${archive}"
-            sha256sum --check --quiet SHA256SUMS
-        ) || fail "SHA256SUMS verification failed in ${archive}"
-        echo "run_control: verified ${archive}"
-        verified=$((verified + 1))
+        local workdir="${destination}/.parts-${name}"
+        rm -rf "${workdir}"; mkdir -p "${workdir}"
+        local part attempt ok
+        for part in ${parts}; do
+            ok=0
+            for attempt in $(seq 1 "${attempts}"); do
+                if scp -q "${ssh_options[@]}" -P "${ssh_port}" "${ssh_destination}:/tmp/${part}" "${workdir}/${part}"; then
+                    ok=1
+                    break
+                fi
+                echo "run_control: ${part} attempt ${attempt} failed, retrying" >&2
+                sleep 5
+            done
+            (( ok )) || { rm -rf "${workdir}"; fail "gave up fetching ${part} after ${attempts} attempts"; }
+        done
+
+        rm -rf "${destination:?}/${name}"
+        cat "${workdir}"/*.part* > "${workdir}/archive.tar"
+        tar -C "${destination}" -xf "${workdir}/archive.tar" || fail "could not extract ${name}"
+        rm -rf "${workdir}"
+        "${remote_ssh[@]}" "rm -f ${stem}.part*" || true
+
+        ( cd "${destination}/${name}" && sha256sum --check --quiet SHA256SUMS )             || fail "SHA256SUMS verification failed in ${destination}/${name}"
+        echo "run_control: verified ${destination}/${name} ($(find "${destination}/${name}" -type f | wc -l) files)"
     done
-    (( verified > 0 )) || fail "no archive for '${run_name}' was fetched from ${remote_archive_root}"
 }
 
 # ----------------------------------------------------------------- main ----
