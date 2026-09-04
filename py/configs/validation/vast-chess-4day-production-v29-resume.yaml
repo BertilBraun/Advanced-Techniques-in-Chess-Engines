@@ -8,8 +8,8 @@ run:
   requires_explicit_approval: true
   resume:
     mode: checkpoint
-    checkpoint_manifest_path: py/training_data/validation/vast-chess-4day-production-v29/checkpoint_617.json
-    generation: 617
+    checkpoint_manifest_path: py/training_data/validation/vast-chess-4day-production-v29/checkpoint_620.json
+    generation: 620
   hardware:
     provider_name: vast.ai
     offer_id: '48571853'
