@@ -8,8 +8,8 @@ run:
   requires_explicit_approval: true
   resume:
     mode: checkpoint
-    checkpoint_manifest_path: py/training_data/validation/vast-chess-4day-production-v29/checkpoint_428.json
-    generation: 428
+    checkpoint_manifest_path: py/training_data/validation/vast-chess-4day-production-v29/checkpoint_617.json
+    generation: 617
   hardware:
     provider_name: vast.ai
     offer_id: '48571853'
@@ -240,7 +240,7 @@ training:
           kind: global_pooling
           placement: every_second_block
     - model_id: chess-cnn-19x176-fromto
-      training_start_days: '2.0'
+      training_start_days: '1.25'
       network:
         policy_head:
           kind: chess_from_to_attention_v1
