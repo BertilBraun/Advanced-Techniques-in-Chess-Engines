@@ -78,6 +78,9 @@ class _Worker:
     def run_batch(self) -> None:
         self.completed_searches += 1
 
+    def suspend_active_games(self) -> int:
+        return 0
+
     def refresh_published_model(self, checkpoint: CheckpointReference, search_stop_policy: SearchStopPolicy) -> None:
         assert not search_stop_policy.apply_learned
         self.generation = checkpoint.generation

@@ -856,3 +856,47 @@ def test_audit_requests_under_a_closed_policy_still_search_to_the_cap(tmp_path: 
     for request in worker.search.request_batches[0][:3]:  # type: ignore[union-attr]
         visits = request.policy_checkpoint_visits
         assert visits is not None and len(visits) == len(policy.checkpoint_multiples)
+
+
+def test_suspended_games_are_resumed_with_their_plies_and_observations(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    inbox.mkdir(parents=True)
+
+    def worker() -> SelfPlayWorker:
+        return SelfPlayWorker(
+            cast(GameImplementation, FakeGame()),
+            parallel_game_count=3,
+            worker_id=0,
+            device_id=0,
+            inbox_path=inbox,
+        )
+
+    first = worker()
+    first.refresh_published_model(checkpoint(tmp_path, 0), flat_stop_policy())
+    first.run_batch()
+    first.run_batch()
+    before = [(game.identity, list(game.action_ids), len(game.observations)) for game in first.active_games]
+    assert first.suspend_active_games() == 3
+
+    second = worker()
+    second.refresh_published_model(checkpoint(tmp_path, 0), flat_stop_policy())
+
+    assert second.restored_games == 3
+    assert [(game.identity, list(game.action_ids), len(game.observations)) for game in second.active_games] == before
+    assert [game.root.position.ply for game in second.active_games] == [2, 2, 2]
+
+
+def test_a_resumed_worker_starts_fresh_games_when_nothing_was_suspended(tmp_path: Path) -> None:
+    inbox = tmp_path / 'completed-games' / 'inbox'
+    inbox.mkdir(parents=True)
+    worker = SelfPlayWorker(
+        cast(GameImplementation, FakeGame()),
+        parallel_game_count=2,
+        worker_id=0,
+        device_id=0,
+        inbox_path=inbox,
+    )
+    worker.refresh_published_model(checkpoint(tmp_path, 0), flat_stop_policy())
+
+    assert worker.restored_games == 0
+    assert [game.action_ids for game in worker.active_games] == [[], []]

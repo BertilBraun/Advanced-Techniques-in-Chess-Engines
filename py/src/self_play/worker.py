@@ -28,6 +28,8 @@ from src.self_play.completed_game import (
     SearchObservation,
     SearchStopReason,
     SearchVisitCounts,
+    SuspendedSelfPlayGame,
+    SuspendedSelfPlayGames,
     TerminationReason,
     publish_completed_self_play_game,
 )
@@ -41,8 +43,8 @@ from src.self_play.resignation import (
     CalibratedResignationConfiguration,
     PublishedResignationPolicy,
 )
-from src.self_play.restart_archive import RestartStateArchive, worker_restart_archive_path
-from src.util.atomic_file import fsync_directory
+from src.self_play.restart_archive import RestartStateArchive, suspended_games_path, worker_restart_archive_path
+from src.util.atomic_file import fsync_directory, write_text_atomically
 from src.util.log import error as log_error
 from src.util.tensorboard import log_scalar
 
@@ -148,6 +150,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         self.search: NativeSearchT | None = None
         self.active_games: list[ActiveSelfPlayGame[NativeRootT]] = []
         self.completed_searches = 0
+        self.restored_games = 0
         self.restart_archive: RestartStateArchive | None = None
         self.true_starts = 0
         self.restart_starts = 0
@@ -226,7 +229,10 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         self.model_generation = checkpoint.generation
         self._prepare_restart_archive(parameters)
         if not self.active_games:
-            self.active_games = [self._new_game(self.search, parameters) for _ in range(self.parallel_game_count)]
+            self.active_games = self._restore_suspended_games(self.search)
+            self.restored_games = len(self.active_games)
+            while len(self.active_games) < self.parallel_game_count:
+                self.active_games.append(self._new_game(self.search, parameters))
         elif capacity_changed:
             for active_game in self.active_games:
                 active_game.root = self.search.new_root(active_game.root.position)
@@ -410,6 +416,68 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
                 )
             return self._complete(active_game, final_wdl, TerminationReason.MAXIMUM_PLIES)
         return None
+
+    def suspend_active_games(self) -> int:
+        """Persist in-flight games so a restart resumes them instead of discarding the plies played.
+
+        Without this a restart throws away every partially played game across all workers, which is
+        several generations of search. Games are resumed rather than adjudicated, so no value target is
+        invented for a position the search never settled.
+        """
+        if self.model_generation is None:
+            return 0
+        games = tuple(
+            SuspendedSelfPlayGame(
+                identity=active_game.identity,
+                started_at_seconds=active_game.started_at_seconds,
+                action_ids=tuple(active_game.action_ids),
+                observations=tuple(active_game.observations),
+                reserved_restart_action_id=active_game.reserved_restart_action_id,
+                is_resignation_continuation=active_game.is_resignation_continuation,
+                resignation_threshold=active_game.resignation_threshold,
+            )
+            # a game mid cut-evaluation has an observation for a ply it has not played; drop it
+            for active_game in self.active_games
+            if active_game.action_ids and not active_game.awaiting_cut_evaluation
+        )
+        path = suspended_games_path(self.inbox_path.parent, self.worker_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = SuspendedSelfPlayGames(worker_id=self.worker_id, model_generation=self.model_generation, games=games)
+        write_text_atomically(path, payload.model_dump_json())
+        return len(games)
+
+    def _restore_suspended_games(self, search: NativeSearchT) -> list[ActiveSelfPlayGame[NativeRootT]]:
+        path = suspended_games_path(self.inbox_path.parent, self.worker_id)
+        if not path.is_file():
+            return []
+        payload = SuspendedSelfPlayGames.model_validate_json(path.read_text(encoding='utf-8'))
+        path.unlink()
+        if payload.worker_id != self.worker_id:
+            return []
+        restored: list[ActiveSelfPlayGame[NativeRootT]] = []
+        for game in payload.games[: self.parallel_game_count]:
+            position = self.game.state.initial_position()
+            legal = True
+            for action_id in game.action_ids:
+                if action_id not in self.game.state.legal_action_ids(position):
+                    legal = False
+                    break
+                position = self.game.state.child_position(position, action_id)
+            if not legal or self.game.state.natural_terminal_wdl(position) is not None:
+                continue
+            restored.append(
+                ActiveSelfPlayGame(
+                    identity=game.identity,
+                    root=search.new_root(position),
+                    started_at_seconds=game.started_at_seconds,
+                    action_ids=list(game.action_ids),
+                    observations=list(game.observations),
+                    reserved_restart_action_id=game.reserved_restart_action_id,
+                    is_resignation_continuation=game.is_resignation_continuation,
+                    resignation_threshold=game.resignation_threshold,
+                )
+            )
+        return restored
 
     def _select_action(
         self,

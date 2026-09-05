@@ -130,6 +130,30 @@ class SearchObservation(SealedSearchObservation):
     policy_target_visits: SearchVisitCounts
 
 
+class SuspendedSelfPlayGame(FrozenModel):
+    """An in-flight game persisted across a restart.
+
+    The native search tree is not stored: replaying the action ids from the initial position
+    reconstructs the position, and the tree rebuilds itself on the next search.
+    """
+
+    schema_version: Literal[1] = 1
+    identity: GameIdentity
+    started_at_seconds: float = Field(ge=0.0)
+    action_ids: tuple[int, ...]
+    observations: tuple[SearchObservation, ...]
+    reserved_restart_action_id: int | None = None
+    is_resignation_continuation: bool = False
+    resignation_threshold: float | None = Field(default=None, ge=-1.0, lt=0.0)
+
+
+class SuspendedSelfPlayGames(FrozenModel):
+    schema_version: Literal[1] = 1
+    worker_id: int = Field(ge=0)
+    model_generation: int = Field(ge=0)
+    games: tuple[SuspendedSelfPlayGame, ...]
+
+
 class CompletedSelfPlayGame(FrozenModel):
     schema_version: Literal[8] = 8
     identity: GameIdentity
