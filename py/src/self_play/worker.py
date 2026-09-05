@@ -123,6 +123,9 @@ class SelfPlayStatisticsSnapshot:
     inference: InferenceStatistics
 
 
+MINIMUM_FLUSHED_PLIES = 8
+
+
 class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResultT, NativeSearchT]):
     def __init__(
         self,
@@ -410,6 +413,34 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
                 )
             return self._complete(active_game, final_wdl, TerminationReason.MAXIMUM_PLIES)
         return None
+
+    def flush_active_games(self) -> int:
+        """Publish partially played games so a shutdown does not discard them.
+
+        Every restart otherwise throws away all in-flight games — thousands per worker, tens of plies
+        each — which is several generations of search. Cut games are already a supported training input
+        (the ply cap produces them), so they are published the same way, adjudicated at the position
+        reached rather than searched again.
+        """
+        if self.search is None or not self.active_games:
+            return 0
+        _, parameters = self._loaded_runtime()
+        published = 0
+        for active_game in self.active_games:
+            if len(active_game.action_ids) < MINIMUM_FLUSHED_PLIES:
+                continue
+            completed = self._complete(
+                active_game,
+                self.game.state.adjudicated_wdl(active_game.root.position, TerminationReason.MAXIMUM_PLIES),
+                TerminationReason.MAXIMUM_PLIES,
+            )
+            self._archive_completed_game(completed, parameters)
+            publish_completed_self_play_game(self.inbox_path, completed, sync_directory=False)
+            published += 1
+        self.active_games = []
+        if published:
+            fsync_directory(self.inbox_path)
+        return published
 
     def _select_action(
         self,
