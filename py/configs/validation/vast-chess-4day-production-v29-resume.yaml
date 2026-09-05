@@ -202,7 +202,7 @@ training:
   limits:
     hourly_price: 0.72
     maximum_cost: null
-    maximum_wall_time_seconds: 198000.0
+    maximum_wall_time_seconds: 345600.0
     manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v29.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
