@@ -8,8 +8,8 @@ run:
   requires_explicit_approval: true
   resume:
     mode: checkpoint
-    checkpoint_manifest_path: py/training_data/validation/vast-chess-4day-production-v29/checkpoint_620.json
-    generation: 620
+    checkpoint_manifest_path: py/training_data/validation/vast-chess-4day-production-v29/checkpoint_797.json
+    generation: 797
   hardware:
     provider_name: vast.ai
     offer_id: '48571853'
@@ -202,7 +202,7 @@ training:
   limits:
     hourly_price: 0.72
     maximum_cost: null
-    maximum_wall_time_seconds: 345600.0
+    maximum_wall_time_seconds: 198000.0
     manual_stop_file: /workspace/run-control/stop/vast-chess-4day-production-v29.stop
     maximum_open_file_count: 49152
     maximum_host_ram_percent: 92.0
@@ -500,23 +500,7 @@ chess:
         kind: staged
         stages:
         - start_generation: 0
-          value: 300
-        - start_generation: 10
-          value: 400
-        - start_generation: 30
-          value: 400
-        - start_generation: 50
-          value: 500
-        - start_generation: 90
           value: 600
-        - start_generation: 180
-          value: 700
-        - start_generation: 250
-          value: 800
-        - start_generation: 550
-          value: 1000
-        - start_generation: 1200
-          value: 1200
       virtual_loss_weight: 1.0
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
