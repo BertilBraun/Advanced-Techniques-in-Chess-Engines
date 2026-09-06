@@ -1,0 +1,9 @@
+Provenance correction: this commit also carries work from a concurrent agent
+fixing the six pre-existing test failures — the SEARCH_PHASE_TIMING_ENABLED
+binding and the interactive-engine test update. It was swept in by a
+'git add -A' from a parallel session. The subject and body describe only part of
+the diff, and the validation claimed in the body does not cover the swept-in
+changes.
+
+Those changes were validated separately on the Linux node at 57a918ae:
+1023 passed / 4 skipped, NativeTests 11/11.
