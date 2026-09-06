@@ -22,7 +22,7 @@ from src.training.network import (
     NetworkParams,
     ResidualContextPlacement,
 )
-from src.training.targets import SearchBudgetHeadLayout, build_training_target_layout
+from src.training.targets import build_training_target_layout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
@@ -192,7 +192,7 @@ def parameter_counts(network: Network) -> ParameterCounts:
     value_head = module_parameter_count(network.value_head)
     auxiliary_heads = module_parameter_count(network.auxiliary_head_modules)
     primary_total = backbone + primary_policy_head + value_head
-    inference_total = primary_total + _search_budget_parameter_count(network)
+    inference_total = primary_total
     training_total = primary_total + auxiliary_heads
     assert training_total == module_parameter_count(network)
     return ParameterCounts(
@@ -203,14 +203,6 @@ def parameter_counts(network: Network) -> ParameterCounts:
         inference_total=inference_total,
         training_total=training_total,
     )
-
-
-def _search_budget_parameter_count(network: Network) -> int:
-    for head, module in zip(network.auxiliary_heads, network.auxiliary_head_modules, strict=True):
-        match head:
-            case SearchBudgetHeadLayout():
-                return module_parameter_count(module)
-    return 0
 
 
 def _attention_backend_context(backend: AttentionBackend) -> AbstractContextManager[None]:

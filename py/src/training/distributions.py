@@ -32,7 +32,7 @@ class RemainingGameLengthTrainingDistribution(FrozenModel):
 
 
 class ScalarAuxiliaryTrainingDistribution(FrozenModel):
-    kind: Literal['future_search_value', 'irreversible_progress', 'search_budget']
+    kind: Literal['future_search_value', 'irreversible_progress']
     target: tuple[float, ...]
     prediction: tuple[float, ...]
     absolute_error: tuple[float, ...]
@@ -130,7 +130,6 @@ def _auxiliary_distribution(
         'future_search_value',
         'irreversible_progress',
         'legal_moves',
-        'search_budget',
     ],
 ) -> AuxiliaryTrainingDistribution:
     eligible = eligibility.to(dtype=torch.bool)
@@ -152,15 +151,6 @@ def _auxiliary_distribution(
             if kind == 'irreversible_progress':
                 eligible_predictions = torch.sigmoid(eligible_predictions)
             eligible_targets = target[eligible].squeeze(1)
-            return ScalarAuxiliaryTrainingDistribution(
-                kind=kind,
-                target=_floats(eligible_targets),
-                prediction=_floats(eligible_predictions),
-                absolute_error=_floats(torch.abs(eligible_predictions - eligible_targets)),
-            )
-        case 'search_budget':
-            eligible_predictions = prediction[eligible].flatten()
-            eligible_targets = target[eligible].flatten()
             return ScalarAuxiliaryTrainingDistribution(
                 kind=kind,
                 target=_floats(eligible_targets),

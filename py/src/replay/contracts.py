@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import isfinite
 from typing import Literal, TypeAlias
 
 from src.games.contracts import WdlTarget
 from src.games.representation import PackedPlanePayload
-from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.self_play.completed_game import SearchVisitCounts
 
 
@@ -69,35 +67,6 @@ class IneligibleScalarAuxiliaryTarget:
 
 
 @dataclass(frozen=True)
-class EligibleSearchBudgetTarget:
-    curve: tuple[float, ...]
-    raw_kl: float
-    source_generation: int
-    model_generation: int
-    inference_model_sha256: str
-    kind: Literal['search_budget'] = 'search_budget'
-    eligible: Literal[True] = True
-
-    def __post_init__(self) -> None:
-        if len(self.curve) != BUDGET_CURVE_POINTS or any(not isfinite(value) for value in self.curve):
-            raise ValueError('Search-budget curve targets require one finite value per grid point.')
-        if not isfinite(self.raw_kl) or self.raw_kl < 0.0:
-            raise ValueError('Search-budget raw KL must be finite and nonnegative.')
-        if self.source_generation < 0 or self.model_generation < 0:
-            raise ValueError('Search-budget source and model generations must be nonnegative.')
-        if len(self.inference_model_sha256) != 64 or any(
-            character not in '0123456789abcdef' for character in self.inference_model_sha256
-        ):
-            raise ValueError('Search-budget model lineage must be a lowercase SHA-256 digest.')
-
-
-@dataclass(frozen=True)
-class IneligibleSearchBudgetTarget:
-    kind: Literal['search_budget'] = 'search_budget'
-    eligible: Literal[False] = False
-
-
-@dataclass(frozen=True)
 class EligibleLegalMovesTarget:
     kind: Literal['legal_moves'] = 'legal_moves'
     eligible: Literal[True] = True
@@ -110,8 +79,6 @@ AuxiliaryReplayTarget: TypeAlias = (
     | IneligibleRemainingGameLengthTarget
     | EligibleScalarAuxiliaryTarget
     | IneligibleScalarAuxiliaryTarget
-    | EligibleSearchBudgetTarget
-    | IneligibleSearchBudgetTarget
     | EligibleLegalMovesTarget
 )
 

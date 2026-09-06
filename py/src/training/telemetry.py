@@ -6,7 +6,7 @@ from statistics import fmean, median
 
 from src.replay.description import ReplayDescription
 from src.replay.manager import IngestedCompletedGame
-from src.self_play.completed_game import SearchStopReason, TerminationReason
+from src.self_play.completed_game import TerminationReason
 from src.training.configuration import CreditTrainingParams
 from src.training.credit_ledger import CreditLedgerState
 
@@ -42,45 +42,6 @@ class CompletedGameLengthTelemetry:
     p99_plies: float
     maximum_plies: int
     terminations: tuple[TerminationGameLengthTelemetry, ...]
-
-
-@dataclass(frozen=True)
-class SearchBudgetTelemetry:
-    baseline_visits: tuple[int, ...]
-    final_visits: tuple[int, ...]
-    assigned_additional_visits: tuple[int, ...]
-    predicted_baseline_log_kls: tuple[float, ...]
-    selected_budget_indices: tuple[int, ...]
-    parallel_searches: tuple[int, ...]
-    spend_residuals: tuple[int, ...]
-    starting_visits: tuple[int, ...]
-    policy_corrections: tuple[float, ...]
-    value_corrections: tuple[float, ...]
-    stop_reasons: tuple[tuple[SearchStopReason, int], ...]
-
-
-def search_budget_telemetry(
-    games: tuple[IngestedCompletedGame, ...],
-) -> SearchBudgetTelemetry | None:
-    observations = tuple(observation for game in games for observation in game.observations)
-    if not observations:
-        return None
-    return SearchBudgetTelemetry(
-        baseline_visits=tuple(observation.baseline_visits for observation in observations),
-        final_visits=tuple(observation.final_visits for observation in observations),
-        assigned_additional_visits=tuple(observation.assigned_additional_visits for observation in observations),
-        predicted_baseline_log_kls=tuple(observation.predicted_baseline_log_kl for observation in observations),
-        selected_budget_indices=tuple(observation.selected_budget_index for observation in observations),
-        parallel_searches=tuple(observation.parallel_searches for observation in observations),
-        spend_residuals=tuple(observation.spend_residual for observation in observations),
-        starting_visits=tuple(observation.starting_visits for observation in observations),
-        policy_corrections=tuple(observation.policy_correction for observation in observations),
-        value_corrections=tuple(observation.value_correction for observation in observations),
-        stop_reasons=tuple(
-            (reason, sum(observation.stop_reason is reason for observation in observations))
-            for reason in SearchStopReason
-        ),
-    )
 
 
 def completed_game_length_telemetry(

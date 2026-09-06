@@ -30,7 +30,7 @@ class _UniformModel(nn.Module):
         super().__init__()
         self.action_size = action_size
 
-    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
         batch_size = inputs.size(0)
         policy = torch.full(
             (batch_size, self.action_size),
@@ -39,15 +39,14 @@ class _UniformModel(nn.Module):
             device=inputs.device,
         )
         outcome = torch.tensor([0.6, 0.3, 0.1], dtype=inputs.dtype, device=inputs.device)
-        correction = torch.zeros((batch_size, 1), dtype=inputs.dtype, device=inputs.device)
-        return policy, outcome.repeat(batch_size, 1), correction
+        return policy, outcome.repeat(batch_size, 1)
 
 
 class _InvalidOutcomeModel(_UniformModel):
-    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor, Tensor]:
-        policy, _, correction = super().forward(inputs)
+    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
+        policy, _ = super().forward(inputs)
         outcome = torch.tensor([1.2, -0.1, -0.1], dtype=inputs.dtype, device=inputs.device)
-        return policy, outcome.repeat(inputs.size(0), 1), correction
+        return policy, outcome.repeat(inputs.size(0), 1)
 
 
 @pytest.fixture

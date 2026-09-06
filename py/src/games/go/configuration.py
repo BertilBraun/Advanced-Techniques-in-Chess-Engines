@@ -65,7 +65,6 @@ class GoExperimentConfiguration(BaseExperimentConfiguration):
     def validate_experiment(self) -> GoExperimentConfiguration:
         self.training.validate_game(
             self.network_dimensions.actions,
-            self.go.self_play,
             self.go.objective.auxiliary_targets,
         )
         if self.evaluation.engine.kind != 'katago':

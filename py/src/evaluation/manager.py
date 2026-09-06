@@ -107,6 +107,7 @@ class EvaluationManager:
             )
             self._save_state()
         self._processes: dict[str, tuple[mp.Process, float]] = {}
+        self._published_ladder_boundaries: set[int] = set()
         self._started = False
 
     @property
@@ -434,6 +435,10 @@ class EvaluationManager:
         self._write_boundary_summary(step, generation, optimizer_steps)
 
     def _publish_ladder_elo(self, boundary_seconds: int) -> None:
+        # Every rung of a boundary reports separately, so without this the identical fit is logged
+        # once per rung and TensorBoard receives duplicate points at the same step.
+        if boundary_seconds in self._published_ladder_boundaries:
+            return
         # One ladder per search budget: a rung played at one search per move measures the network
         # alone and is hundreds of Elo below the same rung played at the full budget, so mixing them
         # into a single fit reads as weakness rather than as two different things being measured.
@@ -462,6 +467,7 @@ class EvaluationManager:
             by_budget.setdefault(definition.search.searches_per_move, []).append(observation)
         if not by_budget:
             return
+        self._published_ladder_boundaries.add(boundary_seconds)
         primary_budget = max(by_budget)
         for budget, observations in sorted(by_budget.items()):
             ladder_elo = fit_ladder_elo(tuple(observations))

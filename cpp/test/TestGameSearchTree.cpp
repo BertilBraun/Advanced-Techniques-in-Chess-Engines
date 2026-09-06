@@ -45,7 +45,7 @@ TreeSearchParameters zeroTreeSearch(const float explorationConstant,
 void expandRoot(GoTree &tree, const std::size_t edgeCount) {
     const std::vector<Go7Game::Action> legalActions = Go7Game::legalActions(tree.rootPosition());
     require(legalActions.size() >= edgeCount, "Go fixture does not have enough root actions");
-    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, {}};
+    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}};
     for (const auto index : range(edgeCount)) {
         inference.actions.emplace_back(
             legalActions[index],
@@ -189,7 +189,7 @@ bool reservedSubtreeStaysPreferred(const float virtualLossWeight) {
     tree.backPropagate(firstChild, -0.6F);
     const std::vector<Go7Game::Action> legalActions =
         Go7Game::legalActions(tree.position(firstChild));
-    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, {}};
+    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}};
     inference.actions.emplace_back(
         legalActions[0], Go7Game::Encoding::actionId(legalActions[0], tree.position(firstChild)),
         0.5F);
@@ -239,7 +239,7 @@ void testRecursiveDiscount() {
     const std::size_t childIndex = materializeRootEdge(tree, 0);
     const std::vector<Go7Game::Action> legalActions =
         Go7Game::legalActions(tree.position(childIndex));
-    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, {}};
+    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}};
     inference.actions.emplace_back(
         legalActions[0], Go7Game::Encoding::actionId(legalActions[0], tree.position(childIndex)),
         0.5F);
@@ -343,7 +343,7 @@ void testFreshRootNoiseUsesRawPriors() {
 template <SearchGame Game> void exerciseTree(typename Game::State position) {
     GameSearchTree<Game> tree(std::move(position), 1, 16);
     const auto legalActions = Game::legalActions(tree.rootPosition());
-    SearchInferenceResult<Game> inference{{}, {0.5F, 0.0F, 0.5F}, {}};
+    SearchInferenceResult<Game> inference{{}, {0.5F, 0.0F, 0.5F}};
     inference.actions.reserve(legalActions.size());
     for (const typename Game::Action action : legalActions) {
         inference.actions.emplace_back(action,
@@ -374,7 +374,7 @@ std::size_t selectedRootEdgeAfterOneVisit(const float rootValue,
     GameSearchTree<Go7Game> tree(
         GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}), 1, 64);
     const auto legalActions = Go7Game::legalActions(tree.rootPosition());
-    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}, {}};
+    SearchInferenceResult<Go7Game> inference{{}, {0.5F, 0.0F, 0.5F}};
     for (const GoAction action : legalActions) {
         inference.actions.emplace_back(action,
                                        Go7Game::Encoding::actionId(action, tree.rootPosition()),

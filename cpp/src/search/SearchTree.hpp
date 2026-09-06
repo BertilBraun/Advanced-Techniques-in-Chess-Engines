@@ -107,7 +107,6 @@ public:
         }
         selected.children.reserve(inferenceResult.actions.size());
         selected.network_outcome = inferenceResult.outcome;
-        selected.search_budget_curve = inferenceResult.search_budget_curve;
         for (const ScoredAction<Action> &scored : inferenceResult.actions) {
             selected.children.push_back({
                 .action = scored.action,

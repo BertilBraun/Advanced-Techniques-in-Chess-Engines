@@ -16,7 +16,6 @@ from src.replay.columnar import (
     ReplayNextPolicyColumnViews,
     ReplayPolicyColumnViews,
     ReplayScalarColumnViews,
-    ReplaySearchBudgetColumnViews,
     build_column_views,
     flatten_column_views,
 )
@@ -25,11 +24,9 @@ from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
     EligibleScalarAuxiliaryTarget,
-    EligibleSearchBudgetTarget,
     IneligibleNextPolicyTarget,
     IneligibleRemainingGameLengthTarget,
     IneligibleScalarAuxiliaryTarget,
-    IneligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
@@ -43,7 +40,6 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchBudgetHeadLayout,
 )
 
 _REPLAY_MAGIC = b'AZRPLY02'
@@ -553,8 +549,6 @@ class ReplayStore:
                     _validate_eligible_values(target.value, target.eligible, minimum=-1.0, maximum=1.0)
                 case ReplayScalarColumnViews(kind='irreversible_progress'):
                     _validate_eligible_values(target.value, target.eligible, minimum=0.0, maximum=1.0)
-                case ReplaySearchBudgetColumnViews():
-                    _validate_search_budget_columns(target)
                 case ReplayLegalMovesColumnViews():
                     pass
 
@@ -596,19 +590,6 @@ class ReplayStore:
                         )
                     else:
                         auxiliary_targets.append(IneligibleScalarAuxiliaryTarget(kind=head.kind))
-                case SearchBudgetHeadLayout(), ReplaySearchBudgetColumnViews():
-                    if int(target.eligible[0]):
-                        auxiliary_targets.append(
-                            EligibleSearchBudgetTarget(
-                                curve=tuple(float(value) for value in target.value[0]),
-                                raw_kl=float(target.raw_kl[0]),
-                                source_generation=int(target.source_generation[0]),
-                                model_generation=int(target.model_generation[0]),
-                                inference_model_sha256=target.inference_model_sha256[0].tobytes().decode('ascii'),
-                            )
-                        )
-                    else:
-                        auxiliary_targets.append(IneligibleSearchBudgetTarget())
                 case LegalMovesHeadLayout(), ReplayLegalMovesColumnViews():
                     auxiliary_targets.append(EligibleLegalMovesTarget())
                 case _:
@@ -648,7 +629,7 @@ def columns_with_eligibility(columns: ReplayColumnViews) -> tuple[npt.NDArray[np
     return tuple(
         target.eligible
         for target in columns.auxiliary
-        if isinstance(target, ReplayNextPolicyColumnViews | ReplayScalarColumnViews | ReplaySearchBudgetColumnViews)
+        if isinstance(target, ReplayNextPolicyColumnViews | ReplayScalarColumnViews)
     )
 
 
@@ -747,21 +728,6 @@ def _validate_eligible_values(
         raise ValueError('Eligible replay scalar targets are outside their valid range.')
     if maximum is not None and np.any(eligible_values > maximum):
         raise ValueError('Eligible replay scalar targets are outside their valid range.')
-
-
-def _validate_search_budget_columns(target: ReplaySearchBudgetColumnViews) -> None:
-    eligible = target.eligible.astype(np.bool_)
-    if np.any(~np.isfinite(target.value[eligible])):
-        raise ValueError('Eligible replay search-budget curve targets must be finite.')
-    _validate_eligible_values(target.raw_kl, target.eligible, minimum=0.0, maximum=None)
-    digests = target.inference_model_sha256[eligible]
-    for digest in digests:
-        try:
-            decoded = digest.tobytes().decode('ascii')
-        except UnicodeDecodeError as error:
-            raise ValueError('Replay search-budget model lineage must be ASCII.') from error
-        if len(decoded) != 64 or any(character not in '0123456789abcdef' for character in decoded):
-            raise ValueError('Replay search-budget model lineage must be a lowercase SHA-256 digest.')
 
 
 def _physical_columns(layout: ReplayLayout, maximum_capacity: int) -> tuple[ReplayPhysicalColumn, ...]:

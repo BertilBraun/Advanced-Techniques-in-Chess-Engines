@@ -122,9 +122,18 @@ python -m tools.run_stockfish_gauntlet \
 ```
 
 Use the same command with `--model-searches 1000` or `--model-searches 100000` for the larger fixed budgets. The
-default fixed-search settings are deliberately the scheduled evaluator's values: one parallel search, one inference
-worker, batch size 64, and one outstanding batch. Override these only when defining a separate benchmark; changing
-parallel search changes the search execution semantics even when the final visit count is unchanged.
+default fixed-search settings are four parallel searches, one inference worker, batch size 64, and one outstanding
+batch. `--parallel-searches 4` changes the search execution semantics even when the final visit count is unchanged:
+`chess-search-findings-20260827.md` §3.1 measures it at roughly −36 Elo against one parallel search at 600 visits,
+so pass `--parallel-searches 1` for any measurement that must compare against a ladder run at one parallel search.
+
+Batch size 64 is deliberate and is not the self-play value. Evaluation keeps only a few dozen leaves in flight, the
+graph capture buckets scale with the cap, and `ladder-batching-rtx4070s-20260906` measures batch size 320 with two
+outstanding batches as 30-40% *slower* than 64 with one across every ladder arm tried.
+
+Every knob that changes the inference batch shape — the ladder's rung concurrency and `--inference-batch-size` alike
+— perturbs the network output in the last bits, so game outcomes reshuffle. Search per game is unchanged, but two
+ladder runs are only comparable game-for-game when their batch shapes match; see the benchmark for the evidence.
 
 ## Timed examples
 

@@ -56,7 +56,6 @@ class ChessExperimentConfiguration(BaseExperimentConfiguration):
     def validate_experiment(self) -> ChessExperimentConfiguration:
         self.training.validate_game(
             self.network_dimensions.actions,
-            self.chess.self_play,
             self.chess.objective.auxiliary_targets,
         )
         if self.evaluation.engine.kind != 'stockfish':

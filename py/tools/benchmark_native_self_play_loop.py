@@ -9,7 +9,6 @@ from pathlib import Path
 
 import AlphaZeroCpp as native
 import torch
-from src.search_budget.policy import BUDGET_CURVE_MULTIPLES, disabled_policy
 
 
 @dataclass(frozen=True)
@@ -17,7 +16,6 @@ class LoopArguments:
     games: int
     parallel_searches: int
     baseline_visits: int
-    learned_search_budget_policy: bool
     retained_root_visit_fraction: float
     inference_workers: int
     inference_batch_size: int
@@ -59,8 +57,7 @@ class StubNetwork(torch.nn.Module):
         loss = 0.9 - win
         draw = torch.full_like(win, 0.1)
         outcomes = torch.stack((win, draw, loss), dim=1)
-        search_budget_curves = torch.zeros((batch, 8), dtype=torch.float32)
-        return logits, outcomes, search_budget_curves
+        return logits, outcomes
 
 
 def write_stub_model(destination: Path, hidden: int) -> Path:
@@ -79,15 +76,8 @@ def search_parameters(arguments: LoopArguments) -> native.SelfPlaySearchParamete
         0.99,
         0.5,
     )
-    policy = disabled_policy().model_copy(update={'apply_learned': arguments.learned_search_budget_policy})
     return native.SelfPlaySearchParameters(
         arguments.baseline_visits,
-        native.SearchBudgetPolicy(
-            list(BUDGET_CURVE_MULTIPLES),
-            policy.lagrange_multiplier,
-            '' if policy.corrector_path is None else str(policy.corrector_path),
-            policy.apply_learned,
-        ),
         tree,
         0.3,
         0.25,
@@ -263,7 +253,6 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
             'games': arguments.games,
             'parallel_searches': arguments.parallel_searches,
             'baseline_visits': arguments.baseline_visits,
-            'search_budget_policy': 'learned' if arguments.learned_search_budget_policy else 'flat',
             'inference_workers': arguments.inference_workers,
             'inference_batch_size': arguments.inference_batch_size,
             'inference_hidden': arguments.inference_hidden,
@@ -314,7 +303,6 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
     parser.add_argument('--games', type=int, default=128)
     parser.add_argument('--parallel-searches', type=int, default=2)
     parser.add_argument('--baseline-visits', type=int, default=250)
-    parser.add_argument('--learned-search-budget-policy', action='store_true')
     parser.add_argument('--retained-root-visit-fraction', type=float, default=0.6)
     parser.add_argument('--inference-workers', type=int, default=2)
     parser.add_argument('--inference-batch-size', type=int, default=256)
@@ -341,7 +329,6 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
         games=namespace.games,
         parallel_searches=namespace.parallel_searches,
         baseline_visits=namespace.baseline_visits,
-        learned_search_budget_policy=namespace.learned_search_budget_policy,
         retained_root_visit_fraction=namespace.retained_root_visit_fraction,
         inference_workers=namespace.inference_workers,
         inference_batch_size=namespace.inference_batch_size,

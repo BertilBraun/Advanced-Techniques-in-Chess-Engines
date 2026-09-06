@@ -6,8 +6,6 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 from src.replay.configuration import ReplayConfiguration
-from src.search_budget.configuration import SearchBudgetConfiguration
-from src.self_play.configuration import SelfPlayConfiguration
 from src.training.progressive import (
     SECONDS_PER_DAY,
     ProgressiveModelDefinition,
@@ -177,7 +175,6 @@ class TrainingLifecycleParams(FrozenModel):
     replay: ReplayConfiguration
     credit: CreditTrainingParams
     inference_retention: InferenceRetentionParams
-    search_budget: SearchBudgetConfiguration
 
 
 class TrainingArgs(FrozenModel):
@@ -224,20 +221,9 @@ class TrainingArgs(FrozenModel):
     def validate_game(
         self,
         action_size: int,
-        self_play: SelfPlayConfiguration,
         auxiliary_targets: tuple[AuxiliaryTargetConfiguration, ...],
     ) -> None:
         if action_size > 65_536:
             raise ValueError('Game action IDs must fit uint16 replay storage.')
         if self.lifecycle.replay.maximum_policy_entries > action_size:
             raise ValueError('Maximum retained policy entries cannot exceed the game action count.')
-        search = self_play.search
-        search_budget_targets = sum(target.kind == 'search_budget' for target in auxiliary_targets)
-        if search_budget_targets != 1:
-            raise ValueError('Learned search-budget allocation requires exactly one search-budget target.')
-        deep_search_multiple = self.lifecycle.search_budget.labeling.deep_search_multiple
-        if any(
-            baseline_visits * deep_search_multiple > 65_535
-            for baseline_visits in defined_schedule_values(search.baseline_visits)
-        ):
-            raise ValueError('Deep-label search visits must fit uint16 replay storage.')

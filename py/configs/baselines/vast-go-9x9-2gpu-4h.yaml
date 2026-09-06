@@ -88,7 +88,6 @@ training:
     inference_retention:
       recent_checkpoint_count: 11
       milestone_interval: 10
-    search_budget: {}
   limits:
     hourly_price: 0.11522222222222216
     maximum_wall_time_seconds: 14700
@@ -245,5 +244,3 @@ go:
       - kind: remaining_game_length
         loss_weight: 0.1
         normalization_scale: 324
-      - kind: search_budget
-        loss_weight: 0.2

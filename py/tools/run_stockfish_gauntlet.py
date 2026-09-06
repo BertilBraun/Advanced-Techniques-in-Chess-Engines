@@ -20,12 +20,20 @@ from src.evaluation.configuration import (
 )
 from src.evaluation.contracts import (
     OPENING_SUITE_MANIFEST_ADAPTER,
+    AnyOpeningSuiteManifest,
     EvaluationGameResult,
     MatchAggregate,
     MatchEvaluationJob,
+    MatchEvaluationResult,
     StockfishFixedNodesOpponent,
 )
-from src.evaluation.match import MatchActionSelector, SearchActionSelector, run_match
+from src.evaluation.match import (
+    ConcurrentMatchGroup,
+    MatchActionSelector,
+    SearchActionSelector,
+    run_concurrent_matches,
+    run_match,
+)
 from src.evaluation.statistics import aggregate_match
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
@@ -151,6 +159,34 @@ class Arguments:
 
 
 @dataclass(frozen=True)
+class GauntletRung:
+    stockfish_nodes: int
+    output_directory: Path
+
+
+@dataclass(frozen=True)
+class ConcurrentGauntletArguments:
+    experiment: Path
+    run_directory: Path
+    checkpoint_generation: int
+    opening_manifest: Path
+    stockfish_executable: Path
+    rungs: tuple[GauntletRung, ...]
+    opening_pairs: int
+    opening_selection: PrefixOpeningSelection | SeededOpeningSelection
+    match_random_seed: int | None
+    devices: tuple[int, ...]
+    model_search_budget: FixedModelSearchBudget | TimedModelSearchBudget
+
+
+@dataclass(frozen=True)
+class _ShardRung:
+    stockfish_nodes: int
+    match_random_seed: int
+    output_path: Path
+
+
+@dataclass(frozen=True)
 class _ShardRequest:
     shard_id: int
     device_id: int
@@ -161,11 +197,9 @@ class _ShardRequest:
     checkpoint_generation: int
     opening_manifest: Path
     stockfish_executable: Path
-    stockfish_nodes: int
+    rungs: tuple[_ShardRung, ...]
     opening_indices: tuple[int, ...]
-    match_random_seed: int
     model_search_budget: FixedModelSearchBudget | TimedModelSearchBudget
-    output_path: Path
 
 
 class _TimedSearchActionSelector(MatchActionSelector[ChessPosition]):
@@ -372,73 +406,76 @@ def _combine_timed_measurements(shards: tuple[GauntletShardResult, ...]) -> Time
     )
 
 
-def _run_shard(request: _ShardRequest) -> GauntletShardResult:
-    started_at = time.monotonic()
+@dataclass(frozen=True)
+class _ShardContext:
+    configuration: ChessExperimentConfiguration
+    checkpoint: CheckpointReference
+    game: ChessImplementation
+    openings: AnyOpeningSuiteManifest
+    search: EvaluationSearchConfiguration
+
+
+def _shard_context(request: _ShardRequest) -> _ShardContext:
     loaded = load_experiment_configuration(request.experiment)
     if not isinstance(loaded, ChessExperimentConfiguration):
         raise ValueError('Stockfish gauntlet requires a chess experiment.')
-    checkpoint = CheckpointReference.load_for_inference(request.run_directory, request.checkpoint_generation)
     openings = OPENING_SUITE_MANIFEST_ADAPTER.validate_json(request.opening_manifest.read_text(encoding='utf-8'))
     if openings.game != 'chess':
         raise ValueError('Stockfish gauntlet requires chess openings.')
-    selected_openings = openings.model_copy(
-        update={'openings': tuple(openings.openings[index] for index in request.opening_indices)}
-    )
-    definition = StockfishFixedNodesEvaluationDefinition(
-        kind='stockfish_fixed_nodes',
-        definition_id=f'stockfish-fixed-nodes-{request.stockfish_nodes}',
-        nodes=request.stockfish_nodes,
-        opening_pair_count=request.pair_count,
-        maximum_game_plies=300,
+    return _ShardContext(
+        configuration=loaded,
+        checkpoint=CheckpointReference.load_for_inference(request.run_directory, request.checkpoint_generation),
+        game=ChessImplementation(loaded),
+        openings=openings.model_copy(
+            update={'openings': tuple(openings.openings[index] for index in request.opening_indices)}
+        ),
         search=_search_configuration(request.model_search_budget),
     )
-    job = MatchEvaluationJob(
+
+
+def _shard_job(request: _ShardRequest, context: _ShardContext, rung: _ShardRung) -> MatchEvaluationJob:
+    return MatchEvaluationJob(
         kind='match',
-        job_id=f'stockfish-n{request.stockfish_nodes}-g{checkpoint.generation}-shard{request.shard_id}',
-        definition=definition,
+        job_id=f'stockfish-n{rung.stockfish_nodes}-g{context.checkpoint.generation}-shard{request.shard_id}',
+        definition=StockfishFixedNodesEvaluationDefinition(
+            kind='stockfish_fixed_nodes',
+            definition_id=f'stockfish-fixed-nodes-{rung.stockfish_nodes}',
+            nodes=rung.stockfish_nodes,
+            opening_pair_count=request.pair_count,
+            maximum_game_plies=300,
+            search=context.search,
+        ),
         boundary_seconds=1,
-        candidate=checkpoint,
-        opponent=StockfishFixedNodesOpponent(kind='stockfish_fixed_nodes', nodes=request.stockfish_nodes),
+        candidate=context.checkpoint,
+        opponent=StockfishFixedNodesOpponent(kind='stockfish_fixed_nodes', nodes=rung.stockfish_nodes),
         device_id=request.device_id,
         deadline_seconds=7 * 24 * 60 * 60,
-        random_seed=request.match_random_seed + request.first_pair_index,
-        result_path=request.output_path,
+        random_seed=rung.match_random_seed + request.first_pair_index,
+        result_path=rung.output_path,
     )
-    game = ChessImplementation(loaded)
-    engine_configuration = _stockfish_configuration(loaded, request.stockfish_executable, request.stockfish_nodes)
-    client = StockfishClient(engine_configuration, game.state, request.stockfish_executable.resolve())
-    stockfish_identity = client.engine_identity
-    external_engine = StockfishFixedNodesMatchEngine(client, request.stockfish_nodes)
-    timed_selector: _TimedSearchActionSelector | None = None
-    candidate_selector: MatchActionSelector[ChessPosition] | None = None
-    if isinstance(request.model_search_budget, TimedModelSearchBudget):
-        timed_selector = _TimedSearchActionSelector(
-            checkpoint,
-            request.device_id,
-            request.model_search_budget,
-        )
-        candidate_selector = timed_selector
-    elif request.model_search_budget.tree_search is not None:
-        candidate_selector = SearchActionSelector(
-            game.create_evaluation_search(
-                request.device_id,
-                checkpoint,
-                definition.search,
-                request.model_search_budget.tree_search,
-            )
-        )
-    try:
-        match = run_match(
-            job,
-            game,
-            selected_openings,
-            1,
-            external_engine,
-            loaded.training.topology.trainer.device_type,
-            candidate_selector=candidate_selector,
-        )
-    finally:
-        external_engine.close()
+
+
+def _open_stockfish_engine(
+    request: _ShardRequest,
+    context: _ShardContext,
+    rung: _ShardRung,
+) -> StockfishFixedNodesMatchEngine:
+    engine_configuration = _stockfish_configuration(
+        context.configuration,
+        request.stockfish_executable,
+        rung.stockfish_nodes,
+    )
+    client = StockfishClient(engine_configuration, context.game.state, request.stockfish_executable.resolve())
+    return StockfishFixedNodesMatchEngine(client, rung.stockfish_nodes)
+
+
+def _shard_result(
+    request: _ShardRequest,
+    match: MatchEvaluationResult,
+    stockfish_identity: str,
+    timed_measurements: TimedMoveMeasurements | None,
+    duration_seconds: float,
+) -> GauntletShardResult:
     result = GauntletShardResult(
         shard_id=request.shard_id,
         device_id=request.device_id,
@@ -446,16 +483,210 @@ def _run_shard(request: _ShardRequest) -> GauntletShardResult:
         pair_count=request.pair_count,
         stockfish_identity=stockfish_identity,
         games=tuple(_shift_game_indices(game_result, request.first_pair_index) for game_result in match.games),
-        timed_move_measurements=None if timed_selector is None else timed_selector.measurements(),
-        duration_seconds=time.monotonic() - started_at,
+        timed_move_measurements=timed_measurements,
+        duration_seconds=duration_seconds,
     )
-    write_text_atomically(request.output_path, result.model_dump_json(indent=2) + '\n')
+    write_text_atomically(match.job.result_path, result.model_dump_json(indent=2) + '\n')
     return result
 
 
-def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
+def _run_timed_shard_rungs(request: _ShardRequest, context: _ShardContext) -> tuple[GauntletShardResult, ...]:
+    # Timed budgets analyse one position at a time, so concurrency across rungs buys no batching and would
+    # only blur the per-rung move measurements. They stay sequential, exactly as the single-rung gauntlet ran.
+    assert isinstance(request.model_search_budget, TimedModelSearchBudget)
+    results: list[GauntletShardResult] = []
+    for rung in request.rungs:
+        rung_started_at = time.monotonic()
+        selector = _TimedSearchActionSelector(context.checkpoint, request.device_id, request.model_search_budget)
+        engine = _open_stockfish_engine(request, context, rung)
+        stockfish_identity = engine.client.engine_identity
+        try:
+            match = run_match(
+                _shard_job(request, context, rung),
+                context.game,
+                context.openings,
+                1,
+                engine,
+                context.configuration.training.topology.trainer.device_type,
+                candidate_selector=selector,
+            )
+        finally:
+            engine.close()
+        results.append(
+            _shard_result(
+                request,
+                match,
+                stockfish_identity,
+                selector.measurements(),
+                time.monotonic() - rung_started_at,
+            )
+        )
+    return tuple(results)
+
+
+def _run_concurrent_shard_rungs(request: _ShardRequest, context: _ShardContext) -> tuple[GauntletShardResult, ...]:
+    assert isinstance(request.model_search_budget, FixedModelSearchBudget)
+    setup_started_at = time.monotonic()
+    candidate_selector: MatchActionSelector[ChessPosition] | None = None
+    if request.model_search_budget.tree_search is not None:
+        candidate_selector = SearchActionSelector(
+            context.game.create_evaluation_search(
+                request.device_id,
+                context.checkpoint,
+                context.search,
+                request.model_search_budget.tree_search,
+            ),
+            context.search.searches_per_move,
+            context.search.parallel_searches,
+        )
+    engines = tuple(_open_stockfish_engine(request, context, rung) for rung in request.rungs)
+    identities = tuple(engine.client.engine_identity for engine in engines)
+    setup_seconds = time.monotonic() - setup_started_at
+    try:
+        matches = run_concurrent_matches(
+            tuple(
+                ConcurrentMatchGroup(
+                    job=_shard_job(request, context, rung),
+                    openings=context.openings,
+                    external_engine=engine,
+                )
+                for rung, engine in zip(request.rungs, engines, strict=True)
+            ),
+            context.game,
+            1,
+            context.configuration.training.topology.trainer.device_type,
+            candidate_selector=candidate_selector,
+        )
+    finally:
+        for engine in engines:
+            engine.close()
+    return tuple(
+        _shard_result(request, match, identity, None, setup_seconds + match.duration_seconds)
+        for match, identity in zip(matches, identities, strict=True)
+    )
+
+
+def _run_shard(request: _ShardRequest) -> tuple[GauntletShardResult, ...]:
+    context = _shard_context(request)
+    if isinstance(request.model_search_budget, TimedModelSearchBudget):
+        return _run_timed_shard_rungs(request, context)
+    return _run_concurrent_shard_rungs(request, context)
+
+
+def _rung_random_seed(
+    arguments: ConcurrentGauntletArguments,
+    default_random_seed: int,
+    stockfish_nodes: int,
+) -> int:
+    if arguments.match_random_seed is None:
+        return default_random_seed + stockfish_nodes
+    return arguments.match_random_seed
+
+
+def _rung_shard_requests(
+    arguments: ConcurrentGauntletArguments,
+    default_random_seed: int,
+    selected_opening_indices: tuple[int, ...],
+) -> tuple[_ShardRequest, ...]:
+    pair_shards = _pair_shards(arguments.opening_pairs, arguments.devices)
+    shard_rungs: list[list[_ShardRung]] = [[] for _ in pair_shards]
+    for rung in arguments.rungs:
+        rung.output_directory.mkdir(parents=True, exist_ok=False)
+        shard_directory = rung.output_directory / 'shards'
+        shard_directory.mkdir()
+        for shard_id in range(len(pair_shards)):
+            shard_rungs[shard_id].append(
+                _ShardRung(
+                    stockfish_nodes=rung.stockfish_nodes,
+                    match_random_seed=_rung_random_seed(arguments, default_random_seed, rung.stockfish_nodes),
+                    output_path=shard_directory / f'shard-{shard_id:02d}.json',
+                )
+            )
+    return tuple(
+        _ShardRequest(
+            shard_id=shard_id,
+            device_id=device_id,
+            first_pair_index=first_pair_index,
+            pair_count=pair_count,
+            experiment=arguments.experiment.resolve(),
+            run_directory=arguments.run_directory.resolve(),
+            checkpoint_generation=arguments.checkpoint_generation,
+            opening_manifest=arguments.opening_manifest.resolve(),
+            stockfish_executable=arguments.stockfish_executable.resolve(),
+            rungs=tuple(shard_rungs[shard_id]),
+            opening_indices=selected_opening_indices[first_pair_index : first_pair_index + pair_count],
+            model_search_budget=arguments.model_search_budget,
+        )
+        for shard_id, (device_id, first_pair_index, pair_count) in enumerate(pair_shards)
+    )
+
+
+def _rung_result(
+    arguments: ConcurrentGauntletArguments,
+    rung: GauntletRung,
+    configuration: ChessExperimentConfiguration,
+    checkpoint: CheckpointReference,
+    manifest_pair_count: int,
+    selected_opening_indices: tuple[int, ...],
+    gpus: tuple[GpuProvenance, ...],
+    idle_check_enforced: bool,
+    shards: tuple[GauntletShardResult, ...],
+    started_at_utc: datetime,
+    duration_seconds: float,
+) -> StockfishGauntletResult:
+    identities = {shard.stockfish_identity for shard in shards}
+    if len(identities) != 1:
+        raise ValueError(f'Stockfish worker identities disagree: {sorted(identities)}')
+    games = tuple(sorted((game for shard in shards for game in shard.games), key=lambda game: game.game_index))
+    if tuple(game.game_index for game in games) != tuple(range(2 * arguments.opening_pairs)):
+        raise ValueError('Merged gauntlet games do not cover the expected indices exactly once.')
+    match_random_seed = _rung_random_seed(arguments, configuration.training.random_seed, rung.stockfish_nodes)
+    engine_configuration = _stockfish_configuration(
+        configuration,
+        arguments.stockfish_executable,
+        rung.stockfish_nodes,
+    )
+    result = StockfishGauntletResult(
+        source_revision=read_source_revision().commit,
+        tool_sha256=file_sha256(Path(__file__)),
+        started_at_utc=started_at_utc,
+        experiment_path=arguments.experiment.resolve(),
+        run_directory=arguments.run_directory.resolve(),
+        evaluated_checkpoint=checkpoint,
+        opening_manifest_path=arguments.opening_manifest.resolve(),
+        opening_manifest_sha256=file_sha256(arguments.opening_manifest),
+        opening_manifest_pair_count=manifest_pair_count,
+        opening_pair_count=arguments.opening_pairs,
+        opening_selection=arguments.opening_selection,
+        selected_opening_indices=selected_opening_indices,
+        match_random_seed=match_random_seed,
+        stockfish_executable_path=arguments.stockfish_executable.resolve(),
+        stockfish_executable_sha256=file_sha256(arguments.stockfish_executable),
+        stockfish_identity=next(iter(identities)),
+        stockfish_match_nodes=rung.stockfish_nodes,
+        stockfish_threads=engine_configuration.threads,
+        stockfish_hash_mib=engine_configuration.hash_mib,
+        model_search_budget=arguments.model_search_budget,
+        gpus=gpus,
+        idle_device_check_enforced=idle_check_enforced,
+        timed_move_measurements=_combine_timed_measurements(shards),
+        games=games,
+        aggregate=aggregate_match(games, match_random_seed, configuration.evaluation.bootstrap_samples),
+        shards=shards,
+        duration_seconds=duration_seconds,
+    )
+    write_text_atomically(rung.output_directory / 'result.json', result.model_dump_json(indent=2) + '\n')
+    return result
+
+
+def run_gauntlets(arguments: ConcurrentGauntletArguments) -> tuple[StockfishGauntletResult, ...]:
+    """Every rung shares one candidate population per shard, so a single inference batch spans all rungs."""
     started_at = time.monotonic()
     started_at_utc = datetime.now(timezone.utc)
+    if not arguments.rungs:
+        raise ValueError('A Stockfish gauntlet needs at least one node rung.')
+    if len({rung.stockfish_nodes for rung in arguments.rungs}) != len(arguments.rungs):
+        raise ValueError('Stockfish gauntlet node rungs must be unique.')
     loaded = load_experiment_configuration(arguments.experiment)
     if not isinstance(loaded, ChessExperimentConfiguration):
         raise ValueError('Stockfish gauntlet requires a chess experiment.')
@@ -473,11 +704,6 @@ def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
         arguments.opening_pairs,
         arguments.opening_selection,
     )
-    match_random_seed = (
-        loaded.training.random_seed + arguments.stockfish_nodes
-        if arguments.match_random_seed is None
-        else arguments.match_random_seed
-    )
     gpus = _gpu_inventory(arguments.devices)
     idle_check_enforced = isinstance(arguments.model_search_budget, TimedModelSearchBudget)
     if idle_check_enforced:
@@ -486,82 +712,56 @@ def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
             details = ', '.join(f'GPU {process.device_id}: PID {process.process_id}' for process in busy)
             raise ValueError(f'Timed gauntlet requires idle selected GPUs; found {details}.')
 
-    arguments.output_directory.mkdir(parents=True, exist_ok=False)
-    shard_directory = arguments.output_directory / 'shards'
-    shard_directory.mkdir()
-    shard_requests = tuple(
-        _ShardRequest(
-            shard_id=shard_id,
-            device_id=device_id,
-            first_pair_index=first_pair_index,
-            pair_count=pair_count,
-            experiment=arguments.experiment.resolve(),
-            run_directory=arguments.run_directory.resolve(),
-            checkpoint_generation=arguments.checkpoint_generation,
-            opening_manifest=arguments.opening_manifest.resolve(),
-            stockfish_executable=arguments.stockfish_executable.resolve(),
-            stockfish_nodes=arguments.stockfish_nodes,
-            opening_indices=selected_opening_indices[first_pair_index : first_pair_index + pair_count],
-            match_random_seed=match_random_seed,
-            model_search_budget=arguments.model_search_budget,
-            output_path=shard_directory / f'shard-{shard_id:02d}.json',
-        )
-        for shard_id, (device_id, first_pair_index, pair_count) in enumerate(
-            _pair_shards(arguments.opening_pairs, arguments.devices)
-        )
-    )
-    shards: list[GauntletShardResult] = []
+    shard_requests = _rung_shard_requests(arguments, loaded.training.random_seed, selected_opening_indices)
+    shards_by_rung: dict[int, list[GauntletShardResult]] = {rung.stockfish_nodes: [] for rung in arguments.rungs}
     with ProcessPoolExecutor(
         max_workers=len(shard_requests),
         mp_context=get_context('spawn'),
     ) as executor:
-        futures = {executor.submit(_run_shard, request): request.shard_id for request in shard_requests}
+        futures = {executor.submit(_run_shard, request): request for request in shard_requests}
         for future in as_completed(futures):
-            shards.append(future.result())
-    ordered_shards = tuple(sorted(shards, key=lambda shard: shard.shard_id))
-    identities = {shard.stockfish_identity for shard in ordered_shards}
-    if len(identities) != 1:
-        raise ValueError(f'Stockfish worker identities disagree: {sorted(identities)}')
-    games = tuple(sorted((game for shard in ordered_shards for game in shard.games), key=lambda game: game.game_index))
-    expected_indices = tuple(range(2 * arguments.opening_pairs))
-    if tuple(game.game_index for game in games) != expected_indices:
-        raise ValueError('Merged gauntlet games do not cover the expected indices exactly once.')
-    engine_configuration = _stockfish_configuration(
-        loaded,
-        arguments.stockfish_executable,
-        arguments.stockfish_nodes,
+            for shard_rung, shard in zip(futures[future].rungs, future.result(), strict=True):
+                shards_by_rung[shard_rung.stockfish_nodes].append(shard)
+    duration_seconds = time.monotonic() - started_at
+    return tuple(
+        _rung_result(
+            arguments,
+            rung,
+            loaded,
+            checkpoint,
+            len(openings.openings),
+            selected_opening_indices,
+            gpus,
+            idle_check_enforced,
+            tuple(sorted(shards_by_rung[rung.stockfish_nodes], key=lambda shard: shard.shard_id)),
+            started_at_utc,
+            duration_seconds,
+        )
+        for rung in arguments.rungs
     )
-    result = StockfishGauntletResult(
-        source_revision=read_source_revision().commit,
-        tool_sha256=file_sha256(Path(__file__)),
-        started_at_utc=started_at_utc,
-        experiment_path=arguments.experiment.resolve(),
-        run_directory=arguments.run_directory.resolve(),
-        evaluated_checkpoint=checkpoint,
-        opening_manifest_path=arguments.opening_manifest.resolve(),
-        opening_manifest_sha256=file_sha256(arguments.opening_manifest),
-        opening_manifest_pair_count=len(openings.openings),
-        opening_pair_count=arguments.opening_pairs,
-        opening_selection=arguments.opening_selection,
-        selected_opening_indices=selected_opening_indices,
-        match_random_seed=match_random_seed,
-        stockfish_executable_path=arguments.stockfish_executable.resolve(),
-        stockfish_executable_sha256=file_sha256(arguments.stockfish_executable),
-        stockfish_identity=next(iter(identities)),
-        stockfish_match_nodes=arguments.stockfish_nodes,
-        stockfish_threads=engine_configuration.threads,
-        stockfish_hash_mib=engine_configuration.hash_mib,
-        model_search_budget=arguments.model_search_budget,
-        gpus=gpus,
-        idle_device_check_enforced=idle_check_enforced,
-        timed_move_measurements=_combine_timed_measurements(ordered_shards),
-        games=games,
-        aggregate=aggregate_match(games, match_random_seed, loaded.evaluation.bootstrap_samples),
-        shards=ordered_shards,
-        duration_seconds=time.monotonic() - started_at,
-    )
-    write_text_atomically(arguments.output_directory / 'result.json', result.model_dump_json(indent=2) + '\n')
-    return result
+
+
+def run_gauntlet(arguments: Arguments) -> StockfishGauntletResult:
+    return run_gauntlets(
+        ConcurrentGauntletArguments(
+            experiment=arguments.experiment,
+            run_directory=arguments.run_directory,
+            checkpoint_generation=arguments.checkpoint_generation,
+            opening_manifest=arguments.opening_manifest,
+            stockfish_executable=arguments.stockfish_executable,
+            rungs=(
+                GauntletRung(
+                    stockfish_nodes=arguments.stockfish_nodes,
+                    output_directory=arguments.output_directory,
+                ),
+            ),
+            opening_pairs=arguments.opening_pairs,
+            opening_selection=arguments.opening_selection,
+            match_random_seed=arguments.match_random_seed,
+            devices=arguments.devices,
+            model_search_budget=arguments.model_search_budget,
+        )
+    )[0]
 
 
 def _opening_selection(namespace: argparse.Namespace) -> PrefixOpeningSelection | SeededOpeningSelection:

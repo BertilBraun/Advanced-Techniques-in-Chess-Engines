@@ -99,12 +99,6 @@ class _ActiveMatch(Generic[PositionT]):
     random_generator: random.Random
 
 
-@dataclass(frozen=True)
-class _MatchSelectors(Generic[PositionT]):
-    candidate: MatchActionSelector[PositionT]
-    opponent: MatchActionSelector[PositionT] | None
-
-
 def _definition_search(job: MatchEvaluationJob) -> EvaluationSearchConfiguration:
     match job.definition:
         case RandomOpponentEvaluationDefinition(search=search):
@@ -175,40 +169,43 @@ def _outcome_for_candidate(
     return CandidateOutcome.DRAW
 
 
-def _create_match_selectors(
+def _create_candidate_selector(
     job: MatchEvaluationJob,
     game: GameImplementation[PositionT, NativeSearchT],
     device_type: Literal['cpu', 'cuda'],
     candidate_selector: MatchActionSelector[PositionT] | None,
-) -> _MatchSelectors[PositionT]:
+) -> MatchActionSelector[PositionT]:
     if isinstance(job.definition, PolicyRandomOpponentEvaluationDefinition):
         if candidate_selector is not None:
             raise ValueError('Policy-only evaluation does not accept a search selector override.')
-        return _MatchSelectors(
-            candidate=PolicyActionSelector(
-                game.state,
-                job.candidate.inference_model_path,
-                job.device_id,
-                device_type,
-            ),
-            opponent=None,
+        return PolicyActionSelector(
+            game.state,
+            job.candidate.inference_model_path,
+            job.device_id,
+            device_type,
         )
+    if candidate_selector is not None:
+        return candidate_selector
     search_configuration = _definition_search(job)
-    candidate = candidate_selector or SearchActionSelector(
+    return SearchActionSelector(
         game.create_evaluation_search(job.device_id, job.candidate, search_configuration),
         search_configuration.searches_per_move,
         search_configuration.parallel_searches,
     )
-    opponent = (
-        SearchActionSelector(
-            game.create_evaluation_search(job.device_id, job.opponent.checkpoint, search_configuration),
-            search_configuration.searches_per_move,
-            search_configuration.parallel_searches,
-        )
-        if job.opponent.kind == 'checkpoint'
-        else None
+
+
+def _create_opponent_selector(
+    job: MatchEvaluationJob,
+    game: GameImplementation[PositionT, NativeSearchT],
+) -> MatchActionSelector[PositionT] | None:
+    if isinstance(job.definition, PolicyRandomOpponentEvaluationDefinition) or job.opponent.kind != 'checkpoint':
+        return None
+    search_configuration = _definition_search(job)
+    return SearchActionSelector(
+        game.create_evaluation_search(job.device_id, job.opponent.checkpoint, search_configuration),
+        search_configuration.searches_per_move,
+        search_configuration.parallel_searches,
     )
-    return _MatchSelectors(candidate=candidate, opponent=opponent)
 
 
 def _partition_turns(
@@ -256,28 +253,14 @@ def _choose_opponent_actions(
             )
 
 
-def _choose_turn_actions(
-    job: MatchEvaluationJob,
-    state: GameStateContract[PositionT],
-    active_matches: list[_ActiveMatch[PositionT]],
-    selectors: _MatchSelectors[PositionT],
-    external_engine: ExternalMatchEngine[PositionT] | None,
+def _selected_actions(
+    turns: tuple[tuple[_ActiveMatch[PositionT], ...], ...],
+    actions: tuple[tuple[int, ...], ...],
 ) -> dict[int, int]:
-    candidate_turns, opponent_turns = _partition_turns(state, active_matches)
-    candidate_actions = selectors.candidate.choose_actions(
-        tuple(active_match.position for active_match in candidate_turns)
-    )
-    opponent_actions = _choose_opponent_actions(
-        job,
-        state,
-        opponent_turns,
-        selectors.opponent,
-        external_engine,
-    )
     return {
         active_match.game_index: action_id
-        for turns, actions in ((candidate_turns, candidate_actions), (opponent_turns, opponent_actions))
-        for active_match, action_id in zip(turns, actions, strict=True)
+        for group_turns, group_actions in zip(turns, actions, strict=True)
+        for active_match, action_id in zip(group_turns, group_actions, strict=True)
     }
 
 
@@ -342,6 +325,118 @@ def _advance_matches(
     return remaining, completed
 
 
+@dataclass(frozen=True)
+class ConcurrentMatchGroup(Generic[PositionT]):
+    job: MatchEvaluationJob
+    openings: AnyOpeningSuiteManifest
+    external_engine: ExternalMatchEngine[PositionT] | None
+
+
+@dataclass
+class _GroupState(Generic[PositionT]):
+    group: ConcurrentMatchGroup[PositionT]
+    opponent_selector: MatchActionSelector[PositionT] | None
+    maximum_game_plies: int
+    active: list[_ActiveMatch[PositionT]]
+    completed: list[EvaluationGameResult]
+    finished_at: float
+
+
+def _candidate_search(job: MatchEvaluationJob) -> EvaluationSearchConfiguration | None:
+    if isinstance(job.definition, PolicyRandomOpponentEvaluationDefinition):
+        return None
+    return _definition_search(job)
+
+
+def _validate_shared_candidate(groups: tuple[ConcurrentMatchGroup[PositionT], ...]) -> None:
+    first = groups[0].job
+    for group in groups[1:]:
+        if group.job.candidate != first.candidate or group.job.device_id != first.device_id:
+            raise ValueError('Concurrent matches must share one candidate checkpoint and device.')
+        if _candidate_search(group.job) != _candidate_search(first):
+            raise ValueError('Concurrent matches must share one candidate search configuration.')
+
+
+def run_concurrent_matches(
+    groups: tuple[ConcurrentMatchGroup[PositionT], ...],
+    game: GameImplementation[PositionT, NativeSearchT],
+    bootstrap_samples: int,
+    device_type: Literal['cpu', 'cuda'],
+    candidate_selector: MatchActionSelector[PositionT] | None = None,
+) -> tuple[MatchEvaluationResult, ...]:
+    """One shared candidate selector plays every group, so a single inference batch spans all of them."""
+    if not groups:
+        raise ValueError('Concurrent match execution requires at least one group.')
+    _validate_shared_candidate(groups)
+    started_at = time.monotonic()
+    candidate = _create_candidate_selector(groups[0].job, game, device_type, candidate_selector)
+    states = [
+        _GroupState(
+            group=group,
+            opponent_selector=_create_opponent_selector(group.job, game),
+            maximum_game_plies=_maximum_game_plies(group.job),
+            active=_build_matches(
+                game.state,
+                group.openings,
+                group.job.definition.opening_pair_count,
+                group.job.random_seed,
+            ),
+            completed=[],
+            finished_at=started_at,
+        )
+        for group in groups
+    ]
+    while any(state.active for state in states):
+        partitioned = tuple(_partition_turns(game.state, state.active) for state in states)
+        candidate_turns = tuple(turns for turns, _ in partitioned)
+        candidate_actions = candidate.choose_actions(
+            tuple(active_match.position for turns in candidate_turns for active_match in turns)
+        )
+        offset = 0
+        sliced_candidate_actions: list[tuple[int, ...]] = []
+        for turns in candidate_turns:
+            sliced_candidate_actions.append(candidate_actions[offset : offset + len(turns)])
+            offset += len(turns)
+        if offset != len(candidate_actions):
+            raise RuntimeError('Candidate selector returned an action count that does not match its positions.')
+        for state, (turns, opponent_turns), actions in zip(
+            states,
+            partitioned,
+            sliced_candidate_actions,
+            strict=True,
+        ):
+            opponent_actions = _choose_opponent_actions(
+                state.group.job,
+                game.state,
+                opponent_turns,
+                state.opponent_selector,
+                state.group.external_engine,
+            )
+            selected_actions = _selected_actions((turns, opponent_turns), (actions, opponent_actions))
+            state.active, newly_completed = _advance_matches(
+                game.state,
+                state.active,
+                selected_actions,
+                state.maximum_game_plies,
+            )
+            state.completed.extend(newly_completed)
+            if newly_completed:
+                state.finished_at = time.monotonic()
+    results: list[MatchEvaluationResult] = []
+    for state in states:
+        ordered = tuple(sorted(state.completed, key=lambda result: result.game_index))
+        results.append(
+            MatchEvaluationResult(
+                kind='match',
+                job=state.group.job,
+                games=ordered,
+                aggregate=aggregate_match(ordered, state.group.job.random_seed, bootstrap_samples),
+                duration_seconds=state.finished_at - started_at,
+            )
+        )
+    return tuple(results)
+
+
 def run_match(
     job: MatchEvaluationJob,
     game: GameImplementation[PositionT, NativeSearchT],
@@ -351,20 +446,5 @@ def run_match(
     device_type: Literal['cpu', 'cuda'],
     candidate_selector: MatchActionSelector[PositionT] | None = None,
 ) -> MatchEvaluationResult:
-    started_at = time.monotonic()
-    selectors = _create_match_selectors(job, game, device_type, candidate_selector)
-    active = _build_matches(game.state, openings, job.definition.opening_pair_count, job.random_seed)
-    completed: list[EvaluationGameResult] = []
-    maximum_game_plies = _maximum_game_plies(job)
-    while active:
-        selected_actions = _choose_turn_actions(job, game.state, active, selectors, external_engine)
-        active, newly_completed = _advance_matches(game.state, active, selected_actions, maximum_game_plies)
-        completed.extend(newly_completed)
-    ordered = tuple(sorted(completed, key=lambda result: result.game_index))
-    return MatchEvaluationResult(
-        kind='match',
-        job=job,
-        games=ordered,
-        aggregate=aggregate_match(ordered, job.random_seed, bootstrap_samples),
-        duration_seconds=time.monotonic() - started_at,
-    )
+    group = ConcurrentMatchGroup(job=job, openings=openings, external_engine=external_engine)
+    return run_concurrent_matches((group,), game, bootstrap_samples, device_type, candidate_selector)[0]

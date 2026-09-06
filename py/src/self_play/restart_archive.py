@@ -224,6 +224,12 @@ class RestartStateArchive:
         return 0 if row is None else int(row[0])
 
 
+def suspended_games_path(completed_games_path: Path, worker_id: int) -> Path:
+    if worker_id < 0:
+        raise ValueError('Self-play worker ID must be nonnegative.')
+    return completed_games_path / 'suspended-games' / f'worker-{worker_id}.json'
+
+
 def worker_restart_archive_path(completed_games_path: Path, worker_id: int) -> Path:
     if worker_id < 0:
         raise ValueError('Self-play worker ID must be nonnegative.')

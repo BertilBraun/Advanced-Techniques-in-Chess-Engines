@@ -87,7 +87,6 @@ class TerminationReason(str, Enum):
 class SearchStopReason(str, Enum):
     FIXED_LIMIT = 'fixed_limit'
     ADDITIONAL_VISITS = 'additional_visits'
-    PREDICTED_BUDGET = 'predicted_budget'
 
 
 class SealedSearchObservation(FrozenModel):
@@ -108,11 +107,7 @@ class SealedSearchObservation(FrozenModel):
     network_root_value: float = Field(ge=-1.0, le=1.0)
     policy_correction: float = Field(ge=0.0, le=1.0)
     value_correction: float = Field(ge=0.0, le=1.0)
-    predicted_baseline_log_kl: float
-    selected_budget_index: int = Field(ge=-1, lt=10)
-    assigned_additional_visits: int = Field(gt=0)
     parallel_searches: int = Field(gt=0, le=16)
-    spend_residual: int
     starting_visits: int = Field(ge=0)
     final_visits: int = Field(gt=0)
     stop_reason: SearchStopReason
@@ -124,10 +119,6 @@ class SealedSearchObservation(FrozenModel):
             raise ValueError('Highest-visited child Q must be finite and lie in [-1, 1].')
         if self.final_visits < self.starting_visits:
             raise ValueError('Final root visits cannot precede retained starting visits.')
-        if self.final_visits - self.starting_visits != self.assigned_additional_visits:
-            raise ValueError('Final visits must equal retained starting visits plus the assigned additional budget.')
-        if not isfinite(self.predicted_baseline_log_kl):
-            raise ValueError('Predicted baseline log KL must be finite.')
 
 
 class SearchObservation(SealedSearchObservation):
@@ -136,8 +127,32 @@ class SearchObservation(SealedSearchObservation):
     policy_target_visits: SearchVisitCounts
 
 
+class SuspendedSelfPlayGame(FrozenModel):
+    """An in-flight game persisted across a restart.
+
+    The native search tree is not stored: replaying the action ids from the initial position
+    reconstructs the position, and the tree rebuilds itself on the next search.
+    """
+
+    schema_version: Literal[1] = 1
+    identity: GameIdentity
+    started_at_seconds: float = Field(ge=0.0)
+    action_ids: tuple[int, ...]
+    observations: tuple[SearchObservation, ...]
+    reserved_restart_action_id: int | None = None
+    is_resignation_continuation: bool = False
+    resignation_threshold: float | None = Field(default=None, ge=-1.0, lt=0.0)
+
+
+class SuspendedSelfPlayGames(FrozenModel):
+    schema_version: Literal[1] = 1
+    worker_id: int = Field(ge=0)
+    model_generation: int = Field(ge=0)
+    games: tuple[SuspendedSelfPlayGame, ...]
+
+
 class CompletedSelfPlayGame(FrozenModel):
-    schema_version: Literal[7] = 7
+    schema_version: Literal[9] = 9
     identity: GameIdentity
     created_at_seconds: float = Field(ge=0.0)
     generation_seconds: float = Field(ge=0.0)

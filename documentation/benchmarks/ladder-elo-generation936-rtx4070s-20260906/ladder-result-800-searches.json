@@ -1,0 +1,89 @@
+{
+  "schema_version": 2,
+  "source_revision": "e856ba749f8bf97bd6683e06cbe75800c61cedf2",
+  "tool_sha256": "0f0a84f1bdf865cd6c6edd54a347904fff51ce4db1f873d0888fb2205424d844",
+  "checkpoint_generation": 936,
+  "opening_manifest_path": "/workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-openings-v1.json",
+  "opening_manifest_sha256": "4bfdf0d97b38499d38f51e0044c06ad977e5fef9c9c8244ffa79f92e1ffd56cb",
+  "stockfish_executable_path": "/workspace/alphazero-engine/engines/upstream/stockfish-13/stockfish_13_linux_x64_bmi2",
+  "stockfish_executable_sha256": "ec56cd6ad04eecd38885912321ee2dfc76aee68415668ba433fa76eb7180ac5a",
+  "stockfish_identity": "Stockfish 13",
+  "probe_game_count": 10,
+  "opening_pair_count": 5,
+  "opening_selection_seed": 20260815,
+  "match_random_seed": 20260816,
+  "model_search_budget": {
+    "kind": "fixed_searches",
+    "searches_per_move": 800,
+    "parallel_searches": 1,
+    "inference_workers": 1,
+    "inference_batch_size": 64,
+    "outstanding_batches_per_worker": 1,
+    "exploration_constant": 1.0,
+    "tree_search": null
+  },
+  "probes": [
+    {
+      "stockfish_nodes": 1000,
+      "result_path": "/workspace/eval/ladder800/stockfish-nodes-1000/result.json",
+      "wins": 10,
+      "draws": 0,
+      "losses": 0,
+      "score": 1.0,
+      "score_confidence_low": 1.0,
+      "score_confidence_high": 1.0
+    },
+    {
+      "stockfish_nodes": 2000,
+      "result_path": "/workspace/eval/ladder800/stockfish-nodes-2000/result.json",
+      "wins": 9,
+      "draws": 0,
+      "losses": 1,
+      "score": 0.9,
+      "score_confidence_low": 0.7,
+      "score_confidence_high": 1.0
+    },
+    {
+      "stockfish_nodes": 5000,
+      "result_path": "/workspace/eval/ladder800/stockfish-nodes-5000/result.json",
+      "wins": 9,
+      "draws": 1,
+      "losses": 0,
+      "score": 0.95,
+      "score_confidence_low": 0.85,
+      "score_confidence_high": 1.0
+    },
+    {
+      "stockfish_nodes": 10000,
+      "result_path": "/workspace/eval/ladder800/stockfish-nodes-10000/result.json",
+      "wins": 5,
+      "draws": 3,
+      "losses": 2,
+      "score": 0.65,
+      "score_confidence_low": 0.4,
+      "score_confidence_high": 0.85
+    },
+    {
+      "stockfish_nodes": 20000,
+      "result_path": "/workspace/eval/ladder800/stockfish-nodes-20000/result.json",
+      "wins": 1,
+      "draws": 4,
+      "losses": 5,
+      "score": 0.3,
+      "score_confidence_low": 0.15,
+      "score_confidence_high": 0.45
+    }
+  ],
+  "closest_stockfish_nodes": 10000,
+  "score_bracket": {
+    "lower_stockfish_nodes": 10000,
+    "upper_stockfish_nodes": 20000
+  },
+  "ladder_elo_fit": {
+    "anchor_source": "melonimarco-ssdf-20260820",
+    "bootstrap_samples": 20000,
+    "ladder_elo": 2564.7870980294274,
+    "confidence_low": 2387.929111172311,
+    "confidence_high": 2725.44944908884
+  }
+}

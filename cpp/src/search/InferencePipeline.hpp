@@ -27,7 +27,6 @@
 struct InferenceOutput {
     torch::Tensor policies;
     torch::Tensor outcomes;
-    torch::Tensor search_budgets;
 };
 
 class InferenceCompletion {
@@ -56,7 +55,7 @@ private:
 
 template <SearchGame Game>
 [[nodiscard]] SearchInferenceResult<Game>
-processInferencePosition(const float *policy, const float *outcome, const float *searchBudget,
+processInferencePosition(const float *policy, const float *outcome,
                          const typename Game::State &position);
 
 using PreparedInferenceModel = std::unique_ptr<torch::jit::script::Module>;
@@ -179,13 +178,11 @@ public:
             results.reserve(positions.size());
             const float *policies = output.policies.data_ptr<float>();
             const float *outcomes = output.outcomes.data_ptr<float>();
-            const float *searchBudgets = output.search_budgets.data_ptr<float>();
-            constexpr std::size_t searchBudgetStride = SEARCH_BUDGET_CURVE_POINTS;
             const InferenceDimensions dimensions = Game::Encoding::inferenceDimensions();
             for (const auto row : range(positions.size())) {
                 results.push_back(processInferencePosition<Game>(
                     policies + row * dimensions.actions, outcomes + row * dimensions.outcomes,
-                    searchBudgets + row * searchBudgetStride, positions[row]));
+                    positions[row]));
             }
             release(slotIndex);
             return results;
@@ -247,7 +244,7 @@ private:
 
 template <SearchGame Game>
 [[nodiscard]] SearchInferenceResult<Game>
-processInferencePosition(const float *policy, const float *outcome, const float *searchBudget,
+processInferencePosition(const float *policy, const float *outcome,
                          const typename Game::State &position) {
     const float win = outcome[static_cast<std::size_t>(WdlIndex::Win)];
     const float draw = outcome[static_cast<std::size_t>(WdlIndex::Draw)];
@@ -256,14 +253,6 @@ processInferencePosition(const float *policy, const float *outcome, const float 
         draw < 0.0F || loss < 0.0F || std::abs(win + draw + loss - 1.0F) > 1e-2F) {
         throw std::runtime_error("Inference model WDL output must be three probabilities");
     }
-    SearchBudgetCurvePrediction searchBudgetCurve{};
-    for (std::size_t index = 0; index < SEARCH_BUDGET_CURVE_POINTS; ++index) {
-        if (!std::isfinite(searchBudget[index])) {
-            throw std::runtime_error("Inference model search-budget curve must be finite");
-        }
-        searchBudgetCurve[index] = searchBudget[index];
-    }
-
     const std::vector<typename Game::Action> legalActions = Game::legalActions(position);
     std::vector<ScoredAction<typename Game::Action>> actions;
     actions.reserve(legalActions.size());
@@ -297,6 +286,5 @@ processInferencePosition(const float *policy, const float *outcome, const float 
     return {
         .actions = std::move(actions),
         .outcome = {.win = win, .draw = draw, .loss = loss},
-        .search_budget_curve = searchBudgetCurve,
     };
 }

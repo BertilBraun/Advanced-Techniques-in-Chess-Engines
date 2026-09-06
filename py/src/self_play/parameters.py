@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Literal, TypeAlias
 
-from src.search_budget.policy import SearchBudgetPolicy
-
 
 @dataclass(frozen=True)
 class RandomOpeningStartParameters:
@@ -78,7 +76,6 @@ FirstPlayUrgencyParameters: TypeAlias = (
 class ResolvedSelfPlayParameters:
     start_position: StartPositionParameters
     baseline_visits: int
-    search_budget_policy: SearchBudgetPolicy
     forced_playout_coefficient: float
     exploration_constant: float
     first_play_urgency: FirstPlayUrgencyParameters

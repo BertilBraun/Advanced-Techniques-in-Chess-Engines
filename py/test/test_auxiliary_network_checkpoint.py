@@ -30,7 +30,6 @@ from src.training.targets import (
     LegalMovesHeadLayout,
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchBudgetHeadLayout,
 )
 
 CHESS_PLANE_ACTION_SIZE = CHESS_POLICY_PLANE_COUNT * 64
@@ -80,7 +79,6 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     auxiliary_heads = (
         NextPolicyHeadLayout(kind='next_policy', action_size=10, ply_offset=1),
         RemainingGameLengthHeadLayout(kind='remaining_game_length', normalization_scale=100.0),
-        SearchBudgetHeadLayout(kind='search_budget'),
     )
     model = Network(parameters, torch.device('cpu'), dimensions, auxiliary_heads=auxiliary_heads)
     output = model.training_output(torch.zeros((2, 3, 3, 3)))
@@ -108,17 +106,15 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     )
     loaded_model.eval()
     loaded_output = loaded_model.training_output(torch.zeros((2, 3, 3, 3)))
-    inference_policy, inference_wdl, inference_search_budget = inference_model(torch.zeros((2, 3, 3, 3)))
+    inference_policy, inference_wdl = inference_model(torch.zeros((2, 3, 3, 3)))
     training_policy_logits, training_wdl_logits = loaded_model.logit_forward(torch.zeros((2, 3, 3, 3)))
 
     assert any(name.startswith('auxiliary_head_modules.') for name in training_state)
     assert manifest.network == model.checkpoint_definition()
     assert all(not name.startswith('auxiliary_head_modules.') for name, _ in inference_model.named_parameters())
-    assert tuple(output.shape for output in loaded_output.auxiliary_logits) == ((2, 10), (2, 1), (2, 8))
+    assert tuple(output.shape for output in loaded_output.auxiliary_logits) == ((2, 10), (2, 1))
     assert inference_policy.shape == (2, 10)
     assert inference_wdl.shape == (2, 3)
-    assert inference_search_budget.shape == (2, 8)
-    torch.testing.assert_close(inference_search_budget, loaded_output.auxiliary_logits[2])
     torch.testing.assert_close(inference_policy, training_policy_logits)
     torch.testing.assert_close(inference_wdl, torch.softmax(training_wdl_logits, dim=1))
     assert b'"kind":"' + parameters.kind.encode() + b'"' in extra_files['network.json']
@@ -165,7 +161,7 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
     loaded.eval()
     loaded_training_output = loaded.training_output(inputs)
     inference_model = torch.jit.load(str(tmp_path / 'model_1.jit.pt'), map_location='cpu')
-    inference_policy, inference_wdl, inference_search_budget = inference_model(inputs)
+    inference_policy, inference_wdl = inference_model(inputs)
 
     assert expected_training_output.policy_logits.shape == (2, CHESS_PLANE_ACTION_SIZE)
     assert tuple(output.shape for output in expected_training_output.auxiliary_logits) == (
@@ -178,7 +174,6 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
     torch.testing.assert_close(loaded_training_output.auxiliary_logits[0], expected_training_output.auxiliary_logits[0])
     torch.testing.assert_close(inference_policy, expected_policy)
     torch.testing.assert_close(inference_wdl, expected_wdl)
-    torch.testing.assert_close(inference_search_budget, torch.zeros((2, 8)))
 
 
 @pytest.mark.parametrize(
@@ -229,7 +224,7 @@ def test_jit_export_matches_training_forward_for_chess_heads(
     save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 1, tmp_path)
     inference_model = torch.jit.load(str(tmp_path / 'model_1.jit.pt'), map_location='cpu')
     inference_model.eval()
-    inference_policy, inference_wdl, _ = inference_model(inputs)
+    inference_policy, inference_wdl = inference_model(inputs)
 
     assert inference_policy.shape == (4, CHESS_PLANE_ACTION_SIZE)
     torch.testing.assert_close(inference_policy, expected_policy_logits, rtol=0.0, atol=1e-5)

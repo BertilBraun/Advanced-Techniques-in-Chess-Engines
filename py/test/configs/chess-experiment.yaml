@@ -87,7 +87,6 @@ training:
     inference_retention:
       recent_checkpoint_count: 11
       milestone_interval: 10
-    search_budget: {}
   limits:
     hourly_price: 1.0
     maximum_cost: null
@@ -234,6 +233,4 @@ chess:
       end_value: 0.15
       rounding: none
     value_discount_per_ply: 1.0
-    auxiliary_targets:
-      - kind: search_budget
-        loss_weight: 0.2
+    auxiliary_targets: []

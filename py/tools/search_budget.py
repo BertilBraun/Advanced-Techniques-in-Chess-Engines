@@ -14,6 +14,12 @@ from src.util.frozen_model import FrozenModel
 from src.util.generation_schedule import ConstantSchedule
 
 _DEFAULT_EXPLORATION_CONSTANT = 1.0
+_DEFAULT_PARALLEL_SEARCHES = 4
+# Evaluation keeps at most a few dozen leaves in flight, and the capture buckets scale with the cap,
+# so a self-play-sized 320 pads every batch and measured 30-40% slower than 64 on the node ladder.
+_DEFAULT_INFERENCE_BATCH_SIZE = 64
+_DEFAULT_FIXED_OUTSTANDING_BATCHES_PER_WORKER = 1
+_DEFAULT_TIMED_OUTSTANDING_BATCHES_PER_WORKER = 2
 
 
 class FixedModelSearchBudget(FrozenModel):
@@ -50,7 +56,7 @@ def add_model_search_budget_arguments(parser: argparse.ArgumentParser) -> None:
     budget.add_argument('--model-move-time-seconds', type=int)
     parser.add_argument('--parallel-searches', type=int)
     parser.add_argument('--inference-workers', type=int)
-    parser.add_argument('--inference-batch-size', default=64, type=int)
+    parser.add_argument('--inference-batch-size', default=_DEFAULT_INFERENCE_BATCH_SIZE, type=int)
     parser.add_argument('--outstanding-batches', type=int)
     parser.add_argument('--exploration-constant', default=_DEFAULT_EXPLORATION_CONSTANT, type=float)
     parser.add_argument('--first-play-urgency', choices=('zero', 'parent_value', 'reduced_parent_value'))
@@ -101,11 +107,15 @@ def model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudget
     if namespace.model_searches is not None:
         return FixedModelSearchBudget(
             searches_per_move=namespace.model_searches,
-            parallel_searches=1 if namespace.parallel_searches is None else namespace.parallel_searches,
+            parallel_searches=(
+                _DEFAULT_PARALLEL_SEARCHES if namespace.parallel_searches is None else namespace.parallel_searches
+            ),
             inference_workers=1 if namespace.inference_workers is None else namespace.inference_workers,
             inference_batch_size=namespace.inference_batch_size,
             outstanding_batches_per_worker=(
-                1 if namespace.outstanding_batches is None else namespace.outstanding_batches
+                _DEFAULT_FIXED_OUTSTANDING_BATCHES_PER_WORKER
+                if namespace.outstanding_batches is None
+                else namespace.outstanding_batches
             ),
             exploration_constant=namespace.exploration_constant,
             tree_search=tree_search,
@@ -119,6 +129,10 @@ def model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudget
         parallel_searches=namespace.parallel_searches,
         inference_workers=2 if namespace.inference_workers is None else namespace.inference_workers,
         inference_batch_size=namespace.inference_batch_size,
-        outstanding_batches_per_worker=2 if namespace.outstanding_batches is None else namespace.outstanding_batches,
+        outstanding_batches_per_worker=(
+            _DEFAULT_TIMED_OUTSTANDING_BATCHES_PER_WORKER
+            if namespace.outstanding_batches is None
+            else namespace.outstanding_batches
+        ),
         exploration_constant=namespace.exploration_constant,
     )

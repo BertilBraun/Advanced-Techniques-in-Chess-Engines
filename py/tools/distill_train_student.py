@@ -252,7 +252,6 @@ def distillation_objective(auxiliary_heads: tuple[str, ...] = ()) -> ResolvedTra
         auxiliary_losses=resolve_auxiliary_losses(
             auxiliary_target_configurations(auxiliary_heads),
             0,
-            search_budget_dedicated_batches=False,
         ),
     )
 

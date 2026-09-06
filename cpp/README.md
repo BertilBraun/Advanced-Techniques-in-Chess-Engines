@@ -38,12 +38,11 @@ and `deployment/run_control.sh` can start. This needs `ruff` in the build interp
 dependency group); configuration fails with a clear message if it is missing. Production
 inference loads the trimmed TorchScript policy/WDL artifact published by the Python checkpoint writer.
 
-Production self-play uses the inference artifact's raw scalar `search_budget` logit. After expanding each root, the
-shared executor applies sigmoid, the versioned multiplier curve, the published blend, deterministic integer rounding,
-and its cumulative spend residual to assign an additional-visit budget. Requests may therefore have heterogeneous
-budgets and parallelism in one batch. Explicit additional budgets and sorted policy-checkpoint visits support
-evaluation and deep labelling without mutating the production spend ledger. See
-[`documentation/architecture/learned-search-budget.md`](../documentation/architecture/learned-search-budget.md).
+Every search runs to a fixed visit limit: production self-play searches its configured baseline, and explicit
+additional-visit limits serve evaluation. Requests may still carry heterogeneous limits and parallelism in one
+batch, and sorted policy-checkpoint visits record intermediate policy snapshots. Adaptive search budgeting and
+learned early stopping were both removed after they failed on Elo; see
+[`documentation/analysis/adaptive-search-conclusion-20260904.md`](../documentation/analysis/adaptive-search-conclusion-20260904.md).
 
 ## Validation
 

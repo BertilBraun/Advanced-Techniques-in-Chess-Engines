@@ -78,7 +78,6 @@ training:
     inference_retention:
       recent_checkpoint_count: 22
       milestone_interval: 20
-    search_budget: {}
   limits:
     hourly_price: 1.1244444
     maximum_cost: null
@@ -351,5 +350,3 @@ chess:
         loss_weight: 0.0125
       - kind: legal_moves
         loss_weight: 0.0125
-      - kind: search_budget
-        loss_weight: 0.2

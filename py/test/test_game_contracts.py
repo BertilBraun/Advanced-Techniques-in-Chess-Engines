@@ -38,7 +38,6 @@ from src.training.objective import (
 from src.training.targets import (
     NextPolicyHeadLayout,
     RemainingGameLengthHeadLayout,
-    SearchBudgetHeadLayout,
     build_training_target_layout,
 )
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
@@ -119,7 +118,7 @@ def test_root_game_implementation_owns_state_and_fixed_target_layout(
     assert implementation.state.augmentation_count == expected_augmentations
     assert implementation.target_layout.action_size == expected_action_size
     assert implementation.target_layout.wdl_size == 3
-    assert implementation.target_layout.auxiliary_heads == (SearchBudgetHeadLayout(kind='search_budget'),)
+    assert implementation.target_layout.auxiliary_heads == ()
 
 
 def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> None:
@@ -137,11 +136,7 @@ def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> 
         network_root_value=0.1,
         policy_correction=0.2,
         value_correction=0.075,
-        predicted_baseline_log_kl=-0.4,
-        selected_budget_index=5,
-        assigned_additional_visits=16,
         parallel_searches=1,
-        spend_residual=0,
         starting_visits=0,
         final_visits=16,
         stop_reason=SearchStopReason.FIXED_LIMIT,
@@ -202,10 +197,6 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
                     'ply_offset': 3,
                     'loss_weight': 0.1,
                 },
-                {
-                    'kind': 'search_budget',
-                    'loss_weight': 0.2,
-                },
             ]
         }
     )
@@ -214,7 +205,6 @@ def test_auxiliary_target_layout_is_run_fixed_and_ordered() -> None:
     assert layout.auxiliary_heads == (
         NextPolicyHeadLayout(kind='next_policy', action_size=1_880, ply_offset=1),
         NextPolicyHeadLayout(kind='next_policy', action_size=1_880, ply_offset=3),
-        SearchBudgetHeadLayout(kind='search_budget'),
     )
 
     chess_configuration = configuration.chess.validated_copy(update={'objective': objective.model_dump(mode='json')})
@@ -289,21 +279,18 @@ def test_canonical_batch_and_model_output_are_the_objective_boundary() -> None:
         policy_targets=torch.tensor(((1.0, 0.0), (0.0, 1.0))),
         wdl_targets=torch.tensor(((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))),
         root_values=torch.tensor((0.5, -0.5)),
-        auxiliary_targets=(torch.zeros((2, 1)),),
-        auxiliary_legal_action_ids=(torch.empty((2, 0), dtype=torch.int64),),
-        auxiliary_eligibility=(torch.tensor((False, False)),),
     )
     output = TrainingModelOutput(
         policy_logits=torch.tensor(((2.0, 0.0), (0.0, 2.0))),
         wdl_logits=torch.tensor(((2.0, 0.0, 0.0), (0.0, 2.0, 0.0))),
-        auxiliary_logits=(torch.zeros((2, 1)),),
+        auxiliary_logits=(),
         features=torch.empty((2, 0)),
     )
 
     loss = objective.calculate_loss(output, batch)
 
     assert loss.total.isfinite()
-    assert loss.auxiliary[0].item() == 0.0
+    assert loss.auxiliary == ()
 
 
 def test_policy_loss_normalizes_only_over_legal_actions() -> None:

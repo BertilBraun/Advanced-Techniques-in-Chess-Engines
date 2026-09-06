@@ -13,6 +13,7 @@ training:
     self_play:
       parallel_games_per_process: 8
   lifecycle:
+    # Two-visit smoke baseline: the standard checkpoint multiples collapse below three visits.
     replay:
       capacity: 2048
       maximum_capacity: 2048

@@ -502,6 +502,30 @@ def test_manager_publishes_ladder_elo_once_every_fixed_node_rung_reports(
     assert ladder_events[-1][1] == pytest.approx(_expected_ladder_elo(), abs=1e-6)
 
 
+def test_manager_publishes_the_ladder_elo_of_a_boundary_exactly_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiment = _experiment_with_fixed_node_rungs(tmp_path)
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
+    rung_jobs = _scheduled_rung_jobs(manager, clock, tmp_path)
+
+    scalar_events: list[tuple[str, float, int]] = []
+    monkeypatch.setattr(
+        'src.evaluation.manager.log_scalar',
+        lambda name, value, step: scalar_events.append((name, value, step)),
+    )
+    for job in rung_jobs:
+        _write_rung_result(job, _rung_games(_NATURAL_RUNG_OUTCOMES[_rung_nodes(job)]))
+    for process in context.processes:
+        process.exitcode = 0
+    manager.collect_completed_jobs()
+
+    assert len([event for event in scalar_events if event[0] == 'evaluation/ladder_elo']) == 1
+
+
 def test_manager_ladder_uses_only_non_capped_games_and_skips_all_capped_rungs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

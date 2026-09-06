@@ -1,0 +1,79 @@
+{
+  "schema_version": 2,
+  "source_revision": "555ffb4433afb5bf0bd1c4433b8cbaad7b0a4213",
+  "tool_sha256": "dae719cf07e477260efabdf4a72d1486b1cd5604c478230f725905664b69dff7",
+  "checkpoint_generation": 700,
+  "opening_manifest_path": "/workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-openings-v1.json",
+  "opening_manifest_sha256": "4bfdf0d97b38499d38f51e0044c06ad977e5fef9c9c8244ffa79f92e1ffd56cb",
+  "stockfish_executable_path": "/workspace/alphazero-engine/engines/upstream/stockfish-13/stockfish_13_linux_x64_bmi2",
+  "stockfish_executable_sha256": "ec56cd6ad04eecd38885912321ee2dfc76aee68415668ba433fa76eb7180ac5a",
+  "stockfish_identity": "Stockfish 13",
+  "probe_game_count": 10,
+  "opening_pair_count": 5,
+  "opening_selection_seed": 20260815,
+  "match_random_seed": 20260816,
+  "model_search_budget": {
+    "kind": "fixed_searches",
+    "searches_per_move": 10000,
+    "parallel_searches": 1,
+    "inference_workers": 1,
+    "inference_batch_size": 64,
+    "outstanding_batches_per_worker": 1,
+    "exploration_constant": 1.0,
+    "tree_search": null
+  },
+  "probes": [
+    {
+      "stockfish_nodes": 300,
+      "result_path": "/workspace/eval/curve/gen700/stockfish-nodes-300/result.json",
+      "wins": 10,
+      "draws": 0,
+      "losses": 0,
+      "score": 1.0,
+      "score_confidence_low": 1.0,
+      "score_confidence_high": 1.0
+    },
+    {
+      "stockfish_nodes": 2000,
+      "result_path": "/workspace/eval/curve/gen700/stockfish-nodes-2000/result.json",
+      "wins": 10,
+      "draws": 0,
+      "losses": 0,
+      "score": 1.0,
+      "score_confidence_low": 1.0,
+      "score_confidence_high": 1.0
+    },
+    {
+      "stockfish_nodes": 10000,
+      "result_path": "/workspace/eval/curve/gen700/stockfish-nodes-10000/result.json",
+      "wins": 6,
+      "draws": 2,
+      "losses": 2,
+      "score": 0.7,
+      "score_confidence_low": 0.45,
+      "score_confidence_high": 0.95
+    },
+    {
+      "stockfish_nodes": 50000,
+      "result_path": "/workspace/eval/curve/gen700/stockfish-nodes-50000/result.json",
+      "wins": 0,
+      "draws": 5,
+      "losses": 5,
+      "score": 0.25,
+      "score_confidence_low": 0.05,
+      "score_confidence_high": 0.45
+    }
+  ],
+  "closest_stockfish_nodes": 10000,
+  "score_bracket": {
+    "lower_stockfish_nodes": 10000,
+    "upper_stockfish_nodes": 50000
+  },
+  "ladder_elo_fit": {
+    "anchor_source": "melonimarco-ssdf-20260820",
+    "bootstrap_samples": 20000,
+    "ladder_elo": 2693.1415544524534,
+    "confidence_low": 2514.8266654048766,
+    "confidence_high": 5000.0
+  }
+}

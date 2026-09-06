@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import cast
 
@@ -15,15 +14,12 @@ from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.training import ChessImplementation
 from src.games.contracts import WdlTarget
 from src.replay.contracts import (
-    EligibleSearchBudgetTarget,
-    IneligibleSearchBudgetTarget,
     ReplaySample,
     SparsePolicyTarget,
 )
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
-from src.search_budget.policy import BUDGET_CURVE_POINTS
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
@@ -110,19 +106,7 @@ def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
 def _replay_sample(
     game: ChessImplementation,
     weight: float,
-    labelled: bool,
 ) -> ReplaySample:
-    budget_target = (
-        EligibleSearchBudgetTarget(
-            curve=(0.5 * weight,) * BUDGET_CURVE_POINTS,
-            raw_kl=0.25,
-            source_generation=0,
-            model_generation=0,
-            inference_model_sha256='0' * 64,
-        )
-        if labelled
-        else IneligibleSearchBudgetTarget()
-    )
     return ReplaySample(
         encoded_state=game.state.packed_plane_layout.value(bytes(game.state.packed_plane_layout.payload_bytes)),
         policy=SparsePolicyTarget(
@@ -136,7 +120,7 @@ def _replay_sample(
         ),
         wdl_target=WdlTarget(win=0.0, draw=1.0, loss=0.0),
         root_value=0.0,
-        auxiliary_targets=(budget_target,),
+        auxiliary_targets=(),
         sample_weight=weight,
         source_model_generation=0,
         source_created_at_seconds=1.0,
@@ -147,12 +131,11 @@ def _replay_description(
     tmp_path: Path,
     game: ChessImplementation,
     layout: ReplayLayout,
-    labelled: bool,
 ) -> ReplayDescription:
     replay_path = tmp_path / 'replay.bin'
     store = ReplayStore.create(replay_path, layout, maximum_capacity=2, logical_capacity=2)
     for weight in (0.5, 1.0):
-        store.append(_replay_sample(game, weight, labelled))
+        store.append(_replay_sample(game, weight))
     store.flush()
     replay_state = store.state
     description = ReplayDescription(
@@ -190,7 +173,7 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
         maximum_policy_entries=2,
         maximum_legal_actions=game.state.maximum_legal_action_count,
     )
-    description = _replay_description(tmp_path, game, layout, labelled=False)
+    description = _replay_description(tmp_path, game, layout)
     trainer_group = TrainerGroup(
         configuration,
         game,
@@ -222,85 +205,6 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
     assert result.statistics.elapsed_seconds > 0.0
     assert result.statistics.gradient_norm > 0.0
     assert result.statistics.training_samples_per_second > 0.0
-    head_statistics = result.statistics.search_budget_head
-    assert head_statistics is not None
-    assert head_statistics.labelled_pool_rows == 0
-    assert head_statistics.labelled_batches == 0
-
-
-def test_a_labelled_replay_trains_the_search_budget_head_on_a_fully_labelled_batch(tmp_path: Path) -> None:
-    configuration = _with_head_training(_configuration(tmp_path))
-    game = ChessImplementation(configuration)
-    model = Network(
-        configuration.training.initial_model.network,
-        torch.device('cpu'),
-        game.network_dimensions,
-        auxiliary_heads=game.target_layout.auxiliary_heads,
-    )
-    save_model_and_optimizer(
-        model,
-        create_optimizer(model, configuration.training.trainer.optimizer),
-        0,
-        tmp_path,
-        bernoulli_probe_states(game.network_dimensions),
-    )
-    layout = ReplayLayout(
-        packed_planes=game.state.packed_plane_layout,
-        targets=game.target_layout,
-        maximum_policy_entries=2,
-        maximum_legal_actions=game.state.maximum_legal_action_count,
-    )
-    description = _replay_description(tmp_path, game, layout, labelled=True)
-    trainer_group = TrainerGroup(
-        configuration,
-        game,
-        TrainerStartup(
-            network=configuration.training.initial_model.network,
-            save_path=tmp_path,
-            starting_generation=0,
-        ),
-    )
-
-    result = trainer_group.train_quantum(
-        TrainerQuantum(
-            replay=description,
-            model_progress=TrainingProgress(
-                completed_optimizer_steps=0,
-                optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
-            ),
-            replay_source_progress=TrainingProgress(
-                completed_optimizer_steps=0,
-                optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
-            ),
-        )
-    )
-    trainer_group.close()
-
-    head_statistics = result.statistics.search_budget_head
-    assert head_statistics is not None
-    assert head_statistics.auxiliary_index == 0
-    assert head_statistics.labelled_pool_rows == 2
-    assert head_statistics.labelled_batches == 1
-    assert head_statistics.target_mean == pytest.approx(0.375)
-    # The head predicts raw log-KL values, so the untrained prediction mean is only bounded by finiteness.
-    assert math.isfinite(head_statistics.prediction_mean)
-    assert head_statistics.absolute_error_mean >= 0.0
-    assert result.statistics.auxiliary_losses == (pytest.approx(head_statistics.loss),)
-
-
-def _with_head_training(configuration: ChessExperimentConfiguration) -> ChessExperimentConfiguration:
-    lifecycle = configuration.training.lifecycle
-    search_budget = lifecycle.search_budget.validated_copy(
-        update={
-            'head_training': {
-                'dedicated_batches': True,
-                'interval_optimizer_steps': 1,
-            }
-        }
-    )
-    updated_lifecycle = lifecycle.validated_copy(update={'search_budget': search_budget.model_dump(mode='json')})
-    training = configuration.training.validated_copy(update={'lifecycle': updated_lifecycle.model_dump(mode='json')})
-    return configuration.validated_copy(update={'training': training.model_dump(mode='json')})
 
 
 def test_distributed_training_model_has_only_batch_norm_buffers() -> None:

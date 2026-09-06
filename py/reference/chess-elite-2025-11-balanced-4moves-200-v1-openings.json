@@ -1,0 +1,3010 @@
+{
+  "schema_version": 3,
+  "game": "chess",
+  "rules_digest": "38bc93f5ee3f70008ace58259fb0d8df4c455ca49990bbfe0417bdae7bc6c67c",
+  "representation_digest": "5259cc3bfc1d7c0b0291e1e483924ac84936fc8e6f10727818ba763c552d979e",
+  "selection_sha256": "658a650994214be07a9706f744ce07eb9158b48af34a593f95efa9c70a2824dc",
+  "openings": [
+    {
+      "opening_id": "elite-2025-11-001",
+      "action_ids": [
+        304,
+        246,
+        170,
+        274,
+        275,
+        710,
+        596,
+        170
+      ],
+      "final_position_digest": "02141ec2842b1e46b5cc43ac46bed2b75d98f948ff973e7f9ba31664fc320f72",
+      "human_readable": "e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-002",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        141,
+        194,
+        941,
+        170
+      ],
+      "final_position_digest": "dc054341a8e2ebd98a2e9ceb5b484d5e30da81d83f4f463b2c8be25bb9361167",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-003",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        141,
+        170,
+        274,
+        140
+      ],
+      "final_position_digest": "e485c22194a2f8edbce5b64adc5afc01ef4c5a489dd06bb4c1b5e3945aa1c093",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1b5 g8f6 d2d3 f8c5"
+    },
+    {
+      "opening_id": "elite-2025-11-004",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        275,
+        44,
+        141
+      ],
+      "final_position_digest": "10eafe55da8d13f5606d4dabd332721a2d4dc5b0d404bfc42865ac1a7fa43ec9",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 f8b4"
+    },
+    {
+      "opening_id": "elite-2025-11-005",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        44,
+        170,
+        774,
+        595
+      ],
+      "final_position_digest": "f963be131fa6e4086151f6c420e692eebfe73b304afbd97354e9dd0b6157a61f",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 b1c3 g8f6 e4e5 f6d7"
+    },
+    {
+      "opening_id": "elite-2025-11-006",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        275,
+        44,
+        245
+      ],
+      "final_position_digest": "cfb0d6ec66e7526f3bfd290fd958911863c3cc9a01b5702da3e5ee43f041c595",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 c7c6"
+    },
+    {
+      "opening_id": "elite-2025-11-007",
+      "action_ids": [
+        275,
+        275,
+        246,
+        303,
+        44,
+        170,
+        710,
+        553
+      ],
+      "final_position_digest": "6a8339e3484bdbc9a161e9811bc38aea8906b1fcaa4a4210f4015b973e4d1cb2",
+      "human_readable": "d2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c4d5 e6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-008",
+      "action_ids": [
+        304,
+        246,
+        170,
+        44,
+        275,
+        710,
+        596,
+        170
+      ],
+      "final_position_digest": "6f7b889e6595d94ef42c166896bc5fbf913bbb2cbdd3918850f74d7bead99ff1",
+      "human_readable": "e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-009",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        140,
+        170,
+        274,
+        140
+      ],
+      "final_position_digest": "deaec2dd8f04b98fe05314019d97791614f02fe21d07a8ccfedf4a72d0ee32e2",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 d2d3 f8c5"
+    },
+    {
+      "opening_id": "elite-2025-11-010",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        774,
+        246,
+        245,
+        44
+      ],
+      "final_position_digest": "b8e0940bfa9b379b58648af036aaa183b2d445d5f5a3e4bedc83572a5ba8513b",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 e4e5 c7c5 c2c3 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-011",
+      "action_ids": [
+        304,
+        246,
+        170,
+        303,
+        275,
+        710,
+        596,
+        44
+      ],
+      "final_position_digest": "8f9826db6685427301a50109a09c6f5b5779bc412808b7ac598c8037aa86453c",
+      "human_readable": "e2e4 c7c5 g1f3 e7e6 d2d4 c5d4 f3d4 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-012",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        275,
+        44,
+        138
+      ],
+      "final_position_digest": "b853aaf812f8e744370b6eb8e4ad35fac8e1a8aca6b783236c4db1dad34dc551",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-013",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        44,
+        743,
+        492,
+        170
+      ],
+      "final_position_digest": "36142dd5a5a2dac5814ee03862120ef3ad10e867ef3f9785c7167eb5377fd263",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 b1c3 d5e4 c3e4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-014",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        44,
+        141,
+        303,
+        109
+      ],
+      "final_position_digest": "6af2905f3e4b23d6fd7e9be368dbf703d7365c736411893d693efc59cd82e3a3",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 e2e3 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-015",
+      "action_ids": [
+        170,
+        170,
+        361,
+        361,
+        129,
+        129,
+        109,
+        109
+      ],
+      "final_position_digest": "76b11c582e216250475ede135fbfbb1b4b877434dc457de63dfa6777c79c0671",
+      "human_readable": "g1f3 g8f6 g2g3 g7g6 f1g2 f8g7 e1g1 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-016",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        774,
+        56,
+        170,
+        303
+      ],
+      "final_position_digest": "9b02bf1fe3a2eb24a0e1e9db22a71cebe4382436978ad9a4c1fcabd02712757d",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 e4e5 c8f5 g1f3 e7e6"
+    },
+    {
+      "opening_id": "elite-2025-11-017",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        140,
+        140,
+        245,
+        170
+      ],
+      "final_position_digest": "be37cad274222a2138e91a28374a5f89efd3d65343d4749ee4e7c83e316bde1d",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-018",
+      "action_ids": [
+        275,
+        275,
+        170,
+        170,
+        56,
+        246,
+        303,
+        44
+      ],
+      "final_position_digest": "9528aa92d5c1d3fa24152d8b5e1ce44f99418a8fc45030e2767d4fd935ed3512",
+      "human_readable": "d2d4 d7d5 g1f3 g8f6 c1f4 c7c5 e2e3 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-019",
+      "action_ids": [
+        275,
+        275,
+        246,
+        303,
+        170,
+        170,
+        361,
+        138
+      ],
+      "final_position_digest": "db8d0240a2c8907e1758df8604d482a89df92bc1fcb98dc24d31966ce77d0efa",
+      "human_readable": "d2d4 d7d5 c2c4 e7e6 g1f3 g8f6 g2g3 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-020",
+      "action_ids": [
+        275,
+        170,
+        246,
+        361,
+        44,
+        275,
+        170,
+        129
+      ],
+      "final_position_digest": "78ff8ead4c07236b6a668a4dec50c72668ffb78f7162b554d125ee7a6b9b9dd4",
+      "human_readable": "d2d4 g8f6 c2c4 g7g6 b1c3 d7d5 g1f3 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-021",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        774,
+        56,
+        389,
+        389
+      ],
+      "final_position_digest": "4c27a8f3d85411d40380a59af75c84e29951f38468beb0420a1c1725c571fc38",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 e4e5 c8f5 h2h4 h7h5"
+    },
+    {
+      "opening_id": "elite-2025-11-022",
+      "action_ids": [
+        246,
+        303,
+        361,
+        275,
+        129,
+        170,
+        170,
+        138
+      ],
+      "final_position_digest": "21738b289b0e13e06d928fa6496c48188bc4ff60a6460e0321bcfc0d22618517",
+      "human_readable": "c2c4 e7e6 g2g3 d7d5 f1g2 g8f6 g1f3 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-023",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        797,
+        471,
+        139,
+        44
+      ],
+      "final_position_digest": "daac02682df5b0b1e8cd2c0e3ddcc99a3125e6cb134c9f5f52c7d6b3e65d6d73",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 e4d5 c6d5 f1d3 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-024",
+      "action_ids": [
+        304,
+        246,
+        170,
+        274,
+        141,
+        54,
+        925,
+        72
+      ],
+      "final_position_digest": "e36bc788f312c71ee42ce6cf30b2dc0d8ac6e48cfb855ab9edfa14159e7c3be3",
+      "human_readable": "e2e4 c7c5 g1f3 d7d6 f1b5 c8d7 b5d7 d8d7"
+    },
+    {
+      "opening_id": "elite-2025-11-025",
+      "action_ids": [
+        304,
+        246,
+        170,
+        44,
+        275,
+        710,
+        596,
+        304
+      ],
+      "final_position_digest": "44dce079c10c47f707fc5154e80f88c79f0c70d88bc0e7d674d5c351351f6f63",
+      "human_readable": "e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 e7e5"
+    },
+    {
+      "opening_id": "elite-2025-11-026",
+      "action_ids": [
+        275,
+        170,
+        246,
+        361,
+        44,
+        275,
+        710,
+        596
+      ],
+      "final_position_digest": "639bcb3ce9c77389edaa2f7776f575ced808f740da45ee19cca3eaba431d4b6d",
+      "human_readable": "d2d4 g8f6 c2c4 g7g6 b1c3 d7d5 c4d5 f6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-027",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        140,
+        140,
+        109,
+        170
+      ],
+      "final_position_digest": "8d5b314564b22341f3db49b3d829404ad5640feafa624c0a47c8e6b15061fb87",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 e1g1 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-028",
+      "action_ids": [
+        304,
+        246,
+        170,
+        44,
+        141,
+        361,
+        109,
+        129
+      ],
+      "final_position_digest": "b6cc18ee0f8e7f7d6b59a2595c428218706f3b7245550b426c7aceb20352b717",
+      "human_readable": "e2e4 c7c5 g1f3 b8c6 f1b5 g7g6 e1g1 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-029",
+      "action_ids": [
+        246,
+        304,
+        361,
+        170,
+        129,
+        245,
+        275,
+        774
+      ],
+      "final_position_digest": "e246e59e63026e569cd1a3091fbda40ae7f8f27df0b6349170b024855e8a603b",
+      "human_readable": "c2c4 e7e5 g2g3 g8f6 f1g2 c7c6 d2d4 e5e4"
+    },
+    {
+      "opening_id": "elite-2025-11-030",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        218,
+        361,
+        67
+      ],
+      "final_position_digest": "639f758d3ac1f0f0b9e55377f72b32dcae29178c2bd5683e70c21e77bb4533eb",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 b7b6 g2g3 c8a6"
+    },
+    {
+      "opening_id": "elite-2025-11-031",
+      "action_ids": [
+        304,
+        246,
+        170,
+        44,
+        141,
+        303,
+        109,
+        169
+      ],
+      "final_position_digest": "bc1f85906a304f52c15b357cef54c7b18a084490f2328473b689f5642a979fab",
+      "human_readable": "e2e4 c7c5 g1f3 b8c6 f1b5 e7e6 e1g1 g8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-032",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        275,
+        44,
+        246
+      ],
+      "final_position_digest": "545ccfc8d8d9612a09396445e5f22dd3cd61635a7013cfc8fa1bb19cd72e1caa",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 c7c5"
+    },
+    {
+      "opening_id": "elite-2025-11-033",
+      "action_ids": [
+        170,
+        275,
+        361,
+        170,
+        129,
+        303,
+        109,
+        138
+      ],
+      "final_position_digest": "31e188fa0f9766faa058878913a6a576967a5cef487bc86cca8012ebcd1b2e9f",
+      "human_readable": "g1f3 d7d5 g2g3 g8f6 f1g2 e7e6 e1g1 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-034",
+      "action_ids": [
+        275,
+        170,
+        170,
+        361,
+        361,
+        129,
+        129,
+        109
+      ],
+      "final_position_digest": "c5ee780aea386b4e327055ebcb7ac81e0f9cd82a3247ffc684b8d39b41e92832",
+      "human_readable": "d2d4 g8f6 g1f3 g7g6 g2g3 f8g7 f1g2 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-035",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        797,
+        471,
+        246,
+        170
+      ],
+      "final_position_digest": "82782fb646bf521d753ea52e9e3af56bc7607f1e6625b6737c95334c938c2239",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 e4d5 c6d5 c2c4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-036",
+      "action_ids": [
+        304,
+        245,
+        170,
+        275,
+        44,
+        743,
+        492,
+        170
+      ],
+      "final_position_digest": "bc8db5563856adac5338797ca461a841ea5d5331da5ca33ab43dec767323be20",
+      "human_readable": "e2e4 c7c6 g1f3 d7d5 b1c3 d5e4 c3e4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-037",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        275,
+        797,
+        596,
+        170
+      ],
+      "final_position_digest": "b26e3bfb7d5aacf52444e797c3129350b9c866ae46537402589d2b63d7792646",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-038",
+      "action_ids": [
+        275,
+        275,
+        170,
+        170,
+        56,
+        303,
+        303,
+        139
+      ],
+      "final_position_digest": "97a6e874aaab3b2295b4a212b99d6e561a0003aae4c44f7d87487eafd2826a06",
+      "human_readable": "d2d4 d7d5 g1f3 g8f6 c1f4 e7e6 e2e3 f8d6"
+    },
+    {
+      "opening_id": "elite-2025-11-039",
+      "action_ids": [
+        275,
+        170,
+        246,
+        361,
+        170,
+        129,
+        361,
+        109
+      ],
+      "final_position_digest": "fe008e99f5328f1b0d6a99dfd65c222977c0fa09992b4d27d8ca784066f83adb",
+      "human_readable": "d2d4 g8f6 c2c4 g7g6 g1f3 f8g7 g2g3 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-040",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        44,
+        743,
+        492,
+        56
+      ],
+      "final_position_digest": "fa1ebd77eeb8915cd12b11c8a3ef3641f4b2bf67e30add3776d161ded595c417",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 b1c3 d5e4 c3e4 c8f5"
+    },
+    {
+      "opening_id": "elite-2025-11-041",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        275,
+        44,
+        45
+      ],
+      "final_position_digest": "f785ce4e47695d7eb8501d5bbbeabe2d0dd849a630f8cfa83753157715d8bd0d",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 b8d7"
+    },
+    {
+      "opening_id": "elite-2025-11-042",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        218,
+        361,
+        66
+      ],
+      "final_position_digest": "c7dd315605fc73578fc0254820ee54ee3057a963b2c252d664fc272eb42a819e",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 b7b6 g2g3 c8b7"
+    },
+    {
+      "opening_id": "elite-2025-11-043",
+      "action_ids": [
+        304,
+        274,
+        275,
+        170,
+        44,
+        304,
+        743,
+        504
+      ],
+      "final_position_digest": "67d4f83f7f6748cff83654d744ba27115d3615135dbb9dbfeb6354123271448e",
+      "human_readable": "e2e4 d7d6 d2d4 g8f6 b1c3 e7e5 d4e5 d6e5"
+    },
+    {
+      "opening_id": "elite-2025-11-044",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        140,
+        170,
+        274,
+        138
+      ],
+      "final_position_digest": "a2dc1b1d5faf8ab9d08baeb07e831246f2a41abcb678be9b4f06b93c57fca7ef",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 d2d3 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-045",
+      "action_ids": [
+        246,
+        246,
+        361,
+        44,
+        129,
+        361,
+        44,
+        129
+      ],
+      "final_position_digest": "ead49f2fda40f0b1b9191afc045602a45bd61da3547d94d2d4c659825f908773",
+      "human_readable": "c2c4 c7c5 g2g3 b8c6 f1g2 g7g6 b1c3 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-046",
+      "action_ids": [
+        275,
+        170,
+        170,
+        303,
+        56,
+        275,
+        303,
+        246
+      ],
+      "final_position_digest": "ee73b8fe270d547a6b61450919afa4d0504f721ad282f66cd21ba8ba8f7023e3",
+      "human_readable": "d2d4 g8f6 g1f3 e7e6 c1f4 d7d5 e2e3 c7c5"
+    },
+    {
+      "opening_id": "elite-2025-11-047",
+      "action_ids": [
+        275,
+        275,
+        246,
+        245,
+        170,
+        170,
+        303,
+        56
+      ],
+      "final_position_digest": "ceba583cf97c39b18d2ee8a1fbcb956fbf1590ca1e9d86e02d915258c1717a31",
+      "human_readable": "d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 e2e3 c8f5"
+    },
+    {
+      "opening_id": "elite-2025-11-048",
+      "action_ids": [
+        170,
+        170,
+        246,
+        361,
+        361,
+        129,
+        129,
+        109
+      ],
+      "final_position_digest": "e9770fe74c97d778e9ab32bcb5462adb1330fb1dca861fe98bd3c15e7fa6ad9a",
+      "human_readable": "g1f3 g8f6 c2c4 g7g6 g2g3 f8g7 f1g2 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-049",
+      "action_ids": [
+        304,
+        246,
+        245,
+        170,
+        774,
+        596,
+        170,
+        44
+      ],
+      "final_position_digest": "9b3a34d9e7995c2f73c7c4214a7229744f049517fc85d82e33b71260d8b257bf",
+      "human_readable": "e2e4 c7c5 c2c3 g8f6 e4e5 f6d5 g1f3 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-050",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        140,
+        170,
+        590,
+        275
+      ],
+      "final_position_digest": "5b46f066d2dd041676efe016fd09c8f7e2d51cece52d1b98817f7b66bbbdc47a",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 f3g5 d7d5"
+    },
+    {
+      "opening_id": "elite-2025-11-051",
+      "action_ids": [
+        246,
+        170,
+        361,
+        361,
+        129,
+        129,
+        44,
+        109
+      ],
+      "final_position_digest": "b82ac9107cf7d0b07005b0a7eb41f0030ef250d93b56630568df97fc47896b91",
+      "human_readable": "c2c4 g8f6 g2g3 g7g6 f1g2 f8g7 b1c3 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-052",
+      "action_ids": [
+        304,
+        246,
+        44,
+        44,
+        361,
+        361,
+        129,
+        129
+      ],
+      "final_position_digest": "70d7010ebc260c385170ba87174eb28e8dd2b899db77b43620eed2c30a24f240",
+      "human_readable": "e2e4 c7c5 b1c3 b8c6 g2g3 g7g6 f1g2 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-053",
+      "action_ids": [
+        246,
+        304,
+        44,
+        170,
+        170,
+        44,
+        304,
+        141
+      ],
+      "final_position_digest": "2beb9a8299998af29a2c58eff4c1a0235e5442c80e75c633f1a648cf87b9adbb",
+      "human_readable": "c2c4 e7e5 b1c3 g8f6 g1f3 b8c6 e2e4 f8b4"
+    },
+    {
+      "opening_id": "elite-2025-11-054",
+      "action_ids": [
+        275,
+        275,
+        246,
+        245,
+        710,
+        471,
+        44,
+        170
+      ],
+      "final_position_digest": "2136295bde882026580a6d26569212b4e1e03aea358fab6dc7e4b4e599c2e417",
+      "human_readable": "d2d4 d7d5 c2c4 c7c6 c4d5 c6d5 b1c3 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-055",
+      "action_ids": [
+        170,
+        275,
+        275,
+        170,
+        246,
+        303,
+        710,
+        553
+      ],
+      "final_position_digest": "763c6a8c6297ff5bae54caa58191a5ec666760182d5904310bbd9105febe75f4",
+      "human_readable": "g1f3 d7d5 d2d4 g8f6 c2c4 e7e6 c4d5 e6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-056",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        141,
+        194,
+        941,
+        274
+      ],
+      "final_position_digest": "d08935f73d2fbc64fe8652d9313357fbd6e05ad0c87c58a68813b60690c2eb87",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 d7d6"
+    },
+    {
+      "opening_id": "elite-2025-11-057",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        45,
+        170,
+        774,
+        595
+      ],
+      "final_position_digest": "51b77f3dd6978ea2c81817e5ab12e5d787d08dd67e8f4da2a6852aba8ccc7673",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 b1d2 g8f6 e4e5 f6d7"
+    },
+    {
+      "opening_id": "elite-2025-11-058",
+      "action_ids": [
+        170,
+        170,
+        218,
+        361,
+        66,
+        129,
+        361,
+        109
+      ],
+      "final_position_digest": "981a428ae1c5baf1af32b925837cfd7496d7fc2360607c4a755ab3efe850fa80",
+      "human_readable": "g1f3 g8f6 b2b3 g7g6 c1b2 f8g7 g2g3 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-059",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        797,
+        553,
+        170,
+        170
+      ],
+      "final_position_digest": "6cab2753daf5d8f46393cb8587b86985fd90d71ea7f73ba0d934691ec57e1bf5",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 e4d5 e6d5 g1f3 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-060",
+      "action_ids": [
+        170,
+        275,
+        275,
+        170,
+        246,
+        245,
+        710,
+        471
+      ],
+      "final_position_digest": "bbbfeda511eb0469b28ed8905affb25866f36e17b629ada231fe1f56afdde1ea",
+      "human_readable": "g1f3 d7d5 d2d4 g8f6 c2c4 c7c6 c4d5 c6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-061",
+      "action_ids": [
+        275,
+        275,
+        246,
+        303,
+        44,
+        170,
+        57,
+        138
+      ],
+      "final_position_digest": "b0c616e956c0fb9bfc2ab686221ddf10ecfcedb2e7774aa0f266379eaa2b2c7d",
+      "human_readable": "d2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-062",
+      "action_ids": [
+        304,
+        246,
+        170,
+        274,
+        141,
+        54,
+        925,
+        45
+      ],
+      "final_position_digest": "c1f4bab6611c9bef70c211a79facb697618f96e4941b48b2676bcadbf359a4f6",
+      "human_readable": "e2e4 c7c5 g1f3 d7d6 f1b5 c8d7 b5d7 b8d7"
+    },
+    {
+      "opening_id": "elite-2025-11-063",
+      "action_ids": [
+        275,
+        275,
+        246,
+        245,
+        170,
+        170,
+        303,
+        303
+      ],
+      "final_position_digest": "de223cdc08dfb6310120374b4b414192d386af08203f9a821c6cffbdc5f18629",
+      "human_readable": "d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 e2e3 e7e6"
+    },
+    {
+      "opening_id": "elite-2025-11-064",
+      "action_ids": [
+        275,
+        275,
+        246,
+        245,
+        170,
+        170,
+        44,
+        194
+      ],
+      "final_position_digest": "6c45d14dbac4373de9eee85bf27f8b4eecd6a0d73e90cf64257ab5008c9c9103",
+      "human_readable": "d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 b1c3 a7a6"
+    },
+    {
+      "opening_id": "elite-2025-11-065",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        44,
+        170,
+        141,
+        491
+      ],
+      "final_position_digest": "c396d8b15b29a63896945328aa23a7994ae81393c6d6ef0efadc067462165240",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 b1c3 g8f6 f1b5 c6d4"
+    },
+    {
+      "opening_id": "elite-2025-11-066",
+      "action_ids": [
+        304,
+        246,
+        170,
+        303,
+        245,
+        170,
+        774,
+        596
+      ],
+      "final_position_digest": "199cf32c95856e8b788f05c96c2e48805ce74656375648c61424a374c5436470",
+      "human_readable": "e2e4 c7c5 g1f3 e7e6 c2c3 g8f6 e4e5 f6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-067",
+      "action_ids": [
+        304,
+        246,
+        170,
+        274,
+        141,
+        45,
+        109,
+        194
+      ],
+      "final_position_digest": "e9f3e010ef1372b4c10a1c7de174b296395dcda9d85c3524f53d84a75c75d063",
+      "human_readable": "e2e4 c7c5 g1f3 d7d6 f1b5 b8d7 e1g1 a7a6"
+    },
+    {
+      "opening_id": "elite-2025-11-068",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        44,
+        141,
+        90,
+        109
+      ],
+      "final_position_digest": "9b7eeb98e0674b025903db69e2dde244514daa96a6347054eb21e4f729f43ae1",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 d1c2 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-069",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        45,
+        246,
+        797,
+        74
+      ],
+      "final_position_digest": "c4b8bcddbaec2fdbc26e0995360d1aa099f1350f08ff81b973c586e6c0d40026",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 b1d2 c7c5 e4d5 d8d5"
+    },
+    {
+      "opening_id": "elite-2025-11-070",
+      "action_ids": [
+        275,
+        170,
+        246,
+        361,
+        361,
+        129,
+        129,
+        109
+      ],
+      "final_position_digest": "c95f2e6b511d752cfa0217edb0083e309d1f3d78c74c76388ee5b53052ada602",
+      "human_readable": "d2d4 g8f6 c2c4 g7g6 g2g3 f8g7 f1g2 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-071",
+      "action_ids": [
+        170,
+        246,
+        361,
+        44,
+        129,
+        361,
+        109,
+        129
+      ],
+      "final_position_digest": "b5868e2afb04071153e59b4de1ac70b84c60c5e3442e33c4fed6e71c75940340",
+      "human_readable": "g1f3 c7c5 g2g3 b8c6 f1g2 g7g6 e1g1 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-072",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        797,
+        471,
+        139,
+        170
+      ],
+      "final_position_digest": "a7da7f596161f854919604d921873b5d9a664c9d0dd5a600518be9c1b3272f31",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 e4d5 c6d5 f1d3 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-073",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        797,
+        553,
+        170,
+        44
+      ],
+      "final_position_digest": "10d04d67989992220f9c892d2fd55abad48172663649e9bb156c04f09c1a70da",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 e4d5 e6d5 g1f3 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-074",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        275,
+        44,
+        194
+      ],
+      "final_position_digest": "965b06f7b45df5883c5ef5b477ffd305a5635d975e8d37cdf7436e9bf9d9b0d0",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 a7a6"
+    },
+    {
+      "opening_id": "elite-2025-11-075",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        140,
+        170,
+        274,
+        388
+      ],
+      "final_position_digest": "931aee6817e06ee38d21001169b2df8c724bf1abc9aa561b1fa1f5ece60197e8",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 d2d3 h7h6"
+    },
+    {
+      "opening_id": "elite-2025-11-076",
+      "action_ids": [
+        275,
+        275,
+        246,
+        245,
+        44,
+        170,
+        303,
+        303
+      ],
+      "final_position_digest": "74761d654a0b53a1df6eb55fe12cd2d820e1ca79b26524c82b1c667fed1f6e5d",
+      "human_readable": "d2d4 d7d5 c2c4 c7c6 b1c3 g8f6 e2e3 e7e6"
+    },
+    {
+      "opening_id": "elite-2025-11-077",
+      "action_ids": [
+        304,
+        246,
+        170,
+        274,
+        275,
+        710,
+        74,
+        44
+      ],
+      "final_position_digest": "c40f7834d6b500c9ec1b4241b8c06f55a9d572e7b2fd351d7aac771f5a09b4bc",
+      "human_readable": "e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 d1d4 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-078",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        361,
+        275,
+        129,
+        138
+      ],
+      "final_position_digest": "82502cd893e3c3f60f8b8cfb22497eab31d96c051e8c2f7ab5138f71da8cf267",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g2g3 d7d5 f1g2 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-079",
+      "action_ids": [
+        170,
+        170,
+        361,
+        275,
+        129,
+        245,
+        109,
+        57
+      ],
+      "final_position_digest": "772e493e37b59af9cf32f44b75eee8cd0acea5a75380ea6470fc6e085b5eb3f7",
+      "human_readable": "g1f3 g8f6 g2g3 d7d5 f1g2 c7c6 e1g1 c8g4"
+    },
+    {
+      "opening_id": "elite-2025-11-080",
+      "action_ids": [
+        275,
+        170,
+        56,
+        275,
+        303,
+        246,
+        245,
+        44
+      ],
+      "final_position_digest": "302fdfa83d235888acae3bc36037595bec2c919dd4fd7c1a382792626be21e34",
+      "human_readable": "d2d4 g8f6 c1f4 d7d5 e2e3 c7c5 c2c3 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-081",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        218,
+        194,
+        66
+      ],
+      "final_position_digest": "13fdfdbbb2570d7ee67d4b9c92692202fb4f4c480e23cb8d3a36ac67bc64a1a3",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 b7b6 a2a3 c8b7"
+    },
+    {
+      "opening_id": "elite-2025-11-082",
+      "action_ids": [
+        170,
+        170,
+        361,
+        275,
+        129,
+        245,
+        109,
+        56
+      ],
+      "final_position_digest": "e89c9c16668302d1f8a5892e27e412d727957c5018ab82c91b597156d068364f",
+      "human_readable": "g1f3 g8f6 g2g3 d7d5 f1g2 c7c6 e1g1 c8f5"
+    },
+    {
+      "opening_id": "elite-2025-11-083",
+      "action_ids": [
+        275,
+        275,
+        246,
+        303,
+        44,
+        246,
+        710,
+        553
+      ],
+      "final_position_digest": "7f364f66f00417b2be8daa9a437d960759462700116923c23bb4949ba636435d",
+      "human_readable": "d2d4 d7d5 c2c4 e7e6 b1c3 c7c5 c4d5 e6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-084",
+      "action_ids": [
+        246,
+        304,
+        361,
+        170,
+        129,
+        275,
+        710,
+        596
+      ],
+      "final_position_digest": "791fdd567f0973ea1f6ef74e59da134399f79df09163a5a68643e9b23fa1a0f0",
+      "human_readable": "c2c4 e7e5 g2g3 g8f6 f1g2 d7d5 c4d5 f6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-085",
+      "action_ids": [
+        170,
+        274,
+        275,
+        170,
+        361,
+        361,
+        129,
+        129
+      ],
+      "final_position_digest": "9895fedf65b579419ca373e75fd3ddc88afe5556ed6dc005a3609358a29c58a8",
+      "human_readable": "g1f3 d7d6 d2d4 g8f6 g2g3 g7g6 f1g2 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-086",
+      "action_ids": [
+        170,
+        246,
+        246,
+        44,
+        361,
+        361,
+        129,
+        129
+      ],
+      "final_position_digest": "775483493a1fa41a9025fbd45635a761d00366620767e828b5cff7d3cbd0acef",
+      "human_readable": "g1f3 c7c5 c2c4 b8c6 g2g3 g7g6 f1g2 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-087",
+      "action_ids": [
+        170,
+        275,
+        361,
+        361,
+        129,
+        129,
+        275,
+        170
+      ],
+      "final_position_digest": "57169da70fafd6edfd242a7eb195a78136a992c8b9be5e7d3114203e931a7e37",
+      "human_readable": "g1f3 d7d5 g2g3 g7g6 f1g2 f8g7 d2d4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-088",
+      "action_ids": [
+        275,
+        170,
+        170,
+        361,
+        56,
+        129,
+        303,
+        109
+      ],
+      "final_position_digest": "c32d639e502b679e931cf88c8ac6f9271942ba23829b8690629e91d7e3617b95",
+      "human_readable": "d2d4 g8f6 g1f3 g7g6 c1f4 f8g7 e2e3 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-089",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        797,
+        471,
+        170,
+        44
+      ],
+      "final_position_digest": "373178f6a15531a92c712aee3b6a2b7d928e689ecbadcad2c58d58024258a9f2",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 e4d5 c6d5 g1f3 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-090",
+      "action_ids": [
+        304,
+        246,
+        44,
+        44,
+        333,
+        361,
+        170,
+        129
+      ],
+      "final_position_digest": "5662d1a6e7ce52690e873bffb5e0b66d0622099fe7cc64e0899b8aa5840210b6",
+      "human_readable": "e2e4 c7c5 b1c3 b8c6 f2f4 g7g6 g1f3 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-091",
+      "action_ids": [
+        246,
+        303,
+        44,
+        275,
+        710,
+        553,
+        275,
+        245
+      ],
+      "final_position_digest": "587e073f81cf3955fc4235e8754815e8b463212e19ee62ae518ece396eed391f",
+      "human_readable": "c2c4 e7e6 b1c3 d7d5 c4d5 e6d5 d2d4 c7c6"
+    },
+    {
+      "opening_id": "elite-2025-11-092",
+      "action_ids": [
+        275,
+        170,
+        56,
+        361,
+        44,
+        275,
+        303,
+        129
+      ],
+      "final_position_digest": "54f45bdade93f827e7960c5cbc1034e945110294bc4cf55dea635b17b3ec2149",
+      "human_readable": "d2d4 g8f6 c1f4 g7g6 b1c3 d7d5 e2e3 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-093",
+      "action_ids": [
+        304,
+        246,
+        170,
+        361,
+        275,
+        710,
+        74,
+        170
+      ],
+      "final_position_digest": "283c2ff200589861a423b3160c13ab2d38da64b91afc4d9cd0dfdf7466f299e1",
+      "human_readable": "e2e4 c7c5 g1f3 g7g6 d2d4 c5d4 d1d4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-094",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        44,
+        141,
+        170,
+        109
+      ],
+      "final_position_digest": "e5ba68de5ce8a9bd99f8a2ac74488cc86be9b4b4207198cf7ad9ef76cbda55f2",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 g1f3 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-095",
+      "action_ids": [
+        275,
+        170,
+        170,
+        303,
+        361,
+        275,
+        129,
+        138
+      ],
+      "final_position_digest": "4c823089234081cfb3ce586f41c6cb86d8aef354ca83b43a37b2a3ac590c989e",
+      "human_readable": "d2d4 g8f6 g1f3 e7e6 g2g3 d7d5 f1g2 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-096",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        141,
+        194,
+        941,
+        138
+      ],
+      "final_position_digest": "ee5980ce71ec4bc74840ea8e74e1cd17ceb2e8a6afacd003cff5ff3535d29772",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-097",
+      "action_ids": [
+        275,
+        170,
+        170,
+        303,
+        56,
+        218,
+        303,
+        66
+      ],
+      "final_position_digest": "727af5cf26a6d2ab9fce9ae0e6c6c06d9ced77ad0198ea8ecac37056ec1547c0",
+      "human_readable": "d2d4 g8f6 g1f3 e7e6 c1f4 b7b6 e2e3 c8b7"
+    },
+    {
+      "opening_id": "elite-2025-11-098",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        44,
+        141,
+        90,
+        275
+      ],
+      "final_position_digest": "9f0f357285a777b6402956d87bb2ddb998980f1f504e3b7230de05385ff5b171",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 d1c2 d7d5"
+    },
+    {
+      "opening_id": "elite-2025-11-099",
+      "action_ids": [
+        275,
+        170,
+        246,
+        361,
+        170,
+        129,
+        361,
+        274
+      ],
+      "final_position_digest": "6a88137c30e1cd5010f9796f7fecf238ca160bd810fd399b39981f1e2c7ddb88",
+      "human_readable": "d2d4 g8f6 c2c4 g7g6 g1f3 f8g7 g2g3 d7d6"
+    },
+    {
+      "opening_id": "elite-2025-11-100",
+      "action_ids": [
+        246,
+        246,
+        170,
+        44,
+        275,
+        710,
+        596,
+        170
+      ],
+      "final_position_digest": "1b3599f68c16ed9941f71fcbc82ecc43f4e90e78f5af6c914940aa81ba79a461",
+      "human_readable": "c2c4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-101",
+      "action_ids": [
+        275,
+        275,
+        246,
+        245,
+        170,
+        170,
+        303,
+        57
+      ],
+      "final_position_digest": "b19377981f11da907fb39b64c1ed123336b66abb6b1888800b66e90363e4881f",
+      "human_readable": "d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 e2e3 c8g4"
+    },
+    {
+      "opening_id": "elite-2025-11-102",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        44,
+        141,
+        170,
+        218
+      ],
+      "final_position_digest": "0587533baf1e7cbe77c81c4490bc867edfe99a13cb89062dfc0d5e79ef6c3b4e",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 g1f3 b7b6"
+    },
+    {
+      "opening_id": "elite-2025-11-103",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        141,
+        54,
+        79
+      ],
+      "final_position_digest": "1c45814ff35e18f591e260de4f420044cea4b20d66b59585ff54b03620a66fab",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 f8b4 c1d2 d8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-104",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        44,
+        141,
+        303,
+        218
+      ],
+      "final_position_digest": "39ad2a73013b7f71bedf33d5b4c8fc84ef04dceadfafafe4b7a471c5e1db69a7",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 e2e3 b7b6"
+    },
+    {
+      "opening_id": "elite-2025-11-105",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        44,
+        141,
+        332,
+        246
+      ],
+      "final_position_digest": "ac063dd747fd0be99214de12e4543db42d4a9faa29a92768083139250b5142e7",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 f2f3 c7c5"
+    },
+    {
+      "opening_id": "elite-2025-11-106",
+      "action_ids": [
+        304,
+        246,
+        170,
+        274,
+        275,
+        710,
+        74,
+        170
+      ],
+      "final_position_digest": "7bb3472c3bd4356d294ce4a87ef486af6aa00a34d64246e03277c383e08d4bed",
+      "human_readable": "e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 d1d4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-107",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        44,
+        141,
+        303,
+        246
+      ],
+      "final_position_digest": "9b22bc45eee98a932977458ccce3529de798c986c38dbad6fd3fe9472c8e2a41",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 e2e3 c7c5"
+    },
+    {
+      "opening_id": "elite-2025-11-108",
+      "action_ids": [
+        304,
+        246,
+        245,
+        275,
+        797,
+        74,
+        275,
+        170
+      ],
+      "final_position_digest": "3166f5bfafddb305eaa10fe9f082510d3528de3d470a7202d633307a99270e43",
+      "human_readable": "e2e4 c7c5 c2c3 d7d5 e4d5 d8d5 d2d4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-109",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        275,
+        797,
+        596,
+        140
+      ],
+      "final_position_digest": "90316eee4eff21aa474ec8b0618a683a61578b78ecbe66045d74a5948aed4561",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4 f8c5"
+    },
+    {
+      "opening_id": "elite-2025-11-110",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        141,
+        194,
+        941,
+        169
+      ],
+      "final_position_digest": "94adc2d06f4a3794fbe9b118d251456c7602eba7ddbfad75f155874e47909feb",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-111",
+      "action_ids": [
+        275,
+        275,
+        246,
+        303,
+        44,
+        194,
+        710,
+        553
+      ],
+      "final_position_digest": "2fbc14f4e12ba6be4e721cbaf2b2dafc2b11ff839a94d0c4b5de01171328469c",
+      "human_readable": "d2d4 d7d5 c2c4 e7e6 b1c3 a7a6 c4d5 e6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-112",
+      "action_ids": [
+        275,
+        170,
+        44,
+        275,
+        56,
+        194,
+        303,
+        303
+      ],
+      "final_position_digest": "faf41e016d10c0064fbf5a80b06b63a148ef436eabc2f0805e3cf7f3182e25d8",
+      "human_readable": "d2d4 g8f6 b1c3 d7d5 c1f4 a7a6 e2e3 e7e6"
+    },
+    {
+      "opening_id": "elite-2025-11-113",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        774,
+        246,
+        245,
+        91
+      ],
+      "final_position_digest": "a828412206ed2b24b5a7a78fb72dcd8b42972d84765105dec964dde1db667153",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 e4e5 c7c5 c2c3 d8b6"
+    },
+    {
+      "opening_id": "elite-2025-11-114",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        44,
+        141,
+        797,
+        553
+      ],
+      "final_position_digest": "4525672a093c8be3a3c9c7ffaa9f8d24a6de63bd1c0f8678e57cbbcf35d558bc",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 b1c3 f8b4 e4d5 e6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-115",
+      "action_ids": [
+        246,
+        303,
+        361,
+        275,
+        129,
+        170,
+        170,
+        739
+      ],
+      "final_position_digest": "6fb31de343abf2de1c98220ee70c9a9f5c958e8aa544c5b5ee41090122ed317c",
+      "human_readable": "c2c4 e7e6 g2g3 d7d5 f1g2 g8f6 g1f3 d5d4"
+    },
+    {
+      "opening_id": "elite-2025-11-116",
+      "action_ids": [
+        304,
+        246,
+        170,
+        44,
+        141,
+        304,
+        109,
+        139
+      ],
+      "final_position_digest": "b26e8e5db593ec89653708b22c2c04c18b9ce36ddb07ee938fed19611bca6dc4",
+      "human_readable": "e2e4 c7c5 g1f3 b8c6 f1b5 e7e5 e1g1 f8d6"
+    },
+    {
+      "opening_id": "elite-2025-11-117",
+      "action_ids": [
+        275,
+        275,
+        246,
+        303,
+        170,
+        246,
+        710,
+        553
+      ],
+      "final_position_digest": "7c4c82911d38f7aa1feddb2e882a7bf0e3eed1b8f4e243943c2eb91a4ec37c55",
+      "human_readable": "d2d4 d7d5 c2c4 e7e6 g1f3 c7c5 c4d5 e6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-118",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        275,
+        44,
+        388
+      ],
+      "final_position_digest": "94c78697a4c893c164c0444daf0699d302e5333c3a474dd99a68c58c9d7ec9f8",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 h7h6"
+    },
+    {
+      "opening_id": "elite-2025-11-119",
+      "action_ids": [
+        170,
+        275,
+        303,
+        170,
+        246,
+        303,
+        44,
+        138
+      ],
+      "final_position_digest": "a07952ec139c51b0a6028df18794ea0c33ae17dcff5b1f4f31ff9575991bcd71",
+      "human_readable": "g1f3 d7d5 e2e3 g8f6 c2c4 e7e6 b1c3 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-120",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        44,
+        141,
+        332,
+        275
+      ],
+      "final_position_digest": "6ad4068e6b999645bc408208de08af76ad0acaee9feda665ff8aec853d984b48",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 f2f3 d7d5"
+    },
+    {
+      "opening_id": "elite-2025-11-121",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        774,
+        56,
+        45,
+        303
+      ],
+      "final_position_digest": "0bb1bf6261f7b3786f5b47946df66fe05183d8e1b96c85559d479fb02e30822e",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 e4e5 c8f5 b1d2 e7e6"
+    },
+    {
+      "opening_id": "elite-2025-11-122",
+      "action_ids": [
+        304,
+        246,
+        275,
+        710,
+        74,
+        44,
+        754,
+        170
+      ],
+      "final_position_digest": "9e2576e72fe66b5a8d41b9e9f8b7b583e7ad8eafe4b57bfa1ab8b5a9b226cf9c",
+      "human_readable": "e2e4 c7c5 d2d4 c5d4 d1d4 b8c6 d4d3 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-123",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        44,
+        743,
+        492,
+        45
+      ],
+      "final_position_digest": "0faef97610f0ea92a23bd844705dbcad86fc7842a9add05fdf9fcadd4a2c0ec3",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 b1c3 d5e4 c3e4 b8d7"
+    },
+    {
+      "opening_id": "elite-2025-11-124",
+      "action_ids": [
+        170,
+        170,
+        246,
+        361,
+        218,
+        129,
+        66,
+        109
+      ],
+      "final_position_digest": "a01c50d899d6bf80bc1d7fd41395d5fa11a6abd7fde069871d7450923ccc4920",
+      "human_readable": "g1f3 g8f6 c2c4 g7g6 b2b3 f8g7 c1b2 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-125",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        44,
+        170,
+        141,
+        141
+      ],
+      "final_position_digest": "f1fc0f3f95b45c94e240c38d9ad181588289fbc550e50d3e13a961f12f755ade",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 b1c3 g8f6 f1b5 f8b4"
+    },
+    {
+      "opening_id": "elite-2025-11-126",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        44,
+        170,
+        141,
+        139
+      ],
+      "final_position_digest": "45d935c87c6b4b5d6a2802042a201b6b2a695096b2dabce716a1aab7bf46c67c",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 b1c3 g8f6 f1b5 f8d6"
+    },
+    {
+      "opening_id": "elite-2025-11-127",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        141,
+        45,
+        109
+      ],
+      "final_position_digest": "325457cd98bbea01a5220197d331987632a6f5bc0dccbffc18dccdec52c39835",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 f8b4 b1d2 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-128",
+      "action_ids": [
+        304,
+        246,
+        170,
+        44,
+        245,
+        275,
+        797,
+        74
+      ],
+      "final_position_digest": "26b6b8aa6c4f5372c43422522b15458136ab0cd078dc49707731c65bf6c6759b",
+      "human_readable": "e2e4 c7c5 g1f3 b8c6 c2c3 d7d5 e4d5 d8d5"
+    },
+    {
+      "opening_id": "elite-2025-11-129",
+      "action_ids": [
+        304,
+        246,
+        170,
+        303,
+        245,
+        275,
+        797,
+        553
+      ],
+      "final_position_digest": "f897e9ecec466dc00a87be7f775f6abef8bb9a3ab66578da5b7b0047375e3144",
+      "human_readable": "e2e4 c7c5 g1f3 e7e6 c2c3 d7d5 e4d5 e6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-130",
+      "action_ids": [
+        304,
+        246,
+        170,
+        303,
+        361,
+        44,
+        129,
+        170
+      ],
+      "final_position_digest": "f0b4f672d2bfa3d458dcf43c6d9e56183f3a2a564c0d198bdf29c00baf05b1d8",
+      "human_readable": "e2e4 c7c5 g1f3 e7e6 g2g3 b8c6 f1g2 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-131",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        139,
+        743,
+        504,
+        170
+      ],
+      "final_position_digest": "2dcf3e08be7527dff78cc7d71c41510d79e8034f47469e7ecf3a1526277012fd",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 f1d3 d5e4 d3e4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-132",
+      "action_ids": [
+        170,
+        275,
+        361,
+        245,
+        129,
+        57,
+        109,
+        45
+      ],
+      "final_position_digest": "9912817ec47107b2ec80bbc510ce838e8b700ea5d22415e936f59bfcd2a2e95d",
+      "human_readable": "g1f3 d7d5 g2g3 c7c6 f1g2 c8g4 e1g1 b8d7"
+    },
+    {
+      "opening_id": "elite-2025-11-133",
+      "action_ids": [
+        275,
+        170,
+        170,
+        361,
+        56,
+        129,
+        303,
+        274
+      ],
+      "final_position_digest": "08747cd463f67bad899c7d6035cad5d307079b4ce718ed280c88a5cb37dec560",
+      "human_readable": "d2d4 g8f6 g1f3 g7g6 c1f4 f8g7 e2e3 d7d6"
+    },
+    {
+      "opening_id": "elite-2025-11-134",
+      "action_ids": [
+        304,
+        246,
+        170,
+        361,
+        275,
+        710,
+        596,
+        129
+      ],
+      "final_position_digest": "2c3a45716ad63c2ed30bf068587906dc091245be1f5b2c9dc5186a470ad29d0d",
+      "human_readable": "e2e4 c7c5 g1f3 g7g6 d2d4 c5d4 f3d4 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-135",
+      "action_ids": [
+        246,
+        245,
+        170,
+        275,
+        303,
+        170,
+        44,
+        194
+      ],
+      "final_position_digest": "dca8e1119b744dfb54621c23b7516d1f0b445bf1804b1bde8aafbd58b1a3c69d",
+      "human_readable": "c2c4 c7c6 g1f3 d7d5 e2e3 g8f6 b1c3 a7a6"
+    },
+    {
+      "opening_id": "elite-2025-11-136",
+      "action_ids": [
+        246,
+        245,
+        361,
+        275,
+        129,
+        170,
+        170,
+        56
+      ],
+      "final_position_digest": "197937d52bf0c6027aff5163552ca27c09d9db3f240fcdc1b2b53f6742a94d65",
+      "human_readable": "c2c4 c7c6 g2g3 d7d5 f1g2 g8f6 g1f3 c8f5"
+    },
+    {
+      "opening_id": "elite-2025-11-137",
+      "action_ids": [
+        275,
+        275,
+        246,
+        245,
+        170,
+        170,
+        303,
+        194
+      ],
+      "final_position_digest": "2eb0fc13af7a78795637d9d715051239dd600d9a5c5f8029f908f13031102442",
+      "human_readable": "d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 e2e3 a7a6"
+    },
+    {
+      "opening_id": "elite-2025-11-138",
+      "action_ids": [
+        275,
+        275,
+        246,
+        245,
+        710,
+        471,
+        56,
+        44
+      ],
+      "final_position_digest": "dc99c2506dec9d019e04d92fa8f8660dae95616bd2a819901f167b518cb39da3",
+      "human_readable": "d2d4 d7d5 c2c4 c7c6 c4d5 c6d5 c1f4 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-139",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        797,
+        553,
+        170,
+        139
+      ],
+      "final_position_digest": "f25f31cf231e08ab78075efe32f1bf38f1a2da6e22af369adda0339fa75f9d67",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 e4d5 e6d5 g1f3 f8d6"
+    },
+    {
+      "opening_id": "elite-2025-11-140",
+      "action_ids": [
+        275,
+        275,
+        246,
+        763,
+        303,
+        170,
+        140,
+        303
+      ],
+      "final_position_digest": "0b16ffbd34fd80a5e0d03a156036768e696eafdb99b145f751984a365c94fd4a",
+      "human_readable": "d2d4 d7d5 c2c4 d5c4 e2e3 g8f6 f1c4 e7e6"
+    },
+    {
+      "opening_id": "elite-2025-11-141",
+      "action_ids": [
+        275,
+        170,
+        170,
+        361,
+        57,
+        129,
+        45,
+        109
+      ],
+      "final_position_digest": "1a42f27d25da8fe70eb24cfe08aa7cdf4e691a274ba974441ccfe29b06fdc2ec",
+      "human_readable": "d2d4 g8f6 g1f3 g7g6 c1g5 f8g7 b1d2 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-142",
+      "action_ids": [
+        275,
+        275,
+        246,
+        245,
+        170,
+        170,
+        361,
+        56
+      ],
+      "final_position_digest": "90c5f0ac79d378f723ffdd5c6c77b539a7fee1d17b34602a63f20f5d4944989d",
+      "human_readable": "d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 g2g3 c8f5"
+    },
+    {
+      "opening_id": "elite-2025-11-143",
+      "action_ids": [
+        304,
+        275,
+        797,
+        74,
+        170,
+        57,
+        138,
+        44
+      ],
+      "final_position_digest": "9018f822ec55c3ab9bb874f96953d194cef760a41b0a60b767407ab5e9b64666",
+      "human_readable": "e2e4 d7d5 e4d5 d8d5 g1f3 c8g4 f1e2 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-144",
+      "action_ids": [
+        170,
+        275,
+        361,
+        170,
+        129,
+        246,
+        109,
+        44
+      ],
+      "final_position_digest": "9347a83b4c42e7a4ef6f45fe48ef8b22797c5cc31f3912a3a4d198d06105ee45",
+      "human_readable": "g1f3 d7d5 g2g3 g8f6 f1g2 c7c5 e1g1 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-145",
+      "action_ids": [
+        275,
+        275,
+        246,
+        303,
+        44,
+        170,
+        710,
+        596
+      ],
+      "final_position_digest": "282d82d929f969f0468bb137bcb80f88d8bacddf3d88768d2114f2d86ac88124",
+      "human_readable": "d2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c4d5 f6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-146",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        218,
+        44,
+        66
+      ],
+      "final_position_digest": "6372bc1a21618ee2285a92afb5963c1a39c05ec9041741472d5e0344041feda3",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 b7b6 b1c3 c8b7"
+    },
+    {
+      "opening_id": "elite-2025-11-147",
+      "action_ids": [
+        304,
+        246,
+        170,
+        361,
+        245,
+        275,
+        797,
+        74
+      ],
+      "final_position_digest": "fc50383dfac58f87b7de02b774c2457bc53e8a450154956c291c1a93396b0bf3",
+      "human_readable": "e2e4 c7c5 g1f3 g7g6 c2c3 d7d5 e4d5 d8d5"
+    },
+    {
+      "opening_id": "elite-2025-11-148",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        44,
+        170,
+        194,
+        275
+      ],
+      "final_position_digest": "76df36316a7e4dd6c8379126ae904627da61942e05355eaaa2328fec88e6ca18",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 b1c3 g8f6 a2a3 d7d5"
+    },
+    {
+      "opening_id": "elite-2025-11-149",
+      "action_ids": [
+        246,
+        245,
+        170,
+        275,
+        303,
+        170,
+        44,
+        303
+      ],
+      "final_position_digest": "d9d61852ba504414d64acd755a5e56da260b4a55508a6910e3630750d3a02cc0",
+      "human_readable": "c2c4 c7c6 g1f3 d7d5 e2e3 g8f6 b1c3 e7e6"
+    },
+    {
+      "opening_id": "elite-2025-11-150",
+      "action_ids": [
+        275,
+        275,
+        246,
+        303,
+        170,
+        170,
+        361,
+        245
+      ],
+      "final_position_digest": "08c7155f3b28878c6bf18e2c533f1caa24d1a0808c575400974681c792cb26c2",
+      "human_readable": "d2d4 d7d5 c2c4 e7e6 g1f3 g8f6 g2g3 c7c6"
+    },
+    {
+      "opening_id": "elite-2025-11-151",
+      "action_ids": [
+        275,
+        170,
+        170,
+        303,
+        361,
+        218,
+        129,
+        66
+      ],
+      "final_position_digest": "ec5a7ffc15e5e7ad12a0efff8612362f1efe5858f166535941b80dbec23d4a50",
+      "human_readable": "d2d4 g8f6 g1f3 e7e6 g2g3 b7b6 f1g2 c8b7"
+    },
+    {
+      "opening_id": "elite-2025-11-152",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        141,
+        194,
+        941,
+        219
+      ],
+      "final_position_digest": "552b747dacd7e09e6bcbd64834fff222bf61ba349746344dbb9671af47d0d1c7",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 b7b5"
+    },
+    {
+      "opening_id": "elite-2025-11-153",
+      "action_ids": [
+        275,
+        275,
+        246,
+        303,
+        44,
+        138,
+        710,
+        553
+      ],
+      "final_position_digest": "fd9d7f732462533a916bf66440f10ea37e3abfb90e9f8c2eadff0407ffd4ed78",
+      "human_readable": "d2d4 d7d5 c2c4 e7e6 b1c3 f8e7 c4d5 e6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-154",
+      "action_ids": [
+        304,
+        304,
+        275,
+        797,
+        74,
+        44,
+        751,
+        170
+      ],
+      "final_position_digest": "bdff97540b787af46e31f4f2670ad0e115e421f639490e9fe457d4837836f932",
+      "human_readable": "e2e4 e7e5 d2d4 e5d4 d1d4 b8c6 d4e3 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-155",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        141,
+        54,
+        195
+      ],
+      "final_position_digest": "5fe8a39268b46c65b47ed0f7c00a0568f7c10c6325e6222408ef604df31268fe",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 f8b4 c1d2 a7a5"
+    },
+    {
+      "opening_id": "elite-2025-11-156",
+      "action_ids": [
+        275,
+        170,
+        170,
+        303,
+        361,
+        219,
+        129,
+        66
+      ],
+      "final_position_digest": "f5eed77a8ae23b924e83393c262424947ef16ffe30fc0cd4fc2b1b360022b50d",
+      "human_readable": "d2d4 g8f6 g1f3 e7e6 g2g3 b7b5 f1g2 c8b7"
+    },
+    {
+      "opening_id": "elite-2025-11-157",
+      "action_ids": [
+        170,
+        275,
+        361,
+        361,
+        129,
+        129,
+        109,
+        304
+      ],
+      "final_position_digest": "dd542362673f1f358654616af6f54c29ea8db7ee679f8d00f1562237767d351c",
+      "human_readable": "g1f3 d7d5 g2g3 g7g6 f1g2 f8g7 e1g1 e7e5"
+    },
+    {
+      "opening_id": "elite-2025-11-158",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        361,
+        141,
+        54,
+        935
+      ],
+      "final_position_digest": "01c05e785c49c89caae1f904316e8f148731eaf2d37ea128776e36de1bebd6f3",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g2g3 f8b4 c1d2 b4e7"
+    },
+    {
+      "opening_id": "elite-2025-11-159",
+      "action_ids": [
+        304,
+        246,
+        170,
+        303,
+        245,
+        275,
+        797,
+        74
+      ],
+      "final_position_digest": "afbdea35ee5c996a8c6ed26940ef780cba087e738a5edb0960a4ef59230ead40",
+      "human_readable": "e2e4 c7c5 g1f3 e7e6 c2c3 d7d5 e4d5 d8d5"
+    },
+    {
+      "opening_id": "elite-2025-11-160",
+      "action_ids": [
+        275,
+        275,
+        246,
+        245,
+        710,
+        471,
+        56,
+        170
+      ],
+      "final_position_digest": "07b411bbef462d6a02a5051c0a500b4e06c0301019db580cc094d3afc87c6cac",
+      "human_readable": "d2d4 d7d5 c2c4 c7c6 c4d5 c6d5 c1f4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-161",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        170,
+        275,
+        303,
+        138
+      ],
+      "final_position_digest": "49409f8d6bfd35dda0c52f2aa1a6b0bb3a855bbeeafcc5d897e0d67feda42132",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 e2e3 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-162",
+      "action_ids": [
+        275,
+        170,
+        246,
+        303,
+        44,
+        141,
+        90,
+        246
+      ],
+      "final_position_digest": "78ab91b9e7309201e05688e982597525161e69c1c57b807a12a4c3c3058b5574",
+      "human_readable": "d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 d1c2 c7c5"
+    },
+    {
+      "opening_id": "elite-2025-11-163",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        774,
+        56,
+        389,
+        388
+      ],
+      "final_position_digest": "0eb984f487f5968ed3cf3421ab2940cddd69c5dd299019e195d4a379f0ed1e42",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 e4e5 c8f5 h2h4 h7h6"
+    },
+    {
+      "opening_id": "elite-2025-11-164",
+      "action_ids": [
+        170,
+        170,
+        275,
+        361,
+        246,
+        129,
+        303,
+        109
+      ],
+      "final_position_digest": "b64a2f6fc8d699320f5a5b94a934fedc928c15259054416e91bebcaaaa00c4b3",
+      "human_readable": "g1f3 g8f6 d2d4 g7g6 c2c4 f8g7 e2e3 e8g8"
+    },
+    {
+      "opening_id": "elite-2025-11-165",
+      "action_ids": [
+        218,
+        304,
+        246,
+        44,
+        66,
+        169,
+        170,
+        275
+      ],
+      "final_position_digest": "bf9e3526fccf180fcaf23078ec9b858b042663578655ed073c7f93bdc805f53d",
+      "human_readable": "b2b3 e7e5 c2c4 b8c6 c1b2 g8e7 g1f3 d7d5"
+    },
+    {
+      "opening_id": "elite-2025-11-166",
+      "action_ids": [
+        246,
+        303,
+        170,
+        275,
+        303,
+        170,
+        218,
+        138
+      ],
+      "final_position_digest": "50685f51fa96bb5034925c5d8494365f879851226f0195ff33d4920be0953561",
+      "human_readable": "c2c4 e7e6 g1f3 d7d5 e2e3 g8f6 b2b3 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-167",
+      "action_ids": [
+        304,
+        246,
+        245,
+        170,
+        774,
+        596,
+        170,
+        274
+      ],
+      "final_position_digest": "4d53661fa7a1c50bcaee916252ace7924219dc70913d56115904089d2f6d30f9",
+      "human_readable": "e2e4 c7c5 c2c3 g8f6 e4e5 f6d5 g1f3 d7d6"
+    },
+    {
+      "opening_id": "elite-2025-11-168",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        140,
+        140,
+        44,
+        170
+      ],
+      "final_position_digest": "6be27ebe7fcbda8d262d54d68e67aa95882f8189f08dac3a5b0fea8f0db34305",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b1c3 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-169",
+      "action_ids": [
+        170,
+        170,
+        218,
+        275,
+        66,
+        246,
+        303,
+        44
+      ],
+      "final_position_digest": "ff143cfe418653940f0bcc455e339942308ff69e1923a9169c8a9f3546fb1a14",
+      "human_readable": "g1f3 g8f6 b2b3 d7d5 c1b2 c7c5 e2e3 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-170",
+      "action_ids": [
+        246,
+        304,
+        361,
+        170,
+        129,
+        245,
+        170,
+        774
+      ],
+      "final_position_digest": "58940dc564139c68e1ed87f0aa343ae74fe6ef30ce8a6c1077c8ec739ba5abdb",
+      "human_readable": "c2c4 e7e5 g2g3 g8f6 f1g2 c7c6 g1f3 e5e4"
+    },
+    {
+      "opening_id": "elite-2025-11-171",
+      "action_ids": [
+        304,
+        246,
+        44,
+        274,
+        275,
+        710,
+        74,
+        44
+      ],
+      "final_position_digest": "092c45bf20092b77a05764397ad553d89459e3dffa4eb9837242d42112fdde7f",
+      "human_readable": "e2e4 c7c5 b1c3 d7d6 d2d4 c5d4 d1d4 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-172",
+      "action_ids": [
+        304,
+        246,
+        44,
+        274,
+        333,
+        361,
+        170,
+        129
+      ],
+      "final_position_digest": "dad91b625c0b6da392a469b3797584b76c7c786bb6793ee5016e152254ee012d",
+      "human_readable": "e2e4 c7c5 b1c3 d7d6 f2f4 g7g6 g1f3 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-173",
+      "action_ids": [
+        304,
+        246,
+        275,
+        710,
+        74,
+        44,
+        754,
+        361
+      ],
+      "final_position_digest": "68892d70aaed9433e8187bebde2393c6ecf9f9e4c5fe76f7116d6a8000febba2",
+      "human_readable": "e2e4 c7c5 d2d4 c5d4 d1d4 b8c6 d4d3 g7g6"
+    },
+    {
+      "opening_id": "elite-2025-11-174",
+      "action_ids": [
+        304,
+        246,
+        170,
+        44,
+        44,
+        304,
+        140,
+        138
+      ],
+      "final_position_digest": "fed565dd93b35f74cc1cc8ca9c120abc5d7af5e9f4b48856f171aa3abc561a9c",
+      "human_readable": "e2e4 c7c5 g1f3 b8c6 b1c3 e7e5 f1c4 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-175",
+      "action_ids": [
+        304,
+        304,
+        170,
+        44,
+        141,
+        170,
+        274,
+        274
+      ],
+      "final_position_digest": "88e4c1de4d806a2ea6008048a4ce4dea4f0c0630b2e006a09af96d6e6471f4fd",
+      "human_readable": "e2e4 e7e5 g1f3 b8c6 f1b5 g8f6 d2d3 d7d6"
+    },
+    {
+      "opening_id": "elite-2025-11-176",
+      "action_ids": [
+        304,
+        304,
+        170,
+        170,
+        275,
+        597,
+        743,
+        275
+      ],
+      "final_position_digest": "46a9686e0d40050899c79dcbd6308cd2a8d80c18e4b720099a7c15295900d77c",
+      "human_readable": "e2e4 e7e5 g1f3 g8f6 d2d4 f6e4 d4e5 d7d5"
+    },
+    {
+      "opening_id": "elite-2025-11-177",
+      "action_ids": [
+        170,
+        275,
+        246,
+        739,
+        361,
+        44,
+        129,
+        304
+      ],
+      "final_position_digest": "3913ea5b8af81343141f8db0e47ff4228aa7c84111ba3cfc3b69bcf3659ba35b",
+      "human_readable": "g1f3 d7d5 c2c4 d5d4 g2g3 b8c6 f1g2 e7e5"
+    },
+    {
+      "opening_id": "elite-2025-11-178",
+      "action_ids": [
+        218,
+        304,
+        66,
+        44,
+        303,
+        170,
+        141,
+        139
+      ],
+      "final_position_digest": "c56918fa83cb5f40f5328cee570fe6c0fe806c0b3ad42b263d6547b0930b41ff",
+      "human_readable": "b2b3 e7e5 c1b2 b8c6 e2e3 g8f6 f1b5 f8d6"
+    },
+    {
+      "opening_id": "elite-2025-11-179",
+      "action_ids": [
+        246,
+        304,
+        44,
+        170,
+        170,
+        44,
+        361,
+        275
+      ],
+      "final_position_digest": "d741c715373dba70f557ee29a3940ada03a28499aaf802ba571a1f649b54bdcc",
+      "human_readable": "c2c4 e7e5 b1c3 g8f6 g1f3 b8c6 g2g3 d7d5"
+    },
+    {
+      "opening_id": "elite-2025-11-180",
+      "action_ids": [
+        275,
+        170,
+        170,
+        361,
+        57,
+        129,
+        45,
+        275
+      ],
+      "final_position_digest": "88722f01ff8078f3369af12343e1fe22db4f17df7e77a8e26869322e928aa712",
+      "human_readable": "d2d4 g8f6 g1f3 g7g6 c1g5 f8g7 b1d2 d7d5"
+    },
+    {
+      "opening_id": "elite-2025-11-181",
+      "action_ids": [
+        304,
+        246,
+        170,
+        274,
+        141,
+        45,
+        195,
+        170
+      ],
+      "final_position_digest": "77f62a9e37db8cbf33844d1bf22e1459e216168f631327a4c38d239f384c054d",
+      "human_readable": "e2e4 c7c5 g1f3 d7d6 f1b5 b8d7 a2a4 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-182",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        45,
+        246,
+        797,
+        553
+      ],
+      "final_position_digest": "c3d0a366367bc0fb1bb60ff0d37a123738e717546263f1a6f481305e34f89e51",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 b1d2 c7c5 e4d5 e6d5"
+    },
+    {
+      "opening_id": "elite-2025-11-183",
+      "action_ids": [
+        170,
+        246,
+        246,
+        44,
+        44,
+        361,
+        361,
+        129
+      ],
+      "final_position_digest": "7953565f99f62d6a37f7af4d1c05400082f4d8863000725b898c346010310d86",
+      "human_readable": "g1f3 c7c5 c2c4 b8c6 b1c3 g7g6 g2g3 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-184",
+      "action_ids": [
+        218,
+        304,
+        66,
+        44,
+        303,
+        275,
+        141,
+        169
+      ],
+      "final_position_digest": "0868ab005d0f37e855a9aee05f76fc436bb3bf13c047a96a3017ae081be5f11c",
+      "human_readable": "b2b3 e7e5 c1b2 b8c6 e2e3 d7d5 f1b5 g8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-185",
+      "action_ids": [
+        275,
+        275,
+        246,
+        303,
+        170,
+        170,
+        361,
+        139
+      ],
+      "final_position_digest": "e82a7e6d0ef080e23160ae1ac2964e4adf2ea3d1ebb844a58dcd945d0c1266a9",
+      "human_readable": "d2d4 d7d5 c2c4 e7e6 g1f3 g8f6 g2g3 f8d6"
+    },
+    {
+      "opening_id": "elite-2025-11-186",
+      "action_ids": [
+        304,
+        304,
+        44,
+        170,
+        140,
+        44,
+        274,
+        497
+      ],
+      "final_position_digest": "783d15a26ad3ec50b3ddc312ce1749d5ca6b163a63a222b7652ff986af0ba573",
+      "human_readable": "e2e4 e7e5 b1c3 g8f6 f1c4 b8c6 d2d3 c6a5"
+    },
+    {
+      "opening_id": "elite-2025-11-187",
+      "action_ids": [
+        275,
+        170,
+        246,
+        361,
+        332,
+        129,
+        304,
+        274
+      ],
+      "final_position_digest": "f0f551042f5cbdbff96ad3e250625d38b576dae3a62e990eca9def67c371fae3",
+      "human_readable": "d2d4 g8f6 c2c4 g7g6 f2f3 f8g7 e2e4 d7d6"
+    },
+    {
+      "opening_id": "elite-2025-11-188",
+      "action_ids": [
+        275,
+        170,
+        170,
+        303,
+        57,
+        275,
+        45,
+        138
+      ],
+      "final_position_digest": "60e2719beeac1c6f0c0b3423d4ae1f74ca4e149427c6e06b1f581958d35cef5a",
+      "human_readable": "d2d4 g8f6 g1f3 e7e6 c1g5 d7d5 b1d2 f8e7"
+    },
+    {
+      "opening_id": "elite-2025-11-189",
+      "action_ids": [
+        304,
+        246,
+        44,
+        194,
+        361,
+        219,
+        129,
+        66
+      ],
+      "final_position_digest": "ffbe8e7547f7f67f01273e4d442907789fe4d30dc6c6f7bd5fab2ae452eaa280",
+      "human_readable": "e2e4 c7c5 b1c3 a7a6 g2g3 b7b5 f1g2 c8b7"
+    },
+    {
+      "opening_id": "elite-2025-11-190",
+      "action_ids": [
+        304,
+        303,
+        274,
+        275,
+        45,
+        246,
+        170,
+        44
+      ],
+      "final_position_digest": "9cbfa78dec64f1e6f9f047e68ddb8593abddc0700af92112effe6564499d3d80",
+      "human_readable": "e2e4 e7e6 d2d3 d7d5 b1d2 c7c5 g1f3 b8c6"
+    },
+    {
+      "opening_id": "elite-2025-11-191",
+      "action_ids": [
+        170,
+        170,
+        246,
+        303,
+        44,
+        275,
+        303,
+        246
+      ],
+      "final_position_digest": "4d7a3d4ab74c5a59c9f39a8153f2915bec0f4aff4ad0a1ba033ec63aa2f16fcb",
+      "human_readable": "g1f3 g8f6 c2c4 e7e6 b1c3 d7d5 e2e3 c7c5"
+    },
+    {
+      "opening_id": "elite-2025-11-192",
+      "action_ids": [
+        304,
+        245,
+        275,
+        275,
+        797,
+        471,
+        170,
+        170
+      ],
+      "final_position_digest": "cf1680e6147c01a55491625a834eead953fc3d49c52dcbf1afee3e2539df14d7",
+      "human_readable": "e2e4 c7c6 d2d4 d7d5 e4d5 c6d5 g1f3 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-193",
+      "action_ids": [
+        304,
+        303,
+        170,
+        275,
+        44,
+        170,
+        774,
+        595
+      ],
+      "final_position_digest": "867dd099e8b4e49354f1867b201e712dc8d30a0c5d21951b5659fb54854debba",
+      "human_readable": "e2e4 e7e6 g1f3 d7d5 b1c3 g8f6 e4e5 f6d7"
+    },
+    {
+      "opening_id": "elite-2025-11-194",
+      "action_ids": [
+        170,
+        275,
+        361,
+        44,
+        129,
+        304,
+        274,
+        170
+      ],
+      "final_position_digest": "cb5bbf9a4daf1b193d9fac9b91b51ed878eb34d722c4b35ab7f1f35e4f618d59",
+      "human_readable": "g1f3 d7d5 g2g3 b8c6 f1g2 e7e5 d2d3 g8f6"
+    },
+    {
+      "opening_id": "elite-2025-11-195",
+      "action_ids": [
+        246,
+        304,
+        361,
+        44,
+        129,
+        361,
+        44,
+        129
+      ],
+      "final_position_digest": "8726ea97983e861a11173a821b4e4cffda021f2b9517ffeb70f314d20c970931",
+      "human_readable": "c2c4 e7e5 g2g3 b8c6 f1g2 g7g6 b1c3 f8g7"
+    },
+    {
+      "opening_id": "elite-2025-11-196",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        774,
+        246,
+        245,
+        54
+      ],
+      "final_position_digest": "662ebaea011927235eb20d117a876fa7bc20e58ebe86144ab63a63e1b7b87b29",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 e4e5 c7c5 c2c3 c8d7"
+    },
+    {
+      "opening_id": "elite-2025-11-197",
+      "action_ids": [
+        170,
+        275,
+        246,
+        303,
+        275,
+        170,
+        303,
+        246
+      ],
+      "final_position_digest": "f16593b9f4127fbb1c8c9d60384560e3548e3b0c2f8b3a140383a7c33de415f5",
+      "human_readable": "g1f3 d7d5 c2c4 e7e6 d2d4 g8f6 e2e3 c7c5"
+    },
+    {
+      "opening_id": "elite-2025-11-198",
+      "action_ids": [
+        170,
+        170,
+        246,
+        246,
+        44,
+        44,
+        361,
+        275
+      ],
+      "final_position_digest": "baa3509b227bf1b5b7004d81f9a3f1e3eb262018310c97ec91d77568d89b50da",
+      "human_readable": "g1f3 g8f6 c2c4 c7c5 b1c3 b8c6 g2g3 d7d5"
+    },
+    {
+      "opening_id": "elite-2025-11-199",
+      "action_ids": [
+        275,
+        170,
+        44,
+        275,
+        56,
+        303,
+        498,
+        46
+      ],
+      "final_position_digest": "41fe4f42ead216d6e8fe08b2f1352c276d7dcfbf6d48516903714e35bf0f8639",
+      "human_readable": "d2d4 g8f6 b1c3 d7d5 c1f4 e7e6 c3b5 b8a6"
+    },
+    {
+      "opening_id": "elite-2025-11-200",
+      "action_ids": [
+        304,
+        303,
+        275,
+        275,
+        44,
+        170,
+        797,
+        553
+      ],
+      "final_position_digest": "53314899ef507adc0260f8badcfd65002d6d6e3347857d1cebe9622737cd5dd6",
+      "human_readable": "e2e4 e7e6 d2d4 d7d5 b1c3 g8f6 e4d5 e6d5"
+    }
+  ],
+  "builder_source_revision": "2b6e7186d0e0994a161f04e2b3b357c34302969b"
+}

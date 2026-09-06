@@ -23,6 +23,14 @@ STOCKFISH_FIXED_NODES_ANCHOR_ELO = MappingProxyType(
         # Plotted points on the same curve: 5000 sits at 2220 and 10000 at 2470.
         5000: 2220.0,
         10000: 2470.0,
+        # Plotted points read off the same Stockfish 13 curve above 10000 nodes. These rungs exist so
+        # the fit is not capped at 2470; the anchors below 10000 retire as the candidate outgrows them.
+        20000: 2700.0,
+        50000: 2960.0,
+        100000: 3100.0,
+        200000: 3230.0,
+        500000: 3350.0,
+        1000000: 3400.0,
     }
 )
 

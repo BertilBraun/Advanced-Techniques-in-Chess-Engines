@@ -118,13 +118,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def_readonly("network_root_value", &Result::network_root_value)
         .def_readonly("policy_correction", &Result::policy_correction)
         .def_readonly("value_correction", &Result::value_correction)
-        .def_readonly("predicted_budget_curve", &Result::predicted_budget_curve)
-        .def_readonly("root_prior_top_share", &Result::root_prior_top_share)
-        .def_readonly("root_prior_entropy", &Result::root_prior_entropy)
-        .def_readonly("selected_budget_index", &Result::selected_budget_index)
-        .def_readonly("assigned_additional_visits", &Result::assigned_additional_visits)
         .def_readonly("parallel_searches", &Result::parallel_searches)
-        .def_readonly("spend_residual", &Result::spend_residual)
         .def_readonly("starting_visits", &Result::starting_visits)
         .def_readonly("final_visits", &Result::final_visits)
         .def_readonly("stop_reason", &Result::stop_reason)
@@ -180,8 +174,6 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def("refresh_model", &Search::refreshModel, py::arg("model_generation"),
              py::arg("model_path"), py::call_guard<py::gil_scoped_release>())
         .def("update_search_schedule", &Search::updateSearchSchedule, py::arg("search_parameters"))
-        .def("reset_spend_residual", &Search::resetSpendResidual)
-        .def_property_readonly("spend_residual", &Search::spendResidual)
         .def_property_readonly("model_generation", &Search::modelGeneration)
         .def("inference_statistics", &Search::inferenceStatistics);
 

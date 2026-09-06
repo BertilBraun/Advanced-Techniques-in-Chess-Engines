@@ -1,3 +1,9 @@
+> **Superseded and removed (2026-09-06).** The system described here no longer exists: adaptive search
+> budgeting was retired on Elo evidence, its learned-early-stopping successor was closed as a negative
+> result, and both were removed from `py/` and `cpp/`. Every search now runs to a fixed visit limit.
+> Kept as the design record; see
+> [`../analysis/adaptive-search-conclusion-20260904.md`](../analysis/adaptive-search-conclusion-20260904.md).
+
 # Learned adaptive search budget
 
 The learned search-budget system is the only production self-play budget path. It replaces the randomized fast/full

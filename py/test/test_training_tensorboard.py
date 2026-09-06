@@ -32,9 +32,7 @@ def test_scheduled_settings_include_every_generation_schedule() -> None:
         'settings/training/value_discount_per_ply',
         'settings/training/auxiliary/0-next-policy-ply-1/loss_weight',
         'settings/training/auxiliary/1-remaining-game-length/loss_weight',
-        'settings/training/auxiliary/2-search-budget/loss_weight',
     }
     assert settings['settings/training/learning_rate'] == pytest.approx(0.0085)
     assert settings['settings/replay/capacity'] == 500_000
     assert settings['settings/self_play/baseline_visits'] == 160
-    assert settings['settings/training/auxiliary/2-search-budget/loss_weight'] == pytest.approx(0.2)
