@@ -83,10 +83,14 @@ reads 2799.1 at 69.3 h of cumulative run time, against roughly 96 h for the four
 
 Do not treat that as a settled win. Four caveats, largest first:
 
-1. **`parallel_searches` — RESOLVED, see `parallel-searches-sweep-rtx4070s-20260906`.** A five-arm
-   sweep at 400 games each measures the cost at **-0.76 +/- 0.37 Elo per doubling, about -3 Elo
-   across the whole 1 -> 16 range**, not the -45 feared below. This caveat is closed: the 2799.1
-   figure needs no material discount. Original text follows.
+1. **`parallel_searches` — STILL OPEN, and possibly larger than first thought.** A five-arm sweep
+   at 400 concurrent games measured only -0.76 +/- 0.37 Elo per doubling, but that population is
+   large enough that the per-tree in-flight cap is never reached (24% of games diverge). At 10 and
+   50 games, where it binds on every move (100% divergence), the cost measures -73 and -49 Elo. This
+   ladder's population was 40 games, inside the binding regime. It ran at 1 so it is undistorted,
+   but if the historical ~2800 was measured at the native default of 16, that number may be
+   depressed by tens of Elo and the comparison is biased in our favour. See
+   `parallel-searches-sweep-rtx4070s-20260906`, CORRECTION section. Original text follows.
 
    This ladder ran at 1. The native default derives
    parallelism from the visit budget: `searchParallelism(10000)` yields targetRounds 50 and

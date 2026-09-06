@@ -46,11 +46,37 @@ arms. The near-identical scorelines are 94 different games landing on the same r
   inference batches. Leaf parallelism only matters when the game population cannot. Compare
   `ladder-batching-rtx4070s-20260906`, which measured 4.9x from parallel 4 at 50 games.
 
-## Consequence for the 2799 ladder Elo
+## CORRECTION: this result is regime-specific and does NOT close the 2799 caveat
 
-The `parallel_searches` caveat recorded in `ladder-elo-generation936-rtx4070s-20260906` is closed.
-Worst case here is about 3 Elo, not the ~45 feared, so the 10,000-search ladder result needs no
-material discount for having run at parallel 1.
+The sweep above ran 400 concurrent games. `parallel_searches` is an upper cap on in-flight leaves
+per tree, enforced at `cpp/src/search/SearchExecutor.hpp:719` with trees served round-robin, so a
+tree gets a second concurrent leaf only after the scheduler has cycled every other schedulable tree.
+With ~200 trees on turn and a batch of 64, the batch fills from 64 distinct trees at one leaf each
+and **the cap is never reached**, except in the tail of each move's search.
+
+Divergence rate proves it, and the Elo cost tracks it:
+
+| Games | ps=1 Elo | ps=8 Elo | delta | games differing | per-arm SE |
+|---|---|---|---|---|---|
+| 10 | +107.5 | +34.9 | **-72.7** | **10/10 (100%)** | 112 |
+| 50 | +34.9 | -13.9 | **-48.8** | **50/50 (100%)** | 50 |
+| 400 | +108.5 | +105.6 | -2.8 | 94/400 (24%) | 18 |
+
+At 10 and 50 games every game diverges: the cap binds on every move. At 400 games only 24% diverge.
+So the -0.76 Elo/doubling slope measures a regime where the flag is largely inert, and must not be
+generalised. The small-population point estimates (-73, -49) are individually inside their noise but
+**corroborate** the -45 in `chess-search-findings-20260827.md` rather than contradicting it.
+
+Consequences:
+
+- **Do not run small probe ladders at high `parallel_searches` on the strength of this benchmark.**
+  That is the regime where the cost is largest, not smallest.
+- **The 2799 caveat is NOT closed.** The generation-936 ladder ran at `parallel_searches` 1 and is
+  itself undistorted, but its population was 40 games — inside the binding regime. If the historical
+  ~2800 was measured at the native default of 16 at a similarly small population, it could be
+  depressed by tens of Elo, biasing the comparison in our favour.
+- Closing it properly needs Elo measured at **small concurrency with a large total game count**
+  (many sequential small matches), which no run so far provides.
 
 ## Provenance
 
