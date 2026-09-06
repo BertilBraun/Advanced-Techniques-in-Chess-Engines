@@ -103,7 +103,8 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
         self.completed_searches = 0
         self.restored_games = 0
         self.restart_archive: RestartStateArchive | None = None
-        self.true_starts = 0
+        self.standard_starts = 0
+        self.random_starts = 0
         self.restart_starts = 0
         self.empty_restart_fallbacks = 0
         self.resignation_policy = PublishedResignationPolicy()
@@ -188,7 +189,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             case RandomOpeningStartParameters(maximum_plies=maximum_plies):
                 return self._new_random_opening_game(search, maximum_plies)
             case RestartStateStartParameters() as restart_parameters:
-                return self._new_restart_or_true_game(search, restart_parameters)
+                return self._new_mixed_start_game(search, restart_parameters)
 
     def _new_random_opening_game(
         self,
@@ -214,21 +215,30 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
                     action_ids=action_ids,
                 )
 
-    def _new_restart_or_true_game(
+    def _new_mixed_start_game(
         self,
         search: NativeSearchT,
         parameters: RestartStateStartParameters,
     ) -> ActiveSelfPlayGame[NativeRootT]:
         assert self.model_generation is not None
         archive = self._required_restart_archive()
-        if self.random.random() < parameters.true_start_probability:
-            self.true_starts += 1
+        start_draw = self.random.random()
+        if start_draw < parameters.standard_start_probability:
+            self.standard_starts += 1
             return self._new_true_start_game(search)
-        reserved = archive.reserve(self.model_generation, parameters)
+        if start_draw < parameters.standard_start_probability + parameters.random_start_probability:
+            self.random_starts += 1
+            return self._new_fixed_random_opening_game(search, parameters.random_opening_plies)
+        reserved = archive.reserve(self.model_generation, parameters, self.random)
         if reserved is None:
             self.empty_restart_fallbacks += 1
-            self.true_starts += 1
-            return self._new_true_start_game(search)
+            nonrestart_total = parameters.standard_start_probability + parameters.random_start_probability
+            assert nonrestart_total > 0.0
+            if self.random.random() < parameters.standard_start_probability / nonrestart_total:
+                self.standard_starts += 1
+                return self._new_true_start_game(search)
+            self.random_starts += 1
+            return self._new_fixed_random_opening_game(search, parameters.random_opening_plies)
         position = self.game.state.initial_position()
         for action_id in reserved.action_prefix:
             if action_id not in self.game.state.legal_action_ids(position):
@@ -244,6 +254,28 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             action_ids=list(reserved.action_prefix),
             reserved_restart_action_id=reserved.action_id,
         )
+
+    def _new_fixed_random_opening_game(
+        self,
+        search: NativeSearchT,
+        opening_plies: int,
+    ) -> ActiveSelfPlayGame[NativeRootT]:
+        while True:
+            position = self.game.state.initial_position()
+            action_ids: list[int] = []
+            for _ in range(opening_plies):
+                action_id = int(self.random.choice(self.game.state.legal_action_ids(position)))
+                action_ids.append(action_id)
+                position = self.game.state.child_position(position, action_id)
+                if self.game.state.natural_terminal_wdl(position) is not None:
+                    break
+            if self.game.state.natural_terminal_wdl(position) is None:
+                return self._active_game(
+                    identity=self._next_identity(),
+                    root=search.new_root(position),
+                    started_at_seconds=time.time(),
+                    action_ids=action_ids,
+                )
 
     def _new_true_start_game(self, search: NativeSearchT) -> ActiveSelfPlayGame[NativeRootT]:
         return self._active_game(
@@ -504,7 +536,8 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             return
         snapshot = self.restart_archive.snapshot()
         for name, value in (
-            ('true_starts', self.true_starts),
+            ('standard_starts', self.standard_starts),
+            ('random_starts', self.random_starts),
             ('restart_starts', self.restart_starts),
             ('empty_fallbacks', self.empty_restart_fallbacks),
             ('archived_positions', snapshot.archived_positions),

@@ -4,6 +4,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 from pydantic import TypeAdapter
 from src.self_play.completed_game import CompletedSelfPlayGame
 from src.self_play.parameters import RestartStateStartParameters
@@ -44,6 +45,7 @@ class _ArchivePosition:
     action_prefix: tuple[int, ...]
     candidate_action_ids: tuple[int, ...]
     played_action_id: int
+    value_disagreement: float
 
 
 class RestartStateArchive:
@@ -57,7 +59,8 @@ class RestartStateArchive:
                 position_key TEXT PRIMARY KEY,
                 source_generation INTEGER NOT NULL,
                 created_at_seconds REAL NOT NULL,
-                action_prefix TEXT NOT NULL
+                action_prefix TEXT NOT NULL,
+                value_disagreement REAL NOT NULL
             );
             CREATE TABLE IF NOT EXISTS restart_candidate (
                 position_key TEXT NOT NULL REFERENCES restart_position(position_key) ON DELETE CASCADE,
@@ -87,12 +90,13 @@ class RestartStateArchive:
         try:
             for position in positions:
                 cursor = self.connection.execute(
-                    'INSERT OR IGNORE INTO restart_position VALUES (?, ?, ?, ?)',
+                    'INSERT OR IGNORE INTO restart_position VALUES (?, ?, ?, ?, ?)',
                     (
                         position.key,
                         position.source_generation,
                         position.created_at_seconds,
                         ACTION_PREFIX_ADAPTER.dump_json(position.action_prefix).decode('utf-8'),
+                        position.value_disagreement,
                     ),
                 )
                 if cursor.rowcount == 0:
@@ -124,20 +128,12 @@ class RestartStateArchive:
         self,
         current_generation: int,
         parameters: RestartStateStartParameters,
+        random_generator: np.random.Generator,
     ) -> ReservedRestart | None:
         self._begin_write()
         try:
             expired_evictions = self._evict_expired(current_generation, parameters.maximum_age_generations)
-            row = self.connection.execute(
-                """
-                SELECT position.position_key, position.action_prefix, candidate.action_id
-                FROM restart_position AS position
-                JOIN restart_candidate AS candidate USING (position_key)
-                WHERE candidate.tried = 0
-                ORDER BY position.created_at_seconds DESC, position.position_key, candidate.action_id
-                LIMIT 1
-                """,
-            ).fetchone()
+            row = self._select_reservation(parameters.uniform_restart_probability, random_generator)
             self._increment_counter('expired_evictions', expired_evictions)
             if row is None:
                 self.connection.commit()
@@ -163,6 +159,44 @@ class RestartStateArchive:
         except BaseException:
             self.connection.rollback()
             raise
+
+    def _select_reservation(
+        self,
+        uniform_probability: float,
+        random_generator: np.random.Generator,
+    ) -> tuple[str, str, int] | None:
+        archive_row = self.connection.execute(
+            'SELECT COUNT(*), COALESCE(MAX(value_disagreement), 0.0) FROM restart_position'
+        ).fetchone()
+        assert archive_row is not None
+        position_count = int(archive_row[0])
+        maximum_disagreement = float(archive_row[1])
+        if position_count == 0:
+            return None
+        selected: tuple[str, str] | None = None
+        if maximum_disagreement > 0.0 and random_generator.random() >= uniform_probability:
+            for _ in range(32):
+                candidate = self._position_at_offset(int(random_generator.integers(0, position_count)))
+                if random_generator.random() <= (candidate[2] / maximum_disagreement) ** 0.5:
+                    selected = (candidate[0], candidate[1])
+                    break
+        if selected is None:
+            candidate = self._position_at_offset(int(random_generator.integers(0, position_count)))
+            selected = (candidate[0], candidate[1])
+        action_row = self.connection.execute(
+            'SELECT action_id FROM restart_candidate WHERE position_key = ? AND tried = 0 ORDER BY action_id LIMIT 1',
+            (selected[0],),
+        ).fetchone()
+        assert action_row is not None
+        return selected[0], selected[1], int(action_row[0])
+
+    def _position_at_offset(self, offset: int) -> tuple[str, str, float]:
+        row = self.connection.execute(
+            'SELECT position_key, action_prefix, value_disagreement FROM restart_position ORDER BY rowid LIMIT 1 OFFSET ?',
+            (offset,),
+        ).fetchone()
+        assert row is not None
+        return str(row[0]), str(row[1]), float(row[2])
 
     def snapshot(self) -> RestartArchiveSnapshot:
         positions = int(self.connection.execute('SELECT COUNT(*) FROM restart_position').fetchone()[0])
@@ -269,6 +303,7 @@ def _eligible_positions(
                 action_prefix=game.action_ids[: observation.ply],
                 candidate_action_ids=tuple(candidates),
                 played_action_id=game.action_ids[observation.ply],
+                value_disagreement=observation.value_correction,
             )
         )
     return tuple(eligible)

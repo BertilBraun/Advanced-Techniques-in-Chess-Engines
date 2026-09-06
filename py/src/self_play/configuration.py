@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from math import isfinite
+from math import isclose, isfinite
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, JsonValue, model_serializer, model_validator
@@ -188,7 +188,11 @@ class RandomOpeningStartConfiguration(FrozenModel):
 
 class RestartStateStartConfiguration(FrozenModel):
     kind: Literal['restart_state'] = 'restart_state'
-    true_start_probability: float = Field(gt=0.0, le=1.0)
+    standard_start_probability: float = Field(ge=0.0, le=1.0)
+    random_start_probability: float = Field(ge=0.0, le=1.0)
+    restart_start_probability: float = Field(ge=0.0, le=1.0)
+    random_opening_plies: int = Field(gt=0)
+    uniform_restart_probability: float = Field(ge=0.0, le=1.0)
     candidate_visit_mass: float = Field(gt=0.0, le=1.0)
     minimum_candidates: int = Field(ge=2)
     maximum_candidates: int = Field(ge=2)
@@ -201,13 +205,27 @@ class RestartStateStartConfiguration(FrozenModel):
     def validate_candidate_count(self) -> RestartStateStartConfiguration:
         if self.maximum_candidates < self.minimum_candidates:
             raise ValueError('Maximum restart candidates must not be below the minimum.')
+        if not isclose(
+            self.standard_start_probability + self.random_start_probability + self.restart_start_probability,
+            1.0,
+        ):
+            raise ValueError('Restart-state start probabilities must sum to one.')
+        if (
+            self.restart_start_probability > 0.0
+            and self.standard_start_probability + self.random_start_probability == 0.0
+        ):
+            raise ValueError('Restart-state self-play requires a non-restart fallback.')
         return self
 
     def resolve(self, model_generation: int) -> RestartStateStartParameters:
         del model_generation
         return RestartStateStartParameters(
             kind=self.kind,
-            true_start_probability=self.true_start_probability,
+            standard_start_probability=self.standard_start_probability,
+            random_start_probability=self.random_start_probability,
+            restart_start_probability=self.restart_start_probability,
+            random_opening_plies=self.random_opening_plies,
+            uniform_restart_probability=self.uniform_restart_probability,
             candidate_visit_mass=self.candidate_visit_mass,
             minimum_candidates=self.minimum_candidates,
             maximum_candidates=self.maximum_candidates,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import isfinite
+from math import isclose, isfinite
 from typing import Literal, TypeAlias
 
 
@@ -18,7 +18,11 @@ class RandomOpeningStartParameters:
 @dataclass(frozen=True)
 class RestartStateStartParameters:
     kind: Literal['restart_state']
-    true_start_probability: float
+    standard_start_probability: float
+    random_start_probability: float
+    restart_start_probability: float
+    random_opening_plies: int
+    uniform_restart_probability: float
     candidate_visit_mass: float
     minimum_candidates: int
     maximum_candidates: int
@@ -28,8 +32,22 @@ class RestartStateStartParameters:
     maximum_age_generations: int
 
     def __post_init__(self) -> None:
-        if not 0.0 < self.true_start_probability <= 1.0:
-            raise ValueError('True-start probability must lie in (0, 1].')
+        probabilities = (
+            self.standard_start_probability,
+            self.random_start_probability,
+            self.restart_start_probability,
+        )
+        if any(not 0.0 <= probability <= 1.0 for probability in probabilities) or not isclose(sum(probabilities), 1.0):
+            raise ValueError('Restart-state start probabilities must lie in [0, 1] and sum to one.')
+        if (
+            self.restart_start_probability > 0.0
+            and self.standard_start_probability + self.random_start_probability == 0.0
+        ):
+            raise ValueError('Restart-state self-play requires a non-restart fallback.')
+        if self.random_opening_plies <= 0:
+            raise ValueError('Random restart-state openings must contain at least one ply.')
+        if not 0.0 <= self.uniform_restart_probability <= 1.0:
+            raise ValueError('Uniform restart probability must lie in [0, 1].')
         if not 0.0 < self.candidate_visit_mass <= 1.0:
             raise ValueError('Candidate visit mass must lie in (0, 1].')
         if self.minimum_candidates < 2 or self.maximum_candidates < self.minimum_candidates:
@@ -114,8 +132,9 @@ class ResolvedSelfPlayParameters:
             case RandomOpeningStartParameters(maximum_plies=maximum_plies):
                 if self.maximum_game_plies is not None and self.maximum_game_plies <= maximum_plies:
                     raise ValueError('Maximum game plies must exceed maximum random opening plies.')
-            case RestartStateStartParameters():
-                pass
+            case RestartStateStartParameters(random_opening_plies=random_opening_plies):
+                if self.maximum_game_plies is not None and self.maximum_game_plies <= random_opening_plies:
+                    raise ValueError('Maximum game plies must exceed random opening plies.')
         if self.primary_sample_weight <= 0.0:
             raise ValueError('Primary sample weight must be positive.')
         if not isfinite(self.value_discount_per_ply) or not 0.0 < self.value_discount_per_ply <= 1.0:

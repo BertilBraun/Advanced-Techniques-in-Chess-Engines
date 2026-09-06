@@ -511,10 +511,14 @@ def test_worker_samples_random_opening_length_from_zero_through_configured_maxim
     assert [active_game.action_ids for active_game in worker.active_games] == [[], [0] * 12]
 
 
-def restart_parameters(true_start_probability: float = 0.5) -> RestartStateStartParameters:
+def restart_parameters(standard_start_probability: float = 0.1) -> RestartStateStartParameters:
     return RestartStateStartParameters(
         kind='restart_state',
-        true_start_probability=true_start_probability,
+        standard_start_probability=standard_start_probability,
+        random_start_probability=0.0 if standard_start_probability == 1.0 else 0.4,
+        restart_start_probability=0.0 if standard_start_probability == 1.0 else 0.5,
+        random_opening_plies=5,
+        uniform_restart_probability=0.3,
         candidate_visit_mass=0.85,
         minimum_candidates=2,
         maximum_candidates=3,
@@ -531,6 +535,13 @@ class FakeRestartRandom:
 
     def random(self) -> float:
         return self.probability_draw
+
+    def integers(self, low: int, high: int) -> int:
+        assert low < high
+        return low
+
+    def choice(self, values: tuple[int, ...]) -> int:
+        return values[0]
 
 
 def restart_source_game() -> CompletedSelfPlayGame:
@@ -573,7 +584,7 @@ def restart_source_game() -> CompletedSelfPlayGame:
     )
 
 
-def test_restart_policy_uses_exact_initial_states_without_random_openings(tmp_path: Path) -> None:
+def test_restart_policy_can_choose_standard_initial_states(tmp_path: Path) -> None:
     worker = SelfPlayWorker(
         cast(GameImplementation, FakeGame(restart_parameters=restart_parameters(1.0))),
         parallel_game_count=1,
@@ -587,11 +598,11 @@ def test_restart_policy_uses_exact_initial_states_without_random_openings(tmp_pa
 
     assert worker.active_games[0].action_ids == []
     assert worker.active_games[0].root.position == FakePosition(0)
-    assert worker.true_starts == 1
+    assert worker.standard_starts == 1
     worker.close()
 
 
-def test_restart_policy_falls_back_to_exact_start_when_archive_is_empty(tmp_path: Path) -> None:
+def test_restart_policy_falls_back_to_random_opening_when_archive_is_empty(tmp_path: Path) -> None:
     worker = SelfPlayWorker(
         cast(GameImplementation, FakeGame(restart_parameters=restart_parameters())),
         parallel_game_count=1,
@@ -603,7 +614,8 @@ def test_restart_policy_falls_back_to_exact_start_when_archive_is_empty(tmp_path
 
     worker.refresh_published_model(checkpoint(tmp_path, 0))
 
-    assert worker.active_games[0].action_ids == []
+    assert worker.active_games[0].action_ids == [0] * 5
+    assert worker.random_starts == 1
     assert worker.empty_restart_fallbacks == 1
     worker.close()
 

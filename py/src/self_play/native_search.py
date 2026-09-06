@@ -89,6 +89,9 @@ class NativeSearchResult(Protocol[NativeRootT]):
     def policy_correction(self) -> float: ...
 
     @property
+    def policy_surprise(self) -> float: ...
+
+    @property
     def value_correction(self) -> float: ...
 
     @property

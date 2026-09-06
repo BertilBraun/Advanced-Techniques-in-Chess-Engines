@@ -537,8 +537,8 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
-    # Re-pinned 2026-09-06: replay sampling became an explicit configuration policy.
-    assert experiment_configuration_sha256(frozen) == '7468c0d0265bd6b4d19c521feac117f6e4db09ba68ac1c2197e0df75162d7acb'
+    # Re-pinned 2026-09-06: replay and restart selection became explicit sampling policies.
+    assert experiment_configuration_sha256(frozen) == '8177c6c65e9e9385f2a312cf6e3515c7b1eb4351fa27de8676be14775b85f388'
 
 
 @pytest.mark.parametrize(

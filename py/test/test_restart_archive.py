@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 from uuid import UUID
 
+import numpy as np
 import pytest
 
 pytest.importorskip('AlphaZeroCpp')
@@ -25,7 +26,11 @@ from src.self_play.restart_archive import RestartStateArchive, worker_restart_ar
 def restart_parameters() -> RestartStateStartParameters:
     return RestartStateStartParameters(
         kind='restart_state',
-        true_start_probability=0.5,
+        standard_start_probability=0.1,
+        random_start_probability=0.4,
+        restart_start_probability=0.5,
+        random_opening_plies=5,
+        uniform_restart_probability=0.3,
         candidate_visit_mass=0.85,
         minimum_candidates=2,
         maximum_candidates=3,
@@ -47,6 +52,7 @@ def completed_game(
     assigned_additional_visits: int = 256,
     model_generation: int = 1,
     created_at_seconds: float = 1.0,
+    value_correction: float = 0.0,
 ) -> CompletedSelfPlayGame:
     action_ids = [4] * action_count
     action_ids[observation_ply] = selected_action_id
@@ -79,7 +85,7 @@ def completed_game(
                 network_root_value=root_value,
                 policy_correction=0.0,
                 policy_surprise=0.0,
-                value_correction=0.0,
+                value_correction=value_correction,
                 parallel_searches=2,
                 starting_visits=0,
                 final_visits=assigned_additional_visits,
@@ -154,11 +160,28 @@ def test_played_candidate_is_not_reserved_again(tmp_path: Path) -> None:
     game = completed_game(1, selected_action_id=0)
     archive.archive_completed_game(game, restart_parameters())
 
-    reservation = archive.reserve(1, restart_parameters())
+    random_generator = np.random.default_rng(1)
+    reservation = archive.reserve(1, restart_parameters(), random_generator)
 
     assert reservation is not None
     assert reservation.action_id == 1
-    assert archive.reserve(1, restart_parameters()) is None
+    assert archive.reserve(1, restart_parameters(), random_generator) is None
+    archive.close()
+
+
+def test_priority_restart_prefers_search_value_disagreement(tmp_path: Path) -> None:
+    archive = RestartStateArchive(tmp_path / 'restart.sqlite3')
+    parameters = replace(restart_parameters(), uniform_restart_probability=0.0)
+    archive.archive_completed_game(completed_game(1, value_correction=0.0), parameters)
+    archive.archive_completed_game(
+        completed_game(2, action_count=16, observation_ply=1, value_correction=1.0),
+        parameters,
+    )
+
+    reservation = archive.reserve(1, parameters, np.random.default_rng(4))
+
+    assert reservation is not None
+    assert reservation.action_prefix == (4,)
     archive.close()
 
 
@@ -170,7 +193,7 @@ def test_capacity_and_generation_age_evict_old_positions(tmp_path: Path) -> None
 
     assert update.capacity_evictions == 1
     assert archive.snapshot().positions == 1
-    assert archive.reserve(22, capacity_one) is None
+    assert archive.reserve(22, capacity_one, np.random.default_rng(1)) is None
     snapshot = archive.snapshot()
     assert snapshot.expired_evictions == 1
     assert snapshot.positions == 0
@@ -182,13 +205,14 @@ def test_reopen_preserves_claims_and_rejects_duplicate_position_insertion(tmp_pa
     game = completed_game(1)
     archive = RestartStateArchive(path)
     archive.archive_completed_game(game, restart_parameters())
-    assert archive.reserve(1, restart_parameters()) is not None
+    random_generator = np.random.default_rng(1)
+    assert archive.reserve(1, restart_parameters(), random_generator) is not None
     archive.close()
 
     reopened = RestartStateArchive(path)
     update = reopened.archive_completed_game(game, restart_parameters())
 
     assert update.positions == 0
-    assert reopened.reserve(1, restart_parameters()) is not None
-    assert reopened.reserve(1, restart_parameters()) is None
+    assert reopened.reserve(1, restart_parameters(), random_generator) is not None
+    assert reopened.reserve(1, restart_parameters(), random_generator) is None
     reopened.close()

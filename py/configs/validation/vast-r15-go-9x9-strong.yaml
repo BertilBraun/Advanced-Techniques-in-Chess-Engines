@@ -109,7 +109,11 @@ go:
         rounding: nearest
     start_position:
       kind: restart_state
-      true_start_probability: 0.5
+      standard_start_probability: 0.1
+      random_start_probability: 0.4
+      restart_start_probability: 0.5
+      random_opening_plies: 5
+      uniform_restart_probability: 0.3
       candidate_visit_mass: 0.9
       minimum_candidates: 2
       maximum_candidates: 4
