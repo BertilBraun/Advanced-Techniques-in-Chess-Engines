@@ -78,6 +78,18 @@ Consequences:
 - Closing it properly needs Elo measured at **small concurrency with a large total game count**
   (many sequential small matches), which no run so far provides.
 
+### SUPERSEDED by the batch-1600 rerun
+
+`parallel-searches-rerun-batch1600-rtx4070s-20260906` reruns arms 1/2/4/8 with
+`inference_batch_size` 1600 (8 x ~200 trees) so the cap binds. **All three contrasts against ps=1
+diverge in 200/200 games**, and the slope there is **−6.4 ± 4.7 Elo per doubling**, about 8x the
+−0.76 measured above. Do not quote the −0.76 slope as the cost of leaf parallelism; it measures an
+inert flag. The rerun's own slope is not significant (t = −1.38), so the honest summary is
+"direction and scale, not a demonstrated effect".
+
+That rerun also shows divergence is a blunter instrument than assumed: at ps=1, where the cap cannot
+bind at any batch size, changing the batch from 64 to 1600 still flips 200/200 games.
+
 ## Provenance
 
 - Source revision: `2b6e7186`

@@ -95,7 +95,12 @@ Do not treat that as a settled win. Four caveats, largest first:
    ladder's population was 40 games, inside the binding regime. It ran at 1 so it is undistorted,
    but if the historical ~2800 was measured at the native default of 16, that number may be
    depressed by tens of Elo and the comparison is biased in our favour. See
-   `parallel-searches-sweep-rtx4070s-20260906`, CORRECTION section. Original text follows.
+   `parallel-searches-sweep-rtx4070s-20260906`, CORRECTION section. A rerun at
+   `inference_batch_size` 1600, where the cap does bind
+   (`parallel-searches-rerun-batch1600-rtx4070s-20260906`), measures −6.4 ± 4.7 Elo per doubling —
+   so a historical measurement at the default of 16 would be depressed by roughly 26 Elo, not the
+   "possibly −45" left open above. Narrower, still not closed, and not significant. Original text
+   follows.
 
    This ladder ran at 1. The native default derives
    parallelism from the visit budget: `searchParallelism(10000)` yields targetRounds 50 and

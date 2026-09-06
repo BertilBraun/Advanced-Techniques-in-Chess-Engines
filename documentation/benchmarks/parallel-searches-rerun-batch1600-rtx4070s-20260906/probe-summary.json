@@ -1,0 +1,193 @@
+{
+ "schema_version": 2,
+ "source_revision": "2b6e7186d0e0994a161f04e2b3b357c34302969b",
+ "tool_sha256": "69d93a9ff22bb6396fab743cde918ba8b72b761a9dc5e54152b61459bca969d6",
+ "started_at_utc": "2026-09-06T14:24:30.332737Z",
+ "experiment_path": "/workspace/alphazero-engine/py/configs/validation/vast-chess-4day-production-v29-resume.yaml",
+ "run_directory": "/workspace/eval/run",
+ "evaluated_checkpoint": {
+  "generation": 936,
+  "manifest_path": "/workspace/eval/run/checkpoint_936.json",
+  "model_path": "/workspace/eval/run/model_936.pt",
+  "optimizer_path": "/workspace/eval/run/optimizer_936.pt",
+  "inference_model_path": "/workspace/eval/run/model_936.jit.pt",
+  "inference_model_sha256": "6b1d0bc7ba5f45199e44b85f0378098037803af52fca2ef47de673fbefc531c8"
+ },
+ "opening_manifest_path": "/workspace/evaluation-artifacts/chess/elite-200-openings.json",
+ "opening_manifest_sha256": "40582c4f753e90d8ebd170498c37e3f4812bff38287e6bfa6db376e9eec70d39",
+ "opening_manifest_pair_count": 200,
+ "opening_pair_count": 5,
+ "opening_selection": {
+  "kind": "prefix"
+ },
+ "selected_opening_indices": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "match_random_seed": 20260816,
+ "stockfish_executable_path": "/workspace/alphazero-engine/engines/upstream/stockfish-13/stockfish_13_linux_x64_bmi2",
+ "stockfish_executable_sha256": "ec56cd6ad04eecd38885912321ee2dfc76aee68415668ba433fa76eb7180ac5a",
+ "stockfish_identity": "Stockfish 13",
+ "stockfish_match_nodes": 10000,
+ "stockfish_threads": 1,
+ "stockfish_hash_mib": 1024,
+ "model_search_budget": {
+  "kind": "fixed_searches",
+  "searches_per_move": 800,
+  "parallel_searches": 8,
+  "inference_workers": 1,
+  "inference_batch_size": 1600,
+  "outstanding_batches_per_worker": 1,
+  "exploration_constant": 1.0,
+  "tree_search": null
+ },
+ "gpus": [
+  {
+   "device_id": 0,
+   "uuid": "GPU-4d95807c-ce8a-d202-f734-9ddb22c00316",
+   "name": "NVIDIA GeForce RTX 4070 SUPER",
+   "memory_total_mib": 12282,
+   "driver_version": "595.84"
+  }
+ ],
+ "idle_device_check_enforced": false,
+ "timed_move_measurements": null,
+ "games": [
+  {
+   "game_index": 0,
+   "pair_index": 0,
+   "opening_id": "elite-2025-11-001",
+   "candidate_player": "first",
+   "pair_seed": 20260816,
+   "outcome": "loss",
+   "termination_reason": "natural",
+   "plies": 48,
+   "duration_seconds": 24.625324410852045
+  },
+  {
+   "game_index": 1,
+   "pair_index": 0,
+   "opening_id": "elite-2025-11-001",
+   "candidate_player": "second",
+   "pair_seed": 20260816,
+   "outcome": "loss",
+   "termination_reason": "natural",
+   "plies": 121,
+   "duration_seconds": 60.26604469609447
+  },
+  {
+   "game_index": 2,
+   "pair_index": 1,
+   "opening_id": "elite-2025-11-002",
+   "candidate_player": "first",
+   "pair_seed": 20260817,
+   "outcome": "win",
+   "termination_reason": "natural",
+   "plies": 203,
+   "duration_seconds": 94.57355379592627
+  },
+  {
+   "game_index": 3,
+   "pair_index": 1,
+   "opening_id": "elite-2025-11-002",
+   "candidate_player": "second",
+   "pair_seed": 20260817,
+   "outcome": "win",
+   "termination_reason": "natural",
+   "plies": 130,
+   "duration_seconds": 64.45445821993053
+  },
+  {
+   "game_index": 4,
+   "pair_index": 2,
+   "opening_id": "elite-2025-11-003",
+   "candidate_player": "first",
+   "pair_seed": 20260818,
+   "outcome": "loss",
+   "termination_reason": "natural",
+   "plies": 128,
+   "duration_seconds": 63.53180352807976
+  },
+  {
+   "game_index": 5,
+   "pair_index": 2,
+   "opening_id": "elite-2025-11-003",
+   "candidate_player": "second",
+   "pair_seed": 20260818,
+   "outcome": "loss",
+   "termination_reason": "natural",
+   "plies": 197,
+   "duration_seconds": 93.78284179512411
+  },
+  {
+   "game_index": 6,
+   "pair_index": 3,
+   "opening_id": "elite-2025-11-004",
+   "candidate_player": "first",
+   "pair_seed": 20260819,
+   "outcome": "loss",
+   "termination_reason": "natural",
+   "plies": 74,
+   "duration_seconds": 37.63796209404245
+  },
+  {
+   "game_index": 7,
+   "pair_index": 3,
+   "opening_id": "elite-2025-11-004",
+   "candidate_player": "second",
+   "pair_seed": 20260819,
+   "outcome": "loss",
+   "termination_reason": "natural",
+   "plies": 151,
+   "duration_seconds": 73.98469612491317
+  },
+  {
+   "game_index": 8,
+   "pair_index": 4,
+   "opening_id": "elite-2025-11-005",
+   "candidate_player": "first",
+   "pair_seed": 20260820,
+   "outcome": "loss",
+   "termination_reason": "natural",
+   "plies": 142,
+   "duration_seconds": 69.91451531695202
+  },
+  {
+   "game_index": 9,
+   "pair_index": 4,
+   "opening_id": "elite-2025-11-005",
+   "candidate_player": "second",
+   "pair_seed": 20260820,
+   "outcome": "draw",
+   "termination_reason": "natural",
+   "plies": 109,
+   "duration_seconds": 54.522813237970695
+  }
+ ],
+ "aggregate": {
+  "wins": 2,
+  "draws": 1,
+  "losses": 7,
+  "score": 0.25,
+  "first_player_score": 0.2,
+  "second_player_score": 0.3,
+  "pair_count": 5,
+  "score_confidence_low": 0.0,
+  "score_confidence_high": 0.65
+ },
+ "shards": [
+  {
+   "shard_id": 0,
+   "device_id": 0,
+   "first_pair_index": 0,
+   "pair_count": 5,
+   "stockfish_identity": "Stockfish 13",
+   "timed_move_measurements": null,
+   "duration_seconds": 100.2028007931076
+  }
+ ],
+ "duration_seconds": 102.2989977330435
+}
