@@ -232,6 +232,7 @@ class MatchEvaluationJob(FrozenModel):
             'reference_checkpoint': 'checkpoint',
             'stockfish': 'stockfish',
             'stockfish_fixed_nodes': 'stockfish_fixed_nodes',
+            'stockfish_adaptive_nodes': 'stockfish_fixed_nodes',
             'katago': 'katago',
         }[self.definition.kind]
         if self.opponent.kind != expected_opponent:

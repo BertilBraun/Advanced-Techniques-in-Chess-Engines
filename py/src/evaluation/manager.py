@@ -9,7 +9,10 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, TypeAdapter
-from src.evaluation.configuration import StockfishFixedNodesEvaluationDefinition
+from src.evaluation.configuration import (
+    StockfishAdaptiveNodesEvaluationDefinition,
+    StockfishFixedNodesEvaluationDefinition,
+)
 from src.evaluation.contracts import (
     CheckpointOpponent,
     EvaluationFailurePhase,
@@ -21,6 +24,7 @@ from src.evaluation.contracts import (
     FixedDatasetEvaluationResult,
     MatchEvaluationJob,
     MatchEvaluationResult,
+    StockfishFixedNodesOpponent,
 )
 from src.evaluation.ladder import (
     STOCKFISH_FIXED_NODES_ANCHOR_ELO,
@@ -30,6 +34,7 @@ from src.evaluation.ladder import (
 )
 from src.evaluation.process import run_evaluation_job, write_evaluation_result
 from src.evaluation.scheduling import (
+    AdaptiveStockfishRungState,
     CheckpointPublication,
     ScheduledEvaluationSuite,
     checkpoint_at,
@@ -46,12 +51,27 @@ from src.util.tensorboard import log_custom_scalar_layout, log_scalar, log_text
 
 
 class EvaluationManagerState(FrozenModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     accumulated_elapsed_seconds: float = Field(ge=0.0)
     next_device_index: int = Field(ge=0)
     checkpoint_publications: tuple[CheckpointPublication, ...]
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...]
     pending_jobs: tuple[EvaluationJob, ...]
+    adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...]
+
+
+def _initial_adaptive_stockfish_rungs(
+    experiment: ExperimentConfiguration,
+) -> tuple[AdaptiveStockfishRungState, ...]:
+    return tuple(
+        AdaptiveStockfishRungState(
+            definition_id=definition.definition_id,
+            selected_nodes=definition.initial_nodes,
+            last_completed_boundary_seconds=None,
+        )
+        for definition in experiment.evaluation.definitions
+        if isinstance(definition, StockfishAdaptiveNodesEvaluationDefinition)
+    )
 
 
 def _terminate_job_process(process: mp.Process) -> None:
@@ -104,8 +124,10 @@ class EvaluationManager:
                 checkpoint_publications=(CheckpointPublication(elapsed_seconds=0.0, checkpoint=starting_checkpoint),),
                 scheduled_suites=(),
                 pending_jobs=(),
+                adaptive_stockfish_rungs=_initial_adaptive_stockfish_rungs(experiment),
             )
             self._save_state()
+        self._validate_adaptive_stockfish_rungs()
         self._processes: dict[str, tuple[mp.Process, float]] = {}
         self._published_ladder_boundaries: set[int] = set()
         self._started = False
@@ -156,6 +178,7 @@ class EvaluationManager:
                     write_evaluation_result(result, job.result_path)
             completed.append(result)
             del self._processes[job_id]
+            self._apply_adaptive_stockfish_result(result)
             self._state = self._state.model_copy(
                 update={
                     'pending_jobs': tuple(pending for pending in self._state.pending_jobs if pending.job_id != job_id)
@@ -183,6 +206,7 @@ class EvaluationManager:
                 suite,
                 self._state.scheduled_suites,
                 self._state.next_device_index,
+                self._state.adaptive_stockfish_rungs,
             )
             self._state = self._state.model_copy(
                 update={
@@ -279,6 +303,56 @@ class EvaluationManager:
         )
         self._save_state()
 
+    def _validate_adaptive_stockfish_rungs(self) -> None:
+        definitions = tuple(
+            definition
+            for definition in self.configuration.definitions
+            if isinstance(definition, StockfishAdaptiveNodesEvaluationDefinition)
+        )
+        if tuple(rung.definition_id for rung in self._state.adaptive_stockfish_rungs) != tuple(
+            definition.definition_id for definition in definitions
+        ):
+            raise ValueError('Persisted adaptive Stockfish rungs do not match the evaluation definitions.')
+        for rung, definition in zip(self._state.adaptive_stockfish_rungs, definitions, strict=True):
+            if rung.selected_nodes not in definition.node_ladder:
+                raise ValueError('Persisted adaptive Stockfish rung is absent from its configured node ladder.')
+
+    def _apply_adaptive_stockfish_result(self, result: EvaluationResult) -> None:
+        if not isinstance(result, MatchEvaluationResult) or not isinstance(
+            result.job.definition, StockfishAdaptiveNodesEvaluationDefinition
+        ):
+            return
+        if not isinstance(result.job.opponent, StockfishFixedNodesOpponent):
+            raise ValueError('Adaptive Stockfish result must contain its resolved fixed-node opponent.')
+        definition = result.job.definition
+        current = next(
+            rung for rung in self._state.adaptive_stockfish_rungs if rung.definition_id == definition.definition_id
+        )
+        if (
+            current.last_completed_boundary_seconds is not None
+            and result.job.boundary_seconds <= current.last_completed_boundary_seconds
+        ):
+            return
+        played_index = definition.node_ladder.index(result.job.opponent.nodes)
+        next_index = played_index
+        if result.aggregate.score >= definition.advance_score_threshold:
+            next_index = min(played_index + 1, len(definition.node_ladder) - 1)
+        elif result.aggregate.score <= definition.retreat_score_threshold:
+            next_index = max(played_index - 1, 0)
+        updated = AdaptiveStockfishRungState(
+            definition_id=definition.definition_id,
+            selected_nodes=definition.node_ladder[next_index],
+            last_completed_boundary_seconds=result.job.boundary_seconds,
+        )
+        self._state = self._state.model_copy(
+            update={
+                'adaptive_stockfish_rungs': tuple(
+                    updated if rung.definition_id == updated.definition_id else rung
+                    for rung in self._state.adaptive_stockfish_rungs
+                )
+            }
+        )
+
     def _launch(self, job: EvaluationJob) -> bool:
         process = self.process_context.Process(
             target=run_evaluation_job,
@@ -322,6 +396,7 @@ class EvaluationManager:
         for job in self._state.pending_jobs:
             if job.result_path.exists():
                 result = self._read_result(job)
+                self._apply_adaptive_stockfish_result(result)
                 self._report(result)
                 continue
             required_paths = (job.candidate.inference_model_path, job.candidate.manifest_path)
@@ -392,6 +467,12 @@ class EvaluationManager:
         log_scalar('evaluation_metadata/progress/model_generation', generation, step)
         log_scalar('evaluation_metadata/progress/optimizer_steps', optimizer_steps, step)
         log_scalar(f'evaluation_metadata/{definition_id}/duration_seconds', result.duration_seconds, step)
+        if isinstance(result.job, MatchEvaluationJob) and isinstance(result.job.opponent, StockfishFixedNodesOpponent):
+            log_scalar(
+                f'evaluation_metadata/{definition_id}/stockfish_nodes',
+                result.job.opponent.nodes,
+                step,
+            )
         match result.kind:
             case 'fixed_dataset':
                 log_scalar(
@@ -430,7 +511,21 @@ class EvaluationManager:
                 )
             case 'failed':
                 log(f'Evaluation {definition_id} at {step}s failed: {result.message}')
-        if isinstance(result.job.definition, StockfishFixedNodesEvaluationDefinition):
+        if isinstance(result.job.definition, StockfishAdaptiveNodesEvaluationDefinition):
+            selected = next(
+                rung
+                for rung in self._state.adaptive_stockfish_rungs
+                if rung.definition_id == result.job.definition.definition_id
+            )
+            log_scalar(
+                f'evaluation_metadata/{definition_id}/next_stockfish_nodes',
+                selected.selected_nodes,
+                step,
+            )
+        if isinstance(
+            result.job.definition,
+            StockfishFixedNodesEvaluationDefinition | StockfishAdaptiveNodesEvaluationDefinition,
+        ):
             self._publish_ladder_elo(step)
         self._write_boundary_summary(step, generation, optimizer_steps)
 
@@ -442,24 +537,29 @@ class EvaluationManager:
         # One ladder per search budget: a rung played at one search per move measures the network
         # alone and is hundreds of Elo below the same rung played at the full budget, so mixing them
         # into a single fit reads as weakness rather than as two different things being measured.
+        suite = next(suite for suite in self._state.scheduled_suites if suite.boundary_seconds == boundary_seconds)
         by_budget: dict[int, list[LadderRungObservation]] = {}
         for definition in self.configuration.definitions:
-            if not isinstance(definition, StockfishFixedNodesEvaluationDefinition):
+            if not isinstance(
+                definition,
+                StockfishFixedNodesEvaluationDefinition | StockfishAdaptiveNodesEvaluationDefinition,
+            ):
                 continue
-            paths = sorted(self.result_directory.glob(f'{boundary_seconds:010d}-{definition.definition_id}-g*.json'))
-            if not paths:
+            if not definition.is_active_at(suite.checkpoint.generation):
+                continue
+            job_id = f'{boundary_seconds:010d}-{definition.definition_id}-g{suite.checkpoint.generation}'
+            result_path = self.result_directory / f'{job_id}.json'
+            if not result_path.is_file():
                 # A rung outside its generation window never reports, so waiting on it would suppress
                 # the ladder for the whole run; only an active rung that has yet to finish should wait.
-                if any(
-                    definition.is_active_at(suite.checkpoint.generation)
-                    for suite in self._state.scheduled_suites
-                    if suite.boundary_seconds == boundary_seconds
-                ):
-                    return
+                return
+            result = TypeAdapter(EvaluationResult).validate_json(result_path.read_text(encoding='utf-8'))
+            if not isinstance(result, MatchEvaluationResult) or not isinstance(
+                result.job.opponent, StockfishFixedNodesOpponent
+            ):
                 continue
-            result = TypeAdapter(EvaluationResult).validate_json(paths[-1].read_text(encoding='utf-8'))
-            anchor_elo = STOCKFISH_FIXED_NODES_ANCHOR_ELO.get(definition.nodes)
-            if anchor_elo is None or not isinstance(result, MatchEvaluationResult):
+            anchor_elo = STOCKFISH_FIXED_NODES_ANCHOR_ELO.get(result.job.opponent.nodes)
+            if anchor_elo is None:
                 continue
             observation = ladder_rung_observation(anchor_elo, result.games)
             if observation is None:

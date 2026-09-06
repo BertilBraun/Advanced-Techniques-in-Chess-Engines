@@ -210,6 +210,27 @@ class StockfishFixedNodesEvaluationDefinition(PairedMatchEvaluationDefinition):
     search: EvaluationSearchConfiguration
 
 
+class StockfishAdaptiveNodesEvaluationDefinition(PairedMatchEvaluationDefinition):
+    kind: Literal['stockfish_adaptive_nodes']
+    definition_id: str = Field(min_length=1)
+    node_ladder: tuple[int, ...] = Field(min_length=1)
+    initial_nodes: int = Field(gt=0)
+    retreat_score_threshold: float = Field(ge=0.0, le=1.0)
+    advance_score_threshold: float = Field(ge=0.0, le=1.0)
+    engine_executable_path: str | None = None
+    search: EvaluationSearchConfiguration
+
+    @model_validator(mode='after')
+    def validate_ladder(self) -> StockfishAdaptiveNodesEvaluationDefinition:
+        if tuple(sorted(set(self.node_ladder))) != self.node_ladder:
+            raise ValueError('Adaptive Stockfish node ladder must be strictly increasing.')
+        if self.initial_nodes not in self.node_ladder:
+            raise ValueError('Adaptive Stockfish initial nodes must be a configured ladder rung.')
+        if not self.retreat_score_threshold < 0.5 < self.advance_score_threshold:
+            raise ValueError('Adaptive Stockfish thresholds must define a deadband around an even score.')
+        return self
+
+
 class KataGoEvaluationDefinition(PairedMatchEvaluationDefinition):
     kind: Literal['katago']
     definition_id: str = Field(min_length=1)
@@ -225,6 +246,7 @@ EvaluationDefinition: TypeAlias = Annotated[
     | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
     | StockfishFixedNodesEvaluationDefinition
+    | StockfishAdaptiveNodesEvaluationDefinition
     | KataGoEvaluationDefinition,
     Field(discriminator='kind'),
 ]
@@ -236,6 +258,7 @@ MatchEvaluationDefinition: TypeAlias = Annotated[
     | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
     | StockfishFixedNodesEvaluationDefinition
+    | StockfishAdaptiveNodesEvaluationDefinition
     | KataGoEvaluationDefinition,
     Field(discriminator='kind'),
 ]
@@ -262,7 +285,8 @@ class EvaluationConfiguration(FrozenModel):
         if self.engine.kind == 'stockfish' and any(definition.kind == 'katago' for definition in self.definitions):
             raise ValueError('Stockfish evaluation configuration cannot contain a KataGo opponent.')
         if self.engine.kind == 'katago' and any(
-            definition.kind in ('stockfish', 'stockfish_fixed_nodes') for definition in self.definitions
+            definition.kind in ('stockfish', 'stockfish_fixed_nodes', 'stockfish_adaptive_nodes')
+            for definition in self.definitions
         ):
             raise ValueError('KataGo evaluation configuration cannot contain a Stockfish opponent.')
         match_definitions = tuple(
@@ -277,4 +301,11 @@ class EvaluationConfiguration(FrozenModel):
         )
         if len(set(fixed_node_rungs)) != len(fixed_node_rungs):
             raise ValueError('Stockfish fixed-node rungs must use unique node counts per model search budget.')
+        adaptive_search_budgets = tuple(
+            definition.search.searches_per_move
+            for definition in self.definitions
+            if isinstance(definition, StockfishAdaptiveNodesEvaluationDefinition)
+        )
+        if len(set(adaptive_search_budgets)) != len(adaptive_search_budgets):
+            raise ValueError('Adaptive Stockfish definitions must use unique model search budgets.')
         return self

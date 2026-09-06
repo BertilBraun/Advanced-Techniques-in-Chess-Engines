@@ -67,6 +67,20 @@ def _categories_from_metrics(
         categories.append(TensorboardCustomScalarCategory(title='Evaluation datasets', charts=tuple(dataset_charts)))
     if duration_tags:
         metadata_charts.append(TensorboardMultilineChart(title='Duration (seconds)', tags=duration_tags))
+    stockfish_node_tags = tuple(
+        f'{evaluation_prefix}/{definition_id}/stockfish_nodes'
+        for (evaluation_prefix, definition_id), metrics in sorted(metrics_by_definition.items())
+        if 'stockfish_nodes' in metrics
+    )
+    if stockfish_node_tags:
+        metadata_charts.append(TensorboardMultilineChart(title='Stockfish nodes', tags=stockfish_node_tags))
+    next_stockfish_node_tags = tuple(
+        f'{evaluation_prefix}/{definition_id}/next_stockfish_nodes'
+        for (evaluation_prefix, definition_id), metrics in sorted(metrics_by_definition.items())
+        if 'next_stockfish_nodes' in metrics
+    )
+    if next_stockfish_node_tags:
+        metadata_charts.append(TensorboardMultilineChart(title='Next Stockfish nodes', tags=next_stockfish_node_tags))
     if metadata_charts:
         categories.append(
             TensorboardCustomScalarCategory(
@@ -88,6 +102,10 @@ def evaluation_tensorboard_categories(
         else:
             metrics = {*MATCH_OUTCOME_METRICS, *MATCH_SCORE_METRICS}
             metadata_metrics.update(MATCH_METADATA_METRICS)
+        if definition.kind in ('stockfish_fixed_nodes', 'stockfish_adaptive_nodes'):
+            metadata_metrics.add('stockfish_nodes')
+        if definition.kind == 'stockfish_adaptive_nodes':
+            metadata_metrics.add('next_stockfish_nodes')
         metrics_by_definition[('evaluation', definition.definition_id)] = metrics
         metrics_by_definition[('evaluation_metadata', definition.definition_id)] = metadata_metrics
     return _categories_from_metrics(metrics_by_definition)

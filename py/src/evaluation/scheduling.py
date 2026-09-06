@@ -15,6 +15,7 @@ from src.evaluation.configuration import (
     PreviousCheckpointEvaluationDefinition,
     RandomOpponentEvaluationDefinition,
     ReferenceCheckpointEvaluationDefinition,
+    StockfishAdaptiveNodesEvaluationDefinition,
     StockfishEvaluationDefinition,
     StockfishFixedNodesEvaluationDefinition,
 )
@@ -42,6 +43,12 @@ class CheckpointPublication(FrozenModel):
 
 
 ScheduledEvaluationSuite = ElapsedCheckpointReference
+
+
+class AdaptiveStockfishRungState(FrozenModel):
+    definition_id: str = Field(min_length=1)
+    selected_nodes: int = Field(gt=0)
+    last_completed_boundary_seconds: int | None = Field(gt=0)
 
 
 @dataclass(frozen=True)
@@ -106,6 +113,7 @@ def _match_job(
     | ReferenceCheckpointEvaluationDefinition
     | StockfishEvaluationDefinition
     | StockfishFixedNodesEvaluationDefinition
+    | StockfishAdaptiveNodesEvaluationDefinition
     | KataGoEvaluationDefinition,
     opponent: EvaluationOpponent,
     context: _EvaluationJobContext,
@@ -130,6 +138,7 @@ def _job_for_definition(
     suite: ScheduledEvaluationSuite,
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...],
     context: _EvaluationJobContext,
+    adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...],
 ) -> EvaluationJob | None:
     match definition:
         case FixedDatasetEvaluationDefinition():
@@ -185,6 +194,17 @@ def _job_for_definition(
                 ),
                 context,
             )
+        case StockfishAdaptiveNodesEvaluationDefinition(engine_executable_path=engine_executable_path):
+            rung = next(rung for rung in adaptive_stockfish_rungs if rung.definition_id == definition.definition_id)
+            return _match_job(
+                definition,
+                StockfishFixedNodesOpponent(
+                    kind='stockfish_fixed_nodes',
+                    nodes=rung.selected_nodes,
+                    engine_executable_path=engine_executable_path,
+                ),
+                context,
+            )
         case KataGoEvaluationDefinition(maximum_visits=maximum_visits):
             return _match_job(
                 definition,
@@ -200,6 +220,7 @@ def jobs_for_suite(
     suite: ScheduledEvaluationSuite,
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...],
     next_device_index: int,
+    adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...] = (),
 ) -> tuple[tuple[EvaluationJob, ...], int]:
     jobs: list[EvaluationJob] = []
     configuration = experiment.evaluation
@@ -225,7 +246,14 @@ def jobs_for_suite(
             ),
             result_path=result_directory / f'{job_id}.json',
         )
-        job = _job_for_definition(definition, configuration, suite, scheduled_suites, context)
+        job = _job_for_definition(
+            definition,
+            configuration,
+            suite,
+            scheduled_suites,
+            context,
+            adaptive_stockfish_rungs,
+        )
         if job is None:
             continue
         jobs.append(job)

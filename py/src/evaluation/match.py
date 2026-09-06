@@ -13,6 +13,7 @@ from src.evaluation.configuration import (
     PreviousCheckpointEvaluationDefinition,
     RandomOpponentEvaluationDefinition,
     ReferenceCheckpointEvaluationDefinition,
+    StockfishAdaptiveNodesEvaluationDefinition,
     StockfishEvaluationDefinition,
     StockfishFixedNodesEvaluationDefinition,
 )
@@ -110,6 +111,8 @@ def _definition_search(job: MatchEvaluationJob) -> EvaluationSearchConfiguration
         case StockfishEvaluationDefinition(search=search):
             return search
         case StockfishFixedNodesEvaluationDefinition(search=search):
+            return search
+        case StockfishAdaptiveNodesEvaluationDefinition(search=search):
             return search
         case KataGoEvaluationDefinition(search=search):
             return search
