@@ -63,6 +63,7 @@ def _configuration(warmup_quanta: int = 2) -> ProgressiveModelSizingConfiguratio
             decay=0.5,
             warmup_quanta=warmup_quanta,
             maximum_relative_loss=1.01,
+            candidate_catchup_learning_rate=0.004,
         ),
     )
 
@@ -132,7 +133,12 @@ def test_model_schedule_accepts_any_nonempty_model_tuple(model_count: int) -> No
 
     configuration = ProgressiveModelSizingConfiguration(
         models=models,
-        promotion=TotalLossEmaPromotionConfiguration(decay=0.9, warmup_quanta=2),
+        promotion=TotalLossEmaPromotionConfiguration(
+            decay=0.9,
+            warmup_quanta=2,
+            maximum_relative_loss=1.01,
+            candidate_catchup_learning_rate=0.004,
+        ),
     )
 
     assert configuration.models == models
@@ -143,7 +149,12 @@ def test_model_schedule_rejects_an_empty_model_tuple() -> None:
     with pytest.raises(ValueError):
         ProgressiveModelSizingConfiguration(
             models=(),
-            promotion=TotalLossEmaPromotionConfiguration(decay=0.9, warmup_quanta=2),
+            promotion=TotalLossEmaPromotionConfiguration(
+                decay=0.9,
+                warmup_quanta=2,
+                maximum_relative_loss=1.01,
+                candidate_catchup_learning_rate=0.004,
+            ),
         )
 
 
@@ -168,7 +179,12 @@ def test_progressive_models_require_zero_then_strictly_increasing_starts(
                 ProgressiveModelDefinition(model_id=f'model-{index}', training_start_days=start, network=_network(8))
                 for index, start in enumerate(starts)
             ),
-            promotion=TotalLossEmaPromotionConfiguration(decay=0.9, warmup_quanta=2),
+            promotion=TotalLossEmaPromotionConfiguration(
+                decay=0.9,
+                warmup_quanta=2,
+                maximum_relative_loss=1.01,
+                candidate_catchup_learning_rate=0.004,
+            ),
         )
 
 
@@ -358,3 +374,15 @@ def test_progressive_trainer_groups_remain_alive_across_quanta(tmp_path: Path) -
     session.close()
     assert all(trainer.closed for trainer in created)
     assert session.trainers == {}
+
+
+def test_progressive_learning_rate_uses_catchup_until_promotion(tmp_path: Path) -> None:
+    loaded = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    configuration = loaded.model_copy(
+        update={'training': loaded.training.model_copy(update={'save_path': str(tmp_path)})}
+    )
+    session = ProgressiveTrainingSession(configuration, cast(GameImplementation, object()))
+
+    assert session._candidate_learning_rate('large', 500) == pytest.approx(0.005)
+    session.state.state = session.state.state.validated_copy(update={'active_model_id': 'large'})
+    assert session._candidate_learning_rate('large', 500) == pytest.approx(0.002)

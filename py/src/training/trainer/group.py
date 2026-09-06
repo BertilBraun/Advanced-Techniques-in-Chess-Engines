@@ -65,7 +65,6 @@ class TrainerGroup:
         quantum: TrainerQuantum,
     ) -> TrainingQuantumResult:
         self._ensure_open()
-        source_generation = quantum.model_progress.model_generation
         target_progress = quantum.model_progress.next_generation
         comparable_generation = quantum.replay_source_progress.model_generation
         command = TrainQuantumCommand(
@@ -73,7 +72,7 @@ class TrainerGroup:
             source_progress=quantum.model_progress,
             target_progress=target_progress,
             parameters=ResolvedTrainingParameters(
-                learning_rate=self.configuration.training.trainer.learning_rate.value_at(source_generation),
+                learning_rate=quantum.base_learning_rate,
                 objective=self.game.training_objective_at(comparable_generation),
             ),
             replay_source_optimizer_steps=quantum.replay_source_progress.completed_optimizer_steps,

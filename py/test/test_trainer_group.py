@@ -195,6 +195,7 @@ def test_trainer_group_runs_blocking_world_size_one_ddp_quantum(tmp_path: Path) 
                 completed_optimizer_steps=0,
                 optimizer_steps_per_generation=configuration.training.lifecycle.credit.optimizer_steps_per_quantum,
             ),
+            base_learning_rate=0.001,
         )
     )
     trainer_group.close()

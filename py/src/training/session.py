@@ -85,6 +85,7 @@ class FixedTrainingSession(TrainingSession):
         game: GameImplementation,
         starting_checkpoint: CheckpointReference,
     ) -> None:
+        self.configuration = configuration
         self.trainer = TrainerGroup(
             configuration,
             game,
@@ -96,11 +97,13 @@ class FixedTrainingSession(TrainingSession):
         )
 
     def train_quantum(self, quantum: TrainingSessionQuantum) -> FixedTrainingSessionResult:
+        global_generation = quantum.progress.model_generation
         result = self.trainer.train_quantum(
             TrainerQuantum(
                 replay=quantum.replay,
                 model_progress=quantum.progress,
                 replay_source_progress=quantum.progress,
+                base_learning_rate=self.configuration.training.trainer.learning_rate.value_at(global_generation),
             )
         )
         return FixedTrainingSessionResult(
@@ -225,6 +228,7 @@ class ProgressiveTrainingSession(TrainingSession):
                 replay=replay,
                 model_progress=model_progress,
                 replay_source_progress=replay_source_progress,
+                base_learning_rate=self._candidate_learning_rate(model_id, replay_source_progress.model_generation),
             )
         )
         self.state.record_candidate(
@@ -236,6 +240,11 @@ class ProgressiveTrainingSession(TrainingSession):
             )
         )
         return ModelTrainingResult(model_id=model_id, result=result)
+
+    def _candidate_learning_rate(self, model_id: str, global_generation: int) -> float:
+        if model_id == self.state.state.active_model_id:
+            return self.configuration.training.trainer.learning_rate.value_at(global_generation)
+        return self.progressive_configuration.promotion.candidate_catchup_learning_rate
 
     def _trainer_group(
         self,

@@ -37,7 +37,7 @@ training:
           policy_head: {kind: go_point_pass_v1}
           num_value_channels: 1
           value_fc_size: 32
-    promotion: {decay: 0.8, warmup_quanta: 10, maximum_relative_loss: 1.01}
+    promotion: {decay: 0.8, warmup_quanta: 10, maximum_relative_loss: 1.01, candidate_catchup_learning_rate: 0.002}
   trainer:
     global_batch_size: 1024
     local_batch_size: 512

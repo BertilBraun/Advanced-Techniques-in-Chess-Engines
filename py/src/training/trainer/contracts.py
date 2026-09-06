@@ -30,6 +30,7 @@ class TrainerQuantum:
     replay: ReplayDescription
     model_progress: TrainingProgress
     replay_source_progress: TrainingProgress
+    base_learning_rate: float
 
 
 class TrainQuantumCommand(FrozenModel):

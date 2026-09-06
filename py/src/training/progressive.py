@@ -29,6 +29,7 @@ class TotalLossEmaPromotionConfiguration(FrozenModel):
     decay: float = Field(gt=0.0, lt=1.0, allow_inf_nan=False)
     warmup_quanta: int = Field(gt=0)
     maximum_relative_loss: float = Field(default=1.01, ge=1.0, allow_inf_nan=False)
+    candidate_catchup_learning_rate: float = Field(gt=0.0, allow_inf_nan=False)
 
 
 class ProgressiveModelSizingConfiguration(FrozenModel):

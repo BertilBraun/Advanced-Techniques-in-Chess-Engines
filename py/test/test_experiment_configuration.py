@@ -537,9 +537,9 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
-    # Re-pinned 2026-09-06: adaptive search budgeting and learned early stopping were both removed,
-    # so the schema lost their configuration blocks and every earlier recorded sha changed with them.
-    assert experiment_configuration_sha256(frozen) == '140a3c256d013a6b269345fa628ad664683b0001cb8df0aca38519698ddd681d'
+    # Re-pinned 2026-09-06: progressive candidates gained an explicit catch-up learning rate,
+    # so the canonical resolved configuration now includes that required training policy.
+    assert experiment_configuration_sha256(frozen) == '4a3ca34db21f5769b3eed1e4d54fb44857a0882faa3d31c827a9e5a32c725b5a'
 
 
 @pytest.mark.parametrize(

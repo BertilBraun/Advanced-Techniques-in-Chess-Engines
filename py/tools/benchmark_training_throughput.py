@@ -255,7 +255,14 @@ def run_benchmark(arguments: Arguments) -> TrainingThroughputBenchmarkResult:
             quantum_started_at = time.perf_counter()
             with sampler or nullcontext():
                 result = trainer_group.train_quantum(
-                    TrainerQuantum(replay=replay, model_progress=progress, replay_source_progress=progress)
+                    TrainerQuantum(
+                        replay=replay,
+                        model_progress=progress,
+                        replay_source_progress=progress,
+                        base_learning_rate=configuration.training.trainer.learning_rate.value_at(
+                            progress.model_generation
+                        ),
+                    )
                 )
             quantum_seconds = time.perf_counter() - quantum_started_at
             completed_searches = activate(result.checkpoint, collect=True)
