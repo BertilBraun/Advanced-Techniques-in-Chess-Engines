@@ -11,6 +11,10 @@ training:
 
 evaluation:
   maximum_concurrent_jobs: 3
+  dataset:
+    path: /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v33.bin
+  openings:
+    path: /workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-openings-v33.json
   definitions:
   - kind: fixed_dataset
     definition_id: fixed-dataset
