@@ -76,7 +76,11 @@ void Board::makeMove(Move m) {
     const std::size_t retainedMoveCount = std::min(m_recentMoveCount, RECENT_MOVE_COUNT - 1);
     std::move_backward(m_recentMoves.begin(), m_recentMoves.begin() + retainedMoveCount,
                        m_recentMoves.begin() + retainedMoveCount + 1);
-    m_recentMoves[0] = {.from = from_sq(m), .to = to_sq(m)};
+    const Square from = m.from_sq();
+    const Square to = m.type_of() == CASTLING
+                          ? static_cast<Square>(static_cast<int>(from) + (m.to_sq() > from ? 2 : -2))
+                          : m.to_sq();
+    m_recentMoves[0] = RecentMove{.from = from, .to = to};
     m_recentMoveCount = std::min(m_recentMoveCount + 1, RECENT_MOVE_COUNT);
     m_pos.do_move(m);
     const bool castlingRightsChanged = castlingRightsMask() != castlingRightsBeforeMove;
