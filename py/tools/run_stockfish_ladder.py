@@ -18,12 +18,10 @@ from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
 from tools.run_stockfish_gauntlet import (
-    Arguments as GauntletArguments,
-)
-from tools.run_stockfish_gauntlet import (
+    ConcurrentGauntletArguments,
+    GauntletRung,
     SeededOpeningSelection,
-    StockfishGauntletResult,
-    run_gauntlet,
+    run_gauntlets,
 )
 from tools.search_budget import (
     FixedModelSearchBudget,
@@ -160,35 +158,37 @@ def _score_bracket(probes: tuple[LadderProbe, ...]) -> LadderBracket | None:
 def run_ladder(arguments: Arguments) -> StockfishLadderResult:
     arguments.output_directory.mkdir(parents=True, exist_ok=False)
     opening_pairs = arguments.probe_games // 2
+    rungs = tuple(
+        GauntletRung(
+            stockfish_nodes=stockfish_nodes,
+            output_directory=arguments.output_directory / f'stockfish-nodes-{stockfish_nodes}',
+        )
+        for stockfish_nodes in arguments.stockfish_node_ladder
+    )
+    gauntlet_results = run_gauntlets(
+        ConcurrentGauntletArguments(
+            experiment=arguments.experiment,
+            run_directory=arguments.run_directory,
+            checkpoint_generation=arguments.checkpoint_generation,
+            opening_manifest=arguments.opening_manifest,
+            stockfish_executable=arguments.stockfish_executable,
+            rungs=rungs,
+            opening_pairs=opening_pairs,
+            opening_selection=SeededOpeningSelection(random_seed=arguments.opening_selection_seed),
+            match_random_seed=arguments.match_random_seed,
+            devices=arguments.devices,
+            model_search_budget=arguments.model_search_budget,
+        )
+    )
     probes: list[LadderProbe] = []
     pair_scores_by_nodes: dict[int, tuple[float, ...]] = {}
-    first_gauntlet_result: StockfishGauntletResult | None = None
-    for stockfish_nodes in arguments.stockfish_node_ladder:
-        run_directory = arguments.output_directory / f'stockfish-nodes-{stockfish_nodes}'
-        result = run_gauntlet(
-            GauntletArguments(
-                experiment=arguments.experiment,
-                run_directory=arguments.run_directory,
-                checkpoint_generation=arguments.checkpoint_generation,
-                opening_manifest=arguments.opening_manifest,
-                stockfish_executable=arguments.stockfish_executable,
-                stockfish_nodes=stockfish_nodes,
-                opening_pairs=opening_pairs,
-                opening_selection=SeededOpeningSelection(random_seed=arguments.opening_selection_seed),
-                match_random_seed=arguments.match_random_seed,
-                devices=arguments.devices,
-                model_search_budget=arguments.model_search_budget,
-                output_directory=run_directory,
-            )
-        )
+    for rung, result in zip(rungs, gauntlet_results, strict=True):
         aggregate = result.aggregate
-        pair_scores_by_nodes[stockfish_nodes] = _pair_scores(result.games)
-        if first_gauntlet_result is None:
-            first_gauntlet_result = result
+        pair_scores_by_nodes[rung.stockfish_nodes] = _pair_scores(result.games)
         probes.append(
             LadderProbe(
-                stockfish_nodes=stockfish_nodes,
-                result_path=(run_directory / 'result.json').resolve(),
+                stockfish_nodes=rung.stockfish_nodes,
+                result_path=(rung.output_directory / 'result.json').resolve(),
                 wins=aggregate.wins,
                 draws=aggregate.draws,
                 losses=aggregate.losses,
@@ -198,7 +198,7 @@ def run_ladder(arguments: Arguments) -> StockfishLadderResult:
             )
         )
     ordered_probes = tuple(sorted(probes, key=lambda probe: probe.stockfish_nodes))
-    assert first_gauntlet_result is not None
+    first_gauntlet_result = gauntlet_results[0]
     result = StockfishLadderResult(
         source_revision=first_gauntlet_result.source_revision,
         tool_sha256=file_sha256(Path(__file__)),

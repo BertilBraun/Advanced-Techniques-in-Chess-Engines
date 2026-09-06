@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
 import torch
 from src.evaluation.configuration import (
     EvaluationSearchConfiguration,
@@ -16,7 +17,7 @@ from src.evaluation.contracts import (
     OpeningSuiteManifest,
     RandomOpponent,
 )
-from src.evaluation.match import run_match
+from src.evaluation.match import ConcurrentMatchGroup, run_concurrent_matches, run_match
 from src.self_play.configuration import BatchedInferenceParams
 from src.training.checkpoint import CheckpointReference
 from test_helpers.checkpoints import checkpoint_reference
@@ -268,3 +269,139 @@ def test_policy_random_match_uses_direct_greedy_policy(tmp_path: Path) -> None:
 
     assert result.games[0].played_action_ids[0] == 1
     assert result.games[1].played_action_ids[1] == 1
+
+
+class ConcurrentFakeGame(FakeGame):
+    state = binary_choice_fake_game_state(terminal_ply=12)
+
+
+class RecordingSelector:
+    def __init__(self) -> None:
+        self.batch_sizes: list[int] = []
+
+    def choose_actions(self, positions: tuple[FakePosition, ...]) -> tuple[int, ...]:
+        self.batch_sizes.append(len(positions))
+        return tuple(0 for _ in positions)
+
+
+def _concurrent_search() -> EvaluationSearchConfiguration:
+    return EvaluationSearchConfiguration(
+        searches_per_move=8,
+        parallel_searches=1,
+        exploration_constant=1.0,
+        inference=BatchedInferenceParams(
+            inference_workers=1,
+            inference_batch_size=8,
+            outstanding_batches_per_worker=1,
+        ),
+    )
+
+
+def _concurrent_openings() -> OpeningSuiteManifest:
+    return OpeningSuiteManifest(
+        game='chess',
+        rules_digest='1' * 64,
+        representation_digest='2' * 64,
+        random_seed=0,
+        engine_identity='fake',
+        engine_artifact_sha256=('3' * 64,),
+        label_search_limit=10,
+        expanded_actions_per_position=2,
+        beam_width=2,
+        openings=(
+            OpeningLine(
+                opening_id='opening',
+                action_ids=(0, 0, 0, 0),
+                path_probability=0.5,
+                final_position_digest='0' * 64,
+                human_readable='opening',
+            ),
+        ),
+        builder_source_revision='revision',
+    )
+
+
+def _concurrent_job(
+    job_id: str,
+    maximum_game_plies: int,
+    search: EvaluationSearchConfiguration,
+) -> MatchEvaluationJob:
+    return MatchEvaluationJob(
+        kind='match',
+        job_id=job_id,
+        definition=RandomOpponentEvaluationDefinition(
+            kind='random',
+            definition_id=job_id,
+            opening_pair_count=1,
+            search=search,
+            maximum_game_plies=maximum_game_plies,
+        ),
+        boundary_seconds=1200,
+        candidate=_checkpoint(),
+        opponent=RandomOpponent(kind='random'),
+        device_id=0,
+        deadline_seconds=3600,
+        random_seed=7,
+        result_path=Path(f'{job_id}.json'),
+    )
+
+
+def test_concurrent_groups_batch_candidate_positions_across_every_group() -> None:
+    search = _concurrent_search()
+    openings = _concurrent_openings()
+    jobs = tuple(
+        _concurrent_job(f'group-{index}', maximum_game_plies, search)
+        for index, maximum_game_plies in enumerate((6, 12, 9))
+    )
+    selector = RecordingSelector()
+
+    run_concurrent_matches(
+        tuple(ConcurrentMatchGroup(job=job, openings=openings, external_engine=None) for job in jobs),
+        ConcurrentFakeGame(),
+        100,
+        'cpu',
+        candidate_selector=selector,
+    )
+
+    assert max(selector.batch_sizes) == 3
+
+
+def test_concurrent_groups_reproduce_the_sequential_games_of_every_group() -> None:
+    search = _concurrent_search()
+    openings = _concurrent_openings()
+    jobs = tuple(
+        _concurrent_job(f'group-{index}', maximum_game_plies, search)
+        for index, maximum_game_plies in enumerate((6, 12, 9))
+    )
+
+    concurrent = run_concurrent_matches(
+        tuple(ConcurrentMatchGroup(job=job, openings=openings, external_engine=None) for job in jobs),
+        ConcurrentFakeGame(),
+        100,
+        'cpu',
+        candidate_selector=RecordingSelector(),
+    )
+    sequential = tuple(
+        run_match(job, ConcurrentFakeGame(), openings, 100, None, 'cpu', candidate_selector=RecordingSelector())
+        for job in jobs
+    )
+
+    for concurrent_result, sequential_result in zip(concurrent, sequential, strict=True):
+        assert [game.played_action_ids for game in concurrent_result.games] == [
+            game.played_action_ids for game in sequential_result.games
+        ]
+        assert concurrent_result.aggregate == sequential_result.aggregate
+
+
+def test_concurrent_groups_reject_disagreeing_candidate_search_configurations() -> None:
+    openings = _concurrent_openings()
+    wider = _concurrent_search().model_copy(update={'searches_per_move': 16})
+    groups = (
+        ConcurrentMatchGroup(
+            job=_concurrent_job('group-0', 6, _concurrent_search()), openings=openings, external_engine=None
+        ),
+        ConcurrentMatchGroup(job=_concurrent_job('group-1', 6, wider), openings=openings, external_engine=None),
+    )
+
+    with pytest.raises(ValueError, match='one candidate search configuration'):
+        run_concurrent_matches(groups, ConcurrentFakeGame(), 100, 'cpu', candidate_selector=RecordingSelector())
