@@ -205,7 +205,7 @@ def test_chess_76_plane_policy_heads_preserve_action_outputs_and_backpropagate()
         auxiliary_heads,
     )
 
-    output = network.training_output(torch.randn((2, 29, 8, 8)))
+    output = network.training_output(torch.randn((2, CHESS_NETWORK_DIMENSIONS.channels, 8, 8)))
     loss = output.policy_logits.sum() + sum(logits.sum() for logits in output.auxiliary_logits)
     loss.backward()
 
@@ -355,7 +355,7 @@ def test_dense_policy_head_remains_selectable_with_small_output_initialization()
     )
     network.eval()
 
-    logits, _ = network.logit_forward(torch.randn((2, 29, 8, 8)))
+    logits, _ = network.logit_forward(torch.randn((2, CHESS_NETWORK_DIMENSIONS.channels, 8, 8)))
     dense_output = network.policy_head[-1]
 
     assert logits.shape == (2, CHESS_NETWORK_DIMENSIONS.actions)
@@ -616,7 +616,7 @@ def test_dense_bottleneck_applies_the_same_small_initialization_to_both_factors(
     )
     network.eval()
 
-    logits, _ = network.logit_forward(torch.randn((2, 29, 8, 8)))
+    logits, _ = network.logit_forward(torch.randn((2, CHESS_NETWORK_DIMENSIONS.channels, 8, 8)))
 
     assert logits.shape == (2, CHESS_NETWORK_DIMENSIONS.actions)
     assert network.policy_head[-2].out_features == 32

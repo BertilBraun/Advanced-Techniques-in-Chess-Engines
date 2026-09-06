@@ -4,7 +4,7 @@ import math
 
 import pytest
 import torch
-from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.games.chess.contract import CHESS_BINARY_CHANNEL_COUNT, CHESS_NETWORK_DIMENSIONS
 from src.games.representation import NetworkDimensions
 from src.training.initialization_guard import (
     InitializationProbe,
@@ -32,8 +32,9 @@ CHESS_PLANE_NETWORK_DIMENSIONS = NetworkDimensions(
 
 def _chess_probe_batch(batch_size: int, action_size: int) -> tuple[torch.Tensor, torch.Tensor]:
     generator = torch.Generator().manual_seed(11)
-    states = (torch.rand((batch_size, 29, 8, 8), generator=generator) < 0.15).float()
-    states[:, 22:] = torch.rand((batch_size, 7, 1, 1), generator=generator)
+    states = (torch.rand((batch_size, CHESS_NETWORK_DIMENSIONS.channels, 8, 8), generator=generator) < 0.15).float()
+    scalar_channel_count = CHESS_NETWORK_DIMENSIONS.channels - CHESS_BINARY_CHANNEL_COUNT
+    states[:, CHESS_BINARY_CHANNEL_COUNT:] = torch.rand((batch_size, scalar_channel_count, 1, 1), generator=generator)
     legal_action_ids = torch.full((batch_size, 24), -1, dtype=torch.int64)
     for row in range(batch_size):
         legal_count = 12 + row % 12

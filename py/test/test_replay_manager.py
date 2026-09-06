@@ -509,7 +509,6 @@ def _replay_layout() -> ReplayLayout:
         packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
         targets=_target_layout(),
         maximum_policy_entries=1,
-        sampling=UniformReplaySamplingConfiguration(kind='uniform'),
         maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
     )
 
@@ -531,6 +530,7 @@ def _open_manager(
         capacity=capacity,
         maximum_capacity=maximum_capacity,
         maximum_policy_entries=1,
+        sampling=UniformReplaySamplingConfiguration(kind='uniform'),
         materialization_processes=materialization_processes,
         materialization_shard_maximum_games=shard_maximum_games,
         materialization_shard_target_source_bytes=shard_maximum_source_bytes,

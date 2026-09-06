@@ -70,11 +70,11 @@ def test_production_progressive_model_parameter_counts_are_derived_directly() ->
         configuration.chess.objective.auxiliary_targets,
     )
 
-    # Re-pinned 2026-09-01: the search-budget head left the network with the stopping rework.
+    # Re-pinned 2026-09-06 after expanding the chess input representation from 29 to 52 channels.
     expected_counts = (
-        (1_155_572, 1_123_091, 1_066_240, 50_252, 6_599, 32_481),
-        (2_167_188, 2_132_563, 2_073_600, 52_300, 6_663, 34_625),
-        (4_562_804, 4_526_035, 4_464_960, 54_348, 6_727, 36_769),
+        (1_158_516, 1_126_035, 1_069_184, 50_252, 6_599, 32_481),
+        (2_170_868, 2_136_243, 2_077_280, 52_300, 6_663, 34_625),
+        (4_567_220, 4_530_451, 4_469_376, 54_348, 6_727, 36_769),
     )
 
     for model, expected in zip(progressive.models, expected_counts, strict=True):

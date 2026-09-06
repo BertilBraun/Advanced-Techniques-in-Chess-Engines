@@ -146,7 +146,7 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
     )
     model = Network(parameters, torch.device('cpu'), CHESS_PLANE_NETWORK_DIMENSIONS, auxiliary_heads)
     model.eval()
-    inputs = torch.randn((2, 29, 8, 8))
+    inputs = torch.randn((2, CHESS_NETWORK_DIMENSIONS.channels, 8, 8))
     expected_training_output = model.training_output(inputs)
     expected_policy, expected_wdl = model(inputs)
 
@@ -218,7 +218,7 @@ def test_jit_export_matches_training_forward_for_chess_heads(
     )
     model = Network(parameters, torch.device('cpu'), CHESS_PLANE_NETWORK_DIMENSIONS, auxiliary_heads)
     model.eval()
-    inputs = torch.rand((4, 29, 8, 8))
+    inputs = torch.rand((4, CHESS_NETWORK_DIMENSIONS.channels, 8, 8))
     expected_policy_logits, expected_value = model(inputs)
 
     save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 1, tmp_path)
