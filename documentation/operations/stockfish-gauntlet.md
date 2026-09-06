@@ -122,9 +122,11 @@ python -m tools.run_stockfish_gauntlet \
 ```
 
 Use the same command with `--model-searches 1000` or `--model-searches 100000` for the larger fixed budgets. The
-default fixed-search settings are deliberately the scheduled evaluator's values: one parallel search, one inference
-worker, batch size 64, and one outstanding batch. Override these only when defining a separate benchmark; changing
-parallel search changes the search execution semantics even when the final visit count is unchanged.
+default fixed-search settings are throughput settings, not the scheduled evaluator's: four parallel searches, one
+inference worker, batch size 320, and two outstanding batches. The inference defaults only change batching, but
+`--parallel-searches 4` changes the search execution semantics even when the final visit count is unchanged, and
+`chess-search-findings-20260827.md` §3.1 measures it at roughly −36 Elo against one parallel search at 600 visits.
+Pass `--parallel-searches 1` for any measurement that must compare against a ladder run at one parallel search.
 
 ## Timed examples
 
