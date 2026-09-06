@@ -75,6 +75,11 @@ population, `parallel_searches` 1, `inference_batch_size` 64.
 **Ladder Elo 2799.1, bootstrap 95% interval [2644.7, 2979.7]**. Bracket 20,000-50,000,
 closest rung 20,000. Raw result: `ladder-result-10000-searches.json`.
 
+A 200-game confirmation match at the 50,000-node rung reads **2844.8, [2806.6, 2882.3]** — see
+`deep-match-generation936-50k-nodes-rtx4070s-20260906`. Compatible with this fit, and it retires the
+apparent anomaly at that rung (0.25 over 10 games there, 0.34 over 200). The two are different
+estimators over different opening books, not a correction of one by the other.
+
 ## Comparison to the four-day yardstick
 
 The four-day run (r3/r4) reached ~2,800 ladder Elo at 10k visits
