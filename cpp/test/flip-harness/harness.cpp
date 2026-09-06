@@ -1,7 +1,7 @@
-// Standalone harness around the REAL C++ encoders in /tmp/az/head/cpp.
+// Standalone harness around the real C++ chess encoders.
 // stdin: one FEN per line.  For each FEN prints:
 //   FEN <fen>
-//   PLANES <29*64 chars of digits/signed ints separated by ','>  (tensor index = plane*64 + square, square = rank*8+file, a1=0)
+//   PLANES <channels*64 comma-separated values> (tensor index = plane*64 + square, square = rank*8+file, a1=0)
 //   MOVE <uci> <actionId> <decodedUci> <mirrorActionId>
 //   END
 #include "games/chess/encoding/ChessEncoding.hpp"

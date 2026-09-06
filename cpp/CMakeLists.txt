@@ -237,6 +237,22 @@ if (BUILD_TESTING)
     target_compile_definitions(NativeTests PRIVATE SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(NativeTests PRIVATE "${TORCH_LIBRARIES}" nlohmann_json::nlohmann_json)
     add_test(NAME NativeTests COMMAND NativeTests)
+
+    add_executable(
+            FlipHarness
+            test/flip-harness/harness.cpp
+            src/games/chess/implementation/ChessAction.cpp
+            src/games/chess/implementation/ChessBoard.cpp
+            src/games/chess/encoding/ChessEncoding.cpp
+            src/games/chess/encoding/ChessPolicyEncoding.cpp
+            "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+            "${stockfish_SOURCE_DIR}/src/memory.cpp"
+            "${stockfish_SOURCE_DIR}/src/misc.cpp"
+            "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+            "${stockfish_SOURCE_DIR}/src/position.cpp"
+    )
+    target_include_directories(FlipHarness PRIVATE src)
+    target_link_libraries(FlipHarness PRIVATE "${TORCH_LIBRARIES}")
 endif ()
 
 if (BUILD_BENCHMARKS)
