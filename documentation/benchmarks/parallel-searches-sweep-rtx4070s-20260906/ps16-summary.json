@@ -1,0 +1,27 @@
+{
+ "aggregate": {
+  "wins": 209,
+  "draws": 100,
+  "losses": 91,
+  "score": 0.6475,
+  "first_player_score": 0.6775,
+  "second_player_score": 0.6175,
+  "pair_count": 200,
+  "score_confidence_low": 0.6075,
+  "score_confidence_high": 0.68625
+ },
+ "model_search_budget": {
+  "kind": "fixed_searches",
+  "searches_per_move": 800,
+  "parallel_searches": 16,
+  "inference_workers": 1,
+  "inference_batch_size": 64,
+  "outstanding_batches_per_worker": 1,
+  "exploration_constant": 1.0,
+  "tree_search": null
+ },
+ "duration_seconds": 1039.9037342921365,
+ "source_revision": "2b6e7186d0e0994a161f04e2b3b357c34302969b",
+ "stockfish_identity": "Stockfish 13",
+ "opening_manifest_sha256": "40582c4f753e90d8ebd170498c37e3f4812bff38287e6bfa6db376e9eec70d39"
+}

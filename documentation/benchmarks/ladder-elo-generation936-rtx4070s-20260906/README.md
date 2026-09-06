@@ -83,7 +83,12 @@ reads 2799.1 at 69.3 h of cumulative run time, against roughly 96 h for the four
 
 Do not treat that as a settled win. Four caveats, largest first:
 
-1. **`parallel_searches` may not match.** This ladder ran at 1. The native default derives
+1. **`parallel_searches` — RESOLVED, see `parallel-searches-sweep-rtx4070s-20260906`.** A five-arm
+   sweep at 400 games each measures the cost at **-0.76 +/- 0.37 Elo per doubling, about -3 Elo
+   across the whole 1 -> 16 range**, not the -45 feared below. This caveat is closed: the 2799.1
+   figure needs no material discount. Original text follows.
+
+   This ladder ran at 1. The native default derives
    parallelism from the visit budget: `searchParallelism(10000)` yields targetRounds 50 and
    doubles to the cap of **16**. If the historical number was measured at the default, it was
    measured at 16 while this one was at 1, and `chess-search-findings-20260827.md` §3.1 puts the
