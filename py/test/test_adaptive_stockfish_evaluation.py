@@ -26,7 +26,7 @@ from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
 from test_helpers.checkpoints import checkpoint_reference
-from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
+from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_CONFIG_DIRECTORY
 
 
 class FakeClock:
@@ -226,6 +226,28 @@ def _adaptive_jobs(
 def _nodes(job: MatchEvaluationJob) -> int:
     assert isinstance(job.opponent, StockfishFixedNodesOpponent)
     return job.opponent.nodes
+
+
+def test_v33_configures_only_the_dataset_and_two_adaptive_matches() -> None:
+    experiment = load_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v33.yaml'
+    )
+    assert isinstance(experiment, ChessExperimentConfiguration)
+
+    assert tuple(definition.definition_id for definition in experiment.evaluation.definitions) == (
+        'fixed-dataset',
+        'stockfish-searched',
+        'stockfish-policy-only',
+    )
+    adaptive = tuple(
+        definition
+        for definition in experiment.evaluation.definitions
+        if isinstance(definition, StockfishAdaptiveNodesEvaluationDefinition)
+    )
+    assert tuple(definition.search.searches_per_move for definition in adaptive) == (64, 1)
+    assert all(definition.search.parallel_searches == 1 for definition in adaptive)
+    assert all(definition.opening_pair_count == 50 for definition in adaptive)
+    assert all(definition.node_ladder == (30, 100, 300, 1_000, 2_000, 3_000, 5_000, 10_000) for definition in adaptive)
 
 
 def test_adaptive_suite_starts_at_configured_rungs_and_schedules_one_match_per_mode(tmp_path: Path) -> None:
