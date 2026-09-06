@@ -106,6 +106,7 @@ def test_stockfish_fixed_nodes_definition_round_trips_and_schedules_distinct_opp
         ScheduledEvaluationSuite(boundary_seconds=1200, checkpoint=checkpoint),
         (),
         0,
+        (),
     )
     job = next(job for job in jobs if job.definition.kind == 'stockfish_fixed_nodes')
 
@@ -144,6 +145,7 @@ def test_stockfish_fixed_nodes_engine_override_reaches_opponent_and_executable(t
         ScheduledEvaluationSuite(boundary_seconds=1200, checkpoint=checkpoint_reference(tmp_path)),
         (),
         0,
+        (),
     )
     job = next(job for job in jobs if job.definition.kind == 'stockfish_fixed_nodes')
 
@@ -301,6 +303,7 @@ def _scheduled_definition_ids(experiment: object, generation: int, tmp_path: Pat
         ScheduledEvaluationSuite(boundary_seconds=1200, checkpoint=checkpoint_reference(generation=generation)),
         (),
         0,
+        (),
     )
     windowed = {'retires-early', 'always-on', 'starts-late'}
     return {job.definition.definition_id for job in jobs} & windowed

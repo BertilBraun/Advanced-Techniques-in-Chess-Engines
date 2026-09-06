@@ -307,6 +307,7 @@ def test_baseline_schedule_keeps_only_three_recent_checkpoint_offsets(tmp_path: 
         suites[-1],
         suites[:-1],
         0,
+        (),
     )
     previous_jobs = tuple(job for job in jobs if job.definition.kind == 'previous_checkpoint')
     assert tuple(job.definition.boundary_offset for job in previous_jobs) == (1, 2, 3)

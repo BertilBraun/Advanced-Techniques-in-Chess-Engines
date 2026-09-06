@@ -220,7 +220,7 @@ def jobs_for_suite(
     suite: ScheduledEvaluationSuite,
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...],
     next_device_index: int,
-    adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...] = (),
+    adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...],
 ) -> tuple[tuple[EvaluationJob, ...], int]:
     jobs: list[EvaluationJob] = []
     configuration = experiment.evaluation
