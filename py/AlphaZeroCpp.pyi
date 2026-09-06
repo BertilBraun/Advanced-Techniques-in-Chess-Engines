@@ -58,6 +58,7 @@ __all__: list[str] = [
     'InferencePrecision',
     'InferenceStatistics',
     'OutcomeProbabilities',
+    'SEARCH_PHASE_TIMING_ENABLED',
     'SdpaBackend',
     'SearchCheckpoint',
     'SearchCheckpointDetail',
@@ -1247,4 +1248,5 @@ def new_root_with_history(starting_fen: str, moves_uci: list[str], arena_capacit
 def search_parallelism(additional_visits: int) -> int: ...
 
 CHESS_ACTION_SIZE: int = 1880
+SEARCH_PHASE_TIMING_ENABLED: bool = False
 OutcomeProbabilities = WdlPrediction
