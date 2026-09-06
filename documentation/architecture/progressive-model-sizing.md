@@ -47,7 +47,8 @@ The promotion configuration explicitly owns:
 
 - EMA decay `d`, constrained to `0 < d < 1` and normally configured as `0.8`;
 - a positive number of paired warmup quanta;
-- the maximum candidate-to-active relative loss, normally `1.01`.
+- the maximum candidate-to-active relative loss;
+- a positive catch-up learning rate for an eligible candidate that is not yet active.
 
 Elapsed eligibility uses the evaluation manager's persisted active-run clock. It therefore resumes from accumulated
 elapsed time after a stopped experiment and does not count preparation or stopped time.
@@ -75,9 +76,11 @@ successors continue. A later stage that becomes eligible after many quanta start
 generation zero and joins the next complete quantum; it does not replay historical batches or receive active-model
 weights.
 
-Learning-rate schedules use each model's persisted local optimizer progress. There is no mutable PyTorch scheduler
-object: the canonical configured schedule plus exact model-local optimizer steps is the complete scheduler state.
-All models share the game-owned resolved objective and auxiliary target layout for a quantum.
+The active model's learning-rate schedule uses the run's global generation. An eligible successor trains at the
+configured catch-up learning rate until it is promoted, then uses the learning rate for the current global
+generation on its next quantum. Each model still owns persisted local optimizer progress for warmup, checkpoint
+generation, and recovery. There is no mutable PyTorch scheduler object. All models share the game-owned resolved
+objective and auxiliary target layout for a quantum.
 
 ## Promotion semantics
 
