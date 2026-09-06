@@ -112,7 +112,7 @@ int runBatchedSearchTests() {
     };
     try {
         const std::array<std::uint32_t, 5> budgets = {100, 300, 600, 1'600, 2'400};
-        const std::array<std::uint32_t, 5> expectedParallelism = {2, 2, 4, 8, 16};
+        const std::array<std::uint32_t, 5> expectedParallelism = {2, 2, 4, 4, 4};
         for (std::size_t index = 0; index < budgets.size(); ++index) {
             require(searchParallelism(budgets[index]) == expectedParallelism[index],
                     "search parallelism schedule changed");

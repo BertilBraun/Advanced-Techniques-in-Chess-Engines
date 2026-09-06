@@ -67,10 +67,10 @@ using SearchLimit = std::variant<FixedSearchLimit, AdditionalSearchLimit>;
     }
     const std::uint32_t targetRounds = (additionalVisits + 199U) / 200U;
     std::uint32_t parallelSearches = 2;
-    while (parallelSearches < targetRounds && parallelSearches < 16U) {
+    while (parallelSearches < targetRounds && parallelSearches < 4U) {
         parallelSearches *= 2U;
     }
-    return std::min(parallelSearches, 16U);
+    return std::min(parallelSearches, 4U);
 }
 
 [[nodiscard]] inline std::uint32_t maximumAdditionalVisits(const SearchLimit &limit) {
