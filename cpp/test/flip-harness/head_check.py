@@ -98,7 +98,7 @@ from run_checks import run_harness
 
 b = chess.Board('r3k2r/pppqppbp/2np1np1/8/2PP4/2N2NP1/PP2PPBP/R2QK2R b KQkq - 0 1')
 r = run_harness([b.fen()])[b.fen()]
-planes = r['planes'].reshape(29, 64)
+planes = r['planes'].reshape(dims.channels, 64)
 bad = 0
 for u, (aid, dec, fsq, tsq, mir) in r['moves'].items():
     s = aid % 64

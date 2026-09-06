@@ -66,10 +66,10 @@ def test_vectorized_dense_batch_preserves_every_auxiliary_variant() -> None:
         maximum_policy_entries=2,
         maximum_legal_actions=3,
     )
-    decoded = np.zeros((2, 29, 8, 8), dtype=np.int8)
+    decoded = np.zeros((2, state.representation.channels, 8, 8), dtype=np.int8)
     decoded[0, 0, 0, 1] = 1
     decoded[1, 1, 2, 3] = 1
-    decoded[:, 22] = np.asarray((2, -3), dtype=np.int8)[:, np.newaxis, np.newaxis]
+    decoded[:, state.representation.scalar_channels[0]] = np.asarray((2, -3), dtype=np.int8)[:, np.newaxis, np.newaxis]
     encoded = np.stack(
         tuple(
             np.frombuffer(

@@ -14,5 +14,30 @@ int runChessEncodingTests() {
     if (!torch::equal(expected, actualTensor)) {
         return 1;
     }
+    Board historyBoard;
+    historyBoard.makeMove(historyBoard.legalMoveFromUci("e2e4"));
+    const CompressedEncodedBoard blackHistory = encodeBoard(historyBoard);
+    if (!blackHistory.binaryPlanes[22].test(52) || !blackHistory.binaryPlanes[23].test(36)) {
+        return 1;
+    }
+    historyBoard.makeMove(historyBoard.legalMoveFromUci("c7c5"));
+    const CompressedEncodedBoard whiteHistory = encodeBoard(historyBoard);
+    if (!whiteHistory.binaryPlanes[22].test(50) || !whiteHistory.binaryPlanes[23].test(34) ||
+        !whiteHistory.binaryPlanes[24].test(12) || !whiteHistory.binaryPlanes[25].test(28)) {
+        return 1;
+    }
+    if (whiteHistory.binaryPlanes[38].word(0) != 0xAA55'AA55'AA55'AA55ULL) {
+        return 1;
+    }
+    const Board oppositeBishops("2b3k1/8/8/8/8/8/8/2B3K1 w - - 0 1");
+    if (encodeBoard(oppositeBishops).binaryPlanes[39].count() != 64) {
+        return 1;
+    }
+    const CompressedEncodedBoard initial = encodeBoard(Board{});
+    if (initial.scalarPlanes[7] != 8 || initial.scalarPlanes[8] != 2 ||
+        initial.scalarPlanes[9] != 2 || initial.scalarPlanes[10] != 2 ||
+        initial.scalarPlanes[11] != 1) {
+        return 1;
+    }
     return 0;
 }

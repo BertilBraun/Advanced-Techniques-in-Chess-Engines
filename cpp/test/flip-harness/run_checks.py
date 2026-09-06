@@ -241,8 +241,9 @@ def main():
         r, rf = resf[b.fen()], resf[bf.fen()]
         mir_stats['positions'] += 1
         # input planes: python augmentation np.flip(axis=2) of P must equal encoding of file-mirrored position
-        planes = r['planes'].reshape(29, 8, 8)
+        planes = r['planes'].reshape(rep.channels, 8, 8)
         aug = np.flip(planes, axis=2)
+        aug[38] = np.fromfunction(lambda row, column: (row + column) % 2 == 0, (8, 8), dtype=int)
         if not np.array_equal(aug.reshape(-1), rf['planes']):
             mir_fail.append(('MIRROR_PLANES', b.fen()))
         # via the actual contract code path
@@ -274,7 +275,7 @@ def main():
     # castling-plane behaviour under file mirror, one explicit example
     b = chess.Board('r3k2r/8/8/8/8/8/8/R3K2R w K - 0 1')
     r = run_harness([b.fen()])[b.fen()]
-    planes = r['planes'].reshape(29, 8, 8)
+    planes = r['planes'].reshape(rep.channels, 8, 8)
     aug = np.flip(planes, axis=2)
     print(
         'CASTLING PLANES example (own K-side only): orig planes12..15 sums',

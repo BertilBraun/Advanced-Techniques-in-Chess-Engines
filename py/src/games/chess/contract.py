@@ -19,6 +19,9 @@ OWN_KING_SIDE_CASTLING_PLANE = 12
 OWN_QUEEN_SIDE_CASTLING_PLANE = 13
 OPPONENT_KING_SIDE_CASTLING_PLANE = 14
 OPPONENT_QUEEN_SIDE_CASTLING_PLANE = 15
+CHECKERBOARD_PLANE = 38
+CHESS_CHANNEL_COUNT = 52
+CHESS_BINARY_CHANNEL_COUNT = 40
 
 
 class ChessPosition(Protocol):
@@ -49,15 +52,15 @@ class ChessPosition(Protocol):
 class ChessStateContract(GameStateContract[ChessPosition]):
     def __init__(self) -> None:
         self._representation = RepresentationDimensions(
-            channels=29,
+            channels=CHESS_CHANNEL_COUNT,
             rows=8,
             columns=8,
-            binary_channels=tuple(range(22)),
-            scalar_channels=tuple(range(22, 29)),
+            binary_channels=tuple(range(CHESS_BINARY_CHANNEL_COUNT)),
+            scalar_channels=tuple(range(CHESS_BINARY_CHANNEL_COUNT, CHESS_CHANNEL_COUNT)),
             packed_planes=PackedPlaneLayout(
                 board_size=8,
-                binary_plane_count=22,
-                scalar_count=7,
+                binary_plane_count=CHESS_BINARY_CHANNEL_COUNT,
+                scalar_count=CHESS_CHANNEL_COUNT - CHESS_BINARY_CHANNEL_COUNT,
             ),
         )
 
@@ -126,7 +129,11 @@ class ChessStateContract(GameStateContract[ChessPosition]):
         states: npt.NDArray[np.float32],
         augmentation_indices: npt.NDArray[np.int64],
     ) -> None:
-        if states.ndim != 4 or states.shape[1:] != (29, 8, 8) or len(states) != len(augmentation_indices):
+        if (
+            states.ndim != 4
+            or states.shape[1:] != (CHESS_CHANNEL_COUNT, 8, 8)
+            or len(states) != len(augmentation_indices)
+        ):
             raise ValueError('Chess decoded states and augmentation indices are not batch-aligned.')
         if np.any((augmentation_indices < 0) | (augmentation_indices >= self.augmentation_count)):
             raise ValueError('Chess augmentation index is outside the fixed layout.')
@@ -140,6 +147,11 @@ class ChessStateContract(GameStateContract[ChessPosition]):
         mirrored[:, [OPPONENT_KING_SIDE_CASTLING_PLANE, OPPONENT_QUEEN_SIDE_CASTLING_PLANE]] = mirrored[
             :, [OPPONENT_QUEEN_SIDE_CASTLING_PLANE, OPPONENT_KING_SIDE_CASTLING_PLANE]
         ]
+        mirrored[:, CHECKERBOARD_PLANE] = np.fromfunction(
+            lambda row, column: (row + column) % 2 == 0,
+            (8, 8),
+            dtype=int,
+        )
         states[mirrored_rows] = mirrored
 
     def transform_action_id(self, action_id: int, augmentation_index: int) -> int:

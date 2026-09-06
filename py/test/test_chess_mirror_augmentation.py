@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from src.games.chess.contract import (
+    CHECKERBOARD_PLANE,
     CHESS_STATE_CONTRACT,
     OPPONENT_KING_SIDE_CASTLING_PLANE,
     OPPONENT_QUEEN_SIDE_CASTLING_PLANE,
@@ -37,13 +38,18 @@ def _transform(payload: PackedPlanePayload, augmentation_index: int) -> np.ndarr
 
 def _synthetic_state() -> np.ndarray:
     generator = np.random.default_rng(3)
-    state = np.zeros((29, 8, 8), dtype=np.int8)
+    state = np.zeros((REPRESENTATION.channels, 8, 8), dtype=np.int8)
     for channel in REPRESENTATION.binary_channels:
         state[channel] = (generator.random((8, 8)) < 0.2).astype(np.int8)
     state[OWN_KING_SIDE_CASTLING_PLANE] = 1
     state[OWN_QUEEN_SIDE_CASTLING_PLANE] = 0
     state[OPPONENT_KING_SIDE_CASTLING_PLANE] = 1
     state[OPPONENT_QUEEN_SIDE_CASTLING_PLANE] = 0
+    state[CHECKERBOARD_PLANE] = np.fromfunction(
+        lambda row, column: (row + column) % 2 == 0,
+        (8, 8),
+        dtype=int,
+    )
     for scalar_index, channel in enumerate(REPRESENTATION.scalar_channels):
         state[channel] = scalar_index - 3
     return state
@@ -69,6 +75,7 @@ def test_file_mirror_flips_files_and_swaps_castling_planes() -> None:
             OPPONENT_KING_SIDE_CASTLING_PLANE,
         ]
     ]
+    expected[CHECKERBOARD_PLANE] = state[CHECKERBOARD_PLANE]
     assert np.array_equal(mirrored, expected)
     assert np.all(mirrored[OWN_KING_SIDE_CASTLING_PLANE] == 0)
     assert np.all(mirrored[OWN_QUEEN_SIDE_CASTLING_PLANE] == 1)

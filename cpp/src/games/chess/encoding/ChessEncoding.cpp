@@ -14,6 +14,8 @@ constexpr std::array pieceTypes = {
     Stockfish::PieceType::PAWN, Stockfish::PieceType::KNIGHT, Stockfish::PieceType::BISHOP,
     Stockfish::PieceType::ROOK, Stockfish::PieceType::QUEEN,  Stockfish::PieceType::KING,
 };
+constexpr std::uint64_t allSquares = 0xFFFF'FFFF'FFFF'FFFFULL;
+constexpr std::uint64_t checkerboard = 0xAA55'AA55'AA55'AA55ULL;
 }
 
 constexpr int pieceCount(const Bitboard bb) noexcept { return std::popcount(bb); }
@@ -45,13 +47,12 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
         }
     }
 
-    constexpr std::uint64_t ALL_SET = 0xFFFF'FFFF'FFFF'FFFFull;
     for (const Color color : {WHITE, BLACK}) {
         const Color positionColor = flipForBlack ? ~color : color;
         out.binaryPlanes[ch++] =
-            canonicalBits(ALL_SET * position.can_castle(positionColor & KING_SIDE));
+            canonicalBits(allSquares * position.can_castle(positionColor & KING_SIDE));
         out.binaryPlanes[ch++] =
-            canonicalBits(ALL_SET * position.can_castle(positionColor & QUEEN_SIDE));
+            canonicalBits(allSquares * position.can_castle(positionColor & QUEEN_SIDE));
     }
 
     for (const Color color : {WHITE, BLACK}) {
@@ -64,8 +65,23 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
     const Square epSquare = position.ep_square();
     out.binaryPlanes[ch++] = canonicalBits(epSquare == SQ_NONE ? 0ULL : square_bb(epSquare));
     const int repetitions = board.repetitionCount();
-    out.binaryPlanes[ch++] = canonicalBits(ALL_SET * (repetitions >= 1));
-    out.binaryPlanes[ch++] = canonicalBits(ALL_SET * (repetitions >= 2));
+    out.binaryPlanes[ch++] = canonicalBits(allSquares * (repetitions >= 1));
+    out.binaryPlanes[ch++] = canonicalBits(allSquares * (repetitions >= 2));
+
+    const auto &recentMoves = board.recentMoves();
+    for (const std::size_t index : range(Board::RECENT_MOVE_COUNT)) {
+        const bool present = index < board.recentMoveCount();
+        out.binaryPlanes[ch++] = canonicalBits(present ? square_bb(recentMoves[index].from) : 0ULL);
+        out.binaryPlanes[ch++] = canonicalBits(present ? square_bb(recentMoves[index].to) : 0ULL);
+    }
+
+    out.binaryPlanes[ch++] = BitBoard<ChessRepresentationDimensions::boardLength>({checkerboard});
+    const Bitboard bishops = position.pieces(BISHOP);
+    const bool oppositeColoredBishops = pieceCount(bishops) == 2 &&
+                                        pieceCount(position.pieces(WHITE, BISHOP)) == 1 &&
+                                        pieceCount(position.pieces(BLACK, BISHOP)) == 1 &&
+                                        pieceCount(bishops & checkerboard) == 1;
+    out.binaryPlanes[ch++] = canonicalBits(allSquares * oppositeColoredBishops);
 
     assert(ch == ChessRepresentationDimensions::binaryChannelCount);
 
@@ -77,6 +93,10 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
         out.scalarPlanes[i] = static_cast<std::int8_t>(pieceCount(white) - pieceCount(black));
     }
     out.scalarPlanes[6] = static_cast<std::int8_t>(std::min(position.rule50_count(), 100));
+    const Color ownColor = position.side_to_move();
+    for (const int i : range(5)) {
+        out.scalarPlanes[7 + i] = static_cast<std::int8_t>(pieceCount(position.pieces(ownColor, pieceTypes[i])));
+    }
 
     return out;
 }

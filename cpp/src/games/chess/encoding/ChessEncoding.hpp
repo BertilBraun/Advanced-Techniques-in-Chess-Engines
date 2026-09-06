@@ -19,9 +19,9 @@ inline constexpr ChessActionEncoding chessActionEncoding = ChessActionEncoding::
 
 struct ChessRepresentationDimensions {
     static constexpr int boardLength = 8;
-    static constexpr int channelCount = 29;
-    static constexpr int binaryChannelCount = 22;
-    static constexpr int scalarChannelCount = 7;
+    static constexpr int channelCount = 52;
+    static constexpr int binaryChannelCount = 40;
+    static constexpr int scalarChannelCount = 12;
     static constexpr int policyPlaneCount = 76;
     static constexpr int policyPlaneActionCount = policyPlaneCount * boardLength * boardLength;
     static constexpr int reducedActionCount = 1880;

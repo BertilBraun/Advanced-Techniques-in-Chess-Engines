@@ -88,7 +88,7 @@ def test_dense_policy_head_bottleneck_sizes_the_reduced_chess_action_space() -> 
     network = _chess_network(DensePolicyHeadConfiguration(channels=BOTTLENECK_CHANNELS))
     network.eval()
 
-    logits, _ = network.logit_forward(torch.randn((2, 29, 8, 8)))
+    logits, _ = network.logit_forward(torch.randn((2, CHESS_NETWORK_DIMENSIONS.channels, 8, 8)))
     head = network.policy_head
     assert isinstance(head, nn.Sequential)
     bottleneck = head[0]
@@ -120,7 +120,7 @@ def test_policy_shaped_auxiliary_heads_follow_the_reduced_chess_action_space() -
         ),
     )
 
-    output = network.training_output(torch.randn((2, 29, 8, 8)))
+    output = network.training_output(torch.randn((2, CHESS_NETWORK_DIMENSIONS.channels, 8, 8)))
 
     assert output.policy_logits.shape == (2, CHESS_ACTION_SIZE)
     assert tuple(logits.shape for logits in output.auxiliary_logits) == (

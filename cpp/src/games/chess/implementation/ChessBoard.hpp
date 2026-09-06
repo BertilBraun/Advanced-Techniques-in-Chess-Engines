@@ -2,6 +2,7 @@
 
 #include "position.h"
 
+#include <array>
 #include <cstdint>
 #include <iostream>
 #include <memory>
@@ -13,6 +14,12 @@
 class Board {
 public:
     static constexpr std::uint16_t MAX_REVERSIBLE_HISTORY_PLIES = 100;
+    static constexpr std::size_t RECENT_MOVE_COUNT = 8;
+
+    struct RecentMove {
+        Stockfish::Square from;
+        Stockfish::Square to;
+    };
 
     explicit Board(
         const std::string &fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
@@ -67,6 +74,10 @@ public:
 
     /// Returns the number of earlier occurrences of the current position.
     [[nodiscard]] int repetitionCount() const;
+    [[nodiscard]] const std::array<RecentMove, RECENT_MOVE_COUNT> &recentMoves() const {
+        return m_recentMoves;
+    }
+    [[nodiscard]] std::size_t recentMoveCount() const { return m_recentMoveCount; }
 
     /**
      * Produces an ASCII representation of the board similar to the Python version:
@@ -101,6 +112,8 @@ private:
 
     Stockfish::Position m_pos;
     std::shared_ptr<const PositionHistory> m_history;
+    std::array<RecentMove, RECENT_MOVE_COUNT> m_recentMoves{};
+    std::size_t m_recentMoveCount = 0;
     mutable std::optional<std::vector<Stockfish::Move>> m_validMoves;
     mutable std::optional<int> m_repetitionCount;
 

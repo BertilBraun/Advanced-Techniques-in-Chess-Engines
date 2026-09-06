@@ -43,12 +43,16 @@ Board::Board(const std::string &fen) {
     setFen(fen);
 }
 
-Board::Board(const Board &other) : m_pos(other.m_pos), m_history(other.m_history) {}
+Board::Board(const Board &other)
+    : m_pos(other.m_pos), m_history(other.m_history), m_recentMoves(other.m_recentMoves),
+      m_recentMoveCount(other.m_recentMoveCount) {}
 
 Board &Board::operator=(const Board &other) {
     if (this != &other) {
         m_pos = other.m_pos;
         m_history = other.m_history;
+        m_recentMoves = other.m_recentMoves;
+        m_recentMoveCount = other.m_recentMoveCount;
         m_validMoves.reset();
         m_repetitionCount.reset();
     }
@@ -69,6 +73,11 @@ void Board::makeMove(Move m) {
     const bool pawnMove = type_of(m_pos.moved_piece(m)) == PAWN;
     const bool capture = m_pos.capture(m);
     const std::uint8_t castlingRightsBeforeMove = castlingRightsMask();
+    const std::size_t retainedMoveCount = std::min(m_recentMoveCount, RECENT_MOVE_COUNT - 1);
+    std::move_backward(m_recentMoves.begin(), m_recentMoves.begin() + retainedMoveCount,
+                       m_recentMoves.begin() + retainedMoveCount + 1);
+    m_recentMoves[0] = {.from = from_sq(m), .to = to_sq(m)};
+    m_recentMoveCount = std::min(m_recentMoveCount + 1, RECENT_MOVE_COUNT);
     m_pos.do_move(m);
     const bool castlingRightsChanged = castlingRightsMask() != castlingRightsBeforeMove;
     const bool resetsRepetitionHistory = pawnMove || capture || castlingRightsChanged;
@@ -88,6 +97,8 @@ void Board::setFen(const std::string &fen) {
     position.set(fen, false);
     m_pos = std::move(position);
     m_history = std::make_shared<const PositionHistory>(m_pos.repetition_key(), nullptr);
+    m_recentMoves = {};
+    m_recentMoveCount = 0;
     m_validMoves.reset();
     m_repetitionCount.reset();
     validateHistory();

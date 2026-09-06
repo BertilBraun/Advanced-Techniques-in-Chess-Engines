@@ -194,7 +194,7 @@ def _reference_object_batch(
 ) -> TrainingBatch:
     samples = tuple(store.sample_at(int(index)) for index in sample_indices)
     row_count = len(samples)
-    states = np.empty((row_count, 29, 8, 8), dtype=np.float32)
+    states = np.empty((row_count, CHESS_STATE_CONTRACT.representation.channels, 8, 8), dtype=np.float32)
     policies = np.zeros((row_count, CHESS_STATE_CONTRACT.action_size), dtype=np.float32)
     legal = np.full((row_count, store.layout.maximum_legal_actions), -1, dtype=np.int64)
     next_policies = np.zeros_like(policies)
