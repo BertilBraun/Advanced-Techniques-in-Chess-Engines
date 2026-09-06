@@ -11,7 +11,7 @@ import torch
 from torch import Tensor, nn
 
 pytest.importorskip('AlphaZeroCpp')
-from AlphaZeroCpp import AnalysisParameters, BatchedInferenceParameters
+from AlphaZeroCpp import SEARCH_PHASE_TIMING_ENABLED, AnalysisParameters, BatchedInferenceParameters
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.interactive.analysis import (
     AnalysisResult,
@@ -206,8 +206,9 @@ def test_timed_search_drains_direct_workers(engine: InteractiveEngine) -> None:
     assert game.root_visits == result.searches
     assert 0 < metrics.model_positions <= result.searches
     assert 0.0 < metrics.worker_utilization <= 1.0
-    assert metrics.tree_selection_nanoseconds > 0
-    assert metrics.board_encoding_nanoseconds > 0
+    # Selection and encoding timers compile away unless the build defines ALPHAZERO_SEARCH_PHASE_TIMING.
+    assert (metrics.tree_selection_nanoseconds > 0) == SEARCH_PHASE_TIMING_ENABLED
+    assert (metrics.board_encoding_nanoseconds > 0) == SEARCH_PHASE_TIMING_ENABLED
 
 
 def test_inference_failure_cancels_every_tree_reservation(

@@ -4,6 +4,7 @@
 #include "search/InferenceConfiguration.hpp"
 #include "search/SearchTypes.hpp"
 #include "search/SelfPlay.hpp"
+#include "util/Timing.hpp"
 #include <pybind11/operators.h>
 #include <pybind11/stl.h>
 
@@ -115,6 +116,9 @@ void bind_search(py::module_ &module) {
         .def_readonly("treeOwnerWaitNanoseconds", &InferenceStatistics::treeOwnerWaitNanoseconds)
         .def_readonly("inferenceNanoseconds", &InferenceStatistics::inferenceNanoseconds)
         .def_readonly("workerUtilization", &InferenceStatistics::workerUtilization);
+
+    module.attr("SEARCH_PHASE_TIMING_ENABLED") =
+        static_cast<bool>(ALPHAZERO_SEARCH_PHASE_TIMING);
 
     py::class_<WdlPrediction>(module, "WdlPrediction")
         .def_readonly("win", &WdlPrediction::win)

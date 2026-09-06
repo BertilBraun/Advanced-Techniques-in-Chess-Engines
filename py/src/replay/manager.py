@@ -50,9 +50,6 @@ from src.util.log import log, warn
 
 PositionT = TypeVar('PositionT')
 DISPATCH_INTERVAL_SECONDS = 1.0
-_LEGACY_STAGED_ROWS_SUFFIX = '.rows.npy'
-_LEGACY_STAGED_METADATA_SUFFIX = '.meta.json'
-_LEGACY_QUEUE_FILE = 'shard-queue.json'
 
 
 @dataclass(frozen=True)
@@ -502,13 +499,6 @@ class ReplayManager(Generic[PositionT]):
         replay_shard_data_path(self.staging_path, shard_identity).unlink(missing_ok=True)
 
     def _recover_directories(self) -> None:
-        legacy = tuple(self.staging_path.glob(f'*{_LEGACY_STAGED_ROWS_SUFFIX}')) + tuple(
-            self.staging_path.glob(f'*{_LEGACY_STAGED_METADATA_SUFFIX}')
-        )
-        if legacy:
-            raise ValueError('Legacy per-game replay staging exists; an explicit replay migration is required.')
-        if (self.completed_games_path / _LEGACY_QUEUE_FILE).exists():
-            raise ValueError('A legacy replay shard queue exists; an explicit replay migration is required.')
         self._assert_one_filesystem()
         for directory in (self.inbox_path, self.staging_path, *self.worker_paths):
             for temporary in directory.glob('.*.tmp'):

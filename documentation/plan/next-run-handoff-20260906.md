@@ -254,13 +254,12 @@ the measurements so far -- they are noisy and small.**
 - **No backwards compatibility, anywhere.** The user's explicit position: he is finished with the old
   checkpoints, and if he wants to rerun one he will check out an old commit. Breaking changes are
   accepted by default. **Remove code that exists only to keep the status quo alive** rather than
-  carrying it. One such shim was already removed on 2026-09-06 (`LEGACY_MODULE_RENAMES` in
-  `py/src/distillation/teacher.py`, which mapped camel-case parameter names from checkpoints written
-  before the 2026-08 module rename; the `_orig_mod.` strip it sat beside is a `torch.compile`
-  artefact and was kept). Remaining candidate: `_recover_directories` in `py/src/replay/manager.py`
-  detects legacy per-game staging and a legacy shard queue and raises -- it does not migrate, so if
-  those layouts can no longer occur it is dead weight under `CLAUDE.md`'s "no defensive checks for
-  scenarios that can't happen".
+  carrying it. Two such shims were removed on 2026-09-06:
+  `LEGACY_MODULE_RENAMES` in `py/src/distillation/teacher.py`, which mapped camel-case parameter names
+  from checkpoints written before the 2026-08 module rename (the `_orig_mod.` strip beside it is a
+  `torch.compile` artefact and was kept); and the legacy per-game staging and shard-queue guards in
+  `_recover_directories` in `py/src/replay/manager.py`, which detected old layouts and raised without
+  migrating. Nothing of that kind is known to remain -- if more surfaces, delete it.
 
   This removes the objection to input-feature changes below: breaking comparability with existing
   checkpoints is explicitly acceptable. The colour-symmetry harness requirement still stands.

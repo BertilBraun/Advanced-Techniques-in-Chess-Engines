@@ -597,28 +597,6 @@ def test_game_identity_file_name_parser_requires_canonical_name() -> None:
         GameIdentity.from_file_name(identity.file_name.replace('worker-3', 'worker-03'))
 
 
-@pytest.mark.parametrize('legacy_suffix', ('.rows.npy', '.meta.json'))
-def test_replay_manager_rejects_legacy_per_game_staging_artifacts(
-    tmp_path: Path,
-    legacy_suffix: str,
-) -> None:
-    staging_path = tmp_path / 'completed-games' / 'staging'
-    staging_path.mkdir(parents=True)
-    (staging_path / f'legacy-game{legacy_suffix}').write_bytes(b'legacy')
-
-    with pytest.raises(ValueError, match='explicit replay migration'):
-        _open_manager(tmp_path, capacity=4, maximum_capacity=4)
-
-
-def test_replay_manager_rejects_a_legacy_shard_queue(tmp_path: Path) -> None:
-    completed_games = tmp_path / 'completed-games'
-    completed_games.mkdir(parents=True)
-    (completed_games / 'shard-queue.json').write_text('{"next_sequence": 2738, "pending": []}', encoding='utf-8')
-
-    with pytest.raises(ValueError, match='explicit replay migration'):
-        _open_manager(tmp_path, capacity=4, maximum_capacity=4)
-
-
 def test_replay_manager_materializes_appends_and_reopens(tmp_path: Path) -> None:
     inbox = tmp_path / 'completed-games' / 'inbox'
     _publish_games(inbox, 2)
