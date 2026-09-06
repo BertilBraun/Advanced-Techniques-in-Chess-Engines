@@ -11,6 +11,7 @@ from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.composition import ConfiguredGame, create_game_implementation
 from src.games.go.configuration import GoExperimentConfiguration
 from src.replay.batch_loader import MappedReplayBatchLoader
+from src.replay.configuration import UniformReplaySamplingConfiguration
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.manager import ReplayManager
@@ -207,6 +208,7 @@ def test_complete_phase2_cpu_path(configuration_name: str, tmp_path: Path) -> No
                 world_size=1,
                 rank=0,
                 sampler_seed=0,
+                sampling=UniformReplaySamplingConfiguration(kind='uniform'),
                 pin_memory=False,
             )
         )

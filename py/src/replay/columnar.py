@@ -70,6 +70,7 @@ class ReplayColumnViews:
     root_value: npt.NDArray[np.float32]
     auxiliary: tuple[ReplayAuxiliaryColumnViews, ...]
     sample_weight: npt.NDArray[np.float32]
+    policy_surprise: npt.NDArray[np.float32]
     source_model_generation: npt.NDArray[np.uint32]
     source_timestamp: npt.NDArray[np.float64]
 
@@ -127,6 +128,7 @@ def build_column_views(
         root_value=_float32_array(arrays, ReplayColumnKind.ROOT_VALUE),
         auxiliary=tuple(auxiliary),
         sample_weight=_float32_array(arrays, ReplayColumnKind.SAMPLE_WEIGHT),
+        policy_surprise=_float32_array(arrays, ReplayColumnKind.POLICY_SURPRISE),
         source_model_generation=_uint32_array(arrays, ReplayColumnKind.SOURCE_MODEL_GENERATION),
         source_timestamp=_float64_array(arrays, ReplayColumnKind.SOURCE_TIMESTAMP),
     )
@@ -187,6 +189,8 @@ def _values_for_descriptor(
             return views.root_value
         case ReplayColumnKind.SAMPLE_WEIGHT:
             return views.sample_weight
+        case ReplayColumnKind.POLICY_SURPRISE:
+            return views.policy_surprise
         case ReplayColumnKind.SOURCE_MODEL_GENERATION:
             return views.source_model_generation
         case ReplayColumnKind.SOURCE_TIMESTAMP:

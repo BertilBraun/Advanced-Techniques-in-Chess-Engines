@@ -116,6 +116,7 @@ def _encode_sample(
             case _:
                 raise ValueError('Replay auxiliary target does not match its fixed layout.')
     columns.sample_weight[row_index] = sample.sample_weight
+    columns.policy_surprise[row_index] = sample.policy_surprise
     columns.source_model_generation[row_index] = sample.source_model_generation
     columns.source_timestamp[row_index] = sample.source_created_at_seconds
 

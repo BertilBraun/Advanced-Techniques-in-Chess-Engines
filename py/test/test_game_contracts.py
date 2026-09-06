@@ -135,6 +135,7 @@ def test_completed_self_play_game_round_trip_uses_shared_trajectory_values() -> 
         baseline_visits=16,
         network_root_value=0.1,
         policy_correction=0.2,
+        policy_surprise=0.3,
         value_correction=0.075,
         parallel_searches=1,
         starting_visits=0,

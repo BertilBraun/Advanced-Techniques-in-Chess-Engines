@@ -43,7 +43,7 @@ training:
           policy_head: {kind: chess_76_plane_direct_v2}
           num_value_channels: 2
           value_fc_size: 48
-    promotion: {decay: 0.8, warmup_quanta: 2, maximum_relative_loss: 1.01}
+    promotion: {decay: 0.8, warmup_quanta: 2, maximum_relative_loss: 1.01, candidate_catchup_learning_rate: 0.005}
   trainer:
     global_batch_size: 2048
     local_batch_size: 2048
@@ -84,6 +84,8 @@ training:
         rounding: nearest
       maximum_capacity: 2500000
       maximum_policy_entries: 60
+      sampling:
+        kind: uniform
     credit:
       replay_ratio: 8
       optimizer_steps_per_quantum: 500

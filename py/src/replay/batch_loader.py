@@ -20,6 +20,7 @@ from src.replay.columnar import (
     ReplayPolicyColumnViews,
     ReplayScalarColumnViews,
 )
+from src.replay.configuration import PolicySurpriseReplaySamplingConfiguration, ReplaySamplingConfiguration
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.pinned_batch_pool import (
@@ -76,6 +77,7 @@ class MappedReplayBatchLoader(Generic[PositionT]):
         world_size: int,
         rank: int,
         sampler_seed: int,
+        sampling: ReplaySamplingConfiguration,
         pin_memory: bool,
     ) -> None:
         if optimizer_steps <= 0 or global_batch_size <= 0 or world_size <= 0:
@@ -96,6 +98,7 @@ class MappedReplayBatchLoader(Generic[PositionT]):
         self.local_batch_size = global_batch_size // world_size
         self.rank = rank
         self.sampler_seed = sampler_seed
+        self.sampling = sampling
         self.pin_memory = pin_memory
 
     def __iter__(self) -> Iterator[TrainingBatch]:
@@ -124,11 +127,14 @@ class MappedReplayBatchLoader(Generic[PositionT]):
             ):
                 raise ValueError('Replay changed after the training description was captured.')
             generator = np.random.default_rng(np.random.SeedSequence((self.sampler_seed, self.source_optimizer_step)))
+            cumulative_surprise = _cumulative_policy_surprise(store, self.sampling)
             for batch_index in range(self.optimizer_steps):
-                global_sample_indices = generator.choice(
+                global_sample_indices = _sample_replay_indices(
+                    generator,
                     self.replay.size,
-                    size=self.global_batch_size,
-                    replace=False,
+                    self.global_batch_size,
+                    self.sampling,
+                    cumulative_surprise,
                 )
                 global_augmentation_indices = generator.integers(
                     0,
@@ -148,6 +154,51 @@ class MappedReplayBatchLoader(Generic[PositionT]):
                 yield batch
         finally:
             store.close()
+
+
+def _cumulative_policy_surprise(
+    store: ReplayStore,
+    sampling: ReplaySamplingConfiguration,
+) -> npt.NDArray[np.float64] | None:
+    match sampling:
+        case PolicySurpriseReplaySamplingConfiguration(maximum_surprise=maximum_surprise):
+            surprises = np.minimum(store.logical_policy_surprise(), np.float32(maximum_surprise))
+            cumulative = np.cumsum(surprises, dtype=np.float64)
+            return cumulative if cumulative[-1] > 0.0 else None
+        case _:
+            return None
+
+
+def _sample_replay_indices(
+    generator: np.random.Generator,
+    replay_size: int,
+    sample_count: int,
+    sampling: ReplaySamplingConfiguration,
+    cumulative_surprise: npt.NDArray[np.float64] | None,
+) -> npt.NDArray[np.int64]:
+    if cumulative_surprise is None or sampling.kind == 'uniform':
+        return generator.choice(replay_size, size=sample_count, replace=False)
+    accepted = np.empty(sample_count, dtype=np.int64)
+    accepted_count = 0
+    accepted_set: set[int] = set()
+    while accepted_count < sample_count:
+        remaining = sample_count - accepted_count
+        priority_draws = generator.random(remaining) >= sampling.uniform_probability
+        draws = generator.integers(0, replay_size, size=remaining, dtype=np.int64)
+        priority_count = int(np.count_nonzero(priority_draws))
+        if priority_count:
+            masses = generator.random(priority_count) * cumulative_surprise[-1]
+            draws[priority_draws] = np.searchsorted(cumulative_surprise, masses, side='right')
+        unique_draws, first_indices = np.unique(draws, return_index=True)
+        ordered_unique = unique_draws[np.argsort(first_indices)]
+        for draw in ordered_unique:
+            index = int(draw)
+            if index in accepted_set:
+                continue
+            accepted[accepted_count] = index
+            accepted_set.add(index)
+            accepted_count += 1
+    return accepted
 
 
 class PrefetchedReplayBatches(Iterator[TrainingBatch]):

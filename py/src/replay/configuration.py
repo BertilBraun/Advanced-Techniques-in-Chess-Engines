@@ -1,14 +1,33 @@
 from __future__ import annotations
 
+from typing import Annotated, Literal, TypeAlias
+
 from pydantic import Field, model_validator
 from src.util.frozen_model import FrozenModel
 from src.util.generation_schedule import IntegerGenerationSchedule, defined_schedule_values
+
+
+class UniformReplaySamplingConfiguration(FrozenModel):
+    kind: Literal['uniform']
+
+
+class PolicySurpriseReplaySamplingConfiguration(FrozenModel):
+    kind: Literal['policy_surprise']
+    uniform_probability: float = Field(ge=0.0, le=1.0)
+    maximum_surprise: float = Field(gt=0.0)
+
+
+ReplaySamplingConfiguration: TypeAlias = Annotated[
+    UniformReplaySamplingConfiguration | PolicySurpriseReplaySamplingConfiguration,
+    Field(discriminator='kind'),
+]
 
 
 class ReplayConfiguration(FrozenModel):
     capacity: IntegerGenerationSchedule
     maximum_capacity: int = Field(gt=0)
     maximum_policy_entries: int = Field(ge=1, le=255)
+    sampling: ReplaySamplingConfiguration
     materialization_processes: int = Field(default=1, ge=1)
     materialization_shard_maximum_games: int = Field(default=32, ge=1)
     materialization_shard_target_source_bytes: int = Field(default=16 * 1024 * 1024, ge=1)

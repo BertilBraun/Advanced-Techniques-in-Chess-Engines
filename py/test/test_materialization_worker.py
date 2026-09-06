@@ -146,6 +146,7 @@ def _game(game_number: int, *, assigned_additional_visits: int = 13) -> Complete
             baseline_visits=13,
             network_root_value=0.1,
             policy_correction=0.2,
+            policy_surprise=0.3,
             value_correction=0.075,
             parallel_searches=1,
             starting_visits=0,

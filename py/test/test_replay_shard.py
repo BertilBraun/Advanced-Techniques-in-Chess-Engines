@@ -108,6 +108,7 @@ def _sample(layout: ReplayLayout, generation: int) -> ReplaySample:
         root_value=0.125,
         auxiliary_targets=tuple(auxiliary),
         sample_weight=1.0,
+        policy_surprise=0.5,
         source_model_generation=generation,
         source_created_at_seconds=100.0 + generation,
     )
@@ -150,6 +151,7 @@ def _observation() -> SearchObservation:
         baseline_visits=14,
         network_root_value=0.15,
         policy_correction=0.1,
+        policy_surprise=0.2,
         value_correction=0.2,
         parallel_searches=1,
         starting_visits=2,

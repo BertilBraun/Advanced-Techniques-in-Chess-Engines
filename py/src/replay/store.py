@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 from src.games.contracts import WdlTarget
 from src.replay.columnar import (
+    ReplayArray,
     ReplayColumnArray,
     ReplayColumnViews,
     ReplayLegalMovesColumnViews,
@@ -43,7 +44,7 @@ from src.training.targets import (
 )
 
 _REPLAY_MAGIC = b'AZRPLY02'
-_REPLAY_SCHEMA_VERSION = 4
+_REPLAY_SCHEMA_VERSION = 5
 _REPLAY_ENDIAN_MARKER = 0x0102
 _REPLAY_CONTAINER_STORE = 1
 _HEADER_BYTES = 65_536
@@ -181,7 +182,7 @@ class ReplayStore:
         if not path.is_file():
             raise ValueError(f'Replay store does not exist: {path}')
         if path.stat().st_size < _HEADER_BYTES:
-            raise ValueError('Replay store is smaller than the fixed schema-4 header.')
+            raise ValueError('Replay store is smaller than the fixed schema-5 header.')
         file = path.open('r+b' if writable else 'rb')
         access = mmap.ACCESS_WRITE if writable else mmap.ACCESS_READ
         mapping: mmap.mmap | None = None
@@ -390,12 +391,25 @@ class ReplayStore:
         wrapped = np.flatnonzero(column[: state.size - first_span]).astype(np.int64) + first_span
         return np.concatenate((leading, wrapped))
 
+    def logical_policy_surprise(self) -> npt.NDArray[np.float32]:
+        column = self._column(ReplayColumnKey(ReplayColumnKind.POLICY_SURPRISE))
+        state = self.state
+        first_span = min(state.size, state.maximum_capacity - state.head)
+        leading = np.asarray(column[state.head : state.head + first_span], dtype=np.float32)
+        if first_span == state.size:
+            return leading.copy()
+        trailing = np.asarray(column[: state.size - first_span], dtype=np.float32)
+        return np.concatenate((leading, trailing))
+
     def _eligibility_column(self, auxiliary_index: int) -> npt.NDArray[np.uint8]:
         key = ReplayColumnKey(ReplayColumnKind.AUXILIARY_ELIGIBLE, auxiliary_index)
+        return np.asarray(self._column(key), dtype=np.uint8)
+
+    def _column(self, key: ReplayColumnKey) -> ReplayArray:
         for column in self._column_arrays:
             if column.descriptor.key == key:
-                return np.asarray(column.values, dtype=np.uint8)
-        raise ValueError(f'Replay layout has no eligibility column for auxiliary head {auxiliary_index}.')
+                return column.values
+        raise ValueError(f'Replay layout has no column named {key.name}.')
 
     def gather_physical(self, physical_indices: npt.ArrayLike) -> ReplayColumnViews:
         indices = np.asarray(physical_indices, dtype=np.int64)
@@ -531,6 +545,8 @@ class ReplayStore:
             raise ValueError('Replay root values must be finite and lie in [-1, 1].')
         if np.any(~np.isfinite(columns.sample_weight)) or np.any(columns.sample_weight <= 0.0):
             raise ValueError('Replay sample weights must be finite and positive.')
+        if np.any(~np.isfinite(columns.policy_surprise)) or np.any(columns.policy_surprise < 0.0):
+            raise ValueError('Replay policy surprise must be finite and nonnegative.')
         if np.any(~np.isfinite(columns.source_timestamp)) or np.any(columns.source_timestamp < 0.0):
             raise ValueError('Replay source timestamps must be finite and nonnegative.')
         for target in columns.auxiliary:
@@ -602,6 +618,7 @@ class ReplayStore:
             root_value=float(columns.root_value[0]),
             auxiliary_targets=tuple(auxiliary_targets),
             sample_weight=float(columns.sample_weight[0]),
+            policy_surprise=float(columns.policy_surprise[0]),
             source_model_generation=int(columns.source_model_generation[0]),
             source_created_at_seconds=float(columns.source_timestamp[0]),
         )

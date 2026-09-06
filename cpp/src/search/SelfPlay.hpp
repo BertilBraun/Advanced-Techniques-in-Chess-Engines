@@ -80,6 +80,7 @@ template <SearchGame Game> struct SelfPlaySearchResult {
     std::vector<GameSearchVisit> policy_target_visits;
     float network_root_value;
     float policy_correction;
+    float policy_surprise;
     float value_correction;
     std::uint32_t parallel_searches;
     std::uint32_t starting_visits;
@@ -160,6 +161,7 @@ public:
                 .policy_target_visits = std::move(searched.results[index].policy_target_visits),
                 .network_root_value = searched.results[index].network_root_value,
                 .policy_correction = searched.results[index].policy_correction,
+                .policy_surprise = searched.results[index].policy_surprise,
                 .value_correction = searched.results[index].value_correction,
                 .parallel_searches = searched.results[index].parallel_searches,
                 .starting_visits = searched.results[index].starting_visits,

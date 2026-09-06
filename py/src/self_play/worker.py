@@ -291,6 +291,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             baseline_visits=parameters.baseline_visits,
             network_root_value=result.network_root_value,
             policy_correction=result.policy_correction,
+            policy_surprise=result.policy_surprise,
             value_correction=result.value_correction,
             parallel_searches=result.parallel_searches,
             starting_visits=result.starting_visits,

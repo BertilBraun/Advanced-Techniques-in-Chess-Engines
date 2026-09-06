@@ -79,6 +79,8 @@ training:
         rounding: nearest
       maximum_capacity: 500000
       maximum_policy_entries: 82
+      sampling:
+        kind: uniform
     credit:
       replay_ratio: 4
       optimizer_steps_per_quantum: 200

@@ -9,7 +9,7 @@ import numpy.typing as npt
 import pytest
 from src.games.contracts import GameStateContract, Player, TerminalOracle, WdlTarget
 from src.games.representation import PackedPlaneLayout, PackedPlanePayload, RepresentationDimensions
-from src.replay.configuration import ReplayConfiguration
+from src.replay.configuration import ReplayConfiguration, UniformReplaySamplingConfiguration
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
@@ -144,6 +144,7 @@ def _completed_game() -> CompletedSelfPlayGame:
                 baseline_visits=13,
                 network_root_value=0.1,
                 policy_correction=0.2,
+                policy_surprise=0.3,
                 value_correction=0.075,
                 parallel_searches=1,
                 starting_visits=0,
@@ -244,6 +245,7 @@ def test_materialization_reconstructs_unobserved_restart_prefix() -> None:
                 baseline_visits=8,
                 network_root_value=0.0,
                 policy_correction=0.0,
+                policy_surprise=0.0,
                 value_correction=0.0,
                 parallel_searches=1,
                 starting_visits=0,
@@ -507,6 +509,7 @@ def _replay_layout() -> ReplayLayout:
         packed_planes=LINEAR_STATE_CONTRACT.packed_plane_layout,
         targets=_target_layout(),
         maximum_policy_entries=1,
+        sampling=UniformReplaySamplingConfiguration(kind='uniform'),
         maximum_legal_actions=LINEAR_STATE_CONTRACT.maximum_legal_action_count,
     )
 

@@ -49,6 +49,8 @@ training:
       capacity: 256
       maximum_capacity: 256
       maximum_policy_entries: 82
+      sampling:
+        kind: uniform
     credit:
       replay_ratio: 4
       optimizer_steps_per_quantum: 1

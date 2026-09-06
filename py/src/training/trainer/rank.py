@@ -400,6 +400,7 @@ def train_rank_quantum(
         world_size=world_size,
         rank=rank,
         sampler_seed=configuration.training.random_seed,
+        sampling=configuration.training.lifecycle.replay.sampling,
         pin_memory=uses_cuda,
     )
     training_result = _train_batches(

@@ -65,6 +65,7 @@ class ReplayColumnKind(str, Enum):
     AUXILIARY_VALUE = 'auxiliary_value'
     AUXILIARY_ELIGIBLE = 'auxiliary_eligible'
     SAMPLE_WEIGHT = 'sample_weight'
+    POLICY_SURPRISE = 'policy_surprise'
     SOURCE_MODEL_GENERATION = 'source_model_generation'
     SOURCE_TIMESTAMP = 'source_timestamp'
 
@@ -216,6 +217,7 @@ class ReplayLayout(FrozenModel):
         descriptors.extend(
             (
                 ReplayColumnDescriptor(ReplayColumnKey(ReplayColumnKind.SAMPLE_WEIGHT), ReplayElementType.FLOAT32),
+                ReplayColumnDescriptor(ReplayColumnKey(ReplayColumnKind.POLICY_SURPRISE), ReplayElementType.FLOAT32),
                 ReplayColumnDescriptor(
                     ReplayColumnKey(ReplayColumnKind.SOURCE_MODEL_GENERATION), ReplayElementType.UINT32
                 ),

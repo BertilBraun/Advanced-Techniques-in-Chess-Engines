@@ -78,6 +78,7 @@ def completed_game(
                 baseline_visits=256,
                 network_root_value=root_value,
                 policy_correction=0.0,
+                policy_surprise=0.0,
                 value_correction=0.0,
                 parallel_searches=2,
                 starting_visits=0,

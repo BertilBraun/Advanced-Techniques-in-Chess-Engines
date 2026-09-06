@@ -80,6 +80,7 @@ class FakeResult:
     policy_target_visits: list[GameSearchVisit]
     network_root_value: float
     policy_correction: float
+    policy_surprise: float
     value_correction: float
     parallel_searches: int
     starting_visits: int
@@ -154,6 +155,7 @@ class FakeSearch:
                     policy_target_visits=self.policy_target_visits,
                     network_root_value=self.root_value,
                     policy_correction=0.0,
+                    policy_surprise=0.0,
                     value_correction=0.0,
                     parallel_searches=1,
                     starting_visits=0,
@@ -558,6 +560,7 @@ def restart_source_game() -> CompletedSelfPlayGame:
                 baseline_visits=256,
                 network_root_value=0.0,
                 policy_correction=0.0,
+                policy_surprise=0.0,
                 value_correction=0.0,
                 parallel_searches=2,
                 starting_visits=0,

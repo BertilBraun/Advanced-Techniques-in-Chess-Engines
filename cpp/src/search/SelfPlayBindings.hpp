@@ -117,6 +117,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
             [](const Result &result) { return visitColumns(result.policy_target_visits); })
         .def_readonly("network_root_value", &Result::network_root_value)
         .def_readonly("policy_correction", &Result::policy_correction)
+        .def_readonly("policy_surprise", &Result::policy_surprise)
         .def_readonly("value_correction", &Result::value_correction)
         .def_readonly("parallel_searches", &Result::parallel_searches)
         .def_readonly("starting_visits", &Result::starting_visits)

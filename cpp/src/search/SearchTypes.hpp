@@ -95,6 +95,7 @@ struct GameSearchResult {
     std::vector<GameSearchVisit> policy_target_visits;
     float network_root_value;
     float policy_correction;
+    float policy_surprise;
     float value_correction;
     std::uint32_t parallel_searches;
     std::uint32_t starting_visits;

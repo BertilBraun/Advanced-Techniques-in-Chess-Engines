@@ -91,6 +91,7 @@ public:
                 .policy_target_visits = {},
                 .network_root_value = 0.0F,
                 .policy_correction = 0.0F,
+                .policy_surprise = 0.0F,
                 .value_correction = 0.0F,
                 .parallel_searches = task.parallel_searches,
                 .starting_visits = task.starting_visits,
@@ -148,7 +149,14 @@ public:
                                                   static_cast<float>(targetVisitTotal);
                 result.policy_correction +=
                     0.5F * std::abs(searchedProbability - node.children[index].raw_prior);
+                if (searchedProbability > 0.0F) {
+                    result.policy_surprise +=
+                        searchedProbability *
+                        std::log(searchedProbability /
+                                 std::max(node.children[index].raw_prior, 1e-12F));
+                }
             }
+            result.policy_surprise = std::max(0.0F, result.policy_surprise);
             results.push_back(std::move(result));
         }
         const std::uint64_t completed =

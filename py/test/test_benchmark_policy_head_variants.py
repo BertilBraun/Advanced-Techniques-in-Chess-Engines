@@ -61,6 +61,7 @@ def _synthetic_store(path: Path) -> None:
                     root_value=0.0,
                     auxiliary_targets=(),
                     sample_weight=1.0,
+                    policy_surprise=0.5,
                     source_model_generation=row,
                     source_created_at_seconds=float(row),
                 )

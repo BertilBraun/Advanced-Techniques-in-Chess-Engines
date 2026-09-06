@@ -87,6 +87,7 @@ def _sample(layout: ReplayLayout, action_id: int, generation: int, auxiliary_eli
             EligibleRemainingGameLengthTarget(normalized_length=(action_id + 1) / 20),
         ),
         sample_weight=1.5,
+        policy_surprise=0.75,
         source_model_generation=generation,
         source_created_at_seconds=123.0 + generation,
     )
@@ -172,6 +173,7 @@ def test_replay_store_rejects_sparse_policy_beyond_fixed_width(tmp_path: Path) -
         root_value=sample.root_value,
         auxiliary_targets=sample.auxiliary_targets,
         sample_weight=sample.sample_weight,
+        policy_surprise=sample.policy_surprise,
         source_model_generation=sample.source_model_generation,
         source_created_at_seconds=sample.source_created_at_seconds,
     )
@@ -230,6 +232,7 @@ def _all_auxiliary_sample(layout: ReplayLayout, generation: int, eligible: bool)
             EligibleLegalMovesTarget(),
         ),
         sample_weight=1.5,
+        policy_surprise=0.75,
         source_model_generation=generation,
         source_created_at_seconds=128.0 + generation,
     )
@@ -284,10 +287,9 @@ def test_direct_column_encoding_matches_transitional_rows_and_zeroes_inactive_pa
     columns = encode_replay_columns(layout, samples)
     encoded_rows = encode_replay_rows(layout, samples)
 
-    # Re-pinned 2026-09-01: the learned-early-stopping rework removed the search-budget replay
-    # columns, changing the fixed row encoding.
+    # Re-pinned 2026-09-06: policy surprise became a first-class replay sampling column.
     assert hashlib.sha256(encoded_rows.tobytes()).hexdigest() == (
-        '8c785c2fe1826db41cf41de4ad1a253052b43a0a56ba8a28ed6e5a0b9e233693'
+        'b72d744767db3b488f9b2078ff5acfae9336df3d8e102751e3ddaf2498087d90'
     )
     for column in flatten_column_views(layout, columns):
         np.testing.assert_array_equal(column.values, encoded_rows[column.descriptor.key.name])
@@ -348,6 +350,7 @@ def test_direct_column_encoding_supports_game_specific_chess_and_go_layouts(game
         root_value=-0.125,
         auxiliary_targets=(),
         sample_weight=1.25,
+        policy_surprise=0.5,
         source_model_generation=9,
         source_created_at_seconds=123.5,
     )

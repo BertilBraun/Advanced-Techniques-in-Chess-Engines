@@ -68,6 +68,8 @@ training:
           - {start_generation: 400, value: 2500000}
       maximum_capacity: 2500000
       maximum_policy_entries: 60
+      sampling:
+        kind: uniform
       materialization_processes: 8
     credit:
       replay_ratio: 8

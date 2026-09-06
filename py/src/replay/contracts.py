@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from typing import Literal, TypeAlias
 
 from src.games.contracts import WdlTarget
@@ -91,11 +92,18 @@ class ReplaySample:
     root_value: float
     auxiliary_targets: tuple[AuxiliaryReplayTarget, ...]
     sample_weight: float
+    policy_surprise: float
     source_model_generation: int
     source_created_at_seconds: float
 
     def __post_init__(self) -> None:
         if not -1.0 <= self.root_value <= 1.0:
             raise ValueError('Replay root value must lie in [-1, 1].')
-        if self.sample_weight <= 0.0 or self.source_model_generation < 0 or self.source_created_at_seconds < 0.0:
+        if (
+            self.sample_weight <= 0.0
+            or not isfinite(self.policy_surprise)
+            or self.policy_surprise < 0.0
+            or self.source_model_generation < 0
+            or self.source_created_at_seconds < 0.0
+        ):
             raise ValueError('Replay source metadata and sample weight must be nonnegative.')

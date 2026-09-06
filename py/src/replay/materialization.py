@@ -179,6 +179,7 @@ def materialize_completed_game(
                 root_value=observation.root_value,
                 auxiliary_targets=tuple(auxiliary_targets),
                 sample_weight=observation.sample_weight,
+                policy_surprise=observation.policy_surprise,
                 source_model_generation=observation.model_generation,
                 source_created_at_seconds=game.created_at_seconds,
             )

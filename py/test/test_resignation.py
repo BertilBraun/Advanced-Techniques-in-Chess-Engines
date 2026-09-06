@@ -74,6 +74,7 @@ def completed_continuation(
                 baseline_visits=20,
                 network_root_value=root_value,
                 policy_correction=0.0,
+                policy_surprise=0.0,
                 value_correction=0.0,
                 parallel_searches=1,
                 starting_visits=0,

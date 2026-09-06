@@ -122,6 +122,7 @@ def _replay_sample(
         root_value=0.0,
         auxiliary_targets=(),
         sample_weight=weight,
+        policy_surprise=0.5,
         source_model_generation=0,
         source_created_at_seconds=1.0,
     )

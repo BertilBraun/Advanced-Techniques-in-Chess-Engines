@@ -108,6 +108,7 @@ def _sample(layout: ReplayLayout, row: int) -> ReplaySample:
         root_value=float((row % 21) - 10) / 10.0,
         auxiliary_targets=(),
         sample_weight=float(row % 4 + 1),
+        policy_surprise=float(row % 8) / 4.0,
         source_model_generation=row,
         source_created_at_seconds=float(1_700_000_000 + row),
     )
@@ -137,6 +138,7 @@ def _observation(ply: int) -> SearchObservation:
         baseline_visits=100,
         network_root_value=0.0,
         policy_correction=0.0,
+        policy_surprise=0.0,
         value_correction=0.0,
         parallel_searches=1,
         starting_visits=0,

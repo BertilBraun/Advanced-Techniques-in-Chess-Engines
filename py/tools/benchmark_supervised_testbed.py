@@ -10,6 +10,7 @@ import torch
 from src.experiment.configuration import load_experiment_configuration
 from src.games.composition import ConfiguredGame, create_game_implementation
 from src.replay.batch_loader import MappedReplayBatchLoader, build_training_batch
+from src.replay.configuration import UniformReplaySamplingConfiguration
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
@@ -173,6 +174,7 @@ def run_cell(
         world_size=1,
         rank=0,
         sampler_seed=arguments.random_seed,
+        sampling=UniformReplaySamplingConfiguration(kind='uniform'),
         pin_memory=True,
     )
     initial = _evaluate_holdout(model, holdout_chunks, objective, precision)

@@ -106,6 +106,7 @@ class SealedSearchObservation(FrozenModel):
     baseline_visits: int = Field(gt=0)
     network_root_value: float = Field(ge=-1.0, le=1.0)
     policy_correction: float = Field(ge=0.0, le=1.0)
+    policy_surprise: float = Field(ge=0.0)
     value_correction: float = Field(ge=0.0, le=1.0)
     parallel_searches: int = Field(gt=0, le=16)
     starting_visits: int = Field(ge=0)
@@ -117,6 +118,8 @@ class SealedSearchObservation(FrozenModel):
             raise ValueError('Search root value must be finite and lie in [-1, 1].')
         if not isfinite(self.highest_visited_child_q) or not -1.0 <= self.highest_visited_child_q <= 1.0:
             raise ValueError('Highest-visited child Q must be finite and lie in [-1, 1].')
+        if not isfinite(self.policy_surprise):
+            raise ValueError('Policy surprise must be finite.')
         if self.final_visits < self.starting_visits:
             raise ValueError('Final root visits cannot precede retained starting visits.')
 

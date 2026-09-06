@@ -112,6 +112,7 @@ def test_vectorized_dense_batch_preserves_every_auxiliary_variant() -> None:
             ReplayLegalMovesColumnViews(kind='legal_moves'),
         ),
         sample_weight=np.asarray((1.0, 2.0), dtype=np.float32),
+        policy_surprise=np.asarray((0.5, 1.0), dtype=np.float32),
         source_model_generation=np.asarray((7, 8), dtype=np.uint32),
         source_timestamp=np.asarray((10.0, 11.0), dtype=np.float64),
     )
@@ -237,6 +238,7 @@ def test_vectorized_go_policy_transforms_every_symmetry_and_preserves_pass(board
         root_value=np.zeros(row_count, dtype=np.float32),
         auxiliary=(),
         sample_weight=np.ones(row_count, dtype=np.float32),
+        policy_surprise=np.zeros(row_count, dtype=np.float32),
         source_model_generation=np.zeros(row_count, dtype=np.uint32),
         source_timestamp=np.zeros(row_count, dtype=np.float64),
     )

@@ -233,6 +233,7 @@ def _sample(state: _SyntheticChessState, row: int) -> ReplaySample:
             EligibleLegalMovesTarget(),
         ),
         sample_weight=float(row % 4 + 1),
+        policy_surprise=float(row % 8) / 4.0,
         source_model_generation=row % 100,
         source_created_at_seconds=float(1_700_000_000 + row),
     )

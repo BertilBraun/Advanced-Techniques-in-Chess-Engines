@@ -15,6 +15,7 @@ from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessStateContract
 from src.games.contracts import WdlTarget
 from src.games.representation import decode_packed_planes
 from src.replay.batch_loader import MappedReplayBatchLoader, build_training_batch
+from src.replay.configuration import PolicySurpriseReplaySamplingConfiguration, UniformReplaySamplingConfiguration
 from src.replay.contracts import (
     EligibleNextPolicyTarget,
     EligibleRemainingGameLengthTarget,
@@ -61,7 +62,7 @@ def _layout() -> ReplayLayout:
     )
 
 
-def _sample(weight: float) -> ReplaySample:
+def _sample(weight: float, policy_surprise: float | None = None) -> ReplaySample:
     primary = SparsePolicyTarget(
         visits=SearchVisitCounts.from_native(
             (
@@ -83,6 +84,7 @@ def _sample(weight: float) -> ReplaySample:
             EligibleRemainingGameLengthTarget(normalized_length=0.25),
         ),
         sample_weight=weight,
+        policy_surprise=weight if policy_surprise is None else policy_surprise,
         source_model_generation=1,
         source_created_at_seconds=10.0,
     )
@@ -117,6 +119,7 @@ def test_mapped_loader_builds_canonical_batches_and_disjoint_rank_slices(tmp_pat
         'global_batch_size': 4,
         'world_size': 2,
         'sampler_seed': 91,
+        'sampling': UniformReplaySamplingConfiguration(kind='uniform'),
         'pin_memory': False,
     }
     rank_zero = next(iter(MappedReplayBatchLoader(rank=0, **common)))
@@ -150,6 +153,38 @@ def test_build_training_batch_accepts_numpy_index_arrays(tmp_path: Path) -> None
 
     assert batch.sample_weights.tolist() == [2.0, 1.0]
     store.close()
+
+
+def test_policy_surprise_sampling_prefers_surprising_rows_and_caps_extremes(tmp_path: Path) -> None:
+    path = tmp_path / 'replay.bin'
+    store = ReplayStore.create(path, _layout(), maximum_capacity=4, logical_capacity=4)
+    for weight, surprise in ((1.0, 0.1), (2.0, 1.0), (3.0, 2.0), (4.0, 100.0)):
+        store.append(_sample(weight, surprise))
+    store.flush()
+    description = _description(path, store)
+    store.close()
+    loader = MappedReplayBatchLoader(
+        replay=description,
+        state=IDENTITY_CHESS_STATE_CONTRACT,
+        source_optimizer_step=20,
+        optimizer_steps=4_000,
+        global_batch_size=1,
+        world_size=1,
+        rank=0,
+        sampler_seed=91,
+        sampling=PolicySurpriseReplaySamplingConfiguration(
+            kind='policy_surprise',
+            uniform_probability=0.3,
+            maximum_surprise=2.0,
+        ),
+        pin_memory=False,
+    )
+
+    sampled_weights = tuple(float(batch.sample_weights[0]) for batch in loader)
+    counts = {weight: sampled_weights.count(weight) for weight in (1.0, 2.0, 3.0, 4.0)}
+
+    assert counts[3.0] > counts[2.0] > counts[1.0]
+    assert abs(counts[3.0] - counts[4.0]) < 200
 
 
 def _reference_object_batch(
@@ -314,6 +349,7 @@ def test_prefetch_preserves_batch_order(tmp_path: Path, depth: int) -> None:
         'world_size': 1,
         'rank': 0,
         'sampler_seed': 91,
+        'sampling': UniformReplaySamplingConfiguration(kind='uniform'),
         'pin_memory': False,
     }
     synchronous_loader = MappedReplayBatchLoader(**common)
@@ -366,6 +402,7 @@ def test_prefetch_prepares_next_batch_before_consumer_requests_it(
         world_size=1,
         rank=0,
         sampler_seed=91,
+        sampling=UniformReplaySamplingConfiguration(kind='uniform'),
         pin_memory=False,
     )
     batches = loader.prefetch(torch.device('cpu'), uses_cuda=False, depth=1)
@@ -411,6 +448,7 @@ def test_prefetch_propagates_producer_failure_and_closes(
         world_size=1,
         rank=0,
         sampler_seed=91,
+        sampling=UniformReplaySamplingConfiguration(kind='uniform'),
         pin_memory=False,
     )
     batches = loader.prefetch(torch.device('cpu'), uses_cuda=False, depth=4)
@@ -463,6 +501,7 @@ def test_prefetch_production_is_bounded_by_depth(
         world_size=1,
         rank=0,
         sampler_seed=91,
+        sampling=UniformReplaySamplingConfiguration(kind='uniform'),
         pin_memory=False,
     )
     batches = loader.prefetch(torch.device('cpu'), uses_cuda=False, depth=depth)
@@ -514,6 +553,7 @@ def test_prefetch_early_close_cancels_queued_preparation(
         world_size=1,
         rank=0,
         sampler_seed=91,
+        sampling=UniformReplaySamplingConfiguration(kind='uniform'),
         pin_memory=False,
     )
     batches = loader.prefetch(torch.device('cpu'), uses_cuda=False, depth=8)
@@ -553,6 +593,7 @@ def test_prefetch_rejects_nonpositive_depth(tmp_path: Path) -> None:
         world_size=1,
         rank=0,
         sampler_seed=91,
+        sampling=UniformReplaySamplingConfiguration(kind='uniform'),
         pin_memory=False,
     )
 
