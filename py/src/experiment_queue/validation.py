@@ -121,8 +121,14 @@ def _validate_repository(configuration: QueueConfiguration) -> None:
 def _git_output(repository_directory: Path, arguments: tuple[str, ...]) -> str:
     result = subprocess.run(
         ('git', '-C', str(repository_directory), *arguments),
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    # The supervisor treats a rejected reload as recoverable, so git failures must not escape as SubprocessError.
+    if result.returncode != 0:
+        command = ' '.join(('git', *arguments))
+        raise ValueError(
+            f'{command} failed in {repository_directory} with exit status {result.returncode}: {result.stderr.strip()}'
+        )
     return result.stdout.strip()

@@ -51,4 +51,6 @@ private:
     GameSearchRoot<ChessGame> m_root;
 
     void reconstructRoot();
+    [[nodiscard]] GameAnalysisResult run(AnalysisMode mode, std::optional<int> timeLimitSeconds,
+                                         std::optional<int> searchLimit);
 };

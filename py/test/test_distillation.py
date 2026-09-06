@@ -395,15 +395,12 @@ def test_parameter_counts_split_the_whole_student() -> None:
 @pytest.mark.parametrize(
     ('stored', 'expected'),
     (
-        ('_orig_mod.backBone.0.x', 'backbone.0.x'),
-        ('_orig_mod.startBlock.0.weight', 'start_block.0.weight'),
-        ('startBlock.0.weight', 'start_block.0.weight'),
-        ('policyHead.3.bias', 'policy_head.3.bias'),
-        ('valueHead.1.weight', 'value_head.1.weight'),
-        ('auxiliaryHeads.0.2.bias', 'auxiliary_head_modules.0.2.bias'),
+        ('_orig_mod.backbone.0.x', 'backbone.0.x'),
+        ('_orig_mod.start_block.0.weight', 'start_block.0.weight'),
+        ('_orig_mod.policy_head.3.bias', 'policy_head.3.bias'),
     ),
 )
-def test_legacy_checkpoint_keys_normalize_to_current_module_names(stored: str, expected: str) -> None:
+def test_compiled_checkpoint_keys_lose_their_wrapper_prefix(stored: str, expected: str) -> None:
     assert tuple(normalize_state_dict_keys({stored: torch.zeros(1)})) == (expected,)
 
 

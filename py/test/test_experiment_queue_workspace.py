@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -18,32 +17,18 @@ from src.experiment_queue.configuration import (
 from src.experiment_queue.validation import ValidatedQueuedExperiment
 from src.experiment_queue.workspace import ExperimentWorkspaceManager
 from test_helpers.configuration_paths import PYTHON_ROOT, TEST_CONFIG_DIRECTORY
+from test_helpers.git_repository import RepositoryFile, create_repository, run_git
 
 TEMPLATE = TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml'
 WORKTREE_CHILD = PYTHON_ROOT / 'src' / 'experiment_queue' / 'worktree_child.py'
 
 
-def _git(repository: Path, *arguments: str) -> str:
-    result = subprocess.run(
-        ('git', '-C', str(repository), *arguments),
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout.strip()
-
-
 def _repository(tmp_path: Path) -> tuple[Path, Path, str]:
-    repository = tmp_path / 'repository'
-    repository.mkdir()
-    experiment_file = repository / 'experiment.yaml'
-    shutil.copy2(TEMPLATE, experiment_file)
-    _git(repository, 'init')
-    _git(repository, 'config', 'user.name', 'Test')
-    _git(repository, 'config', 'user.email', 'test@example.com')
-    _git(repository, 'add', 'experiment.yaml')
-    _git(repository, 'commit', '-m', 'initial')
-    return repository, experiment_file, _git(repository, 'rev-parse', 'HEAD')
+    created = create_repository(
+        tmp_path / 'repository',
+        (RepositoryFile(relative_path='experiment.yaml', source_path=TEMPLATE),),
+    )
+    return created.directory, created.directory / 'experiment.yaml', created.revision
 
 
 def _configuration(tmp_path: Path, repository: Path, experiment: QueuedExperiment) -> QueueConfiguration:
@@ -86,7 +71,7 @@ def test_worktrees_are_exact_revision_isolated_and_outputs_are_central(tmp_path:
     manager = ExperimentWorkspaceManager(_configuration(tmp_path, repository, experiment))
     workspace = manager.create(_validated(experiment))
 
-    assert _git(workspace.source_worktree, 'rev-parse', 'HEAD') == first_revision
+    assert run_git(workspace.source_worktree, 'rev-parse', 'HEAD') == first_revision
     assert workspace.source_worktree.parent == tmp_path / 'worktrees'
     assert workspace.runtime_directory == tmp_path / 'runtime'
     assert workspace.tensorboard_log_directory == tmp_path / 'tensorboard'

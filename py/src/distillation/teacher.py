@@ -10,15 +10,6 @@ from src.training.checkpoint.persistence import create_model
 from src.training.network import Network, NetworkConfiguration, NetworkDefinition
 from src.training.targets import AuxiliaryHeadLayout
 
-# Checkpoints written before the 2026-08 module rename carry camel-case attribute names.
-LEGACY_MODULE_RENAMES = (
-    ('startBlock.', 'start_block.'),
-    ('backBone.', 'backbone.'),
-    ('policyHead.', 'policy_head.'),
-    ('valueHead.', 'value_head.'),
-    ('auxiliaryHeads.', 'auxiliary_head_modules.'),
-)
-
 
 @dataclass(frozen=True)
 class LoadedTeacher:
@@ -32,15 +23,8 @@ class LoadedTeacher:
 
 
 def normalize_state_dict_keys(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-    normalized: dict[str, torch.Tensor] = {}
-    for key, tensor in state_dict.items():
-        renamed = key.removeprefix('_orig_mod.')
-        for legacy, current in LEGACY_MODULE_RENAMES:
-            if renamed.startswith(legacy):
-                renamed = current + renamed.removeprefix(legacy)
-                break
-        normalized[renamed] = tensor
-    return normalized
+    # torch.compile prefixes every parameter of the wrapped module.
+    return {key.removeprefix('_orig_mod.'): tensor for key, tensor in state_dict.items()}
 
 
 def read_network_definition(checkpoint_manifest_path: Path) -> NetworkDefinition | None:

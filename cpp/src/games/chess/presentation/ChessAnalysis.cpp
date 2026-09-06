@@ -84,23 +84,30 @@ void ChessAnalysisSession::applyMove(const std::string &moveUci) {
     reconstructRoot();
 }
 
-ChessAnalysisResult ChessAnalysisSession::analyze(const AnalysisMode mode,
-                                                  const std::optional<int> timeLimitSeconds,
-                                                  const std::optional<int> searchLimit) {
+GameAnalysisResult ChessAnalysisSession::run(const AnalysisMode mode,
+                                             const std::optional<int> timeLimitSeconds,
+                                             const std::optional<int> searchLimit) {
     if (mode == AnalysisMode::Policy) {
-        return present(m_analysis->analyzePolicy(m_root), m_root.position());
+        return m_analysis->analyzePolicy(m_root);
     }
     if (timeLimitSeconds.has_value() == searchLimit.has_value()) {
         throw std::invalid_argument(
             "MCTS analysis requires exactly one time limit or search limit");
     }
     if (timeLimitSeconds.has_value()) {
-        return present(m_analysis->analyzeTimed(m_root, std::chrono::seconds(*timeLimitSeconds)),
-                       m_root.position());
+        return m_analysis->analyzeTimed(m_root, std::chrono::seconds(*timeLimitSeconds));
     }
     if (*searchLimit <= 0) {
         throw std::invalid_argument("search_limit must be positive");
     }
-    return present(m_analysis->analyzeCounted(m_root, static_cast<std::uint32_t>(*searchLimit)),
-                   m_root.position());
+    return m_analysis->analyzeCounted(m_root, static_cast<std::uint32_t>(*searchLimit));
+}
+
+ChessAnalysisResult ChessAnalysisSession::analyze(const AnalysisMode mode,
+                                                  const std::optional<int> timeLimitSeconds,
+                                                  const std::optional<int> searchLimit) {
+    const GameAnalysisResult analysis = run(mode, timeLimitSeconds, searchLimit);
+    // Growing the tree arena reallocates its positions, so the root reference is only taken
+    // once the search that may have grown it has finished.
+    return present(analysis, m_root.position());
 }

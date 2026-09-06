@@ -190,10 +190,23 @@ the measurements so far -- they are noisy and small.**
 
 ### Decided (still open to argument, but this is the current intent)
 
-- **Visits: 600 baseline, a single increase to 800 at generation 1000, nothing beyond.** Keep the
-  existing ramp below 600. Rationale: lower visits buy more unique samples, and more games is
-  expected to beat deeper search on fewer positions. This is the fresh-data hypothesis applied
-  directly.
+- **Visits: keep the early ramp, hold at 600, one step to 800 at generation 1000, nothing beyond.**
+  The v29-era ramp (recoverable from the `adaptive-stopping-final` tag) was
+  `0:300, 10:400, 30:400, 50:500, 90:600, 180:700, 250:800, 550:1000, 1200:1200`. Keep the part up to
+  600 and drop everything above it, giving:
+
+  | start_generation | baseline_visits |
+  |---|---|
+  | 0 | 300 |
+  | 10 | 400 |
+  | 50 | 500 |
+  | 90 | 600 |
+  | 1000 | 800 |
+
+  Note the old `30:400` stage was a no-op repeating the previous value. Rationale for the low start:
+  in the earliest generations the value targets are close to pure noise, so deep search buys little
+  and costs games; rationale for holding at 600: lower visits buy more unique samples, which is the
+  fresh-data hypothesis applied directly.
 - **`parallel_searches`: cap at 4.** Currently derived natively -- `searchParallelism` gives 4 at 600
   visits and 8 at 1000 -- so at the new schedule it would reach 8. Cap it.
 - **`replay_ratio`: keep 8.**
@@ -226,7 +239,9 @@ the measurements so far -- they are noisy and small.**
   30k-50k optimizer steps, flat from there to ~100k, then a sharp rise (which he attributes to the LR
   drop, applied later than ideal), then essentially stagnant past 150k. Note this document already
   records that the "only the first drop mattered" claim **could not be verified** from the paper.
-  The open question is what any of this implies for an AdamW schedule.
+  The open question is what any of this implies for an AdamW schedule. **The user wants an honest
+  recommendation on the optimizer and learning-rate schedule before proceeding** -- not a hedge. If
+  the evidence does not support switching away from AdamW, say so plainly; if it does, say that.
 - **Terminal LR decay.** Sound in principle, but the user expects to stop the next run early -- the
   last runs did not justify more than about two days -- so a decay tuned to the end of a four-day run
   may never be reached. Since the schedule is staged, this can be decided during the run rather than
@@ -236,13 +251,27 @@ the measurements so far -- they are noisy and small.**
   eventual ceiling, and he does not know where the right trade sits. Note the existing restart-state
   mechanism already selects positions where two actions looked plausible, so the marginal gain over
   what we have is the thing to establish.
+- **No backwards compatibility, anywhere.** The user's explicit position: he is finished with the old
+  checkpoints, and if he wants to rerun one he will check out an old commit. Breaking changes are
+  accepted by default. **Remove code that exists only to keep the status quo alive** rather than
+  carrying it. One such shim was already removed on 2026-09-06 (`LEGACY_MODULE_RENAMES` in
+  `py/src/distillation/teacher.py`, which mapped camel-case parameter names from checkpoints written
+  before the 2026-08 module rename; the `_orig_mod.` strip it sat beside is a `torch.compile`
+  artefact and was kept). Remaining candidate: `_recover_directories` in `py/src/replay/manager.py`
+  detects legacy per-game staging and a legacy shard queue and raises -- it does not migrate, so if
+  those layouts can no longer occur it is dead weight under `CLAUDE.md`'s "no defensive checks for
+  scenarios that can't happen".
+
+  This removes the objection to input-feature changes below: breaking comparability with existing
+  checkpoints is explicitly acceptable. The colour-symmetry harness requirement still stands.
+
 - **Input feature additions.** Cheap to add and worth trying: the last 16 moves; group masks of
   pieces for the side to move and the opponent as one plane each; a plain checkerboard plane; a
   boolean plane for opposite-coloured bishops; a boolean plane for pieces giving check; material
-  difference (believed already represented -- verify). Input planes are cheap at inference. **But
-  note the real cost: per `CLAUDE.md`, encoding and action-id changes require the colour-symmetry
-  harness (`cpp/test/flip-harness/`) to pass again**, and they invalidate comparability with existing
-  checkpoints. Weigh that against the expected gain.
+  difference (believed already represented -- verify). Input planes are cheap at inference. **The real
+  cost is validation, not compatibility: per `CLAUDE.md`, encoding and action-id changes require the
+  colour-symmetry harness (`cpp/test/flip-harness/`) to pass again.** Checkpoint comparability is
+  explicitly not a concern -- see the no-backwards-compatibility item above.
 
 ---
 

@@ -150,7 +150,7 @@ def test_queue_releases_slot_after_success_and_failure_and_runs_next_job(tmp_pat
     request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
     configuration = QueueConfiguration(
         runner=RunnerCommand(command=(sys.executable, '-c', script)),
-        repository_directory=tmp_path,
+        repository_directory=repository.directory,
         worktree_root=tmp_path / 'worktrees',
         runtime_directory=tmp_path / 'runtime',
         tensorboard_log_directory=tmp_path / 'tensorboard',
@@ -159,7 +159,7 @@ def test_queue_releases_slot_after_success_and_failure_and_runs_next_job(tmp_pat
             QueuedExperiment(
                 experiment_id=f'experiment-{index}',
                 experiment_file=experiment_path,
-                source_revision=SOURCE_REVISION,
+                source_revision=repository.revision,
                 resources=request,
             )
             for index, experiment_path in enumerate(experiment_paths)
@@ -188,14 +188,13 @@ def test_queue_releases_slot_after_success_and_failure_and_runs_next_job(tmp_pat
 
 
 def test_queue_reloads_changed_pending_experiment_before_launch(tmp_path: Path) -> None:
-    first_path = tmp_path / 'first.yaml'
-    pending_path = tmp_path / 'pending.yaml'
-    shutil.copyfile(EXPERIMENT_TEMPLATE, first_path)
-    shutil.copyfile(EXPERIMENT_TEMPLATE, pending_path)
+    repository = _experiment_repository(tmp_path, ('first.yaml', 'pending.yaml'))
+    first_path = repository.directory / 'first.yaml'
+    pending_path = repository.directory / 'pending.yaml'
     script = (
         'import pathlib, sys, time; '
         'path=pathlib.Path(sys.argv[-1]); '
-        "time.sleep(0.3) if path.name == 'first.yaml' else None; "
+        "time.sleep(1.0) if path.name == 'first.yaml' else None; "
         "print('updated' if 'updated-pending' in path.read_text() else 'original', flush=True)"
     )
     slot = ResourceSlot(
@@ -206,37 +205,38 @@ def test_queue_reloads_changed_pending_experiment_before_launch(tmp_path: Path) 
         log_directory=tmp_path / 'logs',
     )
     request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
+    first = QueuedExperiment(
+        experiment_id='first', experiment_file=first_path, source_revision=repository.revision, resources=request
+    )
+    pending = QueuedExperiment(
+        experiment_id='pending', experiment_file=pending_path, source_revision=repository.revision, resources=request
+    )
     configuration = QueueConfiguration(
         runner=RunnerCommand(command=(sys.executable, '-c', script)),
-        repository_directory=tmp_path,
+        repository_directory=repository.directory,
         worktree_root=tmp_path / 'worktrees',
         runtime_directory=tmp_path / 'runtime',
         tensorboard_log_directory=tmp_path / 'tensorboard',
         slots=(slot,),
-        experiments=(
-            QueuedExperiment(
-                experiment_id='first', experiment_file=first_path, source_revision=SOURCE_REVISION, resources=request
-            ),
-            QueuedExperiment(
-                experiment_id='pending',
-                experiment_file=pending_path,
-                source_revision=SOURCE_REVISION,
-                resources=request,
-            ),
-        ),
+        experiments=(first, pending),
         summary_path=tmp_path / 'queue-summary.json',
         poll_interval_seconds=0.01,
         termination_grace_seconds=1.0,
     )
+    desired = [configuration]
 
     def update_pending_experiment() -> None:
         content = pending_path.read_text(encoding='utf-8')
         pending_path.write_text(content.replace('go-7x7-template', 'updated-pending', 1), encoding='utf-8')
+        revision = commit_all(repository.directory, 'update the pending experiment')
+        desired[0] = configuration.model_copy(
+            update={'experiments': (first, pending.model_copy(update={'source_revision': revision}))}
+        )
 
     update = threading.Timer(0.1, update_pending_experiment)
     update.start()
     try:
-        runner = ExperimentQueueRunner(lambda: validate_queue_for_launch(configuration))
+        runner = ExperimentQueueRunner(lambda: validate_queue_for_launch(desired[0]))
         summary = runner.run()
     finally:
         update.cancel()
@@ -246,15 +246,14 @@ def test_queue_reloads_changed_pending_experiment_before_launch(tmp_path: Path) 
     assert pending_status.execution.stdout_log.read_text(encoding='utf-8').strip() == 'updated'
     assert (
         pending_status.execution.configuration_sha256
-        == validate_queue_for_launch(configuration).experiments[1].configuration_sha256
+        == validate_queue_for_launch(desired[0]).experiments[1].configuration_sha256
     )
 
 
 def test_empty_queue_waits_for_new_desired_experiment(tmp_path: Path) -> None:
-    first_path = tmp_path / 'first.yaml'
-    added_path = tmp_path / 'added.yaml'
-    shutil.copyfile(EXPERIMENT_TEMPLATE, first_path)
-    shutil.copyfile(EXPERIMENT_TEMPLATE, added_path)
+    repository = _experiment_repository(tmp_path, ('first.yaml', 'added.yaml'))
+    first_path = repository.directory / 'first.yaml'
+    added_path = repository.directory / 'added.yaml'
     slot = ResourceSlot(
         slot_id='only-slot',
         cuda_devices=(),
@@ -264,14 +263,14 @@ def test_empty_queue_waits_for_new_desired_experiment(tmp_path: Path) -> None:
     )
     request = ResourceRequest(cuda_device_count=0, cpu_core_count=1, ram_limit_bytes=1_500_000_000)
     first = QueuedExperiment(
-        experiment_id='first', experiment_file=first_path, source_revision=SOURCE_REVISION, resources=request
+        experiment_id='first', experiment_file=first_path, source_revision=repository.revision, resources=request
     )
     added = QueuedExperiment(
-        experiment_id='added', experiment_file=added_path, source_revision=SOURCE_REVISION, resources=request
+        experiment_id='added', experiment_file=added_path, source_revision=repository.revision, resources=request
     )
     initial_configuration = QueueConfiguration(
         runner=RunnerCommand(command=(sys.executable, '-c', "print('completed')")),
-        repository_directory=tmp_path,
+        repository_directory=repository.directory,
         worktree_root=tmp_path / 'worktrees',
         runtime_directory=tmp_path / 'runtime',
         tensorboard_log_directory=tmp_path / 'tensorboard',
@@ -304,8 +303,8 @@ def test_empty_queue_waits_for_new_desired_experiment(tmp_path: Path) -> None:
 
 
 def test_queue_terminates_a_process_tree_over_its_rss_limit(tmp_path: Path) -> None:
-    experiment_path = tmp_path / 'memory-limit.yaml'
-    shutil.copyfile(EXPERIMENT_TEMPLATE, experiment_path)
+    repository = _experiment_repository(tmp_path, ('memory-limit.yaml',))
+    experiment_path = repository.directory / 'memory-limit.yaml'
     child_script = 'import time; allocation = bytearray(30_000_000); time.sleep(60)'
     parent_script = (
         'import subprocess, sys, time; allocation = bytearray(30_000_000); '
@@ -320,7 +319,7 @@ def test_queue_terminates_a_process_tree_over_its_rss_limit(tmp_path: Path) -> N
     )
     configuration = QueueConfiguration(
         runner=RunnerCommand(command=(sys.executable, '-c', parent_script)),
-        repository_directory=tmp_path,
+        repository_directory=repository.directory,
         worktree_root=tmp_path / 'worktrees',
         runtime_directory=tmp_path / 'runtime',
         tensorboard_log_directory=tmp_path / 'tensorboard',
@@ -329,7 +328,7 @@ def test_queue_terminates_a_process_tree_over_its_rss_limit(tmp_path: Path) -> N
             QueuedExperiment(
                 experiment_id='memory-limit',
                 experiment_file=experiment_path,
-                source_revision=SOURCE_REVISION,
+                source_revision=repository.revision,
                 resources=ResourceRequest(
                     cuda_device_count=0,
                     cpu_core_count=1,
@@ -352,8 +351,8 @@ def test_queue_terminates_a_process_tree_over_its_rss_limit(tmp_path: Path) -> N
 
 
 def test_queue_termination_records_failure_and_releases_the_running_slot(tmp_path: Path) -> None:
-    experiment_path = tmp_path / 'long-running.yaml'
-    shutil.copyfile(EXPERIMENT_TEMPLATE, experiment_path)
+    repository = _experiment_repository(tmp_path, ('long-running.yaml',))
+    experiment_path = repository.directory / 'long-running.yaml'
     slot = ResourceSlot(
         slot_id='slot',
         cuda_devices=(),
@@ -363,7 +362,7 @@ def test_queue_termination_records_failure_and_releases_the_running_slot(tmp_pat
     )
     configuration = QueueConfiguration(
         runner=RunnerCommand(command=(sys.executable, '-c', 'import time; time.sleep(60)')),
-        repository_directory=tmp_path,
+        repository_directory=repository.directory,
         worktree_root=tmp_path / 'worktrees',
         runtime_directory=tmp_path / 'runtime',
         tensorboard_log_directory=tmp_path / 'tensorboard',
@@ -372,7 +371,7 @@ def test_queue_termination_records_failure_and_releases_the_running_slot(tmp_pat
             QueuedExperiment(
                 experiment_id='long-running',
                 experiment_file=experiment_path,
-                source_revision=SOURCE_REVISION,
+                source_revision=repository.revision,
                 resources=ResourceRequest(
                     cuda_device_count=0,
                     cpu_core_count=1,
