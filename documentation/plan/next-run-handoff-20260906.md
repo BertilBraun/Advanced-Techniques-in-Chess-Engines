@@ -176,6 +176,76 @@ without explicit instruction, and never spend GPU time that was not authorised. 
 on a node, never locally. Every measurement carries its configuration SHA, and a run with no fetched
 archive did not happen.
 
+---
+
+## The user's design direction, and what to do with it
+
+**Reason through all of this before accepting any of it.** The user's explicit instruction is that the
+next session should argue with the approach and the design decisions rather than treat them as given.
+Several of the items below are framed by the user as open questions; some rest on numbers the user
+himself distrusts. Push back where the evidence is thin, and say so when you agree and why.
+
+The user's own caveat, which applies to everything in this document: **do not put too much trust in
+the measurements so far -- they are noisy and small.**
+
+### Decided (still open to argument, but this is the current intent)
+
+- **Visits: 600 baseline, a single increase to 800 at generation 1000, nothing beyond.** Keep the
+  existing ramp below 600. Rationale: lower visits buy more unique samples, and more games is
+  expected to beat deeper search on fewer positions. This is the fresh-data hypothesis applied
+  directly.
+- **`parallel_searches`: cap at 4.** Currently derived natively -- `searchParallelism` gives 4 at 600
+  visits and 8 at 1000 -- so at the new schedule it would reach 8. Cap it.
+- **`replay_ratio`: keep 8.**
+- **Replay window: grow to 10 M, NOT unbounded.** The user rejects uncapping. Reason: too large a
+  window ages samples out in generation terms, which fights the freshness goal.
+- **Per-sample replay weighting by policy surprise.** Surprising samples get drawn more than the
+  nominal replay ratio, unsurprising ones less -- so with ratio 8, a surprising sample might be seen
+  10+ times and a dull one 5.
+- **Regret scores drive restart-state selection, not per-sample weighting.** This is the user's
+  synthesis and he considers it the better target: keep surprise for sampling weight, use regret for
+  choosing where to restart games. **No new regret network** -- a proxy from existing signals only.
+- **`policy_loss_weight` to ~1.5; leave `value_loss_weight` at 1.0.** Raising the policy weight is
+  judged more valuable than raising the value weight.
+- **Leave out: Gumbel root search, playout cap randomization**, and similar.
+
+### Already true -- verify before proposing to change
+
+- **`root_value_blend` already ends at 0.1** (linear schedule, generations 50 -> 110). The user asked
+  for 0.1; it is already there.
+- **The learning rate is `kind: staged`**, so stages can be added mid-run. The user's concern that a
+  linear decay would prevent adding stages later does not apply.
+- Optimizer is already `adamw`. `policy_loss_weight` and `value_loss_weight` are both 1.0.
+
+### Genuinely open, and worth real argument
+
+- **Optimizer and learning rate.** The user leans AdamW -- newer, generally better, and believes an
+  earlier evaluation favoured it -- but notes AlphaZero got essentially all of its chess strength from
+  SGD+momentum at 0.2 dropped once to 0.02, and that the learning-rate scales are not comparable
+  between the two. His reading of the published chess curve: steep to ~2500 Elo within the first
+  30k-50k optimizer steps, flat from there to ~100k, then a sharp rise (which he attributes to the LR
+  drop, applied later than ideal), then essentially stagnant past 150k. Note this document already
+  records that the "only the first drop mattered" claim **could not be verified** from the paper.
+  The open question is what any of this implies for an AdamW schedule.
+- **Terminal LR decay.** Sound in principle, but the user expects to stop the next run early -- the
+  last runs did not justify more than about two days -- so a decay tuned to the end of a four-day run
+  may never be reached. Since the schedule is staged, this can be decided during the run rather than
+  up front.
+- **How far to push exploration.** Regret-guided restart states may surface more tactical, unusual
+  positions. The user's instinct: more exploration probably means slower learning but a stronger
+  eventual ceiling, and he does not know where the right trade sits. Note the existing restart-state
+  mechanism already selects positions where two actions looked plausible, so the marginal gain over
+  what we have is the thing to establish.
+- **Input feature additions.** Cheap to add and worth trying: the last 16 moves; group masks of
+  pieces for the side to move and the opponent as one plane each; a plain checkerboard plane; a
+  boolean plane for opposite-coloured bishops; a boolean plane for pieces giving check; material
+  difference (believed already represented -- verify). Input planes are cheap at inference. **But
+  note the real cost: per `CLAUDE.md`, encoding and action-id changes require the colour-symmetry
+  harness (`cpp/test/flip-harness/`) to pass again**, and they invalidate comparability with existing
+  checkpoints. Weigh that against the expected gain.
+
+---
+
 ## The question to answer
 
 Given ~26 Elo/h available in the first day and ~2.5 Elo/h after it, and given that we are data-starved

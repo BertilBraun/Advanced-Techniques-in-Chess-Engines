@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import signal
 import sys
 import threading
@@ -24,6 +23,7 @@ from src.experiment_queue.scheduler import ResourceAssignment
 from src.experiment_queue.state import CompletedExperimentStatus, FailedExperimentStatus, load_queue_summary
 from src.experiment_queue.validation import validate_queue_for_launch
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
+from test_helpers.git_repository import GitRepository, RepositoryFile, commit_all, create_repository
 
 pytestmark = [
     pytest.mark.integration,
@@ -31,7 +31,13 @@ pytestmark = [
 ]
 
 EXPERIMENT_TEMPLATE = TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml'
-SOURCE_REVISION = '1' * 40
+
+
+def _experiment_repository(tmp_path: Path, file_names: tuple[str, ...]) -> GitRepository:
+    return create_repository(
+        tmp_path / 'repository',
+        tuple(RepositoryFile(relative_path=name, source_path=EXPERIMENT_TEMPLATE) for name in file_names),
+    )
 
 
 def _available_cpu_cores(count: int) -> tuple[int, ...]:
@@ -123,9 +129,10 @@ def test_linux_launcher_terminates_the_complete_process_group(tmp_path: Path) ->
 
 
 def test_queue_releases_slot_after_success_and_failure_and_runs_next_job(tmp_path: Path) -> None:
-    experiment_paths = tuple(tmp_path / name for name in ('success-one.yaml', 'failure.yaml', 'success-two.yaml'))
-    for experiment_path in experiment_paths:
-        shutil.copyfile(EXPERIMENT_TEMPLATE, experiment_path)
+    repository = _experiment_repository(tmp_path, ('success-one.yaml', 'failure.yaml', 'success-two.yaml'))
+    experiment_paths = tuple(
+        repository.directory / name for name in ('success-one.yaml', 'failure.yaml', 'success-two.yaml')
+    )
     script = (
         'import pathlib, sys, time; '
         'experiment=pathlib.Path(sys.argv[-1]); '
