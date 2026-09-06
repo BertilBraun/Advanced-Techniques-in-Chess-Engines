@@ -15,8 +15,11 @@ from src.util.generation_schedule import ConstantSchedule
 
 _DEFAULT_EXPLORATION_CONSTANT = 1.0
 _DEFAULT_PARALLEL_SEARCHES = 4
-_DEFAULT_INFERENCE_BATCH_SIZE = 320
-_DEFAULT_OUTSTANDING_BATCHES_PER_WORKER = 2
+# Evaluation keeps at most a few dozen leaves in flight, and the capture buckets scale with the cap,
+# so a self-play-sized 320 pads every batch and measured 30-40% slower than 64 on the node ladder.
+_DEFAULT_INFERENCE_BATCH_SIZE = 64
+_DEFAULT_FIXED_OUTSTANDING_BATCHES_PER_WORKER = 1
+_DEFAULT_TIMED_OUTSTANDING_BATCHES_PER_WORKER = 2
 
 
 class FixedModelSearchBudget(FrozenModel):
@@ -110,7 +113,7 @@ def model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudget
             inference_workers=1 if namespace.inference_workers is None else namespace.inference_workers,
             inference_batch_size=namespace.inference_batch_size,
             outstanding_batches_per_worker=(
-                _DEFAULT_OUTSTANDING_BATCHES_PER_WORKER
+                _DEFAULT_FIXED_OUTSTANDING_BATCHES_PER_WORKER
                 if namespace.outstanding_batches is None
                 else namespace.outstanding_batches
             ),
@@ -127,7 +130,7 @@ def model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudget
         inference_workers=2 if namespace.inference_workers is None else namespace.inference_workers,
         inference_batch_size=namespace.inference_batch_size,
         outstanding_batches_per_worker=(
-            _DEFAULT_OUTSTANDING_BATCHES_PER_WORKER
+            _DEFAULT_TIMED_OUTSTANDING_BATCHES_PER_WORKER
             if namespace.outstanding_batches is None
             else namespace.outstanding_batches
         ),
