@@ -3,10 +3,11 @@
 ## Purpose and scope
 
 Model sizing is a training policy above the shared chess/Go model, replay, objective, DDP, and checkpoint contracts.
-It is independent of the concrete network architecture: a required non-empty tuple supplies complete model
-definitions, and the runtime does not infer width, depth, or a relationship between architectures. One definition
-is ordinary fixed-model training. Multiple definitions enable progressive training. The first model starts at
-elapsed run day `0.0`; later models have strictly increasing elapsed active-run starts, such as `0.75` and `1.5` days.
+It is independent of the concrete network architecture: fixed sizing supplies one complete model definition, while
+progressive sizing supplies an ordered tuple of complete definitions. The runtime does not infer width, depth, or a
+relationship between architectures. Progressive sizing also selects one explicit candidate-start policy. The new
+chess v34 configuration uses the primary searched evaluation ladder's smoothed Elo gain; historical chess and Go
+research configurations retain their existing elapsed active-run starts.
 
 This policy does not add a transformer path, model-shape adapter, weight transfer, match gate, or checkpoint
 averaging. Every later model starts from its own random initialization. All models use the run-fixed input,
@@ -27,9 +28,10 @@ This platform intentionally differs:
 - training is synchronous at the coordinator boundary, so every eligible model trains sequentially within one
   quantum on the same immutable replay snapshot and deterministic sample identity;
 - the coordinator waits for all required models before publishing the checkpoint and transitioning self-play;
+- the Elo plateau policy begins candidate catch-up from one persisted run-wide latch;
 - promotion compares paired exponential moving averages built only from quanta seen by both the active model and its
   immediate successor, rather than an unspecified lifetime average;
-- no match gate decides promotion, and evaluation results remain user-facing evidence only;
+- no match gate decides promotion, and evaluation results never publish or promote a candidate;
 - no parameters or optimizer moments transfer between sizes, and no checkpoints are averaged;
 - only one active checkpoint is atomically published to self-play and evaluation.
 
@@ -38,10 +40,33 @@ boundary that fits this platform's blocking DDP quantum.
 
 ## Configuration and eligibility
 
-`training.progressive_model_sizing` owns a non-empty ordered tuple of `ProgressiveModelDefinition` values. Each owns
-a stable model ID, an elapsed active-run start in days, and a complete network definition. This tuple is the only
-network-configuration owner: its first definition is the day-zero published model, so there is no duplicate
-`training.network` field to keep synchronized.
+`training.progressive_model_sizing` is a discriminated configuration union. The `fixed` variant owns one model and
+has no candidate-start or promotion settings. The `progressive` variant owns at least two ordered
+`ProgressiveModelDefinition` values, one candidate-start policy, and the promotion policy. Each definition owns a
+stable model ID and a complete network definition. This is the only network-configuration owner: the fixed model or
+first progressive definition is the day-zero published model, so there is no duplicate `training.network` field.
+
+The `elo_plateau` candidate-start configuration contains only one value beyond its discriminator:
+
+- `minimum_worthwhile_gain_per_hour`, a positive threshold for the primary searched ladder's EMA Elo gain rate.
+
+The Elo EMA decay is fixed in code at `0.95`. Its persisted baseline is Elo `0` at elapsed boundary `0`. Whenever a
+new primary searched ladder Elo boundary becomes complete, boundaries are applied in chronological order and the
+runtime computes:
+
+```text
+ema_next = 0.95 * ema_previous + 0.05 * observed_ladder_elo
+gain_per_hour = (ema_next - ema_previous) / hours_between_boundaries
+```
+
+The elapsed hours are the actual time between the two consecutive EMA boundaries. Failed boundaries add no Elo
+observation; duplicate results and results received out of order do not apply an observation twice. While the gain
+is greater than or equal to the threshold, only the active model trains. The first gain strictly below the threshold
+permanently latches candidate catch-up for the next complete quantum. Later Elo observations continue updating the
+EMA and telemetry but cannot clear the latch.
+
+There is no earliest elapsed gate, lookback window, confirmation count, configurable ladder search budget, or
+post-latch cancellation in this policy.
 
 The promotion configuration explicitly owns:
 
@@ -50,8 +75,14 @@ The promotion configuration explicitly owns:
 - the maximum candidate-to-active relative loss;
 - a positive catch-up learning rate for an eligible candidate that is not yet active.
 
-Elapsed eligibility uses the evaluation manager's persisted active-run clock. It therefore resumes from accumulated
-elapsed time after a stopped experiment and does not count preparation or stopped time.
+The primary searched ladder is the highest configured project-model search budget, currently the
+`evaluation/ladder_elo_64` series also published as `evaluation/ladder_elo`. Policy-only and lower-search ladder
+series never affect candidate training, including when every primary-budget rung at a boundary fails.
+
+The `elapsed` alternative owns one strictly increasing positive `start_days` entry per candidate. It preserves
+timed progressive experiments that do not produce a Stockfish ladder, without placing start times on model
+definitions or mixing elapsed and Elo fields in one configuration shape. It uses the evaluation manager's persisted
+active-run clock, so stopped or preparation time does not advance the schedule.
 
 The clean chess configuration uses attention stages `6x96`, `10x160`, and `15x192`, with feed-forward widths twice
 the embedding width. Their published policy/value networks contain 467,219, 2,092,179, and 4,485,971 parameters.
@@ -63,18 +94,21 @@ the learned output heads remain a small fraction of every stage.
 
 At a progressive training boundary the coordinator pauses the self-play workers selected by the configured topology.
 It freezes a typed replay-batch identity containing the canonical `ReplayDescription` and global source optimizer
-step. The active model and every eligible larger model, in configured order, receive those same values. The existing
+step. Before the Elo latch, only the active model trains. After the latch, the active model and its immediate
+successor receive those same values. The existing
 deterministic rank sampler consequently chooses the same rows in the same optimizer-step order for every model.
 Models may have different execution times but cannot observe different batches.
+
+Under the elapsed alternative, every model whose configured start has passed trains in model order as before.
 
 Each eligible model owns one persistent `TrainerGroup`. Its DDP ranks remain resident across generations and close
 only at run shutdown. Newly eligible candidates start their trainer group once, so ordinary quantum transitions do
 not repeatedly pay process startup, checkpoint loading, CUDA-context creation, or compilation costs.
 
-After a promotion, superseded smaller models stop training. The new active model and its immediate or later eligible
-successors continue. A later stage that becomes eligible after many quanta starts from scratch at model-local
-generation zero and joins the next complete quantum; it does not replay historical batches or receive active-model
-weights.
+After a promotion, the superseded smaller model stops training. Because the run-wide latch is permanent, the new
+active model's immediate successor starts from scratch at model-local generation zero on the next complete quantum.
+Only one successor catches up at a time; later configured stages wait until they become the immediate successor.
+They do not replay historical batches or receive active-model weights.
 
 The active model's learning-rate schedule uses the run's global generation. An eligible successor trains at the
 configured catch-up learning rate until it is promoted, then uses the learning rate for the current global
@@ -112,6 +146,8 @@ initialization restartable.
 `progressive-training.json` atomically persists:
 
 - active model ID;
+- the candidate-start policy variant and, for Elo plateau starts, the EMA Elo, latest applied boundary,
+  instantaneous EMA gain rate, and permanent latch;
 - every model's optimizer progress, latest checkpoint, training-loss EMA, and paired promotion EMA;
 - a pending quantum's exact replay identity and ordered required model IDs;
 - each completed model result and comparable total loss.
@@ -139,11 +175,15 @@ has added enough samples to fund that quantum, leaving later games for the next 
 candidate ordering, private checkpoint import, shared-replay training, promotion, publication, and recovery.
 
 Evaluation startup is explicit. On restart, persisted evaluation jobs remain dormant until any pending progressive
-quantum has completed and its active checkpoint has been published. This prevents resumed evaluation from
-competing with catch-up training.
+quantum has completed and its active checkpoint has been published. The manager then reconstructs the chronological
+terminal prefix of primary ladder boundaries from durable result files, and the progressive state applies only
+boundaries newer than its persisted EMA. This closes the crash window between evaluation result publication and
+candidate-start persistence without repeating an observation.
 
 ## Telemetry
 
 Each model writes separate TensorBoard series below `progressive_models/<model-id>/`, including policy, WDL, total
 loss, gradient norm, local optimizer steps, and quantum duration. `progressive/active_model_index` records the
-published stage. Evaluation and self-play series remain attached only to the globally published model generation.
+published stage. Candidate-start telemetry records `progressive/candidate_start/ema_elo`,
+`instantaneous_ema_gain_per_hour`, `minimum_worthwhile_gain_per_hour`, and `latched` at elapsed evaluation boundaries.
+Evaluation and self-play series remain attached only to the globally published model generation.

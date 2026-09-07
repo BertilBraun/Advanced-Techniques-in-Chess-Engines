@@ -1205,8 +1205,9 @@ Markdown summary containing status, score, W-D-L, player-order scores, and durat
 Per-game actions remain in the result artifact rather than being emitted as thousands of TensorBoard text
 records.
 
-There is no plateau automation. `experiment/plateau.py`, `tools/evaluate_plateau.py`, and their tests are deleted.
-Evaluation results inform user decisions; they do not automatically stop or promote an experiment.
+There is no experiment-stop or promotion automation. `experiment/plateau.py`, `tools/evaluate_plateau.py`, and their
+tests are deleted. The primary searched ladder Elo supplies the progressive-sizing candidate-start latch documented
+in [Progressive model sizing](progressive-model-sizing.md); only the paired training-loss gate promotes a candidate.
 
 ### Replacement and deletion scope
 

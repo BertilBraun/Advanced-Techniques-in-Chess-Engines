@@ -68,11 +68,15 @@ configuration, so changing a base invalidates approvals and queue summaries for 
 
 ### Progressive model sizing
 
-Every experiment defines `training.progressive_model_sizing` as a non-empty tuple of complete model definitions.
-A one-model tuple is fixed-model training; additional definitions use strictly increasing elapsed active-run starts
-and typed paired-loss EMA promotion settings. The day-zero definition is the sole initial-network configuration. See
+Every experiment defines `training.progressive_model_sizing` as a discriminated `fixed` or `progressive` value. The
+fixed variant owns one complete model and no candidate settings. The progressive variant owns at least two models,
+typed paired-loss EMA promotion settings, and either an `elapsed` candidate-start schedule or an `elo_plateau`
+policy. The Elo policy starts the immediate successor when the primary searched evaluation ladder's EMA gain falls
+strictly below its configured rate. The fixed model or first progressive definition is the sole initial-network
+configuration. See
 [`configs/research/go-9x9-progressive-model-sizing.yaml`](configs/research/go-9x9-progressive-model-sizing.yaml) for
-the complete schema and [Progressive model sizing](../documentation/architecture/progressive-model-sizing.md) for
+the elapsed variant, [`configs/production/vast-chess-8gpu-integrated-v34.yaml`](configs/production/vast-chess-8gpu-integrated-v34.yaml)
+for the Elo variant, and [Progressive model sizing](../documentation/architecture/progressive-model-sizing.md) for
 training, promotion, restart, retention, and publication semantics.
 
 ## Experiment queue
