@@ -11,4 +11,6 @@ training:
   progressive_model_sizing:
     candidate_start:
       kind: elo_plateau
-      minimum_worthwhile_gain_per_hour: 5.0
+      minimum_worthwhile_gain_per_hour: 15.0
+    promotion:
+      maximum_relative_loss: 1.005
