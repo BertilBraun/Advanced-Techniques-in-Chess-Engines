@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -136,17 +137,39 @@ def test_optimal_chess_experiment_uses_conservative_search_and_parallel_material
     assert configuration.chess.objective.root_value_blend.value_at(110) == pytest.approx(0.1)
     assert configuration.chess.objective.value_discount_per_ply.value_at(0) == 1.0
     progressive_model_sizing = configuration.training.progressive_model_sizing
-    assert tuple(model.training_start_days for model in progressive_model_sizing.models) == (
-        0.0,
-        0.75,
-        2.0,
-    )
+    assert progressive_model_sizing.is_progressive
+    assert progressive_model_sizing.candidate_start.kind == 'elapsed'
+    assert progressive_model_sizing.candidate_start.start_days == (0.75, 2.0)
+    assert all('training_start_days' not in type(model).model_fields for model in progressive_model_sizing.models)
     expected_model_ids = ('chess-attention-1m', 'chess-attention-2m', 'chess-attention-4m5')
     assert tuple(model.model_id for model in progressive_model_sizing.models) == expected_model_ids
     assert tuple(
         (model.network.num_layers, model.network.embedding_size) for model in progressive_model_sizing.models
     ) == ((8, 128), (10, 160), (15, 192))
     assert configuration.training.initial_model == progressive_model_sizing.models[0]
+
+
+def test_v34_uses_the_primary_ladder_elo_candidate_start_policy() -> None:
+    previous_configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v33.yaml'
+    )
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34.yaml'
+    )
+    previous_progressive = previous_configuration.training.progressive_model_sizing
+    progressive = configuration.training.progressive_model_sizing
+
+    assert previous_progressive.candidate_start.kind == 'elapsed'
+    assert previous_progressive.candidate_start.start_days == (Decimal('0.6666666666666666'),)
+    assert progressive.is_progressive
+    assert progressive.candidate_start.kind == 'elo_plateau'
+    assert progressive.candidate_start.minimum_worthwhile_gain_per_hour == 5.0
+    assert tuple(model.model_id for model in progressive.models) == (
+        'chess-cnn-12x128-fromto',
+        'chess-cnn-14x160-fromto',
+    )
+    assert configuration.evaluation.dataset.path == previous_configuration.evaluation.dataset.path
+    assert configuration.evaluation.openings.path == previous_configuration.evaluation.openings.path
 
 
 @pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))
@@ -431,7 +454,7 @@ def test_game_specific_external_engines_are_validated() -> None:
 
 def test_network_rejects_unknown_parameters() -> None:
     candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
-    candidate['training']['progressive_model_sizing']['models'][0]['network']['experimental_width'] = 256
+    candidate['training']['progressive_model_sizing']['model']['network']['experimental_width'] = 256
 
     with pytest.raises(ValidationError, match='experimental_width'):
         ChessExperimentConfiguration.model_validate(candidate)
@@ -537,8 +560,8 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
-    # Re-pinned 2026-09-06: replay and restart selection became explicit sampling policies.
-    assert experiment_configuration_sha256(frozen) == '8177c6c65e9e9385f2a312cf6e3515c7b1eb4351fa27de8676be14775b85f388'
+    # Re-pinned 2026-09-07: fixed and progressive model sizing became distinct configuration variants.
+    assert experiment_configuration_sha256(frozen) == '45db9f4ae454eedf311a66349e54748e7b57c1840c3e32315204c48479643498'
 
 
 @pytest.mark.parametrize(

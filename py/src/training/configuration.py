@@ -8,6 +8,8 @@ from pydantic import Field, model_validator
 from src.replay.configuration import ReplayConfiguration
 from src.training.progressive import (
     SECONDS_PER_DAY,
+    ElapsedCandidateStartConfiguration,
+    ModelSizingConfiguration,
     ProgressiveModelDefinition,
     ProgressiveModelSizingConfiguration,
 )
@@ -184,7 +186,7 @@ class TrainingArgs(FrozenModel):
     lifecycle: TrainingLifecycleParams
     limits: RuntimeLimits
     random_seed: int
-    progressive_model_sizing: ProgressiveModelSizingConfiguration
+    progressive_model_sizing: ModelSizingConfiguration
 
     @property
     def initial_model(self) -> ProgressiveModelDefinition:
@@ -212,10 +214,13 @@ class TrainingArgs(FrozenModel):
             if maximum_generation > 4_294_967_295:
                 raise ValueError('Maximum model generation must fit uint32 replay metadata.')
         maximum_wall_time = self.limits.maximum_wall_time_seconds
-        final_model = self.progressive_model_sizing.models[-1]
-        final_start_seconds = float(final_model.training_start_days) * SECONDS_PER_DAY
-        if maximum_wall_time is not None and maximum_wall_time <= final_start_seconds:
-            raise ValueError('Maximum wall time must reach the final progressive model training start.')
+        match self.progressive_model_sizing:
+            case ProgressiveModelSizingConfiguration(
+                candidate_start=ElapsedCandidateStartConfiguration(start_days=start_days)
+            ) if maximum_wall_time is not None:
+                final_start_seconds = float(start_days[-1]) * SECONDS_PER_DAY
+                if maximum_wall_time <= final_start_seconds:
+                    raise ValueError('Maximum wall time must reach the final progressive model training start.')
         return self
 
     def validate_game(

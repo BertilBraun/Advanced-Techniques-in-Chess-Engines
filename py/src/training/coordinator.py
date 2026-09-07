@@ -114,6 +114,7 @@ class Coordinator:
             if self.training_session.has_pending_quantum:
                 self._train_quantum(self_play_started=False)
             self.evaluation_manager.start()
+            self._collect_completed_evaluations()
             self._start_self_play()
             self.replay_manager.start_materialization()
             while not self.ledger.training_complete:
@@ -123,7 +124,7 @@ class Coordinator:
                 # slots are sealed.
                 self._append_staged_games()
                 self._apply_self_play_backpressure()
-                self.evaluation_manager.collect_completed_jobs()
+                self._collect_completed_evaluations()
                 self._supervise_self_play()
                 self.final_stop_reason = self.run_limit_monitor.stop_reason() or self._self_play_stop_reason()
                 if self.final_stop_reason is not None:
@@ -162,6 +163,10 @@ class Coordinator:
         ):
             raise RuntimeError('Self-play workers did not enter the running state.')
         self._credit_wait_started_at = time.perf_counter()
+
+    def _collect_completed_evaluations(self) -> None:
+        self.evaluation_manager.collect_completed_jobs()
+        self.training_session.observe_primary_ladder_elos(self.evaluation_manager.completed_primary_ladder_elos)
 
     def _supervise_self_play(self) -> None:
         supervision = self.self_play_group.supervise(

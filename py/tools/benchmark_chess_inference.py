@@ -50,7 +50,6 @@ class AttentionBackend(str, Enum):
 @dataclass(frozen=True)
 class BenchmarkModel:
     model_id: str
-    training_start_days: float
     network: NetworkConfiguration
 
 
@@ -79,7 +78,6 @@ class ParameterCounts(FrozenModel):
 
 class ModelDescription(FrozenModel):
     model_id: str = Field(min_length=1)
-    training_start_days: float = Field(ge=0.0)
     network: NetworkConfiguration
     parameters: ParameterCounts
 
@@ -228,7 +226,6 @@ def _benchmark_models(
     models = tuple(
         BenchmarkModel(
             model_id=model.model_id,
-            training_start_days=float(model.training_start_days),
             network=model.network,
         )
         for model in progressive.models
@@ -239,7 +236,6 @@ def _benchmark_models(
     controls = (
         BenchmarkModel(
             model_id='control-cnn-10x128-direct-policy',
-            training_start_days=0.0,
             network=NetworkParams(
                 num_layers=10,
                 hidden_size=128,
@@ -251,7 +247,6 @@ def _benchmark_models(
         ),
         BenchmarkModel(
             model_id='control-attention-5x256-direct-policy',
-            training_start_days=0.0,
             network=AttentionNetworkParams(
                 num_layers=5,
                 embedding_size=256,
@@ -363,7 +358,6 @@ def run_benchmark(arguments: BenchmarkArguments) -> ChessInferenceBenchmarkRepor
             descriptions.append(
                 ModelDescription(
                     model_id=benchmark_model.model_id,
-                    training_start_days=benchmark_model.training_start_days,
                     network=benchmark_model.network,
                     parameters=parameter_counts(network),
                 )

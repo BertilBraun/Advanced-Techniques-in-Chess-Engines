@@ -10,6 +10,7 @@ from pydantic import TypeAdapter
 from src.evaluation.configuration import (
     EvaluationConfiguration,
     ReferenceCheckpointEvaluationDefinition,
+    StockfishAdaptiveNodesEvaluationDefinition,
     StockfishFixedNodesEvaluationDefinition,
 )
 from src.evaluation.contracts import (
@@ -527,6 +528,44 @@ def test_manager_publishes_the_ladder_elo_of_a_boundary_exactly_once(
     assert len([event for event in scalar_events if event[0] == 'evaluation/ladder_elo']) == 1
 
 
+def test_primary_ladder_series_waits_for_earlier_boundaries_and_skips_failures(tmp_path: Path) -> None:
+    experiment = _experiment_with_fixed_node_rungs(tmp_path)
+    clock = FakeClock()
+    context = FakeProcessContext()
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, context)
+    first_rung_jobs = _scheduled_rung_jobs(manager, clock, tmp_path)
+    clock.now = 41.0
+    second_jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 2))
+    second_rung_jobs = tuple(
+        job
+        for job in second_jobs
+        if isinstance(job, MatchEvaluationJob) and job.definition.kind == 'stockfish_fixed_nodes'
+    )
+    for job in second_rung_jobs:
+        _write_rung_result(job, _rung_games(_NATURAL_RUNG_OUTCOMES[_rung_nodes(job)]))
+
+    assert manager.completed_primary_ladder_elos == ()
+
+    for job in first_rung_jobs:
+        write_evaluation_result(
+            FailedEvaluationResult(
+                kind='failed',
+                job=job,
+                phase=EvaluationFailurePhase.EXECUTION,
+                message='synthetic failure',
+                exit_code=1,
+                traceback_path=None,
+                duration_seconds=1.0,
+            ),
+            job.result_path,
+        )
+
+    observations = manager.completed_primary_ladder_elos
+
+    assert tuple(observation.boundary_seconds for observation in observations) == (40,)
+    assert observations[0].elo == pytest.approx(_expected_ladder_elo(), abs=1e-6)
+
+
 def test_manager_ladder_uses_only_non_capped_games_and_skips_all_capped_rungs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -745,6 +784,42 @@ def test_manager_fits_one_ladder_per_search_budget(tmp_path: Path, monkeypatch: 
     assert named['evaluation/ladder_elo_64'] > named['evaluation/ladder_elo_1']
     # The unsuffixed series stays the highest-budget ladder, so it remains comparable across runs.
     assert named['evaluation/ladder_elo'] == pytest.approx(named['evaluation/ladder_elo_64'])
+
+
+def test_primary_ladder_does_not_fall_back_to_a_lower_search_budget_after_failures(tmp_path: Path) -> None:
+    experiment = _experiment_with_two_search_budgets(tmp_path)
+    clock = FakeClock()
+    manager = EvaluationManager(experiment, checkpoint(tmp_path, 0), clock, FakeProcessContext())
+    clock.now = 21.0
+    jobs = manager.schedule_due_jobs(checkpoint(tmp_path, 1))
+    ladder_jobs = tuple(
+        job
+        for job in jobs
+        if isinstance(job, MatchEvaluationJob)
+        and isinstance(
+            job.definition,
+            StockfishFixedNodesEvaluationDefinition | StockfishAdaptiveNodesEvaluationDefinition,
+        )
+    )
+
+    for job in ladder_jobs:
+        if job.definition.search.searches_per_move == 64:
+            write_evaluation_result(
+                FailedEvaluationResult(
+                    kind='failed',
+                    job=job,
+                    phase=EvaluationFailurePhase.EXECUTION,
+                    message='synthetic failure',
+                    exit_code=1,
+                    traceback_path=None,
+                    duration_seconds=1.0,
+                ),
+                job.result_path,
+            )
+        else:
+            _write_rung_result(job, _rung_games((CandidateOutcome.WIN,) * 10))
+
+    assert manager.completed_primary_ladder_elos == ()
 
 
 def _experiment_with_a_windowed_rung(run_path: Path) -> ChessExperimentConfiguration:

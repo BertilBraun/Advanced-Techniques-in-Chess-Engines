@@ -7,9 +7,9 @@ training:
   limits:
     maximum_wall_time_seconds: 172800
   progressive_model_sizing:
+    kind: progressive
     models:
       - model_id: small
-        training_start_days: 0.0
         network:
           num_layers: 8
           hidden_size: 96
@@ -20,7 +20,6 @@ training:
           num_value_channels: 1
           value_fc_size: 32
       - model_id: medium
-        training_start_days: 0.75
         network:
           num_layers: 10
           hidden_size: 128
@@ -31,7 +30,6 @@ training:
           num_value_channels: 1
           value_fc_size: 32
       - model_id: large
-        training_start_days: 1.5
         network:
           num_layers: 15
           hidden_size: 192
@@ -41,6 +39,9 @@ training:
           policy_head: {kind: go_point_pass_v1}
           num_value_channels: 1
           value_fc_size: 32
+    candidate_start:
+      kind: elapsed
+      start_days: [0.75, 1.5]
     promotion:
       decay: 0.8
       warmup_quanta: 10

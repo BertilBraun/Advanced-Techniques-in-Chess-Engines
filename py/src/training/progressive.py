@@ -2,27 +2,48 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
+from src.evaluation.ladder import PrimaryLadderEloObservation
 from src.replay.description import ReplayDescription
 from src.training.checkpoint import CheckpointReference
 from src.training.network import NetworkConfiguration
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 
+ELO_EMA_DECAY = 0.95
+SECONDS_PER_HOUR = 3_600.0
 SECONDS_PER_DAY = 86_400.0
 
 
 class ProgressiveModelDefinition(FrozenModel):
     model_id: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]*$')
-    training_start_days: Decimal = Field(ge=0)
     network: NetworkConfiguration
 
-    def is_eligible(self, elapsed_seconds: float) -> bool:
-        if elapsed_seconds < 0.0:
-            raise ValueError('Elapsed run time cannot be negative.')
-        return Decimal(str(elapsed_seconds)) >= self.training_start_days * Decimal(str(SECONDS_PER_DAY))
+
+class EloPlateauCandidateStartConfiguration(FrozenModel):
+    kind: Literal['elo_plateau']
+    minimum_worthwhile_gain_per_hour: float = Field(gt=0.0, allow_inf_nan=False)
+
+
+class ElapsedCandidateStartConfiguration(FrozenModel):
+    kind: Literal['elapsed']
+    start_days: tuple[Decimal, ...] = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def validate_starts(self) -> ElapsedCandidateStartConfiguration:
+        if self.start_days[0] <= 0 or any(
+            self.start_days[index] <= self.start_days[index - 1] for index in range(1, len(self.start_days))
+        ):
+            raise ValueError('Elapsed candidate starts must be positive and strictly increasing.')
+        return self
+
+
+CandidateStartConfiguration: TypeAlias = Annotated[
+    EloPlateauCandidateStartConfiguration | ElapsedCandidateStartConfiguration,
+    Field(discriminator='kind'),
+]
 
 
 class TotalLossEmaPromotionConfiguration(FrozenModel):
@@ -32,8 +53,23 @@ class TotalLossEmaPromotionConfiguration(FrozenModel):
     candidate_catchup_learning_rate: float = Field(gt=0.0, allow_inf_nan=False)
 
 
+class FixedModelSizingConfiguration(FrozenModel):
+    kind: Literal['fixed']
+    model: ProgressiveModelDefinition
+
+    @property
+    def models(self) -> tuple[ProgressiveModelDefinition, ...]:
+        return (self.model,)
+
+    @property
+    def is_progressive(self) -> Literal[False]:
+        return False
+
+
 class ProgressiveModelSizingConfiguration(FrozenModel):
-    models: tuple[ProgressiveModelDefinition, ...] = Field(min_length=1)
+    kind: Literal['progressive']
+    models: tuple[ProgressiveModelDefinition, ...] = Field(min_length=2)
+    candidate_start: CandidateStartConfiguration
     promotion: TotalLossEmaPromotionConfiguration
 
     @model_validator(mode='after')
@@ -41,11 +77,12 @@ class ProgressiveModelSizingConfiguration(FrozenModel):
         model_ids = tuple(model.model_id for model in self.models)
         if len(set(model_ids)) != len(model_ids):
             raise ValueError('Progressive model IDs must be unique.')
-        starts = tuple(model.training_start_days for model in self.models)
-        if starts[0] != Decimal(0):
-            raise ValueError('The initial progressive model must start at day zero.')
-        if any(starts[index] <= starts[index - 1] for index in range(1, len(starts))):
-            raise ValueError('Progressive model training starts must be strictly increasing.')
+        match self.candidate_start:
+            case ElapsedCandidateStartConfiguration(start_days=start_days):
+                if len(start_days) != len(self.models) - 1:
+                    raise ValueError('Elapsed candidate starts must contain one entry per candidate model.')
+            case EloPlateauCandidateStartConfiguration():
+                pass
         return self
 
     def model(self, model_id: str) -> ProgressiveModelDefinition:
@@ -55,17 +92,20 @@ class ProgressiveModelSizingConfiguration(FrozenModel):
         raise ValueError(f'Unknown progressive model ID: {model_id}')
 
     @property
-    def is_progressive(self) -> bool:
-        return len(self.models) > 1
-
-    def eligible_model_ids(self, elapsed_seconds: float) -> tuple[str, ...]:
-        return tuple(model.model_id for model in self.models if model.is_eligible(elapsed_seconds))
+    def is_progressive(self) -> Literal[True]:
+        return True
 
     def successor(self, model_id: str) -> ProgressiveModelDefinition | None:
         for index, model in enumerate(self.models):
             if model.model_id == model_id:
                 return self.models[index + 1] if index + 1 < len(self.models) else None
         raise ValueError(f'Unknown progressive model ID: {model_id}')
+
+
+ModelSizingConfiguration: TypeAlias = Annotated[
+    FixedModelSizingConfiguration | ProgressiveModelSizingConfiguration,
+    Field(discriminator='kind'),
+]
 
 
 class ComparableLossEma(FrozenModel):
@@ -93,6 +133,24 @@ class ProgressiveCandidateState(FrozenModel):
     checkpoint: CheckpointReference | None = None
     training_loss_ema: ComparableLossEma | None = None
     promotion_comparison: PromotionLossComparison | None = None
+
+
+class EloPlateauCandidateStartState(FrozenModel):
+    kind: Literal['elo_plateau']
+    latest_boundary_seconds: int = Field(ge=0)
+    ema_elo: float = Field(ge=0.0, allow_inf_nan=False)
+    instantaneous_ema_gain_per_hour: float | None = Field(default=None, allow_inf_nan=False)
+    latched: bool
+
+
+class ElapsedCandidateStartState(FrozenModel):
+    kind: Literal['elapsed']
+
+
+CandidateStartState: TypeAlias = Annotated[
+    EloPlateauCandidateStartState | ElapsedCandidateStartState,
+    Field(discriminator='kind'),
+]
 
 
 class ReplayBatchIdentity(FrozenModel):
@@ -128,9 +186,10 @@ class PendingProgressiveQuantum(FrozenModel):
 
 
 class ProgressiveTrainingState(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     active_model_id: str
     candidates: tuple[ProgressiveCandidateState, ...]
+    candidate_start: CandidateStartState
     pending_quantum: PendingProgressiveQuantum | None = None
 
 
@@ -145,8 +204,40 @@ class ProgressiveTrainingStateStore:
             self.state = ProgressiveTrainingState(
                 active_model_id=configuration.models[0].model_id,
                 candidates=tuple(ProgressiveCandidateState(model_id=model.model_id) for model in configuration.models),
+                candidate_start=self._initial_candidate_start_state(),
             )
             self.save()
+
+    def observe_primary_ladder_elos(
+        self,
+        observations: tuple[PrimaryLadderEloObservation, ...],
+    ) -> tuple[EloPlateauCandidateStartState, ...]:
+        updates: list[EloPlateauCandidateStartState] = []
+        match self.state.candidate_start, self.configuration.candidate_start:
+            case EloPlateauCandidateStartState() as candidate_start, EloPlateauCandidateStartConfiguration() as start:
+                pass
+            case ElapsedCandidateStartState(), ElapsedCandidateStartConfiguration():
+                return ()
+            case _:
+                raise ValueError('Persisted candidate-start policy does not match configuration.')
+        for observation in sorted(observations, key=lambda item: item.boundary_seconds):
+            if observation.boundary_seconds <= candidate_start.latest_boundary_seconds:
+                continue
+            elapsed_hours = (observation.boundary_seconds - candidate_start.latest_boundary_seconds) / SECONDS_PER_HOUR
+            ema_elo = ELO_EMA_DECAY * candidate_start.ema_elo + (1.0 - ELO_EMA_DECAY) * observation.elo
+            gain_per_hour = (ema_elo - candidate_start.ema_elo) / elapsed_hours
+            candidate_start = EloPlateauCandidateStartState(
+                kind='elo_plateau',
+                latest_boundary_seconds=observation.boundary_seconds,
+                ema_elo=ema_elo,
+                instantaneous_ema_gain_per_hour=gain_per_hour,
+                latched=(candidate_start.latched or gain_per_hour < start.minimum_worthwhile_gain_per_hour),
+            )
+            updates.append(candidate_start)
+        if updates:
+            self.state = self.state.validated_copy(update={'candidate_start': candidate_start.model_dump(mode='json')})
+            self.save()
+        return tuple(updates)
 
     def begin_quantum(
         self,
@@ -160,9 +251,7 @@ class ProgressiveTrainingStateStore:
             if self.state.pending_quantum.replay_batch != replay_batch:
                 raise ValueError('Pending progressive quantum replay batches changed across restart.')
             return self.state.pending_quantum
-        eligible = self.configuration.eligible_model_ids(elapsed_seconds)
-        active_index = eligible.index(self.state.active_model_id)
-        required_model_ids = eligible[active_index:]
+        required_model_ids = self._required_model_ids(elapsed_seconds)
         pending = PendingProgressiveQuantum(
             target_global_optimizer_steps=source_optimizer_steps + optimizer_steps_per_quantum,
             replay_batch=replay_batch,
@@ -224,6 +313,7 @@ class ProgressiveTrainingStateStore:
         self.state = ProgressiveTrainingState(
             active_model_id=active_model_id,
             candidates=candidates,
+            candidate_start=self.state.candidate_start,
         )
         self.save()
         return active_model_id
@@ -336,6 +426,42 @@ class ProgressiveTrainingStateStore:
             raise ValueError('Persisted progressive candidates do not match configured model order.')
         if state.active_model_id not in expected_ids:
             raise ValueError('Persisted active progressive model is not configured.')
+        if state.candidate_start.kind != self.configuration.candidate_start.kind:
+            raise ValueError('Persisted candidate-start policy does not match configuration.')
+
+    def _initial_candidate_start_state(self) -> CandidateStartState:
+        match self.configuration.candidate_start:
+            case EloPlateauCandidateStartConfiguration():
+                return EloPlateauCandidateStartState(
+                    kind='elo_plateau',
+                    latest_boundary_seconds=0,
+                    ema_elo=0.0,
+                    latched=False,
+                )
+            case ElapsedCandidateStartConfiguration():
+                return ElapsedCandidateStartState(kind='elapsed')
+
+    def _required_model_ids(self, elapsed_seconds: float) -> tuple[str, ...]:
+        if elapsed_seconds < 0.0:
+            raise ValueError('Elapsed run time cannot be negative.')
+        match self.configuration.candidate_start, self.state.candidate_start:
+            case EloPlateauCandidateStartConfiguration(), EloPlateauCandidateStartState() as state:
+                required_model_ids = (self.state.active_model_id,)
+                successor = self.configuration.successor(self.state.active_model_id)
+                if state.latched and successor is not None:
+                    required_model_ids = (*required_model_ids, successor.model_id)
+                return required_model_ids
+            case ElapsedCandidateStartConfiguration(start_days=start_days), ElapsedCandidateStartState():
+                elapsed_days = Decimal(str(elapsed_seconds)) / Decimal(str(SECONDS_PER_DAY))
+                eligible_model_ids = (self.configuration.models[0].model_id,) + tuple(
+                    model.model_id
+                    for model, start_day in zip(self.configuration.models[1:], start_days, strict=True)
+                    if elapsed_days >= start_day
+                )
+                active_index = eligible_model_ids.index(self.state.active_model_id)
+                return eligible_model_ids[active_index:]
+            case _:
+                raise ValueError('Persisted candidate-start policy does not match configuration.')
 
 
 def retain_progressive_candidate_checkpoints(run_path: Path, state: ProgressiveTrainingState) -> None:

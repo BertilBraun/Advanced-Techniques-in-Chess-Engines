@@ -5,6 +5,7 @@ import os
 import signal
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -29,6 +30,7 @@ from src.evaluation.contracts import (
 from src.evaluation.ladder import (
     STOCKFISH_FIXED_NODES_ANCHOR_ELO,
     LadderRungObservation,
+    PrimaryLadderEloObservation,
     fit_ladder_elo,
     ladder_rung_observation,
 )
@@ -58,6 +60,13 @@ class EvaluationManagerState(FrozenModel):
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...]
     pending_jobs: tuple[EvaluationJob, ...]
     adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...]
+
+
+@dataclass(frozen=True)
+class _LadderEloFit:
+    searches_per_move: int
+    elo: float
+    rung_count: int
 
 
 def _initial_adaptive_stockfish_rungs(
@@ -228,6 +237,24 @@ class EvaluationManager:
             self._state.scheduled_suites,
             self._state.pending_jobs,
         )
+
+    @property
+    def completed_primary_ladder_elos(self) -> tuple[PrimaryLadderEloObservation, ...]:
+        observations: list[PrimaryLadderEloObservation] = []
+        for suite in self._state.scheduled_suites:
+            fits = self._ladder_elos_at(suite.boundary_seconds)
+            if fits is None:
+                break
+            primary_search_budget = self._primary_ladder_search_budget(suite)
+            primary = next((fit for fit in fits if fit.searches_per_move == primary_search_budget), None)
+            if primary is not None:
+                observations.append(
+                    PrimaryLadderEloObservation(
+                        boundary_seconds=suite.boundary_seconds,
+                        elo=primary.elo,
+                    )
+                )
+        return tuple(observations)
 
     def close(self) -> None:
         if not self._started:
@@ -534,6 +561,22 @@ class EvaluationManager:
         # once per rung and TensorBoard receives duplicate points at the same step.
         if boundary_seconds in self._published_ladder_boundaries:
             return
+        fits = self._ladder_elos_at(boundary_seconds)
+        if not fits:
+            return
+        self._published_ladder_boundaries.add(boundary_seconds)
+        suite = next(suite for suite in self._state.scheduled_suites if suite.boundary_seconds == boundary_seconds)
+        primary_search_budget = self._primary_ladder_search_budget(suite)
+        for fit in fits:
+            log_scalar(f'evaluation/ladder_elo_{fit.searches_per_move}', fit.elo, boundary_seconds)
+            if fit.searches_per_move == primary_search_budget:
+                log_scalar('evaluation/ladder_elo', fit.elo, boundary_seconds)
+            log(
+                f'Evaluation ladder Elo at {boundary_seconds}s: {fit.elo:.0f} '
+                f'over {fit.rung_count} rungs at {fit.searches_per_move} searches'
+            )
+
+    def _ladder_elos_at(self, boundary_seconds: int) -> tuple[_LadderEloFit, ...] | None:
         # One ladder per search budget: a rung played at one search per move measures the network
         # alone and is hundreds of Elo below the same rung played at the full budget, so mixing them
         # into a single fit reads as weakness rather than as two different things being measured.
@@ -565,19 +608,26 @@ class EvaluationManager:
             if observation is None:
                 continue
             by_budget.setdefault(definition.search.searches_per_move, []).append(observation)
-        if not by_budget:
-            return
-        self._published_ladder_boundaries.add(boundary_seconds)
-        primary_budget = max(by_budget)
-        for budget, observations in sorted(by_budget.items()):
-            ladder_elo = fit_ladder_elo(tuple(observations))
-            log_scalar(f'evaluation/ladder_elo_{budget}', ladder_elo, boundary_seconds)
-            if budget == primary_budget:
-                log_scalar('evaluation/ladder_elo', ladder_elo, boundary_seconds)
-            log(
-                f'Evaluation ladder Elo at {boundary_seconds}s: {ladder_elo:.0f} '
-                f'over {len(observations)} rungs at {budget} searches'
+        return tuple(
+            _LadderEloFit(
+                searches_per_move=budget,
+                elo=fit_ladder_elo(tuple(observations)),
+                rung_count=len(observations),
             )
+            for budget, observations in sorted(by_budget.items())
+        )
+
+    def _primary_ladder_search_budget(self, suite: ScheduledEvaluationSuite) -> int | None:
+        active_budgets = tuple(
+            definition.search.searches_per_move
+            for definition in self.configuration.definitions
+            if isinstance(
+                definition,
+                StockfishFixedNodesEvaluationDefinition | StockfishAdaptiveNodesEvaluationDefinition,
+            )
+            and definition.is_active_at(suite.checkpoint.generation)
+        )
+        return max(active_budgets, default=None)
 
     def _write_boundary_summary(self, boundary_seconds: int, generation: int, optimizer_steps: int) -> None:
         results: list[EvaluationResult] = []

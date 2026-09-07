@@ -48,6 +48,18 @@ _BISECTION_ITERATIONS = 80
 
 
 @dataclass(frozen=True)
+class PrimaryLadderEloObservation:
+    boundary_seconds: int
+    elo: float
+
+    def __post_init__(self) -> None:
+        if self.boundary_seconds <= 0:
+            raise ValueError('Ladder Elo boundary must be positive.')
+        if not isfinite(self.elo) or self.elo < 0.0:
+            raise ValueError('Ladder Elo must be finite and nonnegative.')
+
+
+@dataclass(frozen=True)
 class LadderRungObservation:
     anchor_elo: float
     score: float

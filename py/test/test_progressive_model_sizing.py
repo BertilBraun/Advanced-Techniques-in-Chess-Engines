@@ -3,11 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from decimal import Decimal
 from pathlib import Path
 from typing import cast
 
 import pytest
+from src.evaluation.ladder import PrimaryLadderEloObservation
 from src.experiment.configuration import ExperimentConfiguration, load_experiment_configuration
 from src.games.implementation import GameImplementation
 from src.games.representation import NetworkDimensions, PackedPlaneLayout
@@ -26,6 +26,9 @@ from src.training.network import (
 )
 from src.training.progressive import (
     CompletedCandidateTraining,
+    ElapsedCandidateStartConfiguration,
+    EloPlateauCandidateStartConfiguration,
+    FixedModelSizingConfiguration,
     ProgressiveModelDefinition,
     ProgressiveModelSizingConfiguration,
     ProgressiveTrainingStateStore,
@@ -54,24 +57,39 @@ def _network(width: int) -> NetworkParams:
 
 def _configuration(warmup_quanta: int = 2) -> ProgressiveModelSizingConfiguration:
     return ProgressiveModelSizingConfiguration(
+        kind='progressive',
         models=(
-            ProgressiveModelDefinition(model_id='small', training_start_days=Decimal('0.0'), network=_network(8)),
-            ProgressiveModelDefinition(model_id='medium', training_start_days=Decimal('0.75'), network=_network(12)),
-            ProgressiveModelDefinition(model_id='large', training_start_days=Decimal('1.5'), network=_network(16)),
+            ProgressiveModelDefinition(model_id='small', network=_network(8)),
+            ProgressiveModelDefinition(model_id='medium', network=_network(12)),
+            ProgressiveModelDefinition(model_id='large', network=_network(16)),
+        ),
+        candidate_start=EloPlateauCandidateStartConfiguration(
+            kind='elo_plateau',
+            minimum_worthwhile_gain_per_hour=5.0,
         ),
         promotion=TotalLossEmaPromotionConfiguration(
             decay=0.5,
             warmup_quanta=warmup_quanta,
             maximum_relative_loss=1.01,
-            candidate_catchup_learning_rate=0.004,
+            candidate_catchup_learning_rate=0.005,
         ),
+    )
+
+
+def _elapsed_configuration() -> ProgressiveModelSizingConfiguration:
+    return _configuration().validated_copy(
+        update={
+            'candidate_start': ElapsedCandidateStartConfiguration(
+                kind='elapsed',
+                start_days=(0.75, 1.5),
+            ).model_dump(mode='json')
+        }
     )
 
 
 def test_progressive_model_definition_accepts_attention_architecture() -> None:
     definition = ProgressiveModelDefinition(
         model_id='attention',
-        training_start_days=Decimal('0.0'),
         network=AttentionNetworkParams(
             num_layers=2,
             embedding_size=64,
@@ -104,35 +122,27 @@ def _checkpoint(tmp_path: Path, model_id: str, generation: int) -> CheckpointRef
     return checkpoint_reference(tmp_path / 'models' / model_id, generation)
 
 
-@pytest.mark.parametrize(
-    ('elapsed_seconds', 'expected'),
-    (
-        (0.0, ('small',)),
-        (64_799.9, ('small',)),
-        (64_800.0, ('small', 'medium')),
-        (129_600.0, ('small', 'medium', 'large')),
-    ),
-)
-def test_elapsed_run_time_controls_candidate_eligibility(
-    elapsed_seconds: float,
-    expected: tuple[str, ...],
-) -> None:
-    assert _configuration().eligible_model_ids(elapsed_seconds) == expected
+def _latch_candidate_start(store: ProgressiveTrainingStateStore) -> None:
+    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=99.0),))
 
 
-@pytest.mark.parametrize('model_count', (1, 2, 4))
+@pytest.mark.parametrize('model_count', (2, 4))
 def test_model_schedule_accepts_any_nonempty_model_tuple(model_count: int) -> None:
     models = tuple(
         ProgressiveModelDefinition(
             model_id=f'model-{index}',
-            training_start_days=Decimal(index),
             network=_network(8 + index),
         )
         for index in range(model_count)
     )
 
     configuration = ProgressiveModelSizingConfiguration(
+        kind='progressive',
         models=models,
+        candidate_start=EloPlateauCandidateStartConfiguration(
+            kind='elo_plateau',
+            minimum_worthwhile_gain_per_hour=5.0,
+        ),
         promotion=TotalLossEmaPromotionConfiguration(
             decay=0.9,
             warmup_quanta=2,
@@ -142,13 +152,61 @@ def test_model_schedule_accepts_any_nonempty_model_tuple(model_count: int) -> No
     )
 
     assert configuration.models == models
-    assert configuration.is_progressive is (model_count > 1)
+    assert configuration.is_progressive
+
+
+def test_fixed_model_configuration_has_no_candidate_or_promotion_policy() -> None:
+    configuration = FixedModelSizingConfiguration(
+        kind='fixed',
+        model=ProgressiveModelDefinition(model_id='only', network=_network(8)),
+    )
+
+    assert configuration.models == (configuration.model,)
+    assert not configuration.is_progressive
+    assert 'candidate_start' not in type(configuration).model_fields
+    assert 'promotion' not in type(configuration).model_fields
+
+
+@pytest.mark.parametrize(
+    ('elapsed_seconds', 'expected'),
+    (
+        (0.0, ('small',)),
+        (64_799.9, ('small',)),
+        (64_800.0, ('small', 'medium')),
+        (129_600.0, ('small', 'medium', 'large')),
+    ),
+)
+def test_elapsed_start_policy_preserves_timed_candidate_eligibility(
+    tmp_path: Path,
+    elapsed_seconds: float,
+    expected: tuple[str, ...],
+) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _elapsed_configuration())
+
+    assert store.begin_quantum(elapsed_seconds, _replay(tmp_path), 0, 4).required_model_ids == expected
+
+
+def test_elapsed_start_policy_requires_one_start_per_candidate() -> None:
+    with pytest.raises(ValueError, match='one entry per candidate'):
+        _configuration().validated_copy(
+            update={
+                'candidate_start': ElapsedCandidateStartConfiguration(
+                    kind='elapsed',
+                    start_days=(0.75,),
+                ).model_dump(mode='json')
+            }
+        )
 
 
 def test_model_schedule_rejects_an_empty_model_tuple() -> None:
     with pytest.raises(ValueError):
         ProgressiveModelSizingConfiguration(
+            kind='progressive',
             models=(),
+            candidate_start=EloPlateauCandidateStartConfiguration(
+                kind='elo_plateau',
+                minimum_worthwhile_gain_per_hour=5.0,
+            ),
             promotion=TotalLossEmaPromotionConfiguration(
                 decay=0.9,
                 warmup_quanta=2,
@@ -163,36 +221,68 @@ def test_training_configuration_has_one_network_owner() -> None:
     assert TrainingArgs.model_fields['progressive_model_sizing'].is_required()
 
 
-@pytest.mark.parametrize(
-    'starts',
-    (
-        (Decimal('0.1'), Decimal('0.75'), Decimal('1.5')),
-        (Decimal('0.0'), Decimal('0.75'), Decimal('0.75')),
-    ),
-)
-def test_progressive_models_require_zero_then_strictly_increasing_starts(
-    starts: tuple[Decimal, Decimal, Decimal],
-) -> None:
-    with pytest.raises(ValueError):
-        ProgressiveModelSizingConfiguration(
-            models=tuple(
-                ProgressiveModelDefinition(model_id=f'model-{index}', training_start_days=start, network=_network(8))
-                for index, start in enumerate(starts)
-            ),
-            promotion=TotalLossEmaPromotionConfiguration(
-                decay=0.9,
-                warmup_quanta=2,
-                maximum_relative_loss=1.01,
-                candidate_catchup_learning_rate=0.004,
-            ),
+def test_candidate_start_ema_has_a_persisted_zero_baseline(tmp_path: Path) -> None:
+    state_path = tmp_path / 'progressive-training.json'
+    store = ProgressiveTrainingStateStore(state_path, _configuration())
+
+    assert store.state.candidate_start.latest_boundary_seconds == 0
+    assert store.state.candidate_start.ema_elo == 0.0
+    assert store.state.candidate_start.instantaneous_ema_gain_per_hour is None
+    assert not store.state.candidate_start.latched
+    assert json.loads(state_path.read_text(encoding='utf-8'))['schema_version'] == 2
+
+
+def test_candidate_starts_only_below_the_gain_threshold(tmp_path: Path) -> None:
+    exact = ProgressiveTrainingStateStore(tmp_path / 'exact.json', _configuration())
+    exact_updates = exact.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=100.0),))
+
+    assert exact_updates[0].instantaneous_ema_gain_per_hour == pytest.approx(5.0)
+    assert not exact.state.candidate_start.latched
+    assert exact.begin_quantum(100_000.0, _replay(tmp_path), 0, 4).required_model_ids == ('small',)
+
+    below = ProgressiveTrainingStateStore(tmp_path / 'below.json', _configuration())
+    below.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=99.0),))
+
+    assert below.state.candidate_start.latched
+    assert below.begin_quantum(0.0, _replay(tmp_path), 0, 4).required_model_ids == ('small', 'medium')
+
+
+def test_candidate_start_latch_never_clears(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration())
+    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=99.0),))
+    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=7200, elo=5000.0),))
+
+    assert store.state.candidate_start.instantaneous_ema_gain_per_hour is not None
+    assert store.state.candidate_start.instantaneous_ema_gain_per_hour > 5.0
+    assert store.state.candidate_start.latched
+
+
+def test_candidate_start_recovers_and_ignores_duplicate_or_older_boundaries(tmp_path: Path) -> None:
+    state_path = tmp_path / 'state.json'
+    first = ProgressiveTrainingStateStore(state_path, _configuration())
+    first.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=100.0),))
+
+    restarted = ProgressiveTrainingStateStore(state_path, _configuration())
+    updates = restarted.observe_primary_ladder_elos(
+        (
+            PrimaryLadderEloObservation(boundary_seconds=7200, elo=190.0),
+            PrimaryLadderEloObservation(boundary_seconds=1800, elo=5000.0),
+            PrimaryLadderEloObservation(boundary_seconds=3600, elo=100.0),
         )
+    )
+
+    assert tuple(update.latest_boundary_seconds for update in updates) == (7200,)
+    assert restarted.state.candidate_start.ema_elo == pytest.approx(14.25)
+    assert restarted.state.candidate_start.latest_boundary_seconds == 7200
+    assert not restarted.state.candidate_start.latched
 
 
 def test_pending_quantum_persists_replay_identity_and_candidate_completion(tmp_path: Path) -> None:
     state_path = tmp_path / 'progressive-training.json'
     store = ProgressiveTrainingStateStore(state_path, _configuration())
+    _latch_candidate_start(store)
     store.initialize_candidate('small', 40, _checkpoint(tmp_path, 'small', 10))
-    pending = store.begin_quantum(64_800.0, _replay(tmp_path), 40, 4)
+    pending = store.begin_quantum(0.0, _replay(tmp_path), 40, 4)
 
     assert pending.required_model_ids == ('small', 'medium')
     assert pending.replay_batch.replay == _replay(tmp_path)
@@ -209,21 +299,45 @@ def test_pending_quantum_persists_replay_identity_and_candidate_completion(tmp_p
     )
 
     restarted = ProgressiveTrainingStateStore(state_path, _configuration())
-    resumed = restarted.begin_quantum(70_000.0, _replay(tmp_path), 40, 4)
+    resumed = restarted.begin_quantum(100_000.0, _replay(tmp_path), 40, 4)
 
     assert resumed.next_model_id == 'medium'
     assert resumed.completed[0].comparable_total_loss == 2.0
     with pytest.raises(ValueError, match='replay batches changed'):
-        restarted.begin_quantum(70_000.0, _replay(tmp_path, head=4), 40, 4)
+        restarted.begin_quantum(100_000.0, _replay(tmp_path, head=4), 40, 4)
+
+
+def test_candidate_latch_takes_effect_at_the_next_quantum(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration())
+    replay = _replay(tmp_path)
+    current = store.begin_quantum(0.0, replay, 0, 4)
+
+    _latch_candidate_start(store)
+
+    assert current.required_model_ids == ('small',)
+    assert store.state.pending_quantum is not None
+    assert store.state.pending_quantum.required_model_ids == ('small',)
+    store.record_candidate(
+        CompletedCandidateTraining(
+            model_id='small',
+            completed_optimizer_steps=4,
+            checkpoint=_checkpoint(tmp_path, 'small', 1),
+            comparable_total_loss=1.0,
+        )
+    )
+    store.complete_quantum()
+
+    assert store.begin_quantum(0.0, replay, 4, 4).required_model_ids == ('small', 'medium')
 
 
 def test_promotion_requires_warmup_and_one_percent_comparable_ema(tmp_path: Path) -> None:
     store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration(warmup_quanta=2))
+    _latch_candidate_start(store)
     replay = _replay(tmp_path)
 
     for quantum, (active_loss, candidate_loss) in enumerate(((2.0, 2.01), (1.8, 1.815))):
         source_steps = quantum * 4
-        store.begin_quantum(64_800.0, replay, source_steps, 4)
+        store.begin_quantum(0.0, replay, source_steps, 4)
         store.record_candidate(
             CompletedCandidateTraining(
                 model_id='small',
@@ -247,8 +361,9 @@ def test_promotion_requires_warmup_and_one_percent_comparable_ema(tmp_path: Path
 
 def test_later_candidate_is_not_skipped_after_first_promotion(tmp_path: Path) -> None:
     store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration(warmup_quanta=1))
+    _latch_candidate_start(store)
     replay = _replay(tmp_path)
-    store.begin_quantum(64_800.0, replay, 0, 4)
+    store.begin_quantum(0.0, replay, 0, 4)
     for model_id in ('small', 'medium'):
         store.record_candidate(
             CompletedCandidateTraining(
@@ -260,7 +375,7 @@ def test_later_candidate_is_not_skipped_after_first_promotion(tmp_path: Path) ->
         )
     assert store.complete_quantum() == 'medium'
 
-    pending = store.begin_quantum(129_600.0, replay, 4, 4)
+    pending = store.begin_quantum(0.0, replay, 4, 4)
 
     assert pending.required_model_ids == ('medium', 'large')
 
@@ -344,7 +459,14 @@ class _RecordingTrainerGroup:
 def test_progressive_trainer_groups_remain_alive_across_quanta(tmp_path: Path) -> None:
     loaded = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     configuration = loaded.model_copy(
-        update={'training': loaded.training.model_copy(update={'save_path': str(tmp_path)})}
+        update={
+            'training': loaded.training.model_copy(
+                update={
+                    'save_path': str(tmp_path),
+                    'progressive_model_sizing': _configuration(),
+                }
+            )
+        }
     )
     network = configuration.training.progressive_model_sizing.models[0].network
     created: list[_RecordingTrainerGroup] = []
@@ -379,7 +501,14 @@ def test_progressive_trainer_groups_remain_alive_across_quanta(tmp_path: Path) -
 def test_progressive_learning_rate_uses_catchup_until_promotion(tmp_path: Path) -> None:
     loaded = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
     configuration = loaded.model_copy(
-        update={'training': loaded.training.model_copy(update={'save_path': str(tmp_path)})}
+        update={
+            'training': loaded.training.model_copy(
+                update={
+                    'save_path': str(tmp_path),
+                    'progressive_model_sizing': _configuration(),
+                }
+            )
+        }
     )
     session = ProgressiveTrainingSession(configuration, cast(GameImplementation, object()))
 

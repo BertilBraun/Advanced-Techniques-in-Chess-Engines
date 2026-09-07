@@ -183,9 +183,9 @@ training:
     resource_telemetry_interval_seconds: 5.0
   random_seed: 20260811
   progressive_model_sizing:
+    kind: progressive
     models:
     - model_id: chess-cnn-12x128-fromto
-      training_start_days: 0.0
       network:
         kind: convolutional
         num_layers: 12
@@ -199,7 +199,6 @@ training:
         num_value_channels: 2
         value_fc_size: 48
     - model_id: chess-cnn-14x160-fromto
-      training_start_days: 0.6666666666666666
       network:
         kind: convolutional
         num_layers: 14
@@ -212,6 +211,9 @@ training:
           key_size: 128
         num_value_channels: 2
         value_fc_size: 48
+    candidate_start:
+      kind: elapsed
+      start_days: [0.6666666666666666]
     promotion:
       decay: 0.8
       warmup_quanta: 10

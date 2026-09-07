@@ -88,7 +88,7 @@ def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
         update={'network': network.model_dump(mode='json')}
     )
     progressive_model_sizing = configuration.training.progressive_model_sizing.validated_copy(
-        update={'models': [initial_model.model_dump(mode='json')]}
+        update={'model': initial_model.model_dump(mode='json')}
     )
     training = configuration.training.validated_copy(
         update={

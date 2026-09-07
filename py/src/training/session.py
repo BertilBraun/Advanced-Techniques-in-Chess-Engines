@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.evaluation.ladder import PrimaryLadderEloObservation
 from src.experiment.configuration import ExperimentConfiguration
 from src.games.implementation import GameImplementation
 from src.replay.description import ReplayDescription
@@ -15,11 +16,15 @@ from src.training.network import NetworkConfiguration
 from src.training.progress import TrainingProgress
 from src.training.progressive import (
     CompletedCandidateTraining,
+    EloPlateauCandidateStartConfiguration,
+    EloPlateauCandidateStartState,
+    ProgressiveModelSizingConfiguration,
     ProgressiveTrainingStateStore,
     retain_progressive_candidate_checkpoints,
 )
 from src.training.trainer import TrainerGroup, TrainingQuantumResult, TrainingStatistics
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
+from src.util.tensorboard import log_scalar
 
 
 @dataclass(frozen=True)
@@ -69,6 +74,9 @@ class TrainingSession(ABC):
         return False
 
     def recover_published_checkpoint(self, progress: TrainingProgress) -> CheckpointReference | None:
+        return None
+
+    def observe_primary_ladder_elos(self, observations: tuple[PrimaryLadderEloObservation, ...]) -> None:
         return None
 
     @abstractmethod
@@ -129,6 +137,11 @@ class ProgressiveTrainingSession(TrainingSession):
         trainer_group_factory: TrainerGroupFactory = TrainerGroup,
     ) -> None:
         progressive_configuration = configuration.training.progressive_model_sizing
+        match progressive_configuration:
+            case ProgressiveModelSizingConfiguration():
+                pass
+            case _:
+                raise ValueError('Progressive training requires a progressive model-sizing configuration.')
         self.configuration = configuration
         self.game = game
         self.trainer_group_factory = trainer_group_factory
@@ -140,6 +153,9 @@ class ProgressiveTrainingSession(TrainingSession):
             progressive_configuration,
         )
         self.trainers: dict[str, TrainerGroup] = {}
+        match self.state.state.candidate_start:
+            case EloPlateauCandidateStartState() as candidate_start:
+                self._record_candidate_start_state(candidate_start)
 
     @property
     def has_pending_quantum(self) -> bool:
@@ -190,6 +206,10 @@ class ProgressiveTrainingSession(TrainingSession):
             active_model_index=self._model_index(active_model_id),
             model_results=tuple(model_results),
         )
+
+    def observe_primary_ladder_elos(self, observations: tuple[PrimaryLadderEloObservation, ...]) -> None:
+        for update in self.state.observe_primary_ladder_elos(observations):
+            self._record_candidate_start_state(update)
 
     def _train_candidate(
         self,
@@ -274,6 +294,28 @@ class ProgressiveTrainingSession(TrainingSession):
 
     def _model_index(self, model_id: str) -> int:
         return tuple(model.model_id for model in self.progressive_configuration.models).index(model_id)
+
+    def _record_candidate_start_state(self, state: EloPlateauCandidateStartState) -> None:
+        candidate_start = self.progressive_configuration.candidate_start
+        match candidate_start:
+            case EloPlateauCandidateStartConfiguration():
+                threshold = candidate_start.minimum_worthwhile_gain_per_hour
+            case _:
+                raise ValueError('Elo candidate-start state requires Elo candidate-start configuration.')
+        step = state.latest_boundary_seconds
+        log_scalar('progressive/candidate_start/ema_elo', state.ema_elo, step)
+        if state.instantaneous_ema_gain_per_hour is not None:
+            log_scalar(
+                'progressive/candidate_start/instantaneous_ema_gain_per_hour',
+                state.instantaneous_ema_gain_per_hour,
+                step,
+            )
+        log_scalar(
+            'progressive/candidate_start/minimum_worthwhile_gain_per_hour',
+            threshold,
+            step,
+        )
+        log_scalar('progressive/candidate_start/latched', float(state.latched), step)
 
 
 def create_training_session(

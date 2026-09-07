@@ -9,17 +9,17 @@ training:
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-cnn-reference.stop
   progressive_model_sizing:
-    models:
-      - model_id: chess-cnn-12x144
-        training_start_days: 0.0
-        network:
-          kind: convolutional
-          num_layers: 12
-          hidden_size: 144
-          residual_context: {kind: global_pooling, placement: every_second_block}
-          policy_head: {kind: chess_76_plane_direct_v2}
-          num_value_channels: 2
-          value_fc_size: 48
+    kind: fixed
+    model:
+      model_id: chess-cnn-12x144
+      network:
+        kind: convolutional
+        num_layers: 12
+        hidden_size: 144
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_76_plane_direct_v2}
+        num_value_channels: 2
+        value_fc_size: 48
 
 chess:
   self_play:

@@ -31,24 +31,19 @@ training:
     minimum_free_disk_gib: 10.0
     resource_telemetry_interval_seconds: 1.0
   progressive_model_sizing:
-    models:
-      - model_id: chess-attention-500k-pilot
-        training_start_days: 0.0
-        network:
-          kind: attention
-          num_layers: 6
-          embedding_size: 96
-          num_heads: 3
-          feedforward_size: 192
-          dropout: 0.0
-          policy_head: {kind: dense, channels: 4}
-          num_value_channels: 2
-          value_fc_size: 48
-    promotion:
-      decay: 0.8
-      warmup_quanta: 10
-      maximum_relative_loss: 1.01
-      candidate_catchup_learning_rate: 0.005
+    kind: fixed
+    model:
+      model_id: chess-attention-500k-pilot
+      network:
+        kind: attention
+        num_layers: 6
+        embedding_size: 96
+        num_heads: 3
+        feedforward_size: 192
+        dropout: 0.0
+        policy_head: {kind: dense, channels: 4}
+        num_value_channels: 2
+        value_fc_size: 48
 evaluation:
   cadence_seconds: 20
   job_timeout_seconds: 120

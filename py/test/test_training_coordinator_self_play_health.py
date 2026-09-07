@@ -6,6 +6,7 @@ from typing import cast
 
 import pytest
 import src.training.coordinator as coordinator_module
+from src.evaluation.ladder import PrimaryLadderEloObservation
 from src.replay.manager import ReplayIngestion
 from src.self_play.protocol import (
     RunningSelfPlayState,
@@ -87,6 +88,10 @@ class _ReplayManager:
 
 @dataclass
 class _EvaluationManager:
+    @property
+    def completed_primary_ladder_elos(self) -> tuple[PrimaryLadderEloObservation, ...]:
+        return ()
+
     def start(self) -> None:
         pass
 
@@ -167,6 +172,9 @@ class _SelfPlayGroup:
 @dataclass
 class _TrainingSession:
     has_pending_quantum: bool = False
+
+    def observe_primary_ladder_elos(self, observations: tuple[PrimaryLadderEloObservation, ...]) -> None:
+        del observations
 
     def close(self) -> None:
         pass
