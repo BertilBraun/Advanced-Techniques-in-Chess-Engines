@@ -173,6 +173,18 @@ def test_v34_uses_the_primary_ladder_elo_candidate_start_policy() -> None:
     assert configuration.evaluation.openings.path == previous_configuration.evaluation.openings.path
 
 
+def test_v34_ema_fix_resume_uses_the_stopped_checkpoint() -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-ema-fix.yaml'
+    )
+
+    assert configuration.run.run_name == 'vast-chess-8gpu-integrated-v34'
+    assert configuration.run.resume.mode == 'checkpoint'
+    assert configuration.run.resume.checkpoint_manifest_path.endswith('checkpoint_387.json')
+    assert configuration.run.resume.generation == 387
+    assert configuration.training.save_path.endswith('vast-chess-8gpu-integrated-v34')
+
+
 @pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))
 def test_enabled_forced_playout_coefficient_must_be_positive_and_finite(coefficient: float) -> None:
     with pytest.raises(ValidationError):
