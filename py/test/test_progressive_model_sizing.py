@@ -123,7 +123,7 @@ def _checkpoint(tmp_path: Path, model_id: str, generation: int) -> CheckpointRef
 
 
 def _latch_candidate_start(store: ProgressiveTrainingStateStore) -> None:
-    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=99.0),))
+    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=4.9),))
 
 
 @pytest.mark.parametrize('model_count', (2, 4))
@@ -226,30 +226,52 @@ def test_candidate_start_ema_has_a_persisted_zero_baseline(tmp_path: Path) -> No
     store = ProgressiveTrainingStateStore(state_path, _configuration())
 
     assert store.state.candidate_start.latest_boundary_seconds == 0
+    assert store.state.candidate_start.ema_observations == 0
     assert store.state.candidate_start.ema_elo == 0.0
     assert store.state.candidate_start.instantaneous_ema_gain_per_hour is None
     assert not store.state.candidate_start.latched
-    assert json.loads(state_path.read_text(encoding='utf-8'))['schema_version'] == 2
+    assert json.loads(state_path.read_text(encoding='utf-8'))['schema_version'] == 3
 
 
 def test_candidate_starts_only_below_the_gain_threshold(tmp_path: Path) -> None:
     exact = ProgressiveTrainingStateStore(tmp_path / 'exact.json', _configuration())
-    exact_updates = exact.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=100.0),))
+    exact_updates = exact.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=5.0),))
 
     assert exact_updates[0].instantaneous_ema_gain_per_hour == pytest.approx(5.0)
     assert not exact.state.candidate_start.latched
     assert exact.begin_quantum(100_000.0, _replay(tmp_path), 0, 4).required_model_ids == ('small',)
 
     below = ProgressiveTrainingStateStore(tmp_path / 'below.json', _configuration())
-    below.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=99.0),))
+    below.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=4.9),))
 
     assert below.state.candidate_start.latched
     assert below.begin_quantum(0.0, _replay(tmp_path), 0, 4).required_model_ids == ('small', 'medium')
 
 
+def test_candidate_start_ema_matches_tensorboard_bias_correction(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration())
+
+    updates = store.observe_primary_ladder_elos(
+        (
+            PrimaryLadderEloObservation(boundary_seconds=1800, elo=800.0),
+            PrimaryLadderEloObservation(boundary_seconds=3600, elo=1000.0),
+            PrimaryLadderEloObservation(boundary_seconds=5400, elo=1200.0),
+        )
+    )
+
+    raw_ema = 0.05 * 1200.0 + 0.95 * (0.05 * 1000.0 + 0.95 * 0.05 * 800.0)
+    expected_ema = raw_ema / (1.0 - 0.95**3)
+    previous_raw_ema = 0.05 * 1000.0 + 0.95 * 0.05 * 800.0
+    previous_ema = previous_raw_ema / (1.0 - 0.95**2)
+
+    assert updates[-1].ema_observations == 3
+    assert updates[-1].ema_elo == pytest.approx(expected_ema)
+    assert updates[-1].instantaneous_ema_gain_per_hour == pytest.approx((expected_ema - previous_ema) / 0.5)
+
+
 def test_candidate_start_latch_never_clears(tmp_path: Path) -> None:
     store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration())
-    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=99.0),))
+    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=4.9),))
     store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=7200, elo=5000.0),))
 
     assert store.state.candidate_start.instantaneous_ema_gain_per_hour is not None
@@ -272,7 +294,8 @@ def test_candidate_start_recovers_and_ignores_duplicate_or_older_boundaries(tmp_
     )
 
     assert tuple(update.latest_boundary_seconds for update in updates) == (7200,)
-    assert restarted.state.candidate_start.ema_elo == pytest.approx(14.25)
+    assert restarted.state.candidate_start.ema_observations == 2
+    assert restarted.state.candidate_start.ema_elo == pytest.approx(146.15384615384616)
     assert restarted.state.candidate_start.latest_boundary_seconds == 7200
     assert not restarted.state.candidate_start.latched
 

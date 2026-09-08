@@ -186,4 +186,6 @@ Each model writes separate TensorBoard series below `progressive_models/<model-i
 loss, gradient norm, local optimizer steps, and quantum duration. `progressive/active_model_index` records the
 published stage. Candidate-start telemetry records `progressive/candidate_start/ema_elo`,
 `instantaneous_ema_gain_per_hour`, `minimum_worthwhile_gain_per_hour`, and `latched` at elapsed evaluation boundaries.
+The Elo series uses TensorBoard's bias-corrected 0.95 EMA, and the gain rate is the change between consecutive
+corrected EMA values divided by the elapsed boundary interval.
 Evaluation and self-play series remain attached only to the globally published model generation.

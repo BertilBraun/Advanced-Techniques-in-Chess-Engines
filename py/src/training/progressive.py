@@ -138,9 +138,21 @@ class ProgressiveCandidateState(FrozenModel):
 class EloPlateauCandidateStartState(FrozenModel):
     kind: Literal['elo_plateau']
     latest_boundary_seconds: int = Field(ge=0)
+    ema_observations: int = Field(ge=0)
     ema_elo: float = Field(ge=0.0, allow_inf_nan=False)
     instantaneous_ema_gain_per_hour: float | None = Field(default=None, allow_inf_nan=False)
     latched: bool
+
+    @model_validator(mode='after')
+    def validate_observation_state(self) -> EloPlateauCandidateStartState:
+        if self.ema_observations == 0:
+            if self.latest_boundary_seconds != 0 or self.ema_elo != 0.0:
+                raise ValueError('An empty Elo EMA must remain at its zero baseline.')
+            if self.instantaneous_ema_gain_per_hour is not None:
+                raise ValueError('An empty Elo EMA cannot have a gain rate.')
+        elif self.latest_boundary_seconds == 0:
+            raise ValueError('An observed Elo EMA must have a positive evaluation boundary.')
+        return self
 
 
 class ElapsedCandidateStartState(FrozenModel):
@@ -186,7 +198,7 @@ class PendingProgressiveQuantum(FrozenModel):
 
 
 class ProgressiveTrainingState(FrozenModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     active_model_id: str
     candidates: tuple[ProgressiveCandidateState, ...]
     candidate_start: CandidateStartState
@@ -224,11 +236,17 @@ class ProgressiveTrainingStateStore:
             if observation.boundary_seconds <= candidate_start.latest_boundary_seconds:
                 continue
             elapsed_hours = (observation.boundary_seconds - candidate_start.latest_boundary_seconds) / SECONDS_PER_HOUR
-            ema_elo = ELO_EMA_DECAY * candidate_start.ema_elo + (1.0 - ELO_EMA_DECAY) * observation.elo
+            ema_observations = candidate_start.ema_observations + 1
+            previous_weight = 1.0 - ELO_EMA_DECAY**candidate_start.ema_observations
+            current_weight = 1.0 - ELO_EMA_DECAY**ema_observations
+            ema_elo = (
+                ELO_EMA_DECAY * candidate_start.ema_elo * previous_weight + (1.0 - ELO_EMA_DECAY) * observation.elo
+            ) / current_weight
             gain_per_hour = (ema_elo - candidate_start.ema_elo) / elapsed_hours
             candidate_start = EloPlateauCandidateStartState(
                 kind='elo_plateau',
                 latest_boundary_seconds=observation.boundary_seconds,
+                ema_observations=ema_observations,
                 ema_elo=ema_elo,
                 instantaneous_ema_gain_per_hour=gain_per_hour,
                 latched=(candidate_start.latched or gain_per_hour < start.minimum_worthwhile_gain_per_hour),
@@ -435,6 +453,7 @@ class ProgressiveTrainingStateStore:
                 return EloPlateauCandidateStartState(
                     kind='elo_plateau',
                     latest_boundary_seconds=0,
+                    ema_observations=0,
                     ema_elo=0.0,
                     latched=False,
                 )
