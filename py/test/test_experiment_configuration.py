@@ -185,6 +185,18 @@ def test_v34_ema_fix_resume_uses_the_stopped_checkpoint() -> None:
     assert configuration.training.save_path.endswith('vast-chess-8gpu-integrated-v34')
 
 
+def test_v34_two_boundary_gate_resume_uses_the_stopped_checkpoint() -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-two-boundary-gate.yaml'
+    )
+
+    assert configuration.run.run_name == 'vast-chess-8gpu-integrated-v34'
+    assert configuration.run.resume.mode == 'checkpoint'
+    assert configuration.run.resume.checkpoint_manifest_path.endswith('checkpoint_511.json')
+    assert configuration.run.resume.generation == 511
+    assert configuration.training.save_path.endswith('vast-chess-8gpu-integrated-v34')
+
+
 @pytest.mark.parametrize('coefficient', (0.0, -1.0, float('inf'), float('nan')))
 def test_enabled_forced_playout_coefficient_must_be_positive_and_finite(coefficient: float) -> None:
     with pytest.raises(ValidationError):
