@@ -315,6 +315,11 @@ class ProgressiveTrainingSession(TrainingSession):
             threshold,
             step,
         )
+        log_scalar(
+            'progressive/candidate_start/consecutive_below_threshold_observations',
+            state.consecutive_below_threshold_observations,
+            step,
+        )
         log_scalar('progressive/candidate_start/latched', float(state.latched), step)
 
 

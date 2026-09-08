@@ -13,6 +13,7 @@ from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 
 ELO_EMA_DECAY = 0.95
+ELO_PLATEAU_CONFIRMATION_OBSERVATIONS = 2
 SECONDS_PER_HOUR = 3_600.0
 SECONDS_PER_DAY = 86_400.0
 
@@ -141,6 +142,7 @@ class EloPlateauCandidateStartState(FrozenModel):
     ema_observations: int = Field(ge=0)
     ema_elo: float = Field(ge=0.0, allow_inf_nan=False)
     instantaneous_ema_gain_per_hour: float | None = Field(default=None, allow_inf_nan=False)
+    consecutive_below_threshold_observations: int = Field(ge=0)
     latched: bool
 
     @model_validator(mode='after')
@@ -150,8 +152,12 @@ class EloPlateauCandidateStartState(FrozenModel):
                 raise ValueError('An empty Elo EMA must remain at its zero baseline.')
             if self.instantaneous_ema_gain_per_hour is not None:
                 raise ValueError('An empty Elo EMA cannot have a gain rate.')
+            if self.consecutive_below_threshold_observations != 0:
+                raise ValueError('An empty Elo EMA cannot have below-threshold observations.')
         elif self.latest_boundary_seconds == 0:
             raise ValueError('An observed Elo EMA must have a positive evaluation boundary.')
+        if self.consecutive_below_threshold_observations > self.ema_observations:
+            raise ValueError('Below-threshold observations cannot exceed total Elo EMA observations.')
         return self
 
 
@@ -198,7 +204,7 @@ class PendingProgressiveQuantum(FrozenModel):
 
 
 class ProgressiveTrainingState(FrozenModel):
-    schema_version: Literal[3] = 3
+    schema_version: Literal[4] = 4
     active_model_id: str
     candidates: tuple[ProgressiveCandidateState, ...]
     candidate_start: CandidateStartState
@@ -243,13 +249,22 @@ class ProgressiveTrainingStateStore:
                 ELO_EMA_DECAY * candidate_start.ema_elo * previous_weight + (1.0 - ELO_EMA_DECAY) * observation.elo
             ) / current_weight
             gain_per_hour = (ema_elo - candidate_start.ema_elo) / elapsed_hours
+            consecutive_below_threshold_observations = (
+                candidate_start.consecutive_below_threshold_observations + 1
+                if gain_per_hour < start.minimum_worthwhile_gain_per_hour
+                else 0
+            )
             candidate_start = EloPlateauCandidateStartState(
                 kind='elo_plateau',
                 latest_boundary_seconds=observation.boundary_seconds,
                 ema_observations=ema_observations,
                 ema_elo=ema_elo,
                 instantaneous_ema_gain_per_hour=gain_per_hour,
-                latched=(candidate_start.latched or gain_per_hour < start.minimum_worthwhile_gain_per_hour),
+                consecutive_below_threshold_observations=consecutive_below_threshold_observations,
+                latched=(
+                    candidate_start.latched
+                    or consecutive_below_threshold_observations >= ELO_PLATEAU_CONFIRMATION_OBSERVATIONS
+                ),
             )
             updates.append(candidate_start)
         if updates:
@@ -455,6 +470,7 @@ class ProgressiveTrainingStateStore:
                     latest_boundary_seconds=0,
                     ema_observations=0,
                     ema_elo=0.0,
+                    consecutive_below_threshold_observations=0,
                     latched=False,
                 )
             case ElapsedCandidateStartConfiguration():

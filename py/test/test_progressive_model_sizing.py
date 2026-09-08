@@ -123,7 +123,12 @@ def _checkpoint(tmp_path: Path, model_id: str, generation: int) -> CheckpointRef
 
 
 def _latch_candidate_start(store: ProgressiveTrainingStateStore) -> None:
-    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=4.9),))
+    store.observe_primary_ladder_elos(
+        (
+            PrimaryLadderEloObservation(boundary_seconds=3600, elo=4.9),
+            PrimaryLadderEloObservation(boundary_seconds=7200, elo=4.9),
+        )
+    )
 
 
 @pytest.mark.parametrize('model_count', (2, 4))
@@ -229,11 +234,12 @@ def test_candidate_start_ema_has_a_persisted_zero_baseline(tmp_path: Path) -> No
     assert store.state.candidate_start.ema_observations == 0
     assert store.state.candidate_start.ema_elo == 0.0
     assert store.state.candidate_start.instantaneous_ema_gain_per_hour is None
+    assert store.state.candidate_start.consecutive_below_threshold_observations == 0
     assert not store.state.candidate_start.latched
-    assert json.loads(state_path.read_text(encoding='utf-8'))['schema_version'] == 3
+    assert json.loads(state_path.read_text(encoding='utf-8'))['schema_version'] == 4
 
 
-def test_candidate_starts_only_below_the_gain_threshold(tmp_path: Path) -> None:
+def test_candidate_starts_only_after_two_consecutive_observations_below_the_gain_threshold(tmp_path: Path) -> None:
     exact = ProgressiveTrainingStateStore(tmp_path / 'exact.json', _configuration())
     exact_updates = exact.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=5.0),))
 
@@ -244,8 +250,22 @@ def test_candidate_starts_only_below_the_gain_threshold(tmp_path: Path) -> None:
     below = ProgressiveTrainingStateStore(tmp_path / 'below.json', _configuration())
     below.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=4.9),))
 
+    assert below.state.candidate_start.consecutive_below_threshold_observations == 1
+    assert not below.state.candidate_start.latched
+    below.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=7200, elo=4.9),))
+
+    assert below.state.candidate_start.consecutive_below_threshold_observations == 2
     assert below.state.candidate_start.latched
     assert below.begin_quantum(0.0, _replay(tmp_path), 0, 4).required_model_ids == ('small', 'medium')
+
+
+def test_candidate_start_confirmation_resets_after_recovery(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration())
+    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=4.9),))
+    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=7200, elo=100.0),))
+
+    assert store.state.candidate_start.consecutive_below_threshold_observations == 0
+    assert not store.state.candidate_start.latched
 
 
 def test_candidate_start_ema_matches_tensorboard_bias_correction(tmp_path: Path) -> None:
@@ -271,11 +291,12 @@ def test_candidate_start_ema_matches_tensorboard_bias_correction(tmp_path: Path)
 
 def test_candidate_start_latch_never_clears(tmp_path: Path) -> None:
     store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration())
-    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=4.9),))
-    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=7200, elo=5000.0),))
+    _latch_candidate_start(store)
+    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=10800, elo=5000.0),))
 
     assert store.state.candidate_start.instantaneous_ema_gain_per_hour is not None
     assert store.state.candidate_start.instantaneous_ema_gain_per_hour > 5.0
+    assert store.state.candidate_start.consecutive_below_threshold_observations == 0
     assert store.state.candidate_start.latched
 
 
