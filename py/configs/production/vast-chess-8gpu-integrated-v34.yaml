@@ -14,3 +14,12 @@ training:
       minimum_worthwhile_gain_per_hour: 15.0
     promotion:
       maximum_relative_loss: 1.005
+
+chess:
+  self_play:
+    start_position:
+      kind: restart_state
+      standard_start_probability: 0.0
+      random_start_probability: 0.5
+      restart_start_probability: 0.5
+      maximum_random_opening_plies: 8

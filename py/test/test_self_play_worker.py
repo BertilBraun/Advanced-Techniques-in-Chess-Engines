@@ -517,7 +517,7 @@ def restart_parameters(standard_start_probability: float = 0.1) -> RestartStateS
         standard_start_probability=standard_start_probability,
         random_start_probability=0.0 if standard_start_probability == 1.0 else 0.4,
         restart_start_probability=0.0 if standard_start_probability == 1.0 else 0.5,
-        random_opening_plies=5,
+        maximum_random_opening_plies=8,
         uniform_restart_probability=0.3,
         candidate_visit_mass=0.85,
         minimum_candidates=2,
@@ -530,14 +530,17 @@ def restart_parameters(standard_start_probability: float = 0.1) -> RestartStateS
 
 
 class FakeRestartRandom:
-    def __init__(self, probability_draw: float) -> None:
+    def __init__(self, probability_draw: float, opening_plies: int = 0) -> None:
         self.probability_draw = probability_draw
+        self.opening_plies = opening_plies
 
     def random(self) -> float:
         return self.probability_draw
 
     def integers(self, low: int, high: int) -> int:
         assert low < high
+        if (low, high) == (0, 9):
+            return self.opening_plies
         return low
 
     def choice(self, values: tuple[int, ...]) -> int:
@@ -602,6 +605,27 @@ def test_restart_policy_can_choose_standard_initial_states(tmp_path: Path) -> No
     worker.close()
 
 
+@pytest.mark.parametrize('opening_plies', (0, 8))
+def test_restart_policy_samples_random_openings_through_the_inclusive_maximum(
+    tmp_path: Path,
+    opening_plies: int,
+) -> None:
+    worker = SelfPlayWorker(
+        cast(GameImplementation, FakeGame(restart_parameters=restart_parameters())),
+        parallel_game_count=1,
+        worker_id=0,
+        device_id=0,
+        inbox_path=tmp_path / 'inbox',
+    )
+    worker.random = cast(np.random.Generator, FakeRestartRandom(0.2, opening_plies=opening_plies))
+
+    worker.refresh_published_model(checkpoint(tmp_path, 0))
+
+    assert worker.active_games[0].action_ids == [0] * opening_plies
+    assert worker.random_starts == 1
+    worker.close()
+
+
 def test_restart_policy_falls_back_to_random_opening_when_archive_is_empty(tmp_path: Path) -> None:
     worker = SelfPlayWorker(
         cast(GameImplementation, FakeGame(restart_parameters=restart_parameters())),
@@ -610,11 +634,11 @@ def test_restart_policy_falls_back_to_random_opening_when_archive_is_empty(tmp_p
         device_id=0,
         inbox_path=tmp_path / 'inbox',
     )
-    worker.random = cast(np.random.Generator, FakeRestartRandom(0.9))
+    worker.random = cast(np.random.Generator, FakeRestartRandom(0.9, opening_plies=8))
 
     worker.refresh_published_model(checkpoint(tmp_path, 0))
 
-    assert worker.active_games[0].action_ids == [0] * 5
+    assert worker.active_games[0].action_ids == [0] * 8
     assert worker.random_starts == 1
     assert worker.empty_restart_fallbacks == 1
     worker.close()

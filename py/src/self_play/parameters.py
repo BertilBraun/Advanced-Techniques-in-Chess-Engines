@@ -21,7 +21,7 @@ class RestartStateStartParameters:
     standard_start_probability: float
     random_start_probability: float
     restart_start_probability: float
-    random_opening_plies: int
+    maximum_random_opening_plies: int
     uniform_restart_probability: float
     candidate_visit_mass: float
     minimum_candidates: int
@@ -44,8 +44,8 @@ class RestartStateStartParameters:
             and self.standard_start_probability + self.random_start_probability == 0.0
         ):
             raise ValueError('Restart-state self-play requires a non-restart fallback.')
-        if self.random_opening_plies <= 0:
-            raise ValueError('Random restart-state openings must contain at least one ply.')
+        if self.maximum_random_opening_plies < 0:
+            raise ValueError('Maximum random restart-state opening plies must be nonnegative.')
         if not 0.0 <= self.uniform_restart_probability <= 1.0:
             raise ValueError('Uniform restart probability must lie in [0, 1].')
         if not 0.0 < self.candidate_visit_mass <= 1.0:
@@ -132,8 +132,8 @@ class ResolvedSelfPlayParameters:
             case RandomOpeningStartParameters(maximum_plies=maximum_plies):
                 if self.maximum_game_plies is not None and self.maximum_game_plies <= maximum_plies:
                     raise ValueError('Maximum game plies must exceed maximum random opening plies.')
-            case RestartStateStartParameters(random_opening_plies=random_opening_plies):
-                if self.maximum_game_plies is not None and self.maximum_game_plies <= random_opening_plies:
+            case RestartStateStartParameters(maximum_random_opening_plies=maximum_random_opening_plies):
+                if self.maximum_game_plies is not None and self.maximum_game_plies <= maximum_random_opening_plies:
                     raise ValueError('Maximum game plies must exceed random opening plies.')
         if self.primary_sample_weight <= 0.0:
             raise ValueError('Primary sample weight must be positive.')

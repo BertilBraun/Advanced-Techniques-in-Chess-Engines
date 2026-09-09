@@ -228,7 +228,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             return self._new_true_start_game(search)
         if start_draw < parameters.standard_start_probability + parameters.random_start_probability:
             self.random_starts += 1
-            return self._new_fixed_random_opening_game(search, parameters.random_opening_plies)
+            return self._new_random_opening_game(search, parameters.maximum_random_opening_plies)
         reserved = archive.reserve(self.model_generation, parameters, self.random)
         if reserved is None:
             self.empty_restart_fallbacks += 1
@@ -238,7 +238,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
                 self.standard_starts += 1
                 return self._new_true_start_game(search)
             self.random_starts += 1
-            return self._new_fixed_random_opening_game(search, parameters.random_opening_plies)
+            return self._new_random_opening_game(search, parameters.maximum_random_opening_plies)
         position = self.game.state.initial_position()
         for action_id in reserved.action_prefix:
             if action_id not in self.game.state.legal_action_ids(position):
@@ -254,28 +254,6 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             action_ids=list(reserved.action_prefix),
             reserved_restart_action_id=reserved.action_id,
         )
-
-    def _new_fixed_random_opening_game(
-        self,
-        search: NativeSearchT,
-        opening_plies: int,
-    ) -> ActiveSelfPlayGame[NativeRootT]:
-        while True:
-            position = self.game.state.initial_position()
-            action_ids: list[int] = []
-            for _ in range(opening_plies):
-                action_id = int(self.random.choice(self.game.state.legal_action_ids(position)))
-                action_ids.append(action_id)
-                position = self.game.state.child_position(position, action_id)
-                if self.game.state.natural_terminal_wdl(position) is not None:
-                    break
-            if self.game.state.natural_terminal_wdl(position) is None:
-                return self._active_game(
-                    identity=self._next_identity(),
-                    root=search.new_root(position),
-                    started_at_seconds=time.time(),
-                    action_ids=action_ids,
-                )
 
     def _new_true_start_game(self, search: NativeSearchT) -> ActiveSelfPlayGame[NativeRootT]:
         return self._active_game(

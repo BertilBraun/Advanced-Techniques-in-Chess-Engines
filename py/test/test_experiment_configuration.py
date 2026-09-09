@@ -169,6 +169,12 @@ def test_v34_uses_the_primary_ladder_elo_candidate_start_policy() -> None:
         'chess-cnn-12x128-fromto',
         'chess-cnn-14x160-fromto',
     )
+    start_position = configuration.chess.self_play.start_position
+    assert start_position.kind == 'restart_state'
+    assert start_position.standard_start_probability == 0.0
+    assert start_position.random_start_probability == 0.5
+    assert start_position.restart_start_probability == 0.5
+    assert start_position.maximum_random_opening_plies == 8
     assert configuration.evaluation.dataset.path == previous_configuration.evaluation.dataset.path
     assert configuration.evaluation.openings.path == previous_configuration.evaluation.openings.path
 
@@ -194,6 +200,18 @@ def test_v34_two_boundary_gate_resume_uses_the_stopped_checkpoint() -> None:
     assert configuration.run.resume.mode == 'checkpoint'
     assert configuration.run.resume.checkpoint_manifest_path.endswith('checkpoint_511.json')
     assert configuration.run.resume.generation == 511
+    assert configuration.training.save_path.endswith('vast-chess-8gpu-integrated-v34')
+
+
+def test_v34_random_opening_resume_uses_the_stopped_checkpoint() -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-random-openings.yaml'
+    )
+
+    assert configuration.run.run_name == 'vast-chess-8gpu-integrated-v34'
+    assert configuration.run.resume.mode == 'checkpoint'
+    assert configuration.run.resume.checkpoint_manifest_path.endswith('checkpoint_914.json')
+    assert configuration.run.resume.generation == 914
     assert configuration.training.save_path.endswith('vast-chess-8gpu-integrated-v34')
 
 
@@ -585,8 +603,8 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
-    # Re-pinned 2026-09-07: fixed and progressive model sizing became distinct configuration variants.
-    assert experiment_configuration_sha256(frozen) == '45db9f4ae454eedf311a66349e54748e7b57c1840c3e32315204c48479643498'
+    # Re-pinned 2026-09-09: restart-state openings now declare a maximum uniformly sampled ply count.
+    assert experiment_configuration_sha256(frozen) == 'da334ffea36a593cfb3566b91f5b7f8e3c8f8f1e851566665e976cf82db9da73'
 
 
 @pytest.mark.parametrize(

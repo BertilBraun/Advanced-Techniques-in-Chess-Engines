@@ -206,7 +206,7 @@ chess:
       standard_start_probability: 0.1
       random_start_probability: 0.4
       restart_start_probability: 0.5
-      random_opening_plies: 5
+      maximum_random_opening_plies: 5
       uniform_restart_probability: 0.3
       candidate_visit_mass: 0.85
       minimum_candidates: 2

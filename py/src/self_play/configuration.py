@@ -191,7 +191,7 @@ class RestartStateStartConfiguration(FrozenModel):
     standard_start_probability: float = Field(ge=0.0, le=1.0)
     random_start_probability: float = Field(ge=0.0, le=1.0)
     restart_start_probability: float = Field(ge=0.0, le=1.0)
-    random_opening_plies: int = Field(gt=0)
+    maximum_random_opening_plies: int = Field(ge=0)
     uniform_restart_probability: float = Field(ge=0.0, le=1.0)
     candidate_visit_mass: float = Field(gt=0.0, le=1.0)
     minimum_candidates: int = Field(ge=2)
@@ -224,7 +224,7 @@ class RestartStateStartConfiguration(FrozenModel):
             standard_start_probability=self.standard_start_probability,
             random_start_probability=self.random_start_probability,
             restart_start_probability=self.restart_start_probability,
-            random_opening_plies=self.random_opening_plies,
+            maximum_random_opening_plies=self.maximum_random_opening_plies,
             uniform_restart_probability=self.uniform_restart_probability,
             candidate_visit_mass=self.candidate_visit_mass,
             minimum_candidates=self.minimum_candidates,
