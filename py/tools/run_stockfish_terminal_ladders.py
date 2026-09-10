@@ -29,6 +29,11 @@ class Arguments:
     dry_run: bool
 
 
+def _safe_inference_batch_size(stockfish_nodes: tuple[int, ...], parallel_searches: int) -> int:
+    # The smallest shard owns one opening pair, hence one candidate root per simultaneously played rung.
+    return len(stockfish_nodes) * parallel_searches
+
+
 def _ladder_command(
     arguments: Arguments,
     model_searches: int,
@@ -68,7 +73,7 @@ def _ladder_command(
         '--inference-workers',
         '1',
         '--inference-batch-size',
-        '64',
+        str(_safe_inference_batch_size(stockfish_nodes, parallel_searches)),
         '--outstanding-batches',
         '1',
         '--exploration-constant',
