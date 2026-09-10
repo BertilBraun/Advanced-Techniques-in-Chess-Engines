@@ -228,9 +228,9 @@ python -m tools.run_stockfish_terminal_ladders \
   --ten-thousand-devices 0 1 2 --eighty-thousand-devices 3 4 5 6 7
 ```
 
-The ladder supervisor keeps `parallel_searches` at 4 and 8. It caps inference batches at 8 for the two-rung 10k
-ladder and 24 for the three-rung 80k ladder, matching the leaves the smallest one-pair shard can populate without
-waiting indefinitely for a batch of 64.
+The ladder supervisor keeps `parallel_searches` at 4 and 8. It caps inference batches at 2 for the two-rung 10k
+ladder and 3 for the three-rung 80k ladder. A fresh tree contributes one root inference request per simultaneous rung
+before it can expand and fan out to parallel leaves, so these caps let the smallest one-pair shard start.
 
 After the user selects one Stockfish node count for each mode, launch all four 400-game matches concurrently. Each
 child shards its 200 paired openings over all eight GPUs. Policy-only is direct masked-policy argmax inference.
