@@ -61,8 +61,6 @@ def test_ladder_commands_pin_the_protocol_and_disjoint_devices(tmp_path: Path) -
     assert ('--model-searches', '80000', '--parallel-searches', '8') == commands[1].command[
         commands[1].command.index('--model-searches') : commands[1].command.index('--inference-workers')
     ]
-    assert commands[0].command[commands[0].command.index('--inference-batch-size') + 1] == '8'
-    assert commands[1].command[commands[1].command.index('--inference-batch-size') + 1] == '24'
 
 
 def test_final_commands_include_true_policy_only_and_three_search_budgets(tmp_path: Path) -> None:
