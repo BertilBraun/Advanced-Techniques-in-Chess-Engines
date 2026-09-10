@@ -15,15 +15,15 @@ treating the run as complete.
 
 The four reported model budgets are:
 
-| Label | `--model-searches` |
+| Label | Model action selection |
 | --- | ---: |
-| policy only | 1 |
-| shallow search | 64 |
-| deep search | 10,000 |
-| very deep search | 80,000 |
+| policy only | direct masked-policy argmax |
+| shallow search | 64 searches |
+| deep search | 10,000 searches |
+| very deep search | 80,000 searches |
 
-Policy-only uses direct inference. The searched final matches use per-request `parallel_searches` of
-4 at 64 searches and 8 at 10,000 and 80,000 searches. All use one inference worker, batch size 64,
+Policy-only uses direct inference. The searched final matches use `parallel_searches` of 1 at 64
+searches, 4 at 10,000, and 8 at 80,000. All use one inference worker, batch size 64,
 one outstanding batch, exploration constant 1.0, Stockfish 13 with one thread and 1,024 MiB hash, and the committed
 `py/reference/chess-elite-2025-11-balanced-4moves-200-v1-openings.json`. The opening manifest has 200
 pairs and file SHA-256 `40582c4f753e90d8ebd170498c37e3f4812bff38287e6bfa6db376e9eec70d39`.
@@ -60,20 +60,19 @@ the terminal-checkpoint match because they evaluate four different checkpoints o
 selected devices, start one process per used device, merge the results, and require the merged game
 indices to cover the requested games exactly once.
 
-Run the two ladders concurrently on disjoint devices: 10k on GPUs 0--2 and 80k on GPUs 3--7. Both use
-batch 64 and `parallel_searches=8`. Fetch the preserved archive concurrently with both ladders.
+Run the two ladders concurrently on disjoint devices: 10k on GPUs 0--2 and 80k on GPUs 3--7. Use batch
+64, parallelism 4 for 10k, and parallelism 8 for 80k. Fetch the preserved archive concurrently with
+both ladders.
 
-Each final match has 200 opening pairs. Do not run four ordinary eight-GPU gauntlet commands at once:
-that would load four model/search stacks on every 12 GB card and keep four inference queues that cannot
-batch together. Add a multi-budget gauntlet runner with one worker and one loaded search model per GPU.
-Each worker owns its shard of all four matches, sends the 64-, 10k-, and 80k-search roots through one
-native search instance with per-request budgets and parallelism 4/8/8, and uses direct inference for
-the policy-only group. When shallow groups finish, the same workers and GPUs continue the 80k group.
+Each final match has 200 opening pairs. Launch four ordinary gauntlet commands concurrently, each
+sharded over GPUs 0--7. Policy-only uses direct inference; 64 uses parallelism 1; 10k uses 4; and 80k
+uses 8. Monitor device memory and process health after launch. If four stacks do not fit, stop the
+failed phase cleanly and revise the allocation from measured memory.
 
 Keep the inference batch cap at 64. In the matched 800-search evaluation benchmark, parallelism 1 took
 219.6 seconds with batch 64 and 305.7 seconds with batch 320; parallelism 4 took 120.2 versus 158.6
 seconds. The self-play-sized batch cap was 32--39% slower because the evaluation population padded
-underfilled batches. Concurrent match groups should feed one shared 64-slot queue.
+underfilled batches. The four commands retain independent 64-slot inference queues.
 
 Parallelism 8 is an accepted throughput/strength trade for the two deep budgets. Its playing cost is
 unresolved (roughly 6--45 Elo in existing evidence), so retain it in every result and do not describe
@@ -83,7 +82,7 @@ The order is:
 
 1. Run the 10,000- and 80,000-search ladders concurrently on their pinned GPU sets.
 2. Present both ladders for user selection of the two final opponents.
-3. Run all four 400-game matches together through the shared multi-budget runner on all eight GPUs.
+3. Run all four 400-game matches concurrently as separate commands, each over all eight GPUs.
 4. Validate each `result.json`, its eight shard files, W/D/L total, game-index coverage, hashes, and
    paired-bootstrap interval before accepting the phase.
 
@@ -96,7 +95,7 @@ python -m tools.run_stockfish_ladder \
   --opening-manifest "$OPENINGS" --stockfish-executable "$STOCKFISH" \
   --stockfish-node-ladder 50000 100000 \
   --probe-games 10 --opening-selection-seed 20260815 --match-random-seed 20260816 \
-  --devices 0 1 2 --model-searches 10000 --parallel-searches 8 \
+  --devices 0 1 2 --model-searches 10000 --parallel-searches 4 \
   --inference-workers 1 --inference-batch-size 64 --outstanding-batches 1 \
   --exploration-constant 1.0 --output-directory "$OUTPUT/ladder-10k"
 ```
@@ -104,8 +103,7 @@ python -m tools.run_stockfish_ladder \
 The concurrently launched 80,000-search ladder uses `50000 100000 200000`, devices `3 4 5 6 7`,
 parallelism 8, and output directory `ladder-80k`.
 
-The existing command below remains useful for isolated reproduction. The production final phase uses
-the shared multi-budget runner so it loads one search stack per GPU:
+Command form for each final searched match:
 
 ```bash
 python -m tools.run_stockfish_gauntlet \
@@ -119,8 +117,8 @@ python -m tools.run_stockfish_gauntlet \
   --exploration-constant 1.0 --output-directory "$MATCH_OUTPUT"
 ```
 
-For isolated matches, use parallelism 4 at 64 searches and 8 at 10k/80k. Policy-only must use the
-shared runner's direct-inference group rather than describing a one-visit tree search as policy-only.
+Use parallelism 1 at 64 searches, 4 at 10k, and 8 at 80k. Policy-only requires a direct policy
+selector rather than describing a one-visit tree search as policy-only.
 The prior v29 10,000-search match took 2.06 hours for 200 games on one RTX 4070 SUPER. Treat roughly
 4--5 hours as the planning allowance for the shared phase's 80k tail and measure rather than claim
 linear scaling.
@@ -144,22 +142,16 @@ discarded before materialization. It stores sparse MCTS visit counts, the legal-
 discounted terminal-outcome WDL target, and the recorded search root value. The second treatment must
 therefore infer fresh policy and WDL distributions from the final checkpoint.
 
-Compare two target sources over the same frozen replay positions:
-
-1. **Search-target compression:** train from the replay's stored visit policy and value/outcome targets.
-2. **Teacher-head distillation:** run the final v34 network over those same encoded positions and train
-   from its raw policy and WDL distributions, without search.
-
-Holding positions, split, architecture, optimiser, steps, and seeds fixed makes the comparison answer
-whether searched labels transfer capability better than direct function imitation, and how quickly
-each target source trains. Independently generated teacher positions would confound the target source
-with a different state distribution and are unnecessary for this first comparison.
+The first experiment is search-target compression only: train from the replay's stored visit policy
+and value/outcome targets. Raw policy logits and raw network WDL predictions are not retained in the
+replay. A later teacher-head experiment must rerun the final checkpoint over positions to recreate
+those labels. When that follow-up is run, reuse the same replay positions and split so the comparison
+changes the labels without changing the state distribution.
 
 The existing distillation trainer does not directly read a production `ReplayStore`, so add a typed,
-read-only replay input path plus a batched final-teacher relabelling path before launch. Freeze the
-replay at the clean stop and record its layout, logical row count, physical ordering/state, and file
-hash. Do not fetch or copy the 10M replay before starting evaluation; retain it on the node and train
-from the read-only store after final evaluation.
+read-only replay input path before launch. Freeze the replay at the clean stop and record its layout,
+logical row count, physical ordering/state, and file hash. Do not fetch or copy the 10M replay before
+starting evaluation; retain it on the node and train from the read-only store after final evaluation.
 
 Under the current chess representation, useful from-to-head candidates around the target size are:
 
@@ -178,13 +170,17 @@ dataset. Use AdamW at 0.002, batch 1,024, a 1,000-step warmup, a high-rate plate
 annealing over the final 20%, and the from-to policy head. Select by held-out policy cross-entropy gap
 above the target-entropy floor; do not rank gaps below 0.005 nats without the second seed.
 
-Evaluate only the winning architecture. First measure teacher and student throughput on an idle GPU at
-the match's actual root population and pin that ratio. Then play 400 games against the teacher at:
+Evaluate only the winning architecture. First measure teacher and student end-to-end search throughput
+on an idle GPU at the match's actual root population and pin the student/teacher searches-per-second
+ratio. Parameter count and raw network throughput do not determine equal playing time because tree
+work and batching do not scale linearly with model size. Correct `tools.distill_match` to scale the
+student budget from `searches_per_second`; it currently records that field but uses
+`positions_per_second`.
 
-- equal searches at 64 and 10,000 searches per move;
-- equal compute at the same teacher budgets, giving the student the pinned throughput multiple;
-- the same Stockfish rung used for the teacher's 64-search final match, at both 64 searches and the
-  equal-compute student budget.
+Play 200 games (100 paired openings) against the teacher at equal searches and again with the student
+budget multiplied by the pinned search-throughput ratio. The second condition is equal expected search
+time per move; report actual move and match durations because it cannot guarantee exact wall-time
+equality. Expand to 400 games only if the first interval leaves the conclusion unresolved.
 
 Report parameter reduction, inference throughput ratio, held-out policy and WDL losses, student-minus-
 teacher Elo at equal searches and equal compute, and calibrated Stockfish Elo. The earlier 0.48M probe
