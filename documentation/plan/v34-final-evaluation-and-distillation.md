@@ -200,12 +200,12 @@ opening and engine hashes, GPU inventory, commands, wall times, W/D/L, intervals
 
 The executable local preparation is available as three modules, run from `py`:
 
-- `tools.run_v34_stockfish_ladders` launches both fixed ladders concurrently on disjoint configurable GPU sets. It
+- `tools.run_stockfish_terminal_ladders` launches both fixed ladders concurrently on disjoint configurable GPU sets. It
   does not fetch archives and rejects an existing output root.
-- `tools.run_v34_final_evaluations` requires the four user-selected Stockfish node counts and launches policy-only,
+- `tools.run_stockfish_terminal_evaluations` requires the four user-selected Stockfish node counts and launches policy-only,
   64-search, 10,000-search, and 80,000-search matches concurrently. Each child uses every configured GPU and an
   independent batch-64 inference path. Policy-only is direct masked-policy argmax and is recorded as such.
-- `tools.run_v34_replay_distillation` hashes the frozen replay once and passes that recorded digest to each read-only
+- `tools.run_replay_compression_experiment` hashes the frozen replay once and passes that recorded digest to each read-only
   trainer without eight repeated full-store hashes. It trains the four approximately 0.5M-parameter
   architectures at two seeds on all eight GPUs, selects by mean held-out policy gap above floor, measures the
   end-to-end search-throughput ratio at the match root population, and runs the 200-game equal-search and
@@ -213,4 +213,4 @@ The executable local preparation is available as three modules, run from `py`:
   immutable request manifest exactly matches all resolved inputs and settings; incomplete evidence is never
   overwritten.
 
-Exact commands and arguments are maintained in [`py/README.md`](../../py/README.md#v34-terminal-evaluation-and-replay-compression).
+Exact commands and arguments are maintained in [`py/README.md`](../../py/README.md#terminal-chess-evaluation-and-replay-compression).

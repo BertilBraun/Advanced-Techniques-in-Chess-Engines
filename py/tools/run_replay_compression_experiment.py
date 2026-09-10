@@ -12,8 +12,8 @@ from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
+from tools.command_orchestration import ChildCommand, parse_devices, run_child_commands, validate_input_paths
 from tools.distill_match import DistillationMatchResult
-from tools.v34_orchestration import ChildCommand, parse_devices, run_child_commands, validate_input_paths
 
 HEADLINE_PATTERN = re.compile(r'headline policy gap above floor ([0-9.]+)')
 
@@ -422,7 +422,7 @@ def run_distillation(arguments: Arguments) -> int:
 
 
 def parse_arguments() -> Arguments:
-    parser = argparse.ArgumentParser(description='Train, select, and evaluate the v34 replay-compression student.')
+    parser = argparse.ArgumentParser(description='Train, select, and evaluate a replay-compression student.')
     parser.add_argument('--teacher-run-state', required=True, type=Path)
     parser.add_argument('--teacher-generation', required=True, type=int)
     parser.add_argument('--replay-store', required=True, type=Path)

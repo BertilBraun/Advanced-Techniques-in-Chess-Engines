@@ -5,7 +5,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.v34_orchestration import (
+from tools.command_orchestration import (
     ChildCommand,
     parse_devices,
     run_child_commands,
@@ -109,7 +109,7 @@ def run_evaluations(arguments: Arguments) -> int:
 
 
 def parse_arguments() -> Arguments:
-    parser = argparse.ArgumentParser(description='Run all four v34 final Stockfish evaluations concurrently.')
+    parser = argparse.ArgumentParser(description='Run four terminal-checkpoint Stockfish evaluations concurrently.')
     parser.add_argument('--experiment', required=True, type=Path)
     parser.add_argument('--run-directory', required=True, type=Path)
     parser.add_argument('--checkpoint-generation', required=True, type=int)

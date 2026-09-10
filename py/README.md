@@ -215,13 +215,13 @@ exact runner command and independently resolved canonical configuration hash. Th
 polling interval, and empty-wait control may change at runtime. Deleting the summary intentionally creates a fresh
 queue and will make every configured experiment eligible to run again.
 
-## v34 terminal evaluation and replay compression
+## Terminal chess evaluation and replay compression
 
 After the v34 run has stopped cleanly and all GPUs are idle, run the two opponent-selection ladders from `py`.
 This command does not fetch the run archive; start the manual `run_control.sh fetch` separately.
 
 ```text
-python -m tools.run_v34_stockfish_ladders \
+python -m tools.run_stockfish_terminal_ladders \
   --experiment "$EXPERIMENT_CONFIG" --run-directory "$RUN_STATE" \
   --checkpoint-generation "$GENERATION" --opening-manifest "$OPENINGS" \
   --stockfish-executable "$STOCKFISH" --output-root "$OUTPUT/ladders" \
@@ -232,7 +232,7 @@ After the user selects one Stockfish node count for each mode, launch all four 4
 child shards its 200 paired openings over all eight GPUs. Policy-only is direct masked-policy argmax inference.
 
 ```text
-python -m tools.run_v34_final_evaluations \
+python -m tools.run_stockfish_terminal_evaluations \
   --experiment "$EXPERIMENT_CONFIG" --run-directory "$RUN_STATE" \
   --checkpoint-generation "$GENERATION" --opening-manifest "$OPENINGS" \
   --stockfish-executable "$STOCKFISH" --output-root "$OUTPUT/final" \
@@ -247,7 +247,7 @@ and equal-expected-time matches. `--searches-per-move` and `--parallel-searches`
 used for throughput and both matches.
 
 ```text
-python -m tools.run_v34_replay_distillation \
+python -m tools.run_replay_compression_experiment \
   --teacher-run-state "$RUN_STATE" --teacher-generation "$GENERATION" \
   --replay-store "$RUN_STATE/replay.bin" --experiment "$EXPERIMENT_CONFIG" \
   --opening-manifest "$OPENINGS" --output-root "$OUTPUT/distillation" \

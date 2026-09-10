@@ -5,18 +5,18 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from tools.run_v34_final_evaluations import Arguments as FinalArguments
-from tools.run_v34_final_evaluations import child_commands as final_commands
-from tools.run_v34_replay_distillation import Arguments as DistillationArguments
-from tools.run_v34_replay_distillation import (
+from tools.command_orchestration import ChildCommand, run_child_commands
+from tools.run_replay_compression_experiment import Arguments as DistillationArguments
+from tools.run_replay_compression_experiment import (
     _validate_or_write_request_manifest,
     request_manifest,
     training_arms,
     training_commands,
 )
-from tools.run_v34_stockfish_ladders import Arguments as LadderArguments
-from tools.run_v34_stockfish_ladders import child_commands as ladder_commands
-from tools.v34_orchestration import ChildCommand, run_child_commands
+from tools.run_stockfish_terminal_evaluations import Arguments as FinalArguments
+from tools.run_stockfish_terminal_evaluations import child_commands as final_commands
+from tools.run_stockfish_terminal_ladders import Arguments as LadderArguments
+from tools.run_stockfish_terminal_ladders import child_commands as ladder_commands
 
 
 def _ladder_arguments(tmp_path: Path) -> LadderArguments:
@@ -172,7 +172,7 @@ def test_distillation_sweep_skips_completed_checkpoint_and_log(tmp_path: Path, m
         return run_state.name == completed.name
 
     monkeypatch.setattr(
-        'tools.run_v34_replay_distillation._arm_is_complete',
+        'tools.run_replay_compression_experiment._arm_is_complete',
         completed_first,
     )
 
