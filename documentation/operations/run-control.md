@@ -97,7 +97,8 @@ Copies, point-in-time, into `<archive-root>/<run-name>-<UTC timestamp>/`:
   `resource-telemetry.jsonl`, `credit-ledger.json`, `evaluations/`, `checkpoint_*.json` manifests
 - `run/search-budget-labels/` and compact replay journals — finalized learned-budget reports, calibration state,
   checksummed shard manifests, cleanup receipts, label-source cohort locators, and replay write-back receipts
-- `run/models/` — the latest retained model and optimizer weights for evaluation or resumption
+- the newest resumable root checkpoint weights and the inference weights used by the newest completed evaluation
+- `run/models/` — the latest retained progressive-stage model and optimizer weights
 - `logs/` — the run log directory and supervisor stdout/stderr
 - `config/` — the authored configuration, the approval JSON, the registry entry
 

@@ -359,6 +359,51 @@ archive_copy() {
     fi
 }
 
+archive_checkpoint_weights() {
+    local checkpoint_manifest="$1" destination="$2"
+    [[ -f "${checkpoint_manifest}" ]] || return 0
+    local artifact_name
+    while IFS= read -r artifact_name; do
+        [[ -n "${artifact_name}" ]] || continue
+        artifact_name="$(basename "${artifact_name}")"
+        archive_copy "$(dirname "${checkpoint_manifest}")/${artifact_name}" "${destination}/${artifact_name}"
+    done < <(
+        "$(venv_python)" - "${checkpoint_manifest}" <<'PYTHON'
+import json
+import sys
+
+manifest = json.load(open(sys.argv[1], encoding='utf-8'))
+for key in ('model_path', 'optimizer_path', 'inference_model_path'):
+    print(manifest[key])
+PYTHON
+    )
+}
+
+latest_evaluated_checkpoint_manifest() {
+    "$(venv_python)" - "${SAVE_PATH}/evaluations" "${SAVE_PATH}" <<'PYTHON'
+import json
+import sys
+from pathlib import Path
+
+evaluation_directory = Path(sys.argv[1])
+save_path = Path(sys.argv[2])
+latest: tuple[float, int] | None = None
+for result_path in evaluation_directory.glob('*.json'):
+    try:
+        result = json.loads(result_path.read_text(encoding='utf-8'))
+        job = result['job']
+        generation = int(job['candidate']['generation'])
+        boundary_seconds = float(job['boundary_seconds'])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        continue
+    candidate = (boundary_seconds, generation)
+    if latest is None or candidate > latest:
+        latest = candidate
+if latest is not None:
+    print(save_path / f'checkpoint_{latest[1]}.json')
+PYTHON
+}
+
 command_preserve() {
     local run_name="$1"
     load_registry "${run_name}"
@@ -391,9 +436,14 @@ command_preserve() {
     for checkpoint_manifest in "${SAVE_PATH}"/checkpoint_*.json; do
         [[ -f "${checkpoint_manifest}" ]] && archive_copy "${checkpoint_manifest}" "${partial}/run/$(basename "${checkpoint_manifest}")"
     done
-    # The weights themselves, not just the manifests that name them: training retains only the most
-    # recent generations, so this is tens of megabytes, and without it an archive cannot re-evaluate
-    # or resume the model the run produced.
+    # Keep both the newest resumable checkpoint and the checkpoint used by the newest completed evaluation.
+    # Their generations can differ because evaluation runs asynchronously after publication.
+    local latest_checkpoint latest_evaluated_checkpoint
+    latest_checkpoint="$(find "${SAVE_PATH}" -maxdepth 1 -type f -name 'checkpoint_*.json' | sort -V | tail -1)"
+    latest_evaluated_checkpoint="$(latest_evaluated_checkpoint_manifest)"
+    archive_checkpoint_weights "${latest_checkpoint}" "${partial}/run"
+    archive_checkpoint_weights "${latest_evaluated_checkpoint}" "${partial}/run"
+    # Progressive sizing keeps its private restart checkpoints below models/.
     archive_copy "${SAVE_PATH}/models" "${partial}/run/models"
 
     (
