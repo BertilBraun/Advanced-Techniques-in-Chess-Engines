@@ -14,6 +14,7 @@ from src.evaluation.ladder import (
     bootstrap_ladder_elo_interval,
     fit_ladder_elo,
 )
+from src.training.checkpoint import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
@@ -57,10 +58,13 @@ class LadderEloFit(FrozenModel):
 
 
 class StockfishLadderResult(FrozenModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     source_revision: str = Field(min_length=40, max_length=40)
     tool_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    experiment_path: Path
+    experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     checkpoint_generation: int = Field(ge=0)
+    evaluated_checkpoint: CheckpointReference
     opening_manifest_path: Path
     opening_manifest_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     stockfish_executable_path: Path
@@ -202,7 +206,10 @@ def run_ladder(arguments: Arguments) -> StockfishLadderResult:
     result = StockfishLadderResult(
         source_revision=first_gauntlet_result.source_revision,
         tool_sha256=file_sha256(Path(__file__)),
+        experiment_path=first_gauntlet_result.experiment_path,
+        experiment_configuration_sha256=first_gauntlet_result.experiment_configuration_sha256,
         checkpoint_generation=arguments.checkpoint_generation,
+        evaluated_checkpoint=first_gauntlet_result.evaluated_checkpoint,
         opening_manifest_path=arguments.opening_manifest.resolve(),
         opening_manifest_sha256=first_gauntlet_result.opening_manifest_sha256,
         stockfish_executable_path=arguments.stockfish_executable.resolve(),

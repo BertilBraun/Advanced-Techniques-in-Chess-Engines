@@ -36,7 +36,7 @@ from src.evaluation.match import (
     run_match,
 )
 from src.evaluation.statistics import aggregate_match
-from src.experiment.configuration import load_experiment_configuration
+from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.contract import ChessPosition
 from src.games.chess.interactive.analysis import TimedMctsAnalysis
@@ -114,11 +114,12 @@ class GauntletShardResult(FrozenModel):
 
 
 class StockfishGauntletResult(FrozenModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     source_revision: str = Field(min_length=40, max_length=40)
     tool_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     started_at_utc: datetime
     experiment_path: Path
+    experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     run_directory: Path
     evaluated_checkpoint: CheckpointReference
     opening_manifest_path: Path
@@ -670,6 +671,7 @@ def _rung_result(
         tool_sha256=file_sha256(Path(__file__)),
         started_at_utc=started_at_utc,
         experiment_path=arguments.experiment.resolve(),
+        experiment_configuration_sha256=experiment_configuration_sha256(configuration),
         run_directory=arguments.run_directory.resolve(),
         evaluated_checkpoint=checkpoint,
         opening_manifest_path=arguments.opening_manifest.resolve(),

@@ -102,6 +102,9 @@ def child_commands(arguments: Arguments) -> tuple[ChildCommand, ...]:
 
 def run_evaluations(arguments: Arguments) -> int:
     outcomes = run_child_commands(child_commands(arguments), arguments.dry_run)
+    for outcome in outcomes:
+        if outcome.return_code == 0:
+            print(f'{outcome.name} result: {arguments.output_root / outcome.name / "result.json"}', flush=True)
     return int(any(outcome.return_code != 0 for outcome in outcomes))
 
 
