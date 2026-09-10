@@ -22,9 +22,9 @@ The four reported model budgets are:
 | deep search | 10,000 |
 | very deep search | 80,000 |
 
-The policy-only match uses one search and `parallel_searches=1`; the searched final matches use
-`parallel_searches=4`. All use one inference worker, batch size 64, one outstanding batch, exploration
-constant 1.0, Stockfish 13 with one thread and 1,024 MiB hash, and the committed
+Policy-only uses direct inference. The searched final matches use per-request `parallel_searches` of
+4 at 64 searches and 8 at 10,000 and 80,000 searches. All use one inference worker, batch size 64,
+one outstanding batch, exploration constant 1.0, Stockfish 13 with one thread and 1,024 MiB hash, and the committed
 `py/reference/chess-elite-2025-11-balanced-4moves-200-v1-openings.json`. The opening manifest has 200
 pairs and file SHA-256 `40582c4f753e90d8ebd170498c37e3f4812bff38287e6bfa6db376e9eec70d39`.
 
@@ -60,24 +60,30 @@ the terminal-checkpoint match because they evaluate four different checkpoints o
 selected devices, start one process per used device, merge the results, and require the merged game
 indices to cover the requested games exactly once.
 
-Each 400-game gauntlet has 200 opening pairs. An eight-GPU assignment gives each GPU 25 pairs/50 games,
-of which roughly 25 positions are candidate turns at any instant. With `parallel_searches=4`, each GPU
-can expose about 100 in-flight leaves to the inference path. The configured inference batch itself is
-64, so four-way search parallelism is sufficient to keep it fed without creating a 100-position model
-batch.
+Run the two ladders concurrently on disjoint devices: 10k on GPUs 0--2 and 80k on GPUs 3--7. Both use
+batch 64 and `parallel_searches=8`. Fetch the preserved archive concurrently with both ladders.
 
-Run all four final matches sequentially on all eight GPUs. This avoids the long idle tail created by a
-four/four split: 10k finishes much earlier than 80k, whereas sequential execution gives every phase the
-whole machine. Use `parallel_searches=4` for 64, 10k, and 80k. Policy-only uses one search and therefore
-`parallel_searches=1`. The measured playing cost of parallel search is unresolved (roughly 6--45 Elo in
-existing evidence), so do not describe the searched results as directly interchangeable with v29's
-`parallel_searches=1` number.
+Each final match has 200 opening pairs. Do not run four ordinary eight-GPU gauntlet commands at once:
+that would load four model/search stacks on every 12 GB card and keep four inference queues that cannot
+batch together. Add a multi-budget gauntlet runner with one worker and one loaded search model per GPU.
+Each worker owns its shard of all four matches, sends the 64-, 10k-, and 80k-search roots through one
+native search instance with per-request budgets and parallelism 4/8/8, and uses direct inference for
+the policy-only group. When shallow groups finish, the same workers and GPUs continue the 80k group.
+
+Keep the inference batch cap at 64. In the matched 800-search evaluation benchmark, parallelism 1 took
+219.6 seconds with batch 64 and 305.7 seconds with batch 320; parallelism 4 took 120.2 versus 158.6
+seconds. The self-play-sized batch cap was 32--39% slower because the evaluation population padded
+underfilled batches. Concurrent match groups should feed one shared 64-slot queue.
+
+Parallelism 8 is an accepted throughput/strength trade for the two deep budgets. Its playing cost is
+unresolved (roughly 6--45 Elo in existing evidence), so retain it in every result and do not describe
+the numbers as directly interchangeable with v29's `parallel_searches=1` result.
 
 The order is:
 
-1. 10,000-search ladder.
-2. 80,000-search ladder.
-3. Run the four 400-game matches sequentially on all eight GPUs: policy-only, 64, 10,000, then 80,000.
+1. Run the 10,000- and 80,000-search ladders concurrently on their pinned GPU sets.
+2. Present both ladders for user selection of the two final opponents.
+3. Run all four 400-game matches together through the shared multi-budget runner on all eight GPUs.
 4. Validate each `result.json`, its eight shard files, W/D/L total, game-index coverage, hashes, and
    paired-bootstrap interval before accepting the phase.
 
@@ -90,15 +96,16 @@ python -m tools.run_stockfish_ladder \
   --opening-manifest "$OPENINGS" --stockfish-executable "$STOCKFISH" \
   --stockfish-node-ladder 50000 100000 \
   --probe-games 10 --opening-selection-seed 20260815 --match-random-seed 20260816 \
-  --devices 0 1 2 3 4 5 6 7 --model-searches 10000 --parallel-searches 4 \
+  --devices 0 1 2 --model-searches 10000 --parallel-searches 8 \
   --inference-workers 1 --inference-batch-size 64 --outstanding-batches 1 \
   --exploration-constant 1.0 --output-directory "$OUTPUT/ladder-10k"
 ```
 
-The 80,000-search ladder uses `50000 100000 200000`, changes the model budget to 80,000, and writes to
-`ladder-80k`.
+The concurrently launched 80,000-search ladder uses `50000 100000 200000`, devices `3 4 5 6 7`,
+parallelism 8, and output directory `ladder-80k`.
 
-Command form for each final match:
+The existing command below remains useful for isolated reproduction. The production final phase uses
+the shared multi-budget runner so it loads one search stack per GPU:
 
 ```bash
 python -m tools.run_stockfish_gauntlet \
@@ -112,11 +119,11 @@ python -m tools.run_stockfish_gauntlet \
   --exploration-constant 1.0 --output-directory "$MATCH_OUTPUT"
 ```
 
-Set `DEVICES` to `0 1 2 3 4 5 6 7` for every match. The policy-only match sets
-`PARALLEL_SEARCHES=1`; every searched match sets it to 4. The prior v29 10,000-search match took 2.06
-hours for 200 games on one RTX 4070 SUPER; ideal eight-card scaling puts 400 games near 31 minutes
-before the parallel-search throughput gain. Treat roughly 4--5 hours as the planning allowance for
-80k on eight cards and measure rather than claim linear scaling.
+For isolated matches, use parallelism 4 at 64 searches and 8 at 10k/80k. Policy-only must use the
+shared runner's direct-inference group rather than describing a one-visit tree search as policy-only.
+The prior v29 10,000-search match took 2.06 hours for 200 games on one RTX 4070 SUPER. Treat roughly
+4--5 hours as the planning allowance for the shared phase's 80k tail and measure rather than claim
+linear scaling.
 
 With 200 paired opening clusters, the expected sampling interval is roughly +/-25--30 Elo near the
 chosen rung, based on the v29 paired variance. Report the actual paired-bootstrap interval. This does
@@ -131,6 +138,11 @@ generations, and the current encoded representation. That is more valuable for t
 than generating raw final-teacher head labels: the student learns from 600/800-visit improved policy
 targets. Scientifically this is fixed-replay compression rather than pure teacher-logit distillation,
 and it should be labelled that way.
+
+The replay does not contain raw policy logits or the source network's raw WDL prediction. Those are
+discarded before materialization. It stores sparse MCTS visit counts, the legal-action set, the
+discounted terminal-outcome WDL target, and the recorded search root value. The second treatment must
+therefore infer fresh policy and WDL distributions from the final checkpoint.
 
 Compare two target sources over the same frozen replay positions:
 
