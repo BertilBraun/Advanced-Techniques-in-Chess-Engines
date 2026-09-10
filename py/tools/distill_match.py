@@ -248,6 +248,15 @@ def _equal_compute_student_searches(
     return clamped, clamped != scaled
 
 
+def search_throughput_ratio(
+    teacher_throughput: ThroughputMeasurement,
+    student_throughput: ThroughputMeasurement,
+) -> float:
+    if teacher_throughput.searches_per_second <= 0.0:
+        raise ValueError('Teacher search throughput must be positive.')
+    return student_throughput.searches_per_second / teacher_throughput.searches_per_second
+
+
 def _score_to_elo(score: float) -> float | None:
     if score <= 0.0 or score >= 1.0:
         return None
@@ -405,7 +414,7 @@ def run_probe(arguments: Arguments) -> DistillationMatchResult:
                 openings,
                 measurement_search,
             )
-            throughput_ratio = student_throughput.positions_per_second / teacher_throughput.positions_per_second
+            throughput_ratio = search_throughput_ratio(teacher_throughput, student_throughput)
             _report_throughput(teacher_throughput, student_throughput, throughput_ratio)
             if arguments.mode == 'equal-compute':
                 student_searches_per_move, student_budget_clamped = _equal_compute_student_searches(

@@ -9,6 +9,7 @@ import torch
 from pydantic import Field
 from src.games.contracts import GameStateContract
 from src.games.representation import decode_packed_plane_bytes_into
+from src.replay.columnar import ReplayColumnViews
 from src.training.batch import TrainingBatch
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -179,4 +180,54 @@ def build_training_batch(
         sample_weights=torch.ones(batch_size, device=device),
         source_model_generations=torch.zeros(batch_size, dtype=torch.int64, device=device),
         source_created_at_seconds=torch.zeros(batch_size, dtype=torch.float64, device=device),
+    )
+
+
+def build_replay_training_batch(
+    columns: ReplayColumnViews,
+    state: GameStateContract,
+    action_size: int,
+    device: torch.device,
+) -> TrainingBatch:
+    batch_size = columns.row_count
+    decoded = np.empty(
+        (batch_size, state.representation.channels, state.representation.rows, state.representation.columns),
+        dtype=np.float32,
+    )
+    decode_packed_plane_bytes_into(
+        np.asarray(columns.encoded_state),
+        state.packed_plane_layout,
+        state.representation.binary_channels,
+        state.representation.scalar_channels,
+        decoded,
+    )
+
+    policy_targets = np.zeros((batch_size, action_size), dtype=np.float32)
+    entry_mask = np.arange(columns.policy.action_ids.shape[1])[None, :] < columns.policy.entry_count[:, None]
+    row_indices = np.repeat(np.arange(batch_size), entry_mask.sum(axis=1))
+    entry_counts = entry_mask.sum(axis=1)
+    action_ids = columns.policy.action_ids[entry_mask]
+    visit_counts = columns.policy.visit_counts[entry_mask].astype(np.float32)
+    totals = np.add.reduceat(visit_counts, np.concatenate(([0], np.cumsum(entry_counts)[:-1])))
+    policy_targets[row_indices, action_ids] = visit_counts / np.repeat(totals, entry_counts)
+
+    legal_action_ids = np.full(columns.policy.legal_action_ids.shape, -1, dtype=np.int64)
+    legal_mask = np.arange(columns.policy.legal_action_ids.shape[1])[None, :] < columns.policy.legal_count[:, None]
+    legal_action_ids[legal_mask] = columns.policy.legal_action_ids[legal_mask]
+    return TrainingBatch(
+        states=torch.from_numpy(decoded).to(device=device, non_blocking=True),
+        policy_targets=torch.from_numpy(policy_targets).to(device=device, non_blocking=True),
+        policy_legal_action_ids=torch.from_numpy(legal_action_ids).to(device=device, non_blocking=True),
+        wdl_targets=torch.from_numpy(np.asarray(columns.wdl_target)).to(device=device, non_blocking=True),
+        root_values=torch.from_numpy(np.asarray(columns.root_value)).to(device=device, non_blocking=True),
+        auxiliary_targets=(),
+        auxiliary_legal_action_ids=(),
+        auxiliary_eligibility=(),
+        sample_weights=torch.from_numpy(np.asarray(columns.sample_weight)).to(device=device, non_blocking=True),
+        source_model_generations=torch.from_numpy(columns.source_model_generation.astype(np.int64)).to(
+            device=device, non_blocking=True
+        ),
+        source_created_at_seconds=torch.from_numpy(np.asarray(columns.source_timestamp)).to(
+            device=device, non_blocking=True
+        ),
     )

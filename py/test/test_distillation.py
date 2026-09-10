@@ -12,37 +12,50 @@ from src.distillation.dataset import (
     MAXIMUM_POLICY_ENTRIES,
     DistillationDatasetManifest,
     DistillationRecordLayout,
+    build_replay_training_batch,
     build_training_batch,
     open_dataset,
     record_dtype,
     write_dataset,
 )
 from src.distillation.teacher import normalize_state_dict_keys
+from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT
+from src.games.chess.training import ChessImplementation
+from src.replay.columnar import ReplayColumnViews, ReplayPolicyColumnViews
+from src.replay.layout import ReplayLayout
+from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
 from src.training.checkpoint.persistence import create_model, create_optimizer
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
+from src.util.hashing import file_sha256
 from tools.benchmark_training_overfit import LossValues, achievable_loss_floor
+from tools.distill_match import ThroughputMeasurement, search_throughput_ratio
 from tools.distill_train_student import (
     AUXILIARY_LOSS_WEIGHT,
     Arguments,
     AttentionBiasKind,
+    DistillationFileInput,
     LearningRateSchedule,
     NetworkKind,
+    OpenedProductionReplay,
     OptimizerKind,
     PolicyHeadKind,
+    ProductionReplayInput,
     auxiliary_head_layouts,
+    close_training_dataset,
     dataset_split,
     distillation_objective,
     held_out_batches,
     learning_rate_at,
     observed_losses,
+    open_training_dataset,
     parameter_counts,
     student_architecture,
 )
 
 STUDENT_ARGUMENTS = Arguments(
-    dataset=Path('unused.bin'),
+    dataset_input=DistillationFileInput(kind='distillation_file', path=Path('unused.bin')),
     output_run_state=Path('unused'),
     network_kind=NetworkKind.CONVOLUTIONAL,
     layers=6,
@@ -87,6 +100,8 @@ def convolutional_student(layers: int, hidden_size: int, policy_bottleneck_rank:
 
 PAYLOAD_BYTES = CHESS_STATE_CONTRACT.packed_plane_layout.payload_bytes
 ACTION_SIZE = CHESS_NETWORK_DIMENSIONS.actions
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+EXPERIMENT_PATH = PROJECT_ROOT / 'py/configs/production/vast-chess-8gpu-optimal.yaml'
 DISTILLED_AUXILIARY_HEADS = ('next_policy', 'remaining_game_length')
 
 
@@ -303,6 +318,91 @@ def test_teacher_wdl_reaches_the_batch_unblended() -> None:
 
     assert batch.wdl_targets[0].tolist() == pytest.approx((0.5, 0.3, 0.2))
     assert batch.root_values[0] == 0.0
+
+
+def test_production_replay_batch_preserves_search_and_source_targets() -> None:
+    columns = ReplayColumnViews(
+        encoded_state=np.zeros((2, PAYLOAD_BYTES), dtype=np.uint8),
+        policy=ReplayPolicyColumnViews(
+            entry_count=np.asarray((2, 1), dtype=np.uint8),
+            action_ids=np.asarray(((17, 900), (3, 0)), dtype=np.uint16),
+            visit_counts=np.asarray(((25, 75), (80, 0)), dtype=np.uint16),
+            legal_count=np.asarray((2, 1), dtype=np.uint8),
+            legal_action_ids=np.asarray(((17, 900), (3, 0)), dtype=np.uint16),
+        ),
+        wdl_target=np.asarray(((0.5, 0.3, 0.2), (0.1, 0.2, 0.7)), dtype=np.float32),
+        root_value=np.asarray((0.25, -0.75), dtype=np.float32),
+        auxiliary=(),
+        sample_weight=np.asarray((1.5, 0.5), dtype=np.float32),
+        policy_surprise=np.asarray((2.0, 3.0), dtype=np.float32),
+        source_model_generation=np.asarray((11, 12), dtype=np.uint32),
+        source_timestamp=np.asarray((100.0, 200.0), dtype=np.float64),
+    )
+
+    batch = build_replay_training_batch(columns, CHESS_STATE_CONTRACT, ACTION_SIZE, torch.device('cpu'))
+
+    assert batch.policy_targets[0, (17, 900)].tolist() == pytest.approx((0.25, 0.75))
+    assert batch.policy_targets[1, 3] == pytest.approx(1.0)
+    assert torch.equal(batch.wdl_targets, torch.from_numpy(columns.wdl_target))
+    assert batch.root_values.tolist() == pytest.approx((0.25, -0.75))
+    assert batch.sample_weights.tolist() == pytest.approx((1.5, 0.5))
+    assert batch.source_model_generations.tolist() == [11, 12]
+    assert batch.source_created_at_seconds.tolist() == pytest.approx((100.0, 200.0))
+
+
+def _throughput(positions_per_second: float, searches_per_second: float) -> ThroughputMeasurement:
+    return ThroughputMeasurement(
+        searches_per_move=64,
+        parallel_searches=1,
+        position_count=200,
+        warmup_batches=2,
+        measured_batches=16,
+        elapsed_seconds=1.0,
+        inference_positions=1,
+        inference_calls=1,
+        inference_seconds=1.0,
+        average_positions_per_inference_call=1.0,
+        worker_utilization=1.0,
+        positions_per_second=positions_per_second,
+        searches_per_second=searches_per_second,
+    )
+
+
+def test_equal_compute_ratio_uses_end_to_end_search_throughput() -> None:
+    teacher = _throughput(positions_per_second=100.0, searches_per_second=200.0)
+    student = _throughput(positions_per_second=500.0, searches_per_second=600.0)
+
+    assert search_throughput_ratio(teacher, student) == pytest.approx(3.0)
+
+
+def test_production_replay_input_opens_the_canonical_layout_read_only(tmp_path: Path) -> None:
+    configuration = load_chess_experiment_configuration(EXPERIMENT_PATH)
+    game = ChessImplementation(configuration)
+    layout = ReplayLayout(
+        packed_planes=game.state.packed_plane_layout,
+        targets=game.target_layout,
+        maximum_policy_entries=configuration.training.lifecycle.replay.maximum_policy_entries,
+        maximum_legal_actions=game.state.maximum_legal_action_count,
+    )
+    path = tmp_path / 'replay.bin'
+    writable = ReplayStore.create(path, layout, maximum_capacity=2, logical_capacity=2)
+    writable.close()
+
+    dataset = open_training_dataset(
+        ProductionReplayInput(
+            kind='production_replay',
+            path=path,
+            experiment=EXPERIMENT_PATH,
+            verified_sha256=file_sha256(path),
+        )
+    )
+
+    assert isinstance(dataset, OpenedProductionReplay)
+    assert dataset.snapshot.layout_digest == layout.digest
+    assert dataset.snapshot.state.size == 0
+    with pytest.raises(RuntimeError, match='read-only'):
+        dataset.store.set_logical_capacity(1)
+    close_training_dataset(dataset)
 
 
 @pytest.fixture(scope='module')

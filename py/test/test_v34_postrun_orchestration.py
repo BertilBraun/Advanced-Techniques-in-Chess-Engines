@@ -3,8 +3,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
 from tools.run_v34_final_evaluations import Arguments as FinalArguments
 from tools.run_v34_final_evaluations import child_commands as final_commands
+from tools.run_v34_replay_distillation import Arguments as DistillationArguments
+from tools.run_v34_replay_distillation import training_arms, training_commands
 from tools.run_v34_stockfish_ladders import Arguments as LadderArguments
 from tools.run_v34_stockfish_ladders import child_commands as ladder_commands
 from tools.v34_orchestration import ChildCommand, run_child_commands
@@ -110,3 +113,62 @@ def test_dry_run_starts_no_children_and_writes_no_logs(tmp_path: Path) -> None:
 
     assert outcomes == ()
     assert not log_path.exists()
+
+
+def _distillation_arguments(tmp_path: Path) -> DistillationArguments:
+    return DistillationArguments(
+        teacher_run_state=tmp_path / 'teacher',
+        teacher_generation=123,
+        replay_store=tmp_path / 'replay.bin',
+        experiment=tmp_path / 'experiment.yaml',
+        opening_manifest=tmp_path / 'openings.json',
+        output_root=tmp_path / 'distillation',
+        devices=tuple(range(8)),
+        seeds=(41, 43),
+        student_generation=0,
+        steps=100_000,
+        searches_per_move=10_000,
+        parallel_searches=4,
+        throughput_device=0,
+        dry_run=True,
+    )
+
+
+def test_distillation_sweep_assigns_two_seeds_per_architecture_across_all_gpus(tmp_path: Path) -> None:
+    arguments = _distillation_arguments(tmp_path)
+
+    arms = training_arms(arguments)
+    commands = training_commands(arguments, '0' * 64)
+
+    assert tuple(arm.architecture.name for arm in arms) == (
+        '4x80',
+        '4x80',
+        '5x72',
+        '5x72',
+        '6x64',
+        '6x64',
+        '8x56',
+        '8x56',
+    )
+    assert tuple(arm.device_id for arm in arms) == tuple(range(8))
+    assert all('--replay-store' in command.command for command in commands)
+    assert all('--policy-head-kind' in command.command for command in commands)
+    assert all(command.command[command.command.index('--policy-key-size') + 1] == '64' for command in commands)
+
+
+def test_distillation_sweep_skips_completed_checkpoint_and_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    arguments = _distillation_arguments(tmp_path)
+    completed = training_arms(arguments)[0]
+
+    def completed_first(run_state: Path, log_path: Path, generation: int) -> bool:
+        return run_state.name == completed.name
+
+    monkeypatch.setattr(
+        'tools.run_v34_replay_distillation._arm_is_complete',
+        completed_first,
+    )
+
+    commands = training_commands(arguments, '0' * 64)
+
+    assert len(commands) == 7
+    assert completed.name not in {command.name for command in commands}

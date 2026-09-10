@@ -215,6 +215,51 @@ exact runner command and independently resolved canonical configuration hash. Th
 polling interval, and empty-wait control may change at runtime. Deleting the summary intentionally creates a fresh
 queue and will make every configured experiment eligible to run again.
 
+## v34 terminal evaluation and replay compression
+
+After the v34 run has stopped cleanly and all GPUs are idle, run the two opponent-selection ladders from `py`.
+This command does not fetch the run archive; start the manual `run_control.sh fetch` separately.
+
+```text
+python -m tools.run_v34_stockfish_ladders \
+  --experiment "$EXPERIMENT_CONFIG" --run-directory "$RUN_STATE" \
+  --checkpoint-generation "$GENERATION" --opening-manifest "$OPENINGS" \
+  --stockfish-executable "$STOCKFISH" --output-root "$OUTPUT/ladders" \
+  --ten-thousand-devices 0 1 2 --eighty-thousand-devices 3 4 5 6 7
+```
+
+After the user selects one Stockfish node count for each mode, launch all four 400-game matches concurrently. Each
+child shards its 200 paired openings over all eight GPUs. Policy-only is direct masked-policy argmax inference.
+
+```text
+python -m tools.run_v34_final_evaluations \
+  --experiment "$EXPERIMENT_CONFIG" --run-directory "$RUN_STATE" \
+  --checkpoint-generation "$GENERATION" --opening-manifest "$OPENINGS" \
+  --stockfish-executable "$STOCKFISH" --output-root "$OUTPUT/final" \
+  --devices 0 1 2 3 4 5 6 7 \
+  --policy-only-stockfish-nodes "$POLICY_NODES" --shallow-stockfish-nodes "$SHALLOW_NODES" \
+  --deep-stockfish-nodes "$DEEP_NODES" --very-deep-stockfish-nodes "$VERY_DEEP_NODES"
+```
+
+Train the two-seed 4x80, 5x72, 6x64, and 8x56 sweep directly from the frozen production replay, select the lowest
+mean held-out policy gap above its entropy floor, measure end-to-end search throughput, then run 200-game equal-search
+and equal-expected-time matches. `--searches-per-move` and `--parallel-searches` define the actual root population
+used for throughput and both matches.
+
+```text
+python -m tools.run_v34_replay_distillation \
+  --teacher-run-state "$RUN_STATE" --teacher-generation "$GENERATION" \
+  --replay-store "$RUN_STATE/replay.bin" --experiment "$EXPERIMENT_CONFIG" \
+  --opening-manifest "$OPENINGS" --output-root "$OUTPUT/distillation" \
+  --devices 0 1 2 3 4 5 6 7 --seeds 20260827 20260828 \
+  --searches-per-move 10000 --parallel-searches 4 --throughput-device 0
+```
+
+The replay is opened read-only. Every student records the store path and SHA-256, configuration SHA-256, layout,
+FIFO state, and retained labels. The manifest explicitly records that raw teacher policy logits and raw teacher WDL
+are unavailable. Completed student arms with a valid hashed inference checkpoint and final metric are reused;
+partial arm directories are left intact and require deliberate preservation before retrying.
+
 ## Validation
 
 Run Python validation from `py`:

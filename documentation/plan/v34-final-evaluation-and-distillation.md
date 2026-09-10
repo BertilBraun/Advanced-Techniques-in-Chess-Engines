@@ -195,3 +195,20 @@ Fetch the full evaluation directories, distillation dataset manifest, all studen
 the selected student checkpoints, throughput measurement, and match results. Each benchmark README
 must carry the exact source revision, resolved configuration SHA, teacher and student checkpoint hashes,
 opening and engine hashes, GPU inventory, commands, wall times, W/D/L, intervals, and limitations.
+
+## Prepared orchestration entry points
+
+The executable local preparation is available as three modules, run from `py`:
+
+- `tools.run_v34_stockfish_ladders` launches both fixed ladders concurrently on disjoint configurable GPU sets. It
+  does not fetch archives and rejects an existing output root.
+- `tools.run_v34_final_evaluations` requires the four user-selected Stockfish node counts and launches policy-only,
+  64-search, 10,000-search, and 80,000-search matches concurrently. Each child uses every configured GPU and an
+  independent batch-64 inference path. Policy-only is direct masked-policy argmax and is recorded as such.
+- `tools.run_v34_replay_distillation` hashes the frozen replay once, trains the four approximately 0.5M-parameter
+  architectures at two seeds on all eight GPUs, selects by mean held-out policy gap above floor, measures the
+  end-to-end search-throughput ratio at the match root population, and runs the 200-game equal-search and
+  equal-expected-time matches. Valid completed training arms and evaluation results are reused; incomplete evidence
+  is never overwritten.
+
+Exact commands and arguments are maintained in [`py/README.md`](../../py/README.md#v34-terminal-evaluation-and-replay-compression).

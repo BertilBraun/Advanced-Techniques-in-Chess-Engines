@@ -2,16 +2,24 @@ from __future__ import annotations
 
 import argparse
 import math
+import re
 import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import Literal, TypeAlias
 
 import numpy as np
 import numpy.typing as npt
 import torch
-from src.distillation.dataset import build_training_batch, open_dataset, read_manifest
+from pydantic import Field
+from src.distillation.dataset import build_replay_training_batch, build_training_batch, open_dataset, read_manifest
+from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
+from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT
+from src.games.chess.training import ChessImplementation
+from src.replay.layout import ReplayLayout
+from src.replay.store import ReplayStore, ReplayStoreState
 from src.training.batch import TrainingBatch
 from src.training.checkpoint.contracts import CheckpointManifest
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
@@ -41,6 +49,7 @@ from src.training.targets import (
     build_training_target_layout,
 )
 from src.util.atomic_file import write_text_atomically
+from src.util.frozen_model import FrozenModel
 from src.util.generation_schedule import ConstantSchedule
 from src.util.hashing import file_sha256
 from src.util.log import log
@@ -98,7 +107,7 @@ ALPHAZERO_SGD_STAGES = ((0.0, 1.0), (1.0 / 7.0, 0.1), (3.0 / 7.0, 0.01), (5.0 / 
 
 @dataclass(frozen=True)
 class Arguments:
-    dataset: Path
+    dataset_input: DistillationFileInput | ProductionReplayInput
     output_run_state: Path
     network_kind: NetworkKind
     layers: int
@@ -129,6 +138,60 @@ class Arguments:
     device_id: int
     random_seed: int
     generation: int
+
+
+@dataclass(frozen=True)
+class DistillationFileInput:
+    kind: Literal['distillation_file']
+    path: Path
+
+
+@dataclass(frozen=True)
+class ProductionReplayInput:
+    kind: Literal['production_replay']
+    path: Path
+    experiment: Path
+    verified_sha256: str
+
+
+DatasetInput: TypeAlias = DistillationFileInput | ProductionReplayInput
+
+
+class ProductionReplaySnapshot(FrozenModel):
+    schema_version: Literal[1] = 1
+    replay_store_path: Path
+    replay_store_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    experiment_path: Path
+    experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    layout_digest: str = Field(pattern=r'^[0-9a-f]{64}$')
+    state: ReplayStoreState
+    retained_labels: tuple[str, ...]
+    unavailable_labels: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class OpenedDistillationFile:
+    records: npt.NDArray
+    action_size: int
+    captured_auxiliary_heads: tuple[str, ...]
+
+    @property
+    def row_count(self) -> int:
+        return len(self.records)
+
+
+@dataclass(frozen=True)
+class OpenedProductionReplay:
+    store: ReplayStore
+    snapshot: ProductionReplaySnapshot
+    action_size: int
+
+    @property
+    def row_count(self) -> int:
+        return self.snapshot.state.size
+
+
+OpenedDataset: TypeAlias = OpenedDistillationFile | OpenedProductionReplay
 
 
 @dataclass(frozen=True)
@@ -431,14 +494,113 @@ def select_device(device_id: int) -> torch.device:
     return torch.device('cpu')
 
 
-def train_student(arguments: Arguments) -> CheckpointManifest:
-    records, dataset_manifest = open_dataset(arguments.dataset)
-    if dataset_manifest.game != CHESS_STATE_CONTRACT.name:
-        raise ValueError(f'This student trains on chess datasets, not on {dataset_manifest.game}.')
-    if dataset_manifest.action_size != CHESS_NETWORK_DIMENSIONS.actions:
-        raise ValueError(f'Dataset action size {dataset_manifest.action_size} does not match the chess action space.')
+def open_training_dataset(dataset_input: DatasetInput) -> OpenedDataset:
+    match dataset_input:
+        case DistillationFileInput(path=path):
+            records, manifest = open_dataset(path)
+            return OpenedDistillationFile(records, manifest.action_size, manifest.captured_auxiliary_heads)
+        case ProductionReplayInput(path=path, experiment=experiment_path, verified_sha256=verified_sha256):
+            configuration = load_experiment_configuration(experiment_path)
+            if not isinstance(configuration, ChessExperimentConfiguration):
+                raise ValueError('Production replay distillation requires a chess experiment configuration.')
+            game = ChessImplementation(configuration)
+            replay_layout = ReplayLayout(
+                packed_planes=game.state.packed_plane_layout,
+                targets=game.target_layout,
+                maximum_policy_entries=configuration.training.lifecycle.replay.maximum_policy_entries,
+                maximum_legal_actions=game.state.maximum_legal_action_count,
+            )
+            store = ReplayStore.open(path, replay_layout, writable=False)
+            snapshot = ProductionReplaySnapshot(
+                replay_store_path=path.resolve(),
+                replay_store_sha256=verified_sha256,
+                experiment_path=experiment_path.resolve(),
+                experiment_configuration_sha256=experiment_configuration_sha256(configuration),
+                layout_digest=replay_layout.digest,
+                state=store.state,
+                retained_labels=(
+                    'encoded_state',
+                    'sparse_mcts_visit_counts',
+                    'discounted_outcome_wdl',
+                    'root_value',
+                    'legal_action_ids',
+                    'sample_weight',
+                    'policy_surprise',
+                    'source_model_generation',
+                    'source_timestamp',
+                ),
+                unavailable_labels=('raw_teacher_policy_logits', 'raw_teacher_wdl'),
+            )
+            return OpenedProductionReplay(store, snapshot, replay_layout.targets.action_size)
 
-    split = dataset_split(len(records), arguments.holdout_fraction, arguments.training_fraction)
+
+def close_training_dataset(dataset: OpenedDataset) -> None:
+    if isinstance(dataset, OpenedProductionReplay):
+        dataset.store.close()
+
+
+def source_training_batch(
+    dataset: OpenedDataset,
+    training_row_count: int,
+    batch_size: int,
+    generator: np.random.Generator,
+    device: torch.device,
+    auxiliary_heads: tuple[str, ...],
+) -> TrainingBatch:
+    indices = np.sort(generator.integers(0, training_row_count, size=batch_size))
+    match dataset:
+        case OpenedDistillationFile(records=records, action_size=action_size):
+            return build_training_batch(records[indices], CHESS_STATE_CONTRACT, action_size, device, auxiliary_heads)
+        case OpenedProductionReplay(store=store, action_size=action_size):
+            if auxiliary_heads:
+                raise ValueError('The first production-replay experiment trains only primary policy and WDL heads.')
+            return build_replay_training_batch(store.gather_logical(indices), CHESS_STATE_CONTRACT, action_size, device)
+
+
+def source_held_out_batches(
+    dataset: OpenedDataset,
+    held_out_start_row: int,
+    batch_size: int,
+    device: torch.device,
+    auxiliary_heads: tuple[str, ...],
+) -> tuple[TrainingBatch, ...]:
+    available_rows = dataset.row_count - held_out_start_row
+    rows_per_batch = min(batch_size, available_rows)
+    batch_count = min(HELD_OUT_EVALUATION_BATCHES, available_rows // rows_per_batch)
+    batches: list[TrainingBatch] = []
+    for index in range(batch_count):
+        start = held_out_start_row + index * rows_per_batch
+        indices = np.arange(start, start + rows_per_batch, dtype=np.int64)
+        match dataset:
+            case OpenedDistillationFile(records=records, action_size=action_size):
+                batches.append(
+                    build_training_batch(records[indices], CHESS_STATE_CONTRACT, action_size, device, auxiliary_heads)
+                )
+            case OpenedProductionReplay(store=store, action_size=action_size):
+                if auxiliary_heads:
+                    raise ValueError('The first production-replay experiment trains only primary policy and WDL heads.')
+                batches.append(
+                    build_replay_training_batch(
+                        store.gather_logical(indices), CHESS_STATE_CONTRACT, action_size, device
+                    )
+                )
+    return tuple(batches)
+
+
+def train_student(arguments: Arguments) -> CheckpointManifest:
+    dataset = open_training_dataset(arguments.dataset_input)
+    if isinstance(dataset, OpenedProductionReplay):
+        arguments.output_run_state.mkdir(parents=True, exist_ok=True)
+        snapshot_path = arguments.output_run_state / 'production-replay-input.json'
+        serialized_snapshot = dataset.snapshot.model_dump_json(indent=2) + '\n'
+        if snapshot_path.exists() and snapshot_path.read_text(encoding='utf-8') != serialized_snapshot:
+            raise ValueError('Existing production replay input manifest does not match this training request.')
+        if not snapshot_path.exists():
+            write_text_atomically(snapshot_path, serialized_snapshot)
+    if dataset.action_size != CHESS_NETWORK_DIMENSIONS.actions:
+        raise ValueError(f'Dataset action size {dataset.action_size} does not match the chess action space.')
+
+    split = dataset_split(dataset.row_count, arguments.holdout_fraction, arguments.training_fraction)
     if split.training_row_count < arguments.batch_size:
         raise ValueError(
             f'{split.training_row_count} training rows are fewer than one batch of {arguments.batch_size}.'
@@ -454,7 +616,7 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
         architecture,
         device,
         CHESS_NETWORK_DIMENSIONS,
-        auxiliary_head_layouts(auxiliary_heads, dataset_manifest.action_size),
+        auxiliary_head_layouts(auxiliary_heads, dataset.action_size),
     )
     optimizer = create_student_optimizer(model, arguments.optimizer_kind, arguments.learning_rate)
     objective = distillation_objective(auxiliary_heads)
@@ -471,11 +633,10 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
         f'{split.held_out_start_row} rows before the holdout, holding out the last {split.held_out_row_count} rows.'
     )
 
-    evaluation_batches = held_out_batches(
-        records,
+    evaluation_batches = source_held_out_batches(
+        dataset,
         split.held_out_start_row,
         arguments.batch_size,
-        dataset_manifest.action_size,
         device,
         auxiliary_heads,
     )
@@ -506,11 +667,10 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
         )
         for parameter_group in optimizer.param_groups:
             parameter_group['lr'] = step_learning_rate
-        batch = sample_training_batch(
-            records,
+        batch = source_training_batch(
+            dataset,
             split.training_row_count,
             arguments.batch_size,
-            dataset_manifest.action_size,
             generator,
             device,
             auxiliary_heads,
@@ -550,13 +710,21 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
         )
 
     manifest = save_student_checkpoint(model, optimizer, arguments.generation, arguments.output_run_state)
+    if isinstance(dataset, OpenedProductionReplay):
+        if dataset.store.state != dataset.snapshot.state:
+            raise RuntimeError('Production replay state changed while the read-only student training input was open.')
+    close_training_dataset(dataset)
     log(f'Wrote generation {arguments.generation} student to {arguments.output_run_state}.')
     return manifest
 
 
 def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser(description='Distil a teacher-labelled chess dataset into a small student.')
-    parser.add_argument('--dataset', required=True, type=Path)
+    dataset = parser.add_mutually_exclusive_group(required=True)
+    dataset.add_argument('--dataset', type=Path)
+    dataset.add_argument('--replay-store', type=Path)
+    parser.add_argument('--replay-experiment', type=Path)
+    parser.add_argument('--replay-store-sha256')
     parser.add_argument('--output-run-state', required=True, type=Path)
     parser.add_argument(
         '--network-kind',
@@ -613,8 +781,21 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--random-seed', default=20260826, type=int)
     parser.add_argument('--generation', default=0, type=int)
     namespace = parser.parse_args()
+    if namespace.replay_store is None:
+        if namespace.replay_experiment is not None or namespace.replay_store_sha256 is not None:
+            raise ValueError('--replay-experiment and --replay-store-sha256 require --replay-store.')
+        dataset_input: DatasetInput = DistillationFileInput(kind='distillation_file', path=namespace.dataset)
+    else:
+        if namespace.replay_experiment is None or namespace.replay_store_sha256 is None:
+            raise ValueError('--replay-store requires --replay-experiment and --replay-store-sha256.')
+        dataset_input = ProductionReplayInput(
+            kind='production_replay',
+            path=namespace.replay_store,
+            experiment=namespace.replay_experiment,
+            verified_sha256=namespace.replay_store_sha256,
+        )
     arguments = Arguments(
-        dataset=namespace.dataset,
+        dataset_input=dataset_input,
         output_run_state=namespace.output_run_state,
         network_kind=NetworkKind(namespace.network_kind),
         layers=namespace.layers,
@@ -646,8 +827,17 @@ def parse_arguments() -> Arguments:
         random_seed=namespace.random_seed,
         generation=namespace.generation,
     )
-    if not arguments.dataset.is_file():
-        raise ValueError(f'Dataset does not exist: {arguments.dataset}')
+    match arguments.dataset_input:
+        case DistillationFileInput(path=path):
+            if not path.is_file():
+                raise ValueError(f'Dataset does not exist: {path}')
+        case ProductionReplayInput(path=path, experiment=experiment, verified_sha256=verified_sha256):
+            if not path.is_file() or not experiment.is_file():
+                raise ValueError('Replay store and replay experiment configuration must both exist.')
+            if arguments.distil_auxiliary_heads:
+                raise ValueError('The first production-replay experiment trains only primary policy and WDL heads.')
+            if not re.fullmatch(r'[0-9a-f]{64}', verified_sha256):
+                raise ValueError('Replay store SHA-256 must contain exactly 64 lowercase hexadecimal digits.')
     if min(arguments.layers, arguments.hidden_size) <= 0:
         raise ValueError('Layers and hidden size must be positive.')
     if arguments.policy_bottleneck_rank < 0:
@@ -688,11 +878,16 @@ def parse_arguments() -> Arguments:
         )
     if len(set(arguments.distil_auxiliary_heads)) != len(arguments.distil_auxiliary_heads):
         raise ValueError('Each distilled auxiliary head may be named at most once.')
-    captured_heads = read_manifest(arguments.dataset).captured_auxiliary_heads
+    captured_heads = (
+        read_manifest(arguments.dataset_input.path).captured_auxiliary_heads
+        if isinstance(arguments.dataset_input, DistillationFileInput)
+        else ()
+    )
     absent_heads = tuple(head for head in arguments.distil_auxiliary_heads if head not in captured_heads)
     if absent_heads:
         raise ValueError(
-            f'Dataset {arguments.dataset} captured auxiliary heads {captured_heads} and cannot supply {absent_heads}.'
+            f'Dataset {arguments.dataset_input.path} captured auxiliary heads {captured_heads} '
+            f'and cannot supply {absent_heads}.'
         )
     if arguments.device_id < 0 or arguments.random_seed < 0 or arguments.generation < 0:
         raise ValueError('Device ID, random seed and generation must be nonnegative.')
