@@ -27,6 +27,7 @@ from src.evaluation.contracts import (
     MatchEvaluationResult,
     StockfishFixedNodesOpponent,
 )
+from src.evaluation.inference import PolicyActionSelector
 from src.evaluation.match import (
     ConcurrentMatchGroup,
     MatchActionSelector,
@@ -50,6 +51,7 @@ from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
 from src.util.provenance import read_source_revision
 from tools.search_budget import (
+    DirectPolicyModelBudget,
     FixedModelSearchBudget,
     ModelSearchBudget,
     TimedModelSearchBudget,
@@ -154,7 +156,7 @@ class Arguments:
     opening_selection: PrefixOpeningSelection | SeededOpeningSelection
     match_random_seed: int | None
     devices: tuple[int, ...]
-    model_search_budget: FixedModelSearchBudget | TimedModelSearchBudget
+    model_search_budget: DirectPolicyModelBudget | FixedModelSearchBudget | TimedModelSearchBudget
     output_directory: Path
 
 
@@ -176,7 +178,7 @@ class ConcurrentGauntletArguments:
     opening_selection: PrefixOpeningSelection | SeededOpeningSelection
     match_random_seed: int | None
     devices: tuple[int, ...]
-    model_search_budget: FixedModelSearchBudget | TimedModelSearchBudget
+    model_search_budget: DirectPolicyModelBudget | FixedModelSearchBudget | TimedModelSearchBudget
 
 
 @dataclass(frozen=True)
@@ -199,7 +201,7 @@ class _ShardRequest:
     stockfish_executable: Path
     rungs: tuple[_ShardRung, ...]
     opening_indices: tuple[int, ...]
-    model_search_budget: FixedModelSearchBudget | TimedModelSearchBudget
+    model_search_budget: DirectPolicyModelBudget | FixedModelSearchBudget | TimedModelSearchBudget
 
 
 class _TimedSearchActionSelector(MatchActionSelector[ChessPosition]):
@@ -307,16 +309,26 @@ def _busy_gpu_processes(gpus: tuple[GpuProvenance, ...]) -> tuple[BusyGpuProcess
 
 
 def _search_configuration(
-    budget: FixedModelSearchBudget | TimedModelSearchBudget,
+    budget: DirectPolicyModelBudget | FixedModelSearchBudget | TimedModelSearchBudget,
 ) -> EvaluationSearchConfiguration:
     # Timed budgets ignore this count, but EvaluationSearchConfiguration demands it exceed parallel_searches.
-    searches_per_move = (
-        budget.searches_per_move if isinstance(budget, FixedModelSearchBudget) else budget.parallel_searches + 1
-    )
+    match budget:
+        case FixedModelSearchBudget():
+            searches_per_move = budget.searches_per_move
+            parallel_searches = budget.parallel_searches
+            exploration_constant = budget.exploration_constant
+        case TimedModelSearchBudget():
+            searches_per_move = budget.parallel_searches + 1
+            parallel_searches = budget.parallel_searches
+            exploration_constant = budget.exploration_constant
+        case DirectPolicyModelBudget():
+            searches_per_move = 2
+            parallel_searches = 1
+            exploration_constant = 1.0
     return EvaluationSearchConfiguration(
         searches_per_move=searches_per_move,
-        parallel_searches=budget.parallel_searches,
-        exploration_constant=budget.exploration_constant,
+        parallel_searches=parallel_searches,
+        exploration_constant=exploration_constant,
         inference=BatchedInferenceParams(
             inference_workers=budget.inference_workers,
             inference_batch_size=budget.inference_batch_size,
@@ -525,10 +537,17 @@ def _run_timed_shard_rungs(request: _ShardRequest, context: _ShardContext) -> tu
 
 
 def _run_concurrent_shard_rungs(request: _ShardRequest, context: _ShardContext) -> tuple[GauntletShardResult, ...]:
-    assert isinstance(request.model_search_budget, FixedModelSearchBudget)
     setup_started_at = time.monotonic()
     candidate_selector: MatchActionSelector[ChessPosition] | None = None
-    if request.model_search_budget.tree_search is not None:
+    if isinstance(request.model_search_budget, DirectPolicyModelBudget):
+        candidate_selector = PolicyActionSelector(
+            context.game.state,
+            context.checkpoint.inference_model_path,
+            request.device_id,
+            context.configuration.training.topology.trainer.device_type,
+            maximum_batch_size=request.model_search_budget.inference_batch_size,
+        )
+    elif request.model_search_budget.tree_search is not None:
         candidate_selector = SearchActionSelector(
             context.game.create_evaluation_search(
                 request.device_id,

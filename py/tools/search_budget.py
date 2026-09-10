@@ -44,14 +44,22 @@ class TimedModelSearchBudget(FrozenModel):
     tree_search: EvaluationTreeSearchOverrides | None = None
 
 
+class DirectPolicyModelBudget(FrozenModel):
+    kind: Literal['policy_only'] = 'policy_only'
+    inference_workers: int = Field(gt=0)
+    inference_batch_size: int = Field(gt=0)
+    outstanding_batches_per_worker: int = Field(gt=0, le=2)
+
+
 ModelSearchBudget: TypeAlias = Annotated[
-    FixedModelSearchBudget | TimedModelSearchBudget,
+    DirectPolicyModelBudget | FixedModelSearchBudget | TimedModelSearchBudget,
     Field(discriminator='kind'),
 ]
 
 
 def add_model_search_budget_arguments(parser: argparse.ArgumentParser) -> None:
     budget = parser.add_mutually_exclusive_group(required=True)
+    budget.add_argument('--model-policy-only', action='store_true')
     budget.add_argument('--model-searches', type=int)
     budget.add_argument('--model-move-time-seconds', type=int)
     parser.add_argument('--parallel-searches', type=int)
@@ -102,8 +110,24 @@ def _tree_search_overrides(namespace: argparse.Namespace) -> EvaluationTreeSearc
     )
 
 
-def model_search_budget(namespace: argparse.Namespace) -> FixedModelSearchBudget | TimedModelSearchBudget:
+def model_search_budget(
+    namespace: argparse.Namespace,
+) -> DirectPolicyModelBudget | FixedModelSearchBudget | TimedModelSearchBudget:
     tree_search = _tree_search_overrides(namespace)
+    if namespace.model_policy_only:
+        if namespace.parallel_searches is not None:
+            raise ValueError('Policy-only inference does not accept --parallel-searches.')
+        if tree_search is not None:
+            raise ValueError('Policy-only inference does not accept tree-search overrides.')
+        return DirectPolicyModelBudget(
+            inference_workers=1 if namespace.inference_workers is None else namespace.inference_workers,
+            inference_batch_size=namespace.inference_batch_size,
+            outstanding_batches_per_worker=(
+                _DEFAULT_FIXED_OUTSTANDING_BATCHES_PER_WORKER
+                if namespace.outstanding_batches is None
+                else namespace.outstanding_batches
+            ),
+        )
     if namespace.model_searches is not None:
         return FixedModelSearchBudget(
             searches_per_move=namespace.model_searches,

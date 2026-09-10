@@ -48,19 +48,25 @@ class PolicyActionSelector(Generic[PositionT]):
         model_path: Path,
         device_id: int,
         device_type: Literal['cpu', 'cuda'],
+        maximum_batch_size: int | None = None,
     ) -> None:
         self.state = state
         self.device = torch.device('cpu') if device_type == 'cpu' else torch.device('cuda', device_id)
         self.model = torch.jit.load(str(model_path), map_location=self.device)
         self.model.eval()
+        self.maximum_batch_size = maximum_batch_size
 
     def choose_actions(self, positions: tuple[PositionT, ...]) -> tuple[int, ...]:
         if not positions:
             return ()
-        decoded = decode_network_inputs(self.state, positions)
+        batch_size = len(positions) if self.maximum_batch_size is None else self.maximum_batch_size
+        logits: list[torch.Tensor] = []
         with torch.inference_mode():
-            policy_logits, _ = self.model(torch.from_numpy(decoded).to(self.device))
-        policy_logits = policy_logits.float().cpu()
+            for offset in range(0, len(positions), batch_size):
+                decoded = decode_network_inputs(self.state, positions[offset : offset + batch_size])
+                policy_logits, _ = self.model(torch.from_numpy(decoded).to(self.device))
+                logits.append(policy_logits.float().cpu())
+        policy_logits = torch.cat(logits)
         return tuple(
             max(
                 self.state.legal_action_ids(position),
