@@ -36,11 +36,10 @@ class Arguments:
     dry_run: bool
 
 
-@dataclass(frozen=True)
-class Architecture:
+class Architecture(FrozenModel):
     name: str
-    layers: int
-    hidden_size: int
+    layers: int = Field(gt=0)
+    hidden_size: int = Field(gt=0)
 
 
 @dataclass(frozen=True)
@@ -70,12 +69,108 @@ class DistillationSelection(FrozenModel):
     selection_rule: Literal['lowest_mean_policy_gap_above_floor'] = 'lowest_mean_policy_gap_above_floor'
 
 
+class StudentTrainingProtocol(FrozenModel):
+    architectures: tuple[Architecture, ...]
+    network_kind: Literal['convolutional']
+    policy_head_kind: Literal['from_to_attention']
+    policy_key_size: Literal[64]
+    batch_size: Literal[1024]
+    learning_rate: Literal[0.002]
+    learning_rate_schedule: Literal['plateau']
+    anneal_fraction: Literal[0.2]
+    warmup_steps: Literal[1000]
+    holdout_fraction: Literal[0.02]
+    evaluate_every: Literal[4000]
+    checkpoint_every: Literal[10000]
+
+
+class StudentEvaluationProtocol(FrozenModel):
+    opening_pair_count: Literal[100]
+    throughput_position_count: Literal[100]
+    exploration_constant: Literal[1.0]
+    random_seed: Literal[20260816]
+    modes: tuple[Literal['throughput-only', 'equal-nodes', 'equal-compute'], ...]
+
+
+class DistillationRequestManifest(FrozenModel):
+    schema_version: Literal[1] = 1
+    teacher_run_state: Path
+    teacher_generation: int = Field(ge=0)
+    replay_store: Path
+    orchestrator_recorded_replay_store_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    experiment: Path
+    opening_manifest: Path
+    output_root: Path
+    devices: tuple[int, ...]
+    seeds: tuple[int, ...]
+    student_generation: int = Field(ge=0)
+    steps: int = Field(gt=0)
+    searches_per_move: int = Field(gt=0)
+    parallel_searches: int = Field(gt=0)
+    throughput_device: int = Field(ge=0)
+    training: StudentTrainingProtocol
+    evaluation: StudentEvaluationProtocol
+
+
 ARCHITECTURES = (
-    Architecture('4x80', 4, 80),
-    Architecture('5x72', 5, 72),
-    Architecture('6x64', 6, 64),
-    Architecture('8x56', 8, 56),
+    Architecture(name='4x80', layers=4, hidden_size=80),
+    Architecture(name='5x72', layers=5, hidden_size=72),
+    Architecture(name='6x64', layers=6, hidden_size=64),
+    Architecture(name='8x56', layers=8, hidden_size=56),
 )
+
+
+def request_manifest(arguments: Arguments, orchestrator_recorded_sha256: str) -> DistillationRequestManifest:
+    return DistillationRequestManifest(
+        teacher_run_state=arguments.teacher_run_state.resolve(),
+        teacher_generation=arguments.teacher_generation,
+        replay_store=arguments.replay_store.resolve(),
+        orchestrator_recorded_replay_store_sha256=orchestrator_recorded_sha256,
+        experiment=arguments.experiment.resolve(),
+        opening_manifest=arguments.opening_manifest.resolve(),
+        output_root=arguments.output_root.resolve(),
+        devices=arguments.devices,
+        seeds=arguments.seeds,
+        student_generation=arguments.student_generation,
+        steps=arguments.steps,
+        searches_per_move=arguments.searches_per_move,
+        parallel_searches=arguments.parallel_searches,
+        throughput_device=arguments.throughput_device,
+        training=StudentTrainingProtocol(
+            architectures=ARCHITECTURES,
+            network_kind='convolutional',
+            policy_head_kind='from_to_attention',
+            policy_key_size=64,
+            batch_size=1024,
+            learning_rate=0.002,
+            learning_rate_schedule='plateau',
+            anneal_fraction=0.2,
+            warmup_steps=1000,
+            holdout_fraction=0.02,
+            evaluate_every=4000,
+            checkpoint_every=10000,
+        ),
+        evaluation=StudentEvaluationProtocol(
+            opening_pair_count=100,
+            throughput_position_count=100,
+            exploration_constant=1.0,
+            random_seed=20260816,
+            modes=('throughput-only', 'equal-nodes', 'equal-compute'),
+        ),
+    )
+
+
+def _validate_or_write_request_manifest(output_root: Path, requested: DistillationRequestManifest) -> None:
+    request_path = output_root / 'request.json'
+    if output_root.exists():
+        if not request_path.is_file():
+            raise ValueError(f'Existing distillation output has no immutable request manifest: {request_path}')
+        existing = DistillationRequestManifest.model_validate_json(request_path.read_text(encoding='utf-8'))
+        if existing != requested:
+            raise ValueError('Existing distillation request manifest does not match this invocation.')
+        return
+    output_root.mkdir(parents=True)
+    write_text_atomically(request_path, requested.model_dump_json(indent=2) + '\n')
 
 
 def training_arms(arguments: Arguments) -> tuple[TrainingArm, ...]:
@@ -88,7 +183,7 @@ def training_arms(arguments: Arguments) -> tuple[TrainingArm, ...]:
     )
 
 
-def _training_command(arguments: Arguments, arm: TrainingArm, replay_store_sha256: str) -> tuple[str, ...]:
+def _training_command(arguments: Arguments, arm: TrainingArm, orchestrator_recorded_sha256: str) -> tuple[str, ...]:
     return (
         sys.executable,
         '-m',
@@ -97,8 +192,8 @@ def _training_command(arguments: Arguments, arm: TrainingArm, replay_store_sha25
         str(arguments.replay_store),
         '--replay-experiment',
         str(arguments.experiment),
-        '--replay-store-sha256',
-        replay_store_sha256,
+        '--orchestrator-recorded-replay-sha256',
+        orchestrator_recorded_sha256,
         '--output-run-state',
         str(arguments.output_root / 'students' / arm.name),
         '--network-kind',
@@ -150,14 +245,16 @@ def _arm_is_complete(run_state: Path, log_path: Path, generation: int) -> bool:
     return True
 
 
-def training_commands(arguments: Arguments, replay_store_sha256: str) -> tuple[ChildCommand, ...]:
+def training_commands(arguments: Arguments, orchestrator_recorded_sha256: str) -> tuple[ChildCommand, ...]:
     commands: list[ChildCommand] = []
     for arm in training_arms(arguments):
         run_state = arguments.output_root / 'students' / arm.name
         log_path = arguments.output_root / 'logs' / f'{arm.name}.log'
         if _arm_is_complete(run_state, log_path, arguments.student_generation):
             continue
-        commands.append(ChildCommand(arm.name, _training_command(arguments, arm, replay_store_sha256), log_path))
+        commands.append(
+            ChildCommand(arm.name, _training_command(arguments, arm, orchestrator_recorded_sha256), log_path)
+        )
     return tuple(commands)
 
 
@@ -256,17 +353,23 @@ def _run_stage(command: ChildCommand, output: Path, dry_run: bool) -> None:
 
 
 def run_distillation(arguments: Arguments) -> int:
+    orchestrator_recorded_sha256 = file_sha256(arguments.replay_store)
+    requested = request_manifest(arguments, orchestrator_recorded_sha256)
     if arguments.dry_run:
-        run_child_commands(training_commands(arguments, '<replay-store-sha256>'), True)
+        if arguments.output_root.exists():
+            _validate_or_write_request_manifest(arguments.output_root, requested)
+        run_child_commands(training_commands(arguments, orchestrator_recorded_sha256), True)
         return 0
-    arguments.output_root.mkdir(parents=True, exist_ok=True)
-    replay_store_sha256 = file_sha256(arguments.replay_store)
+    _validate_or_write_request_manifest(arguments.output_root, requested)
     replay_hash_path = arguments.output_root / 'replay-store.sha256'
-    if replay_hash_path.exists() and replay_hash_path.read_text(encoding='utf-8').strip() != replay_store_sha256:
+    if (
+        replay_hash_path.exists()
+        and replay_hash_path.read_text(encoding='utf-8').strip() != orchestrator_recorded_sha256
+    ):
         raise ValueError('The replay store hash differs from the existing distillation evidence.')
     if not replay_hash_path.exists():
-        write_text_atomically(replay_hash_path, replay_store_sha256 + '\n')
-    commands = training_commands(arguments, replay_store_sha256)
+        write_text_atomically(replay_hash_path, orchestrator_recorded_sha256 + '\n')
+    commands = training_commands(arguments, orchestrator_recorded_sha256)
     if commands:
         outcomes = run_child_commands(commands, arguments.dry_run)
         if any(outcome.return_code != 0 for outcome in outcomes):

@@ -255,10 +255,12 @@ python -m tools.run_v34_replay_distillation \
   --searches-per-move 10000 --parallel-searches 4 --throughput-device 0
 ```
 
-The replay is opened read-only. Every student records the store path and SHA-256, configuration SHA-256, layout,
-FIFO state, and retained labels. The manifest explicitly records that raw teacher policy logits and raw teacher WDL
-are unavailable. Completed student arms with a valid hashed inference checkpoint and final metric are reused;
-partial arm directories are left intact and require deliberate preservation before retrying.
+The supervisor hashes the frozen replay once before launching the eight arms. Each trainer opens the replay read-only
+and records that supervisor-computed digest, the store path, configuration SHA-256, layout, FIFO state, and retained
+labels; the trainers do not repeat the full-store hash. The manifest explicitly records that raw teacher policy
+logits and raw teacher WDL are unavailable. Completed student arms with a valid hashed inference checkpoint and final
+metric are reused only when `request.json` exactly matches every resolved input and training/evaluation setting from
+the original invocation. Partial arm directories are left intact and require deliberate preservation before retrying.
 
 ## Validation
 

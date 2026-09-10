@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from tools.run_v34_final_evaluations import Arguments as FinalArguments
 from tools.run_v34_final_evaluations import child_commands as final_commands
 from tools.run_v34_replay_distillation import Arguments as DistillationArguments
-from tools.run_v34_replay_distillation import training_arms, training_commands
+from tools.run_v34_replay_distillation import (
+    _validate_or_write_request_manifest,
+    request_manifest,
+    training_arms,
+    training_commands,
+)
 from tools.run_v34_stockfish_ladders import Arguments as LadderArguments
 from tools.run_v34_stockfish_ladders import child_commands as ladder_commands
 from tools.v34_orchestration import ChildCommand, run_child_commands
@@ -152,6 +158,8 @@ def test_distillation_sweep_assigns_two_seeds_per_architecture_across_all_gpus(t
     )
     assert tuple(arm.device_id for arm in arms) == tuple(range(8))
     assert all('--replay-store' in command.command for command in commands)
+    assert all('--orchestrator-recorded-replay-sha256' in command.command for command in commands)
+    assert all('--replay-store-sha256' not in command.command for command in commands)
     assert all('--policy-head-kind' in command.command for command in commands)
     assert all(command.command[command.command.index('--policy-key-size') + 1] == '64' for command in commands)
 
@@ -172,3 +180,23 @@ def test_distillation_sweep_skips_completed_checkpoint_and_log(tmp_path: Path, m
 
     assert len(commands) == 7
     assert completed.name not in {command.name for command in commands}
+
+
+def test_distillation_request_manifest_rejects_changed_reuse_settings(tmp_path: Path) -> None:
+    arguments = _distillation_arguments(tmp_path)
+    original = request_manifest(arguments, '0' * 64)
+    _validate_or_write_request_manifest(arguments.output_root, original)
+
+    changed = request_manifest(replace(arguments, teacher_generation=124), '0' * 64)
+
+    with pytest.raises(ValueError, match='does not match'):
+        _validate_or_write_request_manifest(arguments.output_root, changed)
+
+
+def test_distillation_request_manifest_excludes_only_dry_run(tmp_path: Path) -> None:
+    arguments = _distillation_arguments(tmp_path)
+
+    assert request_manifest(arguments, '0' * 64) == request_manifest(
+        replace(arguments, dry_run=not arguments.dry_run),
+        '0' * 64,
+    )

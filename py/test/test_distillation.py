@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import NoReturn
 
 import numpy as np
 import numpy.typing as npt
@@ -35,9 +36,12 @@ from tools.distill_train_student import (
     AUXILIARY_LOSS_WEIGHT,
     Arguments,
     AttentionBiasKind,
+    DatasetInput,
     DistillationFileInput,
     LearningRateSchedule,
     NetworkKind,
+    OpenedDataset,
+    OpenedDistillationFile,
     OpenedProductionReplay,
     OptimizerKind,
     PolicyHeadKind,
@@ -52,6 +56,7 @@ from tools.distill_train_student import (
     open_training_dataset,
     parameter_counts,
     student_architecture,
+    train_student,
 )
 
 STUDENT_ARGUMENTS = Arguments(
@@ -393,7 +398,7 @@ def test_production_replay_input_opens_the_canonical_layout_read_only(tmp_path: 
             kind='production_replay',
             path=path,
             experiment=EXPERIMENT_PATH,
-            verified_sha256=file_sha256(path),
+            orchestrator_recorded_sha256=file_sha256(path),
         )
     )
 
@@ -403,6 +408,33 @@ def test_production_replay_input_opens_the_canonical_layout_read_only(tmp_path: 
     with pytest.raises(RuntimeError, match='read-only'):
         dataset.store.set_logical_capacity(1)
     close_training_dataset(dataset)
+
+
+def test_student_training_closes_its_dataset_when_training_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    dataset = OpenedDistillationFile(
+        records=np.empty((0,), dtype=np.uint8),
+        action_size=ACTION_SIZE,
+        captured_auxiliary_heads=(),
+    )
+    closed: list[OpenedDataset] = []
+
+    def open_dataset_for_test(dataset_input: DatasetInput) -> OpenedDataset:
+        return dataset
+
+    def fail_training(arguments: Arguments, opened_dataset: OpenedDataset) -> NoReturn:
+        raise RuntimeError('training failed')
+
+    def record_close(opened_dataset: OpenedDataset) -> None:
+        closed.append(opened_dataset)
+
+    monkeypatch.setattr('tools.distill_train_student.open_training_dataset', open_dataset_for_test)
+    monkeypatch.setattr('tools.distill_train_student._train_student_with_dataset', fail_training)
+    monkeypatch.setattr('tools.distill_train_student.close_training_dataset', record_close)
+
+    with pytest.raises(RuntimeError, match='training failed'):
+        train_student(STUDENT_ARGUMENTS)
+
+    assert closed == [dataset]
 
 
 @pytest.fixture(scope='module')

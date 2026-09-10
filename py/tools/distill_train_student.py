@@ -151,7 +151,7 @@ class ProductionReplayInput:
     kind: Literal['production_replay']
     path: Path
     experiment: Path
-    verified_sha256: str
+    orchestrator_recorded_sha256: str
 
 
 DatasetInput: TypeAlias = DistillationFileInput | ProductionReplayInput
@@ -160,7 +160,7 @@ DatasetInput: TypeAlias = DistillationFileInput | ProductionReplayInput
 class ProductionReplaySnapshot(FrozenModel):
     schema_version: Literal[1] = 1
     replay_store_path: Path
-    replay_store_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    orchestrator_recorded_replay_store_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     experiment_path: Path
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     layout_digest: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -499,7 +499,11 @@ def open_training_dataset(dataset_input: DatasetInput) -> OpenedDataset:
         case DistillationFileInput(path=path):
             records, manifest = open_dataset(path)
             return OpenedDistillationFile(records, manifest.action_size, manifest.captured_auxiliary_heads)
-        case ProductionReplayInput(path=path, experiment=experiment_path, verified_sha256=verified_sha256):
+        case ProductionReplayInput(
+            path=path,
+            experiment=experiment_path,
+            orchestrator_recorded_sha256=orchestrator_recorded_sha256,
+        ):
             configuration = load_experiment_configuration(experiment_path)
             if not isinstance(configuration, ChessExperimentConfiguration):
                 raise ValueError('Production replay distillation requires a chess experiment configuration.')
@@ -511,26 +515,30 @@ def open_training_dataset(dataset_input: DatasetInput) -> OpenedDataset:
                 maximum_legal_actions=game.state.maximum_legal_action_count,
             )
             store = ReplayStore.open(path, replay_layout, writable=False)
-            snapshot = ProductionReplaySnapshot(
-                replay_store_path=path.resolve(),
-                replay_store_sha256=verified_sha256,
-                experiment_path=experiment_path.resolve(),
-                experiment_configuration_sha256=experiment_configuration_sha256(configuration),
-                layout_digest=replay_layout.digest,
-                state=store.state,
-                retained_labels=(
-                    'encoded_state',
-                    'sparse_mcts_visit_counts',
-                    'discounted_outcome_wdl',
-                    'root_value',
-                    'legal_action_ids',
-                    'sample_weight',
-                    'policy_surprise',
-                    'source_model_generation',
-                    'source_timestamp',
-                ),
-                unavailable_labels=('raw_teacher_policy_logits', 'raw_teacher_wdl'),
-            )
+            try:
+                snapshot = ProductionReplaySnapshot(
+                    replay_store_path=path.resolve(),
+                    orchestrator_recorded_replay_store_sha256=orchestrator_recorded_sha256,
+                    experiment_path=experiment_path.resolve(),
+                    experiment_configuration_sha256=experiment_configuration_sha256(configuration),
+                    layout_digest=replay_layout.digest,
+                    state=store.state,
+                    retained_labels=(
+                        'encoded_state',
+                        'sparse_mcts_visit_counts',
+                        'discounted_outcome_wdl',
+                        'root_value',
+                        'legal_action_ids',
+                        'sample_weight',
+                        'policy_surprise',
+                        'source_model_generation',
+                        'source_timestamp',
+                    ),
+                    unavailable_labels=('raw_teacher_policy_logits', 'raw_teacher_wdl'),
+                )
+            except BaseException:
+                store.close()
+                raise
             return OpenedProductionReplay(store, snapshot, replay_layout.targets.action_size)
 
 
@@ -587,8 +595,7 @@ def source_held_out_batches(
     return tuple(batches)
 
 
-def train_student(arguments: Arguments) -> CheckpointManifest:
-    dataset = open_training_dataset(arguments.dataset_input)
+def _train_student_with_dataset(arguments: Arguments, dataset: OpenedDataset) -> CheckpointManifest:
     if isinstance(dataset, OpenedProductionReplay):
         arguments.output_run_state.mkdir(parents=True, exist_ok=True)
         snapshot_path = arguments.output_run_state / 'production-replay-input.json'
@@ -713,9 +720,16 @@ def train_student(arguments: Arguments) -> CheckpointManifest:
     if isinstance(dataset, OpenedProductionReplay):
         if dataset.store.state != dataset.snapshot.state:
             raise RuntimeError('Production replay state changed while the read-only student training input was open.')
-    close_training_dataset(dataset)
     log(f'Wrote generation {arguments.generation} student to {arguments.output_run_state}.')
     return manifest
+
+
+def train_student(arguments: Arguments) -> CheckpointManifest:
+    dataset = open_training_dataset(arguments.dataset_input)
+    try:
+        return _train_student_with_dataset(arguments, dataset)
+    finally:
+        close_training_dataset(dataset)
 
 
 def parse_arguments() -> Arguments:
@@ -724,7 +738,7 @@ def parse_arguments() -> Arguments:
     dataset.add_argument('--dataset', type=Path)
     dataset.add_argument('--replay-store', type=Path)
     parser.add_argument('--replay-experiment', type=Path)
-    parser.add_argument('--replay-store-sha256')
+    parser.add_argument('--orchestrator-recorded-replay-sha256')
     parser.add_argument('--output-run-state', required=True, type=Path)
     parser.add_argument(
         '--network-kind',
@@ -782,17 +796,17 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--generation', default=0, type=int)
     namespace = parser.parse_args()
     if namespace.replay_store is None:
-        if namespace.replay_experiment is not None or namespace.replay_store_sha256 is not None:
-            raise ValueError('--replay-experiment and --replay-store-sha256 require --replay-store.')
+        if namespace.replay_experiment is not None or namespace.orchestrator_recorded_replay_sha256 is not None:
+            raise ValueError('--replay-experiment and --orchestrator-recorded-replay-sha256 require --replay-store.')
         dataset_input: DatasetInput = DistillationFileInput(kind='distillation_file', path=namespace.dataset)
     else:
-        if namespace.replay_experiment is None or namespace.replay_store_sha256 is None:
-            raise ValueError('--replay-store requires --replay-experiment and --replay-store-sha256.')
+        if namespace.replay_experiment is None or namespace.orchestrator_recorded_replay_sha256 is None:
+            raise ValueError('--replay-store requires --replay-experiment and --orchestrator-recorded-replay-sha256.')
         dataset_input = ProductionReplayInput(
             kind='production_replay',
             path=namespace.replay_store,
             experiment=namespace.replay_experiment,
-            verified_sha256=namespace.replay_store_sha256,
+            orchestrator_recorded_sha256=namespace.orchestrator_recorded_replay_sha256,
         )
     arguments = Arguments(
         dataset_input=dataset_input,
@@ -831,13 +845,19 @@ def parse_arguments() -> Arguments:
         case DistillationFileInput(path=path):
             if not path.is_file():
                 raise ValueError(f'Dataset does not exist: {path}')
-        case ProductionReplayInput(path=path, experiment=experiment, verified_sha256=verified_sha256):
+        case ProductionReplayInput(
+            path=path,
+            experiment=experiment,
+            orchestrator_recorded_sha256=orchestrator_recorded_sha256,
+        ):
             if not path.is_file() or not experiment.is_file():
                 raise ValueError('Replay store and replay experiment configuration must both exist.')
             if arguments.distil_auxiliary_heads:
                 raise ValueError('The first production-replay experiment trains only primary policy and WDL heads.')
-            if not re.fullmatch(r'[0-9a-f]{64}', verified_sha256):
-                raise ValueError('Replay store SHA-256 must contain exactly 64 lowercase hexadecimal digits.')
+            if not re.fullmatch(r'[0-9a-f]{64}', orchestrator_recorded_sha256):
+                raise ValueError(
+                    'Orchestrator-recorded replay SHA-256 must contain exactly 64 lowercase hexadecimal digits.'
+                )
     if min(arguments.layers, arguments.hidden_size) <= 0:
         raise ValueError('Layers and hidden size must be positive.')
     if arguments.policy_bottleneck_rank < 0:
