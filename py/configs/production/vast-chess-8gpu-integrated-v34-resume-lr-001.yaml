@@ -1,0 +1,21 @@
+extends: vast-chess-8gpu-integrated-v34.yaml
+
+run:
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-integrated-v34/checkpoint_1220.json
+    generation: 1220
+
+training:
+  trainer:
+    learning_rate:
+      kind: staged
+      stages:
+      - start_generation: 0
+        value: 0.005
+      - start_generation: 100
+        value: 0.004
+      - start_generation: 800
+        value: 0.003
+      - start_generation: 1220
+        value: 0.001
