@@ -1,8 +1,8 @@
-# AlphaZero chess for $52.08
+# AlphaZero chess for $52
 
-This project trained a superhuman AlphaZero-style chess model using eight consumer GPUs shared between self-play
-and learning. The retained checkpoint used exactly three days on an RTX 4070 SUPER node costing $17.36 per day:
-**$52.08 of training-node rental**.
+This project trained a superhuman AlphaZero-style chess model from scratch through self-play, without human games
+or pretrained chess data. Eight consumer GPUs were shared between self-play and learning for three days, at a
+rounded training-node cost of **$52**.
 
 [Play against the model](https://chess.bertil-braun.de/) ·
 [Download the weights](https://huggingface.co/BertilBraun/alphazero-chess) ·

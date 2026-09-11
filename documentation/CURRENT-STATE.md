@@ -9,8 +9,8 @@ generation 1465, retained at about three days of wall-clock training on 8x RTX 4
 to continue after that snapshot to test the tail, but the three-day checkpoint currently gives the clearest
 time/cost/strength result.
 
-The rental cost through that checkpoint was **$52.08**: exactly three days at the node's billed rate of $17.36 per
-day. This excludes separate evaluation nodes and abandoned or restarted run segments, so it is a
+The rental cost through that checkpoint was **$52**, rounded from three days at the node's billed rate of $17.36
+per day. This excludes separate evaluation nodes and abandoned or restarted run segments, so it is a
 training-checkpoint cost rather than a complete project invoice.
 
 ## Result status

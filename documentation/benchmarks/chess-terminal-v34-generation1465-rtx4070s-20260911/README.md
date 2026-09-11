@@ -23,7 +23,7 @@ Both headline results use 400 games from 200 balanced opening pairs. The paired-
 | Hardware | 8x NVIDIA GeForce RTX 4070 SUPER, 12,282 MiB each; driver 595.71.05 |
 | Match seed | 20260816 |
 
-The node's billed rate was $17.36 per day. The exactly three-day checkpoint therefore cost **$52.08** in
+The node's billed rate was $17.36 per day. The three-day checkpoint therefore cost **$52** in rounded
 training-node rental. That figure excludes separate evaluation nodes and abandoned or restarted run segments; it
 is not a complete project invoice.
 
