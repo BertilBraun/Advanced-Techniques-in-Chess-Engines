@@ -302,6 +302,19 @@ def _match_job(
     )
 
 
+def _student_action_selector(
+    game: ChessImplementation,
+    device_id: int,
+    student: CheckpointReference,
+    search_configuration: EvaluationSearchConfiguration,
+) -> SearchActionSelector[ChessPosition]:
+    return SearchActionSelector(
+        game.create_evaluation_search(device_id, student, search_configuration),
+        search_configuration.searches_per_move,
+        search_configuration.parallel_searches,
+    )
+
+
 def _report_throughput(
     teacher_throughput: ThroughputMeasurement,
     student_throughput: ThroughputMeasurement,
@@ -443,8 +456,11 @@ def run_probe(arguments: Arguments) -> DistillationMatchResult:
             arguments.exploration_constant,
             game.self_play_configuration.inference,
         )
-        candidate_selector: SearchActionSelector[ChessPosition] = SearchActionSelector(
-            game.create_evaluation_search(arguments.device_id, student, student_search)
+        candidate_selector = _student_action_selector(
+            game,
+            arguments.device_id,
+            student,
+            student_search,
         )
         match_result = run_match(
             _match_job(arguments, teacher, student, measurement_search),
