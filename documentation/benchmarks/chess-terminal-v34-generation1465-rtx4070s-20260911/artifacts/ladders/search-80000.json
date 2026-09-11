@@ -1,0 +1,79 @@
+{
+  "schema_version": 3,
+  "source_revision": "a87a186e72862d6f5ff845258007b2ff4246d521",
+  "tool_sha256": "849814c67d6b591d9f319d0e8476237fb5031b121eb517dbcdd15dbed94fb1db",
+  "experiment_path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/resolved-experiment.json",
+  "experiment_configuration_sha256": "5a1194975e225d4c5ebc329ca7641b205e7cd17b88d5b4aa24679d9e6a939c9a",
+  "checkpoint_generation": 1465,
+  "evaluated_checkpoint": {
+    "generation": 1465,
+    "manifest_path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/checkpoint_1465.json",
+    "model_path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/model_1465.pt",
+    "optimizer_path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/optimizer_1465.pt",
+    "inference_model_path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/model_1465.jit.pt",
+    "inference_model_sha256": "402efb61146b5a0f569c960e1f7a7e7714ba1bb28982fcdfb7f10e8ec5a98ad6"
+  },
+  "opening_manifest_path": "/workspace/alphazero-engine/py/reference/chess-elite-2025-11-balanced-4moves-200-v1-openings.json",
+  "opening_manifest_sha256": "40582c4f753e90d8ebd170498c37e3f4812bff38287e6bfa6db376e9eec70d39",
+  "stockfish_executable_path": "/workspace/alphazero-engine/engines/upstream/stockfish-13/stockfish_13_linux_x64_bmi2",
+  "stockfish_executable_sha256": "ec56cd6ad04eecd38885912321ee2dfc76aee68415668ba433fa76eb7180ac5a",
+  "stockfish_identity": "Stockfish 13",
+  "probe_game_count": 10,
+  "opening_pair_count": 5,
+  "opening_selection_seed": 20260815,
+  "match_random_seed": 20260816,
+  "model_search_budget": {
+    "kind": "fixed_searches",
+    "searches_per_move": 80000,
+    "parallel_searches": 8,
+    "inference_workers": 1,
+    "inference_batch_size": 64,
+    "outstanding_batches_per_worker": 1,
+    "exploration_constant": 1.0,
+    "tree_search": null
+  },
+  "probes": [
+    {
+      "stockfish_nodes": 50000,
+      "result_path": "/workspace/postrun/v34-terminal-g1465/ladders/ladder-80k/stockfish-nodes-50000/result.json",
+      "wins": 3,
+      "draws": 5,
+      "losses": 2,
+      "score": 0.55,
+      "score_confidence_low": 0.4,
+      "score_confidence_high": 0.7
+    },
+    {
+      "stockfish_nodes": 100000,
+      "result_path": "/workspace/postrun/v34-terminal-g1465/ladders/ladder-80k/stockfish-nodes-100000/result.json",
+      "wins": 3,
+      "draws": 6,
+      "losses": 1,
+      "score": 0.6,
+      "score_confidence_low": 0.5,
+      "score_confidence_high": 0.7
+    },
+    {
+      "stockfish_nodes": 200000,
+      "result_path": "/workspace/postrun/v34-terminal-g1465/ladders/ladder-80k/stockfish-nodes-200000/result.json",
+      "wins": 1,
+      "draws": 6,
+      "losses": 3,
+      "score": 0.4,
+      "score_confidence_low": 0.3,
+      "score_confidence_high": 0.5
+    }
+  ],
+  "closest_stockfish_nodes": 50000,
+  "score_bracket": {
+    "lower_stockfish_nodes": 100000,
+    "upper_stockfish_nodes": 200000
+  },
+  "ladder_elo_fit": {
+    "anchor_source": "melonimarco-ssdf-20260820",
+    "bootstrap_samples": 20000,
+    "ladder_elo": 3109.583401131519,
+    "confidence_low": 2993.4642529446173,
+    "confidence_high": 3195.13992971244
+  }
+}

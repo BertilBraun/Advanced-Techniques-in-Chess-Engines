@@ -1,0 +1,22 @@
+{
+  "checkpoint_generation": 1465,
+  "ten_thousand": {
+    "rungs": [
+      {"stockfish_nodes": 50000, "wins": 6, "draws": 3, "losses": 1, "score": 0.75},
+      {"stockfish_nodes": 100000, "wins": 1, "draws": 3, "losses": 6, "score": 0.25}
+    ],
+    "selected_stockfish_nodes": 100000,
+    "selection_reason": "Exact distance tie; selected stronger rung."
+  },
+  "eighty_thousand": {
+    "rungs": [
+      {"stockfish_nodes": 50000, "wins": 3, "draws": 5, "losses": 2, "score": 0.55},
+      {"stockfish_nodes": 100000, "wins": 3, "draws": 6, "losses": 1, "score": 0.60},
+      {"stockfish_nodes": 200000, "wins": 1, "draws": 6, "losses": 3, "score": 0.40}
+    ],
+    "selected_stockfish_nodes": 50000,
+    "selection_reason": "Closest observed score to 0.50."
+  },
+  "policy_only_stockfish_nodes": 1000,
+  "shallow_64_stockfish_nodes": 5000
+}
