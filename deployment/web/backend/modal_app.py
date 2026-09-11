@@ -104,7 +104,11 @@ class ChessWebPlay:
             raise RuntimeError('The GPU deployment cannot access CUDA.')
         print(f'Loading interactive engine on {torch.cuda.get_device_name(0)}.')
         engine = InteractiveEngine(
-            InteractiveEngineConfiguration(model_path=str(model_path), inference_target=InferenceTarget.CUDA)
+            InteractiveEngineConfiguration(
+                model_path=str(model_path),
+                parallel_searches=16,
+                inference_target=InferenceTarget.CUDA,
+            )
         )
         for _ in range(_GPU_SINGLE_POSITION_WARMUPS):
             engine.new_game(chess.STARTING_FEN, ()).analyze(PolicyAnalysis())
