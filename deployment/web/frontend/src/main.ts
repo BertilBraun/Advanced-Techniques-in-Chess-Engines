@@ -84,7 +84,7 @@ root.innerHTML = `
     <section class="hero" aria-labelledby="page-title">
       <p class="eyebrow">PLAY THE NETWORK</p>
       <h1 id="page-title">Your move.<br><em>Its calculation.</em></h1>
-      <p class="intro">Play the three-day v34 model: superhuman strength from about $50 of self-play training. Choose its raw policy or give MCTS time to search.</p>
+      <p class="intro">Play a superhuman chess model trained through self-play for exactly three days and $52.08 of rented compute. Choose its raw policy or give MCTS time to search.</p>
     </section>
 
     <section class="play-layout">
@@ -172,10 +172,10 @@ root.innerHTML = `
     <section class="panel run-summary-panel" aria-labelledby="run-summary-title">
       <div class="panel-heading"><h2  id="run-summary-title">Model Training</h2></div>
       <dl class="kv-grid">
-        <div><dt>Checkpoint</dt><dd>v34 generation 1465</dd></div>
-        <div><dt>Training</dt><dd>approximately 3 days</dd></div>
+        <div><dt>Checkpoint</dt><dd>Generation 1465 · 14 blocks × 160 channels</dd></div>
+        <div><dt>Training</dt><dd>exactly 3 days</dd></div>
         <div><dt>Hardware</dt><dd>8x NVIDIA RTX 4070 SUPER, shared self-play and training</dd></div>
-        <div><dt>Approx. cost</dt><dd>about $50 of rented compute</dd></div>
+        <div><dt>Training-node cost</dt><dd>$52.08</dd></div>
       </dl>
       <h3 class="run-summary-subtitle">Approximate Elo by search budget</h3>
       <div class="table-wrap">

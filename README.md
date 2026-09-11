@@ -1,15 +1,25 @@
-# AlphaZero chess on a compute budget
+# AlphaZero chess for $52.08
 
-This repository trains and serves AlphaZero-style chess and Go agents with a C++20 search engine and a typed Python
-training runtime. Its main result is a strong chess model trained from self-play on eight consumer GPUs for about
-three days, at a nominal training-node cost of **$51.84** (about $52).
+This project trained a superhuman AlphaZero-style chess model using eight consumer GPUs shared between self-play
+and learning. The retained checkpoint used exactly three days on an RTX 4070 SUPER node costing $17.36 per day:
+**$52.08 of training-node rental**.
 
-The retained v34 checkpoint is generation 1465, a 14-block, 160-channel residual network with 6,256,365 inference
-parameters. Terminal Stockfish calibration places it at **3,037 benchmark Elo [3,012, 3,061] at 10,000 searches per
-move** and **3,174 [3,144, 3,206] at 80,000 searches per move**. These are conditional ratings on an SSDF-derived
-Stockfish 13 fixed-node ladder. They are not FIDE ratings and should not be compared directly with human ratings.
-The [complete terminal benchmark](documentation/benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md)
-contains all 800 headline-match games and the exact search configurations.
+[Play against the model](https://chess.bertil-braun.de/) ·
+[Download the weights](https://huggingface.co/BertilBraun/alphazero-chess) ·
+[Read the benchmark](documentation/benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md)
+
+| Search per move | Direct opponent | Score | Benchmark Elo (95% CI) |
+| ---: | --- | ---: | ---: |
+| 64 | Stockfish 13 at 5,000 nodes | 56.50% | 2,265 [2,236, 2,297] |
+| 10,000 | Stockfish 13 at 100,000 nodes | 41.00% | 3,037 [3,012, 3,061] |
+| 80,000 | Stockfish 13 at 50,000 nodes | 77.38% | 3,174 [3,144, 3,206] |
+
+Each row is a 400-game match over 200 balanced opening pairs. The numbers use this project's historical
+SSDF-derived Stockfish-node calibration; they are benchmark Elo rather than FIDE ratings. The complete benchmark
+contains every game, artifact hash, confidence interval, and exact search configuration.
+
+The production checkpoint is internally identified as v34 generation 1465. It is a 14-block, 160-channel residual
+network with 6,256,365 inference parameters.
 
 The [rating-scale note](documentation/analysis/chess-elo-scale-and-reporting-20260911.md) explains the SSDF-derived
 Stockfish-node anchors and recommends language for public reporting.

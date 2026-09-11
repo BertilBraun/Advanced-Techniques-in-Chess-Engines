@@ -23,9 +23,9 @@ Both headline results use 400 games from 200 balanced opening pairs. The paired-
 | Hardware | 8x NVIDIA GeForce RTX 4070 SUPER, 12,282 MiB each; driver 595.71.05 |
 | Match seed | 20260816 |
 
-The training configuration prices the eight-GPU node at $0.72/hour. A nominal 72-hour checkpoint therefore costs
-$51.84, reported as **about $52** or **about $50 of training compute**. That headline excludes separate evaluation
-nodes and abandoned or restarted run segments; it is not a complete project invoice.
+The node's billed rate was $17.36 per day. The exactly three-day checkpoint therefore cost **$52.08** in
+training-node rental. That figure excludes separate evaluation nodes and abandoned or restarted run segments; it
+is not a complete project invoice.
 
 ## Final matches
 
