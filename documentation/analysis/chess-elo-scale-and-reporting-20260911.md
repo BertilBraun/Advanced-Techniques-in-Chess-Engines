@@ -39,9 +39,10 @@ The intervals resample paired openings and then apply the same transform. They d
 against a fixed opponent anchor. They do **not** include uncertainty in the anchor scale. The 80,000-search opponent
 was also weaker than ideal for precision: a 77.4% score is farther from the most informative 50% region.
 
-At the time of this audit, the terminal JSON files are still on the evaluation node under
-`/workspace/postrun/v34-terminal-g1465/final/`. They must be fetched and hash-verified before the result satisfies
-the repository's archival evidence rule.
+The terminal evaluation archive was fetched to
+`.codex-diagnostics/v34-terminal-g1465-evaluations-20260911T143000Z`; all 79 entries in its `SHA256SUMS` manifest
+passed verification. The underlying result JSON files are retained under `postrun/v34-terminal-g1465/final/` in
+that archive.
 
 ## Where the ladder's zero point comes from
 
@@ -172,4 +173,3 @@ defined equal wall-clock budget would be the clean way to make that comparison.
    through explicit bridge evidence.
 6. Describe the three-day checkpoint as the cost/strength result even if later training produces a slightly stronger
    checkpoint; state which checkpoint each evaluation used.
-
