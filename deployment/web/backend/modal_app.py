@@ -24,6 +24,7 @@ image = (
         'torch==2.12.1',
         index_url='https://download.pytorch.org/whl/cu126',
     )
+    .pip_install('ruff==0.16.4')
     .add_local_dir(
         _REPOSITORY_ROOT / 'cpp',
         f'{_REMOTE_ROOT}/cpp',
