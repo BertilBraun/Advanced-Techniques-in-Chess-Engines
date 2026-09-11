@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "teacher_run_state": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34",
+  "teacher_generation": 1465,
+  "replay_store": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/replay.bin",
+  "orchestrator_recorded_replay_store_sha256": "d668a18e07be099538a79a70b2c65c275a724b7dba56eddeb5629d0a7df52a83",
+  "experiment": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/resolved-experiment.json",
+  "opening_manifest": "/workspace/alphazero-engine/py/reference/chess-elite-2025-11-balanced-4moves-200-v1-openings.json",
+  "output_root": "/workspace/postrun/v34-terminal-g1465/distillation",
+  "devices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "seeds": [
+    20260827,
+    20260828
+  ],
+  "student_generation": 0,
+  "steps": 100000,
+  "searches_per_move": 10000,
+  "parallel_searches": 4,
+  "throughput_device": 0,
+  "training": {
+    "architectures": [
+      {
+        "name": "4x80",
+        "layers": 4,
+        "hidden_size": 80
+      },
+      {
+        "name": "5x72",
+        "layers": 5,
+        "hidden_size": 72
+      },
+      {
+        "name": "6x64",
+        "layers": 6,
+        "hidden_size": 64
+      },
+      {
+        "name": "8x56",
+        "layers": 8,
+        "hidden_size": 56
+      }
+    ],
+    "network_kind": "convolutional",
+    "policy_head_kind": "from_to_attention",
+    "policy_key_size": 64,
+    "batch_size": 1024,
+    "learning_rate": 0.002,
+    "learning_rate_schedule": "plateau",
+    "anneal_fraction": 0.2,
+    "warmup_steps": 1000,
+    "holdout_fraction": 0.02,
+    "evaluate_every": 4000,
+    "checkpoint_every": 10000
+  },
+  "evaluation": {
+    "opening_pair_count": 100,
+    "throughput_position_count": 100,
+    "exploration_constant": 1.0,
+    "random_seed": 20260816,
+    "modes": [
+      "throughput-only",
+      "equal-nodes",
+      "equal-compute"
+    ]
+  }
+}

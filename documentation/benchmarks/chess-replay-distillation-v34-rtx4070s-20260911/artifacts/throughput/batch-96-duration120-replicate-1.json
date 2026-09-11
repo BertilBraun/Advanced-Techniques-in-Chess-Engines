@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "source_revision": "245d71725643884fcc9737f7bfd21d9ac3ff5068",
+  "source_dirty": false,
+  "tool_sha256": "ecbf23a771776114bd81eec5cc56d44757dcd0849eefc998e0091ec36765a9f5",
+  "started_at_utc": "2026-09-11T10:13:07.600077Z",
+  "mode": "throughput-only",
+  "experiment_path": "/workspace/eval/v34-distill-throughput/configs/batch-96.json",
+  "experiment_configuration_sha256": "c8ac0bbc37c30d81dde0f241724a21ba58f2763f2b9730a599a4d71bcea32a9f",
+  "opening_manifest_path": "/workspace/alphazero-engine/py/reference/chess-elite-2025-11-balanced-4moves-200-v1-openings.json",
+  "opening_manifest_sha256": "40582c4f753e90d8ebd170498c37e3f4812bff38287e6bfa6db376e9eec70d39",
+  "opening_manifest_pair_count": 200,
+  "opening_pair_count": 100,
+  "maximum_game_plies": 300,
+  "device_id": 0,
+  "random_seed": 20260816,
+  "bootstrap_samples": 10000,
+  "teacher": {
+    "run_state_path": "/workspace/eval/v34-distill-mac/teacher",
+    "generation": 1465,
+    "inference_model_path": "/workspace/eval/v34-distill-mac/teacher/model_1465.jit.pt",
+    "inference_model_sha256": "402efb61146b5a0f569c960e1f7a7e7714ba1bb28982fcdfb7f10e8ec5a98ad6",
+    "network": {
+      "architecture": {
+        "policy_head": {
+          "kind": "chess_from_to_attention_v1",
+          "key_size": 128
+        },
+        "num_value_channels": 2,
+        "value_fc_size": 48,
+        "kind": "convolutional",
+        "num_layers": 14,
+        "hidden_size": 160,
+        "residual_context": {
+          "kind": "global_pooling",
+          "placement": "every_second_block"
+        }
+      },
+      "dimensions": {
+        "channels": 52,
+        "rows": 8,
+        "columns": 8,
+        "actions": 1880,
+        "outcomes": 3
+      },
+      "auxiliary_heads": [
+        {
+          "kind": "next_policy",
+          "action_size": 1880,
+          "ply_offset": 1
+        },
+        {
+          "kind": "remaining_game_length",
+          "normalization_scale": 400.0,
+          "output_size": 1
+        }
+      ]
+    }
+  },
+  "student": {
+    "run_state_path": "/workspace/eval/v34-distill-mac/student",
+    "generation": 0,
+    "inference_model_path": "/workspace/eval/v34-distill-mac/student/model_0.jit.pt",
+    "inference_model_sha256": "d41ba5a39316cbe0acfa24533f83c3a5ae96f3241231f1dc7cb0429afb0aa8c7",
+    "network": {
+      "architecture": {
+        "policy_head": {
+          "kind": "chess_from_to_attention_v1",
+          "key_size": 64
+        },
+        "num_value_channels": 2,
+        "value_fc_size": 48,
+        "kind": "convolutional",
+        "num_layers": 8,
+        "hidden_size": 56,
+        "residual_context": {
+          "kind": "global_pooling",
+          "placement": "every_second_block"
+        }
+      },
+      "dimensions": {
+        "channels": 52,
+        "rows": 8,
+        "columns": 8,
+        "actions": 1880,
+        "outcomes": 3
+      },
+      "auxiliary_heads": []
+    }
+  },
+  "teacher_throughput": {
+    "searches_per_move": 64,
+    "parallel_searches": 1,
+    "position_count": 200,
+    "warmup_batches": 2,
+    "measured_batches": 384,
+    "requested_duration_seconds": 120.0,
+    "elapsed_seconds": 120.15319111291319,
+    "inference_positions": 4991616,
+    "inference_calls": 52224,
+    "inference_seconds": 8.684554051,
+    "average_positions_per_inference_call": 95.58087921142578,
+    "worker_utilization": 0.07493630796670914,
+    "positions_per_second": 41543.76553602443,
+    "searches_per_second": 40907.77743373434
+  },
+  "student_throughput": {
+    "searches_per_move": 64,
+    "parallel_searches": 1,
+    "position_count": 200,
+    "warmup_batches": 2,
+    "measured_batches": 1141,
+    "requested_duration_seconds": 120.0,
+    "elapsed_seconds": 120.1010938747786,
+    "inference_positions": 14831859,
+    "inference_calls": 155176,
+    "inference_seconds": 20.972033208,
+    "average_positions_per_inference_call": 95.58087921142578,
+    "worker_utilization": 0.1862044632434845,
+    "positions_per_second": 123494.78694560593,
+    "searches_per_second": 121604.22131731332
+  },
+  "throughput_ratio": 2.9726430753735635,
+  "budgets": null,
+  "games": [],
+  "aggregate": null,
+  "maximum_plies_games": null,
+  "elo_difference": null,
+  "duration_seconds": 340.3908894932829
+}

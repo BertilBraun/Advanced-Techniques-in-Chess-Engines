@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "metrics": [
+    {
+      "architecture": "4x80",
+      "random_seed": 20260827,
+      "headline_policy_gap": 0.5365,
+      "run_state": "/workspace/postrun/v34-terminal-g1465/distillation/students/4x80-seed-20260827"
+    },
+    {
+      "architecture": "4x80",
+      "random_seed": 20260828,
+      "headline_policy_gap": 0.5367,
+      "run_state": "/workspace/postrun/v34-terminal-g1465/distillation/students/4x80-seed-20260828"
+    },
+    {
+      "architecture": "5x72",
+      "random_seed": 20260827,
+      "headline_policy_gap": 0.5272,
+      "run_state": "/workspace/postrun/v34-terminal-g1465/distillation/students/5x72-seed-20260827"
+    },
+    {
+      "architecture": "5x72",
+      "random_seed": 20260828,
+      "headline_policy_gap": 0.5284,
+      "run_state": "/workspace/postrun/v34-terminal-g1465/distillation/students/5x72-seed-20260828"
+    },
+    {
+      "architecture": "6x64",
+      "random_seed": 20260827,
+      "headline_policy_gap": 0.5294,
+      "run_state": "/workspace/postrun/v34-terminal-g1465/distillation/students/6x64-seed-20260827"
+    },
+    {
+      "architecture": "6x64",
+      "random_seed": 20260828,
+      "headline_policy_gap": 0.5281,
+      "run_state": "/workspace/postrun/v34-terminal-g1465/distillation/students/6x64-seed-20260828"
+    },
+    {
+      "architecture": "8x56",
+      "random_seed": 20260827,
+      "headline_policy_gap": 0.5194,
+      "run_state": "/workspace/postrun/v34-terminal-g1465/distillation/students/8x56-seed-20260827"
+    },
+    {
+      "architecture": "8x56",
+      "random_seed": 20260828,
+      "headline_policy_gap": 0.5248,
+      "run_state": "/workspace/postrun/v34-terminal-g1465/distillation/students/8x56-seed-20260828"
+    }
+  ],
+  "selected_architecture": "8x56",
+  "selected_run_state": "/workspace/postrun/v34-terminal-g1465/distillation/students/8x56-seed-20260827",
+  "selected_generation": 0,
+  "selection_rule": "lowest_mean_policy_gap_above_floor"
+}
