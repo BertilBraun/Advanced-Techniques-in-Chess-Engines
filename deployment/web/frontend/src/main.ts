@@ -43,7 +43,7 @@ const root = document.querySelector<HTMLDivElement>("#app");
 if (!root) throw new Error("App container is missing.");
 
 const baselineRunRows: readonly BaselineRunRow[] = [
-  { duration: "64 searches", elo: "2,265 [2,236–2,298]", evidence: "56.50% vs Stockfish 13 at 5k nodes" },
+  { duration: "64 searches", elo: "2,265 [2,236–2,297]", evidence: "56.50% vs Stockfish 13 at 5k nodes" },
   { duration: "10,000 searches", elo: "3,037 [3,012–3,061]", evidence: "41.00% vs Stockfish 13 at 100k nodes" },
   { duration: "80,000 searches", elo: "3,174 [3,144–3,206]", evidence: "77.38% vs Stockfish 13 at 50k nodes" },
 ];
