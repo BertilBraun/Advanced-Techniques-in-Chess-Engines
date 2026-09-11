@@ -41,6 +41,41 @@ committed beside this note, with hashes in `SHA256SUMS`.
 | Equal network MAC match | `ee8240ee2dcea99fda2f1f7617cf1fc2180c971976048fa7db2397ed1d6a5752` |
 | Saturated throughput and equal-time match | `f6abf56a056977b87d30dd24b419870305741cf202e668691bed45a2b50788ac` |
 
+## Published model
+
+The selected student is published in [`model/`](model/):
+
+| File | Purpose | SHA-256 |
+| --- | --- | --- |
+| `model_0.jit.pt` | Fused TorchScript inference model | `d41ba5a39316cbe0acfa24533f83c3a5ae96f3241231f1dc7cb0429afb0aa8c7` |
+| `model_0.pt` | Unfused PyTorch training weights | `59fb68e2884a24df4157fde8691ef761b6c3823f03e8030f1d1d090cae757b33` |
+| `checkpoint_0.json` | Original architecture and checkpoint manifest | `592fc76f5eef7b232d34bae92396d3de762450d890a0ad38d67e8d24ae3174e0` |
+
+The optimizer artifact referenced by the original checkpoint manifest is intentionally omitted. The raw
+weights can initialize further training, but this directory is not an exact optimizer-resumable run state.
+The TorchScript file is self-contained for inference and embeds its network definition.
+
+Minimal forward pass with the repository's locked PyTorch version:
+
+```python
+from pathlib import Path
+
+import torch
+
+model_path = Path('model/model_0.jit.pt')
+model = torch.jit.load(str(model_path), map_location='cpu').eval()
+encoded_positions = torch.zeros((1, 52, 8, 8), dtype=torch.float32)
+with torch.inference_mode():
+    policy_logits, wdl_logits = model(encoded_positions)
+
+assert policy_logits.shape == (1, 1880)
+assert wdl_logits.shape == (1, 3)
+```
+
+Real play must use the repository's chess encoder and legal-action mask; the zero tensor above is only a
+file-loading smoke test. No standalone license is declared for the repository, so publishing these files
+does not grant rights beyond the repository's existing terms.
+
 ## What was distilled
 
 This experiment compressed a frozen production replay store. It is replay-target compression rather

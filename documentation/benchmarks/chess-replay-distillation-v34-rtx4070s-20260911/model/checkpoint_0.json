@@ -1,0 +1,35 @@
+{
+  "generation": 0,
+  "network": {
+    "architecture": {
+      "policy_head": {
+        "kind": "chess_from_to_attention_v1",
+        "key_size": 64
+      },
+      "num_value_channels": 2,
+      "value_fc_size": 48,
+      "kind": "convolutional",
+      "num_layers": 8,
+      "hidden_size": 56,
+      "residual_context": {
+        "kind": "global_pooling",
+        "placement": "every_second_block"
+      }
+    },
+    "dimensions": {
+      "channels": 52,
+      "rows": 8,
+      "columns": 8,
+      "actions": 1880,
+      "outcomes": 3
+    },
+    "auxiliary_heads": []
+  },
+  "model_path": "model_0.pt",
+  "model_sha256": "59fb68e2884a24df4157fde8691ef761b6c3823f03e8030f1d1d090cae757b33",
+  "optimizer_path": "optimizer_0.pt",
+  "optimizer_sha256": "1662c60ea8e00c892f88adaf4c15421812bc6cc62f89c258457b06c8a718cda1",
+  "inference_model_path": "model_0.jit.pt",
+  "inference_model_sha256": "d41ba5a39316cbe0acfa24533f83c3a5ae96f3241231f1dc7cb0429afb0aa8c7",
+  "policy_prior_calibration": null
+}
