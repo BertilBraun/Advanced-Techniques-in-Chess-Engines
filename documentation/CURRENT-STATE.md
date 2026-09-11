@@ -48,6 +48,14 @@ for the archived configuration.
 
 - The replay-compression study is complete and published with the selected student weights, 25 hashed artifacts,
   throughput probes, and three match conditions.
+- The generation-1465 deployment checkpoint and compressed student are published in the
+  [Hugging Face model repository](https://huggingface.co/BertilBraun/alphazero-chess) with immutable revision,
+  source, configuration, architecture, and artifact hashes.
+- The interactive chess client and the project homepage report the terminal v34 result with its calibration and
+  confidence intervals. The interactive backend is pinned to the generation-1465 production artifacts.
+- The [Elo-scale analysis](analysis/chess-elo-scale-and-reporting-20260911.md) defines the public reporting language:
+  these are protocol-specific benchmark ratings calibrated from historical SSDF-derived anchors, not FIDE ratings
+  or current engine-list ratings.
 - The v29 benchmark series and generation-936 deep match provide a fully documented predecessor.
 - Adaptive search budgeting and learned early stopping were rejected on Elo evidence and removed from both Python
   and C++.
@@ -56,9 +64,6 @@ for the archived configuration.
 ## Work still open
 
 - Stop and preserve the final live continuation only on explicit user instruction; fetch and verify its archive.
-- Publish the selected deployment checkpoint to Hugging Face with source/config/checkpoint hashes and a model card.
-- Point the interactive deployment at that exact model and verify backend/frontend compatibility.
-- Complete the Elo-scale comparison with human and engine rating lists before making audience-facing comparisons.
 - Decide whether to write a formal technical report after the repository and public pages are coherent.
 - Add an explicit code and model license. Until then, redistribution terms are unspecified.
 
