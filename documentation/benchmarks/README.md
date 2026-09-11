@@ -19,6 +19,16 @@ records the exact `6x96 -> 10x160 -> 15x192` production-model throughput and par
 
 ## Notable results
 
+- [v34 terminal strength (2026-09-11)](chess-terminal-v34-generation1465-rtx4070s-20260911/README.md) — generation
+  1465 scored 3,037 benchmark Elo [3,012, 3,061] at 10,000 searches and 3,174 [3,144, 3,206] at 80,000 searches,
+  with four complete 400-game result files and the SSDF-anchor caveat.
+- [v34 replay compression (2026-09-11)](chess-replay-distillation-v34-rtx4070s-20260911/README.md) — a published
+  474,069-parameter student, 13.20x smaller than its teacher; -166 Elo under the measured saturated equal-time
+  workload, with model files and compact raw evidence.
+- [v29 generation-936 deep match (2026-09-06)](deep-match-generation936-50k-nodes-rtx4070s-20260906/README.md) —
+  the latest fully documented absolute chess rating: 2,844.8 Elo [2,806.6, 2,882.3] at 10,000 searches.
+- [v29 Elo versus generation (2026-09-06)](ladder-elo-vs-generation-rtx4070s-20260906/README.md) — wall-clock and
+  generation trajectory through generation 1,000, including the late throughput collapse.
 - [Four-node Vast comparison (2026-08-21)](node-comparison-vast-4nodes-20260821/README.md) — the reference for
   node selection; also a model README for new benchmarks.
 - [Four-RTX-3060 self-play throughput baseline](self-play-throughput-4xrtx3060-20260809/README.md) — chess and Go 7x7 capacity

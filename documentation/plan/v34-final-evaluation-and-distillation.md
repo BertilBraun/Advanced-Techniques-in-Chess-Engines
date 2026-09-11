@@ -4,7 +4,10 @@ Date: 2026-09-10. This plan does not authorize stopping v34 or spending GPU time
 measurement protocol so the terminal checkpoint can be evaluated immediately after the user stops
 the run.
 
-The replay-compression phase is complete. Results and compact raw evidence are recorded in
+The terminal evaluation and replay-compression phases are complete. Final strength results and compact raw evidence
+are recorded in
+[`chess-terminal-v34-generation1465-rtx4070s-20260911`](../benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md).
+Compression results and the published student model are recorded in
 [`chess-replay-distillation-v34-rtx4070s-20260911`](../benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md).
 
 ## Terminal checkpoint and evidence gate

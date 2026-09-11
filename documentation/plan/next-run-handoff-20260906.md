@@ -1,5 +1,8 @@
 # Handoff: designing the next chess training run
 
+> **Historical design input.** This handoff shaped v34. It is retained for its evidence and reasoning; current
+> status lives in [`../CURRENT-STATE.md`](../CURRENT-STATE.md).
+
 Written 2026-09-06, after the v29 run was stopped, measured and merged. This document is the starting
 context for a fresh session whose job is to reason through what the next run should look like.
 

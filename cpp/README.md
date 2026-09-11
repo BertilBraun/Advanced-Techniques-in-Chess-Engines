@@ -18,6 +18,19 @@ native search implementation.
 The optimized search is game-parameterized at compile time and instantiated for chess, Go 7x7, and Go 9x9. Python
 bindings expose the same action-ID root/search surface for every game.
 
+## Contracts that must remain aligned
+
+The native boundary is intentionally coarse. Python supplies complete configurations and encoded model artifacts;
+native code returns typed game, policy-target, search-statistics, and analysis records. When changing that boundary:
+
+- update `py/AlphaZeroCpp.pyi` through the normal build rather than editing the generated stub by hand;
+- add a native test and a Python-side binding-contract test;
+- rerun `cpp/test/flip-harness/` for chess encoding or action-ID changes;
+- keep policy and WDL as the production inference outputs unless the canonical training contract changes too.
+
+The colour-symmetry harness is part of correctness, not an optional performance benchmark. It verifies that board
+encoding, action IDs, legal moves, and policy indices agree when positions are transformed between colours.
+
 ## Build
 
 Install the hashed Python environment first; it supplies PyTorch/LibTorch and `pybind11-stubgen`. Then configure and
@@ -61,3 +74,7 @@ python -m pytest --import-mode=importlib .\test -q
 Changes to bindings, state, encoding, inference, or search require both suites. Historical performance evidence is
 under [`documentation/benchmarks`](../documentation/benchmarks/README.md); it is revision-specific and not current
 architecture guidance.
+
+For a fast Linux compile check during development, follow [`cpp/AGENTS.md`](AGENTS.md). It uses a persistent
+`CompileCheck` directory with ccache and deliberately does not produce a deployable artifact. Production and
+measurement builds must use `Release`.

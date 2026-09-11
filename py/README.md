@@ -4,6 +4,28 @@ Python owns experiment configuration, run preparation, coordinator lifecycle, re
 evaluation scheduling, and reporting for chess and Go. Native C++ owns game rules, state transitions, network input
 encoding, and batched search.
 
+The production chess result and its evidence are introduced in the [root README](../README.md). This guide documents
+the current code paths; dated experiment commands farther below reproduce specific protocols and are not launch
+authorization.
+
+## Package map
+
+| Path | Responsibility |
+| --- | --- |
+| `src/experiment/` | Typed experiment schema, inheritance, resolution, and approval inputs |
+| `src/self_play/` | Native-worker lifecycle and completed-game publication |
+| `src/replay/` | Columnar replay storage, shard materialization, and prioritized sampling |
+| `src/training/` | Network definitions, DDP trainers, checkpoint publication, and progressive sizing |
+| `src/evaluation/` | Fixed-dataset metrics, Stockfish/KataGo matches, ladders, and reporting |
+| `src/games/` | Python-facing chess/Go adapters plus UCI and interactive chess entry points |
+| `src/distillation/` | Frozen-replay compression training and selection |
+| `tools/` | Explicit offline evaluation and compression orchestration commands |
+| `configs/` | Baseline, production, research, validation, and queue YAML |
+| `test/` | Unit, native-contract, and opt-in integration tests |
+
+The authoritative experiment shape is the Pydantic union in `src/experiment/configuration.py`. YAML files may use
+`extends`, but approvals and provenance always bind the fully resolved configuration.
+
 ## Production entry points
 
 - `python py/train.py --run-config ... --expected-source-revision ... --approval-file ...` starts an explicitly
@@ -16,6 +38,10 @@ encoding, and batched search.
 
 The UCI and interactive packages are deployment-owned production code. They are independent of the removed Python
 chess rules and training implementations.
+
+Normal run lifecycle is handled from the repository root by
+[`deployment/run_control.sh`](../deployment/run_control.sh), including preservation and fetch. Calling `train.py`
+directly is an implementation-level entry point and does not bypass the approval or evidence requirements.
 
 ## Environment and build
 

@@ -1,5 +1,8 @@
 # Chess search follow-up plan — 2026-08-27
 
+> **Completed campaign record.** The adaptive-search line was subsequently rejected and removed. See
+> [`../analysis/adaptive-search-conclusion-20260904.md`](../analysis/adaptive-search-conclusion-20260904.md).
+
 Continuation from [`analysis/chess-search-findings-20260827.md`](../analysis/chess-search-findings-20260827.md).
 Nothing here is started without an explicit instruction. Work is grouped by what it depends on, and each item
 states the decision it unblocks.

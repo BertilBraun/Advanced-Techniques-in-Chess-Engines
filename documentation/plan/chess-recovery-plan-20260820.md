@@ -1,5 +1,8 @@
 # Chess recovery plan: from the post-rework stall back to a trustworthy training loop
 
+> **Completed campaign record.** This plan guided the August 2026 recovery work but is no longer the active plan.
+> Start at [`../CURRENT-STATE.md`](../CURRENT-STATE.md) and the [plan index](README.md) for the closing v34 phase.
+
 Date: 2026-08-20. Companion to
 [`chess-post-four-day-regression-analysis-20260820.md`](chess-post-four-day-regression-analysis-20260820.md), which
 holds the evidence. This document holds the decisions and the work. It is meant to be referenced phase by phase;

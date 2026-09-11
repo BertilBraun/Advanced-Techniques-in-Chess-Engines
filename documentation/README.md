@@ -1,48 +1,90 @@
-# Documentation index
+# Documentation
 
-The directory name determines a document's authority. `research/` holds the current plan and its evidence,
-`architecture/` the accepted designs, `operations/` re-executed procedures. Material under `history/` and
-`benchmarks/` is evidence about a particular earlier revision or run and must not be used as current guidance.
-This index is updated in the same commit as any document it lists.
+This index is the reader path through the project. Documents are grouped by purpose because the repository retains
+failed experiments and superseded designs as research evidence. A date or confident tone in an old document does
+not make it current guidance.
 
 ## Start here
 
-- [Current state](CURRENT-STATE.md) — what the system is today, in two pages.
-- [Onboarding](ONBOARDING.md) — read-in-this-order path for a new contributor or agent.
-- [Chess recovery plan](plan/chess-recovery-plan-20260820.md) — **the current plan**; work is referenced by
-  WP number and its per-generation yardstick is the pass/fail reference for new runs.
+1. Read the [root README](../README.md) for the result and system overview.
+2. Read [Current state](CURRENT-STATE.md) for what is final, provisional, active, and still missing.
+3. Read the [Python](../py/README.md) or [C++](../cpp/README.md) guide before changing that runtime.
+4. Read [Run control](operations/run-control.md) and the
+   [experiment platform](operations/experiment-platform.md) before touching a run or rented node.
 
-## Current authority
+## Results
 
-- [Chess recovery plan](plan/chess-recovery-plan-20260820.md), grounded in the
-  [post-four-day regression analysis](plan/chess-post-four-day-regression-analysis-20260820.md).
-- [Python runtime architecture](architecture/python-runtime-rework.md) — accepted Python ownership and process
-  model (read its as-built banner: the ingestion contract is being reworked under WP2).
-- [Progressive model sizing](architecture/progressive-model-sizing.md) — accepted training policy.
-- [Run control](operations/run-control.md) — the only supported way to start, stop, inspect and archive runs.
-- [Python runtime README](../py/README.md) and [C++ README](../cpp/README.md) for entry points and builds.
+The retained v34 three-day checkpoint is the project’s main chess result. It reached 3,037 benchmark Elo at 10,000
+searches and 3,174 at 80,000 searches on the project’s SSDF-derived Stockfish 13 fixed-node ladder.
 
-The R1–R12 ledger in [platform-rework.md](architecture/platform-rework.md) is **closed** and authorises nothing;
-it is retained as the historical record of the platform rework.
+| Result | Status | Evidence |
+| --- | --- | --- |
+| v34 generation 1465 replay compression | **Final** | [13.20x smaller student and match artifacts](benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md) |
+| v34 generation 1465 terminal strength | **Final** | [3,037 at 10k and 3,174 at 80k](benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md) |
+| v29 generation 936 deep match | **Final** | [2,844.8 Elo at 10,000 searches](benchmarks/deep-match-generation936-50k-nodes-rtx4070s-20260906/README.md) |
+| v29 strength over wall-clock | **Final** | [generations 100–1000 ladder](benchmarks/ladder-elo-vs-generation-rtx4070s-20260906/README.md) |
+| Four-day historical baseline | **Final, older runtime** | [frozen evidence](evidence/chess-four-day-freeze-20260817/) |
 
-## Where a new document goes
+“Final” means the measurement and compact evidence are committed. It does not mean that the absolute Elo scale is
+equivalent to FIDE, online-server, CCRL, or current Stockfish ratings. The rating-scale analysis is separate work.
+See [What the v34 Elo numbers mean](analysis/chess-elo-scale-and-reporting-20260911.md) for the calibrated scale and
+recommended public language.
 
-| Kind | Destination |
-| --- | --- |
-| Current plan or its evidence | `research/` |
-| Accepted design | `architecture/` |
-| Procedure that is re-executed | `operations/` |
-| Measurement | `benchmarks/<topic>-<hardware>-<date>/` |
-| Per-run or per-node record | dated file, non-normative (see `operations/` node notes) |
-| Superseded document | stays in place with a supersession banner, never silently deleted |
+## Directory guide
 
-## Evidence, not guidance
+| Directory | Purpose | Authority |
+| --- | --- | --- |
+| [`analysis/`](analysis/) | Investigations, literature reviews, and conclusions | Evidence and reasoning; check date and status |
+| [`architecture/`](architecture/README.md) | Accepted designs and implementation records | Current only where the file’s banner says so |
+| [`benchmarks/`](benchmarks/README.md) | Raw measurements and run-specific reports | Authoritative for that exact revision and configuration |
+| [`evidence/`](evidence/README.md) | Frozen run and node records | Immutable evidence, never operating guidance |
+| [`operations/`](operations/README.md) | Procedures intended to be run again | Current operational guidance |
+| [`plan/`](plan/README.md) | Active and completed experiment plans | Planning record; does not itself authorize compute |
+| [`history/`](history/README.md) | Pre-rework and superseded material | Archival and non-normative |
 
-- [`benchmarks/`](benchmarks/README.md) — measured artifacts, each scoped to its recorded revision, hardware,
-  configuration and date.
-- [`history/`](history/README.md) — pre-rework designs and optimization notes, non-normative.
+The [benchmark template](benchmarks/TEMPLATE.md) defines the evidence expected for new measurements. Large fetched
+archives live under the gitignored `.codex-diagnostics/`; compact results and hashes belong in `benchmarks/` or
+`evidence/`.
 
-## Research
+## Current technical guides
 
-- [Experiment backlog](../THINGS_TO_TRY.md) — candidate experiments; ideas, not authorized runs.
-- [Research references](references.md) — papers and external resources.
+- [Python runtime architecture](architecture/python-runtime-rework.md)
+- [Replay pipeline](architecture/replay-pipeline-rework.md)
+- [Progressive model sizing](architecture/progressive-model-sizing.md)
+- [Run control](operations/run-control.md)
+- [Evaluation engines](operations/evaluation-engines.md)
+- [Stockfish gauntlet](operations/stockfish-gauntlet.md)
+- [Experiment result export](operations/experiment-result-export.md)
+- [Web play](operations/web-play.md)
+
+Read supersession banners inside these documents. Some architecture files preserve the reasoning for components
+that were subsequently replaced.
+
+## Research narrative
+
+For the shortest path through the compute-poor chess work:
+
+1. [Post-four-day regression analysis](plan/chess-post-four-day-regression-analysis-20260820.md) identifies why
+   earlier rework stopped learning.
+2. [Chess recovery plan](plan/chess-recovery-plan-20260820.md) records the recovery campaign.
+3. [Search findings](analysis/chess-search-findings-20260827.md) and the
+   [adaptive-search conclusion](analysis/adaptive-search-conclusion-20260904.md) record why adaptive allocation
+   and learned stopping were removed.
+4. [v29 handoff](plan/next-run-handoff-20260906.md) connects throughput collapse, replay reuse, and data scarcity.
+5. [Reference recipes for a compute-poor run](analysis/reference-recipes-for-a-compute-poor-run.md) compares the
+   design with AlphaZero, KataGo, lc0, and later work.
+6. [v34 final evaluation and distillation](plan/v34-final-evaluation-and-distillation.md) defines the closing
+   measurement protocol; the compression branch of that plan is complete.
+
+## Document lifecycle
+
+- Put reproducible procedures in `operations/`.
+- Put accepted component designs in `architecture/`.
+- Put dated measurements in `benchmarks/<topic>-<hardware>-<date>/`.
+- Put investigations and literature synthesis in `analysis/`.
+- Put experiment decisions in `plan/`, with a status at the top.
+- Keep superseded material only when it explains a decision or preserves evidence; mark it clearly and index it as
+  historical.
+
+Research plans and operational guides never authorize spending, launch, stop, or deletion by themselves. The user
+owns those decisions.
