@@ -61,6 +61,7 @@ def _arguments() -> Arguments:
         experiment_config=Path('experiment.yaml'),
         pinned_throughput_ratio=3.5,
         throughput_position_count=200,
+        throughput_duration_seconds=None,
     )
 
 

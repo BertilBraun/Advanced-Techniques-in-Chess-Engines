@@ -66,6 +66,7 @@ class Arguments:
     experiment_config: Path
     pinned_throughput_ratio: float | None
     throughput_position_count: int
+    throughput_duration_seconds: float | None
 
 
 class NetworkIdentity(FrozenModel):
@@ -82,6 +83,7 @@ class ThroughputMeasurement(FrozenModel):
     position_count: int = Field(gt=0)
     warmup_batches: int = Field(ge=0)
     measured_batches: int = Field(gt=0)
+    requested_duration_seconds: float | None = Field(default=None, gt=0.0)
     elapsed_seconds: float = Field(gt=0.0)
     inference_positions: int = Field(ge=0)
     inference_calls: int = Field(ge=0)
@@ -202,14 +204,19 @@ def _measure_throughput(
     device_id: int,
     configuration: EvaluationSearchConfiguration,
     positions: tuple[ChessPosition, ...],
+    duration_seconds: float | None,
 ) -> ThroughputMeasurement:
     search = game.create_evaluation_search(device_id, checkpoint, configuration)
     for _ in range(THROUGHPUT_WARMUP_BATCHES):
         _run_search_batch(search, positions, configuration)
     initial = search.inference_statistics()
     started_at = time.perf_counter()
-    for _ in range(THROUGHPUT_MEASURED_BATCHES):
+    measured_batches = 0
+    while measured_batches < THROUGHPUT_MEASURED_BATCHES or (
+        duration_seconds is not None and time.perf_counter() - started_at < duration_seconds
+    ):
         _run_search_batch(search, positions, configuration)
+        measured_batches += 1
     elapsed_seconds = time.perf_counter() - started_at
     final = search.inference_statistics()
     inference_positions = final.modelInferencePositions - initial.modelInferencePositions
@@ -221,7 +228,8 @@ def _measure_throughput(
         parallel_searches=configuration.parallel_searches,
         position_count=len(positions),
         warmup_batches=THROUGHPUT_WARMUP_BATCHES,
-        measured_batches=THROUGHPUT_MEASURED_BATCHES,
+        measured_batches=measured_batches,
+        requested_duration_seconds=duration_seconds,
         elapsed_seconds=elapsed_seconds,
         inference_positions=inference_positions,
         inference_calls=inference_calls,
@@ -229,9 +237,7 @@ def _measure_throughput(
         average_positions_per_inference_call=final.averageNumberOfPositionsInInferenceCall,
         worker_utilization=final.workerUtilization,
         positions_per_second=inference_positions / elapsed_seconds,
-        searches_per_second=(
-            THROUGHPUT_MEASURED_BATCHES * len(positions) * configuration.searches_per_move / elapsed_seconds
-        ),
+        searches_per_second=(measured_batches * len(positions) * configuration.searches_per_move / elapsed_seconds),
     )
 
 
@@ -375,8 +381,22 @@ def _measure_both(
         openings,
         min(arguments.throughput_position_count, len(openings.openings)),
     )
-    teacher_throughput = _measure_throughput(game, teacher, arguments.device_id, measurement_search, positions)
-    student_throughput = _measure_throughput(game, student, arguments.device_id, measurement_search, positions)
+    teacher_throughput = _measure_throughput(
+        game,
+        teacher,
+        arguments.device_id,
+        measurement_search,
+        positions,
+        arguments.throughput_duration_seconds,
+    )
+    student_throughput = _measure_throughput(
+        game,
+        student,
+        arguments.device_id,
+        measurement_search,
+        positions,
+        arguments.throughput_duration_seconds,
+    )
     return teacher_throughput, student_throughput
 
 
@@ -544,6 +564,7 @@ def parse_arguments() -> Arguments:
         type=int,
         help='Roots per throughput batch; with parallel_searches 1 this is the inference batch size.',
     )
+    parser.add_argument('--throughput-duration-seconds', default=None, type=float)
     namespace = parser.parse_args()
     arguments = Arguments(
         teacher_run_state=namespace.teacher_run_state,
@@ -564,6 +585,7 @@ def parse_arguments() -> Arguments:
         experiment_config=namespace.experiment_config,
         pinned_throughput_ratio=namespace.pinned_throughput_ratio,
         throughput_position_count=namespace.throughput_position_count,
+        throughput_duration_seconds=namespace.throughput_duration_seconds,
     )
     required_paths = (
         arguments.teacher_run_state,
@@ -589,6 +611,8 @@ def parse_arguments() -> Arguments:
         raise ValueError(
             'Opening pairs, ply cap, bootstrap samples, throughput positions and exploration constant must be positive.'
         )
+    if arguments.throughput_duration_seconds is not None and arguments.throughput_duration_seconds <= 0.0:
+        raise ValueError('Throughput duration must be positive when provided.')
     if arguments.output.exists():
         raise ValueError(f'Distillation match output already exists: {arguments.output}')
     return arguments
