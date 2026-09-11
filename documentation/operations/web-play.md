@@ -96,7 +96,14 @@ stabilize the native deadline estimator before the first request. The native
 extension also disables build-host-specific CPU instructions because Modal may
 serve the image on a different host. With revision `main`, each cold container
 resolves the branch to one commit before downloading either artifact, so both
-files come from the same latest snapshot.
+files come from the same latest snapshot. The production deployment currently
+uses Hugging Face revision `22df1c7d90aa01397c5f501a9d2cf0380b98a56d`,
+with `production/v34-generation-1465/model.pt` and
+`production/v34-generation-1465/model.jit.pt`. The latter has SHA-256
+`402efb61146b5a0f569c960e1f7a7e7714ba1bb28982fcdfb7f10e8ec5a98ad6`
+and embeds the 14x160 network's 52-plane input contract. `latest.pt` and
+`latest.jit.pt` are byte-identical convenience aliases, while the descriptive
+paths and pinned revision make the deployment unambiguous.
 
 The 120-second window is two minutes after the container becomes idle. Scaling
 to zero discards in-memory sessions, inference cache, and search subtrees, but it

@@ -45,6 +45,9 @@ committed beside this note, with hashes in `SHA256SUMS`.
 
 The selected student is published in [`model/`](model/):
 
+The same files are also published on Hugging Face under
+[`compressed/v34-replay-8x56-seed-20260827/`](https://huggingface.co/BertilBraun/alphazero-chess/tree/22df1c7d90aa01397c5f501a9d2cf0380b98a56d/compressed/v34-replay-8x56-seed-20260827).
+
 | File | Purpose | SHA-256 |
 | --- | --- | --- |
 | `model_0.jit.pt` | Fused TorchScript inference model | `d41ba5a39316cbe0acfa24533f83c3a5ae96f3241231f1dc7cb0429afb0aa8c7` |

@@ -36,19 +36,16 @@ type UiPhase = "setup" | "cold" | "thinking" | "playing" | "game-over" | "error"
 type BaselineRunRow = {
   duration: string;
   elo: string;
-  confidence: string;
-  available: boolean;
+  evidence: string;
 };
 
 const root = document.querySelector<HTMLDivElement>("#app");
 if (!root) throw new Error("App container is missing.");
 
 const baselineRunRows: readonly BaselineRunRow[] = [
-  { duration: "64 searches", elo: "1,954 +- 42", confidence: "57.75% +– 5.85%", available: true },
-  { duration: "1,000 searches", elo: "2,554 +- 36", confidence: "57.75% +- 5%", available: true },
-  { duration: "10,000 searches", elo: "2,821 +- 43", confidence: "66.75% +- 5.25%", available: true },
-  { duration: "1 second", elo: "2,695 +- 35", confidence: "49.25% +- 5%", available: true },
-  { duration: "5 seconds", elo: "unavailable", confidence: "unavailable", available: false },
+  { duration: "64 searches", elo: "2,265 [2,236–2,298]", evidence: "56.50% vs Stockfish 13 at 5k nodes" },
+  { duration: "10,000 searches", elo: "3,037 [3,012–3,061]", evidence: "41.00% vs Stockfish 13 at 100k nodes" },
+  { duration: "80,000 searches", elo: "3,174 [3,144–3,206]", evidence: "77.38% vs Stockfish 13 at 50k nodes" },
 ];
 
 function escapeHtml(value: string): string {
@@ -69,7 +66,7 @@ function baselineRowsHtml(): string {
       (row) => `<tr>
         <td>${escapeHtml(row.duration)}</td>
         <td>${escapeHtml(row.elo)}</td>
-        <td>${row.available ? escapeHtml(row.confidence) : "not available"}</td>
+        <td>${escapeHtml(row.evidence)}</td>
       </tr>`,
     )
     .join("");
@@ -87,7 +84,7 @@ root.innerHTML = `
     <section class="hero" aria-labelledby="page-title">
       <p class="eyebrow">PLAY THE NETWORK</p>
       <h1 id="page-title">Your move.<br><em>Its calculation.</em></h1>
-      <p class="intro">Play directly against the trained model. Choose a quick policy response or give MCTS time to search.</p>
+      <p class="intro">Play the three-day v34 model: superhuman strength from about $50 of self-play training. Choose its raw policy or give MCTS time to search.</p>
     </section>
 
     <section class="play-layout">
@@ -175,22 +172,23 @@ root.innerHTML = `
     <section class="panel run-summary-panel" aria-labelledby="run-summary-title">
       <div class="panel-heading"><h2  id="run-summary-title">Model Training</h2></div>
       <dl class="kv-grid">
-        <div><dt>Run</dt><dd>four-day baseline</dd></div>
-        <div><dt>Training</dt><dd>4 days (approx. 96h)</dd></div>
-        <div><dt>Hardware</dt><dd>8x NVIDIA RTX 3060 12-GiB GPUs, 64 vCPUs, ~188 GiB RAM</dd></div>
-        <div><dt>Approx. cost</dt><dd>about $0.45/hr &times; 96h ≈ $43.2</dd></div>
+        <div><dt>Checkpoint</dt><dd>v34 generation 1465</dd></div>
+        <div><dt>Training</dt><dd>approximately 3 days</dd></div>
+        <div><dt>Hardware</dt><dd>8x NVIDIA RTX 4070 SUPER, shared self-play and training</dd></div>
+        <div><dt>Approx. cost</dt><dd>about $50 of rented compute</dd></div>
       </dl>
       <h3 class="run-summary-subtitle">Approximate Elo by search budget</h3>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Search budget</th><th>Elo (confidence)</th><th>95% score interval</th></tr>
+            <tr><th>Search budget</th><th>Benchmark Elo (95% CI)</th><th>Direct match</th></tr>
           </thead>
           <tbody id="baseline-summary-body">
             ${baselineRowsHtml()}
           </tbody>
         </table>
       </div>
+      <p class="perspective-note">Stockfish-13 ladder Elo uses historical SSDF-derived fixed-node anchors. It is not FIDE or online rating. Each row comes from 400 games; intervals cover paired-match sampling, conditional on the fixed anchors.</p>
     </section>
 
   </main>
