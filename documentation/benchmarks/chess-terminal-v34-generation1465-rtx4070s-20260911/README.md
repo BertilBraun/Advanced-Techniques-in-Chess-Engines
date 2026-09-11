@@ -65,11 +65,12 @@ closest observed score selected 50,000 nodes.
 
 ## What the Elo scale means
 
-The node anchors are readings from Marco Meloni’s Stockfish 13 curve. That curve fixed Fruit 2.2.1 near 2,830 from
-the historical Swedish Chess Computer Association list, then connected Stockfish node levels through engine
-matches. The reproducible claim is v34’s score against the named Stockfish binary at the named node limit. The
-absolute offset inherits assumptions from Meloni’s openings and protocol, Fruit’s SSDF rating, and an old,
-approximate bridge between the SSDF engine pool and humans.
+The node anchors are readings from
+[Marco Meloni’s Stockfish 13 curve](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/).
+That curve fixed Fruit 2.2.1 near 2,830 from the historical Swedish Chess Computer Association list, then connected
+Stockfish node levels through engine matches. The reproducible claim is v34’s score against the named Stockfish
+binary at the named node limit. The absolute offset inherits assumptions from Meloni’s openings and protocol,
+Fruit’s SSDF rating, and an old, approximate bridge between the SSDF engine pool and humans.
 
 This supports “superhuman strength under the benchmark’s calibration” and “strong-engine territory.” It does not
 support “3,174 FIDE Elo,” a predicted score against a specific grandmaster, or proximity to current full-strength
