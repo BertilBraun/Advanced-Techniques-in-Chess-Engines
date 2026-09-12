@@ -1,0 +1,94 @@
+{
+  "source_onnx_sha256": "56e0bb092adfb1740eb199bd3a743abcfb1cd2e5f102b84f65e10b86d8b05974",
+  "updated_onnx_sha256": "e4ef7982b42d3bb565944dcd4d6f0fb85b4cdf66e59c14457f3f8263eebce289",
+  "timing_cache_sha256": "989a44857c9efc57b034d8cc907e1fb0d97438d9252ccdb6534a96492e81d31f",
+  "timing_cache_bytes": 2025927,
+  "source_build_seconds": 89.80339747294784,
+  "updated_cached_build_seconds": 6.387168112909421,
+  "updated_uncached_build_seconds": 67.02921736985445,
+  "refittable_source_build_seconds": 45.61629460193217,
+  "refit_seconds": 0.156296944944188,
+  "updated_cached_timing": {
+    "repetitions": 5,
+    "iterations_per_repetition": 100,
+    "batch_size": 320,
+    "repetition_seconds": [
+      0.23898427188396454,
+      0.2358125599566847,
+      0.23577357199974358,
+      0.23720551398582757,
+      0.24118545488454401
+    ],
+    "minimum_batch_milliseconds": 2.357735719997436,
+    "median_batch_milliseconds": 2.3720551398582757,
+    "p95_batch_milliseconds": 2.407452182844281,
+    "maximum_batch_milliseconds": 2.41185454884544,
+    "median_positions_per_second": 134904.11526399813
+  },
+  "updated_uncached_timing": {
+    "repetitions": 5,
+    "iterations_per_repetition": 100,
+    "batch_size": 320,
+    "repetition_seconds": [
+      0.23731763195246458,
+      0.2368303530383855,
+      0.2368840998969972,
+      0.23862813808955252,
+      0.23832360305823386
+    ],
+    "minimum_batch_milliseconds": 2.368303530383855,
+    "median_batch_milliseconds": 2.373176319524646,
+    "p95_batch_milliseconds": 2.385672310832888,
+    "maximum_batch_milliseconds": 2.386281380895525,
+    "median_positions_per_second": 134840.38137718185
+  },
+  "updated_refitted_timing": {
+    "repetitions": 5,
+    "iterations_per_repetition": 100,
+    "batch_size": 320,
+    "repetition_seconds": [
+      0.23613148485310376,
+      0.23649275116622448,
+      0.23624870390631258,
+      0.23903770209290087,
+      0.23858156404457986
+    ],
+    "minimum_batch_milliseconds": 2.3613148485310376,
+    "median_batch_milliseconds": 2.364927511662245,
+    "p95_batch_milliseconds": 2.3894647448323667,
+    "maximum_batch_milliseconds": 2.3903770209290087,
+    "median_positions_per_second": 135310.7012464329
+  },
+  "updated_cached_error_to_onnx": {
+    "policy_mean_absolute_error": 0.007893990725278854,
+    "policy_maximum_absolute_error": 0.08239075541496277,
+    "wdl_mean_absolute_error": 0.0003517867880873382,
+    "wdl_maximum_absolute_error": 0.0020409822463989258
+  },
+  "updated_uncached_error_to_onnx": {
+    "policy_mean_absolute_error": 0.007896233350038528,
+    "policy_maximum_absolute_error": 0.08239075541496277,
+    "wdl_mean_absolute_error": 0.0003553622227627784,
+    "wdl_maximum_absolute_error": 0.0020409822463989258
+  },
+  "updated_refitted_error_to_onnx": {
+    "policy_mean_absolute_error": 0.007897465489804745,
+    "policy_maximum_absolute_error": 0.08350682258605957,
+    "wdl_mean_absolute_error": 0.0003575144219212234,
+    "wdl_maximum_absolute_error": 0.002450108528137207
+  },
+  "refitted_error_to_cached": {
+    "policy_mean_absolute_error": 0.006341219879686832,
+    "policy_maximum_absolute_error": 0.078125,
+    "wdl_mean_absolute_error": 0.000301361083984375,
+    "wdl_maximum_absolute_error": 0.00244140625
+  },
+  "artifacts": {
+    "editable-timing.cache": "989a44857c9efc57b034d8cc907e1fb0d97438d9252ccdb6534a96492e81d31f",
+    "source-refittable.engine": "a917cc3fe0347c4ee2b103e9fb9fab2fb31ecc5dcc1ace08ff5f465a2fd493cc",
+    "source.engine": "6083ee9f2d13f2d721eb92a6a04bb5aa3a25439b2b89077042631339820fa6a4",
+    "updated-cached.engine": "ff52770908ebbe4e6aaf2359f2c60e83af43f39f829a035cb5d0bdcb271dadc3",
+    "updated-refitted.engine": "087d39b0b96e8e54dfc6a3edc920d5c951097a9c2452b351443f50507ce43a6b",
+    "updated-uncached.engine": "fae0ea3d4e0d3847d3e74b8a2847053dff290fae413c5ac16f3d6e9a378f0ce4"
+  }
+}
