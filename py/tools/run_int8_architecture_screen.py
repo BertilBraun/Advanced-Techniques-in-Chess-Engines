@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Iterator, Literal
+from typing import Iterator, Literal, TypedDict, cast
 
 import modelopt.torch.quantization as mtq
 import numpy as np
@@ -138,6 +138,13 @@ class Arguments:
     strongly_typed_tensorrt: bool
     constrain_tensorrt_float16_islands: bool
     fixed_trunk_activation_amax: float | None
+    resume_state: Path | None
+    fold_before_training: bool
+
+
+class SavedTrainingState(TypedDict):
+    step: int
+    model: dict[str, Tensor]
 
 
 class TrainingObservation(FrozenModel):
@@ -178,7 +185,7 @@ class TensorRtMeasurement(FrozenModel):
 
 
 class ArchitectureScreenReport(FrozenModel):
-    schema_version: Literal[6] = 6
+    schema_version: Literal[7] = 7
     source_revision: SourceRevision
     cell: ScreenCell
     random_seed: int
@@ -192,6 +199,9 @@ class ArchitectureScreenReport(FrozenModel):
     strongly_typed_tensorrt: bool
     constrained_tensorrt_float16_islands: bool
     fixed_trunk_activation_amax: float | None = Field(default=None, gt=0.0)
+    resumed_state_path: str | None
+    resumed_state_sha256: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
+    folded_before_training: bool
     model_cost: ModelCost
     steps: int = Field(ge=0)
     batch_size: int = Field(gt=0)
@@ -750,11 +760,20 @@ def _measure_torchscript_bfloat16(
     output: Path,
     timing_states: Tensor,
     device: torch.device,
+    allow_folded_state: bool = False,
 ) -> TimingDistribution:
     floating_model = Network(architecture, device, CHESS_NETWORK_DIMENSIONS)
     quantized_state = model.state_dict()
     floating_state = floating_model.state_dict()
-    floating_model.load_state_dict({name: quantized_state[name] for name in floating_state})
+    if allow_folded_state:
+        compatible_state = {
+            name: quantized_state[name]
+            for name, value in floating_state.items()
+            if name in quantized_state and quantized_state[name].shape == value.shape
+        }
+        floating_model.load_state_dict(compatible_state, strict=False)
+    else:
+        floating_model.load_state_dict({name: quantized_state[name] for name in floating_state})
     floating_model.eval()
     model_path = output / 'float-reference.jit.pt'
     torch.jit.save(torch.jit.script(floating_model), model_path)
@@ -823,6 +842,16 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 arguments.fixed_trunk_activation_amax,
             )
             initial_qat_calibration_seconds = time.perf_counter() - calibration_started
+        if arguments.resume_state is not None:
+            saved = cast(SavedTrainingState, torch.load(arguments.resume_state, map_location=device, weights_only=True))
+            model.load_state_dict(saved['model'])
+        if arguments.fold_before_training:
+            _fold_post_activation_batch_norm(model)
+            mtq.calibrate(
+                model,
+                'max',
+                _calibration_loop(opened, calibration_indices, arguments.batch_size, device),
+            )
 
         optimizer = create_student_optimizer(model, OptimizerKind.ADAMW, arguments.learning_rate)
         objective = distillation_objective()
@@ -901,11 +930,13 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             arguments.output,
             activation_batch.states[:TENSORRT_BATCH_SIZE],
             device,
+            arguments.fold_before_training,
         )
         final_qat_calibration_seconds: float | None = None
         if arguments.fold_post_activation_batch_norm:
             calibration_started = time.perf_counter()
-            _fold_post_activation_batch_norm(model)
+            if not arguments.fold_before_training:
+                _fold_post_activation_batch_norm(model)
             mtq.calibrate(
                 model,
                 'max',
@@ -1010,6 +1041,9 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             strongly_typed_tensorrt=arguments.strongly_typed_tensorrt,
             constrained_tensorrt_float16_islands=arguments.constrain_tensorrt_float16_islands,
             fixed_trunk_activation_amax=arguments.fixed_trunk_activation_amax,
+            resumed_state_path=str(arguments.resume_state) if arguments.resume_state is not None else None,
+            resumed_state_sha256=file_sha256(arguments.resume_state) if arguments.resume_state is not None else None,
+            folded_before_training=arguments.fold_before_training,
             model_cost=cost,
             steps=arguments.steps,
             batch_size=arguments.batch_size,
@@ -1067,6 +1101,8 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--strongly-typed-tensorrt', action='store_true')
     parser.add_argument('--constrain-tensorrt-float16-islands', action='store_true')
     parser.add_argument('--fixed-trunk-activation-amax', type=float)
+    parser.add_argument('--resume-state', type=Path)
+    parser.add_argument('--fold-before-training', action='store_true')
     namespace = parser.parse_args()
     if namespace.steps < 0 or namespace.batch_size <= 0 or namespace.evaluate_every <= 0:
         raise ValueError('Steps must be nonnegative; batch size and evaluation interval must be positive.')
@@ -1078,6 +1114,12 @@ def parse_arguments() -> Arguments:
         namespace.fixed_trunk_activation_amax <= 0.0 or not ScreenCell(namespace.cell).uses_qat
     ):
         raise ValueError('Fixed trunk activation amax must be positive and is defined only for QAT cells.')
+    if namespace.fold_before_training and (
+        namespace.resume_state is None
+        or ScreenCell(namespace.cell) not in (ScreenCell.POST_QAT, ScreenCell.POST_SCALED_QAT)
+        or not namespace.fold_post_activation_batch_norm
+    ):
+        raise ValueError('Pretraining folding requires a resumed post-activation QAT cell with deployment folding.')
     if namespace.final_normalization and not ScreenCell(namespace.cell).uses_quantization_friendly_trunk:
         raise ValueError('Final normalization is defined only for the scaled pre-activation trunk.')
     if namespace.fold_post_activation_batch_norm and ScreenCell(namespace.cell) not in (
@@ -1108,6 +1150,8 @@ def parse_arguments() -> Arguments:
         strongly_typed_tensorrt=namespace.strongly_typed_tensorrt,
         constrain_tensorrt_float16_islands=namespace.constrain_tensorrt_float16_islands,
         fixed_trunk_activation_amax=namespace.fixed_trunk_activation_amax,
+        resume_state=namespace.resume_state,
+        fold_before_training=namespace.fold_before_training,
     )
 
 
