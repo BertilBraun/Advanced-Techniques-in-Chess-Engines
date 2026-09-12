@@ -10,7 +10,7 @@ Decide whether the measured TensorRT gain, QAT quality, and native-runtime readi
 
 - [ ] **Complete the native TensorRT backend.** Finish production batch handling, engine/context/buffer lifecycle, atomic refresh, error propagation, and native tests. Validate FP16 first, then a qualifying INT8 engine. Owner: native TensorRT worktree.
 - [ ] **Implement the resumable QAT phase boundary.** After 1,000 optimizer steps, save the pre-fold checkpoint, reconstruct the model in folded deployment topology, recalibrate, rebuild DDP and the optimizer, and persist the phase in checkpoint metadata. The optimizer reset is deliberate because folding replaces parameters. Owner: INT8/QAT and native TensorRT worktrees.
-- [ ] **Exercise the full lifecycle.** Run a bounded remote smoke through pre-fold training, the generation-2 fold/restart, INT8 publication/refit, native self-play, checkpoint refresh, and resume. Fetch its evidence before considering launch.
+- [ ] **Exercise the full lifecycle.** Run a bounded remote smoke through generation-zero TorchScript bootstrap, pre-fold training, the fold/restart boundary, INT8 publication/refit, native self-play, checkpoint refresh, fixed-dataset and search evaluation, and resume. Fetch its evidence before considering launch. The first two attempts exposed real template and publisher-path failures; a clean run remains required.
 - [ ] **Finish optimizer/config integration.** Use NAG with momentum 0.9, Nesterov enabled, weight decay `1e-4`, gradient-norm cap 5, and the selected learning-rate schedule. Resolve replay ratio, head width, and model progression from the measured actor speedup.
 
 ## Pending decisions
@@ -22,6 +22,9 @@ Decide whether the measured TensorRT gain, QAT quality, and native-runtime readi
 - [ ] **Finalize the visit schedule.** Current prior remains 300, 400, 500, then 600 visits, with 800 reserved for the late regime. Change it only if measured TensorRT throughput supports a better data/search trade.
 - [ ] **Finalize progressive sizing.** Confirm small and medium architectures, QAT warm-up/fold behavior for each size, candidate-start logic, and the exclusion of the large model.
 - [ ] **Make the launch decision.** Require a committed revision, resolved config SHA-256, approval file, Release native build, bounded integrated smoke, fetched evidence, and a concrete rollback/restart path.
+- [ ] **Separate TensorRT publication identities.** Self-play batch-320 and evaluation batch-64 engines must not share `model_N.int8.trt.engine`; include template/input shape or purpose in the cache/output identity and prove concurrent publication cannot swap incompatible engines.
+- [ ] **Make evaluation QAT-aware.** Fixed-dataset evaluation currently loads TorchScript directly, while post-fold QAT checkpoints publish ONNX. Generation-zero search evaluation also needs an explicit bootstrap path and all configured evaluation templates must exist.
+- [ ] **Remove inherited learning-rate warm-up.** Override the v34 lineage's `warmup_optimizer_steps: 1000`; the selected NAG schedule starts at 0.1 and linearly decays to 0.01 by global generation 1000.
 
 ## Completed evidence
 
@@ -36,6 +39,7 @@ Decide whether the measured TensorRT gain, QAT quality, and native-runtime readi
 - [x] **Validate native checkpoint refresh.** Two workers atomically refreshed generation 1784 to 1785 in about 0.22 seconds and continued at roughly 72.8k–73.4k simulations/s.
 - [x] **Validate repeated TensorRT refits.** All 160 weights, including 56 Q/DQ constants, remained refittable with zero missing weights; a representative refit took about 0.156 seconds and matched a fresh engine.
 - [x] **Complete the scaled post-activation replicate.** Two production-size seeds produced stable throughput and fidelity; the viable graph is about 2.24–2.27x faster than TorchScript in isolated inference.
+- [x] **Implement the persisted QAT phase model.** Checkpoints distinguish pre-fold and deployment phases, rebuild DDP and optimizer at the fold boundary, and normalize compiled checkpoint keys. Python 3.10 compatibility was restored in `c2338a22`; clean end-to-end validation is still pending above.
 
 ## Known risks
 
