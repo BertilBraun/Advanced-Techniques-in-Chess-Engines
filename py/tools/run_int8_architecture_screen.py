@@ -379,54 +379,15 @@ class _BoundaryQuantizedPostActivationNetwork(Network):
         return self.finish_block(features)
 
 
-class _SharedBoundaryQuantizedResBlock(nn.Module):
-    def __init__(self, block: ResBlock) -> None:
-        super().__init__()
-        self.conv_block1 = block.conv_block1
-        self.conv_block2 = block.conv_block2
-        self.squeeze_excitation = block.squeeze_excitation
-        self.first_activation_quantizer = TensorQuantizer()
-
-    def forward(self, inputs: Tensor) -> Tensor:
-        residual_branch = self.first_activation_quantizer(self.conv_block1(inputs))
-        residual_branch = self.squeeze_excitation(self.conv_block2(residual_branch))
-        return torch.relu(inputs + residual_branch)
+class _SharedBoundaryQuantizedPostActivationNetwork(_BoundaryQuantizedPostActivationNetwork):
+    pass
 
 
-class _SharedBoundaryQuantizedGlobalPoolingResBlock(nn.Module):
-    def __init__(self, block: GlobalPoolingResBlock) -> None:
-        super().__init__()
-        self.global_channels = block.global_channels
-        self.conv_block1 = block.conv_block1
-        self.global_pooling_bias = block.global_pooling_bias
-        self.conv_block2 = block.conv_block2
-        self.first_activation_quantizer = TensorQuantizer()
-
-    def forward(self, inputs: Tensor) -> Tensor:
-        features = self.first_activation_quantizer(self.conv_block1(inputs))
-        global_features = features[:, : self.global_channels]
-        local_features = features[:, self.global_channels :]
-        biased_features = self.global_pooling_bias(local_features, global_features)
-        residual_branch = self.conv_block2(biased_features)
-        return torch.relu(inputs + residual_branch)
-
-
-class _SharedBoundaryQuantizedPostActivationNetwork(Network):
-    def __init__(self, args: NetworkParams, device: torch.device) -> None:
-        super().__init__(args, device, CHESS_NETWORK_DIMENSIONS)
-        self.trunk_output_quantizer = TensorQuantizer()
-        self.backbone = nn.ModuleList(
-            _SharedBoundaryQuantizedGlobalPoolingResBlock(block)
-            if isinstance(block, GlobalPoolingResBlock)
-            else _SharedBoundaryQuantizedResBlock(block)
-            for block in self.backbone
-        )
-
-    def trunk_features(self, inputs: Tensor) -> Tensor:
-        features = self.trunk_output_quantizer(self.start_block(inputs))
-        for block in self.backbone:
-            features = self.trunk_output_quantizer(block(features))
-        return self.finish_block(features)
+def _share_trunk_output_amax(model: _SharedBoundaryQuantizedPostActivationNetwork) -> None:
+    output_quantizers = (model.start_input_quantizer,) + tuple(block.output_input_quantizer for block in model.backbone)
+    shared_amax = torch.stack(tuple(quantizer.amax.float().amax() for quantizer in output_quantizers)).amax()
+    for quantizer in output_quantizers:
+        quantizer.amax = shared_amax.to(device=quantizer.amax.device, dtype=quantizer.amax.dtype)
 
 
 def _replay_batch(dataset: OpenedProductionReplay, indices: np.ndarray, device: torch.device) -> TrainingBatch:
@@ -498,8 +459,6 @@ def _fold_post_activation_batch_norm(model: Network) -> None:
                 | ScaledPostActivationGlobalPoolingResBlock()
                 | _BoundaryQuantizedResBlock()
                 | _BoundaryQuantizedGlobalPoolingResBlock()
-                | _SharedBoundaryQuantizedResBlock()
-                | _SharedBoundaryQuantizedGlobalPoolingResBlock()
             ):
                 if isinstance(block, (ScaledPostActivationResBlock, ScaledPostActivationGlobalPoolingResBlock)):
                     second_batch_norm = block.conv_block2[1]
@@ -908,6 +867,8 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 arguments.quantized_convolutions,
                 arguments.fixed_trunk_activation_amax,
             )
+            if isinstance(model, _SharedBoundaryQuantizedPostActivationNetwork):
+                _share_trunk_output_amax(model)
             initial_qat_calibration_seconds = time.perf_counter() - calibration_started
         if arguments.resume_state is not None:
             saved = cast(SavedTrainingState, torch.load(arguments.resume_state, map_location=device, weights_only=True))
@@ -919,6 +880,8 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 'max',
                 _calibration_loop(opened, calibration_indices, arguments.batch_size, device),
             )
+            if isinstance(model, _SharedBoundaryQuantizedPostActivationNetwork):
+                _share_trunk_output_amax(model)
 
         optimizer = create_student_optimizer(model, OptimizerKind.ADAMW, arguments.learning_rate)
         objective = distillation_objective()
@@ -964,6 +927,8 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                     'max',
                     _calibration_loop(opened, calibration_indices, arguments.batch_size, device),
                 )
+                if isinstance(model, _SharedBoundaryQuantizedPostActivationNetwork):
+                    _share_trunk_output_amax(model)
             if step % arguments.evaluate_every and step != arguments.steps:
                 continue
             now = time.perf_counter()
@@ -1009,6 +974,8 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 'max',
                 _calibration_loop(opened, calibration_indices, arguments.batch_size, device),
             )
+            if isinstance(model, _SharedBoundaryQuantizedPostActivationNetwork):
+                _share_trunk_output_amax(model)
             final_qat_calibration_seconds = time.perf_counter() - calibration_started
         state_path = arguments.output / 'final-state.pt'
         torch.save(model.state_dict(), state_path)
