@@ -1,8 +1,8 @@
 # Chess TensorRT FP16/INT8 feasibility — RTX 4070 SUPER, 2026-09-12
 
-Status: complete. TensorRT FP16 passes the fidelity limits and reaches 100,482 positions/s. Calibrated INT8 PTQ is
-not viable for this checkpoint under the unchanged fidelity limits, even when explicit Q/DQ is restricted to one
-trunk convolution.
+Status: complete for the tested conversion configurations. TensorRT FP16 passes the fidelity limits and reaches
+100,482 positions/s. None of the measured single-calibration INT8 PTQ configurations is usable under the unchanged
+fidelity limits. This result does not rule out calibration selection, a different quantized trunk partition, or QAT.
 
 | | |
 | --- | --- |
@@ -168,9 +168,13 @@ not explain the remaining accuracy loss.
 ModelOpt explicit Q/DQ then removed ambiguity about which layers TensorRT quantized. Both heads stayed in high
 precision, including policy indexing/scatter and outputs. Quantizing all trunk convolutions was fast but invalid,
 and quantizing a single late trunk convolution remained severely inaccurate while eliminating nearly all INT8 speed
-benefit. Calibrated PTQ is therefore not viable for this v34 checkpoint under the strict gates. Further INT8 work
-requires quantization-aware training so the network can adapt to activation quantization; the benchmark gates should
-remain unchanged.
+benefit. The tested PTQ configurations are therefore not viable for this v34 checkpoint under the strict gates. The
+single-convolution lower bound quantized a late convolution in the final residual block; it establishes that merely
+reducing the number of quantized operators does not solve the problem, but it is not a layer-sensitivity sweep.
+Further work should first compare quantized ONNX Runtime and TensorRT outputs, test multiple disjoint calibration
+sets with holdout selection, compare max and entropy calibration, and scan earlier and middle residual blocks. If
+those PTQ controls remain inaccurate, quantization-aware fine-tuning is the next step; the benchmark gates should
+remain unchanged throughout screening.
 
 ## Preserved evidence
 
