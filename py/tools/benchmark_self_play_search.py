@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
+from AlphaZeroCpp import search_parallelism
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.composition import create_game_implementation
@@ -33,7 +34,6 @@ class Arguments:
     duration_seconds: float
     ready_file: Path | None
     start_barrier: Path | None
-    parallel_searches: int | None
     inference_workers: int | None
     inference_batch_size: int | None
     outstanding_batches_per_worker: int | None
@@ -117,7 +117,6 @@ def _apply_self_play_overrides(
         case GoExperimentConfiguration(go=game_configuration):
             field_name = 'go'
     self_play = game_configuration.self_play
-    search_update = {} if arguments.parallel_searches is None else {'parallel_searches': arguments.parallel_searches}
     inference_update = {
         field_name: value
         for field_name, value in (
@@ -132,7 +131,6 @@ def _apply_self_play_overrides(
     }
     updated_self_play = self_play.validated_copy(
         update={
-            'search': self_play.search.validated_copy(update=search_update).model_dump(mode='json'),
             'inference': self_play.inference.validated_copy(update=inference_update).model_dump(mode='json'),
         }
     )
@@ -218,7 +216,9 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         inference_device=arguments.inference_device,
         model_generation=arguments.generation,
         parallel_games=arguments.games,
-        parallel_searches=game.self_play_configuration.search.parallel_searches.value_at(arguments.generation),
+        parallel_searches=search_parallelism(
+            game.self_play_configuration.search.baseline_visits.value_at(arguments.generation)
+        ),
         inference_workers=game.self_play_configuration.inference.inference_workers,
         inference_batch_size=game.self_play_configuration.inference.inference_batch_size,
         outstanding_batches_per_worker=game.self_play_configuration.inference.outstanding_batches_per_worker,
@@ -254,7 +254,6 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--duration-seconds', default=60.0, type=float)
     parser.add_argument('--ready-file', type=Path)
     parser.add_argument('--start-barrier', type=Path)
-    parser.add_argument('--parallel-searches', type=int)
     parser.add_argument('--inference-workers', type=int)
     parser.add_argument('--inference-batch-size', type=int)
     parser.add_argument('--outstanding-batches-per-worker', type=int)
@@ -274,7 +273,6 @@ def parse_arguments() -> Arguments:
         duration_seconds=namespace.duration_seconds,
         ready_file=namespace.ready_file,
         start_barrier=namespace.start_barrier,
-        parallel_searches=namespace.parallel_searches,
         inference_workers=namespace.inference_workers,
         inference_batch_size=namespace.inference_batch_size,
         outstanding_batches_per_worker=namespace.outstanding_batches_per_worker,
@@ -289,7 +287,6 @@ def parse_arguments() -> Arguments:
     if arguments.games <= 0 or arguments.duration_seconds <= 0.0:
         raise ValueError('Games and duration must be positive.')
     overrides = (
-        arguments.parallel_searches,
         arguments.inference_workers,
         arguments.inference_batch_size,
         arguments.outstanding_batches_per_worker,
