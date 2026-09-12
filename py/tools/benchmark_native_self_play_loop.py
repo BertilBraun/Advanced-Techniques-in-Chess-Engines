@@ -30,6 +30,7 @@ class LoopArguments:
     inference_device: str
     device_id: int
     sdpa_backend: str
+    inference_backend: str
     seed: int
 
 
@@ -159,7 +160,14 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
         'math': native.SdpaBackend.MATH,
         'cudnn': native.SdpaBackend.CUDNN,
     }[arguments.sdpa_backend]
-    runtime = native.InferenceConfiguration(arguments.device_id, str(model_path), device, backend)
+    execution_options = native.InferenceExecutionOptions(sdpa_backend=backend)
+    inference_backend = {
+        'torchscript': native.InferenceBackend.TORCHSCRIPT,
+        'tensorrt': native.InferenceBackend.TENSORRT,
+    }[arguments.inference_backend]
+    runtime = native.InferenceConfiguration(
+        arguments.device_id, str(model_path), device, execution_options, inference_backend
+    )
     search = native.ChessSelfPlaySearch(runtime, search_parameters(arguments), inference, 0)
     random = LinearCongruentialRandom(arguments.seed)
     games = [new_game(search, random, arguments.opening_plies) for _ in range(arguments.games)]
@@ -256,6 +264,7 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
             'inference_workers': arguments.inference_workers,
             'inference_batch_size': arguments.inference_batch_size,
             'inference_hidden': arguments.inference_hidden,
+            'inference_backend': arguments.inference_backend,
             'measured_batches': arguments.measured_batches,
         },
         'throughput': {
@@ -316,6 +325,7 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
     parser.add_argument('--collect-statistics', action='store_true')
     parser.add_argument('--inference-device', choices=('cpu', 'cuda'), default='cpu')
     parser.add_argument('--device-id', type=int, default=0)
+    parser.add_argument('--inference-backend', choices=('torchscript', 'tensorrt'), default='torchscript')
     parser.add_argument(
         '--sdpa-backend',
         choices=('automatic', 'flash', 'memory_efficient', 'math', 'cudnn'),
@@ -343,6 +353,7 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
         inference_device=namespace.inference_device,
         device_id=namespace.device_id,
         sdpa_backend=namespace.sdpa_backend,
+        inference_backend=namespace.inference_backend,
         seed=namespace.seed,
     )
     return arguments, namespace.model, namespace.label
