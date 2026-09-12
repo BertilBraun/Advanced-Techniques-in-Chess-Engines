@@ -14,11 +14,10 @@ Status: harness ready; measurement deferred until the live v34 run stops. This f
 [`benchmark_tensorrt_inference.py`](../../../py/tools/benchmark_tensorrt_inference.py) accepts a selected checkpoint
 manifest, an immutable benchmark dataset, and either an immutable calibration dataset or replay store. It verifies
 the checkpoint and immutable dataset hashes, then exports the shipped trimmed policy/WDL TorchScript model as
-separate fixed `[320, 52, 8, 8]` FP16 and FP32 ONNX graphs. TensorRT 10.14 builds the FP16 arm from the FP16 graph
-and the entropy-calibrated INT8 arm from the FP32 graph with FP16 fallback. Legacy TensorRT calibration consumes
-FP32 device input even though the final engine may use lower-precision kernels; the report validates and records the
-resulting input calibration scale. The INT8 arm keeps the policy and WDL heads in FP16 because their reductions,
-indexing, and output distributions are accuracy-sensitive; the convolutional trunk remains eligible for INT8.
+separate fixed `[320, 52, 8, 8]` FP16 and FP32 ONNX graphs. NVIDIA ModelOpt 0.46.1 performs max calibration on the
+FP32 graph and inserts explicit Q/DQ nodes around convolution operations. It excludes the policy and WDL heads,
+including their reductions, indexing, scatter, and outputs. TensorRT 10.14 builds the explicit-Q/DQ graph with FP16
+as the high-precision fallback.
 
 All three measured arms start with the same decoded `int8` tensor for the first 320 legal chess positions in the
 benchmark dataset. Their captured CUDA graphs include the device-side input cast, model execution, and conversion
@@ -62,7 +61,8 @@ the calibrated INT8 engine. BF16 remains unmeasured by this probe.
 The idle control virtual environment `/workspace/alphazero-engine-venv` now contains:
 
 ```text
-onnx==1.22.0
+onnx==1.21.0
+nvidia-modelopt[onnx]==0.46.1
 tensorrt-cu12==10.14.1.48.post1
 tensorrt-cu12-bindings==10.14.1.48.post1
 tensorrt-cu12-libs==10.14.1.48.post1
@@ -108,6 +108,6 @@ this model.
 
 ## Results
 
-Pending the terminal checkpoint and an idle GPU. Copy `report.json`, both ONNX models, both engines, and the
-calibration cache off the ephemeral node. Add their hashes and raw timing/fidelity table here before treating this
-directory as evidence.
+Pending the corrected explicit-Q/DQ measurement. Copy `report.json`, the FP16, FP32 source, and explicit-Q/DQ ONNX
+models, and both engines off the ephemeral node. Add their hashes and raw timing/fidelity table here before treating
+this directory as evidence.

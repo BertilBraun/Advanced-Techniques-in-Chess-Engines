@@ -1,2 +1,3 @@
-onnx==1.22.0
+onnx==1.21.0
+nvidia-modelopt[onnx]==0.46.1
 tensorrt-cu12==10.14.1.48.post1

@@ -13,6 +13,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from enum import Enum
+from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -21,6 +22,7 @@ import numpy.typing as npt
 import onnx
 import tensorrt as trt
 import torch
+from modelopt.onnx.quantization import quantize
 from pydantic import Field
 from src.evaluation.contracts import EVALUATION_DATASET_MANIFEST_ADAPTER
 from src.evaluation.dataset import dataset_manifest_path
@@ -47,10 +49,6 @@ from tools.tensorrt_benchmark_metrics import (
     summarize_timings,
     validate_fidelity,
 )
-from tools.tensorrt_calibration_cache import (
-    entropy_calibration_tensor_scale,
-    validate_input_calibration_scale,
-)
 from tools.tensorrt_calibration_sampling import EncodedStates, select_disjoint_replay_calibration
 from torch import Tensor, nn
 
@@ -63,7 +61,8 @@ TENSORRT_WORKSPACE_BYTES = 4 * 1024**3
 TENSORRT_BUILDER_OPTIMIZATION_LEVEL = 3
 DEFAULT_CALIBRATION_POSITION_COUNT = 32_000
 DEFAULT_CALIBRATION_RANDOM_SEED = 20_260_912
-INT8_FLOAT16_LAYER_PREFIXES = ('/policy_head/', 'policy_head.', '/value_head/', 'value_head.')
+INT8_QUANTIZED_OPERATOR_TYPES = ('Conv',)
+INT8_EXCLUDED_NODE_PATTERNS = (r'.*policy_head.*', r'.*value_head.*')
 
 
 class Backend(str, Enum):
@@ -152,11 +151,10 @@ class CalibrationIdentity(FrozenModel):
     submitted_batches: int = Field(gt=0)
     submitted_positions: int = Field(gt=0)
     benchmark_input_overlap_positions: Literal[0] = 0
-    device_input_dtype: Literal['float32'] = 'float32'
-    observed_maximum_absolute_input: float = Field(gt=0.0)
-    input_tensor_scale: float = Field(gt=0.0)
-    calibration_cache: ArtifactIdentity
-    algorithm: Literal['entropy_calibration_2'] = 'entropy_calibration_2'
+    algorithm: Literal['modelopt_onnx_ptq_max'] = 'modelopt_onnx_ptq_max'
+    tool_version: str = Field(min_length=1)
+    quantized_operator_types: tuple[Literal['Conv'], ...] = INT8_QUANTIZED_OPERATOR_TYPES
+    excluded_node_patterns: tuple[str, ...] = INT8_EXCLUDED_NODE_PATTERNS
 
 
 class HardwareDescription(FrozenModel):
@@ -189,7 +187,7 @@ class CandidateMeasurement(FrozenModel):
 
 
 class TensorRtInferenceBenchmarkReport(FrozenModel):
-    schema_version: Literal[5] = 5
+    schema_version: Literal[6] = 6
     source_revision: SourceRevision
     experiment_configuration_path: str = Field(min_length=1)
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -204,12 +202,13 @@ class TensorRtInferenceBenchmarkReport(FrozenModel):
     warmup_iterations: int = Field(ge=0)
     hardware: HardwareDescription
     float16_onnx_model: ArtifactIdentity
-    int8_onnx_model: ArtifactIdentity
+    int8_source_onnx_model: ArtifactIdentity
+    int8_qdq_onnx_model: ArtifactIdentity
+    int8_quantize_linear_node_count: int = Field(gt=0)
+    int8_dequantize_linear_node_count: int = Field(gt=0)
     onnx_opset_version: int = Field(gt=0)
     tensorrt_workspace_bytes: int = Field(gt=0)
     tensorrt_builder_optimization_level: int = Field(ge=0)
-    int8_forced_float16_layer_prefixes: tuple[str, ...] = INT8_FLOAT16_LAYER_PREFIXES
-    int8_forced_float16_layer_count: int = Field(gt=0)
     fidelity_limits: FidelityLimits
     reference: ReferenceMeasurement
     candidates: tuple[CandidateMeasurement, ...] = Field(min_length=2, max_length=2)
@@ -356,47 +355,6 @@ class _TensorRtCudaGraphRunner(_CudaGraphRunner):
         self.replay()
         torch.cuda.synchronize(self._policy.device)
         return ModelOutputs(policy_logits=self._policy.cpu(), wdl_probabilities=self._wdl.cpu())
-
-
-class _EntropyCalibrator(trt.IInt8EntropyCalibrator2):
-    def __init__(self, states: Tensor, device: torch.device, cache_path: Path) -> None:
-        super().__init__()
-        if states.ndim != 4 or states.shape[0] < BATCH_SIZE or states.shape[0] % BATCH_SIZE != 0:
-            raise ValueError(f'INT8 calibration needs a positive whole number of {BATCH_SIZE}-position batches.')
-        self._states = states
-        self._device = device
-        self._cache_path = cache_path
-        self._batch_count = states.shape[0] // BATCH_SIZE
-        self._batch_index = 0
-        self._device_batch = torch.empty((BATCH_SIZE, *states.shape[1:]), device=device, dtype=torch.float32)
-
-    @property
-    def batch_count(self) -> int:
-        return self._batch_count
-
-    @property
-    def consumed_batch_count(self) -> int:
-        return self._batch_index
-
-    def get_batch_size(self) -> int:
-        return BATCH_SIZE
-
-    def get_batch(self, names: list[str]) -> list[int] | None:
-        if names != [INPUT_NAME]:
-            raise ValueError(f'TensorRT requested calibration inputs {names}, expected {[INPUT_NAME]}.')
-        if self._batch_index >= self._batch_count:
-            return None
-        start = self._batch_index * BATCH_SIZE
-        self._device_batch.copy_(self._states[start : start + BATCH_SIZE].to(dtype=torch.float32))
-        torch.cuda.synchronize(self._device)
-        self._batch_index += 1
-        return [self._device_batch.data_ptr()]
-
-    def read_calibration_cache(self) -> bytes | None:
-        return None
-
-    def write_calibration_cache(self, cache: memoryview) -> None:
-        write_bytes_atomically(self._cache_path, bytes(cache))
 
 
 def _tensor_sha256(tensor: Tensor) -> str:
@@ -569,6 +527,41 @@ def _export_onnx(model_path: Path, output_path: Path, data_type: torch.dtype) ->
     return ArtifactIdentity(path=str(output_path), sha256=file_sha256(output_path))
 
 
+def _quantize_onnx(
+    source_path: Path,
+    output_path: Path,
+    calibration_states: Tensor,
+    device: torch.device,
+) -> tuple[ArtifactIdentity, int, int]:
+    output_path.unlink(missing_ok=True)
+    assert device.index is not None
+    try:
+        quantize(
+            onnx_path=str(source_path),
+            quantize_mode='int8',
+            calibration_data=calibration_states.to(torch.float32).numpy(),
+            calibration_method='max',
+            calibration_eps=[f'cuda:{device.index}', 'cpu'],
+            op_types_to_quantize=list(INT8_QUANTIZED_OPERATOR_TYPES),
+            nodes_to_exclude=list(INT8_EXCLUDED_NODE_PATTERNS),
+            high_precision_dtype='fp16',
+            output_path=str(output_path),
+        )
+        quantized_model = onnx.load(output_path)
+        onnx.checker.check_model(quantized_model, full_check=True)
+    except Exception as error:
+        raise ValueError(f'ModelOpt explicit INT8 Q/DQ conversion failed for {source_path}: {error}') from error
+    quantize_linear_count = sum(node.op_type == 'QuantizeLinear' for node in quantized_model.graph.node)
+    dequantize_linear_count = sum(node.op_type == 'DequantizeLinear' for node in quantized_model.graph.node)
+    if quantize_linear_count == 0 or dequantize_linear_count == 0:
+        raise ValueError('ModelOpt output does not contain explicit INT8 Q/DQ nodes.')
+    return (
+        ArtifactIdentity(path=str(output_path), sha256=file_sha256(output_path)),
+        quantize_linear_count,
+        dequantize_linear_count,
+    )
+
+
 def _parse_onnx(network: trt.INetworkDefinition, parser: trt.OnnxParser, path: Path) -> None:
     if parser.parse_from_file(str(path)):
         return
@@ -580,10 +573,7 @@ def _build_engine(
     onnx_path: Path,
     output_path: Path,
     backend: Backend,
-    calibration_states: Tensor,
-    calibration_cache_path: Path,
-    device: torch.device,
-) -> tuple[ArtifactIdentity, _EntropyCalibrator | None, bool, bool, int]:
+) -> tuple[ArtifactIdentity, bool, bool]:
     logger = trt.Logger(trt.Logger.INFO)
     builder = trt.Builder(logger)
     explicit_batch = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
@@ -594,20 +584,12 @@ def _build_engine(
     configuration.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, TENSORRT_WORKSPACE_BYTES)
     configuration.builder_optimization_level = TENSORRT_BUILDER_OPTIMIZATION_LEVEL
     configuration.set_flag(trt.BuilderFlag.FP16)
-    calibrator: _EntropyCalibrator | None = None
-    forced_float16_layer_count = 0
     match backend:
         case Backend.TENSORRT_FLOAT16:
             pass
         case Backend.TENSORRT_INT8:
             if not builder.platform_has_fast_int8:
                 raise ValueError('TensorRT reports that this GPU has no fast INT8 support.')
-            calibration_cache_path.unlink(missing_ok=True)
-            calibrator = _EntropyCalibrator(calibration_states, device, calibration_cache_path)
-            configuration.set_flag(trt.BuilderFlag.INT8)
-            configuration.set_flag(trt.BuilderFlag.PREFER_PRECISION_CONSTRAINTS)
-            configuration.int8_calibrator = calibrator
-            forced_float16_layer_count = _force_sensitive_heads_to_float16(network)
         case _:
             raise ValueError(f'Cannot build a TensorRT engine for {backend.value}.')
     if not builder.platform_has_fast_fp16:
@@ -618,33 +600,9 @@ def _build_engine(
     write_bytes_atomically(output_path, bytes(serialized))
     return (
         ArtifactIdentity(path=str(output_path), sha256=file_sha256(output_path)),
-        calibrator,
         builder.platform_has_fast_fp16,
         builder.platform_has_fast_int8,
-        forced_float16_layer_count,
     )
-
-
-def _force_sensitive_heads_to_float16(network: trt.INetworkDefinition) -> int:
-    constrained_count = 0
-    for layer_index in range(network.num_layers):
-        layer = network.get_layer(layer_index)
-        if not layer.name.startswith(INT8_FLOAT16_LAYER_PREFIXES):
-            continue
-        floating_output_indices = tuple(
-            output_index
-            for output_index in range(layer.num_outputs)
-            if layer.get_output(output_index).dtype in {trt.float16, trt.float32}
-        )
-        if not floating_output_indices:
-            continue
-        layer.precision = trt.float16
-        for output_index in floating_output_indices:
-            layer.set_output_type(output_index, trt.float16)
-        constrained_count += 1
-    if constrained_count == 0:
-        raise ValueError('TensorRT network contains no policy/value head layers to constrain to FP16.')
-    return constrained_count
 
 
 def _measure_runner(
@@ -750,37 +708,28 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
 
     arguments.artifact_directory.mkdir(parents=True, exist_ok=True)
     float16_onnx_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp16.onnx'
-    int8_onnx_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp32-for-int8.onnx'
+    int8_source_onnx_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp32-for-int8.onnx'
+    int8_qdq_onnx_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-int8-qdq.onnx'
     float16_engine_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp16.engine'
     int8_engine_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-int8.engine'
-    calibration_cache_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-int8.calibration'
     float16_onnx_artifact = _export_onnx(checkpoint.model_path, float16_onnx_path, torch.float16)
-    int8_onnx_artifact = _export_onnx(checkpoint.model_path, int8_onnx_path, torch.float32)
-    float16_engine, _, fast_float16, fast_int8, _ = _build_engine(
+    int8_source_onnx_artifact = _export_onnx(checkpoint.model_path, int8_source_onnx_path, torch.float32)
+    int8_qdq_onnx_artifact, quantize_linear_count, dequantize_linear_count = _quantize_onnx(
+        int8_source_onnx_path,
+        int8_qdq_onnx_path,
+        calibration_states,
+        device,
+    )
+    float16_engine, fast_float16, fast_int8 = _build_engine(
         float16_onnx_path,
         float16_engine_path,
         Backend.TENSORRT_FLOAT16,
-        calibration_states,
-        calibration_cache_path,
-        device,
     )
-    int8_engine, calibrator, _, _, forced_float16_layer_count = _build_engine(
-        int8_onnx_path,
+    int8_engine, _, _ = _build_engine(
+        int8_qdq_onnx_path,
         int8_engine_path,
         Backend.TENSORRT_INT8,
-        calibration_states,
-        calibration_cache_path,
-        device,
     )
-    if (
-        calibrator is None
-        or calibrator.consumed_batch_count != calibrator.batch_count
-        or not calibration_cache_path.is_file()
-    ):
-        raise ValueError('TensorRT did not produce the required INT8 calibration cache.')
-    observed_maximum_absolute_input = float(calibration_states.to(torch.float32).abs().max())
-    input_tensor_scale = entropy_calibration_tensor_scale(calibration_cache_path.read_bytes(), INPUT_NAME)
-    validate_input_calibration_scale(input_tensor_scale, observed_maximum_absolute_input)
 
     reference_runner = _TorchScriptCudaGraphRunner(
         checkpoint.model_path, benchmark_states, device, arguments.warmup_iterations
@@ -825,13 +774,9 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         calibration=CalibrationIdentity(
             source=calibration_source_identity,
             requested_positions=arguments.calibration_position_count,
-            submitted_batches=calibrator.batch_count,
-            submitted_positions=calibrator.batch_count * BATCH_SIZE,
-            observed_maximum_absolute_input=observed_maximum_absolute_input,
-            input_tensor_scale=input_tensor_scale,
-            calibration_cache=ArtifactIdentity(
-                path=str(calibration_cache_path), sha256=file_sha256(calibration_cache_path)
-            ),
+            submitted_batches=arguments.calibration_position_count // BATCH_SIZE,
+            submitted_positions=arguments.calibration_position_count,
+            tool_version=version('nvidia-modelopt'),
         ),
         input_shape=_input_shape(),
         warmup_iterations=arguments.warmup_iterations,
@@ -849,16 +794,17 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
             tensorrt_fast_int8=fast_int8,
             floating_precision_reason=(
                 'FP16 is the conversion baseline because TensorRT 10.14 supports fast FP16 on SM 8.9 and '
-                'provides the fallback precision for calibrated INT8 layers. The INT8 arm uses a separate '
-                'FP32 ONNX input because the legacy TensorRT calibrator consumes FP32 input buffers.'
+                'provides the fallback precision around explicitly quantized INT8 convolution layers.'
             ),
         ),
         float16_onnx_model=float16_onnx_artifact,
-        int8_onnx_model=int8_onnx_artifact,
+        int8_source_onnx_model=int8_source_onnx_artifact,
+        int8_qdq_onnx_model=int8_qdq_onnx_artifact,
+        int8_quantize_linear_node_count=quantize_linear_count,
+        int8_dequantize_linear_node_count=dequantize_linear_count,
         onnx_opset_version=ONNX_OPSET_VERSION,
         tensorrt_workspace_bytes=TENSORRT_WORKSPACE_BYTES,
         tensorrt_builder_optimization_level=TENSORRT_BUILDER_OPTIMIZATION_LEVEL,
-        int8_forced_float16_layer_count=forced_float16_layer_count,
         fidelity_limits=arguments.fidelity_limits,
         reference=reference,
         candidates=candidates,
