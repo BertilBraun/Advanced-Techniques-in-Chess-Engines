@@ -14,6 +14,7 @@ from typing import Iterator, Literal
 import modelopt.torch.quantization as mtq
 import numpy as np
 import onnx
+import onnxruntime as ort
 import torch
 from modelopt.torch.quantization.config import QuantizeConfig, QuantizerCfgEntry
 from modelopt.torch.quantization.nn import TensorQuantizer
@@ -64,15 +65,14 @@ from tools.distill_train_student import (
 from tools.tensorrt_benchmark_metrics import FidelityMetrics, ModelOutputs, TimingDistribution, measure_fidelity
 from torch import Tensor, nn
 
-LAYERS = 12
-HIDDEN_SIZE = 128
+DEFAULT_LAYERS = 12
+DEFAULT_HIDDEN_SIZE = 128
 POLICY_KEY_SIZE = 128
 VALUE_CHANNELS = 2
 VALUE_FULLY_CONNECTED_SIZE = 48
 # The published 3,451,655 count used the former 29-plane encoding. The v34 replay has 52 input planes,
 # adding 23 * 128 * 3 * 3 start-convolution weights while preserving the 12x128 trunk and heads.
 EXPECTED_PARAMETER_COUNT = 3_478_151
-RESIDUAL_BRANCH_SCALE = LAYERS**-0.5
 ACTIVATION_CAP = 6.0
 QAT_RECALIBRATION_INTERVAL = 1_000
 QAT_CALIBRATION_POSITIONS = 3_200
@@ -111,6 +111,10 @@ class Arguments:
     evaluate_every: int
     holdout_fraction: float
     final_fidelity_positions: int
+    layers: int
+    hidden_size: int
+    quantized_convolutions: int
+    final_normalization: bool
 
 
 class TrainingObservation(FrozenModel):
@@ -139,6 +143,9 @@ class TensorRtMeasurement(FrozenModel):
     engine_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     timing: TimingDistribution
     fidelity_to_floating: FidelityMetrics
+    onnx_fidelity_to_floating: FidelityMetrics
+    onnx_fidelity_to_framework: FidelityMetrics
+    tensorrt_fidelity_to_onnx: FidelityMetrics
 
 
 class ArchitectureScreenReport(FrozenModel):
@@ -150,8 +157,9 @@ class ArchitectureScreenReport(FrozenModel):
     replay: ProductionReplaySnapshot
     sampled_index_sequence_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     architecture: NetworkParams
+    quantized_convolutions: int = Field(ge=0)
     model_cost: ModelCost
-    steps: int = Field(gt=0)
+    steps: int = Field(ge=0)
     batch_size: int = Field(gt=0)
     optimizer: Literal['adamw'] = 'adamw'
     peak_learning_rate: float = Field(gt=0.0)
@@ -161,8 +169,8 @@ class ArchitectureScreenReport(FrozenModel):
     held_out_positions: int = Field(gt=0)
     held_out_loss_floor: LossValues
     observations: tuple[TrainingObservation, ...]
-    training_wall_seconds: float = Field(gt=0.0)
-    average_training_samples_per_second: float = Field(gt=0.0)
+    training_wall_seconds: float = Field(ge=0.0)
+    average_training_samples_per_second: float | None = Field(default=None, gt=0.0)
     qat_recalibration_interval: int | None = Field(default=None, gt=0)
     qat_calibration_positions: int | None = Field(default=None, gt=0)
     activation_ranges: tuple[ActivationDistribution, ...]
@@ -175,18 +183,24 @@ class ArchitectureScreenReport(FrozenModel):
     state_dict_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
-def architecture(cell: ScreenCell) -> NetworkParams:
+def architecture(
+    cell: ScreenCell,
+    layers: int = DEFAULT_LAYERS,
+    hidden_size: int = DEFAULT_HIDDEN_SIZE,
+    final_normalization: bool = False,
+) -> NetworkParams:
     residual_block = (
         ScaledPreActivationResidualBlockConfiguration(
-            branch_scale=RESIDUAL_BRANCH_SCALE,
+            branch_scale=layers**-0.5,
             activation_cap=ACTIVATION_CAP,
+            final_activation_cap=ACTIVATION_CAP if final_normalization else None,
         )
         if cell.uses_quantization_friendly_trunk
         else PostActivationResidualBlockConfiguration()
     )
     return NetworkParams(
-        num_layers=LAYERS,
-        hidden_size=HIDDEN_SIZE,
+        num_layers=layers,
+        hidden_size=hidden_size,
         residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
         residual_block=residual_block,
         policy_head=ChessFromToAttentionPolicyHeadConfiguration(key_size=POLICY_KEY_SIZE),
@@ -195,7 +209,7 @@ def architecture(cell: ScreenCell) -> NetworkParams:
     )
 
 
-def _qat_configuration() -> QuantizeConfig:
+def _qat_configuration(cell: ScreenCell, layers: int, quantized_convolutions: int) -> QuantizeConfig:
     configuration = QuantizeConfig.model_validate(copy.deepcopy(mtq.INT8_DEFAULT_CFG))
     configuration.quant_cfg.extend(
         (
@@ -205,6 +219,17 @@ def _qat_configuration() -> QuantizeConfig:
             QuantizerCfgEntry(quantizer_name='*value_head*', enable=False),
         )
     )
+    convolution_module_index = 2 if cell.uses_quantization_friendly_trunk else 0
+    for convolution_index in range(quantized_convolutions, layers * 2):
+        block_index, convolution_in_block = divmod(convolution_index, 2)
+        configuration.quant_cfg.append(
+            QuantizerCfgEntry(
+                quantizer_name=(
+                    f'backbone.{block_index}.conv_block{convolution_in_block + 1}.{convolution_module_index}.*'
+                ),
+                enable=False,
+            )
+        )
     return configuration
 
 
@@ -238,10 +263,13 @@ def _configure_qat(
     calibration_indices: np.ndarray,
     batch_size: int,
     device: torch.device,
+    cell: ScreenCell,
+    layers: int,
+    quantized_convolutions: int,
 ) -> Network:
     quantized = mtq.quantize(
         model,
-        _qat_configuration(),
+        _qat_configuration(cell, layers, quantized_convolutions),
         _calibration_loop(dataset, calibration_indices, batch_size, device),
     )
     assert isinstance(quantized, Network)
@@ -412,12 +440,31 @@ def _tensorrt_outputs(
     return ModelOutputs(torch.cat(policies), torch.cat(values))
 
 
+def _onnx_outputs(
+    onnx_path: Path,
+    batches: tuple[TrainingBatch, ...],
+    device_id: int,
+) -> ModelOutputs:
+    session = ort.InferenceSession(
+        str(onnx_path),
+        providers=[('CUDAExecutionProvider', {'device_id': device_id}), 'CPUExecutionProvider'],
+    )
+    policies: list[Tensor] = []
+    values: list[Tensor] = []
+    for batch in batches:
+        policy, value = session.run(None, {'states': batch.states.float().cpu().numpy()})
+        policies.append(torch.from_numpy(policy).float())
+        values.append(torch.from_numpy(value).float())
+    return ModelOutputs(torch.cat(policies), torch.cat(values))
+
+
 def _measure_tensorrt(
     model: Network,
     output: Path,
     name: str,
     backend: Backend,
     reference: ModelOutputs,
+    framework_outputs: ModelOutputs,
     legal_mask: Tensor,
     fidelity_batches: tuple[TrainingBatch, ...],
     timing_states: Tensor,
@@ -427,6 +474,7 @@ def _measure_tensorrt(
     engine_path = output / f'{name}.engine'
     _export_onnx(model, onnx_path, device)
     engine, _, _ = _build_engine(onnx_path, engine_path, backend)
+    onnx_outputs = _onnx_outputs(onnx_path, fidelity_batches, device.index or 0)
     runner = _TensorRtCudaGraphRunner(engine_path, timing_states, device, 10)
     candidate = _tensorrt_outputs(runner, fidelity_batches)
     timing = _measure_runner(runner, 10, 5, 100, device)
@@ -437,6 +485,9 @@ def _measure_tensorrt(
         engine_sha256=engine.sha256,
         timing=timing,
         fidelity_to_floating=measure_fidelity(reference, candidate, legal_mask),
+        onnx_fidelity_to_floating=measure_fidelity(reference, onnx_outputs, legal_mask),
+        onnx_fidelity_to_framework=measure_fidelity(framework_outputs, onnx_outputs, legal_mask),
+        tensorrt_fidelity_to_onnx=measure_fidelity(onnx_outputs, candidate, legal_mask),
     )
 
 
@@ -458,10 +509,20 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
         device = torch.device('cuda', arguments.device_id)
         torch.manual_seed(arguments.random_seed)
         torch.cuda.manual_seed_all(arguments.random_seed)
-        network_architecture = architecture(arguments.cell)
+        network_architecture = architecture(
+            arguments.cell,
+            arguments.layers,
+            arguments.hidden_size,
+            arguments.final_normalization,
+        )
         model = Network(network_architecture, device, CHESS_NETWORK_DIMENSIONS)
         cost = measure_model_cost(model)
-        if cost.parameters.total != EXPECTED_PARAMETER_COUNT:
+        if (
+            arguments.layers == DEFAULT_LAYERS
+            and arguments.hidden_size == DEFAULT_HIDDEN_SIZE
+            and not arguments.final_normalization
+            and cost.parameters.total != EXPECTED_PARAMETER_COUNT
+        ):
             raise ValueError(f'Expected {EXPECTED_PARAMETER_COUNT:,} parameters, found {cost.parameters.total:,}.')
 
         calibration_generator = np.random.default_rng(arguments.random_seed + 10_000_000)
@@ -473,7 +534,16 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             )
         )
         if arguments.cell.uses_qat:
-            model = _configure_qat(model, opened, calibration_indices, arguments.batch_size, device)
+            model = _configure_qat(
+                model,
+                opened,
+                calibration_indices,
+                arguments.batch_size,
+                device,
+                arguments.cell,
+                arguments.layers,
+                arguments.quantized_convolutions,
+            )
 
         optimizer = create_student_optimizer(model, OptimizerKind.ADAMW, arguments.learning_rate)
         objective = distillation_objective()
@@ -566,6 +636,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                     'float16',
                     Backend.TENSORRT_FLOAT16,
                     floating_outputs,
+                    floating_outputs,
                     legal_mask,
                     fidelity_batches,
                     activation_batch.states[:TENSORRT_BATCH_SIZE],
@@ -579,6 +650,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 'int8',
                 Backend.TENSORRT_INT8,
                 floating_outputs,
+                fake_outputs,
                 legal_mask,
                 fidelity_batches,
                 activation_batch.states[:TENSORRT_BATCH_SIZE],
@@ -597,6 +669,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 'float16',
                 Backend.TENSORRT_FLOAT16,
                 floating_outputs,
+                floating_outputs,
                 legal_mask,
                 fidelity_batches,
                 activation_batch.states[:TENSORRT_BATCH_SIZE],
@@ -611,6 +684,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             replay=opened.snapshot,
             sampled_index_sequence_sha256=sampled_index_hash.hexdigest(),
             architecture=network_architecture,
+            quantized_convolutions=arguments.quantized_convolutions if arguments.cell.uses_qat else 0,
             model_cost=cost,
             steps=arguments.steps,
             batch_size=arguments.batch_size,
@@ -621,7 +695,9 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             held_out_loss_floor=floor,
             observations=tuple(observations),
             training_wall_seconds=training_wall,
-            average_training_samples_per_second=arguments.steps * arguments.batch_size / training_wall,
+            average_training_samples_per_second=(
+                arguments.steps * arguments.batch_size / training_wall if arguments.steps else None
+            ),
             qat_recalibration_interval=QAT_RECALIBRATION_INTERVAL if arguments.cell.uses_qat else None,
             qat_calibration_positions=QAT_CALIBRATION_POSITIONS if arguments.cell.uses_qat else None,
             activation_ranges=activation_ranges,
@@ -655,9 +731,19 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--evaluate-every', default=1_000, type=int)
     parser.add_argument('--holdout-fraction', default=0.02, type=float)
     parser.add_argument('--final-fidelity-positions', default=FINAL_FIDELITY_POSITIONS, type=int)
+    parser.add_argument('--layers', default=DEFAULT_LAYERS, type=int)
+    parser.add_argument('--hidden-size', default=DEFAULT_HIDDEN_SIZE, type=int)
+    parser.add_argument('--quantized-convolutions', default=DEFAULT_LAYERS * 2, type=int)
+    parser.add_argument('--final-normalization', action='store_true')
     namespace = parser.parse_args()
-    if namespace.steps <= 0 or namespace.batch_size <= 0 or namespace.evaluate_every <= 0:
-        raise ValueError('Steps, batch size and evaluation interval must be positive.')
+    if namespace.steps < 0 or namespace.batch_size <= 0 or namespace.evaluate_every <= 0:
+        raise ValueError('Steps must be nonnegative; batch size and evaluation interval must be positive.')
+    if namespace.layers <= 0 or namespace.hidden_size <= 0:
+        raise ValueError('Layers and hidden size must be positive.')
+    if namespace.quantized_convolutions <= 0 or namespace.quantized_convolutions > namespace.layers * 2:
+        raise ValueError('Quantized convolutions must be between one and twice the residual-block count.')
+    if namespace.final_normalization and not ScreenCell(namespace.cell).uses_quantization_friendly_trunk:
+        raise ValueError('Final normalization is defined only for the scaled pre-activation trunk.')
     return Arguments(
         replay_store=namespace.replay_store,
         replay_experiment=namespace.replay_experiment,
@@ -673,6 +759,10 @@ def parse_arguments() -> Arguments:
         evaluate_every=namespace.evaluate_every,
         holdout_fraction=namespace.holdout_fraction,
         final_fidelity_positions=namespace.final_fidelity_positions,
+        layers=namespace.layers,
+        hidden_size=namespace.hidden_size,
+        quantized_convolutions=namespace.quantized_convolutions,
+        final_normalization=namespace.final_normalization,
     )
 
 

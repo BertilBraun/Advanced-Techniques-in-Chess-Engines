@@ -66,6 +66,7 @@ class ScaledPreActivationResidualBlockConfiguration(FrozenModel):
     kind: Literal['scaled_pre_activation'] = 'scaled_pre_activation'
     branch_scale: float = Field(gt=0.0, le=1.0)
     activation_cap: float = Field(gt=0.0)
+    final_activation_cap: float | None = Field(default=None, gt=0.0)
 
 
 ResidualBlockConfiguration: TypeAlias = Annotated[
@@ -235,7 +236,11 @@ class Network(nn.Module):
                         for block_index in range(args.num_layers)
                     ]
                 )
-                self.finish_block = nn.Identity()
+                match args.residual_block:
+                    case ScaledPreActivationResidualBlockConfiguration(final_activation_cap=cap) if cap is not None:
+                        self.finish_block = nn.Sequential(nn.BatchNorm2d(hidden_size), _bounded_relu(cap))
+                    case _:
+                        self.finish_block = nn.Identity()
             case AttentionNetworkParams():
                 hidden_size = args.embedding_size
                 self.start_block = AttentionInput(

@@ -137,6 +137,28 @@ def test_scaled_pre_activation_network_preserves_parameter_count() -> None:
     )
 
 
+def test_scaled_pre_activation_network_can_normalize_before_the_heads() -> None:
+    network = Network(
+        NetworkParams(
+            num_layers=2,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            residual_block=ScaledPreActivationResidualBlockConfiguration(
+                branch_scale=2**-0.5,
+                activation_cap=6.0,
+                final_activation_cap=6.0,
+            ),
+            policy_head=CHESS_POLICY_HEAD,
+        ),
+        torch.device('cpu'),
+        CHESS_PLANE_NETWORK_DIMENSIONS,
+    )
+
+    assert isinstance(network.finish_block, nn.Sequential)
+    assert isinstance(network.finish_block[0], nn.BatchNorm2d)
+    assert isinstance(network.finish_block[1], nn.ReLU6)
+
+
 def test_squeeze_excitation_uses_reduction_sixteen() -> None:
     squeeze_excitation = SqueezeExcitation(32)
     first_projection = squeeze_excitation.excite[0]
