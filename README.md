@@ -53,11 +53,21 @@ replay, policy-surprise replay sampling, regret-guided restart positions, richer
 staged AdamW schedule. The negative results are retained too: adaptive search budgeting and learned early stopping
 were implemented, measured, and removed when they failed to earn their compute cost.
 
+![Playing strength over the v34 training run](documentation/benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/artifacts/elo-vs-hours.png)
+
+By the retained checkpoint, the run had completed **732,500 optimizer steps** and **2.93 million self-play games**,
+materialising **187.5 million fresh positions** and consuming **1.50 billion training presentations**. The
+[training-dynamics report](documentation/benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md)
+contains the hourly strength curve, compute-doubling returns, model and visit throughput changes, raw tables, and a
+playbook for scaling beyond one eight-GPU node.
+
 For the evidence trail, start with:
 
 - [Current state](documentation/CURRENT-STATE.md) for the precise status of the run and publication work;
 - [v34 terminal strength](documentation/benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md)
   for final-match evidence at policy-only, 64, 10,000, and 80,000 searches;
+- [v34 training dynamics](documentation/benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md) for
+  optimizer steps, self-play volume, strength by hour, compute-doubling returns, and the scaling playbook;
 - [v34 final evaluation plan](documentation/plan/v34-final-evaluation-and-distillation.md) for the terminal protocol;
 - [v34 replay compression](documentation/benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md) for
   the completed small-model experiment and downloadable weights;

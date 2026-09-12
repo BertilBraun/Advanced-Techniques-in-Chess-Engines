@@ -1,0 +1,17 @@
+{
+  "final_generation": 1465,
+  "optimizer_steps": 732500,
+  "tensorboard_elapsed_hours": 73.0,
+  "headline_billed_hours": 72.0,
+  "self_play_games": 2925085,
+  "self_play_games_per_hour": 40069.65753424657,
+  "self_play_games_per_second": 11.130460426179605,
+  "fresh_positions": 187524912,
+  "fresh_positions_per_hour": 2568834.4109589043,
+  "training_presentations": 1500160000,
+  "empirical_reuse_factor": 7.999790449175094,
+  "recorded_gpu_hours": 584.0,
+  "headline_gpu_hours": 576.0,
+  "headline_node_cost_usd": 52.08,
+  "estimated_searches": 122563569200
+}

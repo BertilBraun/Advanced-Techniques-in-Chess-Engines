@@ -19,6 +19,7 @@ searches and 3,167 at 80,000 searches on the project’s SSDF-derived Stockfish 
 
 | Result | Status | Evidence |
 | --- | --- | --- |
+| v34 training dynamics and scaling | **Final through generation 1702** | [Hourly curves, throughput, and outscaling playbook](benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md) |
 | v34 generation 1465 replay compression | **Final** | [13.20x smaller student and match artifacts](benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md) |
 | v34 generation 1465 terminal strength | **Final** | [3,037 at 10k and 3,167 at 80k](benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md) |
 | v29 generation 936 deep match | **Final** | [2,844.8 Elo at 10,000 searches](benchmarks/deep-match-generation936-50k-nodes-rtx4070s-20260906/README.md) |
