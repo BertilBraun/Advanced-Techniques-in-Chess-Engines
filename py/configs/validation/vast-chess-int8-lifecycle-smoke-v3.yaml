@@ -38,6 +38,16 @@ training:
     maximum_wall_time_seconds: 600
     manual_stop_file: /workspace/run-control/stop/vast-chess-int8-lifecycle-smoke-v3.stop
 
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: tensorrt
+        bootstrap_with_torchscript: true
+        template_engine_paths:
+        - /workspace/tensorrt/v35-int8-14x160-prefold-template.engine
+        - /workspace/tensorrt/v35-int8-14x160-deployment-trained-template.engine
+
 evaluation:
   definitions:
   - kind: fixed_dataset
