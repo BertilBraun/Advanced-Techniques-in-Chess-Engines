@@ -3,8 +3,9 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from src.util.frozen_model import ConfigurationPath, FrozenModel
+from src.util.generation_schedule import FloatGenerationSchedule, defined_schedule_values
 
 
 class DisabledTrainingQuantization(FrozenModel):
@@ -16,6 +17,13 @@ class TensorRtInt8QatConfiguration(FrozenModel):
     fold_after_optimizer_steps: int = Field(default=1_000, gt=0)
     calibration_positions: int = Field(default=2_048, gt=0)
     recalibration_interval_generations: int = Field(default=1, gt=0)
+    deployment_learning_rate: FloatGenerationSchedule
+
+    @model_validator(mode='after')
+    def validate_deployment_learning_rate(self) -> TensorRtInt8QatConfiguration:
+        if any(value <= 0.0 for value in defined_schedule_values(self.deployment_learning_rate)):
+            raise ValueError('Deployment learning-rate schedule values must be positive.')
+        return self
 
 
 TrainingQuantizationConfiguration: TypeAlias = Annotated[

@@ -333,6 +333,23 @@ def warmup_scaled_learning_rate(
     return base_learning_rate * (completed_optimizer_steps + 1) / warmup_optimizer_steps
 
 
+def qat_phase_learning_rate(
+    base_learning_rate: float,
+    quantization: DisabledTrainingQuantization | TensorRtInt8QatConfiguration,
+    qat_state: QatStateIdentity | None,
+    model_generation: int,
+) -> float:
+    match quantization:
+        case DisabledTrainingQuantization():
+            assert qat_state is None
+            return base_learning_rate
+        case TensorRtInt8QatConfiguration(deployment_learning_rate=deployment_learning_rate):
+            assert qat_state is not None
+            if qat_state.phase is QatCheckpointPhase.DEPLOYMENT:
+                return deployment_learning_rate.value_at(model_generation)
+            return base_learning_rate
+
+
 def _train_batches(
     loader: MappedReplayBatchLoader,
     distributed_model: DistributedDataParallel,
@@ -594,7 +611,12 @@ def train_rank_quantum(
         collect_distributions=rank == 0,
         source_generation=command.source_progress.model_generation,
         precision=configuration.training.trainer.precision,
-        base_learning_rate=command.parameters.learning_rate,
+        base_learning_rate=qat_phase_learning_rate(
+            command.parameters.learning_rate,
+            configuration.training.trainer.quantization,
+            runtime.qat_state,
+            command.source_progress.model_generation,
+        ),
         warmup_optimizer_steps=configuration.training.trainer.warmup_optimizer_steps,
         completed_optimizer_steps=command.source_progress.completed_optimizer_steps,
         replay_prefetch_depth=configuration.training.trainer.replay_prefetch_depth,

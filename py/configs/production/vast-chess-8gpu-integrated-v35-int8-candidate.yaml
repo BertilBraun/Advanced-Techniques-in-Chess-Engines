@@ -14,6 +14,13 @@ training:
       fold_after_optimizer_steps: 1000
       calibration_positions: 256
       recalibration_interval_generations: 1
+      deployment_learning_rate:
+        kind: linear
+        start_generation: 2
+        end_generation: 1000
+        start_value: 0.02
+        end_value: 0.01
+        rounding: none
   lifecycle:
     replay:
       capacity:
