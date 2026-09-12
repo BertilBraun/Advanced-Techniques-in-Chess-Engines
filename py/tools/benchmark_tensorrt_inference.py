@@ -1,0 +1,716 @@
+"""Benchmark the production chess checkpoint against TensorRT FP16 and calibrated INT8.
+
+This is an offline feasibility probe. It does not add a TensorRT production backend. Run it only on
+an idle target GPU because TensorRT engine building performs tactic profiling and INT8 calibration.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import subprocess
+import time
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Literal
+
+import onnx
+import tensorrt as trt
+import torch
+from pydantic import Field
+from src.evaluation.contracts import EVALUATION_DATASET_MANIFEST_ADAPTER
+from src.evaluation.dataset import dataset_manifest_path
+from src.experiment.configuration import experiment_configuration_sha256, load_chess_experiment_configuration
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.training.checkpoint.contracts import load_checkpoint_manifest_path
+from src.util.atomic_file import write_bytes_atomically, write_text_atomically
+from src.util.frozen_model import FrozenModel
+from src.util.hashing import file_sha256
+from src.util.provenance import SourceRevision, read_source_revision
+from tensorrt_benchmark_metrics import (
+    FidelityLimits,
+    FidelityMetrics,
+    ModelOutputs,
+    TimingDistribution,
+    fidelity_failures,
+    measure_fidelity,
+    summarize_timings,
+    validate_fidelity,
+)
+from tools.measure_inference_precision_agreement import load_positions
+from torch import Tensor, nn
+
+BATCH_SIZE = 320
+INPUT_NAME = 'states'
+POLICY_OUTPUT_NAME = 'policy_logits'
+WDL_OUTPUT_NAME = 'wdl_probabilities'
+ONNX_OPSET_VERSION = 20
+TENSORRT_WORKSPACE_BYTES = 4 * 1024**3
+TENSORRT_BUILDER_OPTIMIZATION_LEVEL = 3
+
+
+class Backend(str, Enum):
+    TORCHSCRIPT_BFLOAT16 = 'torchscript_bfloat16_channels_last'
+    TENSORRT_FLOAT16 = 'tensorrt_float16'
+    TENSORRT_INT8 = 'tensorrt_int8_calibrated'
+
+
+@dataclass(frozen=True)
+class BenchmarkArguments:
+    configuration_path: Path
+    checkpoint_manifest_path: Path
+    checkpoint_generation: int
+    benchmark_dataset_path: Path
+    calibration_dataset_path: Path
+    artifact_directory: Path
+    output_path: Path
+    gpu_id: int
+    warmup_iterations: int
+    repetitions: int
+    iterations_per_repetition: int
+    calibration_position_count: int
+    fidelity_limits: FidelityLimits
+    acknowledge_gpu_load: bool
+
+
+class ArtifactIdentity(FrozenModel):
+    path: str = Field(min_length=1)
+    sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
+class DatasetIdentity(FrozenModel):
+    data: ArtifactIdentity
+    manifest: ArtifactIdentity
+    available_positions: int = Field(gt=0)
+    selected_positions: int = Field(gt=0)
+    selected_states_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    legal_action_mask_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
+class CalibrationIdentity(FrozenModel):
+    dataset: DatasetIdentity
+    requested_positions: int = Field(gt=0)
+    submitted_batches: int = Field(gt=0)
+    submitted_positions_including_wrap: int = Field(gt=0)
+    calibration_cache: ArtifactIdentity
+    algorithm: Literal['entropy_calibration_2'] = 'entropy_calibration_2'
+
+
+class HardwareDescription(FrozenModel):
+    gpu_id: int = Field(ge=0)
+    device_name: str = Field(min_length=1)
+    compute_capability: tuple[int, int]
+    driver_version: str = Field(min_length=1)
+    torch_version: str = Field(min_length=1)
+    torch_cuda_version: str = Field(min_length=1)
+    onnx_version: str = Field(min_length=1)
+    tensorrt_version: str = Field(min_length=1)
+    tensorrt_fast_float16: bool
+    tensorrt_bfloat16_builder_flag: bool
+    tensorrt_fast_int8: bool
+    selected_floating_precision: Literal['float16'] = 'float16'
+    floating_precision_reason: str = Field(min_length=1)
+
+
+class ReferenceMeasurement(FrozenModel):
+    backend: Literal[Backend.TORCHSCRIPT_BFLOAT16] = Backend.TORCHSCRIPT_BFLOAT16
+    timing: TimingDistribution
+
+
+class CandidateMeasurement(FrozenModel):
+    backend: Backend
+    engine: ArtifactIdentity
+    timing: TimingDistribution
+    fidelity: FidelityMetrics
+    fidelity_failures: tuple[str, ...]
+
+
+class TensorRtInferenceBenchmarkReport(FrozenModel):
+    schema_version: Literal[1] = 1
+    source_revision: SourceRevision
+    experiment_configuration_path: str = Field(min_length=1)
+    experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    checkpoint_generation: int = Field(ge=0)
+    model_id: str = Field(min_length=1)
+    checkpoint_manifest: ArtifactIdentity
+    inference_model: ArtifactIdentity
+    benchmark_dataset: DatasetIdentity
+    calibration: CalibrationIdentity
+    input_shape: tuple[int, int, int, int]
+    input_dtype: Literal['int8_source_planes'] = 'int8_source_planes'
+    warmup_iterations: int = Field(ge=0)
+    hardware: HardwareDescription
+    onnx_model: ArtifactIdentity
+    onnx_opset_version: int = Field(gt=0)
+    tensorrt_workspace_bytes: int = Field(gt=0)
+    tensorrt_builder_optimization_level: int = Field(ge=0)
+    fidelity_limits: FidelityLimits
+    reference: ReferenceMeasurement
+    candidates: tuple[CandidateMeasurement, ...] = Field(min_length=2, max_length=2)
+
+
+@dataclass(frozen=True)
+class _ResolvedCheckpoint:
+    model_path: Path
+    model_sha256: str
+    manifest_sha256: str
+    model_id: str
+
+
+class _CudaGraphRunner:
+    def replay(self) -> None:
+        raise NotImplementedError
+
+    def outputs(self) -> ModelOutputs:
+        raise NotImplementedError
+
+
+class _TorchScriptCudaGraphRunner(_CudaGraphRunner):
+    def __init__(self, model_path: Path, encoded_states: Tensor, device: torch.device, warmup_iterations: int) -> None:
+        torch.backends.cudnn.benchmark = True
+        model = torch.jit.load(str(model_path), map_location=device)
+        model.to(dtype=torch.bfloat16, memory_format=torch.channels_last)
+        model.eval()
+        self._model: nn.Module = torch.jit.freeze(model)
+        self._encoded_states = encoded_states.to(device=device, dtype=torch.int8)
+        self._typed_states = torch.empty(
+            encoded_states.shape,
+            device=device,
+            dtype=torch.bfloat16,
+            memory_format=torch.channels_last,
+        )
+        self._policy = torch.empty((BATCH_SIZE, CHESS_NETWORK_DIMENSIONS.actions), device=device, dtype=torch.float32)
+        self._wdl = torch.empty((BATCH_SIZE, 3), device=device, dtype=torch.float32)
+        self._stream = torch.cuda.Stream(device=device)
+        with torch.inference_mode(), torch.cuda.stream(self._stream):
+            for _ in range(warmup_iterations):
+                self._execute()
+        self._stream.synchronize()
+        self._graph = torch.cuda.CUDAGraph()
+        with torch.inference_mode(), torch.cuda.graph(self._graph, stream=self._stream):
+            self._execute()
+
+    def _execute(self) -> None:
+        self._typed_states.copy_(self._encoded_states)
+        policy, wdl = self._model(self._typed_states)
+        self._policy.copy_(policy)
+        self._wdl.copy_(wdl)
+
+    def replay(self) -> None:
+        self._graph.replay()
+
+    def outputs(self) -> ModelOutputs:
+        self.replay()
+        torch.cuda.synchronize(self._policy.device)
+        return ModelOutputs(policy_logits=self._policy.cpu(), wdl_probabilities=self._wdl.cpu())
+
+
+class _TensorRtCudaGraphRunner(_CudaGraphRunner):
+    def __init__(self, engine_path: Path, encoded_states: Tensor, device: torch.device, warmup_iterations: int) -> None:
+        runtime = trt.Runtime(trt.Logger(trt.Logger.WARNING))
+        engine = runtime.deserialize_cuda_engine(engine_path.read_bytes())
+        if engine is None:
+            raise ValueError(f'TensorRT could not deserialize {engine_path}.')
+        self._runtime = runtime
+        self._engine: trt.ICudaEngine = engine
+        context = engine.create_execution_context()
+        if context is None:
+            raise ValueError(f'TensorRT could not create an execution context for {engine_path}.')
+        self._context: trt.IExecutionContext = context
+        self._require_engine_contract()
+        self._encoded_states = encoded_states.to(device=device, dtype=torch.int8)
+        self._typed_states = torch.empty(encoded_states.shape, device=device, dtype=torch.float16)
+        self._policy_engine = self._allocate_output(POLICY_OUTPUT_NAME, device)
+        self._wdl_engine = self._allocate_output(WDL_OUTPUT_NAME, device)
+        self._policy = torch.empty_like(self._policy_engine, dtype=torch.float32)
+        self._wdl = torch.empty_like(self._wdl_engine, dtype=torch.float32)
+        if not self._context.set_tensor_address(INPUT_NAME, self._typed_states.data_ptr()):
+            raise ValueError('TensorRT rejected the input tensor address.')
+        if not self._context.set_tensor_address(POLICY_OUTPUT_NAME, self._policy_engine.data_ptr()):
+            raise ValueError('TensorRT rejected the policy output tensor address.')
+        if not self._context.set_tensor_address(WDL_OUTPUT_NAME, self._wdl_engine.data_ptr()):
+            raise ValueError('TensorRT rejected the WDL output tensor address.')
+        self._stream = torch.cuda.Stream(device=device)
+        with torch.cuda.stream(self._stream):
+            for _ in range(warmup_iterations):
+                self._execute()
+        self._stream.synchronize()
+        self._graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self._graph, stream=self._stream):
+            self._execute()
+
+    def _require_engine_contract(self) -> None:
+        names = tuple(self._engine.get_tensor_name(index) for index in range(self._engine.num_io_tensors))
+        expected_names = (INPUT_NAME, POLICY_OUTPUT_NAME, WDL_OUTPUT_NAME)
+        if set(names) != set(expected_names):
+            raise ValueError(f'TensorRT engine tensors are {names}, expected {expected_names}.')
+        expected_shapes = (
+            (INPUT_NAME, _input_shape()),
+            (POLICY_OUTPUT_NAME, (BATCH_SIZE, CHESS_NETWORK_DIMENSIONS.actions)),
+            (WDL_OUTPUT_NAME, (BATCH_SIZE, 3)),
+        )
+        for name, expected_shape in expected_shapes:
+            observed_shape = tuple(self._engine.get_tensor_shape(name))
+            if observed_shape != expected_shape:
+                raise ValueError(f'TensorRT tensor {name} has shape {observed_shape}, expected {expected_shape}.')
+        if self._engine.get_tensor_dtype(INPUT_NAME) != trt.float16:
+            raise ValueError('TensorRT benchmark engine input must be float16.')
+
+    def _allocate_output(self, name: str, device: torch.device) -> Tensor:
+        shape = tuple(self._engine.get_tensor_shape(name))
+        data_type = self._engine.get_tensor_dtype(name)
+        match data_type:
+            case trt.DataType.FLOAT:
+                torch_dtype = torch.float32
+            case trt.DataType.HALF:
+                torch_dtype = torch.float16
+            case trt.DataType.BF16:
+                torch_dtype = torch.bfloat16
+            case _:
+                raise ValueError(f'TensorRT output {name} has unsupported data type {data_type}.')
+        return torch.empty(shape, device=device, dtype=torch_dtype)
+
+    def _execute(self) -> None:
+        self._typed_states.copy_(self._encoded_states)
+        if not self._context.execute_async_v3(torch.cuda.current_stream().cuda_stream):
+            raise ValueError('TensorRT inference submission failed.')
+        self._policy.copy_(self._policy_engine)
+        self._wdl.copy_(self._wdl_engine)
+
+    def replay(self) -> None:
+        self._graph.replay()
+
+    def outputs(self) -> ModelOutputs:
+        self.replay()
+        torch.cuda.synchronize(self._policy.device)
+        return ModelOutputs(policy_logits=self._policy.cpu(), wdl_probabilities=self._wdl.cpu())
+
+
+class _EntropyCalibrator(trt.IInt8EntropyCalibrator2):
+    def __init__(self, states: Tensor, device: torch.device, cache_path: Path) -> None:
+        super().__init__()
+        if states.ndim != 4 or states.shape[0] < BATCH_SIZE:
+            raise ValueError(f'INT8 calibration needs at least {BATCH_SIZE} decoded positions.')
+        self._states = states
+        self._device = device
+        self._cache_path = cache_path
+        self._batch_count = (states.shape[0] + BATCH_SIZE - 1) // BATCH_SIZE
+        self._batch_index = 0
+        self._device_batch = torch.empty((BATCH_SIZE, *states.shape[1:]), device=device, dtype=torch.float16)
+
+    @property
+    def batch_count(self) -> int:
+        return self._batch_count
+
+    @property
+    def consumed_batch_count(self) -> int:
+        return self._batch_index
+
+    def get_batch_size(self) -> int:
+        return BATCH_SIZE
+
+    def get_batch(self, names: list[str]) -> list[int] | None:
+        if names != [INPUT_NAME]:
+            raise ValueError(f'TensorRT requested calibration inputs {names}, expected {[INPUT_NAME]}.')
+        if self._batch_index >= self._batch_count:
+            return None
+        start = self._batch_index * BATCH_SIZE
+        indices = torch.arange(start, start + BATCH_SIZE, dtype=torch.int64) % self._states.shape[0]
+        self._device_batch.copy_(self._states.index_select(0, indices).to(dtype=torch.float16))
+        torch.cuda.synchronize(self._device)
+        self._batch_index += 1
+        return [self._device_batch.data_ptr()]
+
+    def read_calibration_cache(self) -> bytes | None:
+        return None
+
+    def write_calibration_cache(self, cache: memoryview) -> None:
+        write_bytes_atomically(self._cache_path, bytes(cache))
+
+
+def _tensor_sha256(tensor: Tensor) -> str:
+    contiguous = tensor.detach().cpu().contiguous()
+    return hashlib.sha256(contiguous.numpy().tobytes()).hexdigest()
+
+
+def _load_dataset_identity(path: Path, selected_states: Tensor, legal_action_mask: Tensor) -> DatasetIdentity:
+    manifest_path = dataset_manifest_path(path)
+    if not path.is_file() or not manifest_path.is_file():
+        raise ValueError(f'Benchmark dataset and manifest must both exist at {path}.')
+    manifest = EVALUATION_DATASET_MANIFEST_ADAPTER.validate_json(manifest_path.read_text(encoding='utf-8'))
+    if file_sha256(path) != manifest.data_sha256:
+        raise ValueError(f'Dataset hash does not match its manifest: {path}')
+    return DatasetIdentity(
+        data=ArtifactIdentity(path=str(path), sha256=manifest.data_sha256),
+        manifest=ArtifactIdentity(path=str(manifest_path), sha256=file_sha256(manifest_path)),
+        available_positions=manifest.position_count,
+        selected_positions=selected_states.shape[0],
+        selected_states_sha256=_tensor_sha256(selected_states),
+        legal_action_mask_sha256=_tensor_sha256(legal_action_mask),
+    )
+
+
+def _resolve_checkpoint(arguments: BenchmarkArguments) -> _ResolvedCheckpoint:
+    manifest = load_checkpoint_manifest_path(arguments.checkpoint_manifest_path, arguments.checkpoint_generation)
+    if manifest.network.dimensions != CHESS_NETWORK_DIMENSIONS:
+        raise ValueError('Checkpoint network dimensions do not match the current chess representation.')
+    configuration = load_chess_experiment_configuration(arguments.configuration_path)
+    matching_models = tuple(
+        model.model_id
+        for model in configuration.training.progressive_model_sizing.models
+        if model.network == manifest.network.architecture
+    )
+    if len(matching_models) != 1:
+        raise ValueError('Checkpoint architecture does not identify exactly one model in the experiment configuration.')
+    return _ResolvedCheckpoint(
+        model_path=arguments.checkpoint_manifest_path.parent / manifest.inference_model_path,
+        model_sha256=manifest.inference_model_sha256,
+        manifest_sha256=file_sha256(arguments.checkpoint_manifest_path),
+        model_id=matching_models[0],
+    )
+
+
+def _export_onnx(model_path: Path, output_path: Path) -> ArtifactIdentity:
+    model = torch.jit.load(str(model_path), map_location='cpu')
+    model.to(dtype=torch.float16)
+    model.eval()
+    example = torch.zeros(
+        _input_shape(),
+        dtype=torch.float16,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = output_path.with_name(f'.{output_path.name}.tmp')
+    temporary_path.unlink(missing_ok=True)
+    try:
+        with torch.inference_mode():
+            torch.onnx.export(
+                model,
+                (example,),
+                str(temporary_path),
+                input_names=(INPUT_NAME,),
+                output_names=(POLICY_OUTPUT_NAME, WDL_OUTPUT_NAME),
+                opset_version=ONNX_OPSET_VERSION,
+                do_constant_folding=True,
+                dynamo=False,
+            )
+        exported = onnx.load(temporary_path)
+        onnx.checker.check_model(exported, full_check=True)
+        write_bytes_atomically(output_path, temporary_path.read_bytes())
+    except Exception as error:
+        raise ValueError(f'ONNX export or validation failed for {model_path}: {error}') from error
+    finally:
+        temporary_path.unlink(missing_ok=True)
+    return ArtifactIdentity(path=str(output_path), sha256=file_sha256(output_path))
+
+
+def _parse_onnx(network: trt.INetworkDefinition, parser: trt.OnnxParser, path: Path) -> None:
+    if parser.parse_from_file(str(path)):
+        return
+    errors = tuple(str(parser.get_error(index)) for index in range(parser.num_errors))
+    raise ValueError(f'TensorRT ONNX conversion failed for {path}: {" | ".join(errors)}')
+
+
+def _build_engine(
+    onnx_path: Path,
+    output_path: Path,
+    backend: Backend,
+    calibration_states: Tensor,
+    calibration_cache_path: Path,
+    device: torch.device,
+) -> tuple[ArtifactIdentity, _EntropyCalibrator | None, bool, bool]:
+    logger = trt.Logger(trt.Logger.INFO)
+    builder = trt.Builder(logger)
+    explicit_batch = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    network = builder.create_network(explicit_batch)
+    parser = trt.OnnxParser(network, logger)
+    _parse_onnx(network, parser, onnx_path)
+    configuration = builder.create_builder_config()
+    configuration.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, TENSORRT_WORKSPACE_BYTES)
+    configuration.builder_optimization_level = TENSORRT_BUILDER_OPTIMIZATION_LEVEL
+    configuration.set_flag(trt.BuilderFlag.FP16)
+    calibrator: _EntropyCalibrator | None = None
+    match backend:
+        case Backend.TENSORRT_FLOAT16:
+            pass
+        case Backend.TENSORRT_INT8:
+            if not builder.platform_has_fast_int8:
+                raise ValueError('TensorRT reports that this GPU has no fast INT8 support.')
+            calibration_cache_path.unlink(missing_ok=True)
+            calibrator = _EntropyCalibrator(calibration_states, device, calibration_cache_path)
+            configuration.set_flag(trt.BuilderFlag.INT8)
+            configuration.int8_calibrator = calibrator
+        case _:
+            raise ValueError(f'Cannot build a TensorRT engine for {backend.value}.')
+    if not builder.platform_has_fast_fp16:
+        raise ValueError('TensorRT reports that this GPU has no fast FP16 support.')
+    serialized = builder.build_serialized_network(network, configuration)
+    if serialized is None:
+        raise ValueError(f'TensorRT failed to build the {backend.value} engine.')
+    write_bytes_atomically(output_path, bytes(serialized))
+    return (
+        ArtifactIdentity(path=str(output_path), sha256=file_sha256(output_path)),
+        calibrator,
+        builder.platform_has_fast_fp16,
+        builder.platform_has_fast_int8,
+    )
+
+
+def _measure_runner(
+    runner: _CudaGraphRunner,
+    warmup_iterations: int,
+    repetitions: int,
+    iterations_per_repetition: int,
+    device: torch.device,
+) -> TimingDistribution:
+    for _ in range(warmup_iterations):
+        runner.replay()
+    torch.cuda.synchronize(device)
+    durations: list[float] = []
+    for _ in range(repetitions):
+        torch.cuda.synchronize(device)
+        started = time.perf_counter()
+        for _ in range(iterations_per_repetition):
+            runner.replay()
+        torch.cuda.synchronize(device)
+        durations.append(time.perf_counter() - started)
+    return summarize_timings(tuple(durations), iterations_per_repetition, BATCH_SIZE)
+
+
+def _candidate_measurement(
+    backend: Backend,
+    engine: ArtifactIdentity,
+    runner: _CudaGraphRunner,
+    reference_outputs: ModelOutputs,
+    legal_action_mask: Tensor,
+    arguments: BenchmarkArguments,
+    device: torch.device,
+) -> CandidateMeasurement:
+    outputs = runner.outputs()
+    fidelity = measure_fidelity(reference_outputs, outputs, legal_action_mask)
+    return CandidateMeasurement(
+        backend=backend,
+        engine=engine,
+        timing=_measure_runner(
+            runner,
+            arguments.warmup_iterations,
+            arguments.repetitions,
+            arguments.iterations_per_repetition,
+            device,
+        ),
+        fidelity=fidelity,
+        fidelity_failures=fidelity_failures(fidelity, arguments.fidelity_limits),
+    )
+
+
+def _driver_version() -> str:
+    completed = subprocess.run(
+        ('nvidia-smi', '--query-gpu=driver_version', '--format=csv,noheader'),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    versions = tuple(line.strip() for line in completed.stdout.splitlines() if line.strip())
+    if not versions:
+        raise ValueError('nvidia-smi did not report a driver version.')
+    return versions[0]
+
+
+def _input_shape() -> tuple[int, int, int, int]:
+    return (
+        BATCH_SIZE,
+        CHESS_NETWORK_DIMENSIONS.channels,
+        CHESS_NETWORK_DIMENSIONS.rows,
+        CHESS_NETWORK_DIMENSIONS.columns,
+    )
+
+
+def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkReport:
+    if not arguments.acknowledge_gpu_load:
+        raise ValueError('TensorRT engine building and benchmarking require --acknowledge-gpu-load.')
+    if not torch.cuda.is_available():
+        raise ValueError('The TensorRT benchmark requires CUDA.')
+    if arguments.gpu_id < 0 or arguments.gpu_id >= torch.cuda.device_count():
+        raise ValueError(f'GPU ID {arguments.gpu_id} is not available.')
+    if arguments.warmup_iterations < 1 or arguments.repetitions < 3 or arguments.iterations_per_repetition < 1:
+        raise ValueError('Use at least one warm-up, three repetitions, and one timed iteration per repetition.')
+    if arguments.calibration_position_count < BATCH_SIZE:
+        raise ValueError(f'INT8 calibration requires at least {BATCH_SIZE} positions.')
+
+    device = torch.device('cuda', arguments.gpu_id)
+    torch.cuda.set_device(device)
+    checkpoint = _resolve_checkpoint(arguments)
+    benchmark_states, legal_action_mask = load_positions(arguments.benchmark_dataset_path, BATCH_SIZE)
+    calibration_states, calibration_legal_mask = load_positions(
+        arguments.calibration_dataset_path, arguments.calibration_position_count
+    )
+    benchmark_states = benchmark_states.to(torch.int8)
+    calibration_states = calibration_states.to(torch.int8)
+    benchmark_dataset = _load_dataset_identity(arguments.benchmark_dataset_path, benchmark_states, legal_action_mask)
+    calibration_dataset = _load_dataset_identity(
+        arguments.calibration_dataset_path, calibration_states, calibration_legal_mask
+    )
+
+    arguments.artifact_directory.mkdir(parents=True, exist_ok=True)
+    onnx_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp16.onnx'
+    float16_engine_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp16.engine'
+    int8_engine_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-int8.engine'
+    calibration_cache_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-int8.calibration'
+    onnx_artifact = _export_onnx(checkpoint.model_path, onnx_path)
+    float16_engine, _, fast_float16, fast_int8 = _build_engine(
+        onnx_path,
+        float16_engine_path,
+        Backend.TENSORRT_FLOAT16,
+        calibration_states,
+        calibration_cache_path,
+        device,
+    )
+    int8_engine, calibrator, _, _ = _build_engine(
+        onnx_path,
+        int8_engine_path,
+        Backend.TENSORRT_INT8,
+        calibration_states,
+        calibration_cache_path,
+        device,
+    )
+    if (
+        calibrator is None
+        or calibrator.consumed_batch_count != calibrator.batch_count
+        or not calibration_cache_path.is_file()
+    ):
+        raise ValueError('TensorRT did not produce the required INT8 calibration cache.')
+
+    reference_runner = _TorchScriptCudaGraphRunner(
+        checkpoint.model_path, benchmark_states, device, arguments.warmup_iterations
+    )
+    reference_outputs = reference_runner.outputs()
+    reference = ReferenceMeasurement(
+        timing=_measure_runner(
+            reference_runner,
+            arguments.warmup_iterations,
+            arguments.repetitions,
+            arguments.iterations_per_repetition,
+            device,
+        )
+    )
+    candidates = tuple(
+        _candidate_measurement(
+            backend,
+            engine,
+            _TensorRtCudaGraphRunner(engine_path, benchmark_states, device, arguments.warmup_iterations),
+            reference_outputs,
+            legal_action_mask,
+            arguments,
+            device,
+        )
+        for backend, engine, engine_path in (
+            (Backend.TENSORRT_FLOAT16, float16_engine, float16_engine_path),
+            (Backend.TENSORRT_INT8, int8_engine, int8_engine_path),
+        )
+    )
+    properties = torch.cuda.get_device_properties(device)
+    configuration = load_chess_experiment_configuration(arguments.configuration_path)
+    return TensorRtInferenceBenchmarkReport(
+        source_revision=read_source_revision(),
+        experiment_configuration_path=str(arguments.configuration_path),
+        experiment_configuration_sha256=experiment_configuration_sha256(configuration),
+        checkpoint_generation=arguments.checkpoint_generation,
+        model_id=checkpoint.model_id,
+        checkpoint_manifest=ArtifactIdentity(
+            path=str(arguments.checkpoint_manifest_path), sha256=checkpoint.manifest_sha256
+        ),
+        inference_model=ArtifactIdentity(path=str(checkpoint.model_path), sha256=checkpoint.model_sha256),
+        benchmark_dataset=benchmark_dataset,
+        calibration=CalibrationIdentity(
+            dataset=calibration_dataset,
+            requested_positions=arguments.calibration_position_count,
+            submitted_batches=calibrator.batch_count,
+            submitted_positions_including_wrap=calibrator.batch_count * BATCH_SIZE,
+            calibration_cache=ArtifactIdentity(
+                path=str(calibration_cache_path), sha256=file_sha256(calibration_cache_path)
+            ),
+        ),
+        input_shape=_input_shape(),
+        warmup_iterations=arguments.warmup_iterations,
+        hardware=HardwareDescription(
+            gpu_id=arguments.gpu_id,
+            device_name=properties.name,
+            compute_capability=(properties.major, properties.minor),
+            driver_version=_driver_version(),
+            torch_version=torch.__version__,
+            torch_cuda_version=torch.version.cuda or 'none',
+            onnx_version=onnx.__version__,
+            tensorrt_version=trt.__version__,
+            tensorrt_fast_float16=fast_float16,
+            tensorrt_bfloat16_builder_flag=trt.BuilderFlag.BF16 is not None,
+            tensorrt_fast_int8=fast_int8,
+            floating_precision_reason=(
+                'FP16 is the conversion baseline because TensorRT 10.14 supports fast FP16 on SM 8.9 and '
+                'the same FP16 ONNX graph provides the fallback precision for calibrated INT8 layers.'
+            ),
+        ),
+        onnx_model=onnx_artifact,
+        onnx_opset_version=ONNX_OPSET_VERSION,
+        tensorrt_workspace_bytes=TENSORRT_WORKSPACE_BYTES,
+        tensorrt_builder_optimization_level=TENSORRT_BUILDER_OPTIMIZATION_LEVEL,
+        fidelity_limits=arguments.fidelity_limits,
+        reference=reference,
+        candidates=candidates,
+    )
+
+
+def parse_arguments() -> BenchmarkArguments:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--configuration', type=Path, required=True)
+    parser.add_argument('--checkpoint-manifest', type=Path, required=True)
+    parser.add_argument('--checkpoint-generation', type=int, required=True)
+    parser.add_argument('--benchmark-dataset', type=Path, required=True)
+    parser.add_argument('--calibration-dataset', type=Path, required=True)
+    parser.add_argument('--artifact-directory', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--gpu-id', type=int, default=0)
+    parser.add_argument('--warmup-iterations', type=int, default=50)
+    parser.add_argument('--repetitions', type=int, default=15)
+    parser.add_argument('--iterations-per-repetition', type=int, default=100)
+    parser.add_argument('--calibration-position-count', type=int, default=480)
+    parser.add_argument('--minimum-policy-top1-agreement', type=float, default=0.98)
+    parser.add_argument('--maximum-mean-policy-kl-divergence', type=float, default=0.005)
+    parser.add_argument('--maximum-wdl-mean-absolute-error', type=float, default=0.01)
+    parser.add_argument('--maximum-expected-value-mean-absolute-error', type=float, default=0.015)
+    parser.add_argument('--acknowledge-gpu-load', action='store_true')
+    parsed = parser.parse_args()
+    return BenchmarkArguments(
+        configuration_path=parsed.configuration.resolve(),
+        checkpoint_manifest_path=parsed.checkpoint_manifest.resolve(),
+        checkpoint_generation=parsed.checkpoint_generation,
+        benchmark_dataset_path=parsed.benchmark_dataset.resolve(),
+        calibration_dataset_path=parsed.calibration_dataset.resolve(),
+        artifact_directory=parsed.artifact_directory.resolve(),
+        output_path=parsed.output.resolve(),
+        gpu_id=parsed.gpu_id,
+        warmup_iterations=parsed.warmup_iterations,
+        repetitions=parsed.repetitions,
+        iterations_per_repetition=parsed.iterations_per_repetition,
+        calibration_position_count=parsed.calibration_position_count,
+        fidelity_limits=FidelityLimits(
+            minimum_policy_top1_agreement=parsed.minimum_policy_top1_agreement,
+            maximum_mean_policy_kl_divergence=parsed.maximum_mean_policy_kl_divergence,
+            maximum_wdl_mean_absolute_error=parsed.maximum_wdl_mean_absolute_error,
+            maximum_expected_value_mean_absolute_error=parsed.maximum_expected_value_mean_absolute_error,
+        ),
+        acknowledge_gpu_load=parsed.acknowledge_gpu_load,
+    )
+
+
+def main() -> None:
+    arguments = parse_arguments()
+    report = run_benchmark(arguments)
+    write_text_atomically(arguments.output_path, report.model_dump_json(indent=2) + '\n')
+    print(json.dumps(report.model_dump(mode='json'), indent=2))
+    for candidate in report.candidates:
+        validate_fidelity(candidate.backend.value, candidate.fidelity, report.fidelity_limits)
+
+
+if __name__ == '__main__':
+    main()

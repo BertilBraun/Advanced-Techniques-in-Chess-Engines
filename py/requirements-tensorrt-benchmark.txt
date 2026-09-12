@@ -1,0 +1,2 @@
+onnx==1.22.0
+tensorrt-cu12==10.14.1.48.post1
