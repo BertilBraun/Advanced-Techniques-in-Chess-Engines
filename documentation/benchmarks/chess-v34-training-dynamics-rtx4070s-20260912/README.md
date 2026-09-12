@@ -119,6 +119,46 @@ A credible 24-GPU successor would use three eight-GPU nodes and preserve the rel
    while effects of tens of Elo need thousands of paired games for a narrow estimate. Reuse fixed opening pairs,
    retain configuration and model hashes, and reserve deep matches for milestone checkpoints.
 
+### TensorRT, INT8, and systematic tuning
+
+Anthony Young's 2018 Connect Four AlphaZero reports provide two useful future-work templates:
+
+- [Performance Optimization](https://medium.com/oracledevs/lessons-from-alpha-zero-part-5-performance-optimization-664b38dc509e)
+  treats self-play inference as the primary bottleneck. Their implementation combined distributed inference,
+  concurrent games, request batching, cached evaluations, parallel MCTS, and TensorRT. Default TensorRT improved
+  inference throughput by about 11% over their stock libtensorflow path; calibrated TensorRT INT8 approached a 4x
+  increase. They tested several calibration datasets and selected by held-out error. They also found late-training
+  value degradation under INT8 until they changed the head architecture.
+- [Hyperparameter Tuning](https://medium.com/oracledevs/lessons-from-alpha-zero-part-6-hyperparameter-tuning-b1cfcbe4ca9a)
+  reports that a combination of 1cycle learning rates, search and exploration tuning, position de-duplication,
+  wider output heads, multiple training epochs, and a gradually growing replay window reduced their Connect Four
+  convergence from roughly 150 to 40 generations and from 77 to 21 GPU-hours.
+
+The methods transfer; the reported factors and parameter values do not. Connect Four has a much smaller state and
+action space, shorter games, frequent duplicate positions, a different network, and a 2018 TensorFlow inference
+baseline. V34 already uses large concurrent batches, native parallel search, BF16, channels-last tensors,
+TorchScript, and replay prioritisation, so an INT8 TensorRT backend must beat that measured baseline rather than
+stock framework inference.
+
+A useful chess experiment would proceed in four gates:
+
+1. Export the 12x128 and 14x160 inference networks to TensorRT at BF16/FP16 and INT8. Benchmark the actual
+   self-play batch distribution, including partial tail batches, and report accepted positions/second rather than
+   only isolated network evaluations/second.
+2. Calibrate INT8 independently on early-, middle-, and late-run replay samples. Select against held-out policy KL,
+   top-action agreement, WDL error, root-value error, and auxiliary-head error. Value accuracy is especially
+   important because small systematic errors are amplified by search and resignation.
+3. Run paired search-fidelity tests against the BF16 backend at identical roots and seeds before self-play. Measure
+   visit-distribution divergence, selected-action agreement, root-value drift, and end-to-end search throughput.
+4. Admit the backend to a training run only if its throughput gain survives batching and its searched playing
+   strength is resolved within the expected benefit. Keep optimizer, replay, and exploration tuning as separate
+   matched experiments so a backend gain is not confounded with a recipe change.
+
+For hyperparameter work, the transferable lesson is the search procedure: improve experiment throughput first,
+then screen learning-rate schedules, optimizer, exploration, replay age, and head capacity with matched seeds and
+an explicit Elo-per-GPU-hour objective. The Connect Four values, including its C-PUCT, Dirichlet alpha, epoch count,
+and 1cycle base rate, should not be copied into chess.
+
 The most useful additional run statistics are replay-position age percentiles, outcome and termination mix, game
 length distribution, trainer duty cycle, credit starvation, GPU utilisation and power, inference batch fill,
 checkpoint distribution latency, and strength gained per dollar and GPU-hour. Together they reveal whether the
