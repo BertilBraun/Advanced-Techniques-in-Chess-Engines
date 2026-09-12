@@ -38,6 +38,7 @@ class Arguments:
     inference_batch_size: int | None
     outstanding_batches_per_worker: int | None
     backend: Literal['torchscript', 'tensorrt'] | None
+    tensorrt_template_engine: Path | None
     precision: InferencePrecision | None
     memory_format: InferenceMemoryFormat | None
     cudnn_benchmark: bool | None
@@ -119,16 +120,23 @@ def _apply_self_play_overrides(
         case GoExperimentConfiguration(go=game_configuration):
             field_name = 'go'
     self_play = game_configuration.self_play
+    backend_update = None
+    if arguments.backend == 'torchscript':
+        backend_update = {'kind': 'torchscript'}
+    elif arguments.backend == 'tensorrt':
+        if arguments.tensorrt_template_engine is None:
+            raise ValueError('--tensorrt-template-engine is required for the TensorRT backend.')
+        backend_update = {
+            'kind': 'tensorrt',
+            'template_engine_path': str(arguments.tensorrt_template_engine),
+        }
     inference_update = {
         field_name: value
         for field_name, value in (
             ('inference_workers', arguments.inference_workers),
             ('inference_batch_size', arguments.inference_batch_size),
             ('outstanding_batches_per_worker', arguments.outstanding_batches_per_worker),
-            (
-                'backend',
-                None if arguments.backend is None else {'kind': arguments.backend},
-            ),
+            ('backend', backend_update),
             ('precision', arguments.precision),
             ('memory_format', arguments.memory_format),
             ('cudnn_benchmark', arguments.cudnn_benchmark),
@@ -265,6 +273,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--inference-batch-size', type=int)
     parser.add_argument('--outstanding-batches-per-worker', type=int)
     parser.add_argument('--backend', choices=('torchscript', 'tensorrt'))
+    parser.add_argument('--tensorrt-template-engine', type=Path)
     parser.add_argument('--precision', type=InferencePrecision, choices=tuple(InferencePrecision))
     parser.add_argument('--memory-format', type=InferenceMemoryFormat, choices=tuple(InferenceMemoryFormat))
     parser.add_argument('--cudnn-benchmark', action=argparse.BooleanOptionalAction, default=None)
@@ -285,12 +294,15 @@ def parse_arguments() -> Arguments:
         inference_batch_size=namespace.inference_batch_size,
         outstanding_batches_per_worker=namespace.outstanding_batches_per_worker,
         backend=namespace.backend,
+        tensorrt_template_engine=namespace.tensorrt_template_engine,
         precision=namespace.precision,
         memory_format=namespace.memory_format,
         cudnn_benchmark=namespace.cudnn_benchmark,
     )
     if not arguments.model.is_file():
         raise ValueError(f'Benchmark model does not exist: {arguments.model}')
+    if arguments.tensorrt_template_engine is not None and not arguments.tensorrt_template_engine.is_file():
+        raise ValueError(f'TensorRT template does not exist: {arguments.tensorrt_template_engine}')
     if arguments.device < 0 or arguments.worker_id < 0 or arguments.generation < 0 or arguments.warmup_batches < 0:
         raise ValueError('Device, worker, generation, and warm-up batches must be nonnegative.')
     if arguments.games <= 0 or arguments.duration_seconds <= 0.0:

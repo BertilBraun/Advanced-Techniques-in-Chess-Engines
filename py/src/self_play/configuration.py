@@ -180,6 +180,8 @@ class BatchedInferenceParams(FrozenModel):
         # A configuration that does not opt in must serialise, and therefore hash, exactly as it did
         # before these knobs existed, so no recorded experiment_configuration_sha256 moves.
         payload = serialize(self)
+        if isinstance(self.backend, TorchScriptInferenceBackend):
+            payload.pop('backend', None)
         if (
             self.precision is InferencePrecision.BFLOAT16
             and self.memory_format is InferenceMemoryFormat.CONTIGUOUS
