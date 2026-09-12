@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "replay_store_sha256": "d668a18e07be099538a79a70b2c65c275a724b7dba56eddeb5629d0a7df52a83",
+  "onnx_sha256": "92cba2b999fdf3fc1ec16da1a8cff47ac199a36264e661325562658132484ac2",
+  "engine_sha256": "ea7fade34d8af65683bc47a359df79cd79133c68f7c9714e4d2d665e683a6044",
+  "positions": 51200,
+  "batch_size": 320,
+  "onnx_runtime_loss": {
+    "policy": 1.8139637127518653,
+    "wdl": 0.7369782760739326,
+    "auxiliary": [],
+    "total": 2.5509419828653335
+  },
+  "tensorrt_loss": {
+    "policy": 1.8138996079564094,
+    "wdl": 0.7369282834231854,
+    "auxiliary": [],
+    "total": 2.5508278876543047
+  },
+  "policy_margin_agreement_to_onnx": [
+    {
+      "minimum_reference_margin": 0.0,
+      "positions": 51200,
+      "agreement": 0.9967968463897705
+    },
+    {
+      "minimum_reference_margin": 0.01,
+      "positions": 49858,
+      "agreement": 0.9995587468147278
+    },
+    {
+      "minimum_reference_margin": 0.05,
+      "positions": 46591,
+      "agreement": 1.0
+    },
+    {
+      "minimum_reference_margin": 0.1,
+      "positions": 43637,
+      "agreement": 1.0
+    },
+    {
+      "minimum_reference_margin": 0.25,
+      "positions": 36889,
+      "agreement": 1.0
+    },
+    {
+      "minimum_reference_margin": 0.5,
+      "positions": 28415,
+      "agreement": 1.0
+    },
+    {
+      "minimum_reference_margin": 1.0,
+      "positions": 17366,
+      "agreement": 1.0
+    }
+  ]
+}
