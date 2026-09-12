@@ -553,6 +553,10 @@ def _quantize_onnx(
 ) -> tuple[ArtifactIdentity, int, int]:
     output_path.unlink(missing_ok=True)
     assert device.index is not None
+    autotune_output_path = output_path.parent / 'autotune'
+    optimized_autotune_path = autotune_output_path / 'optimized_final.onnx'
+    if autotune:
+        optimized_autotune_path.unlink(missing_ok=True)
     try:
         quantize(
             onnx_path=str(source_path),
@@ -565,16 +569,18 @@ def _quantize_onnx(
             nodes_to_exclude=list(INT8_EXCLUDED_NODE_PATTERNS),
             high_precision_dtype='fp16',
             autotune=autotune,
-            autotune_output_dir=str(output_path.parent / 'autotune') if autotune else None,
+            autotune_output_dir=str(autotune_output_path) if autotune else None,
             autotune_num_schemes_per_region=20,
             autotune_warmup_runs=10,
             autotune_timing_runs=20,
             output_path=str(output_path),
         )
-        quantized_model = onnx.load(output_path)
-        onnx.checker.check_model(quantized_model, full_check=True)
     except Exception as error:
-        raise ValueError(f'ModelOpt explicit INT8 Q/DQ conversion failed for {source_path}: {error}') from error
+        if not autotune or not optimized_autotune_path.exists():
+            raise ValueError(f'ModelOpt explicit INT8 Q/DQ conversion failed for {source_path}: {error}') from error
+        write_bytes_atomically(output_path, optimized_autotune_path.read_bytes())
+    quantized_model = onnx.load(output_path)
+    onnx.checker.check_model(quantized_model, full_check=True)
     quantize_linear_count = sum(node.op_type == 'QuantizeLinear' for node in quantized_model.graph.node)
     dequantize_linear_count = sum(node.op_type == 'DequantizeLinear' for node in quantized_model.graph.node)
     if quantize_linear_count == 0 or dequantize_linear_count == 0:
