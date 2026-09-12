@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
@@ -16,8 +17,13 @@ from src.games.implementation import GameImplementation
 from src.replay.batch_loader import MappedReplayBatchLoader
 from src.training.batch import TrainingModelOutput
 from src.training.checkpoint import CheckpointReference
-from src.training.checkpoint.paths import checkpoint_manifest_path
-from src.training.checkpoint.persistence import load_model_and_optimizer, save_model_and_optimizer
+from src.training.checkpoint.paths import checkpoint_manifest_path, qat_state_save_path
+from src.training.checkpoint.persistence import (
+    create_model,
+    create_optimizer,
+    load_model_and_optimizer,
+    save_model_and_optimizer,
+)
 from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
 from src.training.distributions import (
     TrainingDistributionSnapshot,
@@ -25,6 +31,18 @@ from src.training.distributions import (
 )
 from src.training.network import POLICY_PRIOR_PROBE_POSITIONS, Network
 from src.training.objective import ObjectiveLoss, ResolvedTrainingObjective
+from src.training.quantization import (
+    DisabledTrainingQuantization,
+    QatCheckpointPhase,
+    QatStateIdentity,
+    TensorRtInt8QatConfiguration,
+    configure_qat,
+    deployment_qat_state,
+    fold_scaled_post_activation_batch_norm,
+    recalibrate_qat,
+    save_qat_state,
+)
+from src.training.quantization.checkpoint import load_qat_model_and_optimizer, save_qat_model_and_optimizer
 from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
@@ -34,6 +52,7 @@ from src.training.trainer.contracts import (
     TrainerStopped,
     TrainQuantumCommand,
 )
+from src.util.hashing import file_sha256
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 
@@ -47,7 +66,7 @@ class DistributedTrainingModel(nn.Module):
         return self.model.training_output(states)
 
 
-@dataclass(frozen=True)
+@dataclass
 class _RankRuntime:
     game: GameImplementation
     model: Network
@@ -55,6 +74,8 @@ class _RankRuntime:
     optimizer: torch.optim.Optimizer
     device: torch.device
     save_path: Path
+    qat_state: QatStateIdentity | None
+    qat_calibration_states: torch.Tensor | None
 
 
 @dataclass(frozen=True)
@@ -109,15 +130,62 @@ def _initialize_rank(
     # training.random_seed reached the self-play workers and the evaluation dataset but never the
     # network, so every run drew different initial weights and no run was reproducible.
     torch.manual_seed(configuration.training.random_seed)
-    model, optimizer = load_model_and_optimizer(
-        startup.starting_generation,
-        startup.network,
-        device,
-        startup.save_path,
-        configuration.training.trainer.optimizer,
-        game.network_dimensions,
-        game.target_layout.auxiliary_heads,
-    )
+    quantization_configuration = configuration.training.trainer.quantization
+    qat_state = None
+    qat_calibration_states = None
+    match quantization_configuration:
+        case DisabledTrainingQuantization():
+            model, optimizer = load_model_and_optimizer(
+                startup.starting_generation,
+                startup.network,
+                device,
+                startup.save_path,
+                configuration.training.trainer.optimizer,
+                game.network_dimensions,
+                game.target_layout.auxiliary_heads,
+            )
+        case TensorRtInt8QatConfiguration(calibration_positions=calibration_positions):
+            qat_calibration_states = load_dataset_probe_states(
+                resolve_project_path(configuration.evaluation.dataset.path),
+                game.state,
+                calibration_positions,
+            ).to(device=device, dtype=torch.float32)
+            if initial_checkpoint_exists:
+                model, optimizer, qat_state = load_qat_model_and_optimizer(
+                    startup.starting_generation,
+                    startup.network,
+                    configuration.training.trainer.optimizer,
+                    quantization_configuration,
+                    device,
+                    startup.save_path,
+                    game.network_dimensions,
+                    game.target_layout.auxiliary_heads,
+                )
+            else:
+                model = create_model(
+                    startup.network,
+                    device,
+                    game.network_dimensions,
+                    game.target_layout.auxiliary_heads,
+                )
+                model = configure_qat(
+                    model,
+                    _calibration_loop(
+                        qat_calibration_states,
+                        game.self_play_configuration.inference.inference_batch_size,
+                    ),
+                )
+                optimizer = create_optimizer(model, configuration.training.trainer.optimizer)
+                initial_qat_state_path = qat_state_save_path(0, startup.save_path)
+                if rank == 0:
+                    save_qat_state(model, initial_qat_state_path, 0)
+                distributed.barrier()
+                qat_state = QatStateIdentity(
+                    phase=QatCheckpointPhase.PRE_FOLD,
+                    completed_optimizer_steps=0,
+                    path=initial_qat_state_path,
+                    sha256=file_sha256(initial_qat_state_path),
+                )
     distributed_model = _create_distributed_model(
         model,
         topology,
@@ -133,15 +201,50 @@ def _initialize_rank(
                     game.state,
                     POLICY_PRIOR_PROBE_POSITIONS,
                 )
-            save_model_and_optimizer(
-                model,
-                optimizer,
-                startup.starting_generation,
-                startup.save_path,
-                bootstrap_probe_states,
-            )
+            match quantization_configuration:
+                case DisabledTrainingQuantization():
+                    save_model_and_optimizer(
+                        model,
+                        optimizer,
+                        startup.starting_generation,
+                        startup.save_path,
+                        bootstrap_probe_states,
+                    )
+                case TensorRtInt8QatConfiguration():
+                    assert qat_state is not None and qat_calibration_states is not None
+                    save_qat_model_and_optimizer(
+                        model,
+                        optimizer,
+                        startup.starting_generation,
+                        0,
+                        startup.save_path,
+                        qat_state,
+                        qat_calibration_states[: game.self_play_configuration.inference.inference_batch_size],
+                        bootstrap_probe_states,
+                    )
         distributed.barrier()
-    return _RankRuntime(game, model, distributed_model, optimizer, device, startup.save_path)
+    return _RankRuntime(
+        game,
+        model,
+        distributed_model,
+        optimizer,
+        device,
+        startup.save_path,
+        qat_state,
+        qat_calibration_states,
+    )
+
+
+def _calibration_loop(states: torch.Tensor, batch_size: int) -> Callable[[nn.Module], None]:
+    def run(model: nn.Module) -> None:
+        was_training = model.training
+        model.eval()
+        with torch.inference_mode():
+            for batch in states.split(batch_size):
+                model(batch)
+        model.train(was_training)
+
+    return run
 
 
 def _create_distributed_model(
@@ -179,12 +282,7 @@ def _run_rank_commands(
                         rank,
                         world_size,
                         configuration,
-                        runtime.game,
-                        runtime.model,
-                        runtime.distributed_model,
-                        runtime.optimizer,
-                        runtime.device,
-                        runtime.save_path,
+                        runtime,
                         command,
                     )
                 )
@@ -362,28 +460,101 @@ def _resolve_loss_totals(totals: _DeviceLossTotals) -> _LossTotals:
 
 def _save_rank_checkpoint(
     rank: int,
-    model: Network,
-    optimizer: torch.optim.Optimizer,
+    configuration: ExperimentConfiguration,
+    runtime: _RankRuntime,
     command: TrainQuantumCommand,
-    save_path: Path,
 ) -> CheckpointReference | None:
     if rank != 0:
         return None
     generation = command.target_progress.model_generation
-    save_model_and_optimizer(model, optimizer, generation, save_path)
-    return CheckpointReference.load(save_path, generation)
+    match configuration.training.trainer.quantization:
+        case DisabledTrainingQuantization():
+            save_model_and_optimizer(runtime.model, runtime.optimizer, generation, runtime.save_path)
+            return CheckpointReference.load(runtime.save_path, generation)
+        case TensorRtInt8QatConfiguration():
+            assert runtime.qat_state is not None and runtime.qat_calibration_states is not None
+            return save_qat_model_and_optimizer(
+                runtime.model,
+                runtime.optimizer,
+                generation,
+                command.target_progress.completed_optimizer_steps,
+                runtime.save_path,
+                runtime.qat_state,
+                runtime.qat_calibration_states[: runtime.game.self_play_configuration.inference.inference_batch_size],
+            )
+
+
+def _prepare_qat_publication(
+    rank: int,
+    configuration: ExperimentConfiguration,
+    runtime: _RankRuntime,
+    command: TrainQuantumCommand,
+) -> None:
+    match configuration.training.trainer.quantization:
+        case DisabledTrainingQuantization():
+            return
+        case TensorRtInt8QatConfiguration(
+            fold_after_optimizer_steps=fold_after_optimizer_steps,
+            recalibration_interval_generations=recalibration_interval_generations,
+        ):
+            pass
+    assert runtime.qat_state is not None and runtime.qat_calibration_states is not None
+    source_steps = command.source_progress.completed_optimizer_steps
+    target_steps = command.target_progress.completed_optimizer_steps
+    crosses_fold = source_steps < fold_after_optimizer_steps <= target_steps
+    if crosses_fold and target_steps != fold_after_optimizer_steps:
+        raise ValueError('The QAT fold boundary must align with the end of a training quantum.')
+    if crosses_fold:
+        conversion_path = qat_state_save_path(command.target_progress.model_generation, runtime.save_path)
+        if rank == 0:
+            save_qat_state(runtime.model, conversion_path, target_steps)
+        distributed.barrier()
+        pre_fold_state = QatStateIdentity(
+            phase=QatCheckpointPhase.PRE_FOLD,
+            completed_optimizer_steps=target_steps,
+            path=conversion_path,
+            sha256=file_sha256(conversion_path),
+        )
+        fold_scaled_post_activation_batch_norm(runtime.model)
+        runtime.optimizer = create_optimizer(runtime.model, configuration.training.trainer.optimizer)
+        device_id = runtime.device.index
+        assert device_id is not None, 'TensorRT INT8 QAT requires a CUDA training device.'
+        del runtime.distributed_model
+        runtime.distributed_model = _create_distributed_model(
+            runtime.model,
+            configuration.training.topology.trainer,
+            configuration.training.trainer.compilation,
+            device_id,
+        )
+        runtime.qat_state = deployment_qat_state(pre_fold_state, target_steps)
+    elif runtime.qat_state.phase is QatCheckpointPhase.PRE_FOLD:
+        state_path = qat_state_save_path(command.target_progress.model_generation, runtime.save_path)
+        if rank == 0:
+            save_qat_state(runtime.model, state_path, target_steps)
+        distributed.barrier()
+        runtime.qat_state = QatStateIdentity(
+            phase=QatCheckpointPhase.PRE_FOLD,
+            completed_optimizer_steps=target_steps,
+            path=state_path,
+            sha256=file_sha256(state_path),
+        )
+    else:
+        runtime.qat_state = runtime.qat_state.validated_copy(update={'completed_optimizer_steps': target_steps})
+    if not command.target_progress.model_generation % recalibration_interval_generations:
+        recalibrate_qat(
+            runtime.model,
+            _calibration_loop(
+                runtime.qat_calibration_states,
+                runtime.game.self_play_configuration.inference.inference_batch_size,
+            ),
+        )
 
 
 def train_rank_quantum(
     rank: int,
     world_size: int,
     configuration: ExperimentConfiguration,
-    game: GameImplementation,
-    model: Network,
-    ddp: DistributedDataParallel,
-    optimizer: torch.optim.Optimizer,
-    device: torch.device,
-    save_path: Path,
+    runtime: _RankRuntime,
     command: TrainQuantumCommand,
 ) -> RankTrainingResult:
     started_at = time.perf_counter()
@@ -393,7 +564,7 @@ def train_rank_quantum(
     uses_cuda = configuration.training.topology.trainer.device_type == 'cuda'
     loader = MappedReplayBatchLoader(
         replay=command.replay,
-        state=game.state,
+        state=runtime.game.state,
         source_optimizer_step=command.replay_source_optimizer_steps,
         optimizer_steps=optimizer_steps,
         global_batch_size=configuration.training.trainer.global_batch_size,
@@ -405,9 +576,9 @@ def train_rank_quantum(
     )
     training_result = _train_batches(
         loader,
-        ddp,
-        optimizer,
-        device,
+        runtime.distributed_model,
+        runtime.optimizer,
+        runtime.device,
         uses_cuda,
         configuration.training.trainer.max_grad_norm,
         command.parameters.objective,
@@ -421,7 +592,8 @@ def train_rank_quantum(
         gradient_probe_interval_steps=configuration.training.trainer.gradient_probe_interval_steps,
     )
     totals = _resolve_loss_totals(training_result.totals)
-    checkpoint = _save_rank_checkpoint(rank, model, optimizer, command, save_path)
+    _prepare_qat_publication(rank, configuration, runtime, command)
+    checkpoint = _save_rank_checkpoint(rank, configuration, runtime, command)
     distributed.barrier()
     divisor = float(optimizer_steps)
     return RankTrainingResult(

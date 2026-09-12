@@ -24,7 +24,7 @@ from src.experiment.configuration import ExperimentConfiguration, experiment_con
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.composition import create_game_implementation
 from src.training.checkpoint import CheckpointReference
-from src.training.checkpoint.paths import model_save_path
+from src.training.checkpoint.paths import model_save_path, qat_state_save_path
 from src.training.checkpoint.persistence import (
     create_model,
     create_optimizer,
@@ -33,6 +33,13 @@ from src.training.checkpoint.persistence import (
     save_model_and_optimizer,
 )
 from src.training.network import POLICY_PRIOR_PROBE_POSITIONS
+from src.training.quantization import (
+    DisabledTrainingQuantization,
+    TensorRtInt8QatConfiguration,
+    configure_qat,
+    save_qat_state,
+)
+from src.training.quantization.checkpoint import save_qat_model_and_optimizer
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -223,6 +230,54 @@ def _bootstrap_probe_states(experiment: ExperimentConfiguration) -> torch.Tensor
     )
 
 
+def _save_random_initial_checkpoint(
+    experiment: ExperimentConfiguration,
+    output_path: Path,
+    device: torch.device,
+    auxiliary_heads: tuple[AuxiliaryHeadLayout, ...],
+) -> None:
+    training = experiment.training
+    model = create_model(training.initial_model.network, device, experiment.network_dimensions, auxiliary_heads)
+    match training.trainer.quantization:
+        case DisabledTrainingQuantization():
+            save_model_and_optimizer(
+                model,
+                create_optimizer(model, training.trainer.optimizer),
+                0,
+                output_path,
+                _bootstrap_probe_states(experiment),
+            )
+        case TensorRtInt8QatConfiguration(calibration_positions=calibration_positions):
+            game = create_game_implementation(experiment)
+            bootstrap_probe_states = _bootstrap_probe_states(experiment)
+            calibration_states = bootstrap_probe_states[:calibration_positions].to(
+                device=device,
+                dtype=torch.float32,
+            )
+            inference_batch_size = game.self_play_configuration.inference.inference_batch_size
+
+            def calibrate(calibration_model: torch.nn.Module) -> None:
+                was_training = calibration_model.training
+                calibration_model.eval()
+                with torch.inference_mode():
+                    for states in calibration_states.split(inference_batch_size):
+                        calibration_model(states)
+                calibration_model.train(was_training)
+
+            model = configure_qat(model, calibrate)
+            qat_state = save_qat_state(model, qat_state_save_path(0, output_path), 0)
+            save_qat_model_and_optimizer(
+                model,
+                create_optimizer(model, training.trainer.optimizer),
+                0,
+                0,
+                output_path,
+                qat_state,
+                calibration_states[:inference_batch_size],
+                bootstrap_probe_states,
+            )
+
+
 def _prepare_initial_checkpoint(
     experiment: ExperimentConfiguration,
     output_path: Path,
@@ -244,6 +299,8 @@ def _prepare_initial_checkpoint(
                 output_path,
             )
         case WeightsOnlyResumeConfiguration(model_path=model_path):
+            if not isinstance(training.trainer.quantization, DisabledTrainingQuantization):
+                raise ValueError('QAT training cannot initialize from a float weights-only checkpoint.')
             initial_model_path = _resolve_source_path(model_path)
             if not initial_model_path.is_file():
                 raise ValueError(f'Initial model does not exist: {initial_model_path}')
@@ -266,19 +323,7 @@ def _prepare_initial_checkpoint(
             if checkpoint_path.exists() and not manifest_path.exists():
                 raise ValueError(f'Random checkpoint exists without a run manifest: {checkpoint_path}')
             if not checkpoint_path.exists():
-                model = create_model(
-                    initial_network,
-                    device,
-                    experiment.network_dimensions,
-                    auxiliary_heads,
-                )
-                save_model_and_optimizer(
-                    model,
-                    create_optimizer(model, training.trainer.optimizer),
-                    0,
-                    output_path,
-                    _bootstrap_probe_states(experiment),
-                )
+                _save_random_initial_checkpoint(experiment, output_path, device, auxiliary_heads)
     return CheckpointReference.load(output_path, 0)
 
 

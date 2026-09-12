@@ -7,6 +7,7 @@ run:
 training:
   save_path: py/training_data/production/vast-chess-8gpu-integrated-v35-int8-candidate
   trainer:
+    compilation: disabled
     quantization:
       kind: tensorrt_int8_qat
       fold_after_optimizer_steps: 1000
@@ -41,4 +42,49 @@ chess:
       backend:
         kind: tensorrt
         template_engine_paths:
-        - /workspace/tensorrt/v35-int8-14x160-template.engine
+        - /workspace/tensorrt/v35-int8-14x160-prefold-template.engine
+        - /workspace/tensorrt/v35-int8-14x160-deployment-template.engine
+
+evaluation:
+  definitions:
+  - kind: fixed_dataset
+    definition_id: fixed-dataset
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 0
+    final_generation: null
+    search: &int8_evaluation_search
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        backend:
+          kind: tensorrt
+          template_engine_paths:
+          - /workspace/tensorrt/v35-int8-14x160-prefold-eval-template.engine
+          - /workspace/tensorrt/v35-int8-14x160-deployment-eval-template.engine
+        sdpa_backend: memory_efficient
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-policy-only
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 0
+    final_generation: null
+    search:
+      <<: *int8_evaluation_search
+      searches_per_move: 1

@@ -6,14 +6,20 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 from src.replay.configuration import ReplayConfiguration
+from src.training.network import NetworkParams, ScaledPostActivationResidualBlockConfiguration
 from src.training.progressive import (
     SECONDS_PER_DAY,
     ElapsedCandidateStartConfiguration,
+    FixedModelSizingConfiguration,
     ModelSizingConfiguration,
     ProgressiveModelDefinition,
     ProgressiveModelSizingConfiguration,
 )
-from src.training.quantization.configuration import DisabledTrainingQuantization, TrainingQuantizationConfiguration
+from src.training.quantization.configuration import (
+    DisabledTrainingQuantization,
+    TensorRtInt8QatConfiguration,
+    TrainingQuantizationConfiguration,
+)
 from src.training.run_limits import RuntimeLimits
 from src.training.targets import AuxiliaryTargetConfiguration
 from src.util.frozen_model import FrozenModel
@@ -232,6 +238,19 @@ class TrainingArgs(FrozenModel):
             maximum_generation = credit.maximum_optimizer_steps // credit.optimizer_steps_per_quantum
             if maximum_generation > 4_294_967_295:
                 raise ValueError('Maximum model generation must fit uint32 replay metadata.')
+        match self.trainer.quantization:
+            case TensorRtInt8QatConfiguration(fold_after_optimizer_steps=fold_after_optimizer_steps):
+                if fold_after_optimizer_steps % credit.optimizer_steps_per_quantum:
+                    raise ValueError('The QAT fold boundary must align with a complete training quantum.')
+                match self.progressive_model_sizing:
+                    case FixedModelSizingConfiguration(
+                        model=ProgressiveModelDefinition(
+                            network=NetworkParams(residual_block=ScaledPostActivationResidualBlockConfiguration())
+                        )
+                    ):
+                        pass
+                    case _:
+                        raise ValueError('TensorRT INT8 QAT requires one fixed scaled post-activation model.')
         maximum_wall_time = self.limits.maximum_wall_time_seconds
         match self.progressive_model_sizing:
             case ProgressiveModelSizingConfiguration(

@@ -21,7 +21,7 @@ run:
     torch_version: 2.12.1+cu126
     cuda_version: '12.6'
     dependency_lock_path: uv.lock
-    dependency_lock_sha256: 11074667d5b9e5075faee3d75817f2fbe1af8b863299ed27acd14809f939c484
+    dependency_lock_sha256: 16fb0d1dbc876aecba7245b5e5a65451331ea7fcd5a147f83fb7caeffad188f1
     minimum_open_file_soft_limit: 65536
 training:
   save_path: py/training_data/production/vast-chess-8gpu-optimal

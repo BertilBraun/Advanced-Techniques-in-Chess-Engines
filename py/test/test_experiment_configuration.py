@@ -604,7 +604,7 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
     # Re-pinned 2026-09-12: training quantization now has an explicit disabled default.
-    assert experiment_configuration_sha256(frozen) == 'f93312b9d33adb58792f0ae404b4f3e5472e77530bbb6fcc192193a0c24450a6'
+    assert experiment_configuration_sha256(frozen) == 'd689e26d41179b6f12d505466ff702281fc39aa6a1a84ca473f7015113ff6166'
 
 
 @pytest.mark.parametrize(

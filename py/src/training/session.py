@@ -22,6 +22,7 @@ from src.training.progressive import (
     ProgressiveTrainingStateStore,
     retain_progressive_candidate_checkpoints,
 )
+from src.training.quantization import TensorRtInt8QatConfiguration
 from src.training.trainer import TrainerGroup, TrainingQuantumResult, TrainingStatistics
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.util.tensorboard import log_scalar
@@ -94,6 +95,7 @@ class FixedTrainingSession(TrainingSession):
         starting_checkpoint: CheckpointReference,
     ) -> None:
         self.configuration = configuration
+        self.game = game
         self.trainer = TrainerGroup(
             configuration,
             game,
@@ -114,6 +116,20 @@ class FixedTrainingSession(TrainingSession):
                 base_learning_rate=self.configuration.training.trainer.learning_rate.value_at(global_generation),
             )
         )
+        match self.configuration.training.trainer.quantization:
+            case TensorRtInt8QatConfiguration(fold_after_optimizer_steps=fold_after_optimizer_steps) if (
+                result.completed_optimizer_steps == fold_after_optimizer_steps
+            ):
+                self.trainer.close()
+                self.trainer = TrainerGroup(
+                    self.configuration,
+                    self.game,
+                    TrainerStartup(
+                        network=self.configuration.training.initial_model.network,
+                        save_path=Path(self.configuration.training.save_path),
+                        starting_generation=result.checkpoint.generation,
+                    ),
+                )
         return FixedTrainingSessionResult(
             publication=TrainingPublication(
                 completed_optimizer_steps=result.completed_optimizer_steps,
