@@ -72,6 +72,11 @@ class Backend(str, Enum):
     TENSORRT_INT8 = 'tensorrt_int8_calibrated'
 
 
+class CalibrationMethod(str, Enum):
+    MAX = 'max'
+    ENTROPY = 'entropy'
+
+
 @dataclass(frozen=True)
 class EvaluationDatasetCalibrationSource:
     path: Path
@@ -100,6 +105,10 @@ class BenchmarkArguments:
     repetitions: int
     iterations_per_repetition: int
     calibration_position_count: int
+    calibration_method: CalibrationMethod
+    quantized_node_patterns: tuple[str, ...]
+    fidelity_position_offset: int
+    fidelity_position_count: int
     fidelity_limits: FidelityLimits
     acknowledge_gpu_load: bool
 
@@ -152,10 +161,10 @@ class CalibrationIdentity(FrozenModel):
     submitted_batches: int = Field(gt=0)
     submitted_positions: int = Field(gt=0)
     benchmark_input_overlap_positions: Literal[0] = 0
-    algorithm: Literal['modelopt_onnx_ptq_max'] = 'modelopt_onnx_ptq_max'
+    algorithm: str = Field(min_length=1)
     tool_version: str = Field(min_length=1)
     quantized_operator_types: tuple[Literal['Conv'], ...] = INT8_QUANTIZED_OPERATOR_TYPES
-    quantized_node_patterns: tuple[str, ...] = INT8_QUANTIZED_NODE_PATTERNS
+    quantized_node_patterns: tuple[str, ...]
     excluded_node_patterns: tuple[str, ...] = INT8_EXCLUDED_NODE_PATTERNS
 
 
@@ -189,7 +198,7 @@ class CandidateMeasurement(FrozenModel):
 
 
 class TensorRtInferenceBenchmarkReport(FrozenModel):
-    schema_version: Literal[7] = 7
+    schema_version: Literal[8] = 8
     source_revision: SourceRevision
     experiment_configuration_path: str = Field(min_length=1)
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -198,6 +207,8 @@ class TensorRtInferenceBenchmarkReport(FrozenModel):
     checkpoint_manifest: ArtifactIdentity
     inference_model: ArtifactIdentity
     benchmark_dataset: DatasetIdentity
+    fidelity_position_offset: int = Field(ge=0)
+    fidelity_position_count: int = Field(gt=0, le=BATCH_SIZE)
     calibration: CalibrationIdentity
     input_shape: tuple[int, int, int, int]
     input_dtype: Literal['int8_source_planes'] = 'int8_source_planes'
@@ -534,6 +545,8 @@ def _quantize_onnx(
     output_path: Path,
     calibration_states: Tensor,
     device: torch.device,
+    calibration_method: CalibrationMethod,
+    quantized_node_patterns: tuple[str, ...],
 ) -> tuple[ArtifactIdentity, int, int]:
     output_path.unlink(missing_ok=True)
     assert device.index is not None
@@ -542,10 +555,10 @@ def _quantize_onnx(
             onnx_path=str(source_path),
             quantize_mode='int8',
             calibration_data=calibration_states.to(torch.float32).numpy(),
-            calibration_method='max',
+            calibration_method=calibration_method.value,
             calibration_eps=[f'cuda:{device.index}', 'cpu'],
             op_types_to_quantize=list(INT8_QUANTIZED_OPERATOR_TYPES),
-            nodes_to_quantize=list(INT8_QUANTIZED_NODE_PATTERNS),
+            nodes_to_quantize=list(quantized_node_patterns),
             nodes_to_exclude=list(INT8_EXCLUDED_NODE_PATTERNS),
             high_precision_dtype='fp16',
             output_path=str(output_path),
@@ -638,7 +651,12 @@ def _candidate_measurement(
     arguments: BenchmarkArguments,
     device: torch.device,
 ) -> CandidateMeasurement:
-    outputs = runner.outputs()
+    padded_outputs = runner.outputs()
+    positions = reference_outputs.policy_logits.shape[0]
+    outputs = ModelOutputs(
+        policy_logits=padded_outputs.policy_logits[:positions],
+        wdl_probabilities=padded_outputs.wdl_probabilities[:positions],
+    )
     fidelity = measure_fidelity(reference_outputs, outputs, legal_action_mask)
     return CandidateMeasurement(
         backend=backend,
@@ -688,19 +706,35 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         raise ValueError('Use at least one warm-up, three repetitions, and one timed iteration per repetition.')
     if arguments.calibration_position_count < BATCH_SIZE or arguments.calibration_position_count % BATCH_SIZE != 0:
         raise ValueError(f'INT8 calibration requires a positive whole number of {BATCH_SIZE}-position batches.')
+    if arguments.fidelity_position_offset < 0 or not 1 <= arguments.fidelity_position_count <= BATCH_SIZE:
+        raise ValueError(f'Fidelity offset must be nonnegative and position count must lie in [1, {BATCH_SIZE}].')
+    if not arguments.quantized_node_patterns:
+        raise ValueError('At least one quantized node pattern is required.')
 
     device = torch.device('cuda', arguments.gpu_id)
     torch.cuda.set_device(device)
     checkpoint = _resolve_checkpoint(arguments)
     configuration = load_chess_experiment_configuration(arguments.configuration_path)
-    benchmark_states, legal_action_mask = load_positions(arguments.benchmark_dataset_path, BATCH_SIZE)
-    benchmark_states = benchmark_states.to(torch.int8)
+    loaded_states, loaded_legal_action_mask = load_positions(
+        arguments.benchmark_dataset_path,
+        arguments.fidelity_position_offset + arguments.fidelity_position_count,
+    )
+    benchmark_states = loaded_states[
+        arguments.fidelity_position_offset : arguments.fidelity_position_offset + arguments.fidelity_position_count
+    ].to(torch.int8)
+    legal_action_mask = loaded_legal_action_mask[
+        arguments.fidelity_position_offset : arguments.fidelity_position_offset + arguments.fidelity_position_count
+    ]
     benchmark_dataset = _load_dataset_identity(arguments.benchmark_dataset_path, benchmark_states, legal_action_mask)
+    runner_states = benchmark_states
+    if benchmark_states.shape[0] < BATCH_SIZE:
+        padding_indices = torch.arange(BATCH_SIZE - benchmark_states.shape[0]) % benchmark_states.shape[0]
+        runner_states = torch.cat((benchmark_states, benchmark_states[padding_indices]), dim=0)
     calibration_states, calibration_source_identity = _load_calibration(
         arguments.calibration_source,
         arguments.calibration_position_count,
         configuration,
-        benchmark_states,
+        runner_states,
     )
     overlap_count = _input_overlap_count(calibration_states, benchmark_states)
     if overlap_count:
@@ -722,6 +756,8 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         int8_qdq_onnx_path,
         calibration_states,
         device,
+        arguments.calibration_method,
+        arguments.quantized_node_patterns,
     )
     float16_engine, fast_float16, fast_int8 = _build_engine(
         float16_onnx_path,
@@ -735,9 +771,13 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
     )
 
     reference_runner = _TorchScriptCudaGraphRunner(
-        checkpoint.model_path, benchmark_states, device, arguments.warmup_iterations
+        checkpoint.model_path, runner_states, device, arguments.warmup_iterations
     )
-    reference_outputs = reference_runner.outputs()
+    padded_reference_outputs = reference_runner.outputs()
+    reference_outputs = ModelOutputs(
+        policy_logits=padded_reference_outputs.policy_logits[: arguments.fidelity_position_count],
+        wdl_probabilities=padded_reference_outputs.wdl_probabilities[: arguments.fidelity_position_count],
+    )
     reference = ReferenceMeasurement(
         timing=_measure_runner(
             reference_runner,
@@ -751,7 +791,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         _candidate_measurement(
             backend,
             engine,
-            _TensorRtCudaGraphRunner(engine_path, benchmark_states, device, arguments.warmup_iterations),
+            _TensorRtCudaGraphRunner(engine_path, runner_states, device, arguments.warmup_iterations),
             reference_outputs,
             legal_action_mask,
             arguments,
@@ -774,12 +814,16 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         ),
         inference_model=ArtifactIdentity(path=str(checkpoint.model_path), sha256=checkpoint.model_sha256),
         benchmark_dataset=benchmark_dataset,
+        fidelity_position_offset=arguments.fidelity_position_offset,
+        fidelity_position_count=arguments.fidelity_position_count,
         calibration=CalibrationIdentity(
             source=calibration_source_identity,
             requested_positions=arguments.calibration_position_count,
             submitted_batches=arguments.calibration_position_count // BATCH_SIZE,
             submitted_positions=arguments.calibration_position_count,
+            algorithm=f'modelopt_onnx_ptq_{arguments.calibration_method.value}',
             tool_version=version('nvidia-modelopt'),
+            quantized_node_patterns=arguments.quantized_node_patterns,
         ),
         input_shape=_input_shape(),
         warmup_iterations=arguments.warmup_iterations,
@@ -824,6 +868,12 @@ def parse_arguments() -> BenchmarkArguments:
     calibration_group.add_argument('--calibration-dataset', type=Path)
     calibration_group.add_argument('--calibration-replay', type=Path)
     parser.add_argument('--calibration-random-seed', type=int, default=DEFAULT_CALIBRATION_RANDOM_SEED)
+    parser.add_argument(
+        '--calibration-method', type=CalibrationMethod, choices=tuple(CalibrationMethod), default=CalibrationMethod.MAX
+    )
+    parser.add_argument('--quantized-node-pattern', action='append', dest='quantized_node_patterns')
+    parser.add_argument('--fidelity-position-offset', type=int, default=0)
+    parser.add_argument('--fidelity-position-count', type=int, default=BATCH_SIZE)
     parser.add_argument('--artifact-directory', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--gpu-id', type=int, default=0)
@@ -857,6 +907,10 @@ def parse_arguments() -> BenchmarkArguments:
         repetitions=parsed.repetitions,
         iterations_per_repetition=parsed.iterations_per_repetition,
         calibration_position_count=parsed.calibration_position_count,
+        calibration_method=parsed.calibration_method,
+        quantized_node_patterns=tuple(parsed.quantized_node_patterns or INT8_QUANTIZED_NODE_PATTERNS),
+        fidelity_position_offset=parsed.fidelity_position_offset,
+        fidelity_position_count=parsed.fidelity_position_count,
         fidelity_limits=FidelityLimits(
             minimum_policy_top1_agreement=parsed.minimum_policy_top1_agreement,
             maximum_mean_policy_kl_divergence=parsed.maximum_mean_policy_kl_divergence,
