@@ -301,13 +301,20 @@ def _qat_configuration(
             )
         )
     if fixed_trunk_activation_amax is not None:
-        configuration.quant_cfg.append(
-            QuantizerCfgEntry(
-                quantizer_name='backbone.*.conv_block*.0.input_quantizer',
-                cfg=QuantizerAttributeConfig(
-                    num_bits=8,
-                    axis=None,
-                    constant_amax=fixed_trunk_activation_amax,
+        activation_configuration = QuantizerAttributeConfig(
+            num_bits=8,
+            axis=None,
+            constant_amax=fixed_trunk_activation_amax,
+        )
+        configuration.quant_cfg.extend(
+            (
+                QuantizerCfgEntry(
+                    quantizer_name='backbone.*input_quantizer',
+                    cfg=activation_configuration,
+                ),
+                QuantizerCfgEntry(
+                    quantizer_name='start_input_quantizer',
+                    cfg=activation_configuration,
                 ),
             )
         )
