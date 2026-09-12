@@ -54,6 +54,38 @@ CPU encoding, host-to-device input transfer, device-to-host output transfer, and
 result therefore establishes backend feasibility; it is not a production throughput claim until a native backend
 and end-to-end search benchmark exist.
 
+## Production-path sanity check
+
+The isolated TorchScript result is higher than end-to-end self-play throughput, but its full batch is representative.
+The final archived v34 self-play process averaged 319.39 positions per inference call against the configured cap of
+320. A separate 126.47-second native control used generation 1785, 512 concurrent games, 800 visits, native
+parallelism 4, one inference worker, two outstanding slots, BF16, channels-last, and cuDNN benchmarking. Only the
+opening source was changed to random openings so the stopped run's restart-state database was not mutated. It
+processed 6,129,023 model positions in 19,170 calls, averaged 319.72 positions/call, and achieved 48,463 model
+positions/s on one GPU. Of those calls, 19,124 used the full batch of 320.
+
+The terminal 14x160/800-visit training phase recorded about 506 accepted self-play positions/s across all eight
+GPUs. Multiplying by 800 visits, applying the native control's 0.99756 model-position/search ratio, and dividing by
+eight estimates 50,477 model positions/s/GPU during training. That estimate is 4.2% above the direct native control,
+which is reasonable given the phase-level rate is rounded and covers a longer workload.
+
+| TorchScript measurement | Model positions/s/GPU | Relative to isolated core |
+| --- | ---: | ---: |
+| Isolated captured batch-320 core | 61,694 | 1.000 |
+| Native production self-play control | 48,463 | 0.786 |
+| Training-phase estimate | 50,477 | 0.818 |
+
+The native control and training estimate agree; the isolated core is about 22% faster because it deliberately omits
+search scheduling, encoding, result processing, transfers, and gaps between model calls. The TensorRT FP16 1.63x
+ratio is consequently valid as an inference-core comparison under identical timing scope, but it is not a measured
+self-play speedup. If the native non-model time remained fixed and non-overlapped, the two measured latencies imply
+roughly a 1.44x self-play ceiling. A production TensorRT backend must be integrated and measured before quoting an
+end-to-end gain.
+
+The compact native control output is preserved as
+[`production-self-play-reference.json`](results/production-self-play-reference.json). Its configuration hash differs
+from the resolved run only because of the documented start-position override.
+
 FP16 is selected for the floating TensorRT arm. RTX 4070 SUPER (Ada, SM 8.9) has accelerated FP16 and INT8, and the
 pinned TensorRT exposes FP16, BF16, and INT8 builder flags. FP16 supplies the non-quantized fallback precision for
 the calibrated INT8 engine. BF16 remains unmeasured by this probe.
