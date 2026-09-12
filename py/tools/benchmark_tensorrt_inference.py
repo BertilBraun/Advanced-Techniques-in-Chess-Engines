@@ -631,11 +631,16 @@ def _force_sensitive_heads_to_float16(network: trt.INetworkDefinition) -> int:
         layer = network.get_layer(layer_index)
         if not layer.name.startswith(INT8_FLOAT16_LAYER_PREFIXES):
             continue
+        floating_output_indices = tuple(
+            output_index
+            for output_index in range(layer.num_outputs)
+            if layer.get_output(output_index).dtype in {trt.float16, trt.float32}
+        )
+        if not floating_output_indices:
+            continue
         layer.precision = trt.float16
-        for output_index in range(layer.num_outputs):
-            output = layer.get_output(output_index)
-            if output.dtype in {trt.float16, trt.float32}:
-                layer.set_output_type(output_index, trt.float16)
+        for output_index in floating_output_indices:
+            layer.set_output_type(output_index, trt.float16)
         constrained_count += 1
     if constrained_count == 0:
         raise ValueError('TensorRT network contains no policy/value head layers to constrain to FP16.')
