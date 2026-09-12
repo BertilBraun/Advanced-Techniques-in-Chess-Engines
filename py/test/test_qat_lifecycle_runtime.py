@@ -35,7 +35,7 @@ from src.training.quantization.runtime import (  # noqa: E402
 )
 
 
-def _network() -> Network:
+def _network(actions: int = 10) -> Network:
     return Network(
         NetworkParams(
             num_layers=2,
@@ -50,7 +50,7 @@ def _network() -> Network:
             value_fc_size=16,
         ),
         torch.device('cpu'),
-        NetworkDimensions(channels=8, rows=3, columns=3, actions=10),
+        NetworkDimensions(channels=8, rows=3, columns=3, actions=actions),
     )
 
 
@@ -129,3 +129,25 @@ def test_deployment_qat_checkpoint_round_trip(tmp_path: Path) -> None:
 
     assert loaded_state.phase is QatCheckpointPhase.DEPLOYMENT
     assert all(isinstance(block.conv_block1[1], nn.Identity) for block in loaded.backbone)
+
+
+@pytest.mark.integration
+def test_generation_zero_qat_checkpoint_calibrates_only_inference_copy(tmp_path: Path) -> None:
+    model = configure_qat(_network(actions=64), _calibrate)
+    state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 0)
+    optimizer_configuration = AdamWOptimizerConfiguration()
+    policy_weights_before = model.policy_head[-1].weight.detach().clone()
+
+    reference = save_qat_model_and_optimizer(
+        model,
+        create_optimizer(model, optimizer_configuration),
+        generation=0,
+        completed_optimizer_steps=0,
+        save_folder=tmp_path,
+        qat_state=state,
+        example_states=torch.randn((8, 8, 3, 3)),
+        bootstrap_probe_states=torch.randn((256, 8, 3, 3)),
+    )
+
+    assert torch.equal(model.policy_head[-1].weight, policy_weights_before)
+    assert reference.inference_model_path.suffix == '.onnx'
