@@ -224,14 +224,14 @@ public:
         m_searchParameters = parameters;
     }
 
-    void refreshModel(const std::string &modelPath) {
+    void refreshModel(const std::string &modelPath, const InferenceBackend backend) {
         if (hasPending()) {
             throw std::logic_error("Batched search must be idle during model refresh");
         }
         std::vector<PreparedInferenceModel> preparedModels;
         preparedModels.reserve(m_workers.size());
         for (const std::unique_ptr<InferencePipeline> &worker : m_workers) {
-            preparedModels.push_back(worker->prepareModelRefresh(modelPath));
+            preparedModels.push_back(worker->prepareModelRefresh(modelPath, backend));
         }
         for (const auto index : range(m_workers.size())) {
             m_workers[index]->commitModelRefresh(std::move(preparedModels[index]));

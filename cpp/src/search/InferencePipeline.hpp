@@ -90,7 +90,8 @@ public:
     [[nodiscard]] torch::Tensor createInputBuffer() const;
     [[nodiscard]] InferenceOutput createOutputBuffer() const;
     void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize, InferenceOutput &output);
-    [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
+    [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath,
+                                                              InferenceBackend backend) const;
     void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
 
     [[nodiscard]] size_t maximumBatchSize() const noexcept { return m_maximumBatchSize; }
@@ -125,7 +126,7 @@ private:
                      InferenceCompletion &completion);
 
     const torch::Device m_device;
-    const InferenceBackend m_backend;
+    InferenceBackend m_backend;
     const int m_deviceId;
     const InferenceExecutionOptions m_executionOptions;
     const torch::Dtype m_torchDtype;
@@ -199,7 +200,8 @@ public:
         }
     }
     void consumeWithoutResult(size_t slotIndex);
-    [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
+    [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath,
+                                                              InferenceBackend backend) const;
     void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
     [[nodiscard]] std::uint64_t inferenceNanoseconds() const noexcept {
         return m_statistics.inference_nanoseconds.load(std::memory_order_relaxed);

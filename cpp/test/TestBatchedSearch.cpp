@@ -188,15 +188,15 @@ int runBatchedSearchTests() {
         require(warmResult.starting_visits == 80 && warmResult.final_visits == 96,
                 "a warm production search did not add its baseline in additional visits");
 
-        search.refreshModel(8, updatedModelPath.string());
+        search.refreshModel(8, updatedModelPath.string(), InferenceBackend::TorchScript);
         require(search.modelGeneration() == 8, "refresh did not publish its model generation");
         try {
-            search.refreshModel(9, invalidModelPath.string());
+            search.refreshModel(9, invalidModelPath.string(), InferenceBackend::TorchScript);
             throw std::runtime_error("invalid model refresh unexpectedly succeeded");
         } catch (const std::invalid_argument &) {
         }
         try {
-            search.refreshModel(9, legacyModelPath.string());
+            search.refreshModel(9, legacyModelPath.string(), InferenceBackend::TorchScript);
             throw std::runtime_error("a legacy three-tensor model unexpectedly validated");
         } catch (const std::invalid_argument &) {
         }

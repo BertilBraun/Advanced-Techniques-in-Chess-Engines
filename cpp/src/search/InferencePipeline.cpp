@@ -632,8 +632,9 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size
     completion.wait();
 }
 
-PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
-    if (m_backend == InferenceBackend::TensorRt) {
+PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &modelPath,
+                                                            const InferenceBackend backend) const {
+    if (backend == InferenceBackend::TensorRt) {
         return TensorRtModel(std::make_unique<TensorRtInferenceModel>(
             modelPath, m_deviceId, m_maximumBatchSize, m_dimensions));
     }
@@ -672,9 +673,15 @@ bool InferenceRunner::adoptWeightsInPlace(const torch::jit::script::Module &upda
 #endif
 
 void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
-    if (m_backend == InferenceBackend::TensorRt) {
+    if (std::holds_alternative<TensorRtModel>(updatedModel)) {
         assert(std::get<TensorRtModel>(updatedModel) != nullptr);
         m_model.swap(updatedModel);
+        m_backend = InferenceBackend::TensorRt;
+        return;
+    }
+    if (m_backend == InferenceBackend::TensorRt) {
+        m_model.swap(updatedModel);
+        m_backend = InferenceBackend::TorchScript;
         return;
     }
     TorchScriptInferenceModel &current = std::get<TorchScriptInferenceModel>(m_model);
@@ -845,13 +852,14 @@ void InferencePipeline::releaseAndRethrow(const size_t slotIndex,
     std::rethrow_exception(exception);
 }
 
-PreparedInferenceModel InferencePipeline::prepareModelRefresh(const std::string &modelPath) const {
+PreparedInferenceModel InferencePipeline::prepareModelRefresh(const std::string &modelPath,
+                                                              const InferenceBackend backend) const {
     for (const std::unique_ptr<Slot> &slot : m_slots) {
         if (slot->state.load(std::memory_order_acquire) != SlotState::Empty) {
             throw std::logic_error("Inference pipeline must be idle during model refresh");
         }
     }
-    return m_runner.prepareModelRefresh(modelPath);
+    return m_runner.prepareModelRefresh(modelPath, backend);
 }
 
 void InferencePipeline::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {

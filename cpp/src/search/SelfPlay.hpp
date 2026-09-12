@@ -195,10 +195,12 @@ public:
         return m_search->inferenceStatistics();
     }
 
-    void refreshModel(const std::uint64_t modelGeneration, const std::string &modelPath) {
+    void refreshModel(const std::uint64_t modelGeneration, const std::string &modelPath,
+                      const InferenceBackend backend) {
         const std::unique_lock lock(m_operationMutex);
-        m_search->refreshModel(modelGeneration, modelPath);
+        m_search->refreshModel(modelGeneration, modelPath, backend);
         m_runtimeParameters.model_path = modelPath;
+        m_runtimeParameters.backend = backend;
     }
 
     [[nodiscard]] bool updateSearchSchedule(const SelfPlaySearchParameters &parameters) {

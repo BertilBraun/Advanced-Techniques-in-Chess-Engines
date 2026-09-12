@@ -65,11 +65,12 @@ public:
         m_executor.updateSearchParameters(parameters);
     }
 
-    void refreshModel(const std::uint64_t modelGeneration, const std::string &modelPath) {
+    void refreshModel(const std::uint64_t modelGeneration, const std::string &modelPath,
+                      const InferenceBackend backend) {
         if (modelGeneration <= m_modelGeneration) {
             throw std::invalid_argument("Model generation must increase during refresh");
         }
-        m_executor.refreshModel(modelPath);
+        m_executor.refreshModel(modelPath, backend);
         m_modelGeneration = modelGeneration;
         if (m_resetTreesOnRefresh) {
             resetActiveTrees();

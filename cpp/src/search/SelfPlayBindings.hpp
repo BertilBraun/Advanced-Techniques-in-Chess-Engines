@@ -173,7 +173,7 @@ BoundSelfPlayClasses<Game> bindSelfPlay(py::module_ &module, const SelfPlayBindi
         .def("search", &Search::search, py::arg("requests"), py::arg("collect_statistics") = false,
              py::call_guard<py::gil_scoped_release>())
         .def("refresh_model", &Search::refreshModel, py::arg("model_generation"),
-             py::arg("model_path"), py::call_guard<py::gil_scoped_release>())
+             py::arg("model_path"), py::arg("backend"), py::call_guard<py::gil_scoped_release>())
         .def("update_search_schedule", &Search::updateSearchSchedule, py::arg("search_parameters"))
         .def_property_readonly("model_generation", &Search::modelGeneration)
         .def("inference_statistics", &Search::inferenceStatistics);
