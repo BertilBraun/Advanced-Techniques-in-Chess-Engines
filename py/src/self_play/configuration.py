@@ -154,6 +154,7 @@ class BatchedInferenceParams(FrozenModel):
                 # Every omitted key resolves to the shipped path, so a configuration written before
                 # these knobs existed keeps running unchanged.
                 return {
+                    'backend': InferenceBackend.TORCHSCRIPT.value,
                     'sdpa_backend': SdpaBackend.AUTOMATIC.value,
                     'precision': InferencePrecision.BFLOAT16.value,
                     'memory_format': InferenceMemoryFormat.CONTIGUOUS.value,
