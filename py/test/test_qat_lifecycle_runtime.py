@@ -20,6 +20,7 @@ pytest.importorskip('modelopt.torch.quantization')
 
 from src.training.quantization.runtime import (  # noqa: E402
     configure_qat,
+    deployment_qat_state,
     fold_scaled_post_activation_batch_norm,
     restore_qat_model,
     save_qat_state,
@@ -64,10 +65,11 @@ def test_qat_resume_reconstructs_checkpoint_topology(
     expected_batch_norm: type[nn.Module],
 ) -> None:
     configured = configure_qat(_network(), _calibrate)
+    state = save_qat_state(configured, tmp_path / 'modelopt-state.pt', min(completed_optimizer_steps, 999))
     if phase is QatCheckpointPhase.DEPLOYMENT:
         fold_scaled_post_activation_batch_norm(configured)
+        state = deployment_qat_state(state, completed_optimizer_steps)
     weights = configured.state_dict()
-    state = save_qat_state(configured, tmp_path / f'{phase}.pt', phase, completed_optimizer_steps)
 
     restored = restore_qat_model(_network(), state, TensorRtInt8QatConfiguration())
     restored.model.load_state_dict(weights)
