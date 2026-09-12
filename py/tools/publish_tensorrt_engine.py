@@ -73,34 +73,48 @@ def refit_engine(template_path: Path, onnx_path: Path, output_path: Path) -> Non
     write_bytes_atomically(output_path, bytes(engine.serialize()))
 
 
-def publish(model_path: Path, template_path: Path) -> dict[str, str | int | bool]:
+def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str | int | bool]:
+    if not template_paths:
+        raise ValueError('At least one TensorRT template is required.')
     engine_path = model_path.with_suffix('.trt.engine')
     metadata_path = engine_path.with_suffix('.json')
     lock_path = engine_path.with_suffix('.lock')
     source_sha256 = file_sha256(model_path)
-    template_sha256 = file_sha256(template_path)
+    template_sha256s = tuple(file_sha256(template_path) for template_path in template_paths)
     with exclusive_lock(lock_path):
         if engine_path.is_file() and metadata_path.is_file():
             metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
             if (
                 metadata.get('source_sha256') == source_sha256
-                and metadata.get('template_sha256') == template_sha256
+                and metadata.get('template_sha256') in template_sha256s
                 and metadata.get('engine_sha256') == file_sha256(engine_path)
             ):
                 return {**metadata, 'cached': True}
         logger = trt.Logger(trt.Logger.ERROR)
         runtime = trt.Runtime(logger)
-        template = runtime.deserialize_cuda_engine(template_path.read_bytes())
+        template = runtime.deserialize_cuda_engine(template_paths[0].read_bytes())
         if template is None:
-            raise ValueError(f'Could not deserialize TensorRT template: {template_path}')
+            raise ValueError(f'Could not deserialize TensorRT template: {template_paths[0]}')
         input_shape = engine_input_shape(template)
         onnx_path = engine_path.with_suffix('.temporary.onnx')
         onnx_path.unlink(missing_ok=True)
         try:
             export_onnx(model_path, onnx_path, input_shape)
-            refit_engine(template_path, onnx_path, engine_path)
+            selected_template_path: Path | None = None
+            failures: list[str] = []
+            for template_path in template_paths:
+                try:
+                    refit_engine(template_path, onnx_path, engine_path)
+                except ValueError as error:
+                    failures.append(f'{template_path}: {error}')
+                    continue
+                selected_template_path = template_path
+                break
+            if selected_template_path is None:
+                raise ValueError('No TensorRT template accepted the checkpoint:\n' + '\n'.join(failures))
         finally:
             onnx_path.unlink(missing_ok=True)
+        template_sha256 = file_sha256(selected_template_path)
         metadata = {
             'engine_path': str(engine_path),
             'engine_sha256': file_sha256(engine_path),
@@ -116,9 +130,9 @@ def publish(model_path: Path, template_path: Path) -> dict[str, str | int | bool
 def main() -> None:
     parser = argparse.ArgumentParser(description='Atomically refit a TensorRT template for one checkpoint.')
     parser.add_argument('--model', type=Path, required=True)
-    parser.add_argument('--template-engine', type=Path, required=True)
+    parser.add_argument('--template-engine', type=Path, required=True, action='append')
     arguments = parser.parse_args()
-    print(json.dumps(publish(arguments.model, arguments.template_engine), sort_keys=True))
+    print(json.dumps(publish(arguments.model, tuple(arguments.template_engine)), sort_keys=True))
 
 
 if __name__ == '__main__':

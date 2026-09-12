@@ -48,7 +48,7 @@ class TorchScriptInferenceBackend(FrozenModel):
 
 class TensorRtInferenceBackend(FrozenModel):
     kind: Literal['tensorrt'] = 'tensorrt'
-    template_engine_path: Path
+    template_engine_paths: tuple[Path, ...] = Field(min_length=1)
 
 
 InferenceBackendConfiguration: TypeAlias = Annotated[

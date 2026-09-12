@@ -170,7 +170,7 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
         'tensorrt': native.InferenceBackend.TENSORRT,
     }[arguments.inference_backend]
     if arguments.inference_backend == 'tensorrt' and arguments.tensorrt_template_engine is not None:
-        backend_configuration = TensorRtInferenceBackend(template_engine_path=arguments.tensorrt_template_engine)
+        backend_configuration = TensorRtInferenceBackend(template_engine_paths=(arguments.tensorrt_template_engine,))
         model_path = resolved_inference_model_path(model_path, backend_configuration)
         refresh_model = (
             None

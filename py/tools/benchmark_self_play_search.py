@@ -128,7 +128,7 @@ def _apply_self_play_overrides(
             raise ValueError('--tensorrt-template-engine is required for the TensorRT backend.')
         backend_update = {
             'kind': 'tensorrt',
-            'template_engine_path': str(arguments.tensorrt_template_engine),
+            'template_engine_paths': [str(arguments.tensorrt_template_engine)],
         }
     inference_update = {
         field_name: value
