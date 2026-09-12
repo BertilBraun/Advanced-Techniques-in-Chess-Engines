@@ -13,6 +13,7 @@ from src.training.progressive import (
     ProgressiveModelDefinition,
     ProgressiveModelSizingConfiguration,
 )
+from src.training.quantization.configuration import DisabledTrainingQuantization, TrainingQuantizationConfiguration
 from src.training.run_limits import RuntimeLimits
 from src.training.targets import AuxiliaryTargetConfiguration
 from src.util.frozen_model import FrozenModel
@@ -143,6 +144,7 @@ class TrainingParams(FrozenModel):
     local_batch_size: int = Field(gt=0)
     replay_prefetch_depth: int = Field(default=4, gt=0)
     optimizer: OptimizerConfiguration
+    quantization: TrainingQuantizationConfiguration = DisabledTrainingQuantization()
     precision: TrainingPrecision
     compilation: TrainingCompilation
     learning_rate: FloatGenerationSchedule
