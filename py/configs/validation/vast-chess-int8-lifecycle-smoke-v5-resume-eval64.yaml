@@ -1,0 +1,46 @@
+extends: vast-chess-int8-lifecycle-smoke-v5-resume.yaml
+
+run:
+  run_name: vast-chess-int8-lifecycle-smoke-v5-resume-eval64
+  tensorboard_run_directory: vast-chess-int8-lifecycle-smoke-v5-resume-eval64
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/validation/vast-chess-int8-lifecycle-smoke-v5-resume-fixed/checkpoint_7.json
+    generation: 7
+
+training:
+  save_path: py/training_data/validation/vast-chess-int8-lifecycle-smoke-v5-resume-eval64
+  lifecycle:
+    credit:
+      maximum_optimizer_steps: 8
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-int8-lifecycle-smoke-v5-resume-eval64.stop
+
+evaluation:
+  maximum_concurrent_jobs: 1
+  definitions:
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 1
+    maximum_game_plies: 20
+    first_generation: 8
+    final_generation: null
+    search:
+      searches_per_move: 1
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: true
+          template_engine_paths:
+          - /workspace/tensorrt/v35-int8-14x160-deployment-trained-eval64-template.engine
+        sdpa_backend: memory_efficient
