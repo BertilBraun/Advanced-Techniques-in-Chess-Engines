@@ -12,9 +12,12 @@ Status: harness ready; measurement deferred until the live v34 run stops. This f
 ## Method
 
 [`benchmark_tensorrt_inference.py`](../../../py/tools/benchmark_tensorrt_inference.py) accepts a selected checkpoint
-manifest, an immutable benchmark dataset, and either an immutable calibration dataset or replay store. It verifies the checkpoint and immutable dataset hashes,
-then exports the shipped trimmed policy/WDL TorchScript model to a fixed `[320, 52, 8, 8]` FP16 ONNX graph. It
-builds TensorRT 10.14 engines for FP16 and entropy-calibrated INT8 with FP16 fallback.
+manifest, an immutable benchmark dataset, and either an immutable calibration dataset or replay store. It verifies
+the checkpoint and immutable dataset hashes, then exports the shipped trimmed policy/WDL TorchScript model as
+separate fixed `[320, 52, 8, 8]` FP16 and FP32 ONNX graphs. TensorRT 10.14 builds the FP16 arm from the FP16 graph
+and the entropy-calibrated INT8 arm from the FP32 graph with FP16 fallback. Legacy TensorRT calibration consumes
+FP32 device input even though the final engine may use lower-precision kernels; the report validates and records the
+resulting input calibration scale.
 
 All three measured arms start with the same decoded `int8` tensor for the first 320 legal chess positions in the
 benchmark dataset. Their captured CUDA graphs include the device-side input cast, model execution, and conversion
@@ -50,8 +53,8 @@ result therefore establishes backend feasibility; it is not a production through
 and end-to-end search benchmark exist.
 
 FP16 is selected for the floating TensorRT arm. RTX 4070 SUPER (Ada, SM 8.9) has accelerated FP16 and INT8, and the
-pinned TensorRT exposes FP16, BF16, and INT8 builder flags. FP16 gives the ONNX graph and the non-quantized fallback
-precision for the calibrated INT8 engine one representation. BF16 remains unmeasured by this probe.
+pinned TensorRT exposes FP16, BF16, and INT8 builder flags. FP16 supplies the non-quantized fallback precision for
+the calibrated INT8 engine. BF16 remains unmeasured by this probe.
 
 ## Dependencies prepared on the node
 
@@ -104,6 +107,6 @@ this model.
 
 ## Results
 
-Pending the terminal checkpoint and an idle GPU. Copy `report.json`, the ONNX model, both engines, and the calibration
-cache off the ephemeral node. Add their hashes and raw timing/fidelity table here before treating this directory as
-evidence.
+Pending the terminal checkpoint and an idle GPU. Copy `report.json`, both ONNX models, both engines, and the
+calibration cache off the ephemeral node. Add their hashes and raw timing/fidelity table here before treating this
+directory as evidence.

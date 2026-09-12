@@ -47,6 +47,10 @@ from tools.tensorrt_benchmark_metrics import (
     summarize_timings,
     validate_fidelity,
 )
+from tools.tensorrt_calibration_cache import (
+    entropy_calibration_tensor_scale,
+    validate_input_calibration_scale,
+)
 from tools.tensorrt_calibration_sampling import EncodedStates, select_disjoint_replay_calibration
 from torch import Tensor, nn
 
@@ -147,6 +151,9 @@ class CalibrationIdentity(FrozenModel):
     submitted_batches: int = Field(gt=0)
     submitted_positions: int = Field(gt=0)
     benchmark_input_overlap_positions: Literal[0] = 0
+    device_input_dtype: Literal['float32'] = 'float32'
+    observed_maximum_absolute_input: float = Field(gt=0.0)
+    input_tensor_scale: float = Field(gt=0.0)
     calibration_cache: ArtifactIdentity
     algorithm: Literal['entropy_calibration_2'] = 'entropy_calibration_2'
 
@@ -181,7 +188,7 @@ class CandidateMeasurement(FrozenModel):
 
 
 class TensorRtInferenceBenchmarkReport(FrozenModel):
-    schema_version: Literal[3] = 3
+    schema_version: Literal[4] = 4
     source_revision: SourceRevision
     experiment_configuration_path: str = Field(min_length=1)
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -195,7 +202,8 @@ class TensorRtInferenceBenchmarkReport(FrozenModel):
     input_dtype: Literal['int8_source_planes'] = 'int8_source_planes'
     warmup_iterations: int = Field(ge=0)
     hardware: HardwareDescription
-    onnx_model: ArtifactIdentity
+    float16_onnx_model: ArtifactIdentity
+    int8_onnx_model: ArtifactIdentity
     onnx_opset_version: int = Field(gt=0)
     tensorrt_workspace_bytes: int = Field(gt=0)
     tensorrt_builder_optimization_level: int = Field(ge=0)
@@ -272,9 +280,9 @@ class _TensorRtCudaGraphRunner(_CudaGraphRunner):
         if context is None:
             raise ValueError(f'TensorRT could not create an execution context for {engine_path}.')
         self._context: trt.IExecutionContext = context
-        self._require_engine_contract()
         self._encoded_states = encoded_states.to(device=device, dtype=torch.int8)
-        self._typed_states = torch.empty(encoded_states.shape, device=device, dtype=torch.float16)
+        self._input_dtype = self._require_engine_contract()
+        self._typed_states = torch.empty(encoded_states.shape, device=device, dtype=self._input_dtype)
         self._policy_engine = self._allocate_output(POLICY_OUTPUT_NAME, device)
         self._wdl_engine = self._allocate_output(WDL_OUTPUT_NAME, device)
         self._policy = torch.empty_like(self._policy_engine, dtype=torch.float32)
@@ -294,7 +302,7 @@ class _TensorRtCudaGraphRunner(_CudaGraphRunner):
         with torch.cuda.graph(self._graph, stream=self._stream):
             self._execute()
 
-    def _require_engine_contract(self) -> None:
+    def _require_engine_contract(self) -> torch.dtype:
         names = tuple(self._engine.get_tensor_name(index) for index in range(self._engine.num_io_tensors))
         expected_names = (INPUT_NAME, POLICY_OUTPUT_NAME, WDL_OUTPUT_NAME)
         if set(names) != set(expected_names):
@@ -308,8 +316,14 @@ class _TensorRtCudaGraphRunner(_CudaGraphRunner):
             observed_shape = tuple(self._engine.get_tensor_shape(name))
             if observed_shape != expected_shape:
                 raise ValueError(f'TensorRT tensor {name} has shape {observed_shape}, expected {expected_shape}.')
-        if self._engine.get_tensor_dtype(INPUT_NAME) != trt.float16:
-            raise ValueError('TensorRT benchmark engine input must be float16.')
+        input_data_type = self._engine.get_tensor_dtype(INPUT_NAME)
+        match input_data_type:
+            case trt.DataType.FLOAT:
+                return torch.float32
+            case trt.DataType.HALF:
+                return torch.float16
+            case _:
+                raise ValueError(f'TensorRT benchmark engine input has unsupported data type {input_data_type}.')
 
     def _allocate_output(self, name: str, device: torch.device) -> Tensor:
         shape = tuple(self._engine.get_tensor_shape(name))
@@ -351,7 +365,7 @@ class _EntropyCalibrator(trt.IInt8EntropyCalibrator2):
         self._cache_path = cache_path
         self._batch_count = states.shape[0] // BATCH_SIZE
         self._batch_index = 0
-        self._device_batch = torch.empty((BATCH_SIZE, *states.shape[1:]), device=device, dtype=torch.float16)
+        self._device_batch = torch.empty((BATCH_SIZE, *states.shape[1:]), device=device, dtype=torch.float32)
 
     @property
     def batch_count(self) -> int:
@@ -370,7 +384,7 @@ class _EntropyCalibrator(trt.IInt8EntropyCalibrator2):
         if self._batch_index >= self._batch_count:
             return None
         start = self._batch_index * BATCH_SIZE
-        self._device_batch.copy_(self._states[start : start + BATCH_SIZE].to(dtype=torch.float16))
+        self._device_batch.copy_(self._states[start : start + BATCH_SIZE].to(dtype=torch.float32))
         torch.cuda.synchronize(self._device)
         self._batch_index += 1
         return [self._device_batch.data_ptr()]
@@ -519,13 +533,13 @@ def _resolve_checkpoint(arguments: BenchmarkArguments) -> _ResolvedCheckpoint:
     )
 
 
-def _export_onnx(model_path: Path, output_path: Path) -> ArtifactIdentity:
+def _export_onnx(model_path: Path, output_path: Path, data_type: torch.dtype) -> ArtifactIdentity:
     model = torch.jit.load(str(model_path), map_location='cpu')
-    model.to(dtype=torch.float16)
+    model.to(dtype=data_type)
     model.eval()
     example = torch.zeros(
         _input_shape(),
-        dtype=torch.float16,
+        dtype=data_type,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = output_path.with_name(f'.{output_path.name}.tmp')
@@ -706,13 +720,15 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         )
 
     arguments.artifact_directory.mkdir(parents=True, exist_ok=True)
-    onnx_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp16.onnx'
+    float16_onnx_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp16.onnx'
+    int8_onnx_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp32-for-int8.onnx'
     float16_engine_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp16.engine'
     int8_engine_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-int8.engine'
     calibration_cache_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-int8.calibration'
-    onnx_artifact = _export_onnx(checkpoint.model_path, onnx_path)
+    float16_onnx_artifact = _export_onnx(checkpoint.model_path, float16_onnx_path, torch.float16)
+    int8_onnx_artifact = _export_onnx(checkpoint.model_path, int8_onnx_path, torch.float32)
     float16_engine, _, fast_float16, fast_int8 = _build_engine(
-        onnx_path,
+        float16_onnx_path,
         float16_engine_path,
         Backend.TENSORRT_FLOAT16,
         calibration_states,
@@ -720,7 +736,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         device,
     )
     int8_engine, calibrator, _, _ = _build_engine(
-        onnx_path,
+        int8_onnx_path,
         int8_engine_path,
         Backend.TENSORRT_INT8,
         calibration_states,
@@ -733,6 +749,9 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         or not calibration_cache_path.is_file()
     ):
         raise ValueError('TensorRT did not produce the required INT8 calibration cache.')
+    observed_maximum_absolute_input = float(calibration_states.to(torch.float32).abs().max())
+    input_tensor_scale = entropy_calibration_tensor_scale(calibration_cache_path.read_bytes(), INPUT_NAME)
+    validate_input_calibration_scale(input_tensor_scale, observed_maximum_absolute_input)
 
     reference_runner = _TorchScriptCudaGraphRunner(
         checkpoint.model_path, benchmark_states, device, arguments.warmup_iterations
@@ -779,6 +798,8 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
             requested_positions=arguments.calibration_position_count,
             submitted_batches=calibrator.batch_count,
             submitted_positions=calibrator.batch_count * BATCH_SIZE,
+            observed_maximum_absolute_input=observed_maximum_absolute_input,
+            input_tensor_scale=input_tensor_scale,
             calibration_cache=ArtifactIdentity(
                 path=str(calibration_cache_path), sha256=file_sha256(calibration_cache_path)
             ),
@@ -799,10 +820,12 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
             tensorrt_fast_int8=fast_int8,
             floating_precision_reason=(
                 'FP16 is the conversion baseline because TensorRT 10.14 supports fast FP16 on SM 8.9 and '
-                'the same FP16 ONNX graph provides the fallback precision for calibrated INT8 layers.'
+                'provides the fallback precision for calibrated INT8 layers. The INT8 arm uses a separate '
+                'FP32 ONNX input because the legacy TensorRT calibrator consumes FP32 input buffers.'
             ),
         ),
-        onnx_model=onnx_artifact,
+        float16_onnx_model=float16_onnx_artifact,
+        int8_onnx_model=int8_onnx_artifact,
         onnx_opset_version=ONNX_OPSET_VERSION,
         tensorrt_workspace_bytes=TENSORRT_WORKSPACE_BYTES,
         tensorrt_builder_optimization_level=TENSORRT_BUILDER_OPTIMIZATION_LEVEL,
