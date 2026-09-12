@@ -18,3 +18,5 @@ f6c25a204224dab01eec92d2179e2bc2c6e3bf0d2bf7188034165b61895699db  reports/post-s
 10f976770c544b80a8ad7b4964347048411f65c00f6225e04b25102b2ecbdf57  reports/post-scaled-qat-seed20260914.json
 63cd6d586a72b1c50aef17d1cfbb0a76103d9ac8d4c3d9c8ec640c9cd1ffadde  reports/post-shared-12x128-smoke.json
 94511b3f7ceb30d3b8d03964410c08d9a6d29a1e7ad9396646ffc07c780ce713  reports/post-shared-14x160-smoke.json
+4e71a2ce5bb5671befa8d359bef424730c61dadfde6932460dc172412afd416c  reports/value-head-2-nag-probe.json
+28d380f948218a8df9988b613d2542181202bf09ab1df22ece4e085744b2ef95  reports/value-head-32-nag-probe.json

@@ -35,6 +35,17 @@ A five-minute, 5,000-step frozen-replay probe used the same sampled indices, bat
 
 Loosening the AdamW-era gradient clip from 0.5 to 5.0 improves NAG's total loss by 0.03683, but AdamW remains 0.14855 lower after equal samples. This establishes that AdamW learns much faster in the early frozen-replay regime. It does not test the claim that SGD may generalize better after a long self-play run. The selected future-run NAG schedule is a separate hypothesis: momentum 0.9, Nesterov, weight decay `1e-4`, global batch 2,048, and a linear learning-rate decay from 0.1 at generation 0 to 0.01 at generation 1,000, held thereafter.
 
+## Value-head width probe
+
+A matched 2,500-step NAG probe compared the production-sized 14x160 scaled post-activation model with 2 versus 32 value-head channels. Both arms used the same replay indices, seed, batch 1,024, learning rate 0.1 and gradient clip 5.0.
+
+| Value channels | Parameters | MACs/position | Samples/s | Held-out policy | Held-out WDL | Held-out total |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2 | 6,261,007 | 395,894,544 | 9,435.5 | 2.22621 | **0.77848** | 3.00468 |
+| 32 | 6,358,027 | 396,293,904 | 9,312.0 | **2.22283** | 0.77877 | **3.00159** |
+
+The wider head adds 97,020 parameters (1.55%) and 399,360 MACs (0.10%), while measured training throughput falls 1.31%. Its policy loss is 0.00338 lower, but WDL loss is 0.00029 higher and total loss improves by only 0.00309 in one short seed. It therefore does not earn inclusion. The Connect Four result that motivated this check concerned catastrophic quantization of a one-channel value head; this design already uses two channels and keeps the value head in floating point, so that failure mode does not directly transfer.
+
 ## Evidence
 
 Machine-readable reports are under `raw/reports/`. The retained production-size deployment artifact archive is `.codex-diagnostics/int8-scaled-post-14x160-early-fold-5k-artifacts.tar.gz` (SHA-256 `e10004af66379eb47b5f5a31c36f68082da941d05ea51dc07b71ccfc59fccdf7`). The TensorRT update-cadence and refit evidence is under `raw/cadence/`. Failed and superseded smokes are identified under `raw/failures/`; they must not be mixed with completed screen arms.
