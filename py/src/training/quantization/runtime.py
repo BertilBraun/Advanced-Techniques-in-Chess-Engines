@@ -132,11 +132,11 @@ def restore_qat_model(
         raise ValueError(f'QAT checkpoint phase {state.phase} does not match expected phase {expected_phase}.')
     if file_sha256(state.path) != state.sha256:
         raise ValueError(f'QAT state hash does not match: {state.path}')
+    if state.phase is QatCheckpointPhase.DEPLOYMENT:
+        fold_scaled_post_activation_batch_norm(model)
     restored = modelopt.restore_from_modelopt_state(model, modelopt_state_path=state.path)
     if not isinstance(restored, Network):
         raise ValueError('ModelOpt restore did not preserve the training network contract.')
-    if state.phase is QatCheckpointPhase.DEPLOYMENT:
-        fold_scaled_post_activation_batch_norm(restored)
     return RestoredQatModel(restored, state.phase)
 
 
