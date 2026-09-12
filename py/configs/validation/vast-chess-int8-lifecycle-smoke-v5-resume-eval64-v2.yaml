@@ -8,6 +8,6 @@ training:
   save_path: py/training_data/validation/vast-chess-int8-lifecycle-smoke-v5-resume-eval64-v2
   lifecycle:
     credit:
-      maximum_optimizer_steps: 9
+      maximum_optimizer_steps: 30
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-int8-lifecycle-smoke-v5-resume-eval64-v2.stop
