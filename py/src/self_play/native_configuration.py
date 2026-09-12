@@ -95,12 +95,13 @@ def resolved_inference_model_path(
                     sys.executable,
                     str(publisher),
                     '--model',
-                    str(model_path),
+                    str(model_path.resolve()),
                     *template_arguments,
                 ),
                 check=True,
                 capture_output=True,
                 text=True,
+                cwd=publisher.parent.parent,
             )
             payload = json.loads(completed.stdout)
             log(
