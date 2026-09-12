@@ -30,12 +30,48 @@ caused by the pre-activation/QDQ graph, not a smaller or slower PyTorch baseline
 TensorRT fusion efficiency and its INT8 graph gains only another 1.33x over that lower FP16 baseline.
 
 The original full-trunk ONNX contains 58 Q/DQ pairs for 29 convolutions. The proposed graph contains
-56 pairs for the intended 28 residual convolutions. TensorRT nevertheless chose INT8 tactics for 29
-convolutions, including the nominally floating start convolution. Its detailed engine contains 101
-layers, 29 INT8 convolution tactics, 38 layers with INT8 outputs, and 74 named tactics. Explicitly
-forcing the start convolution, global-context operations, residual adds, and heads to FP16 made
-TensorRT 10.14 reject the weakly typed QDQ graph during format selection. A strongly typed q1 engine
-ran at only 63,203 positions/s and still failed fidelity.
+56 pairs for the intended 28 residual convolutions. Q/DQ counts conceal the important difference:
+the original block layout lets TensorRT keep most of a residual block in one quantized fused tactic,
+while the pre-activation layout materializes normalization, clipping, scaling, and format changes.
+
+The first detailed pre-activation inspector artifact was accidentally built from the original ONNX
+graph. A rebuild from the recorded pre-activation ONNX identity corrected the comparison:
+
+| Engine | Layers | Reformats | Conv + ReLU | Conv + residual + ReLU | Pointwise layers |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Original FP16 | 83 | 1 | 8 | 14 | 0 |
+| Pre-activation FP16 | 330 | 70 | 1 | 0 | 1 |
+| Original INT8 | 103 | 18 | 8 | 14 | 0 |
+| Pre-activation INT8 | 470 | 102 | 1 | 0 | 35 |
+
+The original INT8 engine uses 21 trunk convolutions whose inputs and outputs remain INT8, including
+all 14 second convolutions fused with the residual add and following ReLU. Seven global-pooling
+convolutions produce FP32 for their pooling islands. In the pre-activation INT8 engine, 21 trunk
+convolutions instead use INT8 inputs and weights but produce FP16; the engine then executes the
+pre-activation batch normalization and clipping, branch-scale multiplication, residual addition,
+and requantization separately. Its detailed tensor records contain 390 FP16 outputs and only 35 INT8
+outputs, compared with 20 FP16 and 38 INT8 outputs in the original engine.
+
+The same structural cost is already visible without quantization. The pre-activation FP16 ONNX adds
+28 clipping operations and 14 branch-scale multiplications, and its TensorRT engine grows from 83 to
+330 layers. This accounts for the FP16 throughput decline from 101,464 to 85,991 positions/s. The
+additional FP16/INT8 transitions and lost residual-block fusion then limit INT8 to 1.33x over that
+slower FP16 engine, rather than the original graph's 1.81x. Multiplying those two effects produces
+the observed 1.874x rather than 2.995x speedup over TorchScript.
+
+Explicitly forcing the start convolution, global-context operations, residual adds, and heads to
+FP16 made TensorRT 10.14 reject the weakly typed QDQ graph during format selection. A strongly typed
+q1 engine ran at only 63,203 positions/s and still failed fidelity.
+
+The most plausible recovery is therefore a bounded, scaled **post-activation** block. It retains the
+original `Conv -> BN -> activation -> Conv -> BN -> residual add -> activation` deployment order,
+folds batch normalization into convolution, absorbs residual-branch scaling into the second
+convolution at export, and aligns the branch and skip quantizers so TensorRT can fuse the residual
+input. This keeps the activation cap and residual scaling that constrain QAT ranges without placing
+normalization and clipping between quantized convolution tactics. Conv-BN-aware QAT or explicit
+block-boundary fake quantization are the remaining implementation routes if ordinary module-level
+QAT cannot learn this graph. Reducing global-pooling frequency could remove FP32 islands but would
+change the model's information path and does not explain the measured regression.
 
 ## Fidelity isolation
 
