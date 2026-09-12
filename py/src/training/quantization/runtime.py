@@ -107,7 +107,6 @@ def fold_scaled_post_activation_batch_norm(model: Network) -> None:
 def save_qat_state(
     model: Network,
     path: Path,
-    phase: QatCheckpointPhase,
     completed_optimizer_steps: int,
 ) -> QatStateIdentity:
     temporary_path = path.with_name(f'.{path.name}.modelopt')
@@ -115,10 +114,24 @@ def save_qat_state(
     write_bytes_atomically(path, temporary_path.read_bytes())
     temporary_path.unlink(missing_ok=True)
     return QatStateIdentity(
-        phase=phase,
+        phase=QatCheckpointPhase.PRE_FOLD,
         completed_optimizer_steps=completed_optimizer_steps,
         path=path,
         sha256=file_sha256(path),
+    )
+
+
+def deployment_qat_state(
+    pre_fold_state: QatStateIdentity,
+    completed_optimizer_steps: int,
+) -> QatStateIdentity:
+    if pre_fold_state.phase is not QatCheckpointPhase.PRE_FOLD:
+        raise ValueError('Deployment QAT must retain the ModelOpt conversion state captured before folding.')
+    return QatStateIdentity(
+        phase=QatCheckpointPhase.DEPLOYMENT,
+        completed_optimizer_steps=completed_optimizer_steps,
+        path=pre_fold_state.path,
+        sha256=pre_fold_state.sha256,
     )
 
 
@@ -132,11 +145,11 @@ def restore_qat_model(
         raise ValueError(f'QAT checkpoint phase {state.phase} does not match expected phase {expected_phase}.')
     if file_sha256(state.path) != state.sha256:
         raise ValueError(f'QAT state hash does not match: {state.path}')
-    if state.phase is QatCheckpointPhase.DEPLOYMENT:
-        fold_scaled_post_activation_batch_norm(model)
     restored = modelopt.restore_from_modelopt_state(model, modelopt_state_path=state.path)
     if not isinstance(restored, Network):
         raise ValueError('ModelOpt restore did not preserve the training network contract.')
+    if state.phase is QatCheckpointPhase.DEPLOYMENT:
+        fold_scaled_post_activation_batch_norm(restored)
     return RestoredQatModel(restored, state.phase)
 
 
