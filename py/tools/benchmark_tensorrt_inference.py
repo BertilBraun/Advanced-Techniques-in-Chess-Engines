@@ -47,6 +47,7 @@ from tools.tensorrt_benchmark_metrics import (
     summarize_timings,
     validate_fidelity,
 )
+from tools.tensorrt_calibration_sampling import EncodedStates, select_disjoint_replay_calibration
 from torch import Tensor, nn
 
 BATCH_SIZE = 320
@@ -128,6 +129,7 @@ class ReplayCalibrationSourceIdentity(FrozenModel):
     available_positions: int = Field(gt=0)
     selected_positions: int = Field(gt=0)
     random_seed: int = Field(ge=0)
+    excluded_fidelity_overlap_positions: int = Field(ge=0)
     selected_logical_indices_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     selected_packed_states_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     selected_states_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -179,7 +181,7 @@ class CandidateMeasurement(FrozenModel):
 
 
 class TensorRtInferenceBenchmarkReport(FrozenModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     source_revision: SourceRevision
     experiment_configuration_path: str = Field(min_length=1)
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -435,6 +437,7 @@ def _load_replay_calibration(
     source: ReplayCalibrationSource,
     position_count: int,
     configuration: ChessExperimentConfiguration,
+    benchmark_states: Tensor,
 ) -> tuple[Tensor, ReplayCalibrationSourceIdentity]:
     if not source.path.is_file():
         raise ValueError(f'Calibration replay does not exist: {source.path}')
@@ -446,17 +449,22 @@ def _load_replay_calibration(
             raise ValueError(
                 f'Calibration requests {position_count} replay positions, but only {available_positions} exist.'
             )
-        selected_indices = np.sort(
-            np.random.default_rng(source.random_seed).choice(
-                available_positions,
-                size=position_count,
-                replace=False,
-            )
-        ).astype(np.int64)
-        encoded_states = store.gather_logical(selected_indices).encoded_state.copy()
+
+        def load_replay_states(indices: npt.NDArray[np.int64]) -> tuple[EncodedStates, npt.NDArray[np.int8]]:
+            encoded = store.gather_logical(indices).encoded_state.copy()
+            decoded = decode_states(encoded, CHESS_STATE_CONTRACT).astype(np.int8)
+            return encoded, decoded
+
+        sample = select_disjoint_replay_calibration(
+            available_positions,
+            position_count,
+            source.random_seed,
+            benchmark_states.numpy(),
+            load_replay_states,
+        )
     finally:
         store.close()
-    states = torch.from_numpy(decode_states(encoded_states, CHESS_STATE_CONTRACT)).to(torch.int8)
+    states = torch.from_numpy(sample.decoded_states)
     with source.path.open('rb') as replay_file:
         header_sha256 = hashlib.sha256(replay_file.read(65_536)).hexdigest()
     return states, ReplayCalibrationSourceIdentity(
@@ -467,8 +475,9 @@ def _load_replay_calibration(
         available_positions=available_positions,
         selected_positions=position_count,
         random_seed=source.random_seed,
-        selected_logical_indices_sha256=_array_sha256(selected_indices),
-        selected_packed_states_sha256=_array_sha256(encoded_states),
+        excluded_fidelity_overlap_positions=sample.excluded_overlap_count,
+        selected_logical_indices_sha256=_array_sha256(sample.logical_indices),
+        selected_packed_states_sha256=_array_sha256(sample.encoded_states),
         selected_states_sha256=_tensor_sha256(states),
     )
 
@@ -477,6 +486,7 @@ def _load_calibration(
     source: CalibrationSource,
     position_count: int,
     configuration: ChessExperimentConfiguration,
+    benchmark_states: Tensor,
 ) -> tuple[Tensor, CalibrationSourceIdentity]:
     match source:
         case EvaluationDatasetCalibrationSource(path=path):
@@ -486,7 +496,7 @@ def _load_calibration(
                 dataset=_load_dataset_identity(path, states, legal_action_mask)
             )
         case ReplayCalibrationSource():
-            return _load_replay_calibration(source, position_count, configuration)
+            return _load_replay_calibration(source, position_count, configuration, benchmark_states)
 
 
 def _resolve_checkpoint(arguments: BenchmarkArguments) -> _ResolvedCheckpoint:
@@ -686,12 +696,13 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         arguments.calibration_source,
         arguments.calibration_position_count,
         configuration,
+        benchmark_states,
     )
     overlap_count = _input_overlap_count(calibration_states, benchmark_states)
     if overlap_count:
         raise ValueError(
             f'Calibration contains {overlap_count} inputs from the 320-position fidelity workload; '
-            'select a disjoint calibration source or random seed.'
+            'select a calibration source that is disjoint from the benchmark dataset.'
         )
 
     arguments.artifact_directory.mkdir(parents=True, exist_ok=True)

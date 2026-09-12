@@ -34,8 +34,10 @@ representation digest is `aa77cda28749d276e28fb3081cd9db924224bd002d0207401c78a7
 The 516-position evaluation set is too small for representative INT8 calibration, so it is never used as the
 calibration source. The launch samples 32,000 distinct logical rows from the terminal v34 replay with seed
 `20260912`, without replacement. The report records the stopped replay's available row count, file size, header and
-layout hashes, selected logical-index hash, packed-state hash, and decoded-input hash. The calibration inputs therefore
-cannot include any row from the fixed evaluation artifact. Calibration refuses partial batches and never wraps rows.
+layout hashes, excluded fidelity-overlap count, selected logical-index hash, packed-state hash, and decoded-input hash.
+The sampler discards replay rows whose decoded representation matches any fidelity input and deterministically
+continues through its seeded no-replacement order until exactly 32,000 rows remain. Calibration refuses partial
+batches and never wraps rows.
 
 The default measurement performs 50 warm-up calls and 15 synchronized repetitions of 100 full batches. The report
 retains every repetition, median and p95 batch latency, and median positions/s. Fidelity uses legal-action-masked
