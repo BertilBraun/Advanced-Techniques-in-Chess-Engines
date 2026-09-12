@@ -15,7 +15,7 @@ Status: harness ready; measurement deferred until the live v34 run stops. This f
 manifest, an immutable benchmark dataset, and either an immutable calibration dataset or replay store. It verifies
 the checkpoint and immutable dataset hashes, then exports the shipped trimmed policy/WDL TorchScript model as
 separate fixed `[320, 52, 8, 8]` FP16 and FP32 ONNX graphs. NVIDIA ModelOpt 0.46.1 performs max calibration on the
-FP32 graph and inserts explicit Q/DQ nodes around convolution operations. It excludes the policy and WDL heads,
+FP32 graph and inserts explicit Q/DQ nodes around the final residual block's convolution operations. It excludes the policy and WDL heads,
 including their reductions, indexing, scatter, and outputs. TensorRT 10.14 builds the explicit-Q/DQ graph with FP16
 as the high-precision fallback.
 

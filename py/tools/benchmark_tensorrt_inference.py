@@ -62,6 +62,7 @@ TENSORRT_BUILDER_OPTIMIZATION_LEVEL = 3
 DEFAULT_CALIBRATION_POSITION_COUNT = 32_000
 DEFAULT_CALIBRATION_RANDOM_SEED = 20_260_912
 INT8_QUANTIZED_OPERATOR_TYPES = ('Conv',)
+INT8_QUANTIZED_NODE_PATTERNS = (r'.*/backbone\.13/.*Conv.*',)
 INT8_EXCLUDED_NODE_PATTERNS = (r'.*policy_head.*', r'.*value_head.*')
 
 
@@ -154,6 +155,7 @@ class CalibrationIdentity(FrozenModel):
     algorithm: Literal['modelopt_onnx_ptq_max'] = 'modelopt_onnx_ptq_max'
     tool_version: str = Field(min_length=1)
     quantized_operator_types: tuple[Literal['Conv'], ...] = INT8_QUANTIZED_OPERATOR_TYPES
+    quantized_node_patterns: tuple[str, ...] = INT8_QUANTIZED_NODE_PATTERNS
     excluded_node_patterns: tuple[str, ...] = INT8_EXCLUDED_NODE_PATTERNS
 
 
@@ -187,7 +189,7 @@ class CandidateMeasurement(FrozenModel):
 
 
 class TensorRtInferenceBenchmarkReport(FrozenModel):
-    schema_version: Literal[6] = 6
+    schema_version: Literal[7] = 7
     source_revision: SourceRevision
     experiment_configuration_path: str = Field(min_length=1)
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -543,6 +545,7 @@ def _quantize_onnx(
             calibration_method='max',
             calibration_eps=[f'cuda:{device.index}', 'cpu'],
             op_types_to_quantize=list(INT8_QUANTIZED_OPERATOR_TYPES),
+            nodes_to_quantize=list(INT8_QUANTIZED_NODE_PATTERNS),
             nodes_to_exclude=list(INT8_EXCLUDED_NODE_PATTERNS),
             high_precision_dtype='fp16',
             output_path=str(output_path),
