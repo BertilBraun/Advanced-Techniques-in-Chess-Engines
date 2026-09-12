@@ -8,12 +8,10 @@ Decide whether the measured TensorRT gain, QAT quality, and native-runtime readi
 
 ## In progress
 
-- [ ] **Measure native self-play throughput.** Compare TorchScript BF16 and TensorRT FP16 through the same production search path, configuration, batch behavior, and checkpoint. Record games, evaluated positions, searches, wall time, GPU utilization, and effective positions/s. Owner: native TensorRT worktree.
-- [ ] **Finish the scaled post-activation QAT replicate.** Complete seed 20260914 and its untouched-holdout, ONNX, TensorRT-fidelity, and throughput reports. Owner: INT8/QAT worktree.
-- [ ] **Validate repeated TensorRT refits.** Refit one engine across multiple distinct weight and Q/DQ-scale updates; require zero missing refit weights and compare against freshly built engines for outputs and throughput. Owner: native TensorRT worktree.
 - [ ] **Complete the native TensorRT backend.** Finish production batch handling, engine/context/buffer lifecycle, atomic refresh, error propagation, and native tests. Validate FP16 first, then a qualifying INT8 engine. Owner: native TensorRT worktree.
-- [ ] **Define the production QAT lifecycle.** Specify when normalization is folded/frozen, how activation scales are refreshed, what the training checkpoint owns, and how inference artifacts are exported and refitted without a second divergent model. Owner: INT8/QAT worktree.
-- [ ] **Finish optimizer calibration.** Record the short AdamW control and NAG learning-rate/gradient-clip probes. The proposed NAG recipe is momentum 0.9, Nesterov enabled, weight decay `1e-4`, and learning rate linearly decayed from 0.1 to 0.01 through generation 1,000. Resolve the gradient-norm cap. Owner: INT8/QAT worktree.
+- [ ] **Implement the resumable QAT phase boundary.** After 1,000 optimizer steps, save the pre-fold checkpoint, reconstruct the model in folded deployment topology, recalibrate, rebuild DDP and the optimizer, and persist the phase in checkpoint metadata. The optimizer reset is deliberate because folding replaces parameters. Owner: INT8/QAT and native TensorRT worktrees.
+- [ ] **Exercise the full lifecycle.** Run a bounded remote smoke through pre-fold training, the generation-2 fold/restart, INT8 publication/refit, native self-play, checkpoint refresh, and resume. Fetch its evidence before considering launch.
+- [ ] **Finish optimizer/config integration.** Use NAG with momentum 0.9, Nesterov enabled, weight decay `1e-4`, gradient-norm cap 5, and the selected learning-rate schedule. Resolve replay ratio, head width, and model progression from the measured actor speedup.
 
 ## Pending decisions
 
@@ -33,10 +31,16 @@ Decide whether the measured TensorRT gain, QAT quality, and native-runtime readi
 - [x] **Test shared residual scales.** The graph was runtime-faithful but slower than TensorRT FP16 at production size, so it is rejected.
 - [x] **Demonstrate TensorRT refit.** A seed-13 engine accepted all 160 refittable weights, including 56 Q/DQ constants, and refit to seed 14 in about 0.156 seconds with fresh-engine-equivalent outputs and throughput. Cached rebuilding took about 6.39 seconds versus about 67 seconds uncached.
 - [x] **Compile native TensorRT FP16 inference.** The first parity smoke matched all top actions on five legal positions; maximum legal-policy probability difference was 0.00601 and maximum WDL-component difference was 0.00171.
+- [x] **Measure native search throughput.** In the production 400-root, 64-visit, parallel-searches-4 loop, TorchScript BF16 sustained about 41.0k simulations/s and TensorRT FP16 about 77.3k simulations/s, a 1.885x gain at matched average batch occupancy.
+- [x] **Measure a native INT8 candidate.** The 14x160 early-fold QAT candidate sustained about 98.7k simulations/s versus 75.5k for its TensorRT FP16 form and 41.0k for the v34 TorchScript reference. The 2.405x cross-architecture number is promising but requires the lifecycle smoke and strength validation.
+- [x] **Validate native checkpoint refresh.** Two workers atomically refreshed generation 1784 to 1785 in about 0.22 seconds and continued at roughly 72.8k–73.4k simulations/s.
+- [x] **Validate repeated TensorRT refits.** All 160 weights, including 56 Q/DQ constants, remained refittable with zero missing weights; a representative refit took about 0.156 seconds and matched a fresh engine.
+- [x] **Complete the scaled post-activation replicate.** Two production-size seeds produced stable throughput and fidelity; the viable graph is about 2.24–2.27x faster than TorchScript in isolated inference.
 
 ## Known risks
 
 - The current C++ production path was TorchScript-only before this work; TensorRT lifecycle bugs may surface only under concurrent self-play and checkpoint refresh.
 - The 100k QAT evidence uses a 12x128 model. The 14x160 production-size evidence is currently a short 1k-step smoke, not a full trained model.
 - Late BatchNorm folding changes the quantization problem. Five thousand deployment-form recovery steps repaired most fold-specific loss; ten thousand steps regressed.
+- Folding replaces convolution modules and introduces bias parameters. Performing it inside live DDP would leave DDP and optimizer references stale, so it must be a persisted phase boundary with a rebuilt optimizer and an intentional momentum reset.
 - TensorRT FP16 is already a lower-risk fallback with essentially exact outputs and roughly 1.65x isolated-core throughput on v34.
