@@ -41,6 +41,11 @@ class InferenceMemoryFormat(str, Enum):
     CHANNELS_LAST = 'channels_last'
 
 
+class InferenceBackend(str, Enum):
+    TORCHSCRIPT = 'torchscript'
+    TENSORRT = 'tensorrt'
+
+
 class DisabledForcedPlayoutConfiguration(FrozenModel):
     kind: Literal['disabled'] = 'disabled'
 
@@ -132,6 +137,7 @@ class BatchedInferenceParams(FrozenModel):
     inference_workers: int = Field(gt=0)
     inference_batch_size: int = Field(gt=0)
     outstanding_batches_per_worker: int = Field(ge=1, le=2)
+    backend: InferenceBackend = InferenceBackend.TORCHSCRIPT
     sdpa_backend: SdpaBackend = SdpaBackend.AUTOMATIC
     precision: InferencePrecision = InferencePrecision.BFLOAT16
     memory_format: InferenceMemoryFormat = InferenceMemoryFormat.CONTIGUOUS

@@ -74,13 +74,20 @@ void bind_search(py::module_ &module) {
         .def_readonly("value_discount_per_ply", &TreeSearchParameters::value_discount_per_ply)
         .def_readonly("virtual_loss_weight", &TreeSearchParameters::virtual_loss_weight);
 
+    py::enum_<InferenceBackend>(module, "InferenceBackend")
+        .value("TORCHSCRIPT", InferenceBackend::TorchScript)
+        .value("TENSORRT", InferenceBackend::TensorRt);
+
     py::class_<InferenceConfiguration>(module, "InferenceConfiguration")
-        .def(py::init<int, std::string, InferenceDevice, InferenceExecutionOptions>(),
+        .def(py::init<int, std::string, InferenceDevice, InferenceExecutionOptions,
+                      InferenceBackend>(),
              py::arg("device_id"), py::arg("model_path"), py::arg("device") = InferenceDevice::Auto,
-             py::arg("execution_options") = InferenceExecutionOptions{})
+             py::arg("execution_options") = InferenceExecutionOptions{},
+             py::arg("backend") = InferenceBackend::TorchScript)
         .def_readwrite("device_id", &InferenceConfiguration::device_id)
         .def_readwrite("model_path", &InferenceConfiguration::model_path)
         .def_readwrite("device", &InferenceConfiguration::device)
+        .def_readwrite("backend", &InferenceConfiguration::backend)
         .def_readwrite("execution_options", &InferenceConfiguration::execution_options)
         .def_property(
             "sdpa_backend",
@@ -117,8 +124,7 @@ void bind_search(py::module_ &module) {
         .def_readonly("inferenceNanoseconds", &InferenceStatistics::inferenceNanoseconds)
         .def_readonly("workerUtilization", &InferenceStatistics::workerUtilization);
 
-    module.attr("SEARCH_PHASE_TIMING_ENABLED") =
-        static_cast<bool>(ALPHAZERO_SEARCH_PHASE_TIMING);
+    module.attr("SEARCH_PHASE_TIMING_ENABLED") = static_cast<bool>(ALPHAZERO_SEARCH_PHASE_TIMING);
 
     py::class_<WdlPrediction>(module, "WdlPrediction")
         .def_readonly("win", &WdlPrediction::win)

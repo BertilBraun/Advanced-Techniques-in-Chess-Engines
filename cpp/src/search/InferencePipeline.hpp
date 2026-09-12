@@ -3,6 +3,7 @@
 #include "common.hpp"
 #include "games/GameConcepts.hpp"
 #include "search/InferenceTypes.hpp"
+#include "search/TensorRtInferenceModel.hpp"
 #include "util/Timing.hpp"
 #include "util/py.hpp"
 
@@ -13,6 +14,7 @@
 #include <ranges>
 #include <stdexcept>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #ifdef USE_CUDA
@@ -58,7 +60,9 @@ template <SearchGame Game>
 processInferencePosition(const float *policy, const float *outcome,
                          const typename Game::State &position);
 
-using PreparedInferenceModel = std::unique_ptr<torch::jit::script::Module>;
+using TorchScriptInferenceModel = std::unique_ptr<torch::jit::script::Module>;
+using TensorRtModel = std::unique_ptr<TensorRtInferenceModel>;
+using PreparedInferenceModel = std::variant<TorchScriptInferenceModel, TensorRtModel>;
 
 // Name and shape of every parameter and buffer of the loaded model. Freezing folds them into
 // constants, so the refresh contract is checked against this signature instead.
@@ -80,8 +84,8 @@ class InferenceRunner {
 public:
     InferenceRunner(const std::string &modelPath, InferenceDevice device, int deviceId,
                     size_t maximumBatchSize, bool useDedicatedCudaStream,
-                    InferenceDimensions dimensions,
-                    InferenceExecutionOptions executionOptions = {});
+                    InferenceDimensions dimensions, InferenceExecutionOptions executionOptions = {},
+                    InferenceBackend backend = InferenceBackend::TorchScript);
 
     [[nodiscard]] torch::Tensor createInputBuffer() const;
     [[nodiscard]] InferenceOutput createOutputBuffer() const;
@@ -121,6 +125,8 @@ private:
                      InferenceCompletion &completion);
 
     const torch::Device m_device;
+    const InferenceBackend m_backend;
+    const int m_deviceId;
     const InferenceExecutionOptions m_executionOptions;
     const torch::Dtype m_torchDtype;
     const at::MemoryFormat m_memoryFormat;
@@ -158,7 +164,8 @@ public:
     InferencePipeline(const std::string &modelPath, InferenceDevice device, int deviceId,
                       size_t maximumBatchSize, size_t slotCount, bool useDedicatedCudaStream,
                       InferenceDimensions dimensions,
-                      InferenceExecutionOptions executionOptions = {});
+                      InferenceExecutionOptions executionOptions = {},
+                      InferenceBackend backend = InferenceBackend::TorchScript);
     ~InferencePipeline();
 
     InferencePipeline(const InferencePipeline &) = delete;

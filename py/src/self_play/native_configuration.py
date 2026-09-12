@@ -4,12 +4,14 @@ from typing import TYPE_CHECKING
 
 from src.self_play.configuration import (
     BatchedInferenceParams,
+    InferenceBackend,
     InferenceMemoryFormat,
     InferencePrecision,
     SdpaBackend,
 )
 
 if TYPE_CHECKING:
+    from AlphaZeroCpp import InferenceBackend as NativeInferenceBackend
     from AlphaZeroCpp import InferenceExecutionOptions as NativeInferenceExecutionOptions
     from AlphaZeroCpp import InferenceMemoryFormat as NativeInferenceMemoryFormat
     from AlphaZeroCpp import InferencePrecision as NativeInferencePrecision
@@ -30,6 +32,16 @@ def native_sdpa_backend(backend: SdpaBackend) -> NativeSdpaBackend:
             return NativeSdpaBackend.MATH
         case SdpaBackend.CUDNN:
             return NativeSdpaBackend.CUDNN
+
+
+def native_inference_backend(backend: InferenceBackend) -> NativeInferenceBackend:
+    from AlphaZeroCpp import InferenceBackend as NativeInferenceBackend
+
+    match backend:
+        case InferenceBackend.TORCHSCRIPT:
+            return NativeInferenceBackend.TORCHSCRIPT
+        case InferenceBackend.TENSORRT:
+            return NativeInferenceBackend.TENSORRT
 
 
 def native_inference_precision(precision: InferencePrecision) -> NativeInferencePrecision:

@@ -22,9 +22,10 @@ public:
                       const int deviceId, const BatchedInferenceParameters inferenceParameters,
                       const BatchedSearchParameters searchParameters,
                       const std::uint64_t modelGeneration, const bool resetTreesOnRefresh = true,
-                      const InferenceExecutionOptions executionOptions = {})
+                      const InferenceExecutionOptions executionOptions = {},
+                      const InferenceBackend backend = InferenceBackend::TorchScript)
         : m_executor(modelPath, device, deviceId, inferenceParameters, searchParameters,
-                     executionOptions),
+                     executionOptions, backend),
           m_searchParameters(searchParameters), m_modelGeneration(modelGeneration),
           m_resetTreesOnRefresh(resetTreesOnRefresh),
           m_valueDiscountPerPly(searchParameters.tree_search.value_discount_per_ply) {}

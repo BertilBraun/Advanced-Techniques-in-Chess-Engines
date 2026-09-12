@@ -34,7 +34,8 @@ public:
     BatchedSearchExecutor(const std::string &modelPath, const InferenceDevice device,
                           const int deviceId, const BatchedInferenceParameters inferenceParameters,
                           const BatchedSearchParameters searchParameters,
-                          const InferenceExecutionOptions executionOptions)
+                          const InferenceExecutionOptions executionOptions,
+                          const InferenceBackend backend = InferenceBackend::TorchScript)
         : m_inferenceParameters(inferenceParameters), m_searchParameters(searchParameters),
           m_pending(inferenceParameters.workers), m_randomEngine(std::random_device{}()),
           m_statistics{.modelBatchSizeHistogram =
@@ -44,7 +45,7 @@ public:
             m_workers[workerIndex] = std::make_unique<InferencePipeline>(
                 modelPath, device, deviceId, inferenceParameters.batch_size,
                 std::max<std::size_t>(2, inferenceParameters.outstanding_batches_per_worker), true,
-                Game::Encoding::inferenceDimensions(), executionOptions);
+                Game::Encoding::inferenceDimensions(), executionOptions, backend);
         }
     }
 

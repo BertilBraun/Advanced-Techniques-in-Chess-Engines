@@ -3,6 +3,7 @@ project(AlphaZeroSelfPlay LANGUAGES CXX)
 
 option(BUILD_TESTING "Build native C++ tests" OFF)
 option(BUILD_BENCHMARKS "Build native C++ benchmarks" OFF)
+option(ENABLE_TENSORRT "Enable the TensorRT inference backend" OFF)
 include(CTest)
 
 # --- Export compile commands for Clang-Tidy ---
@@ -74,6 +75,14 @@ check_language(CUDA)
 if (CMAKE_CUDA_COMPILER)
     enable_language(CUDA)
     add_definitions(-DUSE_CUDA)
+endif ()
+
+if (ENABLE_TENSORRT)
+    if (NOT CMAKE_CUDA_COMPILER)
+        message(FATAL_ERROR "TensorRT inference requires CUDA")
+    endif ()
+    find_path(TENSORRT_INCLUDE_DIR NvInfer.h REQUIRED)
+    find_library(TENSORRT_LIBRARY nvinfer REQUIRED)
 endif ()
 
 # --- Set C++ and CUDA standards to C++20 ---
@@ -205,6 +214,11 @@ endif ()
 target_precompile_headers(AlphaZeroCpp PRIVATE src/common.hpp)
 
 target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
+if (ENABLE_TENSORRT)
+    target_include_directories(AlphaZeroCpp PRIVATE ${TENSORRT_INCLUDE_DIR})
+    target_compile_definitions(AlphaZeroCpp PRIVATE ALPHAZERO_USE_TENSORRT)
+    target_link_libraries(AlphaZeroCpp PRIVATE ${TENSORRT_LIBRARY})
+endif ()
 
 if (BUILD_TESTING)
     add_executable(
@@ -227,6 +241,7 @@ if (BUILD_TESTING)
             src/games/chess/encoding/ChessPolicyEncoding.cpp
             src/games/chess/presentation/ChessSearchPresentation.cpp
             src/search/InferencePipeline.cpp
+            src/search/TensorRtInferenceModel.cpp
             "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
             "${stockfish_SOURCE_DIR}/src/memory.cpp"
             "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -236,6 +251,11 @@ if (BUILD_TESTING)
     target_include_directories(NativeTests PRIVATE src test)
     target_compile_definitions(NativeTests PRIVATE SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(NativeTests PRIVATE "${TORCH_LIBRARIES}" nlohmann_json::nlohmann_json)
+    if (ENABLE_TENSORRT)
+        target_include_directories(NativeTests PRIVATE ${TENSORRT_INCLUDE_DIR})
+        target_compile_definitions(NativeTests PRIVATE ALPHAZERO_USE_TENSORRT)
+        target_link_libraries(NativeTests PRIVATE ${TENSORRT_LIBRARY})
+    endif ()
     add_test(NAME NativeTests COMMAND NativeTests)
 
     add_executable(
@@ -263,6 +283,7 @@ add_executable(
         src/games/chess/encoding/ChessEncoding.cpp
         src/games/chess/encoding/ChessPolicyEncoding.cpp
         src/search/InferencePipeline.cpp
+        src/search/TensorRtInferenceModel.cpp
         src/games/chess/implementation/ChessAction.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
@@ -272,6 +293,11 @@ add_executable(
 )
 target_include_directories(InferenceBenchmark PRIVATE src)
 target_link_libraries(InferenceBenchmark PRIVATE "${TORCH_LIBRARIES}" nlohmann_json::nlohmann_json)
+if (ENABLE_TENSORRT)
+    target_include_directories(InferenceBenchmark PRIVATE ${TENSORRT_INCLUDE_DIR})
+    target_compile_definitions(InferenceBenchmark PRIVATE ALPHAZERO_USE_TENSORRT)
+    target_link_libraries(InferenceBenchmark PRIVATE ${TENSORRT_LIBRARY})
+endif ()
 endif ()
 
 set_target_properties(AlphaZeroCpp PROPERTIES

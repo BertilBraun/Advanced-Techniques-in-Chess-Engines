@@ -42,6 +42,7 @@ template <SearchGame Game> struct SearchInferenceResult {
 };
 
 enum class InferenceDevice { Auto, Cpu, Cuda };
+enum class InferenceBackend { TorchScript, TensorRt };
 enum class SdpaBackend { Automatic, Flash, MemoryEfficient, Math, CuDNN };
 
 // CUDA inference precision. CPU inference stays float32 whatever is requested here.

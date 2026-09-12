@@ -316,13 +316,13 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
                                  const int deviceId, const size_t maximumBatchSize,
                                  const bool useDedicatedCudaStream,
                                  const InferenceDimensions dimensions,
-                                 const InferenceExecutionOptions executionOptions)
-    : m_device(resolveDevice(device, deviceId)), m_executionOptions(executionOptions),
+                                 const InferenceExecutionOptions executionOptions,
+                                 const InferenceBackend backend)
+    : m_device(resolveDevice(device, deviceId)), m_backend(backend), m_deviceId(deviceId),
+      m_executionOptions(executionOptions),
       m_torchDtype(resolveDtype(m_device, executionOptions.precision)),
       m_memoryFormat(resolveMemoryFormat(m_device, executionOptions.memory_format)),
-      m_maximumBatchSize(maximumBatchSize), m_dimensions(dimensions),
-      m_model(std::make_unique<torch::jit::script::Module>(
-          loadInferenceModel(modelPath, m_device, m_torchDtype, m_memoryFormat))) {
+      m_maximumBatchSize(maximumBatchSize), m_dimensions(dimensions) {
     configureExecution(m_device, executionOptions);
     if (maximumBatchSize == 0) {
         throw std::invalid_argument("Maximum inference batch size must be positive");
@@ -330,6 +330,9 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
     if (dimensions.channels == 0 || dimensions.rows == 0 || dimensions.columns == 0 ||
         dimensions.actions == 0 || dimensions.outcomes == 0) {
         throw std::invalid_argument("Inference dimensions must be positive");
+    }
+    if (m_backend == InferenceBackend::TensorRt && !m_device.is_cuda()) {
+        throw std::invalid_argument("TensorRT inference requires a CUDA device");
     }
 #ifdef USE_CUDA
     if (m_device.is_cuda() && useDedicatedCudaStream) {
@@ -340,9 +343,17 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
         throw std::runtime_error("Dedicated CUDA streams require a CUDA-enabled native build");
     }
 #endif
-    m_parameterSignature = tensorSignature(m_model->named_parameters());
-    m_bufferSignature = tensorSignature(m_model->named_buffers());
-    *m_model = torch::jit::freeze(*m_model);
+    if (m_backend == InferenceBackend::TorchScript) {
+        TorchScriptInferenceModel model = std::make_unique<torch::jit::script::Module>(
+            loadInferenceModel(modelPath, m_device, m_torchDtype, m_memoryFormat));
+        m_parameterSignature = tensorSignature(model->named_parameters());
+        m_bufferSignature = tensorSignature(model->named_buffers());
+        *model = torch::jit::freeze(*model);
+        m_model = std::move(model);
+    } else {
+        m_model = std::make_unique<TensorRtInferenceModel>(modelPath, deviceId, maximumBatchSize,
+                                                           dimensions);
+    }
     m_deviceInput = createDeviceInputBuffer();
     m_deviceTypedInput = torch::empty(
         {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.channels),
@@ -373,11 +384,16 @@ size_t InferenceRunner::capturedBatchSize(const size_t batchSize) const noexcept
 }
 
 void InferenceRunner::runModelToStaging(const size_t batchSize) {
+    if (m_backend == InferenceBackend::TensorRt) {
+        std::get<TensorRtModel>(m_model)->forward(m_deviceInput, batchSize, m_deviceOutputStaging);
+        return;
+    }
     const std::int64_t rows = tensorSize(batchSize);
     const torch::Tensor typedInput = m_deviceTypedInput.narrow(0, 0, rows);
     typedInput.copy_(m_deviceInput.narrow(0, 0, rows));
     m_modelInputs[0] = typedInput;
-    const auto outputTuple = m_model->forward(m_modelInputs).toTuple();
+    const auto outputTuple =
+        std::get<TorchScriptInferenceModel>(m_model)->forward(m_modelInputs).toTuple();
     if (outputTuple->elements().size() != 2) {
         throw std::runtime_error("Inference model must return policy and WDL tensors");
     }
@@ -386,10 +402,16 @@ void InferenceRunner::runModelToStaging(const size_t batchSize) {
 }
 
 void InferenceRunner::runEagerModel(const size_t batchSize, InferenceOutput &output) {
+    if (m_backend == InferenceBackend::TensorRt) {
+        runModelToStaging(batchSize);
+        copyStagedOutput(batchSize, output);
+        return;
+    }
     const torch::Tensor typedInput = m_deviceTypedInput.narrow(0, 0, tensorSize(batchSize));
     typedInput.copy_(m_deviceInput.narrow(0, 0, tensorSize(batchSize)));
     m_modelInputs[0] = typedInput;
-    const torch::jit::IValue modelOutput = m_model->forward(m_modelInputs);
+    const torch::jit::IValue modelOutput =
+        std::get<TorchScriptInferenceModel>(m_model)->forward(m_modelInputs);
     const auto outputTuple = modelOutput.toTuple();
     if (outputTuple->elements().size() != 2) {
         throw std::runtime_error("Inference model must return policy and WDL tensors");
@@ -429,7 +451,8 @@ void InferenceRunner::captureBatchGraphs() {
 
 void InferenceRunner::captureBatchGraphsSerialized() {
 #ifdef USE_CUDA
-    if (!m_device.is_cuda() || !m_cudaStream.has_value()) {
+    if (m_backend == InferenceBackend::TensorRt || !m_device.is_cuda() ||
+        !m_cudaStream.has_value()) {
         releaseBatchGraphs();
         return;
     }
@@ -610,19 +633,24 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size
 }
 
 PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
+    if (m_backend == InferenceBackend::TensorRt) {
+        return TensorRtModel(std::make_unique<TensorRtInferenceModel>(
+            modelPath, m_deviceId, m_maximumBatchSize, m_dimensions));
+    }
     const torch::Tensor validationInput = torch::zeros(
         {1, tensorSize(m_dimensions.channels), tensorSize(m_dimensions.rows),
          tensorSize(m_dimensions.columns)},
         torch::TensorOptions().device(m_device).dtype(m_torchDtype).memory_format(m_memoryFormat));
-    return prepareInferenceModelUpdate(
+    return TorchScriptInferenceModel(prepareInferenceModelUpdate(
         m_parameterSignature, m_bufferSignature, modelPath, m_device, m_torchDtype, m_memoryFormat,
-        validationInput, tensorSize(m_dimensions.actions), tensorSize(m_dimensions.outcomes));
+        validationInput, tensorSize(m_dimensions.actions), tensorSize(m_dimensions.outcomes)));
 }
 
 #ifdef USE_CUDA
 bool InferenceRunner::adoptWeightsInPlace(const torch::jit::script::Module &updatedModel) noexcept {
     try {
-        const std::vector<torch::Tensor> current = frozenConstantTensors(*m_model);
+        const std::vector<torch::Tensor> current =
+            frozenConstantTensors(*std::get<TorchScriptInferenceModel>(m_model));
         const std::vector<torch::Tensor> updated = frozenConstantTensors(updatedModel);
         if (!interchangeableConstants(current, updated)) {
             return false;
@@ -644,8 +672,15 @@ bool InferenceRunner::adoptWeightsInPlace(const torch::jit::script::Module &upda
 #endif
 
 void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
-    assert(m_model != nullptr);
-    assert(updatedModel != nullptr);
+    if (m_backend == InferenceBackend::TensorRt) {
+        assert(std::get<TensorRtModel>(updatedModel) != nullptr);
+        m_model.swap(updatedModel);
+        return;
+    }
+    TorchScriptInferenceModel &current = std::get<TorchScriptInferenceModel>(m_model);
+    TorchScriptInferenceModel &updated = std::get<TorchScriptInferenceModel>(updatedModel);
+    assert(current != nullptr);
+    assert(updated != nullptr);
 #ifdef USE_CUDA
     // Swap and recapture under the replay lock: the graphs that still hold the private pool replay
     // the previous weights, so nothing may replay them between the swap and their replacement.
@@ -654,13 +689,13 @@ void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) no
     // at each captured shape makes the JIT compile a specialisation per shape whose device code
     // the process never gets back. Overwriting the weights the live graphs already point at keeps
     // both the graphs and the executor, so nothing is compiled and nothing is stranded.
-    if (!m_batchGraphs.empty() && adoptWeightsInPlace(*updatedModel)) {
+    if (!m_batchGraphs.empty() && adoptWeightsInPlace(*updated)) {
         return;
     }
-    m_model.swap(updatedModel);
+    current.swap(updated);
     captureBatchGraphsSerialized();
 #else
-    m_model.swap(updatedModel);
+    current.swap(updated);
 #endif
 }
 
@@ -668,9 +703,10 @@ InferencePipeline::InferencePipeline(const std::string &modelPath, const Inferen
                                      const int deviceId, const size_t maximumBatchSize,
                                      const size_t slotCount, const bool useDedicatedCudaStream,
                                      const InferenceDimensions dimensions,
-                                     const InferenceExecutionOptions executionOptions)
+                                     const InferenceExecutionOptions executionOptions,
+                                     const InferenceBackend backend)
     : m_runner(modelPath, device, deviceId, maximumBatchSize, useDedicatedCudaStream, dimensions,
-               executionOptions) {
+               executionOptions, backend) {
     if (slotCount < 2) {
         throw std::invalid_argument("Inference pipeline requires at least two slots");
     }
