@@ -104,7 +104,7 @@ def resolved_inference_model_path(
                 text=True,
                 cwd=publisher.parent.parent,
             )
-            payload = json.loads(completed.stdout)
+            payload = json.loads(completed.stdout.splitlines()[-1])
             log(
                 f'Published TensorRT inference artifact for {model_path.name} in '
                 f'{time.perf_counter() - started_at:.3f}s.'
