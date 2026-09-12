@@ -1181,16 +1181,24 @@ def parse_arguments() -> Arguments:
         namespace.fixed_trunk_activation_amax <= 0.0 or not ScreenCell(namespace.cell).uses_qat
     ):
         raise ValueError('Fixed trunk activation amax must be positive and is defined only for QAT cells.')
+    fold_cell = ScreenCell(namespace.cell)
+    fold_cell_supports_training = fold_cell in (
+        ScreenCell.POST_QAT,
+        ScreenCell.POST_SHARED_QAT,
+        ScreenCell.POST_SCALED_QAT,
+    )
+    fold_cell_requires_resume = fold_cell != ScreenCell.POST_SHARED_QAT
     if namespace.fold_before_training and (
-        namespace.resume_state is None
-        or ScreenCell(namespace.cell) not in (ScreenCell.POST_QAT, ScreenCell.POST_SCALED_QAT)
+        (fold_cell_requires_resume and namespace.resume_state is None)
+        or not fold_cell_supports_training
         or not namespace.fold_post_activation_batch_norm
     ):
-        raise ValueError('Pretraining folding requires a resumed post-activation QAT cell with deployment folding.')
+        raise ValueError('Pretraining folding requires a supported post-activation QAT cell with deployment folding.')
     if namespace.final_normalization and not ScreenCell(namespace.cell).uses_quantization_friendly_trunk:
         raise ValueError('Final normalization is defined only for the scaled pre-activation trunk.')
     if namespace.fold_post_activation_batch_norm and ScreenCell(namespace.cell) not in (
         ScreenCell.POST_QAT,
+        ScreenCell.POST_SHARED_QAT,
         ScreenCell.POST_SCALED_QAT,
     ):
         raise ValueError('Batch-normalization folding is defined only for post-activation QAT cells.')
