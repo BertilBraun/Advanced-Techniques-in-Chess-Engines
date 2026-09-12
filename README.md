@@ -12,7 +12,7 @@ rounded training-node cost of **$52**.
 | ---: | --- | ---: | ---: |
 | 64 | Stockfish 13 at 5,000 nodes | 56.50% | 2,265 [2,236, 2,297] |
 | 10,000 | Stockfish 13 at 100,000 nodes | 41.00% | 3,037 [3,012, 3,061] |
-| 80,000 | Stockfish 13 at 50,000 nodes | 77.38% | 3,174 [3,144, 3,206] |
+| 80,000 | Stockfish 13 at 100,000 nodes | 59.50% | 3,167 [3,143, 3,193] |
 
 Each row is a 400-game match over 200 balanced opening pairs. The numbers use this project's historical
 SSDF-derived Stockfish-node calibration; they are benchmark Elo rather than FIDE ratings. The complete benchmark
@@ -26,16 +26,16 @@ Stockfish-node anchors and recommends language for public reporting.
 
 ## Superhuman Playing Strength
 
-At 80,000 MCTS searches per move, the saved generation-1465 model scored **77.375%** against Stockfish 13 limited
-to 50,000 nodes per move: 252 wins, 115 draws, and 33 losses across 400 games. This gives **3,174 SSDF-calibrated
-benchmark Elo [3,144, 3,206]**. The scale comes from
+At 80,000 MCTS searches per move, the saved generation-1465 model scored **59.50%** against Stockfish 13 limited
+to 100,000 nodes per move: 143 wins, 190 draws, and 67 losses across 400 games. This gives **3,167 SSDF-calibrated
+benchmark Elo [3,143, 3,193]**. The scale comes from
 [Marco Meloni's Stockfish 13 node-strength curve](https://www.melonimarco.it/en/2021/03/08/stockfish-and-lc0-test-at-different-number-of-nodes/),
 which anchors fixed-node Stockfish 13 through Fruit 2.2.1 to the historical SSDF scale. Under that calibration, the
 result is clear evidence of superhuman playing strength; the number is a benchmark rating, not a FIDE rating.
 
-The batched evaluation delivered an amortized **4.62 seconds per model move on one RTX 4070 SUPER**, or about five
-seconds per move. A newer 400-game evaluation against Stockfish 13 at 100,000 nodes per move is currently running;
-its verified result will replace the 50,000-node measurement where appropriate.
+An isolated benchmark of the same search configuration across 400 positions delivered an amortized mean of
+**5.31 seconds per model move on one RTX 4070 SUPER** (5.19-second median), or about five seconds per move. This is
+saturated batched throughput with 50 concurrent positions per GPU, rather than single-game response latency.
 
 The project also compressed v34 into a 474,069-parameter network. The student is **13.20x smaller** and trails its
 teacher by 166 Elo under the measured, saturated equal-time serving workload. Its model weights, manifests, raw

@@ -19,7 +19,8 @@ training-checkpoint cost rather than a complete project invoice.
 | --- | --- | --- |
 | v34 checkpoint: generation 1465, 14x160, 6,256,365 inference parameters | **Verified** | Frozen teacher manifest in the [compression benchmark](benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md) |
 | 3,037 benchmark Elo [3,012, 3,061] at 10,000 searches | **Verified** | [400-game terminal benchmark](benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md); `parallel_searches: 4` |
-| 3,174 benchmark Elo [3,144, 3,206] at 80,000 searches | **Verified** | [400-game terminal benchmark](benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md); `parallel_searches: 8` |
+| 3,167 benchmark Elo [3,143, 3,193] at 80,000 searches | **Verified** | [400-game terminal benchmark](benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md); `parallel_searches: 8` |
+| 80,000-search batched throughput: 5.31 seconds/move mean | **Verified** | 400 isolated positions across 8x RTX 4070 SUPER; 5.19-second median |
 | 474,069-parameter student is 13.20x smaller | **Verified** | Published model and hashes in the [compression benchmark](benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md) |
 | Student trails by 166.2 Elo under saturated equal expected time | **Verified** | 400 games, 64/186 searches, interval [-200.2, -136.0] |
 | Student is superhuman at large search | **Unmeasured hypothesis** | Requires its own calibrated high-search Stockfish match |

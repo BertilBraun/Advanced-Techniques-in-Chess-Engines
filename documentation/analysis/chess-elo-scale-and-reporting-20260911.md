@@ -1,21 +1,21 @@
 # What the v34 Elo numbers mean
 
 Date: 2026-09-11. This note audits the rating scale behind the v34 terminal results and fixes language for public
-reporting. The conclusion is simple: **3037 and 3174 are valid results on this project's Stockfish-node ladder, but
+reporting. The conclusion is simple: **3037 and 3167 are valid results on this project's Stockfish-node ladder, but
 they are not FIDE ratings.** The scale was designed as a historical human-strength proxy, so it supports a qualified
 "superhuman" claim. It does not support a precise conversion to the modern human pool.
 
 ## Recommended public statement
 
-> At the saved three-day checkpoint, v34 reached **3037 benchmark Elo** at 10,000 searches per move and **3174
+> At the saved three-day checkpoint, v34 reached **3037 benchmark Elo** at 10,000 searches per move and **3167
 > benchmark Elo** at 80,000 searches per move on our Stockfish 13 fixed-node ladder. The 95% paired-bootstrap
-> sampling intervals are **3012--3061** and **3144--3206**, conditional on the ladder's historical SSDF-derived
+> sampling intervals are **3012--3061** and **3143--3193**, conditional on the ladder's historical SSDF-derived
 > anchors. This is strong evidence of superhuman chess strength under that calibration, but the figures are not FIDE
 > ratings and should not be compared point-for-point with human or other engine lists.
 
 For a short headline, use **"superhuman strength for about $50 of training compute"**, followed nearby by the full
 benchmark sentence above. Use **"strong-engine territory"** only with the qualification that current full-strength
-engines remain far ahead. Avoid "3037 FIDE Elo", "3174 human Elo", and "approaching state-of-the-art engine level".
+engines remain far ahead. Avoid "3037 FIDE Elo", "3167 human Elo", and "approaching state-of-the-art engine level".
 
 ## What was measured
 
@@ -29,15 +29,17 @@ per move.
 | v34 budget | Stockfish 13 opponent | W/D/L | Score | Score 95% CI | Ladder Elo | Conditional 95% CI |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 10,000 searches | 100,000 nodes, anchor 3100 | 67/194/139 | 0.4100 | 0.3763--0.4438 | 3037 | 3012--3061 |
-| 80,000 searches | 50,000 nodes, anchor 2960 | 252/115/33 | 0.7738 | 0.7425--0.8050 | 3174 | 3144--3206 |
+| 80,000 searches | 100,000 nodes, anchor 3100 | 143/190/67 | 0.5950 | 0.5612--0.6313 | 3167 | 3143--3193 |
+| 80,000 searches, earlier match | 50,000 nodes, anchor 2960 | 252/115/33 | 0.7738 | 0.7425--0.8050 | 3174 | 3144--3206 |
 
 The result uses the ordinary Elo performance transform
 
 `rating = opponent_anchor + 400 * log10(score / (1 - score))`.
 
 The intervals resample paired openings and then apply the same transform. They describe game-sampling uncertainty
-against a fixed opponent anchor. They do **not** include uncertainty in the anchor scale. The 80,000-search opponent
-was also weaker than ideal for precision: a 77.4% score is farther from the most informative 50% region.
+against a fixed opponent anchor. They do **not** include uncertainty in the anchor scale. The first 80,000-search
+opponent was weaker than ideal for precision: a 77.4% score is farther from the most informative 50% region. The
+later 100,000-node confirmation produced the headline estimate from a 59.5% score.
 
 The terminal evaluation archive was fetched to
 `.codex-diagnostics/v34-terminal-g1465-evaluations-20260911T143000Z`; all 79 entries in its `SHA256SUMS` manifest
@@ -99,7 +101,7 @@ rating software can also change measured differences rather than merely shift th
 
 | List | Population and protocol | Relevant published number | What it can establish |
 | --- | --- | ---: | --- |
-| This project | v34 against one-thread Stockfish 13 at fixed nodes per move; paired four-move openings | 3037 at 10k; 3174 at 80k | v34's performance against the specified node-limited opponents, on Meloni's offset |
+| This project | v34 against one-thread Stockfish 13 at fixed nodes per move; paired four-move openings | 3037 at 10k; 3167 at 80k | v34's performance against the specified node-limited opponents, on Meloni's offset |
 | SSDF | Engine/hardware pairs; 40 moves/120 min; mixed historical hardware | Stockfish 13: 3569; leader: 3586 | Relative strength under SSDF conditions, with a historical and approximate human bridge |
 | CCRL 40/15 | Engines; equivalent to 40 moves/15 min on i7-4770K; generic book; tablebases; BayesElo | Stockfish 13: 3572 (1 CPU) or 3613 (4 CPU); Stockfish 18: 3649 | Relative engine strength under CCRL conditions |
 | CEGT 40/20 | Engines; current list described by CEGT as 10 min + 5 sec; one-CPU entry cited here | Stockfish 18: 3612 in February 2026 | Relative engine strength under CEGT conditions |
@@ -124,7 +126,7 @@ scale, but sharing the formula does not connect its origin to an engine pool
 ([FIDE rating regulations](https://handbook.fide.com/chapter/B02RBRegulations2024)). Online chess-site ratings are
 disconnected pools as well and need their own empirical bridge.
 
-## Can 3037 or 3174 be converted to human Elo?
+## Can 3037 or 3167 be converted to human Elo?
 
 There is no defensible statistical conversion interval from the available evidence. A valid conversion would need
 enough games between representative modern humans and the evaluated v34 configuration, at a defined human time
@@ -132,7 +134,7 @@ control and without selection effects. This project has none. The old SSDF bridg
 but no current estimate of its systematic error at 3000+ and no basis for turning that error into a confidence
 interval.
 
-The central values are 214 and 351 points above the current top FIDE standard rating. That arithmetic describes the
+The central values are 214 and 344 points above the current top FIDE standard rating. That arithmetic describes the
 two displayed scales; it is not an expected-score prediction against Carlsen. Even subtracting SSDF's historical
 100-point correction would leave both central estimates above 2823, but that correction was an offset decision in
 2000, not a bound on present error.
@@ -141,7 +143,7 @@ The responsible human comparison is therefore qualitative:
 
 - **Defensible:** "above the top-human region on a historical SSDF-derived calibration"; "strong evidence of
   superhuman strength under this benchmark's calibration."
-- **Too strong without human games:** "3037/3174 FIDE Elo"; "would score as a 3037/3174 human"; "proved stronger
+- **Too strong without human games:** "3037/3167 FIDE Elo"; "would score as a 3037/3167 human"; "proved stronger
   than every human."
 
 If a numeric human claim becomes important, the measurement should be designed directly: pre-register a time

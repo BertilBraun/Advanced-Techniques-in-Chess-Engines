@@ -45,7 +45,7 @@ if (!root) throw new Error("App container is missing.");
 const baselineRunRows: readonly BaselineRunRow[] = [
   { duration: "64 searches", elo: "2,265 [2,236–2,297]", evidence: "56.50% vs Stockfish 13 at 5k nodes" },
   { duration: "10,000 searches", elo: "3,037 [3,012–3,061]", evidence: "41.00% vs Stockfish 13 at 100k nodes" },
-  { duration: "80,000 searches", elo: "3,174 [3,144–3,206]", evidence: "77.38% vs Stockfish 13 at 50k nodes" },
+  { duration: "80,000 searches", elo: "3,167 [3,143–3,193]", evidence: "59.50% vs Stockfish 13 at 100k nodes" },
 ];
 
 function escapeHtml(value: string): string {
@@ -188,7 +188,7 @@ root.innerHTML = `
           </tbody>
         </table>
       </div>
-      <p class="perspective-note">Stockfish-13 ladder Elo uses historical SSDF-derived fixed-node anchors. It is not FIDE or online rating. Each row comes from 400 games; intervals cover paired-match sampling, conditional on the fixed anchors.</p>
+      <p class="perspective-note">Stockfish-13 ladder Elo uses historical SSDF-derived fixed-node anchors. It is not FIDE or online rating. Each row comes from 400 games; intervals cover paired-match sampling, conditional on the fixed anchors. At 80,000 searches, isolated saturated throughput averaged 5.31 seconds per move on one RTX 4070 SUPER.</p>
     </section>
 
   </main>

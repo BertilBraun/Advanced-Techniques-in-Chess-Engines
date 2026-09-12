@@ -1,0 +1,19 @@
+{
+  "amortized_seconds_per_position": 5.228688751636073,
+  "checkpoint_generation": 1465,
+  "device_id": 2,
+  "elapsed_seconds": 261.43443758180365,
+  "experiment_configuration_sha256": "c66c4abf1ef1525731fd3a1b24033eea290c36640ca51c0947c9f67a78bd76c6",
+  "inference_batch_size": 64,
+  "inference_model_sha256": "402efb61146b5a0f569c960e1f7a7e7714ba1bb28982fcdfb7f10e8ec5a98ad6",
+  "inference_workers": 1,
+  "opening_manifest_sha256": "40582c4f753e90d8ebd170498c37e3f4812bff38287e6bfa6db376e9eec70d39",
+  "outstanding_batches_per_worker": 1,
+  "parallel_searches": 8,
+  "position_count": 50,
+  "searches_per_position": 80000,
+  "searches_per_second": 15300.20312931569,
+  "selected_action_count": 50,
+  "source_revision": "92c9f487d38467ac8c34bb88a28604e3a539e15f",
+  "warmup_searches_per_position": 1024
+}

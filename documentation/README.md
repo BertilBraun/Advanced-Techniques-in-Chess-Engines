@@ -15,12 +15,12 @@ not make it current guidance.
 ## Results
 
 The retained v34 three-day checkpoint is the project’s main chess result. It reached 3,037 benchmark Elo at 10,000
-searches and 3,174 at 80,000 searches on the project’s SSDF-derived Stockfish 13 fixed-node ladder.
+searches and 3,167 at 80,000 searches on the project’s SSDF-derived Stockfish 13 fixed-node ladder.
 
 | Result | Status | Evidence |
 | --- | --- | --- |
 | v34 generation 1465 replay compression | **Final** | [13.20x smaller student and match artifacts](benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md) |
-| v34 generation 1465 terminal strength | **Final** | [3,037 at 10k and 3,174 at 80k](benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md) |
+| v34 generation 1465 terminal strength | **Final** | [3,037 at 10k and 3,167 at 80k](benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md) |
 | v29 generation 936 deep match | **Final** | [2,844.8 Elo at 10,000 searches](benchmarks/deep-match-generation936-50k-nodes-rtx4070s-20260906/README.md) |
 | v29 strength over wall-clock | **Final** | [generations 100–1000 ladder](benchmarks/ladder-elo-vs-generation-rtx4070s-20260906/README.md) |
 | Four-day historical baseline | **Final, older runtime** | [frozen evidence](evidence/chess-four-day-freeze-20260817/) |
