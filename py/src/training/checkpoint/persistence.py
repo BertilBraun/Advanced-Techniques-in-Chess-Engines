@@ -37,6 +37,7 @@ from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
 from src.util.log import LogLevel, log
+from torch import Tensor
 
 
 def _temporary_path(path: Path) -> Path:
@@ -63,6 +64,31 @@ def create_optimizer(model: Network, configuration: OptimizerConfiguration) -> t
                 weight_decay=weight_decay,
                 nesterov=nesterov,
             )
+
+
+def load_model_state_dict(
+    model: Network,
+    state_dict: dict[str, Tensor],
+    path: str | PathLike[str],
+) -> None:
+    try:
+        model.load_state_dict(state_dict)
+        return
+    except RuntimeError:
+        compiled_keys = tuple(key.startswith('_orig_mod.') for key in state_dict)
+        if any(compiled_keys):
+            if not all(compiled_keys):
+                raise ValueError(f'Model checkpoint mixes compiled and uncompiled parameter keys: {path}')
+            log(f'Could not load model from: {path}, trying to load without compilation')
+            normalized_state_dict = {key.removeprefix('_orig_mod.'): value for key, value in state_dict.items()}
+        else:
+            log(f'Could not load model from: {path}, trying to load with compilation')
+            normalized_state_dict = {f'_orig_mod.{key}': value for key, value in state_dict.items()}
+    try:
+        model.load_state_dict(normalized_state_dict)
+    except RuntimeError:
+        log(f'Could not load model from: {path}')
+        raise
         case AdamWOptimizerConfiguration(weight_decay=weight_decay, amsgrad=amsgrad, epsilon=epsilon):
             return torch.optim.AdamW(
                 model.parameters(),
@@ -94,31 +120,7 @@ def load_model(
     except FileNotFoundError as error:
         raise ValueError(f'Model does not exist: {path}') from error
 
-    try:
-        model.load_state_dict(data)
-    except RuntimeError:
-        # check if any key contains "_orig_mod." if so, try to load without it, else try to load
-        contains_org = any('_orig_mod.' in key for key in data.keys())
-
-        if contains_org:
-            assert all('_orig_mod.' in key for key in data.keys()), 'Some keys contain "_orig_mod." and some do not'
-
-            log(f'Could not load model from: {path}, trying to load without compilation')
-            # replace all key prefixes or "_orig_mod." with ""
-
-            data = {key.replace('_orig_mod.', ''): value for key, value in data.items()}
-            model.load_state_dict(data)
-        else:
-            assert all('_orig_mod.' not in key for key in data.keys()), 'Some keys contain "_orig_mod." and some do not'
-            log(f'Could not load model from: {path}, trying to load with compilation')
-
-            data = {f'_orig_mod.{key}': value for key, value in data.items()}
-
-        try:
-            model.load_state_dict(data)
-        except RuntimeError:
-            log(f'Could not load model from: {path}')
-            raise
+    load_model_state_dict(model, data, path)
     log(f'Model loaded from: {path}', level=LogLevel.DEBUG)
     return model
 

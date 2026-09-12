@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 import torch
 from src.games.representation import NetworkDimensions
+from src.training.checkpoint.contracts import read_checkpoint_manifest
+from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.checkpoint.persistence import create_optimizer
 from src.training.configuration import AdamWOptimizerConfiguration
 from src.training.network import (
@@ -16,6 +18,7 @@ from src.training.network import (
     ScaledPostActivationResidualBlockConfiguration,
 )
 from src.training.quantization.configuration import QatCheckpointPhase, TensorRtInt8QatConfiguration
+from src.util.hashing import file_sha256
 from torch import nn
 
 pytest.importorskip('modelopt.torch.quantization')
@@ -140,6 +143,41 @@ def test_deployment_qat_checkpoint_round_trip(tmp_path: Path) -> None:
 
     assert loaded_state.phase is QatCheckpointPhase.DEPLOYMENT
     assert all(isinstance(block.conv_block1[1], nn.Identity) for block in loaded.backbone)
+
+
+@pytest.mark.integration
+def test_qat_checkpoint_load_normalizes_compiled_parameter_keys(tmp_path: Path) -> None:
+    model = configure_qat(_network(), _calibrate)
+    pre_fold_state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 0)
+    optimizer_configuration = AdamWOptimizerConfiguration()
+    reference = save_qat_model_and_optimizer(
+        model,
+        create_optimizer(model, optimizer_configuration),
+        generation=0,
+        completed_optimizer_steps=0,
+        save_folder=tmp_path,
+        qat_state=pre_fold_state,
+        example_states=torch.randn((8, 8, 3, 3)),
+        bootstrap_probe_states=torch.randn((256, 8, 3, 3)),
+    )
+    weights = torch.load(reference.model_path, map_location='cpu', weights_only=True)
+    torch.save({f'_orig_mod.{key}': value for key, value in weights.items()}, reference.model_path)
+    manifest = read_checkpoint_manifest(0, tmp_path).model_copy(
+        update={'model_sha256': file_sha256(reference.model_path)}
+    )
+    checkpoint_manifest_path(0, tmp_path).write_text(manifest.model_dump_json(indent=2) + '\n')
+
+    loaded, _, _ = load_qat_model_and_optimizer(
+        generation=0,
+        network_configuration=model.network_args,
+        optimizer_configuration=optimizer_configuration,
+        quantization_configuration=TensorRtInt8QatConfiguration(),
+        device=torch.device('cpu'),
+        save_folder=tmp_path,
+        dimensions=NetworkDimensions(channels=8, rows=3, columns=3, actions=10),
+    )
+
+    assert set(loaded.state_dict()) == set(model.state_dict())
 
 
 @pytest.mark.integration

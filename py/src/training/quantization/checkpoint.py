@@ -17,7 +17,7 @@ from src.training.checkpoint.paths import (
     optimizer_save_path,
     qat_state_save_path,
 )
-from src.training.checkpoint.persistence import create_model, load_optimizer
+from src.training.checkpoint.persistence import create_model, load_model_state_dict, load_optimizer
 from src.training.configuration import OptimizerConfiguration
 from src.training.network import (
     InferenceNetwork,
@@ -143,6 +143,6 @@ def load_qat_model_and_optimizer(
     model = create_model(network_configuration, device, dimensions, auxiliary_heads)
     restored = restore_qat_model(model, reference.qat_state, quantization_configuration)
     weights = torch.load(reference.model_path, map_location=device, weights_only=True)
-    restored.model.load_state_dict(weights)
+    load_model_state_dict(restored.model, weights, reference.model_path)
     optimizer = load_optimizer(reference.optimizer_path, restored.model, optimizer_configuration, device)
     return restored.model, optimizer, reference.qat_state
