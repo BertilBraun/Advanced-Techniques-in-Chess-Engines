@@ -183,6 +183,7 @@ class ArchitectureScreenReport(FrozenModel):
     sampled_index_sequence_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     architecture: NetworkParams
     quantized_convolutions: int = Field(ge=0)
+    qat_activation_boundaries: Literal['convolution', 'residual_block'] | None
     folded_post_activation_batch_norm: bool
     strongly_typed_tensorrt: bool
     constrained_tensorrt_float16_islands: bool
@@ -267,13 +268,71 @@ def _qat_configuration(cell: ScreenCell, layers: int, quantized_convolutions: in
             )
         )
     if cell == ScreenCell.POST_QAT:
-        configuration.quant_cfg.append(
-            QuantizerCfgEntry(
-                quantizer_name='backbone.*.conv_block*.0.output_quantizer',
-                enable=False,
+        configuration.quant_cfg.extend(
+            (
+                QuantizerCfgEntry(
+                    quantizer_name='backbone.*.conv_block*.0.input_quantizer',
+                    enable=False,
+                ),
+                QuantizerCfgEntry(
+                    quantizer_name='backbone.*.conv_block*.0.output_quantizer',
+                    enable=False,
+                ),
             )
         )
     return configuration
+
+
+class _BoundaryQuantizedResBlock(nn.Module):
+    def __init__(self, block: ResBlock) -> None:
+        super().__init__()
+        self.conv_block1 = block.conv_block1
+        self.conv_block2 = block.conv_block2
+        self.squeeze_excitation = block.squeeze_excitation
+        self.first_activation_quantizer = TensorQuantizer()
+        self.output_activation_quantizer = TensorQuantizer()
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        residual_branch = self.first_activation_quantizer(self.conv_block1(inputs))
+        residual_branch = self.squeeze_excitation(self.conv_block2(residual_branch))
+        return self.output_activation_quantizer(torch.relu(inputs + residual_branch))
+
+
+class _BoundaryQuantizedGlobalPoolingResBlock(nn.Module):
+    def __init__(self, block: GlobalPoolingResBlock) -> None:
+        super().__init__()
+        self.global_channels = block.global_channels
+        self.conv_block1 = block.conv_block1
+        self.global_pooling_bias = block.global_pooling_bias
+        self.conv_block2 = block.conv_block2
+        self.first_activation_quantizer = TensorQuantizer()
+        self.output_activation_quantizer = TensorQuantizer()
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        features = self.first_activation_quantizer(self.conv_block1(inputs))
+        global_features = features[:, : self.global_channels]
+        local_features = features[:, self.global_channels :]
+        biased_features = self.global_pooling_bias(local_features, global_features)
+        residual_branch = self.conv_block2(biased_features)
+        return self.output_activation_quantizer(torch.relu(inputs + residual_branch))
+
+
+class _BoundaryQuantizedPostActivationNetwork(Network):
+    def __init__(self, args: NetworkParams, device: torch.device) -> None:
+        super().__init__(args, device, CHESS_NETWORK_DIMENSIONS)
+        self.start_activation_quantizer = TensorQuantizer()
+        self.backbone = nn.ModuleList(
+            _BoundaryQuantizedGlobalPoolingResBlock(block)
+            if isinstance(block, GlobalPoolingResBlock)
+            else _BoundaryQuantizedResBlock(block)
+            for block in self.backbone
+        )
+
+    def trunk_features(self, inputs: Tensor) -> Tensor:
+        features = self.start_activation_quantizer(self.start_block(inputs))
+        for block in self.backbone:
+            features = block(features)
+        return self.finish_block(features)
 
 
 def _replay_batch(dataset: OpenedProductionReplay, indices: np.ndarray, device: torch.device) -> TrainingBatch:
@@ -342,6 +401,8 @@ def _fold_post_activation_batch_norm(model: Network) -> None:
                 | GlobalPoolingResBlock()
                 | ScaledPostActivationResBlock()
                 | ScaledPostActivationGlobalPoolingResBlock()
+                | _BoundaryQuantizedResBlock()
+                | _BoundaryQuantizedGlobalPoolingResBlock()
             ):
                 if isinstance(block, (ScaledPostActivationResBlock, ScaledPostActivationGlobalPoolingResBlock)):
                     second_batch_norm = block.conv_block2[1]
@@ -694,7 +755,11 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             arguments.hidden_size,
             arguments.final_normalization,
         )
-        model = Network(network_architecture, device, CHESS_NETWORK_DIMENSIONS)
+        model = (
+            _BoundaryQuantizedPostActivationNetwork(network_architecture, device)
+            if arguments.cell == ScreenCell.POST_QAT
+            else Network(network_architecture, device, CHESS_NETWORK_DIMENSIONS)
+        )
         cost = measure_model_cost(model)
         if (
             arguments.layers == DEFAULT_LAYERS
@@ -890,6 +955,13 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             sampled_index_sequence_sha256=sampled_index_hash.hexdigest(),
             architecture=network_architecture,
             quantized_convolutions=arguments.quantized_convolutions if arguments.cell.uses_qat else 0,
+            qat_activation_boundaries=(
+                'residual_block'
+                if arguments.cell == ScreenCell.POST_QAT
+                else 'convolution'
+                if arguments.cell.uses_qat
+                else None
+            ),
             folded_post_activation_batch_norm=arguments.fold_post_activation_batch_norm,
             strongly_typed_tensorrt=arguments.strongly_typed_tensorrt,
             constrained_tensorrt_float16_islands=arguments.constrain_tensorrt_float16_islands,
