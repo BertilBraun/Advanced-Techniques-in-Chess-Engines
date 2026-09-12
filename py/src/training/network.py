@@ -62,6 +62,12 @@ class PostActivationResidualBlockConfiguration(FrozenModel):
     kind: Literal['post_activation'] = 'post_activation'
 
 
+class ScaledPostActivationResidualBlockConfiguration(FrozenModel):
+    kind: Literal['scaled_post_activation'] = 'scaled_post_activation'
+    branch_scale: float = Field(gt=0.0, le=1.0)
+    activation_cap: float = Field(gt=0.0)
+
+
 class ScaledPreActivationResidualBlockConfiguration(FrozenModel):
     kind: Literal['scaled_pre_activation'] = 'scaled_pre_activation'
     branch_scale: float = Field(gt=0.0, le=1.0)
@@ -70,7 +76,9 @@ class ScaledPreActivationResidualBlockConfiguration(FrozenModel):
 
 
 ResidualBlockConfiguration: TypeAlias = Annotated[
-    PostActivationResidualBlockConfiguration | ScaledPreActivationResidualBlockConfiguration,
+    PostActivationResidualBlockConfiguration
+    | ScaledPostActivationResidualBlockConfiguration
+    | ScaledPreActivationResidualBlockConfiguration,
     Field(discriminator='kind'),
 ]
 
@@ -933,6 +941,26 @@ class ResBlock(nn.Module):
         return x
 
 
+class ScaledPostActivationResBlock(nn.Module):
+    def __init__(self, num_hidden: int, branch_scale: float, activation_cap: float) -> None:
+        super().__init__()
+        self.branch_scale = branch_scale
+        self.conv_block1 = nn.Sequential(
+            nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(num_hidden),
+            _bounded_relu(activation_cap),
+        )
+        self.conv_block2 = nn.Sequential(
+            nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(num_hidden),
+        )
+        self.final_activation = _bounded_relu(activation_cap)
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        residual_branch = self.conv_block2(self.conv_block1(inputs))
+        return self.final_activation(inputs + self.branch_scale * residual_branch)
+
+
 def _bounded_relu(activation_cap: float) -> nn.Module:
     return nn.ReLU6(inplace=True) if activation_cap == 6.0 else nn.Hardtanh(0.0, activation_cap, inplace=True)
 
@@ -1108,6 +1136,33 @@ class GlobalPoolingResBlock(nn.Module):
         return self.relu2(self.conv_block2(biased_features) + inputs)
 
 
+class ScaledPostActivationGlobalPoolingResBlock(nn.Module):
+    def __init__(self, num_hidden: int, branch_scale: float, activation_cap: float) -> None:
+        super().__init__()
+        self.branch_scale = branch_scale
+        self.global_channels = max(1, num_hidden // 4)
+        local_channels = num_hidden - self.global_channels
+        self.conv_block1 = nn.Sequential(
+            nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(num_hidden),
+            _bounded_relu(activation_cap),
+        )
+        self.global_pooling_bias = GlobalPoolingBias(self.global_channels, local_channels)
+        self.conv_block2 = nn.Sequential(
+            nn.Conv2d(local_channels, num_hidden, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(num_hidden),
+        )
+        self.final_activation = _bounded_relu(activation_cap)
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        features = self.conv_block1(inputs)
+        global_features = features[:, : self.global_channels]
+        local_features = features[:, self.global_channels :]
+        biased_features = self.global_pooling_bias(local_features, global_features)
+        residual_branch = self.conv_block2(biased_features)
+        return self.final_activation(inputs + self.branch_scale * residual_branch)
+
+
 class ScaledPreActivationGlobalPoolingResBlock(nn.Module):
     def __init__(self, num_hidden: int, branch_scale: float, activation_cap: float) -> None:
         super().__init__()
@@ -1154,6 +1209,21 @@ def _build_residual_block(
                         GlobalPoolingResBlock(hidden_channels)
                         if placement.applies_to(block_index)
                         else ResBlock(hidden_channels)
+                    )
+        case ScaledPostActivationResidualBlockConfiguration(
+            branch_scale=branch_scale,
+            activation_cap=activation_cap,
+        ):
+            match residual_context:
+                case DisabledResidualContext():
+                    return ScaledPostActivationResBlock(hidden_channels, branch_scale, activation_cap)
+                case SqueezeExcitationResidualContext():
+                    raise ValueError('Scaled post-activation blocks do not support squeeze-excitation context.')
+                case GlobalPoolingResidualContext(placement=placement):
+                    return (
+                        ScaledPostActivationGlobalPoolingResBlock(hidden_channels, branch_scale, activation_cap)
+                        if placement.applies_to(block_index)
+                        else ScaledPostActivationResBlock(hidden_channels, branch_scale, activation_cap)
                     )
         case ScaledPreActivationResidualBlockConfiguration(
             branch_scale=branch_scale,

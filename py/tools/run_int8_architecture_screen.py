@@ -33,6 +33,9 @@ from src.training.network import (
     PostActivationResidualBlockConfiguration,
     ResBlock,
     ResidualContextPlacement,
+    ScaledPostActivationGlobalPoolingResBlock,
+    ScaledPostActivationResBlock,
+    ScaledPostActivationResidualBlockConfiguration,
     ScaledPreActivationResidualBlockConfiguration,
 )
 from src.training.objective import ResolvedTrainingObjective
@@ -88,16 +91,27 @@ ACTIVATION_RANGE_POSITIONS = 64
 class ScreenCell(str, Enum):
     POST_FLOAT = 'post_float'
     POST_QAT = 'post_qat'
+    POST_SCALED_FLOAT = 'post_scaled_float'
+    POST_SCALED_QAT = 'post_scaled_qat'
     PRE_SCALED_FLOAT = 'pre_scaled_float'
     PRE_SCALED_QAT = 'pre_scaled_qat'
 
     @property
     def uses_quantization_friendly_trunk(self) -> bool:
+        return self in (
+            ScreenCell.POST_SCALED_FLOAT,
+            ScreenCell.POST_SCALED_QAT,
+            ScreenCell.PRE_SCALED_FLOAT,
+            ScreenCell.PRE_SCALED_QAT,
+        )
+
+    @property
+    def uses_pre_activation_trunk(self) -> bool:
         return self in (ScreenCell.PRE_SCALED_FLOAT, ScreenCell.PRE_SCALED_QAT)
 
     @property
     def uses_qat(self) -> bool:
-        return self in (ScreenCell.POST_QAT, ScreenCell.PRE_SCALED_QAT)
+        return self in (ScreenCell.POST_QAT, ScreenCell.POST_SCALED_QAT, ScreenCell.PRE_SCALED_QAT)
 
 
 @dataclass(frozen=True)
@@ -201,15 +215,20 @@ def architecture(
     hidden_size: int = DEFAULT_HIDDEN_SIZE,
     final_normalization: bool = False,
 ) -> NetworkParams:
-    residual_block = (
-        ScaledPreActivationResidualBlockConfiguration(
-            branch_scale=layers**-0.5,
-            activation_cap=ACTIVATION_CAP,
-            final_activation_cap=ACTIVATION_CAP if final_normalization else None,
-        )
-        if cell.uses_quantization_friendly_trunk
-        else PostActivationResidualBlockConfiguration()
-    )
+    match cell:
+        case ScreenCell.POST_FLOAT | ScreenCell.POST_QAT:
+            residual_block = PostActivationResidualBlockConfiguration()
+        case ScreenCell.POST_SCALED_FLOAT | ScreenCell.POST_SCALED_QAT:
+            residual_block = ScaledPostActivationResidualBlockConfiguration(
+                branch_scale=layers**-0.5,
+                activation_cap=ACTIVATION_CAP,
+            )
+        case ScreenCell.PRE_SCALED_FLOAT | ScreenCell.PRE_SCALED_QAT:
+            residual_block = ScaledPreActivationResidualBlockConfiguration(
+                branch_scale=layers**-0.5,
+                activation_cap=ACTIVATION_CAP,
+                final_activation_cap=ACTIVATION_CAP if final_normalization else None,
+            )
     return NetworkParams(
         num_layers=layers,
         hidden_size=hidden_size,
@@ -231,7 +250,7 @@ def _qat_configuration(cell: ScreenCell, layers: int, quantized_convolutions: in
             QuantizerCfgEntry(quantizer_name='*value_head*', enable=False),
         )
     )
-    convolution_module_index = 2 if cell.uses_quantization_friendly_trunk else 0
+    convolution_module_index = 2 if cell.uses_pre_activation_trunk else 0
     for convolution_index in range(quantized_convolutions, layers * 2):
         block_index, convolution_in_block = divmod(convolution_index, 2)
         configuration.quant_cfg.append(
@@ -306,7 +325,12 @@ def _fold_post_activation_batch_norm(model: Network) -> None:
     model.eval()
     for block in model.backbone:
         match block:
-            case ResBlock() | GlobalPoolingResBlock():
+            case (
+                ResBlock()
+                | GlobalPoolingResBlock()
+                | ScaledPostActivationResBlock()
+                | ScaledPostActivationGlobalPoolingResBlock()
+            ):
                 _fold_convolution_batch_norm(block.conv_block1)
                 _fold_convolution_batch_norm(block.conv_block2)
             case _:
@@ -896,8 +920,11 @@ def parse_arguments() -> Arguments:
         raise ValueError('Quantized convolutions must be between one and twice the residual-block count.')
     if namespace.final_normalization and not ScreenCell(namespace.cell).uses_quantization_friendly_trunk:
         raise ValueError('Final normalization is defined only for the scaled pre-activation trunk.')
-    if namespace.fold_post_activation_batch_norm and ScreenCell(namespace.cell) != ScreenCell.POST_QAT:
-        raise ValueError('Batch-normalization folding is defined only for the post-activation QAT cell.')
+    if namespace.fold_post_activation_batch_norm and ScreenCell(namespace.cell) not in (
+        ScreenCell.POST_QAT,
+        ScreenCell.POST_SCALED_QAT,
+    ):
+        raise ValueError('Batch-normalization folding is defined only for post-activation QAT cells.')
     return Arguments(
         replay_store=namespace.replay_store,
         replay_experiment=namespace.replay_experiment,
