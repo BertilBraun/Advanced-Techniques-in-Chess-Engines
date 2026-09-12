@@ -72,7 +72,7 @@ chess:
         kind: tensorrt
         bootstrap_with_torchscript: true
         template_engine_paths:
-        - /workspace/tensorrt/v35-int8-14x160-prefold-template.engine
+        - /workspace/tensorrt/v35-int8-14x160-prefold-production-template.engine
         - /workspace/tensorrt/v35-int8-14x160-deployment-trained-template.engine
   objective:
     policy_loss_weight: 1.0
