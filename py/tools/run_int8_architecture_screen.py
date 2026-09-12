@@ -17,7 +17,7 @@ import onnx
 import onnxruntime as ort
 import tensorrt as trt
 import torch
-from modelopt.torch.quantization.config import QuantizeConfig, QuantizerCfgEntry
+from modelopt.torch.quantization.config import QuantizeConfig, QuantizerAttributeConfig, QuantizerCfgEntry
 from modelopt.torch.quantization.nn import TensorQuantizer
 from pydantic import Field
 from src.distillation.dataset import build_replay_training_batch
@@ -137,6 +137,7 @@ class Arguments:
     fold_post_activation_batch_norm: bool
     strongly_typed_tensorrt: bool
     constrain_tensorrt_float16_islands: bool
+    fixed_trunk_activation_amax: float | None
 
 
 class TrainingObservation(FrozenModel):
@@ -190,6 +191,7 @@ class ArchitectureScreenReport(FrozenModel):
     folded_post_activation_batch_norm: bool
     strongly_typed_tensorrt: bool
     constrained_tensorrt_float16_islands: bool
+    fixed_trunk_activation_amax: float | None = Field(default=None, gt=0.0)
     model_cost: ModelCost
     steps: int = Field(ge=0)
     batch_size: int = Field(gt=0)
@@ -249,7 +251,12 @@ def architecture(
     )
 
 
-def _qat_configuration(cell: ScreenCell, layers: int, quantized_convolutions: int) -> QuantizeConfig:
+def _qat_configuration(
+    cell: ScreenCell,
+    layers: int,
+    quantized_convolutions: int,
+    fixed_trunk_activation_amax: float | None,
+) -> QuantizeConfig:
     configuration = QuantizeConfig.model_validate(copy.deepcopy(mtq.INT8_DEFAULT_CFG))
     configuration.quant_cfg.extend(
         (
@@ -280,6 +287,17 @@ def _qat_configuration(cell: ScreenCell, layers: int, quantized_convolutions: in
                 QuantizerCfgEntry(
                     quantizer_name='backbone.*.conv_block*.0.output_quantizer',
                     enable=False,
+                ),
+            )
+        )
+    if fixed_trunk_activation_amax is not None:
+        configuration.quant_cfg.append(
+            QuantizerCfgEntry(
+                quantizer_name='backbone.*.conv_block*.0.input_quantizer',
+                cfg=QuantizerAttributeConfig(
+                    num_bits=8,
+                    axis=None,
+                    constant_amax=fixed_trunk_activation_amax,
                 ),
             )
         )
@@ -376,10 +394,11 @@ def _configure_qat(
     cell: ScreenCell,
     layers: int,
     quantized_convolutions: int,
+    fixed_trunk_activation_amax: float | None,
 ) -> Network:
     quantized = mtq.quantize(
         model,
-        _qat_configuration(cell, layers, quantized_convolutions),
+        _qat_configuration(cell, layers, quantized_convolutions, fixed_trunk_activation_amax),
         _calibration_loop(dataset, calibration_indices, batch_size, device),
     )
     assert isinstance(quantized, Network)
@@ -801,6 +820,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 arguments.cell,
                 arguments.layers,
                 arguments.quantized_convolutions,
+                arguments.fixed_trunk_activation_amax,
             )
             initial_qat_calibration_seconds = time.perf_counter() - calibration_started
 
@@ -989,6 +1009,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             folded_post_activation_batch_norm=arguments.fold_post_activation_batch_norm,
             strongly_typed_tensorrt=arguments.strongly_typed_tensorrt,
             constrained_tensorrt_float16_islands=arguments.constrain_tensorrt_float16_islands,
+            fixed_trunk_activation_amax=arguments.fixed_trunk_activation_amax,
             model_cost=cost,
             steps=arguments.steps,
             batch_size=arguments.batch_size,
@@ -1045,6 +1066,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--fold-post-activation-batch-norm', action='store_true')
     parser.add_argument('--strongly-typed-tensorrt', action='store_true')
     parser.add_argument('--constrain-tensorrt-float16-islands', action='store_true')
+    parser.add_argument('--fixed-trunk-activation-amax', type=float)
     namespace = parser.parse_args()
     if namespace.steps < 0 or namespace.batch_size <= 0 or namespace.evaluate_every <= 0:
         raise ValueError('Steps must be nonnegative; batch size and evaluation interval must be positive.')
@@ -1052,6 +1074,10 @@ def parse_arguments() -> Arguments:
         raise ValueError('Layers and hidden size must be positive.')
     if namespace.quantized_convolutions <= 0 or namespace.quantized_convolutions > namespace.layers * 2:
         raise ValueError('Quantized convolutions must be between one and twice the residual-block count.')
+    if namespace.fixed_trunk_activation_amax is not None and (
+        namespace.fixed_trunk_activation_amax <= 0.0 or not ScreenCell(namespace.cell).uses_qat
+    ):
+        raise ValueError('Fixed trunk activation amax must be positive and is defined only for QAT cells.')
     if namespace.final_normalization and not ScreenCell(namespace.cell).uses_quantization_friendly_trunk:
         raise ValueError('Final normalization is defined only for the scaled pre-activation trunk.')
     if namespace.fold_post_activation_batch_norm and ScreenCell(namespace.cell) not in (
@@ -1081,6 +1107,7 @@ def parse_arguments() -> Arguments:
         fold_post_activation_batch_norm=namespace.fold_post_activation_batch_norm,
         strongly_typed_tensorrt=namespace.strongly_typed_tensorrt,
         constrain_tensorrt_float16_islands=namespace.constrain_tensorrt_float16_islands,
+        fixed_trunk_activation_amax=namespace.fixed_trunk_activation_amax,
     )
 
 
