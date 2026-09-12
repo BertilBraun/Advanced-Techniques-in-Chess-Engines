@@ -606,6 +606,7 @@ def _build_engine(
         case Backend.TENSORRT_INT8:
             if not builder.platform_has_fast_int8:
                 raise ValueError('TensorRT reports that this GPU has no fast INT8 support.')
+            configuration.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
         case _:
             raise ValueError(f'Cannot build a TensorRT engine for {backend.value}.')
     if not builder.platform_has_fast_fp16:
