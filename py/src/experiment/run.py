@@ -36,10 +36,9 @@ from src.training.network import POLICY_PRIOR_PROBE_POSITIONS
 from src.training.quantization import (
     DisabledTrainingQuantization,
     TensorRtInt8QatConfiguration,
-    configure_qat,
-    save_qat_state,
 )
 from src.training.quantization.checkpoint import save_qat_model_and_optimizer
+from src.training.quantization.runtime import configure_qat, save_qat_state
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel

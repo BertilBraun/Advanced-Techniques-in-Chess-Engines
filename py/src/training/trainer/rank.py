@@ -36,13 +36,15 @@ from src.training.quantization import (
     QatCheckpointPhase,
     QatStateIdentity,
     TensorRtInt8QatConfiguration,
+)
+from src.training.quantization.checkpoint import load_qat_model_and_optimizer, save_qat_model_and_optimizer
+from src.training.quantization.runtime import (
     configure_qat,
     deployment_qat_state,
     fold_scaled_post_activation_batch_norm,
     recalibrate_qat,
     save_qat_state,
 )
-from src.training.quantization.checkpoint import load_qat_model_and_optimizer, save_qat_model_and_optimizer
 from src.training.trainer.contracts import (
     RankTrainingFailure,
     RankTrainingResult,
