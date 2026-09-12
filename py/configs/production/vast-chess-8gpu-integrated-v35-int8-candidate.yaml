@@ -39,11 +39,12 @@ training:
 chess:
   self_play:
     inference:
-      backend:
-        kind: tensorrt
-        template_engine_paths:
-        - /workspace/tensorrt/v35-int8-14x160-prefold-template.engine
-        - /workspace/tensorrt/v35-int8-14x160-deployment-template.engine
+        backend:
+          kind: tensorrt
+          template_engine_paths:
+          - /workspace/tensorrt/v35-int8-14x160-generation0-template.engine
+          - /workspace/tensorrt/v35-int8-14x160-prefold-template.engine
+          - /workspace/tensorrt/v35-int8-14x160-deployment-template.engine
 
 evaluation:
   definitions:
