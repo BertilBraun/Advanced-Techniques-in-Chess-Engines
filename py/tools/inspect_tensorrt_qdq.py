@@ -52,6 +52,7 @@ class TensorRtLayerDescription(FrozenModel):
     inputs: tuple[TensorRtTensorDescription, ...] = Field(alias='Inputs')
     outputs: tuple[TensorRtTensorDescription, ...] = Field(alias='Outputs')
     parameter_type: str | None = Field(default=None, alias='ParameterType', min_length=1)
+    parameter_subtype: str | None = Field(default=None, alias='ParameterSubType', min_length=1)
     origin: str | None = Field(default=None, alias='Origin')
     tactic_name: str | None = Field(default=None, alias='TacticName')
     tactic_value: str | None = Field(default=None, alias='TacticValue')
@@ -83,6 +84,16 @@ class TensorRtLayerDescription(FrozenModel):
     post_padding: tuple[int, ...] | None = Field(default=None, alias='PostPadding')
     pre_padding: tuple[int, ...] | None = Field(default=None, alias='PrePadding')
     stride: tuple[int, ...] | None = Field(default=None, alias='Stride')
+    input_argument_count: int | None = Field(default=None, alias='NbInputArgs', ge=0)
+    input_arguments: tuple[str, ...] | None = Field(default=None, alias='InputArgs')
+    output_variable_count: int | None = Field(default=None, alias='NbOutputVars', ge=0)
+    output_variables: tuple[str, ...] | None = Field(default=None, alias='OutputVars')
+    parameter_count: int | None = Field(default=None, alias='NbParams', ge=0)
+    parameters: tuple[str, ...] | None = Field(default=None, alias='Params')
+    literal_count: int | None = Field(default=None, alias='NbLiterals', ge=0)
+    literals: tuple[str, ...] | None = Field(default=None, alias='Literals')
+    operation_count: int | None = Field(default=None, alias='NbOperations', ge=0)
+    operations: tuple[str, ...] | None = Field(default=None, alias='Operations')
 
 
 class TensorRtQdqInspection(FrozenModel):

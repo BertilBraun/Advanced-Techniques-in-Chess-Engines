@@ -25,10 +25,12 @@ from src.training.batch import TrainingBatch
 from src.training.model_cost import ModelCost, measure_model_cost
 from src.training.network import (
     ChessFromToAttentionPolicyHeadConfiguration,
+    GlobalPoolingResBlock,
     GlobalPoolingResidualContext,
     Network,
     NetworkParams,
     PostActivationResidualBlockConfiguration,
+    ResBlock,
     ResidualContextPlacement,
     ScaledPreActivationResidualBlockConfiguration,
 )
@@ -115,6 +117,7 @@ class Arguments:
     hidden_size: int
     quantized_convolutions: int
     final_normalization: bool
+    fold_post_activation_batch_norm: bool
 
 
 class TrainingObservation(FrozenModel):
@@ -149,7 +152,7 @@ class TensorRtMeasurement(FrozenModel):
 
 
 class ArchitectureScreenReport(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     source_revision: SourceRevision
     cell: ScreenCell
     random_seed: int
@@ -158,6 +161,7 @@ class ArchitectureScreenReport(FrozenModel):
     sampled_index_sequence_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     architecture: NetworkParams
     quantized_convolutions: int = Field(ge=0)
+    folded_post_activation_batch_norm: bool
     model_cost: ModelCost
     steps: int = Field(ge=0)
     batch_size: int = Field(gt=0)
@@ -274,6 +278,27 @@ def _configure_qat(
     )
     assert isinstance(quantized, Network)
     return quantized
+
+
+def _fold_convolution_batch_norm(block: nn.Sequential) -> None:
+    convolution = block[0]
+    batch_norm = block[1]
+    assert isinstance(convolution, nn.Conv2d)
+    assert isinstance(batch_norm, nn.BatchNorm2d)
+    block[0] = torch.nn.utils.fusion.fuse_conv_bn_eval(convolution, batch_norm)
+    block[1] = nn.Identity()
+
+
+def _fold_post_activation_batch_norm(model: Network) -> None:
+    model.eval()
+    for block in model.backbone:
+        match block:
+            case ResBlock() | GlobalPoolingResBlock():
+                _fold_convolution_batch_norm(block.conv_block1)
+                _fold_convolution_batch_norm(block.conv_block2)
+            case _:
+                raise ValueError('Batch-normalization folding requires the post-activation residual trunk.')
+    model.train()
 
 
 @contextmanager
@@ -525,6 +550,9 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
         ):
             raise ValueError(f'Expected {EXPECTED_PARAMETER_COUNT:,} parameters, found {cost.parameters.total:,}.')
 
+        if arguments.fold_post_activation_batch_norm:
+            _fold_post_activation_batch_norm(model)
+
         calibration_generator = np.random.default_rng(arguments.random_seed + 10_000_000)
         calibration_indices = np.sort(
             calibration_generator.choice(
@@ -685,6 +713,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             sampled_index_sequence_sha256=sampled_index_hash.hexdigest(),
             architecture=network_architecture,
             quantized_convolutions=arguments.quantized_convolutions if arguments.cell.uses_qat else 0,
+            folded_post_activation_batch_norm=arguments.fold_post_activation_batch_norm,
             model_cost=cost,
             steps=arguments.steps,
             batch_size=arguments.batch_size,
@@ -735,6 +764,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--hidden-size', default=DEFAULT_HIDDEN_SIZE, type=int)
     parser.add_argument('--quantized-convolutions', default=DEFAULT_LAYERS * 2, type=int)
     parser.add_argument('--final-normalization', action='store_true')
+    parser.add_argument('--fold-post-activation-batch-norm', action='store_true')
     namespace = parser.parse_args()
     if namespace.steps < 0 or namespace.batch_size <= 0 or namespace.evaluate_every <= 0:
         raise ValueError('Steps must be nonnegative; batch size and evaluation interval must be positive.')
@@ -744,6 +774,8 @@ def parse_arguments() -> Arguments:
         raise ValueError('Quantized convolutions must be between one and twice the residual-block count.')
     if namespace.final_normalization and not ScreenCell(namespace.cell).uses_quantization_friendly_trunk:
         raise ValueError('Final normalization is defined only for the scaled pre-activation trunk.')
+    if namespace.fold_post_activation_batch_norm and ScreenCell(namespace.cell) != ScreenCell.POST_QAT:
+        raise ValueError('Batch-normalization folding is defined only for the post-activation QAT cell.')
     return Arguments(
         replay_store=namespace.replay_store,
         replay_experiment=namespace.replay_experiment,
@@ -763,6 +795,7 @@ def parse_arguments() -> Arguments:
         hidden_size=namespace.hidden_size,
         quantized_convolutions=namespace.quantized_convolutions,
         final_normalization=namespace.final_normalization,
+        fold_post_activation_batch_norm=namespace.fold_post_activation_batch_norm,
     )
 
 
