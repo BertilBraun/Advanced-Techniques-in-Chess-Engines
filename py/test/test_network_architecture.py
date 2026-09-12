@@ -26,8 +26,12 @@ from src.training.network import (
     Network,
     NetworkParams,
     PolicyPlaneHead,
+    PostActivationResidualBlockConfiguration,
     ResBlock,
     ResidualContextPlacement,
+    ScaledPreActivationGlobalPoolingResBlock,
+    ScaledPreActivationResBlock,
+    ScaledPreActivationResidualBlockConfiguration,
     SqueezeExcitation,
     SqueezeExcitationResidualContext,
     _build_dense_policy_head,
@@ -83,6 +87,54 @@ def test_squeeze_excitation_is_inside_residual_branch_before_skip_addition() -> 
     inputs = torch.ones((1, 16, 2, 2))
 
     assert torch.equal(block(inputs), inputs * 3)
+
+
+def test_scaled_pre_activation_block_scales_only_the_residual_branch() -> None:
+    block = ScaledPreActivationResBlock(16, branch_scale=0.25, activation_cap=6.0)
+    block.conv_block1 = nn.Identity()
+    block.conv_block2 = nn.Identity()
+    inputs = torch.ones((1, 16, 2, 2))
+
+    assert torch.equal(block(inputs), inputs * 1.25)
+
+
+def test_scaled_pre_activation_network_preserves_parameter_count() -> None:
+    common = dict(
+        num_layers=12,
+        hidden_size=128,
+        residual_context=GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_SECOND_BLOCK),
+        policy_head=CHESS_POLICY_HEAD,
+        num_value_channels=2,
+        value_fc_size=48,
+    )
+    post_activation = Network(
+        NetworkParams(**common, residual_block=PostActivationResidualBlockConfiguration()),
+        torch.device('cpu'),
+        CHESS_PLANE_NETWORK_DIMENSIONS,
+    )
+    pre_activation = Network(
+        NetworkParams(
+            **common,
+            residual_block=ScaledPreActivationResidualBlockConfiguration(
+                branch_scale=12**-0.5,
+                activation_cap=6.0,
+            ),
+        ),
+        torch.device('cpu'),
+        CHESS_PLANE_NETWORK_DIMENSIONS,
+    )
+
+    assert sum(parameter.numel() for parameter in post_activation.parameters()) == sum(
+        parameter.numel() for parameter in pre_activation.parameters()
+    )
+    assert (
+        tuple(isinstance(block, ScaledPreActivationGlobalPoolingResBlock) for block in pre_activation.backbone)
+        == (
+            False,
+            True,
+        )
+        * 6
+    )
 
 
 def test_squeeze_excitation_uses_reduction_sixteen() -> None:
