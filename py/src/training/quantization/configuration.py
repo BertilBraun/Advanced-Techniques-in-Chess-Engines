@@ -4,7 +4,7 @@ from enum import StrEnum
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field
-from src.util.frozen_model import FrozenModel
+from src.util.frozen_model import ConfigurationPath, FrozenModel
 
 
 class DisabledTrainingQuantization(FrozenModel):
@@ -27,6 +27,13 @@ TrainingQuantizationConfiguration: TypeAlias = Annotated[
 class QatCheckpointPhase(StrEnum):
     PRE_FOLD = 'pre_fold'
     DEPLOYMENT = 'deployment'
+
+
+class QatStateIdentity(FrozenModel):
+    phase: QatCheckpointPhase
+    completed_optimizer_steps: int = Field(ge=0)
+    path: ConfigurationPath
+    sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
 def expected_qat_phase(

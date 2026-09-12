@@ -16,6 +16,12 @@ def optimizer_save_path(generation: int, save_folder: str | PathLike[str]) -> Pa
     return path
 
 
+def qat_state_save_path(generation: int, save_folder: str | PathLike[str]) -> Path:
+    path = Path(save_folder) / f'qat_state_{generation}.pt'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def checkpoint_manifest_path(generation: int, save_folder: str | PathLike[str]) -> Path:
     return Path(save_folder) / f'checkpoint_{generation}.json'
 
