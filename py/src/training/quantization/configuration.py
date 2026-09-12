@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field
@@ -24,7 +24,7 @@ TrainingQuantizationConfiguration: TypeAlias = Annotated[
 ]
 
 
-class QatCheckpointPhase(StrEnum):
+class QatCheckpointPhase(str, Enum):
     PRE_FOLD = 'pre_fold'
     DEPLOYMENT = 'deployment'
 
