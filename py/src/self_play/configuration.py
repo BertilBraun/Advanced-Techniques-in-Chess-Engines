@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 from math import isclose, isfinite
+from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, JsonValue, model_serializer, model_validator
@@ -41,9 +42,19 @@ class InferenceMemoryFormat(str, Enum):
     CHANNELS_LAST = 'channels_last'
 
 
-class InferenceBackend(str, Enum):
-    TORCHSCRIPT = 'torchscript'
-    TENSORRT = 'tensorrt'
+class TorchScriptInferenceBackend(FrozenModel):
+    kind: Literal['torchscript'] = 'torchscript'
+
+
+class TensorRtInferenceBackend(FrozenModel):
+    kind: Literal['tensorrt'] = 'tensorrt'
+    template_engine_path: Path
+
+
+InferenceBackendConfiguration: TypeAlias = Annotated[
+    TorchScriptInferenceBackend | TensorRtInferenceBackend,
+    Field(discriminator='kind'),
+]
 
 
 class DisabledForcedPlayoutConfiguration(FrozenModel):
@@ -137,7 +148,7 @@ class BatchedInferenceParams(FrozenModel):
     inference_workers: int = Field(gt=0)
     inference_batch_size: int = Field(gt=0)
     outstanding_batches_per_worker: int = Field(ge=1, le=2)
-    backend: InferenceBackend = InferenceBackend.TORCHSCRIPT
+    backend: InferenceBackendConfiguration = TorchScriptInferenceBackend()
     sdpa_backend: SdpaBackend = SdpaBackend.AUTOMATIC
     precision: InferencePrecision = InferencePrecision.BFLOAT16
     memory_format: InferenceMemoryFormat = InferenceMemoryFormat.CONTIGUOUS
@@ -154,7 +165,7 @@ class BatchedInferenceParams(FrozenModel):
                 # Every omitted key resolves to the shipped path, so a configuration written before
                 # these knobs existed keeps running unchanged.
                 return {
-                    'backend': InferenceBackend.TORCHSCRIPT.value,
+                    'backend': {'kind': 'torchscript'},
                     'sdpa_backend': SdpaBackend.AUTOMATIC.value,
                     'precision': InferencePrecision.BFLOAT16.value,
                     'memory_format': InferenceMemoryFormat.CONTIGUOUS.value,

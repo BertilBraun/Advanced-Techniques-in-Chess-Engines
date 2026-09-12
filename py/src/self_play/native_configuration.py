@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.self_play.configuration import (
     BatchedInferenceParams,
-    InferenceBackend,
+    InferenceBackendConfiguration,
     InferenceMemoryFormat,
     InferencePrecision,
     SdpaBackend,
+    TensorRtInferenceBackend,
+    TorchScriptInferenceBackend,
 )
 
 if TYPE_CHECKING:
@@ -34,14 +40,37 @@ def native_sdpa_backend(backend: SdpaBackend) -> NativeSdpaBackend:
             return NativeSdpaBackend.CUDNN
 
 
-def native_inference_backend(backend: InferenceBackend) -> NativeInferenceBackend:
+def native_inference_backend(backend: InferenceBackendConfiguration) -> NativeInferenceBackend:
     from AlphaZeroCpp import InferenceBackend as NativeInferenceBackend
 
     match backend:
-        case InferenceBackend.TORCHSCRIPT:
+        case TorchScriptInferenceBackend():
             return NativeInferenceBackend.TORCHSCRIPT
-        case InferenceBackend.TENSORRT:
+        case TensorRtInferenceBackend():
             return NativeInferenceBackend.TENSORRT
+
+
+def resolved_inference_model_path(model_path: Path, backend: InferenceBackendConfiguration) -> Path:
+    match backend:
+        case TorchScriptInferenceBackend():
+            return model_path
+        case TensorRtInferenceBackend(template_engine_path=template_engine_path):
+            publisher = Path(__file__).parents[2] / 'tools' / 'publish_tensorrt_engine.py'
+            completed = subprocess.run(
+                (
+                    sys.executable,
+                    str(publisher),
+                    '--model',
+                    str(model_path),
+                    '--template-engine',
+                    str(template_engine_path),
+                ),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            payload = json.loads(completed.stdout)
+            return Path(payload['engine_path'])
 
 
 def native_inference_precision(precision: InferencePrecision) -> NativeInferencePrecision:

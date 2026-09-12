@@ -9,7 +9,11 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.games.contracts import GameStateContract, TerminalOracle
 from src.games.representation import NetworkDimensions
 from src.self_play.configuration import BatchedInferenceParams, SelfPlayConfiguration
-from src.self_play.native_configuration import native_execution_options, native_inference_backend
+from src.self_play.native_configuration import (
+    native_execution_options,
+    native_inference_backend,
+    resolved_inference_model_path,
+)
 from src.self_play.parameters import (
     ParentValueFirstPlayUrgencyParameters,
     ReducedParentValueFirstPlayUrgencyParameters,
@@ -137,9 +141,10 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
 
         # Defaults to the self-play inference parameters; evaluation passes its own so backends can differ.
         effective = self.self_play_configuration.inference if inference is None else inference
+        resolved_model_path = resolved_inference_model_path(model_path, effective.backend)
         return InferenceConfiguration(
             device_id=device_id,
-            model_path=str(model_path),
+            model_path=str(resolved_model_path),
             device=InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA,
             execution_options=native_execution_options(effective),
             backend=native_inference_backend(effective.backend),
