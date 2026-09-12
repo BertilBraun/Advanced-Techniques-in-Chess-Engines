@@ -29,8 +29,10 @@ def prepare_training_startup(
     experiment = load_experiment_configuration(run_configuration_path.resolve())
     started_at = monotonic()
     manifest = prepare_experiment_training_run(experiment, expected_source_revision, approval_path)
-    write_resolved_experiment(Path(experiment.training.save_path) / 'resolved-experiment.json', experiment)
+    run_path = Path(experiment.training.save_path)
+    write_resolved_experiment(run_path / 'resolved-experiment.json', experiment)
     configure_tensorboard_run_directory(experiment.run.tensorboard_run_directory)
+    (run_path / 'run-outcome.json').unlink(missing_ok=True)
     return PreparedTrainingStartup(
         experiment=experiment,
         manifest=manifest,
