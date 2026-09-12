@@ -11,7 +11,6 @@ from src.training.checkpoint.contracts import (
     BootstrapPolicyPriorRecord,
     CheckpointManifest,
     CheckpointReference,
-    QatCheckpointRecord,
     load_checkpoint_manifest,
     load_checkpoint_manifest_path,
 )
@@ -33,6 +32,7 @@ from src.training.network import (
     NetworkDefinition,
     calibrate_bootstrap_policy_prior,
 )
+from src.training.quantization.configuration import QatCheckpointPhase
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
@@ -269,13 +269,18 @@ def save_model_and_optimizer(
 
 def _checkpoint_identity(
     manifest: CheckpointManifest,
-) -> tuple[NetworkDefinition, str, str, str, QatCheckpointRecord | None]:
+) -> tuple[NetworkDefinition, str, str, str, tuple[QatCheckpointPhase, int, str] | None]:
+    qat_identity = (
+        None
+        if manifest.qat is None
+        else (manifest.qat.phase, manifest.qat.completed_optimizer_steps, manifest.qat.state_sha256)
+    )
     return (
         manifest.network,
         manifest.model_sha256,
         manifest.optimizer_sha256,
         manifest.inference_model_sha256,
-        manifest.qat,
+        qat_identity,
     )
 
 
