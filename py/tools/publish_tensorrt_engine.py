@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -73,7 +74,7 @@ def refit_engine(template_path: Path, onnx_path: Path, output_path: Path) -> Non
     write_bytes_atomically(output_path, bytes(engine.serialize()))
 
 
-def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str | int | bool]:
+def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str | int | float | bool]:
     if not template_paths:
         raise ValueError('At least one TensorRT template is required.')
     engine_path = model_path.with_suffix('.trt.engine')
@@ -107,17 +108,21 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
                 exported = onnx.load(onnx_path)
                 onnx.checker.check_model(exported, full_check=True)
             selected_template_path: Path | None = None
+            refit_seconds: float | None = None
             failures: list[str] = []
             for template_path in template_paths:
+                refit_started_at = time.perf_counter()
                 try:
                     refit_engine(template_path, onnx_path, engine_path)
                 except (TypeError, ValueError) as error:
                     failures.append(f'{template_path}: {error}')
                     continue
                 selected_template_path = template_path
+                refit_seconds = time.perf_counter() - refit_started_at
                 break
             if selected_template_path is None:
                 raise ValueError('No TensorRT template accepted the checkpoint:\n' + '\n'.join(failures))
+            assert refit_seconds is not None
         finally:
             if owns_onnx:
                 onnx_path.unlink(missing_ok=True)
@@ -128,6 +133,7 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
             'source_sha256': source_sha256,
             'template_sha256': template_sha256,
             'batch_size': input_shape[0],
+            'refit_seconds': refit_seconds,
             'cached': False,
         }
         write_text_atomically(metadata_path, json.dumps(metadata, indent=2, sort_keys=True) + '\n')
