@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
 import tensorrt as trt
@@ -21,7 +22,10 @@ def build_template(
     onnx_path = output_path.with_suffix('.temporary.onnx')
     onnx_path.unlink(missing_ok=True)
     try:
-        export_onnx(model_path, onnx_path, (batch_size, channels, rows, columns))
+        if model_path.suffix == '.onnx':
+            shutil.copyfile(model_path, onnx_path)
+        else:
+            export_onnx(model_path, onnx_path, (batch_size, channels, rows, columns))
         logger = trt.Logger(trt.Logger.WARNING)
         builder = trt.Builder(logger)
         network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
