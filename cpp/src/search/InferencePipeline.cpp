@@ -98,7 +98,7 @@ void requireMatchingSignature(const std::vector<ModelTensorSignature> &current,
     }
 }
 
-PreparedInferenceModel
+TorchScriptInferenceModel
 prepareInferenceModelUpdate(const std::vector<ModelTensorSignature> &parameterSignature,
                             const std::vector<ModelTensorSignature> &bufferSignature,
                             const std::string &modelPath, const torch::Device &device,
@@ -641,9 +641,9 @@ PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &m
         {1, tensorSize(m_dimensions.channels), tensorSize(m_dimensions.rows),
          tensorSize(m_dimensions.columns)},
         torch::TensorOptions().device(m_device).dtype(m_torchDtype).memory_format(m_memoryFormat));
-    return TorchScriptInferenceModel(prepareInferenceModelUpdate(
+    return prepareInferenceModelUpdate(
         m_parameterSignature, m_bufferSignature, modelPath, m_device, m_torchDtype, m_memoryFormat,
-        validationInput, tensorSize(m_dimensions.actions), tensorSize(m_dimensions.outcomes)));
+        validationInput, tensorSize(m_dimensions.actions), tensorSize(m_dimensions.outcomes));
 }
 
 #ifdef USE_CUDA
