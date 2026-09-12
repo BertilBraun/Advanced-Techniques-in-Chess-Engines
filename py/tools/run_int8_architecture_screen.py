@@ -990,7 +990,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
         if arguments.cell.uses_qat:
             fake_outputs, _ = _model_outputs(model, fidelity_batches, device)
             fake_loss = _evaluate(model, evaluation_batches, objective, device)
-            if arguments.cell == ScreenCell.POST_QAT:
+            if arguments.cell in (ScreenCell.POST_QAT, ScreenCell.POST_SHARED_QAT):
                 floating_outputs = fake_outputs
                 legal_mask = torch.cat(
                     tuple(_legal_action_mask(batch.policy_legal_action_ids) for batch in fidelity_batches)
