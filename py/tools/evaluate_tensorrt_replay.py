@@ -6,7 +6,7 @@ from pathlib import Path
 
 import torch
 from pydantic import Field
-from src.training.batch import TrainingModelOutput
+from src.training.batch import TrainingBatch, TrainingModelOutput
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
@@ -49,12 +49,13 @@ class MarginAgreement(FrozenModel):
 
 
 class TensorRtReplayReport(FrozenModel):
-    schema_version: int = 1
+    schema_version: int = 2
     replay_store_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     onnx_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     engine_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     positions: int = Field(gt=0)
     batch_size: int = Field(gt=0)
+    onnx_runtime_loss: LossValues
     tensorrt_loss: LossValues
     policy_margin_agreement_to_onnx: tuple[MarginAgreement, ...]
 
@@ -81,6 +82,25 @@ def _policy_margin_agreement(
     return tuple(results)
 
 
+def _replay_loss(outputs: ModelOutputs, batches: tuple[TrainingBatch, ...]) -> LossValues:
+    objective = distillation_objective()
+    losses: list[LossValues] = []
+    offset = 0
+    for batch in batches:
+        position_count = len(batch)
+        cpu_batch = batch.to_device(torch.device('cpu'), non_blocking=False)
+        wdl_probabilities = outputs.wdl_probabilities[offset : offset + position_count]
+        training_output = TrainingModelOutput(
+            policy_logits=outputs.policy_logits[offset : offset + position_count],
+            wdl_logits=wdl_probabilities.clamp_min(torch.finfo(torch.float32).tiny).log(),
+            auxiliary_logits=(),
+            features=torch.empty(0),
+        )
+        losses.append(observed_losses(objective.calculate_loss(training_output, cpu_batch)))
+        offset += position_count
+    return mean_loss_values(tuple(losses))
+
+
 def run(arguments: Arguments) -> TensorRtReplayReport:
     dataset_input = ProductionReplayInput(
         kind='production_replay',
@@ -98,22 +118,12 @@ def run(arguments: Arguments) -> TensorRtReplayReport:
         device = torch.device('cuda', arguments.device_id)
         batches = _held_out_batches(opened, split.held_out_start_row, arguments.positions, BATCH_SIZE, device)
         runner = _TensorRtCudaGraphRunner(arguments.engine, batches[0].states, device, 10)
-        objective = distillation_objective()
         outputs: list[ModelOutputs] = []
-        losses: list[LossValues] = []
         legal_masks: list[torch.Tensor] = []
         for batch in batches:
             runner.load_states(batch.states)
             output = runner.outputs()
             outputs.append(output)
-            cpu_batch = batch.to_device(torch.device('cpu'), non_blocking=False)
-            training_output = TrainingModelOutput(
-                policy_logits=output.policy_logits,
-                wdl_logits=output.wdl_probabilities.clamp_min(torch.finfo(torch.float32).tiny).log(),
-                auxiliary_logits=(),
-                features=torch.empty(0),
-            )
-            losses.append(observed_losses(objective.calculate_loss(training_output, cpu_batch)))
             legal_masks.append(_legal_action_mask(batch.policy_legal_action_ids))
         candidate = ModelOutputs(
             policy_logits=torch.cat(tuple(output.policy_logits for output in outputs)),
@@ -128,7 +138,8 @@ def run(arguments: Arguments) -> TensorRtReplayReport:
             engine_sha256=file_sha256(arguments.engine),
             positions=arguments.positions,
             batch_size=BATCH_SIZE,
-            tensorrt_loss=mean_loss_values(tuple(losses)),
+            onnx_runtime_loss=_replay_loss(reference, batches),
+            tensorrt_loss=_replay_loss(candidate, batches),
             policy_margin_agreement_to_onnx=_policy_margin_agreement(reference, candidate, legal_mask),
         )
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
