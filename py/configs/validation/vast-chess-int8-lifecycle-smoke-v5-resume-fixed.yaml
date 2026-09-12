@@ -1,0 +1,10 @@
+extends: vast-chess-int8-lifecycle-smoke-v5-resume.yaml
+
+run:
+  run_name: vast-chess-int8-lifecycle-smoke-v5-resume-fixed
+  tensorboard_run_directory: vast-chess-int8-lifecycle-smoke-v5-resume-fixed
+
+training:
+  save_path: py/training_data/validation/vast-chess-int8-lifecycle-smoke-v5-resume-fixed
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-int8-lifecycle-smoke-v5-resume-fixed.stop
