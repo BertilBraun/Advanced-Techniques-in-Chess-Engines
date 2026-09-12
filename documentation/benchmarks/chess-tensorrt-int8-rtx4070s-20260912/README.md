@@ -12,7 +12,7 @@ Status: harness ready; measurement deferred until the live v34 run stops. This f
 ## Method
 
 [`benchmark_tensorrt_inference.py`](../../../py/tools/benchmark_tensorrt_inference.py) accepts a selected checkpoint
-manifest and separate benchmark/calibration dataset paths. It verifies the checkpoint and immutable dataset hashes,
+manifest, an immutable benchmark dataset, and either an immutable calibration dataset or replay store. It verifies the checkpoint and immutable dataset hashes,
 then exports the shipped trimmed policy/WDL TorchScript model to a fixed `[320, 52, 8, 8]` FP16 ONNX graph. It
 builds TensorRT 10.14 engines for FP16 and entropy-calibrated INT8 with FP16 fallback.
 
@@ -22,7 +22,20 @@ of policy/WDL outputs to FP32 staging tensors:
 
 - production reference: frozen TorchScript, BF16, channels-last, cuDNN benchmarking enabled;
 - TensorRT FP16;
-- TensorRT INT8 calibrated from the separately named immutable legal-position dataset.
+- TensorRT INT8 calibrated from 32,000 deterministically sampled v34 replay positions (100 full batches).
+
+The fidelity workload is the first 320 positions of `chess-stockfish-evaluation-v33.bin`, matching the dataset in
+the resolved v34 experiment configuration. That immutable file contains 516 positions and has SHA-256
+`147b525c430d2a677a6e1309ce60bf7bb22a4886726c5affae63a9f3349d96c8`; its manifest has SHA-256
+`d5f902b4283e223f5005860868e57be1971bb7216d9c265b408a3614c3f0a6a5`. The manifest's 332-byte packed
+state payload matches the current chess contract (40 binary planes × 8 bytes plus 12 scalar bytes), and its
+representation digest is `aa77cda28749d276e28fb3081cd9db924224bd002d0207401c78a72507c6ab4d`.
+
+The 516-position evaluation set is too small for representative INT8 calibration, so it is never used as the
+calibration source. The launch samples 32,000 distinct logical rows from the terminal v34 replay with seed
+`20260912`, without replacement. The report records the stopped replay's available row count, file size, header and
+layout hashes, selected logical-index hash, packed-state hash, and decoded-input hash. The calibration inputs therefore
+cannot include any row from the fixed evaluation artifact. Calibration refuses partial batches and never wraps rows.
 
 The default measurement performs 50 warm-up calls and 15 synchronized repetitions of 100 full batches. The report
 retains every repetition, median and p95 batch latency, and median positions/s. Fidelity uses legal-action-masked
@@ -65,9 +78,10 @@ terminal_generation=TERMINAL_GENERATION_SELECTED_AFTER_STOP
   --configuration /workspace/run-control/configs/vast-chess-8gpu-integrated-v34-resume-g1702.yaml \
   --checkpoint-manifest "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/checkpoint_${terminal_generation}.json" \
   --checkpoint-generation "${terminal_generation}" \
-  --benchmark-dataset /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v32.bin \
-  --calibration-dataset /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v32.bin \
-  --calibration-position-count 480 \
+  --benchmark-dataset /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v33.bin \
+  --calibration-replay /workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/replay.bin \
+  --calibration-position-count 32000 \
+  --calibration-random-seed 20260912 \
   --artifact-directory /workspace/tensorrt-v34-terminal \
   --output /workspace/tensorrt-v34-terminal/report.json \
   --gpu-id 0 \

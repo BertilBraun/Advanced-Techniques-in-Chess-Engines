@@ -14,8 +14,10 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
+import numpy as np
+import numpy.typing as npt
 import onnx
 import tensorrt as trt
 import torch
@@ -23,8 +25,13 @@ from pydantic import Field
 from src.evaluation.contracts import EVALUATION_DATASET_MANIFEST_ADAPTER
 from src.evaluation.dataset import dataset_manifest_path
 from src.experiment.configuration import experiment_configuration_sha256, load_chess_experiment_configuration
-from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.games.chess.configuration import ChessExperimentConfiguration
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT
+from src.replay.batch_loader import decode_states
+from src.replay.layout import ReplayLayout
+from src.replay.store import ReplayStore
 from src.training.checkpoint.contracts import load_checkpoint_manifest_path
+from src.training.targets import build_training_target_layout
 from src.util.atomic_file import write_bytes_atomically, write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
@@ -49,6 +56,8 @@ WDL_OUTPUT_NAME = 'wdl_probabilities'
 ONNX_OPSET_VERSION = 20
 TENSORRT_WORKSPACE_BYTES = 4 * 1024**3
 TENSORRT_BUILDER_OPTIMIZATION_LEVEL = 3
+DEFAULT_CALIBRATION_POSITION_COUNT = 32_000
+DEFAULT_CALIBRATION_RANDOM_SEED = 20_260_912
 
 
 class Backend(str, Enum):
@@ -58,12 +67,26 @@ class Backend(str, Enum):
 
 
 @dataclass(frozen=True)
+class EvaluationDatasetCalibrationSource:
+    path: Path
+
+
+@dataclass(frozen=True)
+class ReplayCalibrationSource:
+    path: Path
+    random_seed: int
+
+
+CalibrationSource = EvaluationDatasetCalibrationSource | ReplayCalibrationSource
+
+
+@dataclass(frozen=True)
 class BenchmarkArguments:
     configuration_path: Path
     checkpoint_manifest_path: Path
     checkpoint_generation: int
     benchmark_dataset_path: Path
-    calibration_dataset_path: Path
+    calibration_source: CalibrationSource
     artifact_directory: Path
     output_path: Path
     gpu_id: int
@@ -84,16 +107,44 @@ class DatasetIdentity(FrozenModel):
     data: ArtifactIdentity
     manifest: ArtifactIdentity
     available_positions: int = Field(gt=0)
+    packed_payload_bytes: int = Field(gt=0)
+    representation_digest: str = Field(pattern=r'^[0-9a-f]{64}$')
     selected_positions: int = Field(gt=0)
     selected_states_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     legal_action_mask_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
-class CalibrationIdentity(FrozenModel):
+class EvaluationDatasetCalibrationSourceIdentity(FrozenModel):
+    kind: Literal['evaluation_dataset'] = 'evaluation_dataset'
     dataset: DatasetIdentity
+
+
+class ReplayCalibrationSourceIdentity(FrozenModel):
+    kind: Literal['replay'] = 'replay'
+    path: str = Field(min_length=1)
+    file_size_bytes: int = Field(gt=0)
+    header_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    layout_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    available_positions: int = Field(gt=0)
+    selected_positions: int = Field(gt=0)
+    random_seed: int = Field(ge=0)
+    selected_logical_indices_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    selected_packed_states_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    selected_states_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
+CalibrationSourceIdentity = Annotated[
+    EvaluationDatasetCalibrationSourceIdentity | ReplayCalibrationSourceIdentity,
+    Field(discriminator='kind'),
+]
+
+
+class CalibrationIdentity(FrozenModel):
+    source: CalibrationSourceIdentity
     requested_positions: int = Field(gt=0)
     submitted_batches: int = Field(gt=0)
-    submitted_positions_including_wrap: int = Field(gt=0)
+    submitted_positions: int = Field(gt=0)
+    benchmark_input_overlap_positions: Literal[0] = 0
     calibration_cache: ArtifactIdentity
     algorithm: Literal['entropy_calibration_2'] = 'entropy_calibration_2'
 
@@ -128,7 +179,7 @@ class CandidateMeasurement(FrozenModel):
 
 
 class TensorRtInferenceBenchmarkReport(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     source_revision: SourceRevision
     experiment_configuration_path: str = Field(min_length=1)
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -291,12 +342,12 @@ class _TensorRtCudaGraphRunner(_CudaGraphRunner):
 class _EntropyCalibrator(trt.IInt8EntropyCalibrator2):
     def __init__(self, states: Tensor, device: torch.device, cache_path: Path) -> None:
         super().__init__()
-        if states.ndim != 4 or states.shape[0] < BATCH_SIZE:
-            raise ValueError(f'INT8 calibration needs at least {BATCH_SIZE} decoded positions.')
+        if states.ndim != 4 or states.shape[0] < BATCH_SIZE or states.shape[0] % BATCH_SIZE != 0:
+            raise ValueError(f'INT8 calibration needs a positive whole number of {BATCH_SIZE}-position batches.')
         self._states = states
         self._device = device
         self._cache_path = cache_path
-        self._batch_count = (states.shape[0] + BATCH_SIZE - 1) // BATCH_SIZE
+        self._batch_count = states.shape[0] // BATCH_SIZE
         self._batch_index = 0
         self._device_batch = torch.empty((BATCH_SIZE, *states.shape[1:]), device=device, dtype=torch.float16)
 
@@ -317,8 +368,7 @@ class _EntropyCalibrator(trt.IInt8EntropyCalibrator2):
         if self._batch_index >= self._batch_count:
             return None
         start = self._batch_index * BATCH_SIZE
-        indices = torch.arange(start, start + BATCH_SIZE, dtype=torch.int64) % self._states.shape[0]
-        self._device_batch.copy_(self._states.index_select(0, indices).to(dtype=torch.float16))
+        self._device_batch.copy_(self._states[start : start + BATCH_SIZE].to(dtype=torch.float16))
         torch.cuda.synchronize(self._device)
         self._batch_index += 1
         return [self._device_batch.data_ptr()]
@@ -335,6 +385,15 @@ def _tensor_sha256(tensor: Tensor) -> str:
     return hashlib.sha256(contiguous.numpy().tobytes()).hexdigest()
 
 
+def _array_sha256(array: npt.NDArray[np.generic]) -> str:
+    return hashlib.sha256(np.ascontiguousarray(array).tobytes()).hexdigest()
+
+
+def _input_overlap_count(left: Tensor, right: Tensor) -> int:
+    right_rows = {hashlib.sha256(row.numpy().tobytes()).digest() for row in right.detach().cpu().contiguous()}
+    return sum(hashlib.sha256(row.numpy().tobytes()).digest() in right_rows for row in left.detach().cpu().contiguous())
+
+
 def _load_dataset_identity(path: Path, selected_states: Tensor, legal_action_mask: Tensor) -> DatasetIdentity:
     manifest_path = dataset_manifest_path(path)
     if not path.is_file() or not manifest_path.is_file():
@@ -342,14 +401,92 @@ def _load_dataset_identity(path: Path, selected_states: Tensor, legal_action_mas
     manifest = EVALUATION_DATASET_MANIFEST_ADAPTER.validate_json(manifest_path.read_text(encoding='utf-8'))
     if file_sha256(path) != manifest.data_sha256:
         raise ValueError(f'Dataset hash does not match its manifest: {path}')
+    expected_payload_bytes = CHESS_STATE_CONTRACT.packed_plane_layout.payload_bytes
+    if manifest.packed_payload_bytes != expected_payload_bytes:
+        raise ValueError(
+            f'Dataset packed payload is {manifest.packed_payload_bytes} bytes; '
+            f'the current chess state contract requires {expected_payload_bytes}.'
+        )
     return DatasetIdentity(
         data=ArtifactIdentity(path=str(path), sha256=manifest.data_sha256),
         manifest=ArtifactIdentity(path=str(manifest_path), sha256=file_sha256(manifest_path)),
         available_positions=manifest.position_count,
+        packed_payload_bytes=manifest.packed_payload_bytes,
+        representation_digest=manifest.representation_digest,
         selected_positions=selected_states.shape[0],
         selected_states_sha256=_tensor_sha256(selected_states),
         legal_action_mask_sha256=_tensor_sha256(legal_action_mask),
     )
+
+
+def _replay_layout(configuration: ChessExperimentConfiguration) -> ReplayLayout:
+    return ReplayLayout(
+        packed_planes=CHESS_STATE_CONTRACT.packed_plane_layout,
+        targets=build_training_target_layout(
+            CHESS_NETWORK_DIMENSIONS.actions,
+            configuration.chess.objective.auxiliary_targets,
+        ),
+        maximum_policy_entries=configuration.training.lifecycle.replay.maximum_policy_entries,
+        maximum_legal_actions=CHESS_STATE_CONTRACT.maximum_legal_action_count,
+    )
+
+
+def _load_replay_calibration(
+    source: ReplayCalibrationSource,
+    position_count: int,
+    configuration: ChessExperimentConfiguration,
+) -> tuple[Tensor, ReplayCalibrationSourceIdentity]:
+    if not source.path.is_file():
+        raise ValueError(f'Calibration replay does not exist: {source.path}')
+    layout = _replay_layout(configuration)
+    store = ReplayStore.open(source.path, layout, writable=False)
+    try:
+        available_positions = store.state.size
+        if position_count > available_positions:
+            raise ValueError(
+                f'Calibration requests {position_count} replay positions, but only {available_positions} exist.'
+            )
+        selected_indices = np.sort(
+            np.random.default_rng(source.random_seed).choice(
+                available_positions,
+                size=position_count,
+                replace=False,
+            )
+        ).astype(np.int64)
+        encoded_states = store.gather_logical(selected_indices).encoded_state.copy()
+    finally:
+        store.close()
+    states = torch.from_numpy(decode_states(encoded_states, CHESS_STATE_CONTRACT)).to(torch.int8)
+    with source.path.open('rb') as replay_file:
+        header_sha256 = hashlib.sha256(replay_file.read(65_536)).hexdigest()
+    return states, ReplayCalibrationSourceIdentity(
+        path=str(source.path),
+        file_size_bytes=source.path.stat().st_size,
+        header_sha256=header_sha256,
+        layout_sha256=layout.digest,
+        available_positions=available_positions,
+        selected_positions=position_count,
+        random_seed=source.random_seed,
+        selected_logical_indices_sha256=_array_sha256(selected_indices),
+        selected_packed_states_sha256=_array_sha256(encoded_states),
+        selected_states_sha256=_tensor_sha256(states),
+    )
+
+
+def _load_calibration(
+    source: CalibrationSource,
+    position_count: int,
+    configuration: ChessExperimentConfiguration,
+) -> tuple[Tensor, CalibrationSourceIdentity]:
+    match source:
+        case EvaluationDatasetCalibrationSource(path=path):
+            states, legal_action_mask = load_positions(path, position_count)
+            states = states.to(torch.int8)
+            return states, EvaluationDatasetCalibrationSourceIdentity(
+                dataset=_load_dataset_identity(path, states, legal_action_mask)
+            )
+        case ReplayCalibrationSource():
+            return _load_replay_calibration(source, position_count, configuration)
 
 
 def _resolve_checkpoint(arguments: BenchmarkArguments) -> _ResolvedCheckpoint:
@@ -535,22 +672,27 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         raise ValueError(f'GPU ID {arguments.gpu_id} is not available.')
     if arguments.warmup_iterations < 1 or arguments.repetitions < 3 or arguments.iterations_per_repetition < 1:
         raise ValueError('Use at least one warm-up, three repetitions, and one timed iteration per repetition.')
-    if arguments.calibration_position_count < BATCH_SIZE:
-        raise ValueError(f'INT8 calibration requires at least {BATCH_SIZE} positions.')
+    if arguments.calibration_position_count < BATCH_SIZE or arguments.calibration_position_count % BATCH_SIZE != 0:
+        raise ValueError(f'INT8 calibration requires a positive whole number of {BATCH_SIZE}-position batches.')
 
     device = torch.device('cuda', arguments.gpu_id)
     torch.cuda.set_device(device)
     checkpoint = _resolve_checkpoint(arguments)
+    configuration = load_chess_experiment_configuration(arguments.configuration_path)
     benchmark_states, legal_action_mask = load_positions(arguments.benchmark_dataset_path, BATCH_SIZE)
-    calibration_states, calibration_legal_mask = load_positions(
-        arguments.calibration_dataset_path, arguments.calibration_position_count
-    )
     benchmark_states = benchmark_states.to(torch.int8)
-    calibration_states = calibration_states.to(torch.int8)
     benchmark_dataset = _load_dataset_identity(arguments.benchmark_dataset_path, benchmark_states, legal_action_mask)
-    calibration_dataset = _load_dataset_identity(
-        arguments.calibration_dataset_path, calibration_states, calibration_legal_mask
+    calibration_states, calibration_source_identity = _load_calibration(
+        arguments.calibration_source,
+        arguments.calibration_position_count,
+        configuration,
     )
+    overlap_count = _input_overlap_count(calibration_states, benchmark_states)
+    if overlap_count:
+        raise ValueError(
+            f'Calibration contains {overlap_count} inputs from the 320-position fidelity workload; '
+            'select a disjoint calibration source or random seed.'
+        )
 
     arguments.artifact_directory.mkdir(parents=True, exist_ok=True)
     onnx_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-fp16.onnx'
@@ -610,7 +752,6 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         )
     )
     properties = torch.cuda.get_device_properties(device)
-    configuration = load_chess_experiment_configuration(arguments.configuration_path)
     return TensorRtInferenceBenchmarkReport(
         source_revision=read_source_revision(),
         experiment_configuration_path=str(arguments.configuration_path),
@@ -623,10 +764,10 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         inference_model=ArtifactIdentity(path=str(checkpoint.model_path), sha256=checkpoint.model_sha256),
         benchmark_dataset=benchmark_dataset,
         calibration=CalibrationIdentity(
-            dataset=calibration_dataset,
+            source=calibration_source_identity,
             requested_positions=arguments.calibration_position_count,
             submitted_batches=calibrator.batch_count,
-            submitted_positions_including_wrap=calibrator.batch_count * BATCH_SIZE,
+            submitted_positions=calibrator.batch_count * BATCH_SIZE,
             calibration_cache=ArtifactIdentity(
                 path=str(calibration_cache_path), sha256=file_sha256(calibration_cache_path)
             ),
@@ -666,26 +807,36 @@ def parse_arguments() -> BenchmarkArguments:
     parser.add_argument('--checkpoint-manifest', type=Path, required=True)
     parser.add_argument('--checkpoint-generation', type=int, required=True)
     parser.add_argument('--benchmark-dataset', type=Path, required=True)
-    parser.add_argument('--calibration-dataset', type=Path, required=True)
+    calibration_group = parser.add_mutually_exclusive_group(required=True)
+    calibration_group.add_argument('--calibration-dataset', type=Path)
+    calibration_group.add_argument('--calibration-replay', type=Path)
+    parser.add_argument('--calibration-random-seed', type=int, default=DEFAULT_CALIBRATION_RANDOM_SEED)
     parser.add_argument('--artifact-directory', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--gpu-id', type=int, default=0)
     parser.add_argument('--warmup-iterations', type=int, default=50)
     parser.add_argument('--repetitions', type=int, default=15)
     parser.add_argument('--iterations-per-repetition', type=int, default=100)
-    parser.add_argument('--calibration-position-count', type=int, default=480)
+    parser.add_argument('--calibration-position-count', type=int, default=DEFAULT_CALIBRATION_POSITION_COUNT)
     parser.add_argument('--minimum-policy-top1-agreement', type=float, default=0.98)
     parser.add_argument('--maximum-mean-policy-kl-divergence', type=float, default=0.005)
     parser.add_argument('--maximum-wdl-mean-absolute-error', type=float, default=0.01)
     parser.add_argument('--maximum-expected-value-mean-absolute-error', type=float, default=0.015)
     parser.add_argument('--acknowledge-gpu-load', action='store_true')
     parsed = parser.parse_args()
+    if parsed.calibration_dataset is not None:
+        calibration_source: CalibrationSource = EvaluationDatasetCalibrationSource(parsed.calibration_dataset.resolve())
+    else:
+        calibration_source = ReplayCalibrationSource(
+            parsed.calibration_replay.resolve(),
+            parsed.calibration_random_seed,
+        )
     return BenchmarkArguments(
         configuration_path=parsed.configuration.resolve(),
         checkpoint_manifest_path=parsed.checkpoint_manifest.resolve(),
         checkpoint_generation=parsed.checkpoint_generation,
         benchmark_dataset_path=parsed.benchmark_dataset.resolve(),
-        calibration_dataset_path=parsed.calibration_dataset.resolve(),
+        calibration_source=calibration_source,
         artifact_directory=parsed.artifact_directory.resolve(),
         output_path=parsed.output.resolve(),
         gpu_id=parsed.gpu_id,
