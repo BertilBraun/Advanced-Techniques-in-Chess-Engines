@@ -261,10 +261,15 @@ def _calibration_loop(
     device: torch.device,
 ) -> Callable[[nn.Module], None]:
     def run(model: nn.Module) -> None:
-        with torch.inference_mode():
-            for start in range(0, len(indices), batch_size):
-                batch = _replay_batch(dataset, indices[start : start + batch_size], device)
-                model(batch.states)
+        was_training = model.training
+        model.eval()
+        try:
+            with torch.inference_mode():
+                for start in range(0, len(indices), batch_size):
+                    batch = _replay_batch(dataset, indices[start : start + batch_size], device)
+                    model(batch.states)
+        finally:
+            model.train(was_training)
 
     return run
 
