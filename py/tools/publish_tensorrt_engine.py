@@ -105,7 +105,7 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
             for template_path in template_paths:
                 try:
                     refit_engine(template_path, onnx_path, engine_path)
-                except ValueError as error:
+                except (TypeError, ValueError) as error:
                     failures.append(f'{template_path}: {error}')
                     continue
                 selected_template_path = template_path

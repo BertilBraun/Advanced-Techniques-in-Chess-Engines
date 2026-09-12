@@ -28,6 +28,7 @@ lichess = [
     "rich",
 ]
 tensorrt = [
+    "nvidia-modelopt==0.46.1; sys_platform == 'linux'",
     "onnx==1.21.0",
     "tensorrt-cu12==10.14.1.48.post1; sys_platform == 'linux'",
 ]
