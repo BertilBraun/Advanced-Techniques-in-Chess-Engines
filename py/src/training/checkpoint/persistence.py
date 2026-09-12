@@ -302,10 +302,11 @@ def _copy_checkpoint(
             raise ValueError(mismatch_message)
         return destination
 
+    inference_suffix = '.jit.pt' if source_manifest.qat is None or generation == 0 else '.int8.onnx'
     destination_paths = (
         model_save_path(generation, destination_folder),
         optimizer_save_path(generation, destination_folder),
-        model_save_path(generation, destination_folder).with_suffix('.jit.pt'),
+        destination_folder / f'model_{generation}{inference_suffix}',
     )
     destination_qat_path = qat_state_save_path(generation, destination_folder) if source_qat_path is not None else None
     if any(path.exists() for path in destination_paths) or (
