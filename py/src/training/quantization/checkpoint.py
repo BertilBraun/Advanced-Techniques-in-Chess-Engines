@@ -10,6 +10,7 @@ from src.training.checkpoint.contracts import (
     CheckpointReference,
     QatCheckpointRecord,
     load_checkpoint_manifest,
+    load_checkpoint_manifest_path,
 )
 from src.training.checkpoint.paths import (
     checkpoint_manifest_path,
@@ -146,3 +147,47 @@ def load_qat_model_and_optimizer(
     load_model_state_dict(restored.model, weights, reference.model_path)
     optimizer = load_optimizer(reference.optimizer_path, restored.model, optimizer_configuration, device)
     return restored.model, optimizer, reference.qat_state
+
+
+def qat_inference_checkpoint_for_batch(
+    checkpoint: CheckpointReference,
+    batch_size: int,
+    network_configuration: NetworkConfiguration,
+    optimizer_configuration: OptimizerConfiguration,
+    quantization_configuration: TensorRtInt8QatConfiguration,
+    device: torch.device,
+    dimensions: NetworkDimensions,
+    auxiliary_heads: tuple[AuxiliaryHeadLayout, ...] = (),
+) -> CheckpointReference:
+    if batch_size <= 0:
+        raise ValueError('QAT inference batch size must be positive.')
+    manifest = load_checkpoint_manifest_path(checkpoint.manifest_path, checkpoint.generation)
+    if manifest.qat is None:
+        raise ValueError('A batch-specific QAT inference artifact requires a QAT checkpoint.')
+    if checkpoint.generation == 0:
+        raise ValueError('Generation-zero QAT inference uses the TorchScript bootstrap artifact.')
+    artifact_path = checkpoint.manifest_path.parent / (
+        f'model_{checkpoint.generation}.int8-b{batch_size}-{checkpoint.inference_model_sha256[:16]}.onnx'
+    )
+    if not artifact_path.is_file():
+        model, _, _ = load_qat_model_and_optimizer(
+            checkpoint.generation,
+            network_configuration,
+            optimizer_configuration,
+            quantization_configuration,
+            device,
+            checkpoint.manifest_path.parent,
+            dimensions,
+            auxiliary_heads,
+        )
+        example_states = torch.zeros(
+            (batch_size, dimensions.channels, dimensions.rows, dimensions.columns),
+            device=device,
+        )
+        export_qat_onnx(model, artifact_path, example_states)
+    return checkpoint.model_copy(
+        update={
+            'inference_model_path': artifact_path,
+            'inference_model_sha256': file_sha256(artifact_path),
+        }
+    )

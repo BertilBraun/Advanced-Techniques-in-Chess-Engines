@@ -4,12 +4,13 @@ import time
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+import torch
 from src.evaluation.configuration import EvaluationSearchConfiguration, EvaluationTreeSearchOverrides
 from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
 from src.games.implementation import GameImplementation, resolved_evaluation_parameters
 from src.games.representation import NetworkDimensions
-from src.self_play.configuration import BatchedInferenceParams
+from src.self_play.configuration import BatchedInferenceParams, TensorRtInferenceBackend
 from src.self_play.native_search import NativeSelfPlaySearch
 from src.self_play.parameters import (
     ResolvedSelfPlayParameters,
@@ -17,6 +18,8 @@ from src.self_play.parameters import (
 from src.self_play.resignation import CalibratedResignationConfiguration
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
+from src.training.quantization.checkpoint import qat_inference_checkpoint_for_batch
+from src.training.quantization.configuration import TensorRtInt8QatConfiguration
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 from src.util.generation_schedule import FloatGenerationSchedule
 from src.util.log import log
@@ -107,6 +110,20 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         configuration: EvaluationSearchConfiguration,
         tree_search: EvaluationTreeSearchOverrides | None = None,
     ) -> ChessSelfPlaySearch:
+        match configuration.inference.backend, self.configuration.training.trainer.quantization:
+            case TensorRtInferenceBackend(), TensorRtInt8QatConfiguration() as quantization_configuration:
+                checkpoint = qat_inference_checkpoint_for_batch(
+                    checkpoint,
+                    configuration.inference.inference_batch_size,
+                    self.configuration.training.initial_model.network,
+                    self.configuration.training.trainer.optimizer,
+                    quantization_configuration,
+                    torch.device('cuda', device_id),
+                    self.network_dimensions,
+                    self.target_layout.auxiliary_heads,
+                )
+            case _:
+                pass
         parameters = self.evaluation_parameters_at(checkpoint.generation, configuration, tree_search)
         return self._create_search(device_id, checkpoint, parameters, configuration.inference)
 

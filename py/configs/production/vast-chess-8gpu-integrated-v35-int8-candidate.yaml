@@ -79,6 +79,7 @@ chess:
     value_loss_weight: 1.0
 
 evaluation:
+  maximum_concurrent_jobs: 1
   definitions:
   - kind: stockfish_adaptive_nodes
     definition_id: stockfish-searched
