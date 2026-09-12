@@ -51,7 +51,7 @@ class TensorRtLayerDescription(FrozenModel):
     layer_type: str = Field(alias='LayerType', min_length=1)
     inputs: tuple[TensorRtTensorDescription, ...] = Field(alias='Inputs')
     outputs: tuple[TensorRtTensorDescription, ...] = Field(alias='Outputs')
-    parameter_type: str = Field(alias='ParameterType', min_length=1)
+    parameter_type: str | None = Field(default=None, alias='ParameterType', min_length=1)
     origin: str | None = Field(default=None, alias='Origin')
     tactic_name: str | None = Field(default=None, alias='TacticName')
     tactic_value: str | None = Field(default=None, alias='TacticValue')
