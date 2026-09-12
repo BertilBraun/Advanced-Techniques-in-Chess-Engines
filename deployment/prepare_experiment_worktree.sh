@@ -11,6 +11,7 @@ build_cache_root="${ENGINE_BUILD_CACHE_ROOT:-/workspace/experiment-build-cache}"
 shared_dependency_root="${ENGINE_SHARED_DEPENDENCY_ROOT:-${control_repository}/cpp/build/_deps}"
 build_jobs="${ENGINE_BUILD_JOBS:-$(nproc)}"
 trust_existing_native_build="${ENGINE_TRUST_EXISTING_NATIVE_BUILD:-0}"
+enable_tensorrt="${ENGINE_ENABLE_TENSORRT:-0}"
 
 for required_command in cmake flock git sha256sum; do
     if ! command -v "${required_command}" >/dev/null 2>&1; then
@@ -20,6 +21,10 @@ for required_command in cmake flock git sha256sum; do
 done
 if [[ ! -x "${virtual_environment_python}" ]]; then
     echo "Training Python is unavailable: ${virtual_environment_python}" >&2
+    exit 1
+fi
+if [[ "${enable_tensorrt}" != 0 && "${enable_tensorrt}" != 1 ]]; then
+    echo "ENGINE_ENABLE_TENSORRT must be 0 or 1." >&2
     exit 1
 fi
 if [[ ! -d "${engine_directory}" ]]; then
@@ -51,7 +56,7 @@ fi
 cpp_tree="$(git -C "${source_root}" rev-parse HEAD:cpp)"
 runtime_identity="$(${virtual_environment_python} -c 'import platform, sysconfig, torch; print("|".join((platform.machine(), sysconfig.get_config_var("SOABI"), torch.__version__, str(torch.version.cuda), str(torch._C._GLIBCXX_USE_CXX11_ABI))))')"
 compiler_identity="$(c++ --version | head -n 1)"
-cache_key="$(printf '%s\n%s\n%s\n' "${cpp_tree}" "${runtime_identity}" "${compiler_identity}" | sha256sum | cut -d ' ' -f 1)"
+cache_key="$(printf '%s\n%s\n%s\n%s\n' "${cpp_tree}" "${runtime_identity}" "${compiler_identity}" "${enable_tensorrt}" | sha256sum | cut -d ' ' -f 1)"
 native_cache_directory="${build_cache_root}/native/${cache_key}"
 lock_path="${build_cache_root}/locks/${cache_key}.lock"
 mkdir -p "$(dirname "${lock_path}")" "$(dirname "${native_cache_directory}")"
@@ -76,6 +81,7 @@ if [[ "${trust_existing_native_build}" != 1 || ! -f "${source_root}/py/AlphaZero
         -B "${source_root}/cpp/build" \
         -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
+        -DENABLE_TENSORRT="$([[ "${enable_tensorrt}" == 1 ]] && printf ON || printf OFF)" \
         -DPython3_EXECUTABLE="${virtual_environment_python}" \
         -DFETCHCONTENT_SOURCE_DIR_PYBIND11="${shared_dependency_root}/pybind11-src" \
         -DFETCHCONTENT_SOURCE_DIR_STOCKFISH="${shared_dependency_root}/stockfish-src" \

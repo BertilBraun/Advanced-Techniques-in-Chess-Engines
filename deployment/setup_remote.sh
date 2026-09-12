@@ -11,6 +11,7 @@ python_command="${ENGINE_PYTHON:-python3}"
 uv_version="${ENGINE_UV_VERSION:-0.11.14}"
 open_file_soft_limit="${ENGINE_OPEN_FILE_SOFT_LIMIT:-65536}"
 install_ccache="${ENGINE_INSTALL_CCACHE:-1}"
+enable_tensorrt="${ENGINE_ENABLE_TENSORRT:-0}"
 
 if [[ $# -eq 0 ]]; then
     echo "Usage: setup_remote.sh COMMAND [ARGUMENT ...]" >&2
@@ -28,6 +29,10 @@ if [[ "${install_ccache}" != 0 && "${install_ccache}" != 1 ]]; then
     echo "ENGINE_INSTALL_CCACHE must be 0 or 1." >&2
     exit 1
 fi
+if [[ "${enable_tensorrt}" != 0 && "${enable_tensorrt}" != 1 ]]; then
+    echo "ENGINE_ENABLE_TENSORRT must be 0 or 1." >&2
+    exit 1
+fi
 if [[ -n "${repository_depth}" && ! "${repository_depth}" =~ ^[1-9][0-9]*$ ]]; then
     echo "ENGINE_REPOSITORY_DEPTH must be a positive integer when set." >&2
     exit 1
@@ -39,6 +44,14 @@ if [[ "${install_ccache}" == 1 ]] && ! command -v ccache >/dev/null 2>&1; then
     fi
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends ccache
+fi
+if [[ "${enable_tensorrt}" == 1 ]]; then
+    if [[ "$(id -u)" -ne 0 ]] || ! command -v apt-get >/dev/null 2>&1; then
+        echo "TensorRT development libraries require root and apt-get." >&2
+        exit 1
+    fi
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends libnvinfer-dev
 fi
 
 if ! [[ "${open_file_soft_limit}" =~ ^[1-9][0-9]*$ ]]; then
@@ -71,9 +84,11 @@ virtual_environment_python="${virtual_environment}/bin/python"
 virtual_environment_uv="${virtual_environment}/bin/uv"
 
 "${virtual_environment_python}" -m pip install --disable-pip-version-check "uv==${uv_version}"
-UV_PROJECT_ENVIRONMENT="${virtual_environment}" "${virtual_environment_uv}" sync \
-    --locked \
-    --project "${repository_directory}"
+sync_arguments=(sync --locked --project "${repository_directory}")
+if [[ "${enable_tensorrt}" == 1 ]]; then
+    sync_arguments+=(--extra tensorrt)
+fi
+UV_PROJECT_ENVIRONMENT="${virtual_environment}" "${virtual_environment_uv}" "${sync_arguments[@]}"
 
 python_nvidia_library_path="$(
     "${virtual_environment_python}" -c \
@@ -90,6 +105,7 @@ cmake \
     -S "${repository_directory}/cpp" \
     -B "${repository_directory}/cpp/build" \
     -DCMAKE_BUILD_TYPE=Release \
+    -DENABLE_TENSORRT="$([[ "${enable_tensorrt}" == 1 ]] && printf ON || printf OFF)" \
     -DPython3_EXECUTABLE="${virtual_environment_python}"
 cmake --build "${repository_directory}/cpp/build" --parallel
 

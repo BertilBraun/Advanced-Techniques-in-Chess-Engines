@@ -27,6 +27,10 @@ lichess = [
     "requests",
     "rich",
 ]
+tensorrt = [
+    "onnx==1.21.0",
+    "tensorrt-cu12==10.14.1.48.post1; sys_platform == 'linux'",
+]
 
 [dependency-groups]
 dev = [
