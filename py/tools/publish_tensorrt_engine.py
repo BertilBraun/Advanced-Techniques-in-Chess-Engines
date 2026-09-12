@@ -96,10 +96,16 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
         if template is None:
             raise ValueError(f'Could not deserialize TensorRT template: {template_paths[0]}')
         input_shape = engine_input_shape(template)
-        onnx_path = engine_path.with_suffix('.temporary.onnx')
-        onnx_path.unlink(missing_ok=True)
+        owns_onnx = model_path.suffix != '.onnx'
+        onnx_path = engine_path.with_suffix('.temporary.onnx') if owns_onnx else model_path
+        if owns_onnx:
+            onnx_path.unlink(missing_ok=True)
         try:
-            export_onnx(model_path, onnx_path, input_shape)
+            if owns_onnx:
+                export_onnx(model_path, onnx_path, input_shape)
+            else:
+                exported = onnx.load(onnx_path)
+                onnx.checker.check_model(exported, full_check=True)
             selected_template_path: Path | None = None
             failures: list[str] = []
             for template_path in template_paths:
@@ -113,7 +119,8 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
             if selected_template_path is None:
                 raise ValueError('No TensorRT template accepted the checkpoint:\n' + '\n'.join(failures))
         finally:
-            onnx_path.unlink(missing_ok=True)
+            if owns_onnx:
+                onnx_path.unlink(missing_ok=True)
         template_sha256 = file_sha256(selected_template_path)
         metadata = {
             'engine_path': str(engine_path),

@@ -1,0 +1,44 @@
+extends: vast-chess-8gpu-integrated-v35.yaml
+
+run:
+  run_name: vast-chess-8gpu-integrated-v35-int8-candidate
+  tensorboard_run_directory: vast-chess-8gpu-integrated-v35-int8-candidate
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-integrated-v35-int8-candidate
+  trainer:
+    quantization:
+      kind: tensorrt_int8_qat
+      fold_after_optimizer_steps: 1000
+      calibration_positions: 2048
+      recalibration_interval_generations: 1
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-integrated-v35-int8-candidate.stop
+  progressive_model_sizing:
+    kind: fixed
+    model:
+      model_id: chess-cnn-scaled-post-14x160-fromto-int8
+      network:
+        kind: convolutional
+        num_layers: 14
+        hidden_size: 160
+        residual_block:
+          kind: scaled_post_activation
+          branch_scale: 0.2672612419124244
+          activation_cap: 6.0
+        residual_context:
+          kind: global_pooling
+          placement: every_second_block
+        policy_head:
+          kind: chess_from_to_attention_v1
+          key_size: 128
+        num_value_channels: 2
+        value_fc_size: 48
+
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: tensorrt
+        template_engine_paths:
+        - /workspace/tensorrt/v35-int8-14x160-template.engine
