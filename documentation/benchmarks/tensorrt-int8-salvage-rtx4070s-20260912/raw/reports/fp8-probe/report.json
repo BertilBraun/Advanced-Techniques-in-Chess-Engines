@@ -1,0 +1,27 @@
+{
+  "fidelity": {
+    "positions": 320,
+    "policy_top1_agreement": 0.890625,
+    "mean_policy_kl_divergence": 0.02306803358181772,
+    "maximum_policy_kl_divergence": 0.27496916190455795,
+    "wdl_mean_absolute_error": 0.008314132690429688,
+    "wdl_maximum_absolute_error": 0.17919921875,
+    "expected_value_mean_absolute_error": 0.02060301899909973,
+    "expected_value_maximum_absolute_error": 0.30145263671875
+  },
+  "timing": {
+    "repetitions": 3,
+    "iterations_per_repetition": 20,
+    "batch_size": 320,
+    "repetition_seconds": [
+      0.062353785149753094,
+      0.06242843810468912,
+      0.05780167016200721
+    ],
+    "minimum_batch_milliseconds": 2.8900835081003606,
+    "median_batch_milliseconds": 3.1176892574876547,
+    "p95_batch_milliseconds": 3.121048640459776,
+    "maximum_batch_milliseconds": 3.121421905234456,
+    "median_positions_per_second": 102640.12015676874
+  }
+}

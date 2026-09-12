@@ -1,0 +1,330 @@
+{
+  "single_early_conv": {
+    "qdq_node_count": 2,
+    "source_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "qdq_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "source_ort_vs_qdq_ort": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9897959183673469,
+      "mean_policy_kl_divergence": 0.0004740334909393703,
+      "maximum_policy_kl_divergence": 0.010094332549983657,
+      "wdl_mean_absolute_error": 0.0016137454341970333,
+      "wdl_maximum_absolute_error": 0.022996127605438232,
+      "expected_value_mean_absolute_error": 0.004183647682538674,
+      "expected_value_maximum_absolute_error": 0.04392758011817932
+    },
+    "qdq_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9846938775510204,
+      "mean_policy_kl_divergence": 0.0003626327054249538,
+      "maximum_policy_kl_divergence": 0.00470506922521477,
+      "wdl_mean_absolute_error": 0.0012033326285226004,
+      "wdl_maximum_absolute_error": 0.02197265625,
+      "expected_value_mean_absolute_error": 0.00309227923957669,
+      "expected_value_maximum_absolute_error": 0.0439453125
+    },
+    "source_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9948979591836735,
+      "mean_policy_kl_divergence": 0.0003377273356598484,
+      "maximum_policy_kl_divergence": 0.002925706560780887,
+      "wdl_mean_absolute_error": 0.0014491545806201746,
+      "wdl_maximum_absolute_error": 0.03232395648956299,
+      "expected_value_mean_absolute_error": 0.0038275467790188076,
+      "expected_value_maximum_absolute_error": 0.06441298127174377
+    }
+  },
+  "ranked_4": {
+    "qdq_node_count": 8,
+    "source_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "qdq_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "source_ort_vs_qdq_ort": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9540816326530612,
+      "mean_policy_kl_divergence": 0.002509413851342745,
+      "maximum_policy_kl_divergence": 0.04175734589820903,
+      "wdl_mean_absolute_error": 0.004027263118828438,
+      "wdl_maximum_absolute_error": 0.04799187183380127,
+      "expected_value_mean_absolute_error": 0.010240912859147529,
+      "expected_value_maximum_absolute_error": 0.08208766579627991
+    },
+    "qdq_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9489795918367347,
+      "mean_policy_kl_divergence": 0.002950210854305429,
+      "maximum_policy_kl_divergence": 0.023944578334028,
+      "wdl_mean_absolute_error": 0.004247655673902862,
+      "wdl_maximum_absolute_error": 0.0654296875,
+      "expected_value_mean_absolute_error": 0.010842011899364238,
+      "expected_value_maximum_absolute_error": 0.126953125
+    },
+    "source_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9642857142857143,
+      "mean_policy_kl_divergence": 0.0009280337131624478,
+      "maximum_policy_kl_divergence": 0.009983050673384362,
+      "wdl_mean_absolute_error": 0.002669724968395063,
+      "wdl_maximum_absolute_error": 0.059921056032180786,
+      "expected_value_mean_absolute_error": 0.007124679356727901,
+      "expected_value_maximum_absolute_error": 0.11910048127174377
+    }
+  },
+  "ranked_8": {
+    "qdq_node_count": 16,
+    "source_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "qdq_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "source_ort_vs_qdq_ort": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9336734693877551,
+      "mean_policy_kl_divergence": 0.007223944824693608,
+      "maximum_policy_kl_divergence": 0.12266330037339274,
+      "wdl_mean_absolute_error": 0.005414948502530148,
+      "wdl_maximum_absolute_error": 0.09584987163543701,
+      "expected_value_mean_absolute_error": 0.013991506816581728,
+      "expected_value_maximum_absolute_error": 0.18656358122825623
+    },
+    "qdq_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9336734693877551,
+      "mean_policy_kl_divergence": 0.009852983809554041,
+      "maximum_policy_kl_divergence": 0.07921776109295373,
+      "wdl_mean_absolute_error": 0.006230192119572439,
+      "wdl_maximum_absolute_error": 0.181396484375,
+      "expected_value_mean_absolute_error": 0.01633294747800243,
+      "expected_value_maximum_absolute_error": 0.360107421875
+    },
+    "source_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9591836734693877,
+      "mean_policy_kl_divergence": 0.004264671321402099,
+      "maximum_policy_kl_divergence": 0.10443373769867323,
+      "wdl_mean_absolute_error": 0.004272290511804373,
+      "wdl_maximum_absolute_error": 0.08799722790718079,
+      "expected_value_mean_absolute_error": 0.01123644681338563,
+      "expected_value_maximum_absolute_error": 0.17354384064674377
+    }
+  },
+  "contiguous_blocks_0_3": {
+    "qdq_node_count": 16,
+    "source_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "qdq_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "source_ort_vs_qdq_ort": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9336734693877551,
+      "mean_policy_kl_divergence": 0.005971956076303631,
+      "maximum_policy_kl_divergence": 0.12553716034594875,
+      "wdl_mean_absolute_error": 0.005931687636338934,
+      "wdl_maximum_absolute_error": 0.06432795524597168,
+      "expected_value_mean_absolute_error": 0.015234682075821852,
+      "expected_value_maximum_absolute_error": 0.1118125319480896
+    },
+    "qdq_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9387755102040817,
+      "mean_policy_kl_divergence": 0.007106324646082109,
+      "maximum_policy_kl_divergence": 0.05394375310835236,
+      "wdl_mean_absolute_error": 0.006598044414909518,
+      "wdl_maximum_absolute_error": 0.12255859375,
+      "expected_value_mean_absolute_error": 0.01710145327509666,
+      "expected_value_maximum_absolute_error": 0.244873046875
+    },
+    "source_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.9693877551020408,
+      "mean_policy_kl_divergence": 0.003391553421199346,
+      "maximum_policy_kl_divergence": 0.06626712696830958,
+      "wdl_mean_absolute_error": 0.0038938562015109522,
+      "wdl_maximum_absolute_error": 0.11802652478218079,
+      "expected_value_mean_absolute_error": 0.010187518857752107,
+      "expected_value_maximum_absolute_error": 0.23311415314674377
+    }
+  },
+  "ranked_12": {
+    "qdq_node_count": 24,
+    "source_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "qdq_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "source_ort_vs_qdq_ort": {
+      "positions": 196,
+      "policy_top1_agreement": 0.75,
+      "mean_policy_kl_divergence": 0.13940505713680512,
+      "maximum_policy_kl_divergence": 2.3044657980188648,
+      "wdl_mean_absolute_error": 0.021304839648635818,
+      "wdl_maximum_absolute_error": 0.373681902885437,
+      "expected_value_mean_absolute_error": 0.05527667235464276,
+      "expected_value_maximum_absolute_error": 0.7292962670326233
+    },
+    "qdq_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.8979591836734694,
+      "mean_policy_kl_divergence": 0.018372193066574574,
+      "maximum_policy_kl_divergence": 0.10170647316419512,
+      "wdl_mean_absolute_error": 0.010466893513997396,
+      "wdl_maximum_absolute_error": 0.15234375,
+      "expected_value_mean_absolute_error": 0.02733086566535794,
+      "expected_value_maximum_absolute_error": 0.25177001953125
+    },
+    "source_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.7959183673469388,
+      "mean_policy_kl_divergence": 0.14537647200341916,
+      "maximum_policy_kl_divergence": 2.8350170891622004,
+      "wdl_mean_absolute_error": 0.021592874070439413,
+      "wdl_maximum_absolute_error": 0.3668675422668457,
+      "expected_value_mean_absolute_error": 0.05663451155034673,
+      "expected_value_maximum_absolute_error": 0.7195306420326233
+    }
+  },
+  "ranked_20": {
+    "qdq_node_count": 40,
+    "source_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "qdq_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "source_ort_vs_qdq_ort": {
+      "positions": 196,
+      "policy_top1_agreement": 0.3469387755102041,
+      "mean_policy_kl_divergence": 1.2369379621934284,
+      "maximum_policy_kl_divergence": 7.340064008525563,
+      "wdl_mean_absolute_error": 0.05107961331500488,
+      "wdl_maximum_absolute_error": 0.5279250741004944,
+      "expected_value_mean_absolute_error": 0.13088791904738173,
+      "expected_value_maximum_absolute_error": 1.035509392619133
+    },
+    "qdq_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.5153061224489796,
+      "mean_policy_kl_divergence": 0.598138467646348,
+      "maximum_policy_kl_divergence": 9.380523635648645,
+      "wdl_mean_absolute_error": 0.017068016285798987,
+      "wdl_maximum_absolute_error": 0.1875,
+      "expected_value_mean_absolute_error": 0.0450160162789481,
+      "expected_value_maximum_absolute_error": 0.36083984375
+    },
+    "source_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.3622448979591837,
+      "mean_policy_kl_divergence": 1.357493787158241,
+      "maximum_policy_kl_divergence": 7.475386165848933,
+      "wdl_mean_absolute_error": 0.05052780375980652,
+      "wdl_maximum_absolute_error": 0.4916701912879944,
+      "expected_value_mean_absolute_error": 0.12961731292188586,
+      "expected_value_maximum_absolute_error": 0.961656853556633
+    }
+  },
+  "ranked_28": {
+    "qdq_node_count": 56,
+    "source_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "qdq_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "source_ort_vs_qdq_ort": {
+      "positions": 196,
+      "policy_top1_agreement": 0.16326530612244897,
+      "mean_policy_kl_divergence": 23.198356470925884,
+      "maximum_policy_kl_divergence": 131.60480558728224,
+      "wdl_mean_absolute_error": 0.142623553315469,
+      "wdl_maximum_absolute_error": 0.917052187025547,
+      "expected_value_mean_absolute_error": 0.3825495799217012,
+      "expected_value_maximum_absolute_error": 1.809255875647068
+    },
+    "qdq_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.10204081632653061,
+      "mean_policy_kl_divergence": 24.767662992700114,
+      "maximum_policy_kl_divergence": 118.22656250054075,
+      "wdl_mean_absolute_error": 0.06299165874516884,
+      "wdl_maximum_absolute_error": 0.696533203125,
+      "expected_value_mean_absolute_error": 0.1663365123831496,
+      "expected_value_maximum_absolute_error": 1.228759765625
+    },
+    "source_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.15306122448979592,
+      "mean_policy_kl_divergence": 23.564655585744166,
+      "maximum_policy_kl_divergence": 160.51717451461639,
+      "wdl_mean_absolute_error": 0.16384492058554018,
+      "wdl_maximum_absolute_error": 0.8347444534301758,
+      "expected_value_mean_absolute_error": 0.4434656949146005,
+      "expected_value_maximum_absolute_error": 1.6379435062408447
+    }
+  },
+  "full_trunk": {
+    "qdq_node_count": 58,
+    "source_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "qdq_ort_providers": [
+      "CUDAExecutionProvider",
+      "CPUExecutionProvider"
+    ],
+    "source_ort_vs_qdq_ort": {
+      "positions": 196,
+      "policy_top1_agreement": 0.14795918367346939,
+      "mean_policy_kl_divergence": 26.95644147398422,
+      "maximum_policy_kl_divergence": 144.9576123996854,
+      "wdl_mean_absolute_error": 0.1311107010906879,
+      "wdl_maximum_absolute_error": 0.8851871490478516,
+      "expected_value_mean_absolute_error": 0.3505790075394135,
+      "expected_value_maximum_absolute_error": 1.7634317874908447
+    },
+    "qdq_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.1326530612244898,
+      "mean_policy_kl_divergence": 26.253047668847223,
+      "maximum_policy_kl_divergence": 123.12401063608075,
+      "wdl_mean_absolute_error": 0.07173006408879547,
+      "wdl_maximum_absolute_error": 0.729736328125,
+      "expected_value_mean_absolute_error": 0.19404218543548973,
+      "expected_value_maximum_absolute_error": 1.1479911804199219
+    },
+    "source_ort_vs_tensorrt": {
+      "positions": 196,
+      "policy_top1_agreement": 0.1326530612244898,
+      "mean_policy_kl_divergence": 22.764527845707292,
+      "maximum_policy_kl_divergence": 115.07782066554164,
+      "wdl_mean_absolute_error": 0.12531341480401656,
+      "wdl_maximum_absolute_error": 0.8120393753051758,
+      "expected_value_mean_absolute_error": 0.32869601714999735,
+      "expected_value_maximum_absolute_error": 1.5789066683501005
+    }
+  }
+}

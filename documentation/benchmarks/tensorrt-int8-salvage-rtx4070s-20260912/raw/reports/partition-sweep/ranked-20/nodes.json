@@ -1,0 +1,22 @@
+[
+  "/backbone.3/Conv_1",
+  "/backbone.0/conv_block2/0/Conv",
+  "/backbone.2/Conv_1",
+  "/backbone.0/conv_block1/0/0/Conv",
+  "/backbone.2/Conv",
+  "/backbone.4/Conv_1",
+  "/backbone.4/Conv",
+  "/backbone.1/conv_block1/Conv",
+  "/backbone.1/conv_block2/0/Conv",
+  "/backbone.3/Conv",
+  "/backbone.5/Conv_1",
+  "/backbone.9/Conv_1",
+  "/backbone.5/Conv",
+  "/backbone.7/Conv_1",
+  "/backbone.11/Conv_1",
+  "/backbone.6/Conv_1",
+  "/backbone.13/Conv_1",
+  "/backbone.10/Conv_1",
+  "/backbone.8/Conv_1",
+  "/backbone.12/Conv_1"
+]

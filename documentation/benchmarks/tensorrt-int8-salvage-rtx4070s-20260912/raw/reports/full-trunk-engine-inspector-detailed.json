@@ -1,0 +1,4859 @@
+{
+  "Layers": [
+    {
+      "Name": "states_QuantizeLinear",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "states",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            52,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "states_cast_to_fp16",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            52,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "QDQ",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: states_QuantizeLinear]"
+    },
+    {
+      "Name": "states_cast_to_fp16",
+      "LayerType": "NoOp",
+      "Inputs": [
+        {
+          "Name": "states_cast_to_fp16",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            52,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "states_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            52,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "Reformatting CopyNode for Input Tensor 0 to start_block.0.0.weight + start_block.0.0.weight_QuantizeLinear + /start_block/0/0/Conv + /start_block/0/1/Relu",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "states_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            52,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to start_block.0.0.weight + start_block.0.0.weight_QuantizeLinear + /start_block/0/0/Conv + /start_block/0/1/Relu",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            52,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "REFORMAT",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "start_block.0.0.weight + start_block.0.0.weight_QuantizeLinear + /start_block/0/0/Conv + /start_block/0/1/Relu",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to start_block.0.0.weight + start_block.0.0.weight_QuantizeLinear + /start_block/0/0/Conv + /start_block/0/1/Relu",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            52,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/start_block/0/1/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 74880
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: start_block.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /start_block/0/0/Conv]\u001e[ONNX Layer: /start_block/0/1/Relu]\u001e[ONNX Layer: /start_block/0/1/Relu_output_0_QuantizeLinear]\u001e[ONNX Layer: states_DequantizeLinear]\u001e[ONNX Layer: start_block.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.0.conv_block1.0.0.weight + backbone.0.conv_block1.0.0.weight_QuantizeLinear + /backbone.0/conv_block1/0/0/Conv + /backbone.0/conv_block1/0/1/Relu",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/start_block/0/1/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.0/conv_block1/0/1/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.0.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.0/conv_block1/0/0/Conv]\u001e[ONNX Layer: /backbone.0/conv_block1/0/1/Relu]\u001e[ONNX Layer: /backbone.0/conv_block1/0/1/Relu_output_0_QuantizeLinear]\u001e[ONNX Layer: /start_block/0/1/Relu_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.0.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.0.conv_block2.0.weight + backbone.0.conv_block2.0.weight_QuantizeLinear + /backbone.0/conv_block2/0/Conv + /backbone.0/Add + /backbone.0/relu2/Relu",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.0/conv_block1/0/1/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/start_block/0/1/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.0/relu2/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.0.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.0/conv_block2/0/Conv]\u001e[ONNX Layer: /backbone.0/relu2/Relu_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.0/conv_block1/0/1/Relu_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.0.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.0/Add]\u001e[ONNX Layer: /backbone.0/relu2/Relu]\u001e[ONNX Layer: /start_block/0/1/Relu_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.1.conv_block1.0.0.weight + backbone.1.conv_block1.0.0.weight_QuantizeLinear + /backbone.1/conv_block1/Conv",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.0/relu2/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.1/conv_block1/Conv_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 0,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "NONE",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8f32_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_tilesize128x64x64_stage4_warpsize2x2x1_g1_tensor16x8x32_t1r3s3_alignc4",
+      "TacticValue": "0x23b890da05937b9e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.1.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.1/conv_block1/Conv]\u001e[ONNX Layer: /backbone.0/relu2/Relu_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.1.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "__myl_ReluSlicMeanMaxrSlic_myl7_0",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/backbone.1/conv_block1/Conv_output_0",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl7",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl7",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_2_myl7",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReluSlicMeanMaxrSlic_0xd5c15a6cf6c26eca6b99506990047b6e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.1/conv_block1/Relu]\u001f[ONNX Layer: /backbone.1/Slice_1]\u001f[ONNX Layer: /backbone.1/Slice_2]\u001f[ONNX Layer: /backbone.1/global_pooling_bias/ReduceMax]\u001f[ONNX Layer: /backbone.1/global_pooling_bias/ReduceMean]"
+    },
+    {
+      "Name": "__myl_ReshReshConc_myl7_1",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl7",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl7",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_1/global_pooling_bias/projection/Gemm_output_0.1_5_myl7",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReshReshConc_0xdc133c50020c906a9f3b1bf087165fcf",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.1/global_pooling_bias/ReduceMax]\u001f[ONNX Layer: /backbone.1/global_pooling_bias/Concat]\u001f[ONNX Layer: /backbone.1/global_pooling_bias/ReduceMean]"
+    },
+    {
+      "Name": "/backbone_1/global_pooling_bias/projection/Gemm_myl7_2",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/backbone_1/global_pooling_bias/projection/Gemm_output_0.1_5_myl7",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_1/global_pooling_bias/projection/Gemm_output_0.1_myl7",
+          "Dimensions": [
+            320,
+            120
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f32f32_tf32f32_f32_tn_n_tilesize32x32x64_stage3_warpsize2x1x2_tensor16x8x8",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.1/global_pooling_bias/projection/Gemm]"
+    },
+    {
+      "Name": "__myl_Add_myl7_3",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_2_myl7",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "/backbone_1/global_pooling_bias/projection/Gemm_output_0.1_myl7",
+          "Dimensions": [
+            320,
+            120,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.1/global_pooling_bias/Add_output_0",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_Add_0xf1dc715cd23d4c3998a7e8073aae6b09",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.1/global_pooling_bias/Add]"
+    },
+    {
+      "Name": "/backbone.1/global_pooling_bias/Add_output_0_QuantizeLinear",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.1/global_pooling_bias/Add_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.1/global_pooling_bias/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "QDQ",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.1/global_pooling_bias/Add_output_0_QuantizeLinear]"
+    },
+    {
+      "Name": "Reformatting CopyNode for Input Tensor 0 to backbone.1.conv_block2.0.weight + backbone.1.conv_block2.0.weight_QuantizeLinear + /backbone.1/conv_block2/0/Conv + /backbone.1/Add + /backbone.1/relu2/Relu",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.1/global_pooling_bias/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.1.conv_block2.0.weight + backbone.1.conv_block2.0.weight_QuantizeLinear + /backbone.1/conv_block2/0/Conv + /backbone.1/Add + /backbone.1/relu2/Relu",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "REFORMAT",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "backbone.1.conv_block2.0.weight + backbone.1.conv_block2.0.weight_QuantizeLinear + /backbone.1/conv_block2/0/Conv + /backbone.1/Add + /backbone.1/relu2/Relu",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.1.conv_block2.0.weight + backbone.1.conv_block2.0.weight_QuantizeLinear + /backbone.1/conv_block2/0/Conv + /backbone.1/Add + /backbone.1/relu2/Relu",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.0/relu2/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.1/relu2/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 172800
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32",
+      "TacticValue": "0x2ff8bc85c8ced89e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.1.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.1/conv_block2/0/Conv]\u001e[ONNX Layer: /backbone.1/relu2/Relu_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.1/global_pooling_bias/Add_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.1.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.1/Add]\u001e[ONNX Layer: /backbone.1/relu2/Relu]\u001e[ONNX Layer: /backbone.0/relu2/Relu_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.2.conv_block1.0.0.weight + backbone.2.conv_block1.0.0.weight_QuantizeLinear + /backbone.2/Conv + /backbone.2/Relu",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.1/relu2/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.2/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.2.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.2/Conv]\u001e[ONNX Layer: /backbone.2/Relu]\u001e[ONNX Layer: /backbone.2/Relu_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.1/relu2/Relu_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.2.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.2.conv_block2.0.weight + backbone.2.conv_block2.0.weight_QuantizeLinear + /backbone.2/Conv_1 + /backbone.2/Add + /backbone.2/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.2/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.1/relu2/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.2/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.2.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.2/Conv_1]\u001e[ONNX Layer: /backbone.2/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.2/Relu_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.2.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.2/Add]\u001e[ONNX Layer: /backbone.2/Relu_1]\u001e[ONNX Layer: /backbone.1/relu2/Relu_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.3.conv_block1.0.0.weight + backbone.3.conv_block1.0.0.weight_QuantizeLinear + /backbone.3/Conv",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.2/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.3/Conv_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 0,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "NONE",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8f32_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_tilesize128x64x64_stage4_warpsize2x2x1_g1_tensor16x8x32_t1r3s3_alignc4",
+      "TacticValue": "0x23b890da05937b9e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.3.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.3/Conv]\u001e[ONNX Layer: /backbone.2/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.3.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "__myl_ReluSlicMeanMaxrSlic_myl14_0",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/backbone.3/Conv_output_0",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl14",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl14",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_2_myl14",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReluSlicMeanMaxrSlic_0xd5c15a6cf6c26eca6b99506990047b6e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.3/Relu]\u001f[ONNX Layer: /backbone.3/Slice_1]\u001f[ONNX Layer: /backbone.3/Slice_2]\u001f[ONNX Layer: /backbone.3/ReduceMax]\u001f[ONNX Layer: /backbone.3/ReduceMean]"
+    },
+    {
+      "Name": "__myl_ReshReshConc_myl14_1",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl14",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl14",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_3/Gemm_output_0.1_5_myl14",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReshReshConc_0xdc133c50020c906a9f3b1bf087165fcf",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.3/ReduceMax]\u001f[ONNX Layer: /backbone.3/Concat]\u001f[ONNX Layer: /backbone.3/ReduceMean]"
+    },
+    {
+      "Name": "/backbone_3/Gemm_myl14_2",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/backbone_3/Gemm_output_0.1_5_myl14",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_3/Gemm_output_0.1_myl14",
+          "Dimensions": [
+            320,
+            120
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f32f32_tf32f32_f32_tn_n_tilesize32x32x64_stage3_warpsize2x1x2_tensor16x8x8",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.3/Gemm]"
+    },
+    {
+      "Name": "__myl_Add_myl14_3",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_2_myl14",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "/backbone_3/Gemm_output_0.1_myl14",
+          "Dimensions": [
+            320,
+            120,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.3/Add_output_0",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_Add_0xf1dc715cd23d4c3998a7e8073aae6b09",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.3/Add]"
+    },
+    {
+      "Name": "/backbone.3/Add_output_0_QuantizeLinear",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.3/Add_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.3/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "QDQ",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.3/Add_output_0_QuantizeLinear]"
+    },
+    {
+      "Name": "Reformatting CopyNode for Input Tensor 0 to backbone.3.conv_block2.0.weight + backbone.3.conv_block2.0.weight_QuantizeLinear + /backbone.3/Conv_1 + /backbone.3/Add_1 + /backbone.3/Relu_1",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.3/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.3.conv_block2.0.weight + backbone.3.conv_block2.0.weight_QuantizeLinear + /backbone.3/Conv_1 + /backbone.3/Add_1 + /backbone.3/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "REFORMAT",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "backbone.3.conv_block2.0.weight + backbone.3.conv_block2.0.weight_QuantizeLinear + /backbone.3/Conv_1 + /backbone.3/Add_1 + /backbone.3/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.3.conv_block2.0.weight + backbone.3.conv_block2.0.weight_QuantizeLinear + /backbone.3/Conv_1 + /backbone.3/Add_1 + /backbone.3/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.2/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.3/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 172800
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32",
+      "TacticValue": "0x2ff8bc85c8ced89e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.3.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.3/Conv_1]\u001e[ONNX Layer: /backbone.3/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.3/Add_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.3.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.3/Add_1]\u001e[ONNX Layer: /backbone.3/Relu_1]\u001e[ONNX Layer: /backbone.2/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.4.conv_block1.0.0.weight + backbone.4.conv_block1.0.0.weight_QuantizeLinear + /backbone.4/Conv + /backbone.4/Relu",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.3/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.4/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.4.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.4/Conv]\u001e[ONNX Layer: /backbone.4/Relu]\u001e[ONNX Layer: /backbone.4/Relu_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.3/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.4.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.4.conv_block2.0.weight + backbone.4.conv_block2.0.weight_QuantizeLinear + /backbone.4/Conv_1 + /backbone.4/Add + /backbone.4/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.4/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.3/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.4/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.4.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.4/Conv_1]\u001e[ONNX Layer: /backbone.4/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.4/Relu_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.4.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.4/Add]\u001e[ONNX Layer: /backbone.4/Relu_1]\u001e[ONNX Layer: /backbone.3/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.5.conv_block1.0.0.weight + backbone.5.conv_block1.0.0.weight_QuantizeLinear + /backbone.5/Conv",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.4/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.5/Conv_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 0,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "NONE",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8f32_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_tilesize128x64x64_stage4_warpsize2x2x1_g1_tensor16x8x32_t1r3s3_alignc4",
+      "TacticValue": "0x23b890da05937b9e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.5.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.5/Conv]\u001e[ONNX Layer: /backbone.4/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.5.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "__myl_ReluSlicMeanMaxrSlic_myl21_0",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/backbone.5/Conv_output_0",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl21",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl21",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_2_myl21",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReluSlicMeanMaxrSlic_0xd5c15a6cf6c26eca6b99506990047b6e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.5/Relu]\u001f[ONNX Layer: /backbone.5/Slice_1]\u001f[ONNX Layer: /backbone.5/Slice_2]\u001f[ONNX Layer: /backbone.5/ReduceMax]\u001f[ONNX Layer: /backbone.5/ReduceMean]"
+    },
+    {
+      "Name": "__myl_ReshReshConc_myl21_1",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl21",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl21",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_5/Gemm_output_0.1_5_myl21",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReshReshConc_0xdc133c50020c906a9f3b1bf087165fcf",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.5/ReduceMax]\u001f[ONNX Layer: /backbone.5/Concat]\u001f[ONNX Layer: /backbone.5/ReduceMean]"
+    },
+    {
+      "Name": "/backbone_5/Gemm_myl21_2",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/backbone_5/Gemm_output_0.1_5_myl21",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_5/Gemm_output_0.1_myl21",
+          "Dimensions": [
+            320,
+            120
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f32f32_tf32f32_f32_tn_n_tilesize32x32x64_stage3_warpsize2x1x2_tensor16x8x8",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.5/Gemm]"
+    },
+    {
+      "Name": "__myl_Add_myl21_3",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_2_myl21",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "/backbone_5/Gemm_output_0.1_myl21",
+          "Dimensions": [
+            320,
+            120,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.5/Add_output_0",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_Add_0xf1dc715cd23d4c3998a7e8073aae6b09",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.5/Add]"
+    },
+    {
+      "Name": "/backbone.5/Add_output_0_QuantizeLinear",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.5/Add_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.5/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "QDQ",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.5/Add_output_0_QuantizeLinear]"
+    },
+    {
+      "Name": "Reformatting CopyNode for Input Tensor 0 to backbone.5.conv_block2.0.weight + backbone.5.conv_block2.0.weight_QuantizeLinear + /backbone.5/Conv_1 + /backbone.5/Add_1 + /backbone.5/Relu_1",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.5/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.5.conv_block2.0.weight + backbone.5.conv_block2.0.weight_QuantizeLinear + /backbone.5/Conv_1 + /backbone.5/Add_1 + /backbone.5/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "REFORMAT",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "backbone.5.conv_block2.0.weight + backbone.5.conv_block2.0.weight_QuantizeLinear + /backbone.5/Conv_1 + /backbone.5/Add_1 + /backbone.5/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.5.conv_block2.0.weight + backbone.5.conv_block2.0.weight_QuantizeLinear + /backbone.5/Conv_1 + /backbone.5/Add_1 + /backbone.5/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.4/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.5/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 172800
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32",
+      "TacticValue": "0x2ff8bc85c8ced89e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.5.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.5/Conv_1]\u001e[ONNX Layer: /backbone.5/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.5/Add_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.5.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.5/Add_1]\u001e[ONNX Layer: /backbone.5/Relu_1]\u001e[ONNX Layer: /backbone.4/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.6.conv_block1.0.0.weight + backbone.6.conv_block1.0.0.weight_QuantizeLinear + /backbone.6/Conv + /backbone.6/Relu",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.5/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.6/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.6.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.6/Conv]\u001e[ONNX Layer: /backbone.6/Relu]\u001e[ONNX Layer: /backbone.6/Relu_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.5/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.6.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.6.conv_block2.0.weight + backbone.6.conv_block2.0.weight_QuantizeLinear + /backbone.6/Conv_1 + /backbone.6/Add + /backbone.6/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.6/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.5/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.6/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.6.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.6/Conv_1]\u001e[ONNX Layer: /backbone.6/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.6/Relu_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.6.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.6/Add]\u001e[ONNX Layer: /backbone.6/Relu_1]\u001e[ONNX Layer: /backbone.5/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.7.conv_block1.0.0.weight + backbone.7.conv_block1.0.0.weight_QuantizeLinear + /backbone.7/Conv",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.6/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.7/Conv_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 0,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "NONE",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8f32_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_tilesize128x64x64_stage4_warpsize2x2x1_g1_tensor16x8x32_t1r3s3_alignc4",
+      "TacticValue": "0x23b890da05937b9e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.7.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.7/Conv]\u001e[ONNX Layer: /backbone.6/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.7.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "__myl_ReluSlicMeanMaxrSlic_myl28_0",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/backbone.7/Conv_output_0",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl28",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl28",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_2_myl28",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReluSlicMeanMaxrSlic_0xd5c15a6cf6c26eca6b99506990047b6e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.7/Relu]\u001f[ONNX Layer: /backbone.7/Slice_1]\u001f[ONNX Layer: /backbone.7/Slice_2]\u001f[ONNX Layer: /backbone.7/ReduceMax]\u001f[ONNX Layer: /backbone.7/ReduceMean]"
+    },
+    {
+      "Name": "__myl_ReshReshConc_myl28_1",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl28",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl28",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_7/Gemm_output_0.1_5_myl28",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReshReshConc_0xdc133c50020c906a9f3b1bf087165fcf",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.7/ReduceMax]\u001f[ONNX Layer: /backbone.7/Concat]\u001f[ONNX Layer: /backbone.7/ReduceMean]"
+    },
+    {
+      "Name": "/backbone_7/Gemm_myl28_2",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/backbone_7/Gemm_output_0.1_5_myl28",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_7/Gemm_output_0.1_myl28",
+          "Dimensions": [
+            320,
+            120
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f32f32_tf32f32_f32_tn_n_tilesize32x32x64_stage3_warpsize2x1x2_tensor16x8x8",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.7/Gemm]"
+    },
+    {
+      "Name": "__myl_Add_myl28_3",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_2_myl28",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "/backbone_7/Gemm_output_0.1_myl28",
+          "Dimensions": [
+            320,
+            120,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.7/Add_output_0",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_Add_0xf1dc715cd23d4c3998a7e8073aae6b09",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.7/Add]"
+    },
+    {
+      "Name": "/backbone.7/Add_output_0_QuantizeLinear",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.7/Add_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.7/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "QDQ",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.7/Add_output_0_QuantizeLinear]"
+    },
+    {
+      "Name": "Reformatting CopyNode for Input Tensor 0 to backbone.7.conv_block2.0.weight + backbone.7.conv_block2.0.weight_QuantizeLinear + /backbone.7/Conv_1 + /backbone.7/Add_1 + /backbone.7/Relu_1",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.7/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.7.conv_block2.0.weight + backbone.7.conv_block2.0.weight_QuantizeLinear + /backbone.7/Conv_1 + /backbone.7/Add_1 + /backbone.7/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "REFORMAT",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "backbone.7.conv_block2.0.weight + backbone.7.conv_block2.0.weight_QuantizeLinear + /backbone.7/Conv_1 + /backbone.7/Add_1 + /backbone.7/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.7.conv_block2.0.weight + backbone.7.conv_block2.0.weight_QuantizeLinear + /backbone.7/Conv_1 + /backbone.7/Add_1 + /backbone.7/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.6/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.7/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 172800
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32",
+      "TacticValue": "0x2ff8bc85c8ced89e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.7.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.7/Conv_1]\u001e[ONNX Layer: /backbone.7/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.7/Add_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.7.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.7/Add_1]\u001e[ONNX Layer: /backbone.7/Relu_1]\u001e[ONNX Layer: /backbone.6/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.8.conv_block1.0.0.weight + backbone.8.conv_block1.0.0.weight_QuantizeLinear + /backbone.8/Conv + /backbone.8/Relu",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.7/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.8/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.8.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.8/Conv]\u001e[ONNX Layer: /backbone.8/Relu]\u001e[ONNX Layer: /backbone.8/Relu_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.7/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.8.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.8.conv_block2.0.weight + backbone.8.conv_block2.0.weight_QuantizeLinear + /backbone.8/Conv_1 + /backbone.8/Add + /backbone.8/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.8/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.7/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.8/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.8.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.8/Conv_1]\u001e[ONNX Layer: /backbone.8/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.8/Relu_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.8.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.8/Add]\u001e[ONNX Layer: /backbone.8/Relu_1]\u001e[ONNX Layer: /backbone.7/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.9.conv_block1.0.0.weight + backbone.9.conv_block1.0.0.weight_QuantizeLinear + /backbone.9/Conv",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.8/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.9/Conv_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 0,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "NONE",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8f32_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_tilesize128x64x64_stage4_warpsize2x2x1_g1_tensor16x8x32_t1r3s3_alignc4",
+      "TacticValue": "0x23b890da05937b9e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.9.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.9/Conv]\u001e[ONNX Layer: /backbone.8/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.9.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "__myl_ReluSlicMeanMaxrSlic_myl35_0",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/backbone.9/Conv_output_0",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl35",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl35",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_2_myl35",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReluSlicMeanMaxrSlic_0xd5c15a6cf6c26eca6b99506990047b6e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.9/Relu]\u001f[ONNX Layer: /backbone.9/Slice_1]\u001f[ONNX Layer: /backbone.9/Slice_2]\u001f[ONNX Layer: /backbone.9/ReduceMax]\u001f[ONNX Layer: /backbone.9/ReduceMean]"
+    },
+    {
+      "Name": "__myl_ReshReshConc_myl35_1",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl35",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl35",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_9/Gemm_output_0.1_5_myl35",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReshReshConc_0xdc133c50020c906a9f3b1bf087165fcf",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.9/ReduceMax]\u001f[ONNX Layer: /backbone.9/Concat]\u001f[ONNX Layer: /backbone.9/ReduceMean]"
+    },
+    {
+      "Name": "/backbone_9/Gemm_myl35_2",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/backbone_9/Gemm_output_0.1_5_myl35",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_9/Gemm_output_0.1_myl35",
+          "Dimensions": [
+            320,
+            120
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f32f32_tf32f32_f32_tn_n_tilesize32x32x64_stage3_warpsize2x1x2_tensor16x8x8",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.9/Gemm]"
+    },
+    {
+      "Name": "__myl_Add_myl35_3",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_2_myl35",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "/backbone_9/Gemm_output_0.1_myl35",
+          "Dimensions": [
+            320,
+            120,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.9/Add_output_0",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_Add_0xf1dc715cd23d4c3998a7e8073aae6b09",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.9/Add]"
+    },
+    {
+      "Name": "/backbone.9/Add_output_0_QuantizeLinear",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.9/Add_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.9/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "QDQ",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.9/Add_output_0_QuantizeLinear]"
+    },
+    {
+      "Name": "Reformatting CopyNode for Input Tensor 0 to backbone.9.conv_block2.0.weight + backbone.9.conv_block2.0.weight_QuantizeLinear + /backbone.9/Conv_1 + /backbone.9/Add_1 + /backbone.9/Relu_1",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.9/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.9.conv_block2.0.weight + backbone.9.conv_block2.0.weight_QuantizeLinear + /backbone.9/Conv_1 + /backbone.9/Add_1 + /backbone.9/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "REFORMAT",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "backbone.9.conv_block2.0.weight + backbone.9.conv_block2.0.weight_QuantizeLinear + /backbone.9/Conv_1 + /backbone.9/Add_1 + /backbone.9/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.9.conv_block2.0.weight + backbone.9.conv_block2.0.weight_QuantizeLinear + /backbone.9/Conv_1 + /backbone.9/Add_1 + /backbone.9/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.8/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.9/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 172800
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32",
+      "TacticValue": "0x2ff8bc85c8ced89e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.9.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.9/Conv_1]\u001e[ONNX Layer: /backbone.9/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.9/Add_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.9.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.9/Add_1]\u001e[ONNX Layer: /backbone.9/Relu_1]\u001e[ONNX Layer: /backbone.8/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.10.conv_block1.0.0.weight + backbone.10.conv_block1.0.0.weight_QuantizeLinear + /backbone.10/Conv + /backbone.10/Relu",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.9/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.10/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.10.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.10/Conv]\u001e[ONNX Layer: /backbone.10/Relu]\u001e[ONNX Layer: /backbone.10/Relu_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.9/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.10.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.10.conv_block2.0.weight + backbone.10.conv_block2.0.weight_QuantizeLinear + /backbone.10/Conv_1 + /backbone.10/Add + /backbone.10/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.10/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.9/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.10/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.10.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.10/Conv_1]\u001e[ONNX Layer: /backbone.10/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.10/Relu_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.10.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.10/Add]\u001e[ONNX Layer: /backbone.10/Relu_1]\u001e[ONNX Layer: /backbone.9/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.11.conv_block1.0.0.weight + backbone.11.conv_block1.0.0.weight_QuantizeLinear + /backbone.11/Conv",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.10/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.11/Conv_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 0,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "NONE",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8f32_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_tilesize128x64x64_stage4_warpsize2x2x1_g1_tensor16x8x32_t1r3s3_alignc4",
+      "TacticValue": "0x23b890da05937b9e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.11.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.11/Conv]\u001e[ONNX Layer: /backbone.10/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.11.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "__myl_ReluSlicMeanMaxrSlic_myl42_0",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/backbone.11/Conv_output_0",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl42",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl42",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_2_myl42",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReluSlicMeanMaxrSlic_0xd5c15a6cf6c26eca6b99506990047b6e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.11/Relu]\u001f[ONNX Layer: /backbone.11/Slice_1]\u001f[ONNX Layer: /backbone.11/Slice_2]\u001f[ONNX Layer: /backbone.11/ReduceMax]\u001f[ONNX Layer: /backbone.11/ReduceMean]"
+    },
+    {
+      "Name": "__myl_ReshReshConc_myl42_1",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl42",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl42",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_11/Gemm_output_0.1_5_myl42",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReshReshConc_0xdc133c50020c906a9f3b1bf087165fcf",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.11/ReduceMax]\u001f[ONNX Layer: /backbone.11/Concat]\u001f[ONNX Layer: /backbone.11/ReduceMean]"
+    },
+    {
+      "Name": "/backbone_11/Gemm_myl42_2",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/backbone_11/Gemm_output_0.1_5_myl42",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_11/Gemm_output_0.1_myl42",
+          "Dimensions": [
+            320,
+            120
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f32f32_tf32f32_f32_tn_n_tilesize32x32x64_stage3_warpsize2x1x2_tensor16x8x8",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.11/Gemm]"
+    },
+    {
+      "Name": "__myl_Add_myl42_3",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_2_myl42",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "/backbone_11/Gemm_output_0.1_myl42",
+          "Dimensions": [
+            320,
+            120,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.11/Add_output_0",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_Add_0xf1dc715cd23d4c3998a7e8073aae6b09",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.11/Add]"
+    },
+    {
+      "Name": "/backbone.11/Add_output_0_QuantizeLinear",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.11/Add_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.11/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "QDQ",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.11/Add_output_0_QuantizeLinear]"
+    },
+    {
+      "Name": "Reformatting CopyNode for Input Tensor 0 to backbone.11.conv_block2.0.weight + backbone.11.conv_block2.0.weight_QuantizeLinear + /backbone.11/Conv_1 + /backbone.11/Add_1 + /backbone.11/Relu_1",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.11/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.11.conv_block2.0.weight + backbone.11.conv_block2.0.weight_QuantizeLinear + /backbone.11/Conv_1 + /backbone.11/Add_1 + /backbone.11/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "REFORMAT",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "backbone.11.conv_block2.0.weight + backbone.11.conv_block2.0.weight_QuantizeLinear + /backbone.11/Conv_1 + /backbone.11/Add_1 + /backbone.11/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.11.conv_block2.0.weight + backbone.11.conv_block2.0.weight_QuantizeLinear + /backbone.11/Conv_1 + /backbone.11/Add_1 + /backbone.11/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.10/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.11/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 172800
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32",
+      "TacticValue": "0x2ff8bc85c8ced89e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.11.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.11/Conv_1]\u001e[ONNX Layer: /backbone.11/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.11/Add_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.11.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.11/Add_1]\u001e[ONNX Layer: /backbone.11/Relu_1]\u001e[ONNX Layer: /backbone.10/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.12.conv_block1.0.0.weight + backbone.12.conv_block1.0.0.weight_QuantizeLinear + /backbone.12/Conv + /backbone.12/Relu",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.11/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.12/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.12.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.12/Conv]\u001e[ONNX Layer: /backbone.12/Relu]\u001e[ONNX Layer: /backbone.12/Relu_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.11/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.12.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.12.conv_block2.0.weight + backbone.12.conv_block2.0.weight_QuantizeLinear + /backbone.12/Conv_1 + /backbone.12/Add + /backbone.12/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.12/Relu_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.11/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.12/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8i8_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize128x96x64_stage3_warpsize4x1x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xd277f13d771603ee",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.12.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.12/Conv_1]\u001e[ONNX Layer: /backbone.12/Relu_1_output_0_QuantizeLinear]\u001e[ONNX Layer: /backbone.12/Relu_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.12.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.12/Add]\u001e[ONNX Layer: /backbone.12/Relu_1]\u001e[ONNX Layer: /backbone.11/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "/backbone.12/Relu_1_output_0_DequantizeLinear_clone_1",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.12/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.12/Relu_1_output_0_DequantizeLinear_Output_clone_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "QDQ",
+      "TacticValue": "0x00000000000003ea",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.12/Relu_1_output_0_DequantizeLinear]"
+    },
+    {
+      "Name": "backbone.13.conv_block1.0.0.weight + backbone.13.conv_block1.0.0.weight_QuantizeLinear + /backbone.13/Conv",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "/backbone.12/Relu_1_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.13/Conv_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 230400
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 0,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "NONE",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8f32_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_tilesize128x64x64_stage4_warpsize2x2x1_g1_tensor16x8x32_t1r3s3_alignc4",
+      "TacticValue": "0x23b890da05937b9e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.13.conv_block1.0.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.13/Conv]\u001e[ONNX Layer: /backbone.12/Relu_1_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.13.conv_block1.0.0.weight_DequantizeLinear]"
+    },
+    {
+      "Name": "__myl_ReluSlicMeanMaxrSlic_myl50_0",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/backbone.13/Conv_output_0",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl50",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl50",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_2_myl50",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReluSlicMeanMaxrSlic_0xd5c15a6cf6c26eca6b99506990047b6e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.13/Relu]\u001f[ONNX Layer: /backbone.13/Slice_1]\u001f[ONNX Layer: /backbone.13/Slice_2]\u001f[ONNX Layer: /backbone.13/ReduceMax]\u001f[ONNX Layer: /backbone.13/ReduceMean]"
+    },
+    {
+      "Name": "__myl_ReshReshConc_myl50_1",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_4_myl50",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_3_myl50",
+          "Dimensions": [
+            320,
+            40,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_13/Gemm_output_0.1_5_myl50",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReshReshConc_0xdc133c50020c906a9f3b1bf087165fcf",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.13/ReduceMax]\u001f[ONNX Layer: /backbone.13/Concat]\u001f[ONNX Layer: /backbone.13/ReduceMean]"
+    },
+    {
+      "Name": "/backbone_13/Gemm_myl50_2",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/backbone_13/Gemm_output_0.1_5_myl50",
+          "Dimensions": [
+            320,
+            80
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone_13/Gemm_output_0.1_myl50",
+          "Dimensions": [
+            320,
+            120
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f32f32_tf32f32_f32_tn_n_tilesize32x32x64_stage3_warpsize2x1x2_tensor16x8x8",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.13/Gemm]"
+    },
+    {
+      "Name": "__myl_Add_myl50_3",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_2_myl50",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        },
+        {
+          "Name": "/backbone_13/Gemm_output_0.1_myl50",
+          "Dimensions": [
+            320,
+            120,
+            1,
+            1
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.13/Add_output_0",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_Add_0xf1dc715cd23d4c3998a7e8073aae6b09",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.13/Add]"
+    },
+    {
+      "Name": "/backbone.13/Add_output_0_QuantizeLinear",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.13/Add_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.13/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "QDQ",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /backbone.13/Add_output_0_QuantizeLinear]"
+    },
+    {
+      "Name": "Reformatting CopyNode for Input Tensor 0 to backbone.13.conv_block2.0.weight + backbone.13.conv_block2.0.weight_QuantizeLinear + /backbone.13/Conv_1 + /backbone.13/Add_1 + /backbone.13/Relu_1",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "/backbone.13/Add_output_0_QuantizeLinear_Output",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.13.conv_block2.0.weight + backbone.13.conv_block2.0.weight_QuantizeLinear + /backbone.13/Conv_1 + /backbone.13/Add_1 + /backbone.13/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "REFORMAT",
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "backbone.13.conv_block2.0.weight + backbone.13.conv_block2.0.weight_QuantizeLinear + /backbone.13/Conv_1 + /backbone.13/Add_1 + /backbone.13/Relu_1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to backbone.13.conv_block2.0.weight + backbone.13.conv_block2.0.weight_QuantizeLinear + /backbone.13/Conv_1 + /backbone.13/Add_1 + /backbone.13/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            120,
+            8,
+            8
+          ],
+          "Format/Datatype": "Int8"
+        },
+        {
+          "Name": "/backbone.12/Relu_1_output_0_DequantizeLinear_Output_clone_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Output Tensor 0 to backbone.13.conv_block2.0.weight + backbone.13.conv_block2.0.weight_QuantizeLinear + /backbone.13/Conv_1 + /backbone.13/Add_1 + /backbone.13/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kSAME_UPPER",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 160,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Int8",
+        "Count": 172800
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 160
+      },
+      "HasBias": 1,
+      "HasReLU": 1,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 1,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "RELU",
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_interleaved_i8f16_i8i32_f32_nchw_vect_c_32kcrs_vect_c_32_nchw_vect_c_32_tilesize64x64x64_stage6_warpsize2x2x1_g1_tensor16x8x32_t1r3s3",
+      "TacticValue": "0xad6872a374321f7e",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: backbone.13.conv_block2.0.weight_QuantizeLinear]\u001e[ONNX Layer: /backbone.13/Conv_1]\u001e[ONNX Layer: /backbone.13/Add_output_0_DequantizeLinear]\u001e[ONNX Layer: backbone.13.conv_block2.0.weight_DequantizeLinear]\u001e[ONNX Layer: /backbone.13/Add_1]\u001e[ONNX Layer: /backbone.13/Relu_1]"
+    },
+    {
+      "Name": "Reformatting CopyNode for Output Tensor 0 to backbone.13.conv_block2.0.weight + backbone.13.conv_block2.0.weight_QuantizeLinear + /backbone.13/Conv_1 + /backbone.13/Add_1 + /backbone.13/Relu_1",
+      "LayerType": "Reformat",
+      "Inputs": [
+        {
+          "Name": "Reformatted Output Tensor 0 to backbone.13.conv_block2.0.weight + backbone.13.conv_block2.0.weight_QuantizeLinear + /backbone.13/Conv_1 + /backbone.13/Add_1 + /backbone.13/Relu_1",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/backbone.13/Relu_1_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "ParameterType": "Reformat",
+      "Origin": "REFORMAT",
+      "TacticValue": "0x00000000000003ea",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "Reformatting CopyNode for Input Tensor 0 to /value_head/0/0/Conv",
+      "LayerType": "NoOp",
+      "Inputs": [
+        {
+          "Name": "/backbone.13/Relu_1_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to /value_head/0/0/Conv",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "/value_head/0/0/Conv",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to /value_head/0/0/Conv",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/value_head/0/0/Conv_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            2,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 2,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Half",
+        "Count": 320
+      },
+      "Bias": {
+        "Type": "Half",
+        "Count": 2
+      },
+      "HasBias": 1,
+      "HasReLU": 0,
+      "HasSparseWeights": 0,
+      "HasDynamicFilter": 0,
+      "HasDynamicBias": 0,
+      "HasResidual": 0,
+      "ConvXAsActInputIdx": -1,
+      "BiasAsActInputIdx": -1,
+      "ResAsActInputIdx": -1,
+      "Activation": "NONE",
+      "TacticName": "sm75_xmma_fprop_implicit_gemm_indexed_f16f16_f16f16_f16_nhwckrsc_nhwc_tilesize128x32x32_stage1_warpsize4x1x1_g1_tensor16x8x8",
+      "TacticValue": "0xa13cdf70a9d99d45",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /value_head/0/0/Conv]"
+    },
+    {
+      "Name": "Reformatting CopyNode for Input Tensor 0 to {ForeignNode[onnx::Expand_721...policy_logits_cast_to_fp32]}",
+      "LayerType": "NoOp",
+      "Inputs": [
+        {
+          "Name": "/backbone.13/Relu_1_output_0",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to {ForeignNode[onnx::Expand_721...policy_logits_cast_to_fp32]}",
+          "Location": "Device",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticValue": "0x0000000000000000",
+      "StreamId": 0,
+      "Metadata": ""
+    },
+    {
+      "Name": "__myl_ReshMove_myl58_0",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "Reformatted Input Tensor 0 to {ForeignNode[onnx::Expand_721...policy_logits_cast_to_fp32]}",
+          "Dimensions": [
+            320,
+            160,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/policy_head/Reshape _ /policy_head/Transpose_reshape_output.1_myl58",
+          "Dimensions": [
+            320,
+            160,
+            64
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "__myl_ReshMove_0x448baadb2565b31ce236ba1525a2277f",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /policy_head/Reshape]\u001e[ONNX Layer: /policy_head/Transpose]"
+    },
+    {
+      "Name": "__myl_Move_myl58_1",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/policy_head/Reshape _ /policy_head/Transpose_reshape_output.1_myl58",
+          "Dimensions": [
+            320,
+            64,
+            160
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_5_myl58",
+          "Dimensions": [
+            320,
+            64,
+            160
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "__myl_Move_0x7461f36fcd1f435e352c73ba30a4e149",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /policy_head/token_projection/MatMul]\u001f[ONNX Layer: /policy_head/activation/Gelu]\u001f[ONNX Layer: /policy_head/token_projection/Add]"
+    },
+    {
+      "Name": "__myl_Fc_myl58_2",
+      "LayerType": "fusion",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_5_myl58",
+          "Dimensions": [
+            320,
+            64,
+            160
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/policy_head/activation/Gelu_output_0.1_myl58",
+          "Dimensions": [
+            320,
+            64,
+            128
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f16f16_f16f16_f16_nn_n_tilesize64x128x32_stage5_warpsize2x2x1_tensor16x8x16_by_fusion_tactic",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /policy_head/token_projection/MatMul]\u001f[ONNX Layer: /policy_head/activation/Gelu]\u001f[ONNX Layer: /policy_head/token_projection/Add]"
+    },
+    {
+      "Name": "/policy_head/key_projection/MatMul+/policy_head/query_projection/MatMul_myl58_3",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/policy_head/activation/Gelu_output_0.1_myl58",
+          "Dimensions": [
+            20480,
+            128
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__mye10712_myl58",
+          "Dimensions": [
+            2,
+            20480,
+            128
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f16f16_f16f16_f16_nn_n_tilesize256x128x32_stage3_warpsize4x2x1_tensor16x8x16",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /policy_head/key_projection/MatMul]\u001f[ONNX Layer: /policy_head/key_projection/Add]\u001f[ONNX Layer: /policy_head/query_projection/MatMul]\u001f[ONNX Layer: /policy_head/query_projection/Add]"
+    },
+    {
+      "Name": "__mye10902_myl58_4",
+      "LayerType": "signal",
+      "Inputs": [],
+      "Outputs": [],
+      "TacticName": "",
+      "StreamId": 0,
+      "EventId": 1,
+      "Metadata": ""
+    },
+    {
+      "Name": "__mye10904_myl58_5",
+      "LayerType": "wait",
+      "Inputs": [],
+      "Outputs": [],
+      "TacticName": "",
+      "StreamId": 1,
+      "EventId": 1,
+      "Metadata": ""
+    },
+    {
+      "Name": "__myl_Slic_myl58_6",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__mye10712_myl58",
+          "Dimensions": [
+            320,
+            64,
+            128
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/policy_head/Slice_2_slice_output.1_myl58",
+          "Dimensions": [
+            320,
+            8,
+            128
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "__myl_Slic_0x0090a8e72319d4efd49dbb1a56fc54f8",
+      "StreamId": 1,
+      "Metadata": "[ONNX Layer: /policy_head/Slice_2]"
+    },
+    {
+      "Name": "/policy_head/promotion_projection/MatMul_myl58_7",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/policy_head/Slice_2_slice_output.1_myl58",
+          "Dimensions": [
+            2560,
+            128
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__mye10554_myl58",
+          "Dimensions": [
+            2560,
+            4
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f16f16_f16f16_f16_tn_n_tilesize64x32x64_stage5_warpsize2x2x1_tensor16x8x16_aligna4_alignc4",
+      "StreamId": 1,
+      "Metadata": "[ONNX Layer: /policy_head/promotion_projection/MatMul]"
+    },
+    {
+      "Name": "__myl_SlicSubReshGath_myl58_8",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__mye10554_myl58",
+          "Dimensions": [
+            320,
+            8,
+            4
+          ],
+          "Format/Datatype": "Half"
+        },
+        {
+          "Name": "__mye10554_myl58",
+          "Dimensions": [
+            320,
+            8,
+            4
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_11_myl58",
+          "Dimensions": [
+            320,
+            88
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "__myl_SlicSubReshGath_0x478615eacde3fa3264dbf9b830ba7137",
+      "StreamId": 1,
+      "Metadata": "[ONNX Layer: /policy_head/Slice_6]\u001f[ONNX Layer: /policy_head/Gather_1]\u001f[ONNX Layer: /policy_head/Reshape_2]\u001f[ONNX Layer: /policy_head/Sub]"
+    },
+    {
+      "Name": "__myl_Move_myl58_9",
+      "LayerType": "kgen",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Name": "/policy_head/ScatterElements_output_0.1_myl58",
+          "Dimensions": [
+            320,
+            1880
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "__myl_Move_0x56aff3edec342cdbdfcc2eb78806e572",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /policy_head/ScatterElements]\u001f[ONNX Layer: /policy_head/Expand_1]"
+    },
+    {
+      "Name": "__mye10906_myl58_10",
+      "LayerType": "signal",
+      "Inputs": [],
+      "Outputs": [],
+      "TacticName": "",
+      "StreamId": 0,
+      "EventId": 2,
+      "Metadata": ""
+    },
+    {
+      "Name": "__mye10908_myl58_11",
+      "LayerType": "wait",
+      "Inputs": [],
+      "Outputs": [],
+      "TacticName": "",
+      "StreamId": 1,
+      "EventId": 2,
+      "Metadata": ""
+    },
+    {
+      "Name": "__myl_Scat_myl58_12",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/policy_head/ScatterElements_output_0.1_myl58",
+          "Dimensions": [
+            320,
+            1880
+          ],
+          "Format/Datatype": "Half"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_11_myl58",
+          "Dimensions": [
+            320,
+            88
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/policy_head/ScatterElements_output_0.1_myl58",
+          "Dimensions": [
+            320,
+            1880
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "__myl_Scat_0x35c72718f66fdd48df8d2cd0bb62bb65",
+      "StreamId": 1,
+      "Metadata": "[ONNX Layer: /policy_head/ScatterElements]\u001f[ONNX Layer: /policy_head/Expand_1]"
+    },
+    {
+      "Name": "__myl_Tran_myl58_13",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__mye10712_myl58",
+          "Dimensions": [
+            320,
+            64,
+            128
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_13_myl58",
+          "Dimensions": [
+            320,
+            128,
+            64
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "__myl_Tran_0xb45089311de4463a3e06cdf59bcefd71",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /policy_head/Transpose_1]"
+    },
+    {
+      "Name": "__myl_FcMul_myl58_14",
+      "LayerType": "fusion",
+      "Inputs": [
+        {
+          "Name": "__mye10712_myl58",
+          "Dimensions": [
+            320,
+            64,
+            128
+          ],
+          "Format/Datatype": "Half"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_13_myl58",
+          "Dimensions": [
+            320,
+            128,
+            64
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_14_myl58",
+          "Dimensions": [
+            320,
+            64,
+            64
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f16f16_f16f16_f16_nn_n_tilesize64x64x64_stage4_warpsize2x2x1_tensor16x8x16_by_fusion_tactic",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /policy_head/Div]\u001f[ONNX Layer: /policy_head/MatMul]"
+    },
+    {
+      "Name": "__mye10910_myl58_15",
+      "LayerType": "signal",
+      "Inputs": [],
+      "Outputs": [],
+      "TacticName": "",
+      "StreamId": 0,
+      "EventId": 3,
+      "Metadata": ""
+    },
+    {
+      "Name": "__mye10912_myl58_16",
+      "LayerType": "wait",
+      "Inputs": [],
+      "Outputs": [],
+      "TacticName": "",
+      "StreamId": 1,
+      "EventId": 3,
+      "Metadata": ""
+    },
+    {
+      "Name": "__myl_ReshGathAddCast_myl58_17",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/policy_head/ScatterElements_output_0.1_myl58",
+          "Dimensions": [
+            320,
+            1880
+          ],
+          "Format/Datatype": "Half"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_14_myl58",
+          "Dimensions": [
+            320,
+            64,
+            64
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "policy_logits",
+          "Dimensions": [
+            320,
+            1880
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_ReshGathAddCast_0x08eb7cf9ec88badc84b252f8aa46e48f",
+      "StreamId": 1,
+      "Metadata": "[ONNX Layer: /policy_head/Reshape_1]\u001f[ONNX Layer: /policy_head/Gather]\u001f[ONNX Layer: /policy_head/Add]"
+    },
+    {
+      "Name": "__myl_Relu_myl58_18",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "/value_head/0/0/Conv_output_0",
+          "Dimensions": [
+            320,
+            2,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/value_head/0/1/Relu_output_0.1_myl58",
+          "Dimensions": [
+            320,
+            2,
+            8,
+            8
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "__myl_Relu_0x97c0544c5044394f109e406e632e1658",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /value_head/0/1/Relu]"
+    },
+    {
+      "Name": "/value_head/4/Gemm_myl58_19",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/value_head/0/1/Relu_output_0.1_myl58",
+          "Dimensions": [
+            320,
+            128
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "/value_head/6/Gemm_output_0.1_16_myl58",
+          "Dimensions": [
+            320,
+            48
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f16f16_f16f16_f16_nn_n_tilesize32x32x64_stage6_warpsize2x2x1_tensor16x8x16",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /value_head/4/Gemm]\u001f[ONNX Layer: /value_head/5/Relu]"
+    },
+    {
+      "Name": "/value_head/6/Gemm_myl58_20",
+      "LayerType": "gemm",
+      "Inputs": [
+        {
+          "Name": "/value_head/6/Gemm_output_0.1_16_myl58",
+          "Dimensions": [
+            320,
+            48
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "__myln_k_arg__bb1_17_myl58",
+          "Dimensions": [
+            320,
+            3
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "TacticName": "sm80_xmma_gemm_f16f16_f16f32_f32_tn_n_tilesize32x32x64_stage6_warpsize2x2x1_tensor16x8x16_aligna2_alignc2",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /value_head/6/Gemm]"
+    },
+    {
+      "Name": "__myl_SlicSlicMaxSlicMaxSubExpSlicSlicAddSlicAddDivCast_myl58_21",
+      "LayerType": "kgen",
+      "Inputs": [
+        {
+          "Name": "__myln_k_arg__bb1_17_myl58",
+          "Dimensions": [
+            320,
+            3
+          ],
+          "Format/Datatype": "Half"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_17_myl58",
+          "Dimensions": [
+            320,
+            3
+          ],
+          "Format/Datatype": "Half"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_17_myl58",
+          "Dimensions": [
+            320,
+            3
+          ],
+          "Format/Datatype": "Half"
+        },
+        {
+          "Name": "__myln_k_arg__bb1_17_myl58",
+          "Dimensions": [
+            320,
+            3
+          ],
+          "Format/Datatype": "Half"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "wdl_probabilities",
+          "Dimensions": [
+            320,
+            3
+          ],
+          "Format/Datatype": "Float"
+        }
+      ],
+      "TacticName": "__myl_SlicSlicMaxSlicMaxSubExpSlicSlicAddSlicAddDivCast_0x43caccac6ea9f1dfecf609b6d2d3d368",
+      "StreamId": 0,
+      "Metadata": "[ONNX Layer: /Softmax]"
+    },
+    {
+      "Name": "exit^bb^signal^1_myl58_22",
+      "LayerType": "signal",
+      "Inputs": [],
+      "Outputs": [],
+      "TacticName": "",
+      "StreamId": 1,
+      "EventId": 4,
+      "Metadata": ""
+    },
+    {
+      "Name": "exit^bb^wait^1_myl58_23",
+      "LayerType": "wait",
+      "Inputs": [],
+      "Outputs": [],
+      "TacticName": "",
+      "StreamId": 0,
+      "EventId": 4,
+      "Metadata": ""
+    }
+  ],
+  "Bindings": [
+    "states",
+    "policy_logits",
+    "wdl_probabilities"
+  ]
+}

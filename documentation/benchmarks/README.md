@@ -19,6 +19,10 @@ records the exact `6x96 -> 10x160 -> 15x192` production-model throughput and par
 
 ## Notable results
 
+- [TensorRT INT8 salvage investigation (2026-09-12)](tensorrt-int8-salvage-rtx4070s-20260912/README.md) — the
+  approximately 3x full-trunk INT8 core speed is real but invalid; calibration sweeps, all-layer sensitivity,
+  mixed precision, autotuning, QAT, SmoothQuant, weight-only INT8, per-channel activation quantization, FP8,
+  and a 32-channel value head did not produce a fidelity-valid material speedup.
 - [v34 training dynamics (2026-09-12)](chess-v34-training-dynamics-rtx4070s-20260912/README.md) — 732,500
   optimizer steps, 2.93 million games, 187.5 million fresh positions, hourly strength curves, throughput by model
   and visit phase, compute-doubling returns, and a multi-node scaling playbook.

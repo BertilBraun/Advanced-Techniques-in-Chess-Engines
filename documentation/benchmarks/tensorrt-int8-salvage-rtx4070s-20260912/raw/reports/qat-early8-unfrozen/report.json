@@ -1,0 +1,138 @@
+{
+  "sample_count": 512000,
+  "training_positions": 409600,
+  "selection_positions": 51200,
+  "holdout_positions": 51200,
+  "partition": "early8",
+  "steps": 500,
+  "learning_rate": 3e-06,
+  "freeze_quantized_only": false,
+  "training_seconds": 59.256029170937836,
+  "initial_selection_fidelity": {
+    "positions": 51200,
+    "policy_top1_agreement": 0.32048828125,
+    "mean_policy_kl_divergence": 1.1182885876238924,
+    "maximum_policy_kl_divergence": 165.50842171974344,
+    "wdl_mean_absolute_error": 0.08967690575407121,
+    "wdl_maximum_absolute_error": 0.9027253985404968,
+    "expected_value_mean_absolute_error": 0.21215178830962259,
+    "expected_value_maximum_absolute_error": 1.805316861718893
+  },
+  "initial_holdout_fidelity": {
+    "positions": 51200,
+    "policy_top1_agreement": 0.3289453125,
+    "mean_policy_kl_divergence": 1.1128629125805594,
+    "maximum_policy_kl_divergence": 183.94772056398944,
+    "wdl_mean_absolute_error": 0.08990180887212358,
+    "wdl_maximum_absolute_error": 0.9230581820011139,
+    "expected_value_mean_absolute_error": 0.21248744739500644,
+    "expected_value_maximum_absolute_error": 1.8453638851642609
+  },
+  "selection_history": [
+    {
+      "step": 100,
+      "fidelity": {
+        "positions": 51200,
+        "policy_top1_agreement": 0.292734375,
+        "mean_policy_kl_divergence": 1.5171690119524321,
+        "maximum_policy_kl_divergence": 185.70784335756196,
+        "wdl_mean_absolute_error": 0.09604199072652969,
+        "wdl_maximum_absolute_error": 0.9658973813056946,
+        "expected_value_mean_absolute_error": 0.23726394858267136,
+        "expected_value_maximum_absolute_error": 1.9138452960178256
+      }
+    },
+    {
+      "step": 200,
+      "fidelity": {
+        "positions": 51200,
+        "policy_top1_agreement": 0.23326171875,
+        "mean_policy_kl_divergence": 2.946538784248924,
+        "maximum_policy_kl_divergence": 208.6388783893979,
+        "wdl_mean_absolute_error": 0.17444586506185292,
+        "wdl_maximum_absolute_error": 0.9914425015449524,
+        "expected_value_mean_absolute_error": 0.4490958390350673,
+        "expected_value_maximum_absolute_error": 1.9777742509031668
+      }
+    },
+    {
+      "step": 300,
+      "fidelity": {
+        "positions": 51200,
+        "policy_top1_agreement": 0.1087109375,
+        "mean_policy_kl_divergence": 9.070631682522537,
+        "maximum_policy_kl_divergence": 490.411265323771,
+        "wdl_mean_absolute_error": 0.3324200589244948,
+        "wdl_maximum_absolute_error": 0.9922340512275696,
+        "expected_value_mean_absolute_error": 0.8779573064166927,
+        "expected_value_maximum_absolute_error": 1.9801086811348796
+      }
+    },
+    {
+      "step": 400,
+      "fidelity": {
+        "positions": 51200,
+        "policy_top1_agreement": 0.079921875,
+        "mean_policy_kl_divergence": 5.453647345917175,
+        "maximum_policy_kl_divergence": 224.76973269760106,
+        "wdl_mean_absolute_error": 0.3672225428970417,
+        "wdl_maximum_absolute_error": 0.9953879714012146,
+        "expected_value_mean_absolute_error": 0.9634916192793759,
+        "expected_value_maximum_absolute_error": 1.9873638253629906
+      }
+    },
+    {
+      "step": 500,
+      "fidelity": {
+        "positions": 51200,
+        "policy_top1_agreement": 0.081875,
+        "mean_policy_kl_divergence": 5.509320914526951,
+        "maximum_policy_kl_divergence": 263.192188870757,
+        "wdl_mean_absolute_error": 0.3657871278459315,
+        "wdl_maximum_absolute_error": 0.9949921369552612,
+        "expected_value_mean_absolute_error": 0.9601411035598048,
+        "expected_value_maximum_absolute_error": 1.9865527579095215
+      }
+    }
+  ],
+  "selected_top1": 0.32048828125,
+  "final_holdout_fidelity": {
+    "positions": 51200,
+    "policy_top1_agreement": 0.3289453125,
+    "mean_policy_kl_divergence": 1.11286291247188,
+    "maximum_policy_kl_divergence": 183.94772056398944,
+    "wdl_mean_absolute_error": 0.08990180887212358,
+    "wdl_maximum_absolute_error": 0.9230581820011139,
+    "expected_value_mean_absolute_error": 0.21248744739500644,
+    "expected_value_maximum_absolute_error": 1.8453638851642609
+  },
+  "tensorrt_holdout_fidelity": {
+    "positions": 320,
+    "policy_top1_agreement": 0.35,
+    "mean_policy_kl_divergence": 1.0614728947897814,
+    "maximum_policy_kl_divergence": 7.870782356691608,
+    "wdl_mean_absolute_error": 0.08778886795043946,
+    "wdl_maximum_absolute_error": 0.602294921875,
+    "expected_value_mean_absolute_error": 0.20902135372161865,
+    "expected_value_maximum_absolute_error": 1.080810546875
+  },
+  "tensorrt_timing": {
+    "repetitions": 3,
+    "iterations_per_repetition": 20,
+    "batch_size": 320,
+    "repetition_seconds": [
+      0.04232319816946983,
+      0.042288466822355986,
+      0.04228446795605123
+    ],
+    "minimum_batch_milliseconds": 2.1142233978025615,
+    "median_batch_milliseconds": 2.1144233411177993,
+    "p95_batch_milliseconds": 2.1159862517379224,
+    "maximum_batch_milliseconds": 2.1161599084734917,
+    "median_positions_per_second": 151341.49996226895
+  },
+  "onnx_quantize_linear_nodes": 58,
+  "onnx_dequantize_linear_nodes": 58,
+  "engine_path": "/workspace/int8-salvage/qat-early8-unfrozen/qat-int8.engine",
+  "loss_tail_mean": 8.879564514160156
+}

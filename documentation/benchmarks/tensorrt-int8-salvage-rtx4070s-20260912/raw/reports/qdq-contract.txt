@@ -1,0 +1,245 @@
+['CUDAExecutionProvider', 'CPUExecutionProvider']
+[('states', 'tensor(float)', [320, 52, 8, 8])]
+[('policy_logits', 'tensor(float)', [320, 1880]), ('wdl_probabilities', 'tensor(float)', [320, 3])]
+[
+  {
+    "name": "backbone.0.conv_block1.0.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.0.conv_block1.0.0.weight",
+      "backbone.0.conv_block1.0.0.weight_scale_1",
+      "backbone.0.conv_block1.0.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      0.00015723705291748047,
+      0.0150146484375
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.0.conv_block2.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.0.conv_block2.0.weight",
+      "backbone.0.conv_block2.0.weight_scale_1",
+      "backbone.0.conv_block2.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      0.00017535686492919922,
+      0.006805419921875
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.1.conv_block1.0.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.1.conv_block1.0.0.weight",
+      "backbone.1.conv_block1.0.0.weight_scale_1",
+      "backbone.1.conv_block1.0.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      7.748603820800781e-07,
+      0.0279998779296875
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.1.conv_block2.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.1.conv_block2.0.weight",
+      "backbone.1.conv_block2.0.weight_scale_1",
+      "backbone.1.conv_block2.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      3.921985626220703e-05,
+      0.0029163360595703125
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.10.conv_block1.0.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.10.conv_block1.0.0.weight",
+      "backbone.10.conv_block1.0.0.weight_scale_1",
+      "backbone.10.conv_block1.0.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      0.0008792877197265625,
+      0.01139068603515625
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.10.conv_block2.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.10.conv_block2.0.weight",
+      "backbone.10.conv_block2.0.weight_scale_1",
+      "backbone.10.conv_block2.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      0.00022017955780029297,
+      0.005573272705078125
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.11.conv_block1.0.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.11.conv_block1.0.0.weight",
+      "backbone.11.conv_block1.0.0.weight_scale_1",
+      "backbone.11.conv_block1.0.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      0.0001188516616821289,
+      0.02252197265625
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.11.conv_block2.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.11.conv_block2.0.weight",
+      "backbone.11.conv_block2.0.weight_scale_1",
+      "backbone.11.conv_block2.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      8.70823860168457e-05,
+      0.0026493072509765625
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.12.conv_block1.0.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.12.conv_block1.0.0.weight",
+      "backbone.12.conv_block1.0.0.weight_scale_1",
+      "backbone.12.conv_block1.0.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      0.0008592605590820312,
+      0.0097503662109375
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.12.conv_block2.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.12.conv_block2.0.weight",
+      "backbone.12.conv_block2.0.weight_scale_1",
+      "backbone.12.conv_block2.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      0.00012362003326416016,
+      0.007549285888671875
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.13.conv_block1.0.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.13.conv_block1.0.0.weight",
+      "backbone.13.conv_block1.0.0.weight_scale_1",
+      "backbone.13.conv_block1.0.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      0.00024366378784179688,
+      0.017242431640625
+    ],
+    "zero_dtype": "int8"
+  },
+  {
+    "name": "backbone.13.conv_block2.0.weight_QuantizeLinear",
+    "op": "QuantizeLinear",
+    "inputs": [
+      "backbone.13.conv_block2.0.weight",
+      "backbone.13.conv_block2.0.weight_scale_1",
+      "backbone.13.conv_block2.0.weight_zero_point_1"
+    ],
+    "attrs": {
+      "axis": 0
+    },
+    "scale_shape": [
+      160
+    ],
+    "scale_minmax": [
+      4.76837158203125e-05,
+      0.003986358642578125
+    ],
+    "zero_dtype": "int8"
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "quantize_linear_nodes": 3,
+  "source_vs_optimized_ort": {
+    "positions": 320,
+    "policy_top1_agreement": 0.646875,
+    "mean_policy_kl_divergence": 0.31806506319191485,
+    "maximum_policy_kl_divergence": 3.8055648199466563,
+    "wdl_mean_absolute_error": 0.14881731831095144,
+    "wdl_maximum_absolute_error": 0.9074403122067451,
+    "expected_value_mean_absolute_error": 0.4033388738251233,
+    "expected_value_maximum_absolute_error": 1.794868702068925
+  },
+  "source_vs_tensorrt": {
+    "positions": 320,
+    "policy_top1_agreement": 0.640625,
+    "mean_policy_kl_divergence": 0.31825986745590407,
+    "maximum_policy_kl_divergence": 3.7905092107663725,
+    "wdl_mean_absolute_error": 0.14885875611629065,
+    "wdl_maximum_absolute_error": 0.9070703461766243,
+    "expected_value_mean_absolute_error": 0.40344563481558,
+    "expected_value_maximum_absolute_error": 1.7951210290193558
+  },
+  "optimized_ort_vs_tensorrt": {
+    "positions": 320,
+    "policy_top1_agreement": 0.99375,
+    "mean_policy_kl_divergence": 2.5594941014774477e-05,
+    "maximum_policy_kl_divergence": 0.00029611836461142444,
+    "wdl_mean_absolute_error": 0.0002864579151112897,
+    "wdl_maximum_absolute_error": 0.0036249160766601562,
+    "expected_value_mean_absolute_error": 0.0007072727399645373,
+    "expected_value_maximum_absolute_error": 0.005910232663154602
+  },
+  "timing": {
+    "repetitions": 3,
+    "iterations_per_repetition": 20,
+    "batch_size": 320,
+    "repetition_seconds": [
+      0.06642860895954072,
+      0.0635138051584363,
+      0.06353014498017728
+    ],
+    "minimum_batch_milliseconds": 3.175690257921815,
+    "median_batch_milliseconds": 3.176507249008864,
+    "p95_batch_milliseconds": 3.3069381280802195,
+    "maximum_batch_milliseconds": 3.3214304479770362,
+    "median_positions_per_second": 100739.57806954371
+  }
+}

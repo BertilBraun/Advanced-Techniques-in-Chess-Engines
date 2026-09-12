@@ -1,0 +1,218 @@
+{
+  "torchscript_bf16_vs_unquantized_onnx_fp32": {
+    "positions": 320,
+    "policy_top1_agreement": 0.99375,
+    "mean_policy_kl_divergence": 0.00015864218820314525,
+    "maximum_policy_kl_divergence": 0.0012288213249731542,
+    "wdl_mean_absolute_error": 0.0009652746150095482,
+    "wdl_maximum_absolute_error": 0.012004196643829346,
+    "expected_value_mean_absolute_error": 0.002465545006998582,
+    "expected_value_maximum_absolute_error": 0.020214498043060303
+  },
+  "unquantized_onnx_fp32_vs_qdq_onnxruntime": {
+    "positions": 320,
+    "policy_top1_agreement": 0.121875,
+    "mean_policy_kl_divergence": 26.467407494166554,
+    "maximum_policy_kl_divergence": 172.5073739002648,
+    "wdl_mean_absolute_error": 0.12921299890125132,
+    "wdl_maximum_absolute_error": 0.8851871490478516,
+    "expected_value_mean_absolute_error": 0.34472535283784966,
+    "expected_value_maximum_absolute_error": 1.7634317874908447
+  },
+  "qdq_onnxruntime_vs_tensorrt": {
+    "positions": 320,
+    "policy_top1_agreement": 0.125,
+    "mean_policy_kl_divergence": 25.138603687214676,
+    "maximum_policy_kl_divergence": 133.70255539007448,
+    "wdl_mean_absolute_error": 0.06664868686348199,
+    "wdl_maximum_absolute_error": 0.729736328125,
+    "expected_value_mean_absolute_error": 0.18002130482345818,
+    "expected_value_maximum_absolute_error": 1.1479911804199219
+  },
+  "torchscript_bf16_vs_tensorrt": {
+    "positions": 320,
+    "policy_top1_agreement": 0.11875,
+    "mean_policy_kl_divergence": 22.44667738692616,
+    "maximum_policy_kl_divergence": 132.66535786495913,
+    "wdl_mean_absolute_error": 0.13074851656953493,
+    "wdl_maximum_absolute_error": 0.82080078125,
+    "expected_value_mean_absolute_error": 0.3451828522607684,
+    "expected_value_maximum_absolute_error": 1.5963134765625
+  },
+  "activation_errors": [
+    {
+      "tensor": "/start_block/0/0/Conv_output_0",
+      "mean_absolute_error": 0.07875264436006546,
+      "maximum_absolute_error": 1.2758893966674805,
+      "reference_mean_absolute_value": 0.5417153835296631
+    },
+    {
+      "tensor": "/backbone.0/conv_block1/0/0/Conv_output_0",
+      "mean_absolute_error": 810.6373291015625,
+      "maximum_absolute_error": 59519.67578125,
+      "reference_mean_absolute_value": 1.4376404285430908
+    },
+    {
+      "tensor": "/backbone.0/conv_block2/0/Conv_output_0",
+      "mean_absolute_error": 0.18861250579357147,
+      "maximum_absolute_error": 3.427326202392578,
+      "reference_mean_absolute_value": 0.8039379715919495
+    },
+    {
+      "tensor": "/backbone.1/conv_block1/Conv_output_0",
+      "mean_absolute_error": 0.5790606141090393,
+      "maximum_absolute_error": 7.0709686279296875,
+      "reference_mean_absolute_value": 2.1389150619506836
+    },
+    {
+      "tensor": "/backbone.1/conv_block2/0/Conv_output_0",
+      "mean_absolute_error": 0.1548653542995453,
+      "maximum_absolute_error": 2.663553237915039,
+      "reference_mean_absolute_value": 0.48475342988967896
+    },
+    {
+      "tensor": "/backbone.2/Conv_output_0",
+      "mean_absolute_error": 0.35385993123054504,
+      "maximum_absolute_error": 5.013067245483398,
+      "reference_mean_absolute_value": 1.6863270998001099
+    },
+    {
+      "tensor": "/backbone.2/Conv_1_output_0",
+      "mean_absolute_error": 0.16911472380161285,
+      "maximum_absolute_error": 3.3848514556884766,
+      "reference_mean_absolute_value": 0.5513885617256165
+    },
+    {
+      "tensor": "/backbone.3/Conv_output_0",
+      "mean_absolute_error": 0.7036440968513489,
+      "maximum_absolute_error": 11.033458709716797,
+      "reference_mean_absolute_value": 2.453552484512329
+    },
+    {
+      "tensor": "/backbone.3/Conv_1_output_0",
+      "mean_absolute_error": 0.14794379472732544,
+      "maximum_absolute_error": 2.9485630989074707,
+      "reference_mean_absolute_value": 0.49730706214904785
+    },
+    {
+      "tensor": "/backbone.4/Conv_output_0",
+      "mean_absolute_error": 0.39761674404144287,
+      "maximum_absolute_error": 4.763059616088867,
+      "reference_mean_absolute_value": 1.7759578227996826
+    },
+    {
+      "tensor": "/backbone.4/Conv_1_output_0",
+      "mean_absolute_error": 0.1791868656873703,
+      "maximum_absolute_error": 6.048654556274414,
+      "reference_mean_absolute_value": 0.5526748299598694
+    },
+    {
+      "tensor": "/backbone.5/Conv_output_0",
+      "mean_absolute_error": 1.1548833847045898,
+      "maximum_absolute_error": 18.528039932250977,
+      "reference_mean_absolute_value": 2.433319568634033
+    },
+    {
+      "tensor": "/backbone.5/Conv_1_output_0",
+      "mean_absolute_error": 0.33097657561302185,
+      "maximum_absolute_error": 5.824296474456787,
+      "reference_mean_absolute_value": 0.49878937005996704
+    },
+    {
+      "tensor": "/backbone.6/Conv_output_0",
+      "mean_absolute_error": 1.122155785560608,
+      "maximum_absolute_error": 14.76661491394043,
+      "reference_mean_absolute_value": 1.7291886806488037
+    },
+    {
+      "tensor": "/backbone.6/Conv_1_output_0",
+      "mean_absolute_error": 0.487629234790802,
+      "maximum_absolute_error": 12.938971519470215,
+      "reference_mean_absolute_value": 0.5010761618614197
+    },
+    {
+      "tensor": "/backbone.7/Conv_output_0",
+      "mean_absolute_error": 2.159193992614746,
+      "maximum_absolute_error": 31.81245231628418,
+      "reference_mean_absolute_value": 2.1847286224365234
+    },
+    {
+      "tensor": "/backbone.7/Conv_1_output_0",
+      "mean_absolute_error": 0.4266223609447479,
+      "maximum_absolute_error": 9.558671951293945,
+      "reference_mean_absolute_value": 0.4678037166595459
+    },
+    {
+      "tensor": "/backbone.8/Conv_output_0",
+      "mean_absolute_error": 1.383059024810791,
+      "maximum_absolute_error": 21.069734573364258,
+      "reference_mean_absolute_value": 1.7174304723739624
+    },
+    {
+      "tensor": "/backbone.8/Conv_1_output_0",
+      "mean_absolute_error": 0.4771512746810913,
+      "maximum_absolute_error": 10.550561904907227,
+      "reference_mean_absolute_value": 0.4524156153202057
+    },
+    {
+      "tensor": "/backbone.9/Conv_output_0",
+      "mean_absolute_error": 2.5968260765075684,
+      "maximum_absolute_error": 43.03268814086914,
+      "reference_mean_absolute_value": 2.1223764419555664
+    },
+    {
+      "tensor": "/backbone.9/Conv_1_output_0",
+      "mean_absolute_error": 0.38688331842422485,
+      "maximum_absolute_error": 9.103278160095215,
+      "reference_mean_absolute_value": 0.43605753779411316
+    },
+    {
+      "tensor": "/backbone.10/Conv_output_0",
+      "mean_absolute_error": 1.7718591690063477,
+      "maximum_absolute_error": 23.0037899017334,
+      "reference_mean_absolute_value": 1.6865746974945068
+    },
+    {
+      "tensor": "/backbone.10/Conv_1_output_0",
+      "mean_absolute_error": 0.8095217943191528,
+      "maximum_absolute_error": 23.850170135498047,
+      "reference_mean_absolute_value": 0.5869279503822327
+    },
+    {
+      "tensor": "/backbone.11/Conv_output_0",
+      "mean_absolute_error": 3.726641893386841,
+      "maximum_absolute_error": 53.58766555786133,
+      "reference_mean_absolute_value": 2.2408254146575928
+    },
+    {
+      "tensor": "/backbone.11/Conv_1_output_0",
+      "mean_absolute_error": 0.6700877547264099,
+      "maximum_absolute_error": 27.210050582885742,
+      "reference_mean_absolute_value": 0.594953179359436
+    },
+    {
+      "tensor": "/backbone.12/Conv_output_0",
+      "mean_absolute_error": 2.6013317108154297,
+      "maximum_absolute_error": 56.21438217163086,
+      "reference_mean_absolute_value": 1.653696894645691
+    },
+    {
+      "tensor": "/backbone.12/Conv_1_output_0",
+      "mean_absolute_error": 1.9249745607376099,
+      "maximum_absolute_error": 50.93195724487305,
+      "reference_mean_absolute_value": 1.0034568309783936
+    },
+    {
+      "tensor": "/backbone.13/Conv_output_0",
+      "mean_absolute_error": 4.668233394622803,
+      "maximum_absolute_error": 117.46957397460938,
+      "reference_mean_absolute_value": 2.2351109981536865
+    },
+    {
+      "tensor": "/backbone.13/Conv_1_output_0",
+      "mean_absolute_error": 1.6289488077163696,
+      "maximum_absolute_error": 76.15408325195312,
+      "reference_mean_absolute_value": 1.123948335647583
+    }
+  ]
+}

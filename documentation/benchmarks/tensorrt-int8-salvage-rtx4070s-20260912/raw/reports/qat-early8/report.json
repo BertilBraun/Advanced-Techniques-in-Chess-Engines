@@ -1,0 +1,57 @@
+{
+  "sample_count": 32000,
+  "training_positions": 25600,
+  "partition": "early8",
+  "steps": 2000,
+  "learning_rate": 3e-05,
+  "training_seconds": 114.08092299592681,
+  "initial_holdout_fidelity": {
+    "positions": 6400,
+    "policy_top1_agreement": 0.963125,
+    "mean_policy_kl_divergence": 0.0019341296415168446,
+    "maximum_policy_kl_divergence": 1.9428039255264156,
+    "wdl_mean_absolute_error": 0.003873168055967895,
+    "wdl_maximum_absolute_error": 0.0969538688659668,
+    "expected_value_mean_absolute_error": 0.009391626949876802,
+    "expected_value_maximum_absolute_error": 0.1662735641002655
+  },
+  "final_holdout_fidelity": {
+    "positions": 6400,
+    "policy_top1_agreement": 0.88796875,
+    "mean_policy_kl_divergence": 0.02261537866791977,
+    "maximum_policy_kl_divergence": 11.745530983117986,
+    "wdl_mean_absolute_error": 0.009939921656186766,
+    "wdl_maximum_absolute_error": 0.5304833948612213,
+    "expected_value_mean_absolute_error": 0.023948259968747075,
+    "expected_value_maximum_absolute_error": 0.7923504412174225
+  },
+  "tensorrt_holdout_fidelity": {
+    "positions": 320,
+    "policy_top1_agreement": 0.890625,
+    "mean_policy_kl_divergence": 0.03270249343989752,
+    "maximum_policy_kl_divergence": 3.4574286955585154,
+    "wdl_mean_absolute_error": 0.011568137009938558,
+    "wdl_maximum_absolute_error": 0.5166015625,
+    "expected_value_mean_absolute_error": 0.02791147232055664,
+    "expected_value_maximum_absolute_error": 0.7720146179199219
+  },
+  "tensorrt_timing": {
+    "repetitions": 3,
+    "iterations_per_repetition": 20,
+    "batch_size": 320,
+    "repetition_seconds": [
+      0.06094760005362332,
+      0.06097611994482577,
+      0.05947743006981909
+    ],
+    "minimum_batch_milliseconds": 2.9738715034909546,
+    "median_batch_milliseconds": 3.047380002681166,
+    "p95_batch_milliseconds": 3.048663397785276,
+    "maximum_batch_milliseconds": 3.0488059972412884,
+    "median_positions_per_second": 105008.23649116799
+  },
+  "onnx_quantize_linear_nodes": 16,
+  "onnx_dequantize_linear_nodes": 16,
+  "engine_path": "/workspace/int8-salvage/qat-early8/qat-int8.engine",
+  "loss_tail_mean": 0.005287152940873056
+}
