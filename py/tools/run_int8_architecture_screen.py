@@ -159,6 +159,7 @@ class ActivationDistribution(FrozenModel):
 
 
 class TensorRtMeasurement(FrozenModel):
+    reference: Literal['floating', 'fake_quant']
     onnx_path: str = Field(min_length=1)
     onnx_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     engine_path: str = Field(min_length=1)
@@ -171,10 +172,12 @@ class TensorRtMeasurement(FrozenModel):
     onnx_export_seconds: float = Field(ge=0.0)
     engine_build_seconds: float = Field(ge=0.0)
     runner_initialization_seconds: float = Field(ge=0.0)
+    quantize_linear_nodes: int = Field(ge=0)
+    dequantize_linear_nodes: int = Field(ge=0)
 
 
 class ArchitectureScreenReport(FrozenModel):
-    schema_version: Literal[5] = 5
+    schema_version: Literal[6] = 6
     source_revision: SourceRevision
     cell: ScreenCell
     random_seed: int
@@ -205,11 +208,11 @@ class ArchitectureScreenReport(FrozenModel):
     initial_qat_calibration_seconds: float | None = Field(default=None, ge=0.0)
     final_qat_calibration_seconds: float | None = Field(default=None, ge=0.0)
     activation_ranges: tuple[ActivationDistribution, ...]
-    floating_held_out_loss: LossValues
+    floating_held_out_loss: LossValues | None
     fake_quant_held_out_loss: LossValues | None
     floating_to_fake_quant_fidelity: FidelityMetrics | None
     torchscript_bfloat16_timing: TimingDistribution
-    tensorrt_float16: TensorRtMeasurement
+    tensorrt_float16: TensorRtMeasurement | None
     tensorrt_int8: TensorRtMeasurement | None
     state_dict_path: str = Field(min_length=1)
     state_dict_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -615,12 +618,18 @@ def _measure_tensorrt(
     device: torch.device,
     strongly_typed: bool,
     constrain_float16_islands: bool,
+    reference_kind: Literal['floating', 'fake_quant'] = 'floating',
 ) -> TensorRtMeasurement:
     onnx_path = output / f'{name}.onnx'
     engine_path = output / f'{name}.engine'
     export_started = time.perf_counter()
     _export_onnx(model, onnx_path, device)
     onnx_export_seconds = time.perf_counter() - export_started
+    exported = onnx.load(onnx_path)
+    quantize_linear_nodes = sum(node.op_type == 'QuantizeLinear' for node in exported.graph.node)
+    dequantize_linear_nodes = sum(node.op_type == 'DequantizeLinear' for node in exported.graph.node)
+    if backend == Backend.TENSORRT_INT8 and (not quantize_linear_nodes or not dequantize_linear_nodes):
+        raise ValueError('TensorRT INT8 export contains no Q/DQ nodes.')
     build_started = time.perf_counter()
     if strongly_typed and backend == Backend.TENSORRT_INT8:
         engine = _build_strongly_typed_engine(onnx_path, engine_path)
@@ -636,6 +645,7 @@ def _measure_tensorrt(
     candidate = _tensorrt_outputs(runner, fidelity_batches)
     timing = _measure_runner(runner, 10, 5, 100, device)
     return TensorRtMeasurement(
+        reference=reference_kind,
         onnx_path=str(onnx_path),
         onnx_sha256=file_sha256(onnx_path),
         engine_path=engine.path,
@@ -648,6 +658,8 @@ def _measure_tensorrt(
         onnx_export_seconds=onnx_export_seconds,
         engine_build_seconds=engine_build_seconds,
         runner_initialization_seconds=runner_initialization_seconds,
+        quantize_linear_nodes=quantize_linear_nodes,
+        dequantize_linear_nodes=dequantize_linear_nodes,
     )
 
 
@@ -891,25 +903,37 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             device,
         )
         if arguments.cell.uses_qat:
-            with _quantizers_disabled(model):
-                floating_outputs, legal_mask = _model_outputs(model, fidelity_batches, device)
-                floating_loss = _evaluate(model, evaluation_batches, objective, device)
-                float16_measurement = _measure_tensorrt(
-                    model,
-                    arguments.output,
-                    'float16',
-                    Backend.TENSORRT_FLOAT16,
-                    floating_outputs,
-                    floating_outputs,
-                    legal_mask,
-                    fidelity_batches,
-                    activation_batch.states[:TENSORRT_BATCH_SIZE],
-                    device,
-                    arguments.strongly_typed_tensorrt,
-                    arguments.constrain_tensorrt_float16_islands,
-                )
             fake_outputs, _ = _model_outputs(model, fidelity_batches, device)
             fake_loss = _evaluate(model, evaluation_batches, objective, device)
+            if arguments.cell == ScreenCell.POST_QAT:
+                floating_outputs = fake_outputs
+                legal_mask = torch.cat(
+                    tuple(_legal_action_mask(batch.policy_legal_action_ids) for batch in fidelity_batches)
+                )
+                floating_loss = None
+                float16_measurement = None
+                float_to_fake = None
+                deployment_reference: Literal['floating', 'fake_quant'] = 'fake_quant'
+            else:
+                with _quantizers_disabled(model):
+                    floating_outputs, legal_mask = _model_outputs(model, fidelity_batches, device)
+                    floating_loss = _evaluate(model, evaluation_batches, objective, device)
+                    float16_measurement = _measure_tensorrt(
+                        model,
+                        arguments.output,
+                        'float16',
+                        Backend.TENSORRT_FLOAT16,
+                        floating_outputs,
+                        floating_outputs,
+                        legal_mask,
+                        fidelity_batches,
+                        activation_batch.states[:TENSORRT_BATCH_SIZE],
+                        device,
+                        arguments.strongly_typed_tensorrt,
+                        arguments.constrain_tensorrt_float16_islands,
+                    )
+                float_to_fake = measure_fidelity(floating_outputs, fake_outputs, legal_mask)
+                deployment_reference = 'floating'
             int8_measurement = _measure_tensorrt(
                 model,
                 arguments.output,
@@ -923,8 +947,8 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 device,
                 arguments.strongly_typed_tensorrt,
                 arguments.constrain_tensorrt_float16_islands,
+                deployment_reference,
             )
-            float_to_fake = measure_fidelity(floating_outputs, fake_outputs, legal_mask)
         else:
             floating_outputs, legal_mask = _model_outputs(model, fidelity_batches, device)
             floating_loss = _evaluate(model, evaluation_batches, objective, device)
