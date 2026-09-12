@@ -147,7 +147,7 @@ def test_deployment_qat_checkpoint_round_trip(tmp_path: Path) -> None:
 
 @pytest.mark.integration
 def test_qat_checkpoint_load_normalizes_compiled_parameter_keys(tmp_path: Path) -> None:
-    model = configure_qat(_network(), _calibrate)
+    model = configure_qat(_network(actions=64), _calibrate)
     pre_fold_state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 0)
     optimizer_configuration = AdamWOptimizerConfiguration()
     reference = save_qat_model_and_optimizer(
@@ -174,7 +174,7 @@ def test_qat_checkpoint_load_normalizes_compiled_parameter_keys(tmp_path: Path) 
         quantization_configuration=TensorRtInt8QatConfiguration(),
         device=torch.device('cpu'),
         save_folder=tmp_path,
-        dimensions=NetworkDimensions(channels=8, rows=3, columns=3, actions=10),
+        dimensions=NetworkDimensions(channels=8, rows=3, columns=3, actions=64),
     )
 
     assert set(loaded.state_dict()) == set(model.state_dict())
