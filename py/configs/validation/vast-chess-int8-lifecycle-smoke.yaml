@@ -14,7 +14,7 @@ training:
     quantization:
       kind: tensorrt_int8_qat
       fold_after_optimizer_steps: 1
-      calibration_positions: 320
+      calibration_positions: 256
       recalibration_interval_generations: 1
   topology:
     trainer:

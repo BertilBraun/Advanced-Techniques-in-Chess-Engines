@@ -11,7 +11,7 @@ training:
     quantization:
       kind: tensorrt_int8_qat
       fold_after_optimizer_steps: 1000
-      calibration_positions: 2048
+      calibration_positions: 256
       recalibration_interval_generations: 1
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-integrated-v35-int8-candidate.stop
