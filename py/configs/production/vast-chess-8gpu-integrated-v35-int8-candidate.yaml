@@ -52,8 +52,6 @@ chess:
 
 evaluation:
   definitions:
-  - kind: fixed_dataset
-    definition_id: fixed-dataset
   - kind: stockfish_adaptive_nodes
     definition_id: stockfish-searched
     node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
@@ -71,13 +69,13 @@ evaluation:
       exploration_constant: auto
       inference:
         inference_workers: 1
-        inference_batch_size: 64
+        inference_batch_size: 320
         outstanding_batches_per_worker: 1
         backend:
           kind: tensorrt
+          bootstrap_with_torchscript: true
           template_engine_paths:
-          - /workspace/tensorrt/v35-int8-14x160-prefold-eval-template.engine
-          - /workspace/tensorrt/v35-int8-14x160-deployment-eval-template.engine
+          - /workspace/tensorrt/v35-int8-14x160-deployment-trained-template.engine
         sdpa_backend: memory_efficient
   - kind: stockfish_adaptive_nodes
     definition_id: stockfish-policy-only

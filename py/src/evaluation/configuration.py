@@ -280,8 +280,6 @@ class EvaluationConfiguration(FrozenModel):
         definition_ids = tuple(definition.definition_id for definition in self.definitions)
         if len(set(definition_ids)) != len(definition_ids):
             raise ValueError('Evaluation definition IDs must be unique.')
-        if not any(definition.kind == 'fixed_dataset' for definition in self.definitions):
-            raise ValueError('Evaluation must contain one fixed-dataset definition.')
         if self.engine.kind == 'stockfish' and any(definition.kind == 'katago' for definition in self.definitions):
             raise ValueError('Stockfish evaluation configuration cannot contain a KataGo opponent.')
         if self.engine.kind == 'katago' and any(
