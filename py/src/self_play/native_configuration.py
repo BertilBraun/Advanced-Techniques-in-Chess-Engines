@@ -93,7 +93,8 @@ def resolved_inference_model_path(
             completed = subprocess.run(
                 (
                     sys.executable,
-                    str(publisher),
+                    '-m',
+                    'tools.publish_tensorrt_engine',
                     '--model',
                     str(model_path.resolve()),
                     *template_arguments,
