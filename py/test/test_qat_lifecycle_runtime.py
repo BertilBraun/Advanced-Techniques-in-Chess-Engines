@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 import torch
 from src.games.representation import NetworkDimensions
+from src.training.checkpoint.persistence import create_optimizer
+from src.training.configuration import AdamWOptimizerConfiguration
 from src.training.network import (
     DensePolicyHeadConfiguration,
     DisabledResidualContext,
@@ -18,6 +20,10 @@ from torch import nn
 
 pytest.importorskip('modelopt.torch.quantization')
 
+from src.training.quantization.checkpoint import (  # noqa: E402
+    load_qat_model_and_optimizer,
+    save_qat_model_and_optimizer,
+)
 from src.training.quantization.runtime import (  # noqa: E402
     configure_qat,
     deployment_qat_state,
@@ -91,3 +97,35 @@ def test_folded_qat_export_contains_explicit_quantization(tmp_path: Path) -> Non
 
     assert artifact.quantize_linear_nodes > 0
     assert artifact.dequantize_linear_nodes > 0
+
+
+@pytest.mark.integration
+def test_deployment_qat_checkpoint_round_trip(tmp_path: Path) -> None:
+    model = configure_qat(_network(), _calibrate)
+    pre_fold_state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 999)
+    fold_scaled_post_activation_batch_norm(model)
+    recalibrate_qat(model, _calibrate)
+    deployment_state = deployment_qat_state(pre_fold_state, 1_000)
+    optimizer_configuration = AdamWOptimizerConfiguration()
+    save_qat_model_and_optimizer(
+        model,
+        create_optimizer(model, optimizer_configuration),
+        generation=2,
+        completed_optimizer_steps=1_000,
+        save_folder=tmp_path,
+        qat_state=deployment_state,
+        example_states=torch.randn((8, 8, 3, 3)),
+    )
+
+    loaded, _, loaded_state = load_qat_model_and_optimizer(
+        generation=2,
+        network_configuration=model.network_args,
+        optimizer_configuration=optimizer_configuration,
+        quantization_configuration=TensorRtInt8QatConfiguration(),
+        device=torch.device('cpu'),
+        save_folder=tmp_path,
+        dimensions=NetworkDimensions(channels=8, rows=3, columns=3, actions=10),
+    )
+
+    assert loaded_state.phase is QatCheckpointPhase.DEPLOYMENT
+    assert all(isinstance(block.conv_block1[1], nn.Identity) for block in loaded.backbone)

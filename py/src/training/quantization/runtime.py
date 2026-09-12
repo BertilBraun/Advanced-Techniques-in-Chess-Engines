@@ -21,6 +21,7 @@ from src.training.network import (
 )
 from src.training.quantization.configuration import (
     QatCheckpointPhase,
+    QatStateIdentity,
     TensorRtInt8QatConfiguration,
     expected_qat_phase,
 )
@@ -30,13 +31,6 @@ from src.util.hashing import file_sha256
 from torch import Tensor, nn
 
 CalibrationLoop = Callable[[nn.Module], None]
-
-
-class QatStateIdentity(FrozenModel):
-    phase: QatCheckpointPhase
-    completed_optimizer_steps: int = Field(ge=0)
-    path: ConfigurationPath
-    sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
 class QatOnnxArtifact(FrozenModel):

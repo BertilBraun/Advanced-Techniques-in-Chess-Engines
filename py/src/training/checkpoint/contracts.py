@@ -3,8 +3,10 @@ from __future__ import annotations
 from os import PathLike
 from pathlib import Path
 
+from pydantic import Field
 from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.network import NetworkDefinition
+from src.training.quantization.configuration import QatCheckpointPhase, QatStateIdentity
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
 
@@ -18,6 +20,13 @@ class BootstrapPolicyPriorRecord(FrozenModel):
     applied_scale: float
 
 
+class QatCheckpointRecord(FrozenModel):
+    phase: QatCheckpointPhase
+    completed_optimizer_steps: int = Field(ge=0)
+    state_path: str
+    state_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
 class CheckpointManifest(FrozenModel):
     generation: int
     network: NetworkDefinition
@@ -27,6 +36,7 @@ class CheckpointManifest(FrozenModel):
     optimizer_sha256: str
     inference_model_path: str
     inference_model_sha256: str
+    qat: QatCheckpointRecord | None = None
     policy_prior_calibration: BootstrapPolicyPriorRecord | None = None
 
 
@@ -63,6 +73,7 @@ def load_checkpoint_manifest(
     )
     for artifact_path, expected_sha256 in artifacts:
         _validate_checkpoint_artifact(artifact_path, expected_sha256)
+    _validate_qat_artifact(root, manifest)
     return manifest
 
 
@@ -91,7 +102,14 @@ def load_checkpoint_manifest_path(path: Path, expected_generation: int) -> Check
     )
     for artifact_path, expected_sha256 in artifacts:
         _validate_checkpoint_artifact(artifact_path, expected_sha256)
+    _validate_qat_artifact(path.parent, manifest)
     return manifest
+
+
+def _validate_qat_artifact(root: Path, manifest: CheckpointManifest) -> None:
+    if manifest.qat is None:
+        return
+    _validate_checkpoint_artifact(root / manifest.qat.state_path, manifest.qat.state_sha256)
 
 
 class CheckpointReference(FrozenModel):
@@ -101,6 +119,7 @@ class CheckpointReference(FrozenModel):
     optimizer_path: Path
     inference_model_path: Path
     inference_model_sha256: str
+    qat_state: QatStateIdentity | None = None
 
     def validate_inference_model(self) -> None:
         if not self.inference_model_path.is_file():
@@ -120,6 +139,14 @@ class CheckpointReference(FrozenModel):
 
     @classmethod
     def from_manifest(cls, run_path: Path, manifest: CheckpointManifest) -> CheckpointReference:
+        qat_state = None
+        if manifest.qat is not None:
+            qat_state = QatStateIdentity(
+                phase=manifest.qat.phase,
+                completed_optimizer_steps=manifest.qat.completed_optimizer_steps,
+                path=run_path / manifest.qat.state_path,
+                sha256=manifest.qat.state_sha256,
+            )
         return cls(
             generation=manifest.generation,
             manifest_path=checkpoint_manifest_path(manifest.generation, run_path),
@@ -127,4 +154,5 @@ class CheckpointReference(FrozenModel):
             optimizer_path=run_path / manifest.optimizer_path,
             inference_model_path=run_path / manifest.inference_model_path,
             inference_model_sha256=manifest.inference_model_sha256,
+            qat_state=qat_state,
         )

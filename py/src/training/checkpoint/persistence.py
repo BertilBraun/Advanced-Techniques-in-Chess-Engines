@@ -11,10 +11,16 @@ from src.training.checkpoint.contracts import (
     BootstrapPolicyPriorRecord,
     CheckpointManifest,
     CheckpointReference,
+    QatCheckpointRecord,
     load_checkpoint_manifest,
     load_checkpoint_manifest_path,
 )
-from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
+from src.training.checkpoint.paths import (
+    checkpoint_manifest_path,
+    model_save_path,
+    optimizer_save_path,
+    qat_state_save_path,
+)
 from src.training.configuration import (
     AdamWOptimizerConfiguration,
     OptimizerConfiguration,
@@ -261,18 +267,22 @@ def save_model_and_optimizer(
     write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')
 
 
-def _checkpoint_identity(manifest: CheckpointManifest) -> tuple[NetworkDefinition, str, str, str]:
+def _checkpoint_identity(
+    manifest: CheckpointManifest,
+) -> tuple[NetworkDefinition, str, str, str, QatCheckpointRecord | None]:
     return (
         manifest.network,
         manifest.model_sha256,
         manifest.optimizer_sha256,
         manifest.inference_model_sha256,
+        manifest.qat,
     )
 
 
 def _copy_checkpoint(
     source_manifest: CheckpointManifest,
     source_paths: tuple[Path, Path, Path],
+    source_qat_path: Path | None,
     generation: int,
     destination_folder: Path,
     mismatch_message: str,
@@ -290,7 +300,10 @@ def _copy_checkpoint(
         optimizer_save_path(generation, destination_folder),
         model_save_path(generation, destination_folder).with_suffix('.jit.pt'),
     )
-    if any(path.exists() for path in destination_paths):
+    destination_qat_path = qat_state_save_path(generation, destination_folder) if source_qat_path is not None else None
+    if any(path.exists() for path in destination_paths) or (
+        destination_qat_path is not None and destination_qat_path.exists()
+    ):
         raise ValueError('Checkpoint artifacts exist without their checkpoint manifest.')
 
     destination_folder.mkdir(parents=True, exist_ok=True)
@@ -298,6 +311,11 @@ def _copy_checkpoint(
         temporary_path = _temporary_path(destination_path)
         shutil.copyfile(source_path, temporary_path)
         temporary_path.replace(destination_path)
+    if source_qat_path is not None:
+        assert destination_qat_path is not None
+        temporary_path = _temporary_path(destination_qat_path)
+        shutil.copyfile(source_qat_path, temporary_path)
+        temporary_path.replace(destination_qat_path)
 
     manifest = CheckpointManifest(
         generation=generation,
@@ -309,6 +327,16 @@ def _copy_checkpoint(
         inference_model_path=destination_paths[2].name,
         inference_model_sha256=source_manifest.inference_model_sha256,
         policy_prior_calibration=source_manifest.policy_prior_calibration,
+        qat=(
+            None
+            if source_manifest.qat is None
+            else source_manifest.qat.model_copy(
+                update={
+                    'state_path': destination_qat_path.name,
+                    'state_sha256': file_sha256(destination_qat_path),
+                }
+            )
+        ),
     )
     write_text_atomically(destination_manifest_path, manifest.model_dump_json(indent=2) + '\n')
     return CheckpointReference.load(destination_folder, generation)
@@ -325,9 +353,13 @@ def import_checkpoint(
         source_manifest_path.parent / source_manifest.optimizer_path,
         source_manifest_path.parent / source_manifest.inference_model_path,
     )
+    source_qat_path = (
+        None if source_manifest.qat is None else source_manifest_path.parent / source_manifest.qat.state_path
+    )
     return _copy_checkpoint(
         source_manifest,
         source_paths,
+        source_qat_path,
         generation,
         destination_folder,
         'Existing imported checkpoint does not match the configured source checkpoint.',
@@ -341,9 +373,13 @@ def publish_checkpoint(
 ) -> CheckpointReference:
     source_manifest = load_checkpoint_manifest_path(source.manifest_path, source.generation)
     source_paths = (source.model_path, source.optimizer_path, source.inference_model_path)
+    source_qat_path = (
+        None if source_manifest.qat is None else source.manifest_path.parent / source_manifest.qat.state_path
+    )
     return _copy_checkpoint(
         source_manifest,
         source_paths,
+        source_qat_path,
         generation,
         destination_folder,
         'Existing published checkpoint does not match the progressive model checkpoint.',
