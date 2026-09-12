@@ -9,6 +9,7 @@ training:
   trainer:
     compilation: disabled
     warmup_optimizer_steps: 1000
+    max_grad_norm: 1.0
     quantization:
       kind: tensorrt_int8_qat
       fold_after_optimizer_steps: 1000
