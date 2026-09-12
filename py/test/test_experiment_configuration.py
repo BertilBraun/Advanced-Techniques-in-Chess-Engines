@@ -603,8 +603,8 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
-    # Re-pinned 2026-09-09: restart-state openings now declare a maximum uniformly sampled ply count.
-    assert experiment_configuration_sha256(frozen) == 'da334ffea36a593cfb3566b91f5b7f8e3c8f8f1e851566665e976cf82db9da73'
+    # Re-pinned 2026-09-12: optimizer settings are now represented by a typed configuration.
+    assert experiment_configuration_sha256(frozen) == '655104cd40940c8c947c8730ededa8f71ab1d5f60404c968dddb4f75f63f480a'
 
 
 @pytest.mark.parametrize(

@@ -14,6 +14,7 @@ from src.games.chess.policy_encoding import (
 )
 from src.training.checkpoint.paths import model_save_path
 from src.training.checkpoint.persistence import create_model, create_optimizer, load_model, save_model_and_optimizer
+from src.training.configuration import AdamWOptimizerConfiguration
 from src.training.model_cost import measure_model_cost
 from src.training.network import (
     BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
@@ -351,7 +352,7 @@ def test_a_saved_cell_reloads_to_the_same_policy_logits(attention_bias: object, 
     with torch.no_grad():
         expected, _ = model.logit_forward(states)
 
-    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 7, tmp_path)
+    save_model_and_optimizer(model, create_optimizer(model, AdamWOptimizerConfiguration()), 7, tmp_path)
     reloaded = load_model(model_save_path(7, tmp_path), architecture, DEVICE, CHESS_NETWORK_DIMENSIONS)
 
     with torch.no_grad():
@@ -363,7 +364,7 @@ def test_the_shared_template_bank_stays_shared_after_a_reload(tmp_path: Path) ->
     torch.manual_seed(43)
     architecture = attention_parameters(num_layers=3, attention_bias=SMOLGEN)
     model = Network(architecture, DEVICE, CHESS_NETWORK_DIMENSIONS)
-    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 7, tmp_path)
+    save_model_and_optimizer(model, create_optimizer(model, AdamWOptimizerConfiguration()), 7, tmp_path)
 
     reloaded = load_model(model_save_path(7, tmp_path), architecture, DEVICE, CHESS_NETWORK_DIMENSIONS)
 

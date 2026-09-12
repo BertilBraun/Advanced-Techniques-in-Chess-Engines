@@ -12,6 +12,7 @@ from src.games.chess.interactive.analysis import CountedMctsAnalysis, PolicyAnal
 from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
 from src.games.chess.interactive.engine import InteractiveEngine
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
+from src.training.configuration import AdamWOptimizerConfiguration
 from src.training.network import (
     AttentionNetworkParams,
     ChessFromToAttentionPolicyHeadConfiguration,
@@ -79,7 +80,7 @@ def test_native_inference_pipeline_searches_with_an_exported_new_head_model(
     model = Network(parameters, torch.device('cpu'), CHESS_NETWORK_DIMENSIONS, auxiliary_heads)
     save_model_and_optimizer(
         model,
-        create_optimizer(model, 'adamw'),
+        create_optimizer(model, AdamWOptimizerConfiguration()),
         0,
         tmp_path,
         bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS),
@@ -128,7 +129,7 @@ def test_native_cuda_inference_preserves_from_to_head_index_buffers(tmp_path: Pa
     )
     save_model_and_optimizer(
         model,
-        create_optimizer(model, 'adamw'),
+        create_optimizer(model, AdamWOptimizerConfiguration()),
         0,
         tmp_path,
         bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS),

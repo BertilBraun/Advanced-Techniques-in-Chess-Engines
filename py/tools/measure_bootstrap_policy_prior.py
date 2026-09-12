@@ -10,6 +10,7 @@ from src.distillation.dataset import build_training_batch, open_dataset
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT
 from src.training.checkpoint.contracts import read_checkpoint_manifest
 from src.training.checkpoint.persistence import create_model, create_optimizer, save_model_and_optimizer
+from src.training.configuration import AdamWOptimizerConfiguration
 from src.training.model_cost import measure_model_cost
 from src.training.network import (
     POLICY_PRIOR_PROBE_POSITIONS,
@@ -69,7 +70,7 @@ def measure_cell(name: str, architecture, states: torch.Tensor, save_folder: Pat
     calibration = calibrate_bootstrap_policy_prior(export, states)
 
     save_folder.mkdir(parents=True, exist_ok=True)
-    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 0, save_folder, states)
+    save_model_and_optimizer(model, create_optimizer(model, AdamWOptimizerConfiguration()), 0, save_folder, states)
     manifest = read_checkpoint_manifest(0, save_folder)
 
     return BootstrapPriorMeasurement(

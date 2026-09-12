@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 from src.replay.configuration import ReplayConfiguration
@@ -108,7 +108,24 @@ class CreditTrainingParams(FrozenModel):
         return available_credits > threshold
 
 
-OptimizerType = Literal['adamw', 'sgd']
+class AdamWOptimizerConfiguration(FrozenModel):
+    kind: Literal['adamw'] = 'adamw'
+    weight_decay: float = Field(default=0.0001, ge=0.0, allow_inf_nan=False)
+    amsgrad: bool = True
+    epsilon: float = Field(default=1e-5, gt=0.0, allow_inf_nan=False)
+
+
+class SgdOptimizerConfiguration(FrozenModel):
+    kind: Literal['sgd'] = 'sgd'
+    momentum: float = Field(default=0.9, ge=0.0, lt=1.0, allow_inf_nan=False)
+    weight_decay: float = Field(default=0.0001, ge=0.0, allow_inf_nan=False)
+    nesterov: bool = True
+
+
+OptimizerConfiguration: TypeAlias = Annotated[
+    AdamWOptimizerConfiguration | SgdOptimizerConfiguration,
+    Field(discriminator='kind'),
+]
 
 
 class TrainingPrecision(str, Enum):
@@ -125,7 +142,7 @@ class TrainingParams(FrozenModel):
     global_batch_size: int = Field(gt=0)
     local_batch_size: int = Field(gt=0)
     replay_prefetch_depth: int = Field(default=4, gt=0)
-    optimizer: OptimizerType
+    optimizer: OptimizerConfiguration
     precision: TrainingPrecision
     compilation: TrainingCompilation
     learning_rate: FloatGenerationSchedule
