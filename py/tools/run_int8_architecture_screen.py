@@ -580,9 +580,6 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
         ):
             raise ValueError(f'Expected {EXPECTED_PARAMETER_COUNT:,} parameters, found {cost.parameters.total:,}.')
 
-        if arguments.fold_post_activation_batch_norm:
-            _fold_post_activation_batch_norm(model)
-
         calibration_generator = np.random.default_rng(arguments.random_seed + 10_000_000)
         calibration_indices = np.sort(
             calibration_generator.choice(
@@ -669,6 +666,13 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             torch.save({'step': step, 'model': model.state_dict(), 'optimizer': optimizer.state_dict()}, state_path)
 
         training_wall = time.perf_counter() - started
+        if arguments.fold_post_activation_batch_norm:
+            _fold_post_activation_batch_norm(model)
+            mtq.calibrate(
+                model,
+                'max',
+                _calibration_loop(opened, calibration_indices, arguments.batch_size, device),
+            )
         state_path = arguments.output / 'final-state.pt'
         torch.save(model.state_dict(), state_path)
         activation_batch = _replay_batch(
