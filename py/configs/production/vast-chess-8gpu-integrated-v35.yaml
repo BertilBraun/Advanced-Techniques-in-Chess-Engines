@@ -1,0 +1,40 @@
+extends: vast-chess-8gpu-integrated-v34.yaml
+
+run:
+  run_name: vast-chess-8gpu-integrated-v35
+  tensorboard_run_directory: vast-chess-8gpu-integrated-v35
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-integrated-v35
+  trainer:
+    global_batch_size: 2048
+    optimizer:
+      kind: sgd
+      momentum: 0.9
+      weight_decay: 0.0001
+      nesterov: true
+    learning_rate:
+      kind: linear
+      start_generation: 0
+      end_generation: 1000
+      start_value: 0.1
+      end_value: 0.01
+      rounding: none
+    max_grad_norm: 5.0
+  lifecycle:
+    credit:
+      replay_ratio: 6.25
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-integrated-v35.stop
+  progressive_model_sizing:
+    promotion:
+      candidate_catchup_learning_rate: 0.1
+
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: tensorrt
+        template_engine_paths:
+        - /workspace/tensorrt/v35-small-fp16-template.engine
+        - /workspace/tensorrt/v35-medium-fp16-template.engine
