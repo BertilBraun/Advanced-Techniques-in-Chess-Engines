@@ -372,6 +372,14 @@ class _TensorRtCudaGraphRunner(_CudaGraphRunner):
     def replay(self) -> None:
         self._graph.replay()
 
+    def load_states(self, encoded_states: Tensor) -> None:
+        if encoded_states.shape != self._encoded_states.shape:
+            raise ValueError(
+                f'TensorRT runner states have shape {tuple(encoded_states.shape)}, '
+                f'expected {tuple(self._encoded_states.shape)}.'
+            )
+        self._encoded_states.copy_(encoded_states.to(device=self._encoded_states.device, dtype=torch.int8))
+
     def outputs(self) -> ModelOutputs:
         self.replay()
         torch.cuda.synchronize(self._policy.device)
