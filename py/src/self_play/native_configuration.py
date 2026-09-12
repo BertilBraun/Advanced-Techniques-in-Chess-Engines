@@ -55,6 +55,8 @@ def resolved_inference_model_path(model_path: Path, backend: InferenceBackendCon
         case TorchScriptInferenceBackend():
             return model_path
         case TensorRtInferenceBackend(template_engine_path=template_engine_path):
+            if model_path.name.endswith('.engine'):
+                return model_path
             publisher = Path(__file__).parents[2] / 'tools' / 'publish_tensorrt_engine.py'
             completed = subprocess.run(
                 (

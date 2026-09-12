@@ -9,6 +9,8 @@ from pathlib import Path
 
 import AlphaZeroCpp as native
 import torch
+from src.self_play.configuration import TensorRtInferenceBackend
+from src.self_play.native_configuration import resolved_inference_model_path
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,7 @@ class LoopArguments:
     inference_backend: str
     seed: int
     refresh_model: Path | None
+    tensorrt_template_engine: Path | None
 
 
 class StubNetwork(torch.nn.Module):
@@ -166,6 +169,16 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
         'torchscript': native.InferenceBackend.TORCHSCRIPT,
         'tensorrt': native.InferenceBackend.TENSORRT,
     }[arguments.inference_backend]
+    if arguments.inference_backend == 'tensorrt' and arguments.tensorrt_template_engine is not None:
+        backend_configuration = TensorRtInferenceBackend(template_engine_path=arguments.tensorrt_template_engine)
+        model_path = resolved_inference_model_path(model_path, backend_configuration)
+        refresh_model = (
+            None
+            if arguments.refresh_model is None
+            else resolved_inference_model_path(arguments.refresh_model, backend_configuration)
+        )
+    else:
+        refresh_model = arguments.refresh_model
     runtime = native.InferenceConfiguration(
         arguments.device_id, str(model_path), device, execution_options, inference_backend
     )
@@ -185,9 +198,9 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
     refresh_seconds = None
 
     for batch_index in range(arguments.warmup_batches + arguments.measured_batches):
-        if batch_index == arguments.warmup_batches and arguments.refresh_model is not None:
+        if batch_index == arguments.warmup_batches and refresh_model is not None:
             refresh_started_at = time.perf_counter()
-            search.refresh_model(1, str(arguments.refresh_model))
+            search.refresh_model(1, str(refresh_model))
             refresh_seconds = time.perf_counter() - refresh_started_at
         measuring = batch_index >= arguments.warmup_batches
         if measuring and initial_statistics is None:
@@ -320,6 +333,7 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
     parser.add_argument('--seed', type=int, default=12345)
     parser.add_argument('--model', type=Path)
     parser.add_argument('--refresh-model', type=Path)
+    parser.add_argument('--tensorrt-template-engine', type=Path)
     parser.add_argument('--label', type=str, default='')
     namespace = parser.parse_args()
     arguments = LoopArguments(
@@ -343,9 +357,12 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
         inference_backend=namespace.inference_backend,
         seed=namespace.seed,
         refresh_model=namespace.refresh_model,
+        tensorrt_template_engine=namespace.tensorrt_template_engine,
     )
     if arguments.refresh_model is not None and not arguments.refresh_model.is_file():
         raise ValueError(f'Refresh model does not exist: {arguments.refresh_model}')
+    if arguments.tensorrt_template_engine is not None and not arguments.tensorrt_template_engine.is_file():
+        raise ValueError(f'TensorRT template does not exist: {arguments.tensorrt_template_engine}')
     return arguments, namespace.model, namespace.label
 
 
