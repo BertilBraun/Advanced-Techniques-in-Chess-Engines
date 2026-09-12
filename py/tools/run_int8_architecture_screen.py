@@ -15,6 +15,7 @@ import modelopt.torch.quantization as mtq
 import numpy as np
 import onnx
 import onnxruntime as ort
+import tensorrt as trt
 import torch
 from modelopt.torch.quantization.config import QuantizeConfig, QuantizerCfgEntry
 from modelopt.torch.quantization.nn import TensorQuantizer
@@ -35,7 +36,7 @@ from src.training.network import (
     ScaledPreActivationResidualBlockConfiguration,
 )
 from src.training.objective import ResolvedTrainingObjective
-from src.util.atomic_file import write_text_atomically
+from src.util.atomic_file import write_bytes_atomically, write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
 from src.util.provenance import SourceRevision, read_source_revision
@@ -43,6 +44,7 @@ from tools.benchmark_tensorrt_inference import (
     BATCH_SIZE as TENSORRT_BATCH_SIZE,
 )
 from tools.benchmark_tensorrt_inference import (
+    ArtifactIdentity,
     Backend,
     _build_engine,
     _measure_runner,
@@ -118,6 +120,7 @@ class Arguments:
     quantized_convolutions: int
     final_normalization: bool
     fold_post_activation_batch_norm: bool
+    strongly_typed_tensorrt: bool
 
 
 class TrainingObservation(FrozenModel):
@@ -162,6 +165,7 @@ class ArchitectureScreenReport(FrozenModel):
     architecture: NetworkParams
     quantized_convolutions: int = Field(ge=0)
     folded_post_activation_batch_norm: bool
+    strongly_typed_tensorrt: bool
     model_cost: ModelCost
     steps: int = Field(ge=0)
     batch_size: int = Field(gt=0)
@@ -494,11 +498,16 @@ def _measure_tensorrt(
     fidelity_batches: tuple[TrainingBatch, ...],
     timing_states: Tensor,
     device: torch.device,
+    strongly_typed: bool,
 ) -> TensorRtMeasurement:
     onnx_path = output / f'{name}.onnx'
     engine_path = output / f'{name}.engine'
     _export_onnx(model, onnx_path, device)
-    engine, _, _ = _build_engine(onnx_path, engine_path, backend)
+    engine = (
+        _build_strongly_typed_engine(onnx_path, engine_path)
+        if strongly_typed and backend == Backend.TENSORRT_INT8
+        else _build_engine(onnx_path, engine_path, backend)[0]
+    )
     onnx_outputs = _onnx_outputs(onnx_path, fidelity_batches, device.index or 0)
     runner = _TensorRtCudaGraphRunner(engine_path, timing_states, device, 10)
     candidate = _tensorrt_outputs(runner, fidelity_batches)
@@ -514,6 +523,27 @@ def _measure_tensorrt(
         onnx_fidelity_to_framework=measure_fidelity(framework_outputs, onnx_outputs, legal_mask),
         tensorrt_fidelity_to_onnx=measure_fidelity(onnx_outputs, candidate, legal_mask),
     )
+
+
+def _build_strongly_typed_engine(onnx_path: Path, engine_path: Path) -> ArtifactIdentity:
+    logger = trt.Logger(trt.Logger.INFO)
+    builder = trt.Builder(logger)
+    flags = (1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)) | (
+        1 << int(trt.NetworkDefinitionCreationFlag.STRONGLY_TYPED)
+    )
+    network = builder.create_network(flags)
+    parser = trt.OnnxParser(network, logger)
+    if not parser.parse_from_file(str(onnx_path)):
+        errors = tuple(str(parser.get_error(index)) for index in range(parser.num_errors))
+        raise ValueError(f'TensorRT ONNX conversion failed for {onnx_path}: {" | ".join(errors)}')
+    configuration = builder.create_builder_config()
+    configuration.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 * 1024**3)
+    configuration.builder_optimization_level = 3
+    serialized = builder.build_serialized_network(network, configuration)
+    if serialized is None:
+        raise ValueError(f'TensorRT failed to build a strongly typed engine for {onnx_path}.')
+    write_bytes_atomically(engine_path, bytes(serialized))
+    return ArtifactIdentity(path=str(engine_path), sha256=file_sha256(engine_path))
 
 
 def run(arguments: Arguments) -> ArchitectureScreenReport:
@@ -669,6 +699,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                     fidelity_batches,
                     activation_batch.states[:TENSORRT_BATCH_SIZE],
                     device,
+                    arguments.strongly_typed_tensorrt,
                 )
             fake_outputs, _ = _model_outputs(model, fidelity_batches, device)
             fake_loss = _evaluate(model, evaluation_batches, objective, device)
@@ -683,6 +714,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 fidelity_batches,
                 activation_batch.states[:TENSORRT_BATCH_SIZE],
                 device,
+                arguments.strongly_typed_tensorrt,
             )
             float_to_fake = measure_fidelity(floating_outputs, fake_outputs, legal_mask)
         else:
@@ -702,6 +734,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 fidelity_batches,
                 activation_batch.states[:TENSORRT_BATCH_SIZE],
                 device,
+                arguments.strongly_typed_tensorrt,
             )
 
         report = ArchitectureScreenReport(
@@ -714,6 +747,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             architecture=network_architecture,
             quantized_convolutions=arguments.quantized_convolutions if arguments.cell.uses_qat else 0,
             folded_post_activation_batch_norm=arguments.fold_post_activation_batch_norm,
+            strongly_typed_tensorrt=arguments.strongly_typed_tensorrt,
             model_cost=cost,
             steps=arguments.steps,
             batch_size=arguments.batch_size,
@@ -765,6 +799,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--quantized-convolutions', default=DEFAULT_LAYERS * 2, type=int)
     parser.add_argument('--final-normalization', action='store_true')
     parser.add_argument('--fold-post-activation-batch-norm', action='store_true')
+    parser.add_argument('--strongly-typed-tensorrt', action='store_true')
     namespace = parser.parse_args()
     if namespace.steps < 0 or namespace.batch_size <= 0 or namespace.evaluate_every <= 0:
         raise ValueError('Steps must be nonnegative; batch size and evaluation interval must be positive.')
@@ -796,6 +831,7 @@ def parse_arguments() -> Arguments:
         quantized_convolutions=namespace.quantized_convolutions,
         final_normalization=namespace.final_normalization,
         fold_post_activation_batch_norm=namespace.fold_post_activation_batch_norm,
+        strongly_typed_tensorrt=namespace.strongly_typed_tensorrt,
     )
 
 

@@ -111,7 +111,14 @@ class TensorRtQdqInspection(FrozenModel):
 
 
 def _initializer_arrays(model: onnx.ModelProto) -> dict[str, np.ndarray]:
-    return {initializer.name: numpy_helper.to_array(initializer) for initializer in model.graph.initializer}
+    values = {initializer.name: numpy_helper.to_array(initializer) for initializer in model.graph.initializer}
+    for node in model.graph.node:
+        if node.op_type != 'Constant':
+            continue
+        value = next((attribute.t for attribute in node.attribute if attribute.name == 'value'), None)
+        if value is not None:
+            values[node.output[0]] = numpy_helper.to_array(value)
+    return values
 
 
 def _attribute_int(node: onnx.NodeProto, name: str, default: int) -> int:
