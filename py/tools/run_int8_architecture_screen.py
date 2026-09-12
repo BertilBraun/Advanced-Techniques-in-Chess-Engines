@@ -387,7 +387,7 @@ def _share_trunk_output_amax(model: _SharedBoundaryQuantizedPostActivationNetwor
     output_quantizers = (model.start_input_quantizer,) + tuple(block.output_input_quantizer for block in model.backbone)
     shared_amax = torch.stack(tuple(quantizer.amax.float().amax() for quantizer in output_quantizers)).amax()
     for quantizer in output_quantizers:
-        quantizer.amax = shared_amax.to(device=quantizer.amax.device, dtype=quantizer.amax.dtype)
+        quantizer.amax = shared_amax.to(device=quantizer.amax.device, dtype=quantizer.amax.dtype).clone()
 
 
 def _replay_batch(dataset: OpenedProductionReplay, indices: np.ndarray, device: torch.device) -> TrainingBatch:
