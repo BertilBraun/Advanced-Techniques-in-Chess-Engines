@@ -156,7 +156,7 @@ class TensorRtMeasurement(FrozenModel):
 
 
 class ArchitectureScreenReport(FrozenModel):
-    schema_version: Literal[3] = 3
+    schema_version: Literal[4] = 4
     source_revision: SourceRevision
     cell: ScreenCell
     random_seed: int
@@ -167,6 +167,7 @@ class ArchitectureScreenReport(FrozenModel):
     quantized_convolutions: int = Field(ge=0)
     folded_post_activation_batch_norm: bool
     strongly_typed_tensorrt: bool
+    constrained_tensorrt_float16_islands: bool
     model_cost: ModelCost
     steps: int = Field(ge=0)
     batch_size: int = Field(gt=0)
@@ -501,15 +502,17 @@ def _measure_tensorrt(
     timing_states: Tensor,
     device: torch.device,
     strongly_typed: bool,
+    constrain_float16_islands: bool,
 ) -> TensorRtMeasurement:
     onnx_path = output / f'{name}.onnx'
     engine_path = output / f'{name}.engine'
     _export_onnx(model, onnx_path, device)
-    engine = (
-        _build_strongly_typed_engine(onnx_path, engine_path)
-        if strongly_typed and backend == Backend.TENSORRT_INT8
-        else _build_engine(onnx_path, engine_path, backend)[0]
-    )
+    if strongly_typed and backend == Backend.TENSORRT_INT8:
+        engine = _build_strongly_typed_engine(onnx_path, engine_path)
+    elif constrain_float16_islands and backend == Backend.TENSORRT_INT8:
+        engine = _build_precision_constrained_engine(onnx_path, engine_path)
+    else:
+        engine = _build_engine(onnx_path, engine_path, backend)[0]
     onnx_outputs = _onnx_outputs(onnx_path, fidelity_batches, device.index or 0)
     runner = _TensorRtCudaGraphRunner(engine_path, timing_states, device, 10)
     candidate = _tensorrt_outputs(runner, fidelity_batches)
@@ -544,6 +547,47 @@ def _build_strongly_typed_engine(onnx_path: Path, engine_path: Path) -> Artifact
     serialized = builder.build_serialized_network(network, configuration)
     if serialized is None:
         raise ValueError(f'TensorRT failed to build a strongly typed engine for {onnx_path}.')
+    write_bytes_atomically(engine_path, bytes(serialized))
+    return ArtifactIdentity(path=str(engine_path), sha256=file_sha256(engine_path))
+
+
+def _requires_float16_island(layer: trt.ILayer) -> bool:
+    name = layer.name
+    if 'start_block' in name or 'policy_head' in name or 'value_head' in name or 'global_pooling_bias' in name:
+        return True
+    return layer.type == trt.LayerType.ELEMENTWISE and '/backbone.' in name and name.endswith('/Add')
+
+
+def _build_precision_constrained_engine(onnx_path: Path, engine_path: Path) -> ArtifactIdentity:
+    logger = trt.Logger(trt.Logger.INFO)
+    builder = trt.Builder(logger)
+    network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+    parser = trt.OnnxParser(network, logger)
+    if not parser.parse_from_file(str(onnx_path)):
+        errors = tuple(str(parser.get_error(index)) for index in range(parser.num_errors))
+        raise ValueError(f'TensorRT ONNX conversion failed for {onnx_path}: {" | ".join(errors)}')
+    constrained_types = {
+        trt.LayerType.ACTIVATION,
+        trt.LayerType.CONVOLUTION,
+        trt.LayerType.ELEMENTWISE,
+        trt.LayerType.MATRIX_MULTIPLY,
+        trt.LayerType.REDUCE,
+    }
+    for index in range(network.num_layers):
+        layer = network.get_layer(index)
+        if layer.type not in constrained_types or not _requires_float16_island(layer):
+            continue
+        layer.precision = trt.float16
+        for output_index in range(layer.num_outputs):
+            layer.set_output_type(output_index, trt.float16)
+    configuration = builder.create_builder_config()
+    configuration.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 * 1024**3)
+    configuration.builder_optimization_level = 3
+    configuration.set_flag(trt.BuilderFlag.FP16)
+    configuration.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
+    serialized = builder.build_serialized_network(network, configuration)
+    if serialized is None:
+        raise ValueError(f'TensorRT failed to build a precision-constrained engine for {onnx_path}.')
     write_bytes_atomically(engine_path, bytes(serialized))
     return ArtifactIdentity(path=str(engine_path), sha256=file_sha256(engine_path))
 
@@ -731,6 +775,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                     activation_batch.states[:TENSORRT_BATCH_SIZE],
                     device,
                     arguments.strongly_typed_tensorrt,
+                    arguments.cell.uses_quantization_friendly_trunk,
                 )
             fake_outputs, _ = _model_outputs(model, fidelity_batches, device)
             fake_loss = _evaluate(model, evaluation_batches, objective, device)
@@ -746,6 +791,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 activation_batch.states[:TENSORRT_BATCH_SIZE],
                 device,
                 arguments.strongly_typed_tensorrt,
+                arguments.cell.uses_quantization_friendly_trunk,
             )
             float_to_fake = measure_fidelity(floating_outputs, fake_outputs, legal_mask)
         else:
@@ -766,6 +812,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 activation_batch.states[:TENSORRT_BATCH_SIZE],
                 device,
                 arguments.strongly_typed_tensorrt,
+                arguments.cell.uses_quantization_friendly_trunk,
             )
 
         report = ArchitectureScreenReport(
@@ -779,6 +826,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             quantized_convolutions=arguments.quantized_convolutions if arguments.cell.uses_qat else 0,
             folded_post_activation_batch_norm=arguments.fold_post_activation_batch_norm,
             strongly_typed_tensorrt=arguments.strongly_typed_tensorrt,
+            constrained_tensorrt_float16_islands=arguments.cell.uses_quantization_friendly_trunk,
             model_cost=cost,
             steps=arguments.steps,
             batch_size=arguments.batch_size,
