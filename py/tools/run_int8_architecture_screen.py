@@ -120,6 +120,11 @@ class ScreenCell(str, Enum):
         )
 
 
+class LearningRateSchedule(str, Enum):
+    COSINE = 'cosine'
+    CONSTANT_AFTER_WARMUP = 'constant_after_warmup'
+
+
 @dataclass(frozen=True)
 class Arguments:
     replay_store: Path
@@ -132,6 +137,8 @@ class Arguments:
     steps: int
     batch_size: int
     learning_rate: float
+    optimizer_kind: OptimizerKind
+    learning_rate_schedule: LearningRateSchedule
     warmup_steps: int
     evaluate_every: int
     holdout_fraction: float
@@ -191,7 +198,7 @@ class TensorRtMeasurement(FrozenModel):
 
 
 class ArchitectureScreenReport(FrozenModel):
-    schema_version: Literal[7] = 7
+    schema_version: Literal[8] = 8
     source_revision: SourceRevision
     cell: ScreenCell
     random_seed: int
@@ -211,9 +218,9 @@ class ArchitectureScreenReport(FrozenModel):
     model_cost: ModelCost
     steps: int = Field(ge=0)
     batch_size: int = Field(gt=0)
-    optimizer: Literal['adamw'] = 'adamw'
+    optimizer: OptimizerKind
     peak_learning_rate: float = Field(gt=0.0)
-    learning_rate_schedule: Literal['cosine'] = 'cosine'
+    learning_rate_schedule: LearningRateSchedule
     warmup_steps: int = Field(gt=0)
     holdout_fraction: float = Field(gt=0.0, lt=1.0)
     held_out_positions: int = Field(gt=0)
@@ -397,6 +404,12 @@ def _replay_batch(dataset: OpenedProductionReplay, indices: np.ndarray, device: 
         dataset.action_size,
         device,
     )
+
+
+def _screen_learning_rate(step: int, arguments: Arguments) -> float:
+    if arguments.learning_rate_schedule == LearningRateSchedule.COSINE:
+        return learning_rate_at(step, arguments.steps, arguments.learning_rate, arguments.warmup_steps)
+    return arguments.learning_rate * min(step / arguments.warmup_steps, 1.0)
 
 
 def _calibration_loop(
@@ -883,7 +896,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             if isinstance(model, _SharedBoundaryQuantizedPostActivationNetwork):
                 _share_trunk_output_amax(model)
 
-        optimizer = create_student_optimizer(model, OptimizerKind.ADAMW, arguments.learning_rate)
+        optimizer = create_student_optimizer(model, arguments.optimizer_kind, arguments.learning_rate)
         objective = distillation_objective()
         evaluation_batches = source_held_out_batches(
             opened,
@@ -902,12 +915,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
         window_started = started
         window_samples = 0
         for step in range(1, arguments.steps + 1):
-            learning_rate = learning_rate_at(
-                step,
-                arguments.steps,
-                arguments.learning_rate,
-                arguments.warmup_steps,
-            )
+            learning_rate = _screen_learning_rate(step, arguments)
             for group in optimizer.param_groups:
                 group['lr'] = learning_rate
             indices = np.sort(generator.integers(0, split.training_row_count, size=arguments.batch_size))
@@ -1081,7 +1089,9 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             model_cost=cost,
             steps=arguments.steps,
             batch_size=arguments.batch_size,
+            optimizer=arguments.optimizer_kind,
             peak_learning_rate=arguments.learning_rate,
+            learning_rate_schedule=arguments.learning_rate_schedule,
             warmup_steps=arguments.warmup_steps,
             holdout_fraction=arguments.holdout_fraction,
             held_out_positions=split.held_out_row_count,
@@ -1123,6 +1133,12 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--steps', default=100_000, type=int)
     parser.add_argument('--batch-size', default=1_024, type=int)
     parser.add_argument('--learning-rate', default=0.002, type=float)
+    parser.add_argument('--optimizer', choices=tuple(kind.value for kind in OptimizerKind), default='adamw')
+    parser.add_argument(
+        '--learning-rate-schedule',
+        choices=tuple(schedule.value for schedule in LearningRateSchedule),
+        default='cosine',
+    )
     parser.add_argument('--warmup-steps', default=200, type=int)
     parser.add_argument('--evaluate-every', default=1_000, type=int)
     parser.add_argument('--holdout-fraction', default=0.02, type=float)
@@ -1180,6 +1196,8 @@ def parse_arguments() -> Arguments:
         steps=namespace.steps,
         batch_size=namespace.batch_size,
         learning_rate=namespace.learning_rate,
+        optimizer_kind=OptimizerKind(namespace.optimizer),
+        learning_rate_schedule=LearningRateSchedule(namespace.learning_rate_schedule),
         warmup_steps=namespace.warmup_steps,
         evaluate_every=namespace.evaluate_every,
         holdout_fraction=namespace.holdout_fraction,
