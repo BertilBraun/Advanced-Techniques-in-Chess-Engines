@@ -38,7 +38,7 @@ from src.training.quantization import (
     TensorRtInt8QatConfiguration,
 )
 from src.training.quantization.checkpoint import save_qat_model_and_optimizer
-from src.training.quantization.runtime import configure_qat, save_qat_state
+from src.training.quantization.runtime import configure_qat, fixed_batch_example_states, save_qat_state
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -272,7 +272,7 @@ def _save_random_initial_checkpoint(
                 0,
                 output_path,
                 qat_state,
-                calibration_states[:inference_batch_size],
+                fixed_batch_example_states(calibration_states, inference_batch_size),
                 bootstrap_probe_states,
             )
 

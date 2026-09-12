@@ -41,6 +41,7 @@ from src.training.quantization.checkpoint import load_qat_model_and_optimizer, s
 from src.training.quantization.runtime import (
     configure_qat,
     deployment_qat_state,
+    fixed_batch_example_states,
     fold_scaled_post_activation_batch_norm,
     recalibrate_qat,
     save_qat_state,
@@ -221,7 +222,10 @@ def _initialize_rank(
                         0,
                         startup.save_path,
                         qat_state,
-                        qat_calibration_states[: game.self_play_configuration.inference.inference_batch_size],
+                        fixed_batch_example_states(
+                            qat_calibration_states,
+                            game.self_play_configuration.inference.inference_batch_size,
+                        ),
                         bootstrap_probe_states,
                     )
         distributed.barrier()
@@ -482,7 +486,10 @@ def _save_rank_checkpoint(
                 command.target_progress.completed_optimizer_steps,
                 runtime.save_path,
                 runtime.qat_state,
-                runtime.qat_calibration_states[: runtime.game.self_play_configuration.inference.inference_batch_size],
+                fixed_batch_example_states(
+                    runtime.qat_calibration_states,
+                    runtime.game.self_play_configuration.inference.inference_batch_size,
+                ),
             )
 
 

@@ -46,6 +46,13 @@ class RestoredQatModel:
     phase: QatCheckpointPhase
 
 
+def fixed_batch_example_states(states: Tensor, batch_size: int) -> Tensor:
+    if states.shape[0] <= 0:
+        raise ValueError('QAT deployment export requires at least one calibration position.')
+    repetitions = (batch_size + states.shape[0] - 1) // states.shape[0]
+    return states.repeat((repetitions, 1, 1, 1))[:batch_size]
+
+
 def _qat_configuration() -> QuantizeConfig:
     configuration = QuantizeConfig.model_validate(copy.deepcopy(quantization.INT8_DEFAULT_CFG))
     configuration.quant_cfg.extend(

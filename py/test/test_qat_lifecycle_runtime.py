@@ -28,11 +28,22 @@ from src.training.quantization.runtime import (  # noqa: E402
     configure_qat,
     deployment_qat_state,
     export_qat_onnx,
+    fixed_batch_example_states,
     fold_scaled_post_activation_batch_norm,
     recalibrate_qat,
     restore_qat_model,
     save_qat_state,
 )
+
+
+def test_fixed_batch_example_states_repeats_to_exact_deployment_batch() -> None:
+    states = torch.arange(3 * 2 * 2 * 2).reshape(3, 2, 2, 2)
+
+    result = fixed_batch_example_states(states, 5)
+
+    assert result.shape == (5, 2, 2, 2)
+    assert torch.equal(result[:3], states)
+    assert torch.equal(result[3:], states[:2])
 
 
 def _network(actions: int = 10) -> Network:
