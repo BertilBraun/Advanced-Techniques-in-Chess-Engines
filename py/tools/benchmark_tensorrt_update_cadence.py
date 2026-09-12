@@ -19,7 +19,7 @@ from tools.benchmark_tensorrt_inference import (
     _measure_runner,
     _TensorRtCudaGraphRunner,
 )
-from tools.tensorrt_benchmark_metrics import ModelOutputs
+from tools.tensorrt_benchmark_metrics import ModelOutputs, measure_fidelity
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,15 @@ class BuildResult:
     engine_path: Path
     build_seconds: float
     timing_cache: bytes
+
+
+@dataclass(frozen=True)
+class RefitStep:
+    name: str
+    onnx_path: Path
+    engine_path: Path
+    seconds: float
+    missing_weights: tuple[str, ...]
 
 
 def _parse_onnx(network: trt.INetworkDefinition, parser: trt.OnnxParser, path: Path) -> None:
@@ -67,24 +76,50 @@ def _build_engine(
     return BuildResult(engine_path=engine_path, build_seconds=build_seconds, timing_cache=serialized_cache)
 
 
-def _refit_engine(source_engine_path: Path, updated_onnx_path: Path, output_path: Path) -> float:
+def _refit_engine_sequence(
+    source_engine_path: Path,
+    source_onnx_path: Path,
+    updated_onnx_path: Path,
+    output: Path,
+) -> tuple[tuple[str, ...], tuple[RefitStep, ...]]:
     logger = trt.Logger(trt.Logger.INFO)
     runtime = trt.Runtime(logger)
     engine = runtime.deserialize_cuda_engine(source_engine_path.read_bytes())
     if engine is None:
         raise ValueError(f'TensorRT failed to deserialize {source_engine_path}.')
     refitter = trt.Refitter(engine, logger)
-    parser_refitter = trt.OnnxParserRefitter(refitter, logger)
-    started = time.perf_counter()
-    if not parser_refitter.refit_from_file(str(updated_onnx_path)):
-        missing = tuple(refitter.get_missing_weights())
-        raise ValueError(f'TensorRT ONNX refit failed; missing weights: {missing}.')
-    if not refitter.refit_cuda_engine():
-        missing = tuple(refitter.get_missing_weights())
-        raise ValueError(f'TensorRT engine refit failed; missing weights: {missing}.')
-    refit_seconds = time.perf_counter() - started
-    write_bytes_atomically(output_path, bytes(engine.serialize()))
-    return refit_seconds
+    refittable_weights = tuple(sorted(refitter.get_all_weights()))
+    steps: list[RefitStep] = []
+    targets = (
+        ('updated-first', updated_onnx_path),
+        ('source-return', source_onnx_path),
+        ('updated-second', updated_onnx_path),
+    )
+    for name, onnx_path in targets:
+        parser_refitter = trt.OnnxParserRefitter(refitter, logger)
+        started = time.perf_counter()
+        if not parser_refitter.refit_from_file(str(onnx_path)):
+            missing = tuple(sorted(refitter.get_missing_weights()))
+            raise ValueError(f'TensorRT ONNX refit failed for {name}; missing weights: {missing}.')
+        missing = tuple(sorted(refitter.get_missing_weights()))
+        if missing:
+            raise ValueError(f'TensorRT ONNX refit left missing weights for {name}: {missing}.')
+        if not refitter.refit_cuda_engine():
+            missing = tuple(sorted(refitter.get_missing_weights()))
+            raise ValueError(f'TensorRT engine refit failed for {name}; missing weights: {missing}.')
+        seconds = time.perf_counter() - started
+        engine_path = output / f'{name}.engine'
+        write_bytes_atomically(engine_path, bytes(engine.serialize()))
+        steps.append(
+            RefitStep(
+                name=name,
+                onnx_path=onnx_path,
+                engine_path=engine_path,
+                seconds=seconds,
+                missing_weights=missing,
+            )
+        )
+    return refittable_weights, tuple(steps)
 
 
 def _onnx_outputs(path: Path, states: torch.Tensor, device_id: int) -> ModelOutputs:
@@ -113,6 +148,11 @@ def _error_summary(reference: ModelOutputs, candidate: ModelOutputs) -> dict[str
         'wdl_mean_absolute_error': float(value_error.mean()),
         'wdl_maximum_absolute_error': float(value_error.max()),
     }
+
+
+def _fidelity_summary(reference: ModelOutputs, candidate: ModelOutputs) -> dict[str, object]:
+    legal_mask = torch.ones(reference.policy_logits.shape, dtype=torch.bool)
+    return measure_fidelity(reference, candidate, legal_mask).model_dump(mode='json')
 
 
 def main() -> None:
@@ -156,16 +196,26 @@ def main() -> None:
         source.timing_cache,
         True,
     )
-    refit_seconds = _refit_engine(
+    refittable_weights, refit_steps = _refit_engine_sequence(
         refit_source.engine_path,
+        arguments.source_onnx,
         arguments.updated_onnx,
-        arguments.output / 'updated-refitted.engine',
+        arguments.output,
     )
 
     reference = _onnx_outputs(arguments.updated_onnx, states, arguments.device_id)
     cached_outputs, cached_timing = _engine_outputs(cached.engine_path, states, device)
     uncached_outputs, uncached_timing = _engine_outputs(uncached.engine_path, states, device)
-    refitted_outputs, refitted_timing = _engine_outputs(arguments.output / 'updated-refitted.engine', states, device)
+    first_refitted_outputs, first_refitted_timing = _engine_outputs(
+        arguments.output / 'updated-first.engine', states, device
+    )
+    source_return_reference = _onnx_outputs(arguments.source_onnx, states, arguments.device_id)
+    source_return_outputs, source_return_timing = _engine_outputs(
+        arguments.output / 'source-return.engine', states, device
+    )
+    second_refitted_outputs, second_refitted_timing = _engine_outputs(
+        arguments.output / 'updated-second.engine', states, device
+    )
     report = {
         'source_onnx_sha256': file_sha256(arguments.source_onnx),
         'updated_onnx_sha256': file_sha256(arguments.updated_onnx),
@@ -175,14 +225,36 @@ def main() -> None:
         'updated_cached_build_seconds': cached.build_seconds,
         'updated_uncached_build_seconds': uncached.build_seconds,
         'refittable_source_build_seconds': refit_source.build_seconds,
-        'refit_seconds': refit_seconds,
+        'refittable_weight_count': len(refittable_weights),
+        'refittable_quantizer_constant_count': sum('quantizer' in name for name in refittable_weights),
+        'refittable_weights': refittable_weights,
+        'refit_steps': [
+            {
+                'name': step.name,
+                'onnx_sha256': file_sha256(step.onnx_path),
+                'engine_sha256': file_sha256(step.engine_path),
+                'seconds': step.seconds,
+                'missing_weights': step.missing_weights,
+            }
+            for step in refit_steps
+        ],
         'updated_cached_timing': cached_timing,
         'updated_uncached_timing': uncached_timing,
-        'updated_refitted_timing': refitted_timing,
+        'updated_first_refitted_timing': first_refitted_timing,
+        'source_return_refitted_timing': source_return_timing,
+        'updated_second_refitted_timing': second_refitted_timing,
         'updated_cached_error_to_onnx': _error_summary(reference, cached_outputs),
         'updated_uncached_error_to_onnx': _error_summary(reference, uncached_outputs),
-        'updated_refitted_error_to_onnx': _error_summary(reference, refitted_outputs),
-        'refitted_error_to_cached': _error_summary(cached_outputs, refitted_outputs),
+        'updated_cached_fidelity_to_onnx': _fidelity_summary(reference, cached_outputs),
+        'updated_uncached_fidelity_to_onnx': _fidelity_summary(reference, uncached_outputs),
+        'updated_first_refitted_error_to_onnx': _error_summary(reference, first_refitted_outputs),
+        'updated_first_refitted_fidelity_to_onnx': _fidelity_summary(reference, first_refitted_outputs),
+        'source_return_refitted_error_to_onnx': _error_summary(source_return_reference, source_return_outputs),
+        'source_return_refitted_fidelity_to_onnx': _fidelity_summary(source_return_reference, source_return_outputs),
+        'updated_second_refitted_error_to_onnx': _error_summary(reference, second_refitted_outputs),
+        'updated_second_refitted_fidelity_to_onnx': _fidelity_summary(reference, second_refitted_outputs),
+        'updated_first_refitted_error_to_cached': _error_summary(cached_outputs, first_refitted_outputs),
+        'updated_second_refitted_error_to_cached': _error_summary(cached_outputs, second_refitted_outputs),
         'artifacts': {
             path.name: file_sha256(path)
             for path in sorted(arguments.output.iterdir())
