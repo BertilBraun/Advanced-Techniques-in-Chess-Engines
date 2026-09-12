@@ -8,15 +8,40 @@ training:
   save_path: py/training_data/production/vast-chess-8gpu-integrated-v35-int8-candidate
   trainer:
     compilation: disabled
-    warmup_optimizer_steps: 0
+    warmup_optimizer_steps: 1000
     quantization:
       kind: tensorrt_int8_qat
       fold_after_optimizer_steps: 1000
       calibration_positions: 256
       recalibration_interval_generations: 1
   lifecycle:
+    replay:
+      capacity:
+        kind: staged
+        stages:
+        - start_generation: 0
+          value: 450000
+        - start_generation: 5
+          value: 900000
+        - start_generation: 10
+          value: 1500000
+        - start_generation: 20
+          value: 2100000
+        - start_generation: 40
+          value: 3000000
+        - start_generation: 70
+          value: 4500000
+        - start_generation: 100
+          value: 6000000
+        - start_generation: 400
+          value: 9000000
+        - start_generation: 700
+          value: 12000000
+        - start_generation: 1000
+          value: 15000000
+      maximum_capacity: 15000000
     credit:
-      replay_ratio: 8
+      replay_ratio: 6.25
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-integrated-v35-int8-candidate.stop
   progressive_model_sizing:
@@ -48,7 +73,10 @@ chess:
         bootstrap_with_torchscript: true
         template_engine_paths:
         - /workspace/tensorrt/v35-int8-14x160-prefold-template.engine
-        - /workspace/tensorrt/v35-int8-14x160-deployment-template.engine
+        - /workspace/tensorrt/v35-int8-14x160-deployment-trained-template.engine
+  objective:
+    policy_loss_weight: 1.0
+    value_loss_weight: 1.0
 
 evaluation:
   definitions:
@@ -61,7 +89,7 @@ evaluation:
     engine_executable_path: engines/stockfish-13
     opening_pair_count: 50
     maximum_game_plies: 300
-    first_generation: 0
+    first_generation: 2
     final_generation: null
     search: &int8_evaluation_search
       searches_per_move: 64
@@ -69,13 +97,13 @@ evaluation:
       exploration_constant: auto
       inference:
         inference_workers: 1
-        inference_batch_size: 320
+        inference_batch_size: 64
         outstanding_batches_per_worker: 1
         backend:
           kind: tensorrt
           bootstrap_with_torchscript: true
           template_engine_paths:
-          - /workspace/tensorrt/v35-int8-14x160-deployment-trained-template.engine
+          - /workspace/tensorrt/v35-int8-14x160-deployment-trained-eval64-template.engine
         sdpa_backend: memory_efficient
   - kind: stockfish_adaptive_nodes
     definition_id: stockfish-policy-only
@@ -86,7 +114,7 @@ evaluation:
     engine_executable_path: engines/stockfish-13
     opening_pair_count: 50
     maximum_game_plies: 300
-    first_generation: 0
+    first_generation: 2
     final_generation: null
     search:
       <<: *int8_evaluation_search
