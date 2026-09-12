@@ -289,13 +289,13 @@ class _BoundaryQuantizedResBlock(nn.Module):
         self.conv_block1 = block.conv_block1
         self.conv_block2 = block.conv_block2
         self.squeeze_excitation = block.squeeze_excitation
-        self.first_activation_quantizer = TensorQuantizer()
-        self.output_activation_quantizer = TensorQuantizer()
+        self.first_input_quantizer = TensorQuantizer()
+        self.output_input_quantizer = TensorQuantizer()
 
     def forward(self, inputs: Tensor) -> Tensor:
-        residual_branch = self.first_activation_quantizer(self.conv_block1(inputs))
+        residual_branch = self.first_input_quantizer(self.conv_block1(inputs))
         residual_branch = self.squeeze_excitation(self.conv_block2(residual_branch))
-        return self.output_activation_quantizer(torch.relu(inputs + residual_branch))
+        return self.output_input_quantizer(torch.relu(inputs + residual_branch))
 
 
 class _BoundaryQuantizedGlobalPoolingResBlock(nn.Module):
@@ -305,22 +305,22 @@ class _BoundaryQuantizedGlobalPoolingResBlock(nn.Module):
         self.conv_block1 = block.conv_block1
         self.global_pooling_bias = block.global_pooling_bias
         self.conv_block2 = block.conv_block2
-        self.first_activation_quantizer = TensorQuantizer()
-        self.output_activation_quantizer = TensorQuantizer()
+        self.first_input_quantizer = TensorQuantizer()
+        self.output_input_quantizer = TensorQuantizer()
 
     def forward(self, inputs: Tensor) -> Tensor:
-        features = self.first_activation_quantizer(self.conv_block1(inputs))
+        features = self.first_input_quantizer(self.conv_block1(inputs))
         global_features = features[:, : self.global_channels]
         local_features = features[:, self.global_channels :]
         biased_features = self.global_pooling_bias(local_features, global_features)
         residual_branch = self.conv_block2(biased_features)
-        return self.output_activation_quantizer(torch.relu(inputs + residual_branch))
+        return self.output_input_quantizer(torch.relu(inputs + residual_branch))
 
 
 class _BoundaryQuantizedPostActivationNetwork(Network):
     def __init__(self, args: NetworkParams, device: torch.device) -> None:
         super().__init__(args, device, CHESS_NETWORK_DIMENSIONS)
-        self.start_activation_quantizer = TensorQuantizer()
+        self.start_input_quantizer = TensorQuantizer()
         self.backbone = nn.ModuleList(
             _BoundaryQuantizedGlobalPoolingResBlock(block)
             if isinstance(block, GlobalPoolingResBlock)
@@ -329,7 +329,7 @@ class _BoundaryQuantizedPostActivationNetwork(Network):
         )
 
     def trunk_features(self, inputs: Tensor) -> Tensor:
-        features = self.start_activation_quantizer(self.start_block(inputs))
+        features = self.start_input_quantizer(self.start_block(inputs))
         for block in self.backbone:
             features = block(features)
         return self.finish_block(features)
