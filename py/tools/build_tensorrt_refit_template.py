@@ -10,11 +10,18 @@ from tools.publish_tensorrt_engine import export_onnx
 WORKSPACE_BYTES = 4 * 1024**3
 
 
-def build_template(model_path: Path, output_path: Path, batch_size: int) -> None:
+def build_template(
+    model_path: Path,
+    output_path: Path,
+    batch_size: int,
+    channels: int,
+    rows: int,
+    columns: int,
+) -> None:
     onnx_path = output_path.with_suffix('.temporary.onnx')
     onnx_path.unlink(missing_ok=True)
     try:
-        export_onnx(model_path, onnx_path, batch_size)
+        export_onnx(model_path, onnx_path, (batch_size, channels, rows, columns))
         logger = trt.Logger(trt.Logger.WARNING)
         builder = trt.Builder(logger)
         network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
@@ -40,8 +47,18 @@ def main() -> None:
     parser.add_argument('--model', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--batch-size', type=int, required=True)
+    parser.add_argument('--channels', type=int, default=52)
+    parser.add_argument('--rows', type=int, default=8)
+    parser.add_argument('--columns', type=int, default=8)
     arguments = parser.parse_args()
-    build_template(arguments.model, arguments.output, arguments.batch_size)
+    build_template(
+        arguments.model,
+        arguments.output,
+        arguments.batch_size,
+        arguments.channels,
+        arguments.rows,
+        arguments.columns,
+    )
 
 
 if __name__ == '__main__':

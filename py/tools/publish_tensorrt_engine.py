@@ -30,16 +30,16 @@ def exclusive_lock(path: Path) -> Iterator[None]:
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
-def engine_batch_size(engine: trt.ICudaEngine) -> int:
+def engine_input_shape(engine: trt.ICudaEngine) -> tuple[int, int, int, int]:
     shape = engine.get_tensor_shape(INPUT_NAME)
-    if len(shape) != 4 or shape[0] <= 0 or tuple(shape[1:]) != (52, 8, 8):
+    if len(shape) != 4 or any(dimension <= 0 for dimension in shape):
         raise ValueError(f'TensorRT template has incompatible input shape: {tuple(shape)}')
-    return shape[0]
+    return tuple(shape)
 
 
-def export_onnx(model_path: Path, output_path: Path, batch_size: int) -> None:
+def export_onnx(model_path: Path, output_path: Path, input_shape: tuple[int, int, int, int]) -> None:
     model = torch.jit.load(str(model_path), map_location='cpu').to(dtype=torch.float16).eval()
-    example = torch.zeros((batch_size, 52, 8, 8), dtype=torch.float16)
+    example = torch.zeros(input_shape, dtype=torch.float16)
     with torch.inference_mode():
         torch.onnx.export(
             model,
@@ -93,11 +93,11 @@ def publish(model_path: Path, template_path: Path) -> dict[str, str | int | bool
         template = runtime.deserialize_cuda_engine(template_path.read_bytes())
         if template is None:
             raise ValueError(f'Could not deserialize TensorRT template: {template_path}')
-        batch_size = engine_batch_size(template)
+        input_shape = engine_input_shape(template)
         onnx_path = engine_path.with_suffix('.temporary.onnx')
         onnx_path.unlink(missing_ok=True)
         try:
-            export_onnx(model_path, onnx_path, batch_size)
+            export_onnx(model_path, onnx_path, input_shape)
             refit_engine(template_path, onnx_path, engine_path)
         finally:
             onnx_path.unlink(missing_ok=True)
@@ -106,7 +106,7 @@ def publish(model_path: Path, template_path: Path) -> dict[str, str | int | bool
             'engine_sha256': file_sha256(engine_path),
             'source_sha256': source_sha256,
             'template_sha256': template_sha256,
-            'batch_size': batch_size,
+            'batch_size': input_shape[0],
             'cached': False,
         }
         write_text_atomically(metadata_path, json.dumps(metadata, indent=2, sort_keys=True) + '\n')
