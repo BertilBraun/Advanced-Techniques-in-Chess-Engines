@@ -48,10 +48,20 @@ def select_disjoint_replay_calibration(
     while selected_count < position_count and candidate_offset < available_positions:
         needed = position_count - selected_count
         candidate_count = min(available_positions - candidate_offset, max(needed, REFILL_CHUNK_SIZE))
-        candidate_indices = np.sort(candidate_order[candidate_offset : candidate_offset + candidate_count])
+        candidate_indices = candidate_order[candidate_offset : candidate_offset + candidate_count]
         candidate_offset += candidate_count
-        encoded_states, decoded_states = load_states(candidate_indices)
-        _validate_loaded_states(candidate_indices, encoded_states, decoded_states, excluded_states.shape[1:])
+        gather_order = np.argsort(candidate_indices)
+        gathered_indices = candidate_indices[gather_order]
+        gathered_encoded_states, gathered_decoded_states = load_states(gathered_indices)
+        _validate_loaded_states(
+            gathered_indices,
+            gathered_encoded_states,
+            gathered_decoded_states,
+            excluded_states.shape[1:],
+        )
+        candidate_order_restore = np.argsort(gather_order)
+        encoded_states = gathered_encoded_states[candidate_order_restore]
+        decoded_states = gathered_decoded_states[candidate_order_restore]
         keep = np.asarray([_row_digest(row) not in excluded_digests for row in decoded_states], dtype=np.bool_)
         excluded_overlap_count += int(np.count_nonzero(~keep))
         retained_indices = candidate_indices[keep][:needed]

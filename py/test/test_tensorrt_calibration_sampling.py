@@ -43,5 +43,5 @@ def test_replay_calibration_refills_after_excluding_initial_candidates(
 
     sample = select_disjoint_replay_calibration(6, 3, 17, excluded_states, _state_loader)
 
-    np.testing.assert_array_equal(np.sort(sample.logical_indices), np.asarray((3, 4, 5)))
+    np.testing.assert_array_equal(sample.logical_indices, np.asarray((4, 5, 3)))
     assert sample.excluded_overlap_count == 3
