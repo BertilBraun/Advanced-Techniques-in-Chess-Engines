@@ -1,0 +1,71 @@
+Inserted 189 quantizers
+/workspace/alphazero-engine-venv/lib/python3.12/site-packages/modelopt/torch/export/layer_utils.py:29: UserWarning: Cannot find transformers package. Hugginface modules cannot be exported.
+  warn("Cannot find transformers package. Hugginface modules cannot be exported.")
+Loading extension modelopt_cuda_ext...
+Loaded extension modelopt_cuda_ext in 0.1 seconds
+/workspace/alphazero-engine/py/tools/run_int8_architecture_screen.py:435: DeprecationWarning: You are using the legacy TorchScript-based ONNX export. Starting in PyTorch 2.9, the new torch.export-based ONNX exporter has become the default. Learn more about the new export logic: https://docs.pytorch.org/docs/stable/onnx_export.html. For exporting control flow: https://pytorch.org/tutorials/beginner/onnx/export_control_flow_model_to_onnx_tutorial.html
+  torch.onnx.export(
+/workspace/alphazero-engine-venv/lib/python3.12/site-packages/modelopt/torch/quantization/nn/modules/tensor_quantizer.py:1138: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  if inputs.numel() == 0:
+/workspace/alphazero-engine-venv/lib/python3.12/site-packages/torch/onnx/_internal/torchscript_exporter/utils.py:1785: UserWarning: Warning: ONNX export does not support duplicated values in 'index' field, this will cause the ONNX model to be incorrect.
+  return symbolic_fn(graph_context, *inputs, **attrs)
+[09/12/2026-15:11:01] [TRT] [I] [MemUsageChange] Init CUDA: CPU -2, GPU +0, now: CPU 1571, GPU 597 (MiB)
+[09/12/2026-15:11:01] [TRT] [I] ----------------------------------------------------------------
+[09/12/2026-15:11:01] [TRT] [I] Input filename:   /workspace/int8-throughput-repeat/qfriendly-constrained/float16.onnx
+[09/12/2026-15:11:01] [TRT] [I] ONNX IR version:  0.0.9
+[09/12/2026-15:11:01] [TRT] [I] Opset version:    20
+[09/12/2026-15:11:01] [TRT] [I] Producer name:    pytorch
+[09/12/2026-15:11:01] [TRT] [I] Producer version: 2.12.1
+[09/12/2026-15:11:01] [TRT] [I] Domain:           
+[09/12/2026-15:11:01] [TRT] [I] Model version:    0
+[09/12/2026-15:11:01] [TRT] [I] Doc string:       
+[09/12/2026-15:11:01] [TRT] [I] ----------------------------------------------------------------
+[09/12/2026-15:11:01] [TRT] [I] [MemUsageChange] Init builder kernel library: CPU +240, GPU +2, now: CPU 1970, GPU 599 (MiB)
+[09/12/2026-15:11:02] [TRT] [I] Local timing cache in use. Profiling results in this builder pass will not be stored.
+[09/12/2026-15:12:19] [TRT] [I] Compiler backend is used during engine build.
+[09/12/2026-15:12:55] [TRT] [I] Detected 1 inputs and 2 output network tensors.
+[09/12/2026-15:12:57] [TRT] [I] Total Host Persistent Memory: 187664 bytes
+[09/12/2026-15:12:57] [TRT] [I] Total Device Persistent Memory: 0 bytes
+[09/12/2026-15:12:57] [TRT] [I] Max Scratch Memory: 20971520 bytes
+[09/12/2026-15:12:57] [TRT] [I] [BlockAssignment] Started assigning block shifts. This will take 237 steps to complete.
+[09/12/2026-15:12:57] [TRT] [I] [BlockAssignment] Algorithm ShiftNTopDown took 66.952ms to assign 125 blocks to 237 nodes requiring 40694272 bytes.
+[09/12/2026-15:12:57] [TRT] [I] Total Activation Memory: 40666624 bytes
+[09/12/2026-15:12:57] [TRT] [I] Total Weights Memory: 13842336 bytes
+[09/12/2026-15:12:57] [TRT] [I] Compiler backend is used during engine execution.
+[09/12/2026-15:12:57] [TRT] [I] Engine generation completed in 115.19 seconds.
+[09/12/2026-15:12:57] [TRT] [I] [MemUsageStats] Peak memory usage of TRT CPU/GPU memory allocators: CPU 1 MiB, GPU 57 MiB
+[0;93m2026-09-12 15:12:58.172412191 [W:onnxruntime:, transformer_memcpy.cc:111 ApplyImpl] 14 Memcpy nodes are added to the graph main_graph for CUDAExecutionProvider. It might have negative impact on performance (including unable to run CUDA graph). Set session_options.log_severity_level=1 to see the detail logs before this message.[m
+[09/12/2026-15:13:01] [TRT] [I] ----------------------------------------------------------------
+[09/12/2026-15:13:01] [TRT] [I] Input filename:   /workspace/int8-throughput-repeat/qfriendly-constrained/int8.onnx
+[09/12/2026-15:13:01] [TRT] [I] ONNX IR version:  0.0.9
+[09/12/2026-15:13:01] [TRT] [I] Opset version:    20
+[09/12/2026-15:13:01] [TRT] [I] Producer name:    pytorch
+[09/12/2026-15:13:01] [TRT] [I] Producer version: 2.12.1
+[09/12/2026-15:13:01] [TRT] [I] Domain:           
+[09/12/2026-15:13:01] [TRT] [I] Model version:    0
+[09/12/2026-15:13:01] [TRT] [I] Doc string:       
+[09/12/2026-15:13:01] [TRT] [I] ----------------------------------------------------------------
+/workspace/alphazero-engine/py/tools/run_int8_architecture_screen.py:580: DeprecationWarning: Use Deprecated in TensorRT 10.12. Superseded by strong typing. instead.
+  layer.precision = trt.float16
+/workspace/alphazero-engine/py/tools/run_int8_architecture_screen.py:582: DeprecationWarning: Use Deprecated in TensorRT 10.12. Superseded by strong typing. instead.
+  layer.set_output_type(output_index, trt.float16)
+[09/12/2026-15:13:02] [TRT] [I] [MemUsageChange] Init builder kernel library: CPU -267, GPU +0, now: CPU 6408, GPU 809 (MiB)
+[09/12/2026-15:13:02] [TRT] [I] Local timing cache in use. Profiling results in this builder pass will not be stored.
+[09/12/2026-15:13:02] [TRT] [E] [optimizer.cpp::filterQDQFormats::5028] Error Code 2: Internal Error (Assertion !n->candidateRequirements.empty() failed. PWN(PWN(PWN(PWN(PWN((Unnamed Layer* 133) [Constant] + (Unnamed Layer* 134) [ElementWise], (Unnamed Layer* 135) [Unary]), PWN((Unnamed Layer* 136) [ElementWise], (Unnamed Layer* 137) [ElementWise])), (Unnamed Layer* 138) [ElementWise]), /backbone.0/conv_block1/conv_block1.0/BatchNormalization), PWN(/backbone.0/conv_block1/conv_block1.1/Clip))[POINTWISE]: All of the candidates were removed, which points to the node being incorrectly)
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/workspace/alphazero-engine/py/tools/run_int8_architecture_screen.py", line 924, in <module>
+    main()
+  File "/workspace/alphazero-engine/py/tools/run_int8_architecture_screen.py", line 919, in main
+    report = run(parse_arguments())
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/alphazero-engine/py/tools/run_int8_architecture_screen.py", line 782, in run
+    int8_measurement = _measure_tensorrt(
+                       ^^^^^^^^^^^^^^^^^^
+  File "/workspace/alphazero-engine/py/tools/run_int8_architecture_screen.py", line 513, in _measure_tensorrt
+    engine = _build_precision_constrained_engine(onnx_path, engine_path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/alphazero-engine/py/tools/run_int8_architecture_screen.py", line 590, in _build_precision_constrained_engine
+    raise ValueError(f'TensorRT failed to build a precision-constrained engine for {onnx_path}.')
+ValueError: TensorRT failed to build a precision-constrained engine for /workspace/int8-throughput-repeat/qfriendly-constrained/int8.onnx.
