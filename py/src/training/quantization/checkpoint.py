@@ -5,6 +5,7 @@ from pathlib import Path
 import torch
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint.contracts import (
+    BootstrapPolicyPriorRecord,
     CheckpointManifest,
     CheckpointReference,
     QatCheckpointRecord,
@@ -18,7 +19,12 @@ from src.training.checkpoint.paths import (
 )
 from src.training.checkpoint.persistence import create_model, load_optimizer
 from src.training.configuration import OptimizerConfiguration
-from src.training.network import Network, NetworkConfiguration
+from src.training.network import (
+    InferenceNetwork,
+    Network,
+    NetworkConfiguration,
+    calibrate_bootstrap_policy_prior,
+)
 from src.training.quantization.configuration import QatStateIdentity, TensorRtInt8QatConfiguration
 from src.training.quantization.runtime import export_qat_onnx, restore_qat_model
 from src.training.targets import AuxiliaryHeadLayout
@@ -42,9 +48,12 @@ def save_qat_model_and_optimizer(
     save_folder: Path,
     qat_state: QatStateIdentity,
     example_states: torch.Tensor,
+    bootstrap_probe_states: torch.Tensor | None = None,
 ) -> CheckpointReference:
     if qat_state.completed_optimizer_steps != completed_optimizer_steps:
         raise ValueError('QAT state progress must match checkpoint optimizer progress.')
+    if generation == 0 and bootstrap_probe_states is None:
+        raise ValueError('The generation-0 QAT export requires real bootstrap policy probe states.')
     raw_model_path = model_save_path(generation, save_folder)
     raw_optimizer_path = optimizer_save_path(generation, save_folder)
     stored_qat_state_path = qat_state_save_path(generation, save_folder)
@@ -54,7 +63,22 @@ def save_qat_model_and_optimizer(
     torch.save(model.state_dict(), temporary_model_path)
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
     write_bytes_atomically(stored_qat_state_path, qat_state.path.read_bytes())
-    export_qat_onnx(model, inference_path, example_states)
+    export_model: torch.nn.Module = model
+    policy_prior_calibration = None
+    if generation == 0:
+        assert bootstrap_probe_states is not None
+        inference_model = InferenceNetwork(model)
+        calibration = calibrate_bootstrap_policy_prior(inference_model, bootstrap_probe_states)
+        export_model = inference_model
+        policy_prior_calibration = BootstrapPolicyPriorRecord(
+            initial_top1_mass=calibration.initial_shape.top1_mass,
+            initial_top3_mass=calibration.initial_shape.top3_mass,
+            calibrated_top1_mass=calibration.calibrated_shape.top1_mass,
+            calibrated_top3_mass=calibration.calibrated_shape.top3_mass,
+            target_top3_mass=calibration.target_top3_mass,
+            applied_scale=calibration.applied_scale,
+        )
+    export_qat_onnx(export_model, inference_path, example_states)
     temporary_model_path.replace(raw_model_path)
     temporary_optimizer_path.replace(raw_optimizer_path)
     manifest = CheckpointManifest(
@@ -72,6 +96,7 @@ def save_qat_model_and_optimizer(
             state_path=stored_qat_state_path.name,
             state_sha256=file_sha256(stored_qat_state_path),
         ),
+        policy_prior_calibration=policy_prior_calibration,
     )
     write_text_atomically(
         checkpoint_manifest_path(generation, save_folder),
