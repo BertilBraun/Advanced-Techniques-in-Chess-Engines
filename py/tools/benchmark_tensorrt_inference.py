@@ -107,6 +107,7 @@ class BenchmarkArguments:
     calibration_position_count: int
     calibration_method: CalibrationMethod
     quantized_node_patterns: tuple[str, ...]
+    autotune: bool
     fidelity_position_offset: int
     fidelity_position_count: int
     fidelity_limits: FidelityLimits
@@ -165,6 +166,7 @@ class CalibrationIdentity(FrozenModel):
     tool_version: str = Field(min_length=1)
     quantized_operator_types: tuple[Literal['Conv'], ...] = INT8_QUANTIZED_OPERATOR_TYPES
     quantized_node_patterns: tuple[str, ...]
+    autotune: bool
     excluded_node_patterns: tuple[str, ...] = INT8_EXCLUDED_NODE_PATTERNS
 
 
@@ -198,7 +200,7 @@ class CandidateMeasurement(FrozenModel):
 
 
 class TensorRtInferenceBenchmarkReport(FrozenModel):
-    schema_version: Literal[8] = 8
+    schema_version: Literal[9] = 9
     source_revision: SourceRevision
     experiment_configuration_path: str = Field(min_length=1)
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -547,6 +549,7 @@ def _quantize_onnx(
     device: torch.device,
     calibration_method: CalibrationMethod,
     quantized_node_patterns: tuple[str, ...],
+    autotune: bool,
 ) -> tuple[ArtifactIdentity, int, int]:
     output_path.unlink(missing_ok=True)
     assert device.index is not None
@@ -561,6 +564,11 @@ def _quantize_onnx(
             nodes_to_quantize=list(quantized_node_patterns),
             nodes_to_exclude=list(INT8_EXCLUDED_NODE_PATTERNS),
             high_precision_dtype='fp16',
+            autotune=autotune,
+            autotune_output_dir=str(output_path.parent / 'autotune') if autotune else None,
+            autotune_num_schemes_per_region=20,
+            autotune_warmup_runs=10,
+            autotune_timing_runs=20,
             output_path=str(output_path),
         )
         quantized_model = onnx.load(output_path)
@@ -758,6 +766,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         device,
         arguments.calibration_method,
         arguments.quantized_node_patterns,
+        arguments.autotune,
     )
     float16_engine, fast_float16, fast_int8 = _build_engine(
         float16_onnx_path,
@@ -824,6 +833,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
             algorithm=f'modelopt_onnx_ptq_{arguments.calibration_method.value}',
             tool_version=version('nvidia-modelopt'),
             quantized_node_patterns=arguments.quantized_node_patterns,
+            autotune=arguments.autotune,
         ),
         input_shape=_input_shape(),
         warmup_iterations=arguments.warmup_iterations,
@@ -872,6 +882,7 @@ def parse_arguments() -> BenchmarkArguments:
         '--calibration-method', type=CalibrationMethod, choices=tuple(CalibrationMethod), default=CalibrationMethod.MAX
     )
     parser.add_argument('--quantized-node-pattern', action='append', dest='quantized_node_patterns')
+    parser.add_argument('--autotune', action='store_true')
     parser.add_argument('--fidelity-position-offset', type=int, default=0)
     parser.add_argument('--fidelity-position-count', type=int, default=BATCH_SIZE)
     parser.add_argument('--artifact-directory', type=Path, required=True)
@@ -909,6 +920,7 @@ def parse_arguments() -> BenchmarkArguments:
         calibration_position_count=parsed.calibration_position_count,
         calibration_method=parsed.calibration_method,
         quantized_node_patterns=tuple(parsed.quantized_node_patterns or INT8_QUANTIZED_NODE_PATTERNS),
+        autotune=parsed.autotune,
         fidelity_position_offset=parsed.fidelity_position_offset,
         fidelity_position_count=parsed.fidelity_position_count,
         fidelity_limits=FidelityLimits(
