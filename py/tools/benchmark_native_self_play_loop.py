@@ -32,6 +32,7 @@ class LoopArguments:
     sdpa_backend: str
     inference_backend: str
     seed: int
+    refresh_model: Path | None
 
 
 class StubNetwork(torch.nn.Module):
@@ -181,8 +182,13 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
     completed_games = 0
     initial_statistics = None
     measurement_started_at = time.perf_counter()
+    refresh_seconds = None
 
     for batch_index in range(arguments.warmup_batches + arguments.measured_batches):
+        if batch_index == arguments.warmup_batches and arguments.refresh_model is not None:
+            refresh_started_at = time.perf_counter()
+            search.refresh_model(1, str(arguments.refresh_model))
+            refresh_seconds = time.perf_counter() - refresh_started_at
         measuring = batch_index >= arguments.warmup_batches
         if measuring and initial_statistics is None:
             initial_statistics = search.inference_statistics()
@@ -253,6 +259,7 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
             'microseconds_per_simulation': 1e6 * elapsed / simulations if simulations else 0.0,
             'completed_games': completed_games,
         },
+        'refresh_seconds': refresh_seconds,
         'wall_split_seconds': {
             'python_prepare': prepare_seconds,
             'native_search': native_seconds,
@@ -312,6 +319,7 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
     )
     parser.add_argument('--seed', type=int, default=12345)
     parser.add_argument('--model', type=Path)
+    parser.add_argument('--refresh-model', type=Path)
     parser.add_argument('--label', type=str, default='')
     namespace = parser.parse_args()
     arguments = LoopArguments(
@@ -334,7 +342,10 @@ def parse_arguments() -> tuple[LoopArguments, Path | None, str]:
         sdpa_backend=namespace.sdpa_backend,
         inference_backend=namespace.inference_backend,
         seed=namespace.seed,
+        refresh_model=namespace.refresh_model,
     )
+    if arguments.refresh_model is not None and not arguments.refresh_model.is_file():
+        raise ValueError(f'Refresh model does not exist: {arguments.refresh_model}')
     return arguments, namespace.model, namespace.label
 
 
