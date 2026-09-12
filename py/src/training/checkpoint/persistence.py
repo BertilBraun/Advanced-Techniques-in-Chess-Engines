@@ -64,6 +64,14 @@ def create_optimizer(model: Network, configuration: OptimizerConfiguration) -> t
                 weight_decay=weight_decay,
                 nesterov=nesterov,
             )
+        case AdamWOptimizerConfiguration(weight_decay=weight_decay, amsgrad=amsgrad, epsilon=epsilon):
+            return torch.optim.AdamW(
+                model.parameters(),
+                lr=0.001,
+                weight_decay=weight_decay,
+                amsgrad=amsgrad,
+                eps=epsilon,
+            )
 
 
 def load_model_state_dict(
@@ -89,14 +97,6 @@ def load_model_state_dict(
     except RuntimeError:
         log(f'Could not load model from: {path}')
         raise
-        case AdamWOptimizerConfiguration(weight_decay=weight_decay, amsgrad=amsgrad, epsilon=epsilon):
-            return torch.optim.AdamW(
-                model.parameters(),
-                lr=0.001,
-                weight_decay=weight_decay,
-                amsgrad=amsgrad,
-                eps=epsilon,
-            )
 
 
 def load_model(
