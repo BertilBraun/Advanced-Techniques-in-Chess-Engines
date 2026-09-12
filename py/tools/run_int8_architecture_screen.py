@@ -122,6 +122,7 @@ class Arguments:
     final_normalization: bool
     fold_post_activation_batch_norm: bool
     strongly_typed_tensorrt: bool
+    constrain_tensorrt_float16_islands: bool
 
 
 class TrainingObservation(FrozenModel):
@@ -775,7 +776,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                     activation_batch.states[:TENSORRT_BATCH_SIZE],
                     device,
                     arguments.strongly_typed_tensorrt,
-                    arguments.cell.uses_quantization_friendly_trunk,
+                    arguments.constrain_tensorrt_float16_islands,
                 )
             fake_outputs, _ = _model_outputs(model, fidelity_batches, device)
             fake_loss = _evaluate(model, evaluation_batches, objective, device)
@@ -791,7 +792,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 activation_batch.states[:TENSORRT_BATCH_SIZE],
                 device,
                 arguments.strongly_typed_tensorrt,
-                arguments.cell.uses_quantization_friendly_trunk,
+                arguments.constrain_tensorrt_float16_islands,
             )
             float_to_fake = measure_fidelity(floating_outputs, fake_outputs, legal_mask)
         else:
@@ -812,7 +813,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 activation_batch.states[:TENSORRT_BATCH_SIZE],
                 device,
                 arguments.strongly_typed_tensorrt,
-                arguments.cell.uses_quantization_friendly_trunk,
+                arguments.constrain_tensorrt_float16_islands,
             )
 
         report = ArchitectureScreenReport(
@@ -826,7 +827,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             quantized_convolutions=arguments.quantized_convolutions if arguments.cell.uses_qat else 0,
             folded_post_activation_batch_norm=arguments.fold_post_activation_batch_norm,
             strongly_typed_tensorrt=arguments.strongly_typed_tensorrt,
-            constrained_tensorrt_float16_islands=arguments.cell.uses_quantization_friendly_trunk,
+            constrained_tensorrt_float16_islands=arguments.constrain_tensorrt_float16_islands,
             model_cost=cost,
             steps=arguments.steps,
             batch_size=arguments.batch_size,
@@ -880,6 +881,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--final-normalization', action='store_true')
     parser.add_argument('--fold-post-activation-batch-norm', action='store_true')
     parser.add_argument('--strongly-typed-tensorrt', action='store_true')
+    parser.add_argument('--constrain-tensorrt-float16-islands', action='store_true')
     namespace = parser.parse_args()
     if namespace.steps < 0 or namespace.batch_size <= 0 or namespace.evaluate_every <= 0:
         raise ValueError('Steps must be nonnegative; batch size and evaluation interval must be positive.')
@@ -912,6 +914,7 @@ def parse_arguments() -> Arguments:
         final_normalization=namespace.final_normalization,
         fold_post_activation_batch_norm=namespace.fold_post_activation_batch_norm,
         strongly_typed_tensorrt=namespace.strongly_typed_tensorrt,
+        constrain_tensorrt_float16_islands=namespace.constrain_tensorrt_float16_islands,
     )
 
 
