@@ -11,7 +11,7 @@ import numpy as np
 import onnx
 import tensorrt as trt
 from onnx import numpy_helper
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
@@ -59,7 +59,12 @@ class TensorRtLayerDescription(FrozenModel):
     stream_id: int | None = Field(default=None, alias='StreamId')
     activation: str | None = Field(default=None, alias='Activation')
     bias: TensorRtWeightsDescription | None = Field(default=None, alias='Bias')
-    weights: TensorRtWeightsDescription | None = Field(default=None, alias='Weights')
+    weights: TensorRtWeightsDescription | None = Field(
+        default=None,
+        alias='Weights',
+        validation_alias=AliasChoices('Weights', 'weights'),
+    )
+    dimensions: tuple[int, ...] | None = Field(default=None, alias='dimensions')
     bias_as_activation_input_index: int | None = Field(default=None, alias='BiasAsActInputIdx')
     convolution_as_activation_input_index: int | None = Field(default=None, alias='ConvXAsActInputIdx')
     residual_as_activation_input_index: int | None = Field(default=None, alias='ResAsActInputIdx')
