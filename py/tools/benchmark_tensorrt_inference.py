@@ -63,6 +63,7 @@ TENSORRT_WORKSPACE_BYTES = 4 * 1024**3
 TENSORRT_BUILDER_OPTIMIZATION_LEVEL = 3
 DEFAULT_CALIBRATION_POSITION_COUNT = 32_000
 DEFAULT_CALIBRATION_RANDOM_SEED = 20_260_912
+INT8_FLOAT16_LAYER_PREFIXES = ('/policy_head/', 'policy_head.', '/value_head/', 'value_head.')
 
 
 class Backend(str, Enum):
@@ -188,7 +189,7 @@ class CandidateMeasurement(FrozenModel):
 
 
 class TensorRtInferenceBenchmarkReport(FrozenModel):
-    schema_version: Literal[4] = 4
+    schema_version: Literal[5] = 5
     source_revision: SourceRevision
     experiment_configuration_path: str = Field(min_length=1)
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -207,6 +208,8 @@ class TensorRtInferenceBenchmarkReport(FrozenModel):
     onnx_opset_version: int = Field(gt=0)
     tensorrt_workspace_bytes: int = Field(gt=0)
     tensorrt_builder_optimization_level: int = Field(ge=0)
+    int8_forced_float16_layer_prefixes: tuple[str, ...] = INT8_FLOAT16_LAYER_PREFIXES
+    int8_forced_float16_layer_count: int = Field(gt=0)
     fidelity_limits: FidelityLimits
     reference: ReferenceMeasurement
     candidates: tuple[CandidateMeasurement, ...] = Field(min_length=2, max_length=2)
@@ -580,7 +583,7 @@ def _build_engine(
     calibration_states: Tensor,
     calibration_cache_path: Path,
     device: torch.device,
-) -> tuple[ArtifactIdentity, _EntropyCalibrator | None, bool, bool]:
+) -> tuple[ArtifactIdentity, _EntropyCalibrator | None, bool, bool, int]:
     logger = trt.Logger(trt.Logger.INFO)
     builder = trt.Builder(logger)
     explicit_batch = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
@@ -592,6 +595,7 @@ def _build_engine(
     configuration.builder_optimization_level = TENSORRT_BUILDER_OPTIMIZATION_LEVEL
     configuration.set_flag(trt.BuilderFlag.FP16)
     calibrator: _EntropyCalibrator | None = None
+    forced_float16_layer_count = 0
     match backend:
         case Backend.TENSORRT_FLOAT16:
             pass
@@ -601,7 +605,9 @@ def _build_engine(
             calibration_cache_path.unlink(missing_ok=True)
             calibrator = _EntropyCalibrator(calibration_states, device, calibration_cache_path)
             configuration.set_flag(trt.BuilderFlag.INT8)
+            configuration.set_flag(trt.BuilderFlag.PREFER_PRECISION_CONSTRAINTS)
             configuration.int8_calibrator = calibrator
+            forced_float16_layer_count = _force_sensitive_heads_to_float16(network)
         case _:
             raise ValueError(f'Cannot build a TensorRT engine for {backend.value}.')
     if not builder.platform_has_fast_fp16:
@@ -615,7 +621,25 @@ def _build_engine(
         calibrator,
         builder.platform_has_fast_fp16,
         builder.platform_has_fast_int8,
+        forced_float16_layer_count,
     )
+
+
+def _force_sensitive_heads_to_float16(network: trt.INetworkDefinition) -> int:
+    constrained_count = 0
+    for layer_index in range(network.num_layers):
+        layer = network.get_layer(layer_index)
+        if not layer.name.startswith(INT8_FLOAT16_LAYER_PREFIXES):
+            continue
+        layer.precision = trt.float16
+        for output_index in range(layer.num_outputs):
+            output = layer.get_output(output_index)
+            if output.dtype in {trt.float16, trt.float32}:
+                layer.set_output_type(output_index, trt.float16)
+        constrained_count += 1
+    if constrained_count == 0:
+        raise ValueError('TensorRT network contains no policy/value head layers to constrain to FP16.')
+    return constrained_count
 
 
 def _measure_runner(
@@ -727,7 +751,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
     calibration_cache_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-int8.calibration'
     float16_onnx_artifact = _export_onnx(checkpoint.model_path, float16_onnx_path, torch.float16)
     int8_onnx_artifact = _export_onnx(checkpoint.model_path, int8_onnx_path, torch.float32)
-    float16_engine, _, fast_float16, fast_int8 = _build_engine(
+    float16_engine, _, fast_float16, fast_int8, _ = _build_engine(
         float16_onnx_path,
         float16_engine_path,
         Backend.TENSORRT_FLOAT16,
@@ -735,7 +759,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         calibration_cache_path,
         device,
     )
-    int8_engine, calibrator, _, _ = _build_engine(
+    int8_engine, calibrator, _, _, forced_float16_layer_count = _build_engine(
         int8_onnx_path,
         int8_engine_path,
         Backend.TENSORRT_INT8,
@@ -829,6 +853,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         onnx_opset_version=ONNX_OPSET_VERSION,
         tensorrt_workspace_bytes=TENSORRT_WORKSPACE_BYTES,
         tensorrt_builder_optimization_level=TENSORRT_BUILDER_OPTIMIZATION_LEVEL,
+        int8_forced_float16_layer_count=forced_float16_layer_count,
         fidelity_limits=arguments.fidelity_limits,
         reference=reference,
         candidates=candidates,

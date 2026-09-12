@@ -17,7 +17,8 @@ the checkpoint and immutable dataset hashes, then exports the shipped trimmed po
 separate fixed `[320, 52, 8, 8]` FP16 and FP32 ONNX graphs. TensorRT 10.14 builds the FP16 arm from the FP16 graph
 and the entropy-calibrated INT8 arm from the FP32 graph with FP16 fallback. Legacy TensorRT calibration consumes
 FP32 device input even though the final engine may use lower-precision kernels; the report validates and records the
-resulting input calibration scale.
+resulting input calibration scale. The INT8 arm keeps the policy and WDL heads in FP16 because their reductions,
+indexing, and output distributions are accuracy-sensitive; the convolutional trunk remains eligible for INT8.
 
 All three measured arms start with the same decoded `int8` tensor for the first 320 legal chess positions in the
 benchmark dataset. Their captured CUDA graphs include the device-side input cast, model execution, and conversion
