@@ -49,6 +49,7 @@ from tools.benchmark_tensorrt_inference import (
     _build_engine,
     _measure_runner,
     _TensorRtCudaGraphRunner,
+    _TorchScriptCudaGraphRunner,
 )
 from tools.benchmark_training_overfit import LossValues, achievable_loss_floor
 from tools.distill_train_student import (
@@ -155,7 +156,7 @@ class TensorRtMeasurement(FrozenModel):
 
 
 class ArchitectureScreenReport(FrozenModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     source_revision: SourceRevision
     cell: ScreenCell
     random_seed: int
@@ -185,6 +186,7 @@ class ArchitectureScreenReport(FrozenModel):
     floating_held_out_loss: LossValues
     fake_quant_held_out_loss: LossValues | None
     floating_to_fake_quant_fidelity: FidelityMetrics | None
+    torchscript_bfloat16_timing: TimingDistribution
     tensorrt_float16: TensorRtMeasurement
     tensorrt_int8: TensorRtMeasurement | None
     state_dict_path: str = Field(min_length=1)
@@ -546,6 +548,24 @@ def _build_strongly_typed_engine(onnx_path: Path, engine_path: Path) -> Artifact
     return ArtifactIdentity(path=str(engine_path), sha256=file_sha256(engine_path))
 
 
+def _measure_torchscript_bfloat16(
+    model: Network,
+    architecture: NetworkParams,
+    output: Path,
+    timing_states: Tensor,
+    device: torch.device,
+) -> TimingDistribution:
+    floating_model = Network(architecture, device, CHESS_NETWORK_DIMENSIONS)
+    quantized_state = model.state_dict()
+    floating_state = floating_model.state_dict()
+    floating_model.load_state_dict({name: quantized_state[name] for name in floating_state})
+    floating_model.eval()
+    model_path = output / 'float-reference.jit.pt'
+    torch.jit.save(torch.jit.script(floating_model), model_path)
+    runner = _TorchScriptCudaGraphRunner(model_path, timing_states, device, 10)
+    return _measure_runner(runner, 10, 5, 100, device)
+
+
 def run(arguments: Arguments) -> ArchitectureScreenReport:
     arguments.output.mkdir(parents=True, exist_ok=True)
     dataset_input = ProductionReplayInput(
@@ -688,6 +708,13 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             TENSORRT_BATCH_SIZE,
             device,
         )
+        torchscript_timing = _measure_torchscript_bfloat16(
+            model,
+            network_architecture,
+            arguments.output,
+            activation_batch.states[:TENSORRT_BATCH_SIZE],
+            device,
+        )
         if arguments.cell.uses_qat:
             with _quantizers_disabled(model):
                 floating_outputs, legal_mask = _model_outputs(model, fidelity_batches, device)
@@ -771,6 +798,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             floating_held_out_loss=floating_loss,
             fake_quant_held_out_loss=fake_loss,
             floating_to_fake_quant_fidelity=float_to_fake,
+            torchscript_bfloat16_timing=torchscript_timing,
             tensorrt_float16=float16_measurement,
             tensorrt_int8=int8_measurement,
             state_dict_path=str(state_path),
