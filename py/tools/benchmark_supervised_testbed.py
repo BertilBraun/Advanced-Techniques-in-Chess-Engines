@@ -16,7 +16,7 @@ from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
 from src.training.checkpoint.persistence import create_model, create_optimizer
-from src.training.configuration import TrainingPrecision
+from src.training.configuration import AdamWOptimizerConfiguration, TrainingPrecision
 from src.training.network import (
     AttentionNetworkParams,
     DensePolicyHeadConfiguration,
@@ -164,7 +164,7 @@ def run_cell(
     torch.cuda.manual_seed_all(arguments.random_seed)
     device = torch.device('cuda', arguments.device_id)
     model = create_model(cell.network, device, game.network_dimensions, game.target_layout.auxiliary_heads)
-    optimizer = create_optimizer(model, 'adamw')
+    optimizer = create_optimizer(model, AdamWOptimizerConfiguration())
     loader = MappedReplayBatchLoader(
         replay=train_description,
         state=game.state,

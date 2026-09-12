@@ -17,7 +17,7 @@ from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
 from src.training.checkpoint.persistence import create_model, create_optimizer
-from src.training.configuration import TrainingPrecision
+from src.training.configuration import AdamWOptimizerConfiguration, TrainingPrecision
 from src.training.network import (
     AttentionNetworkParams,
     Chess76PlaneDirectPolicyHeadConfiguration,
@@ -281,7 +281,7 @@ def run_model_benchmark(
     device = training_batch.states.device
     network = benchmark_network(model_id)
     model = create_model(network, device, inputs.dimensions, inputs.auxiliary_heads)
-    optimizer = create_optimizer(model, 'adamw')
+    optimizer = create_optimizer(model, AdamWOptimizerConfiguration())
     for parameter_group in optimizer.param_groups:
         parameter_group['lr'] = inputs.learning_rate
     floor = achievable_loss_floor(training_batch, objective)

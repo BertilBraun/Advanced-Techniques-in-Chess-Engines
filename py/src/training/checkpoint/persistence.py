@@ -15,7 +15,11 @@ from src.training.checkpoint.contracts import (
     load_checkpoint_manifest_path,
 )
 from src.training.checkpoint.paths import checkpoint_manifest_path, model_save_path, optimizer_save_path
-from src.training.configuration import OptimizerType
+from src.training.configuration import (
+    AdamWOptimizerConfiguration,
+    OptimizerConfiguration,
+    SgdOptimizerConfiguration,
+)
 from src.training.network import (
     InferenceNetwork,
     Network,
@@ -43,12 +47,24 @@ def create_model(
     return model
 
 
-def create_optimizer(model: Network, type: OptimizerType) -> torch.optim.Optimizer:
-    if type == 'sgd':
-        return torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.001, nesterov=True)
-    elif type == 'adamw':
-        return torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.0001, amsgrad=True, eps=1e-5)
-    raise ValueError(f'Optimizer type {type} not supported. Supported types: adamw, sgd')
+def create_optimizer(model: Network, configuration: OptimizerConfiguration) -> torch.optim.Optimizer:
+    match configuration:
+        case SgdOptimizerConfiguration(momentum=momentum, weight_decay=weight_decay, nesterov=nesterov):
+            return torch.optim.SGD(
+                model.parameters(),
+                lr=0.01,
+                momentum=momentum,
+                weight_decay=weight_decay,
+                nesterov=nesterov,
+            )
+        case AdamWOptimizerConfiguration(weight_decay=weight_decay, amsgrad=amsgrad, epsilon=epsilon):
+            return torch.optim.AdamW(
+                model.parameters(),
+                lr=0.001,
+                weight_decay=weight_decay,
+                amsgrad=amsgrad,
+                eps=epsilon,
+            )
 
 
 def load_model(
@@ -104,10 +120,10 @@ def load_model(
 def load_optimizer(
     path: str | PathLike[str],
     model: Network,
-    type: OptimizerType,
+    configuration: OptimizerConfiguration,
     device: torch.device,
 ) -> torch.optim.Optimizer:
-    optimizer = create_optimizer(model, type)
+    optimizer = create_optimizer(model, configuration)
     try:
         for _ in range(5):
             try:
@@ -138,14 +154,14 @@ def load_model_and_optimizer(
     args: NetworkConfiguration,
     device: torch.device,
     save_folder: str | PathLike[str],
-    type: OptimizerType,
+    optimizer_configuration: OptimizerConfiguration,
     dimensions: NetworkDimensions,
     auxiliary_heads: tuple[AuxiliaryHeadLayout, ...] = (),
 ) -> tuple[Network, torch.optim.Optimizer]:
     manifest_path = checkpoint_manifest_path(generation, save_folder)
     if generation == 0 and not manifest_path.exists():
         model = create_model(args, device, dimensions, auxiliary_heads)
-        optimizer = create_optimizer(model, type)
+        optimizer = create_optimizer(model, optimizer_configuration)
         log('Created a new model and optimizer for generation 0.')
         return model, optimizer
     if generation < 0:
@@ -166,7 +182,12 @@ def load_model_and_optimizer(
         dimensions,
         auxiliary_heads,
     )
-    optimizer = load_optimizer(Path(save_folder) / manifest.optimizer_path, model, type, device)
+    optimizer = load_optimizer(
+        Path(save_folder) / manifest.optimizer_path,
+        model,
+        optimizer_configuration,
+        device,
+    )
     log(f'Model and optimizer loaded from generation {generation}')
     return model, optimizer
 

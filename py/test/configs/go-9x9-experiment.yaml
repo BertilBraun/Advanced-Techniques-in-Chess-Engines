@@ -40,7 +40,8 @@ training:
   trainer:
     global_batch_size: 256
     local_batch_size: 256
-    optimizer: adamw
+    optimizer:
+      kind: adamw
     precision: float32
     compilation: disabled
     learning_rate: 0.002

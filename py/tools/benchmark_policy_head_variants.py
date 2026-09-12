@@ -15,6 +15,7 @@ from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
 from src.training.checkpoint.persistence import create_model, create_optimizer
+from src.training.configuration import AdamWOptimizerConfiguration
 from src.training.network import (
     DensePolicyHeadConfiguration,
     GlobalPoolingResidualContext,
@@ -182,7 +183,7 @@ def run_variant(
     torch.manual_seed(arguments.random_seed)
     torch.cuda.manual_seed_all(arguments.random_seed)
     model = create_model(trunk_configuration(arguments, policy_head), device, game.network_dimensions)
-    optimizer = create_optimizer(model, 'adamw')
+    optimizer = create_optimizer(model, AdamWOptimizerConfiguration())
     for parameter_group in optimizer.param_groups:
         parameter_group['lr'] = arguments.learning_rate
     initial = evaluate_holdout(model, holdout_chunks)

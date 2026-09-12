@@ -28,6 +28,7 @@ from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
 from src.training.batch import TrainingBatch
 from src.training.checkpoint.persistence import create_model, create_optimizer
+from src.training.configuration import AdamWOptimizerConfiguration
 from src.training.targets import NextPolicyHeadLayout, RemainingGameLengthHeadLayout
 from src.util.hashing import file_sha256
 from tools.benchmark_training_overfit import LossValues, achievable_loss_floor
@@ -445,7 +446,7 @@ def overfit_observation() -> OverfitObservation:
     model = create_model(
         student_architecture(convolutional_student(1, 16, 32)), torch.device('cpu'), CHESS_NETWORK_DIMENSIONS
     )
-    optimizer = create_optimizer(model, 'adamw')
+    optimizer = create_optimizer(model, AdamWOptimizerConfiguration())
     for parameter_group in optimizer.param_groups:
         parameter_group['lr'] = 0.05
 
@@ -784,7 +785,7 @@ def auxiliary_overfit_observation() -> OverfitObservation:
         CHESS_NETWORK_DIMENSIONS,
         auxiliary_head_layouts(DISTILLED_AUXILIARY_HEADS, ACTION_SIZE),
     )
-    optimizer = create_optimizer(model, 'adamw')
+    optimizer = create_optimizer(model, AdamWOptimizerConfiguration())
     for parameter_group in optimizer.param_groups:
         parameter_group['lr'] = 0.05
 

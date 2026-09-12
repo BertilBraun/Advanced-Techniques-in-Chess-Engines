@@ -9,6 +9,7 @@ from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint.contracts import read_checkpoint_manifest
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
+from src.training.configuration import AdamWOptimizerConfiguration
 from src.training.network import (
     ATTENTION_LINEAR_INITIALIZATION_STD,
     BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
@@ -584,7 +585,7 @@ def test_generation_zero_checkpoint_export_is_calibrated_and_later_generations_a
         torch.device('cpu'),
         CHESS_NETWORK_DIMENSIONS,
     )
-    optimizer = create_optimizer(model, 'adamw')
+    optimizer = create_optimizer(model, AdamWOptimizerConfiguration())
     probe_states = bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS)
     uncalibrated_shape = measure_policy_prior_shape(_fused_export(model), probe_states)
 
@@ -614,7 +615,7 @@ def test_generation_zero_manifest_records_the_calibration_and_generation_one_doe
         torch.device('cpu'),
         CHESS_NETWORK_DIMENSIONS,
     )
-    optimizer = create_optimizer(model, 'adamw')
+    optimizer = create_optimizer(model, AdamWOptimizerConfiguration())
     probe_states = bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS)
     uncalibrated_shape = measure_policy_prior_shape(_fused_export(model), probe_states)
 
@@ -645,7 +646,7 @@ def test_generation_zero_export_without_probe_states_fails(tmp_path: Path) -> No
     )
 
     with pytest.raises(ValueError, match='probe positions'):
-        save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 0, tmp_path)
+        save_model_and_optimizer(model, create_optimizer(model, AdamWOptimizerConfiguration()), 0, tmp_path)
 
 
 DENSE_HEAD_PARAMETER_COUNTS = (

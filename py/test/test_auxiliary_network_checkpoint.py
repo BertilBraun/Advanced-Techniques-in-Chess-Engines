@@ -13,6 +13,7 @@ from src.training.checkpoint.persistence import (
     load_model_and_optimizer,
     save_model_and_optimizer,
 )
+from src.training.configuration import AdamWOptimizerConfiguration
 from src.training.network import (
     CHESS_POLICY_PLANE_COUNT,
     AttentionNetworkParams,
@@ -88,7 +89,7 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
     assert output.auxiliary_logits[0].shape == (2, 10)
     assert output.auxiliary_logits[1].shape == (2, 1)
 
-    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 1, tmp_path)
+    save_model_and_optimizer(model, create_optimizer(model, AdamWOptimizerConfiguration()), 1, tmp_path)
     manifest = load_checkpoint_manifest(1, tmp_path)
     training_state = torch.load(tmp_path / 'model_1.pt', map_location='cpu', weights_only=True)
     extra_files = {'network.json': ''}
@@ -125,7 +126,7 @@ def test_training_model_keeps_auxiliary_heads_but_jit_inference_model_trims_them
             parameters.model_copy(update={'num_layers': 2}),
             torch.device('cpu'),
             tmp_path,
-            'adamw',
+            AdamWOptimizerConfiguration(),
             dimensions,
             auxiliary_heads=auxiliary_heads,
         )
@@ -150,7 +151,7 @@ def test_spatial_policy_checkpoint_and_trimmed_jit_preserve_inference_abi(tmp_pa
     expected_training_output = model.training_output(inputs)
     expected_policy, expected_wdl = model(inputs)
 
-    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 1, tmp_path)
+    save_model_and_optimizer(model, create_optimizer(model, AdamWOptimizerConfiguration()), 1, tmp_path)
     loaded = load_model(
         tmp_path / 'model_1.pt',
         parameters,
@@ -221,7 +222,7 @@ def test_jit_export_matches_training_forward_for_chess_heads(
     inputs = torch.rand((4, CHESS_NETWORK_DIMENSIONS.channels, 8, 8))
     expected_policy_logits, expected_value = model(inputs)
 
-    save_model_and_optimizer(model, create_optimizer(model, 'adamw'), 1, tmp_path)
+    save_model_and_optimizer(model, create_optimizer(model, AdamWOptimizerConfiguration()), 1, tmp_path)
     inference_model = torch.jit.load(str(tmp_path / 'model_1.jit.pt'), map_location='cpu')
     inference_model.eval()
     inference_policy, inference_wdl = inference_model(inputs)
