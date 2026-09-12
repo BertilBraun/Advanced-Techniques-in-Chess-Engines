@@ -40,6 +40,21 @@ def qat_inference_model_path(generation: int, save_folder: Path) -> Path:
     return save_folder / f'model_{generation}.int8.onnx'
 
 
+def _bootstrap_inference_model(model: Network) -> InferenceNetwork:
+    plain_model = Network(
+        model.network_args,
+        next(model.parameters()).device,
+        model.dimensions,
+        model.auxiliary_heads,
+    )
+    qat_weights = model.state_dict()
+    plain_model.load_state_dict({name: qat_weights[name] for name in plain_model.state_dict()})
+    inference_model = InferenceNetwork(plain_model)
+    inference_model.eval()
+    inference_model.fuse_model()
+    return inference_model
+
+
 def save_qat_model_and_optimizer(
     model: Network,
     optimizer: torch.optim.Optimizer,
@@ -57,19 +72,19 @@ def save_qat_model_and_optimizer(
     raw_model_path = model_save_path(generation, save_folder)
     raw_optimizer_path = optimizer_save_path(generation, save_folder)
     stored_qat_state_path = qat_state_save_path(generation, save_folder)
-    inference_path = qat_inference_model_path(generation, save_folder)
+    inference_path = (
+        raw_model_path.with_suffix('.jit.pt') if generation == 0 else qat_inference_model_path(generation, save_folder)
+    )
     temporary_model_path = _temporary_path(raw_model_path)
     temporary_optimizer_path = _temporary_path(raw_optimizer_path)
     torch.save(model.state_dict(), temporary_model_path)
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
     write_bytes_atomically(stored_qat_state_path, qat_state.path.read_bytes())
-    export_model: torch.nn.Module = model
     policy_prior_calibration = None
     if generation == 0:
         assert bootstrap_probe_states is not None
-        inference_model = InferenceNetwork(model)
+        inference_model = _bootstrap_inference_model(model)
         calibration = calibrate_bootstrap_policy_prior(inference_model, bootstrap_probe_states)
-        export_model = inference_model
         policy_prior_calibration = BootstrapPolicyPriorRecord(
             initial_top1_mass=calibration.initial_shape.top1_mass,
             initial_top3_mass=calibration.initial_shape.top3_mass,
@@ -78,7 +93,13 @@ def save_qat_model_and_optimizer(
             target_top3_mass=calibration.target_top3_mass,
             applied_scale=calibration.applied_scale,
         )
-    export_qat_onnx(export_model, inference_path, example_states)
+        torch.jit.save(
+            torch.jit.script(inference_model),
+            str(inference_path),
+            _extra_files={'network.json': inference_model.checkpoint_definition().model_dump_json()},
+        )
+    else:
+        export_qat_onnx(model, inference_path, example_states)
     temporary_model_path.replace(raw_model_path)
     temporary_optimizer_path.replace(raw_optimizer_path)
     manifest = CheckpointManifest(

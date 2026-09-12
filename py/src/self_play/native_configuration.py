@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,7 @@ from src.self_play.configuration import (
     TensorRtInferenceBackend,
     TorchScriptInferenceBackend,
 )
+from src.util.log import log
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import InferenceBackend as NativeInferenceBackend
@@ -40,11 +42,23 @@ def native_sdpa_backend(backend: SdpaBackend) -> NativeSdpaBackend:
             return NativeSdpaBackend.CUDNN
 
 
-def native_inference_backend(backend: InferenceBackendConfiguration) -> NativeInferenceBackend:
+def _uses_torchscript_bootstrap(model_path: Path, backend: TensorRtInferenceBackend) -> bool:
+    return backend.bootstrap_with_torchscript and model_path.name.endswith('.jit.pt')
+
+
+def native_inference_backend(
+    backend: InferenceBackendConfiguration,
+    model_path: Path,
+) -> NativeInferenceBackend:
     from AlphaZeroCpp import InferenceBackend as NativeInferenceBackend
 
     match backend:
         case TorchScriptInferenceBackend():
+            return NativeInferenceBackend.TORCHSCRIPT
+        case TensorRtInferenceBackend() as tensor_rt_backend if _uses_torchscript_bootstrap(
+            model_path,
+            tensor_rt_backend,
+        ):
             return NativeInferenceBackend.TORCHSCRIPT
         case TensorRtInferenceBackend():
             return NativeInferenceBackend.TENSORRT
@@ -54,7 +68,14 @@ def resolved_inference_model_path(model_path: Path, backend: InferenceBackendCon
     match backend:
         case TorchScriptInferenceBackend():
             return model_path
+        case TensorRtInferenceBackend() as tensor_rt_backend if _uses_torchscript_bootstrap(
+            model_path,
+            tensor_rt_backend,
+        ):
+            log(f'Using TorchScript bootstrap inference artifact {model_path}.')
+            return model_path
         case TensorRtInferenceBackend(template_engine_paths=template_engine_paths):
+            started_at = time.perf_counter()
             if model_path.name.endswith('.engine'):
                 return model_path
             publisher = Path(__file__).parents[2] / 'tools' / 'publish_tensorrt_engine.py'
@@ -76,6 +97,10 @@ def resolved_inference_model_path(model_path: Path, backend: InferenceBackendCon
                 text=True,
             )
             payload = json.loads(completed.stdout)
+            log(
+                f'Published TensorRT inference artifact for {model_path.name} in '
+                f'{time.perf_counter() - started_at:.3f}s.'
+            )
             return Path(payload['engine_path'])
 
 

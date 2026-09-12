@@ -49,6 +49,7 @@ class TorchScriptInferenceBackend(FrozenModel):
 class TensorRtInferenceBackend(FrozenModel):
     kind: Literal['tensorrt'] = 'tensorrt'
     template_engine_paths: tuple[Path, ...] = Field(min_length=1)
+    bootstrap_with_torchscript: bool = False
 
 
 InferenceBackendConfiguration: TypeAlias = Annotated[
@@ -176,7 +177,10 @@ class BatchedInferenceParams(FrozenModel):
                 return configuration
 
     @model_serializer(mode='wrap')
-    def omit_unset_execution_knobs(self, serialize: SerializerFunctionWrapHandler) -> dict[str, JsonValue]:
+    def omit_unset_execution_knobs(
+        self,
+        serialize: SerializerFunctionWrapHandler,
+    ) -> dict[str, JsonValue | dict[str, str | bool | tuple[Path, ...]]]:
         # A configuration that does not opt in must serialise, and therefore hash, exactly as it did
         # before these knobs existed, so no recorded experiment_configuration_sha256 moves.
         payload = serialize(self)

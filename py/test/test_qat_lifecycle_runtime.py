@@ -161,4 +161,5 @@ def test_generation_zero_qat_checkpoint_calibrates_only_inference_copy(tmp_path:
     )
 
     assert torch.equal(model.policy_head[-1].weight, policy_weights_before)
-    assert reference.inference_model_path.suffix == '.onnx'
+    assert reference.inference_model_path.name.endswith('.jit.pt')
+    torch.jit.load(str(reference.inference_model_path))

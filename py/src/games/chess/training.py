@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,7 @@ from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 from src.util.generation_schedule import FloatGenerationSchedule
+from src.util.log import log
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import ChessSelfPlaySearch
@@ -135,7 +137,8 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         )
 
         self.validate_native_dimensions(ChessSelfPlaySearch.inference_dimensions())
-        return ChessSelfPlaySearch(
+        started_at = time.perf_counter()
+        search = ChessSelfPlaySearch(
             self.native_inference_configuration(device_id, checkpoint.inference_model_path, inference),
             self.native_search_parameters(parameters),
             BatchedInferenceParameters(
@@ -145,6 +148,11 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
             ),
             checkpoint.generation,
         )
+        log(
+            f'Constructed chess native search for generation {checkpoint.generation} on device {device_id} '
+            f'in {time.perf_counter() - started_at:.3f}s.'
+        )
+        return search
 
     def training_objective_at(self, model_generation: int) -> ResolvedTrainingObjective:
         configuration = self.configuration.chess.objective

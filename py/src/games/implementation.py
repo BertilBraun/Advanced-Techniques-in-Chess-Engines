@@ -147,7 +147,7 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
             model_path=str(resolved_model_path),
             device=InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA,
             execution_options=native_execution_options(effective),
-            backend=native_inference_backend(effective.backend),
+            backend=native_inference_backend(effective.backend, model_path),
         )
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:

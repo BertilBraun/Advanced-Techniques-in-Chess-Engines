@@ -41,8 +41,8 @@ chess:
     inference:
       backend:
         kind: tensorrt
+        bootstrap_with_torchscript: true
         template_engine_paths:
-        - /workspace/tensorrt/v35-int8-14x160-generation0-template.engine
         - /workspace/tensorrt/v35-int8-14x160-prefold-template.engine
         - /workspace/tensorrt/v35-int8-14x160-deployment-template.engine
 
