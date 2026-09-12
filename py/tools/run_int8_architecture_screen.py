@@ -69,7 +69,9 @@ HIDDEN_SIZE = 128
 POLICY_KEY_SIZE = 128
 VALUE_CHANNELS = 2
 VALUE_FULLY_CONNECTED_SIZE = 48
-EXPECTED_PARAMETER_COUNT = 3_451_655
+# The published 3,451,655 count used the former 29-plane encoding. The v34 replay has 52 input planes,
+# adding 23 * 128 * 3 * 3 start-convolution weights while preserving the 12x128 trunk and heads.
+EXPECTED_PARAMETER_COUNT = 3_478_151
 RESIDUAL_BRANCH_SCALE = LAYERS**-0.5
 ACTIVATION_CAP = 6.0
 QAT_RECALIBRATION_INTERVAL = 1_000
