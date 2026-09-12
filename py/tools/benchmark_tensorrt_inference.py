@@ -50,6 +50,11 @@ from tools.tensorrt_benchmark_metrics import (
     validate_fidelity,
 )
 from tools.tensorrt_calibration_sampling import EncodedStates, select_disjoint_replay_calibration
+from tools.tensorrt_quantization_recovery import (
+    DirectQuantizationOutput,
+    QuantizationOutputIdentity,
+    identify_modelopt_autotune_recovery,
+)
 from torch import Tensor, nn
 
 BATCH_SIZE = 320
@@ -200,7 +205,7 @@ class CandidateMeasurement(FrozenModel):
 
 
 class TensorRtInferenceBenchmarkReport(FrozenModel):
-    schema_version: Literal[9] = 9
+    schema_version: Literal[10] = 10
     source_revision: SourceRevision
     experiment_configuration_path: str = Field(min_length=1)
     experiment_configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
@@ -219,6 +224,7 @@ class TensorRtInferenceBenchmarkReport(FrozenModel):
     float16_onnx_model: ArtifactIdentity
     int8_source_onnx_model: ArtifactIdentity
     int8_qdq_onnx_model: ArtifactIdentity
+    quantization_output: QuantizationOutputIdentity
     int8_quantize_linear_node_count: int = Field(gt=0)
     int8_dequantize_linear_node_count: int = Field(gt=0)
     onnx_opset_version: int = Field(gt=0)
@@ -550,13 +556,14 @@ def _quantize_onnx(
     calibration_method: CalibrationMethod,
     quantized_node_patterns: tuple[str, ...],
     autotune: bool,
-) -> tuple[ArtifactIdentity, int, int]:
+) -> tuple[ArtifactIdentity, int, int, QuantizationOutputIdentity]:
     output_path.unlink(missing_ok=True)
     assert device.index is not None
     autotune_output_path = output_path.parent / 'autotune'
     optimized_autotune_path = autotune_output_path / 'optimized_final.onnx'
     if autotune:
         optimized_autotune_path.unlink(missing_ok=True)
+    quantization_output: QuantizationOutputIdentity = DirectQuantizationOutput()
     try:
         quantize(
             onnx_path=str(source_path),
@@ -576,9 +583,11 @@ def _quantize_onnx(
             output_path=str(output_path),
         )
     except Exception as error:
-        if not autotune or not optimized_autotune_path.exists():
+        recovery = identify_modelopt_autotune_recovery(error)
+        if not autotune or recovery is None or not optimized_autotune_path.exists():
             raise ValueError(f'ModelOpt explicit INT8 Q/DQ conversion failed for {source_path}: {error}') from error
         write_bytes_atomically(output_path, optimized_autotune_path.read_bytes())
+        quantization_output = recovery
     quantized_model = onnx.load(output_path)
     onnx.checker.check_model(quantized_model, full_check=True)
     quantize_linear_count = sum(node.op_type == 'QuantizeLinear' for node in quantized_model.graph.node)
@@ -589,6 +598,7 @@ def _quantize_onnx(
         ArtifactIdentity(path=str(output_path), sha256=file_sha256(output_path)),
         quantize_linear_count,
         dequantize_linear_count,
+        quantization_output,
     )
 
 
@@ -765,7 +775,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
     int8_engine_path = arguments.artifact_directory / f'{checkpoint.model_id}-batch320-int8.engine'
     float16_onnx_artifact = _export_onnx(checkpoint.model_path, float16_onnx_path, torch.float16)
     int8_source_onnx_artifact = _export_onnx(checkpoint.model_path, int8_source_onnx_path, torch.float32)
-    int8_qdq_onnx_artifact, quantize_linear_count, dequantize_linear_count = _quantize_onnx(
+    int8_qdq_onnx_artifact, quantize_linear_count, dequantize_linear_count, quantization_output = _quantize_onnx(
         int8_source_onnx_path,
         int8_qdq_onnx_path,
         calibration_states,
@@ -863,6 +873,7 @@ def run_benchmark(arguments: BenchmarkArguments) -> TensorRtInferenceBenchmarkRe
         float16_onnx_model=float16_onnx_artifact,
         int8_source_onnx_model=int8_source_onnx_artifact,
         int8_qdq_onnx_model=int8_qdq_onnx_artifact,
+        quantization_output=quantization_output,
         int8_quantize_linear_node_count=quantize_linear_count,
         int8_dequantize_linear_node_count=dequantize_linear_count,
         onnx_opset_version=ONNX_OPSET_VERSION,

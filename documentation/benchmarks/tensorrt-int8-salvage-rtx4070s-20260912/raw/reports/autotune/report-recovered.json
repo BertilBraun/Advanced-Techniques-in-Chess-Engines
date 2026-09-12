@@ -1,4 +1,10 @@
 {
+  "quantization_output": {
+    "kind": "recovered_modelopt_autotune",
+    "condition": "remove_partial_input_qdq_index_error",
+    "exception_type": "IndexError",
+    "message": "list index out of range"
+  },
   "quantize_linear_nodes": 3,
   "source_vs_optimized_ort": {
     "positions": 320,

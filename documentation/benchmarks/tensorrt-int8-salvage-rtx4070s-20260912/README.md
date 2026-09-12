@@ -88,7 +88,11 @@ TensorRT fidelity; every candidate was checked in the final TensorRT engine.
 
 ModelOpt's throughput-only autotuner evaluated 470 schemes and selected three Q/DQ pairs for a 1.009x
 internal speedup. The selected graph retained only 64.1% policy top-1 agreement and ran at 100,740
-positions/s in the common harness. It therefore found neither an accurate nor a faster partition.
+positions/s in the common harness. ModelOpt produced that final graph before its
+`remove_partial_input_qdq` postprocessing step raised `IndexError: list index out of range`; the
+benchmark recovered only that validated `optimized_final.onnx` artifact, and the structured report
+records the recovery condition and message. It therefore found neither an accurate nor a faster
+partition.
 
 ## QAT and value-head ablation
 
