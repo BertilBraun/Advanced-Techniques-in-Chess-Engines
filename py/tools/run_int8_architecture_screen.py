@@ -139,6 +139,7 @@ class Arguments:
     learning_rate: float
     optimizer_kind: OptimizerKind
     learning_rate_schedule: LearningRateSchedule
+    gradient_clip_max_norm: float
     warmup_steps: int
     evaluate_every: int
     holdout_fraction: float
@@ -198,7 +199,7 @@ class TensorRtMeasurement(FrozenModel):
 
 
 class ArchitectureScreenReport(FrozenModel):
-    schema_version: Literal[8] = 8
+    schema_version: Literal[9] = 9
     source_revision: SourceRevision
     cell: ScreenCell
     random_seed: int
@@ -221,6 +222,7 @@ class ArchitectureScreenReport(FrozenModel):
     optimizer: OptimizerKind
     peak_learning_rate: float = Field(gt=0.0)
     learning_rate_schedule: LearningRateSchedule
+    gradient_clip_max_norm: float = Field(gt=0.0)
     warmup_steps: int = Field(gt=0)
     holdout_fraction: float = Field(gt=0.0, lt=1.0)
     held_out_positions: int = Field(gt=0)
@@ -925,7 +927,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
                 loss = objective.calculate_loss(model.training_output(batch.states), batch)
             loss.total.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), arguments.gradient_clip_max_norm)
             optimizer.step()
             recent_losses.append(observed_losses(loss))
             window_samples += arguments.batch_size
@@ -1092,6 +1094,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             optimizer=arguments.optimizer_kind,
             peak_learning_rate=arguments.learning_rate,
             learning_rate_schedule=arguments.learning_rate_schedule,
+            gradient_clip_max_norm=arguments.gradient_clip_max_norm,
             warmup_steps=arguments.warmup_steps,
             holdout_fraction=arguments.holdout_fraction,
             held_out_positions=split.held_out_row_count,
@@ -1140,6 +1143,7 @@ def parse_arguments() -> Arguments:
         default='cosine',
     )
     parser.add_argument('--warmup-steps', default=200, type=int)
+    parser.add_argument('--gradient-clip-max-norm', default=0.5, type=float)
     parser.add_argument('--evaluate-every', default=1_000, type=int)
     parser.add_argument('--holdout-fraction', default=0.02, type=float)
     parser.add_argument('--final-fidelity-positions', default=FINAL_FIDELITY_POSITIONS, type=int)
@@ -1156,6 +1160,8 @@ def parse_arguments() -> Arguments:
     namespace = parser.parse_args()
     if namespace.steps < 0 or namespace.batch_size <= 0 or namespace.evaluate_every <= 0:
         raise ValueError('Steps must be nonnegative; batch size and evaluation interval must be positive.')
+    if namespace.gradient_clip_max_norm <= 0.0:
+        raise ValueError('Gradient clip maximum norm must be positive.')
     if namespace.layers <= 0 or namespace.hidden_size <= 0:
         raise ValueError('Layers and hidden size must be positive.')
     if namespace.quantized_convolutions <= 0 or namespace.quantized_convolutions > namespace.layers * 2:
@@ -1198,6 +1204,7 @@ def parse_arguments() -> Arguments:
         learning_rate=namespace.learning_rate,
         optimizer_kind=OptimizerKind(namespace.optimizer),
         learning_rate_schedule=LearningRateSchedule(namespace.learning_rate_schedule),
+        gradient_clip_max_norm=namespace.gradient_clip_max_norm,
         warmup_steps=namespace.warmup_steps,
         evaluate_every=namespace.evaluate_every,
         holdout_fraction=namespace.holdout_fraction,
