@@ -28,6 +28,7 @@ class PositionComparison:
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Compare native TorchScript and TensorRT chess inference.')
     parser.add_argument('--model', type=Path, required=True)
+    parser.add_argument('--model-backend', choices=('torchscript', 'tensorrt'), default='torchscript')
     parser.add_argument('--engine', type=Path, required=True)
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--batch-size', type=int, default=320)
@@ -52,11 +53,11 @@ def create_analysis(
 
 
 def compare_position(
-    torch_analysis: ChessAnalysis,
+    reference_analysis: ChessAnalysis,
     tensor_rt_analysis: ChessAnalysis,
     moves: tuple[str, ...],
 ) -> PositionComparison:
-    torch_result = torch_analysis.new_session(STARTING_FEN, list(moves)).analyze(AnalysisMode.POLICY)
+    torch_result = reference_analysis.new_session(STARTING_FEN, list(moves)).analyze(AnalysisMode.POLICY)
     tensor_rt_result = tensor_rt_analysis.new_session(STARTING_FEN, list(moves)).analyze(AnalysisMode.POLICY)
     torch_policy = {candidate.move_uci: candidate.policy_prior for candidate in torch_result.candidates}
     tensor_rt_policy = {candidate.move_uci: candidate.policy_prior for candidate in tensor_rt_result.candidates}
@@ -82,9 +83,10 @@ def compare_position(
 
 def main() -> None:
     arguments = parse_arguments()
-    torch_analysis = create_analysis(
-        arguments.model, InferenceBackend.TORCHSCRIPT, arguments.device, arguments.batch_size
+    model_backend = (
+        InferenceBackend.TORCHSCRIPT if arguments.model_backend == 'torchscript' else InferenceBackend.TENSORRT
     )
+    reference_analysis = create_analysis(arguments.model, model_backend, arguments.device, arguments.batch_size)
     tensor_rt_analysis = create_analysis(
         arguments.engine, InferenceBackend.TENSORRT, arguments.device, arguments.batch_size
     )
@@ -95,7 +97,7 @@ def main() -> None:
         ('e2e4', 'e7e5', 'g1f3', 'b8c6'),
         ('d2d4', 'd7d5', 'c2c4', 'e7e6', 'b1c3'),
     )
-    comparisons = [compare_position(torch_analysis, tensor_rt_analysis, moves) for moves in positions]
+    comparisons = [compare_position(reference_analysis, tensor_rt_analysis, moves) for moves in positions]
     for comparison in comparisons:
         print(comparison)
     print(f'all_top_actions_match={all(item.same_top_action for item in comparisons)}')
