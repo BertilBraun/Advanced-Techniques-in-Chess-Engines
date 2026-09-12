@@ -43,6 +43,11 @@ public:
     }
 };
 
+TensorRtLogger &tensorRtLogger() {
+    static TensorRtLogger logger;
+    return logger;
+}
+
 torch::Dtype torchType(const nvinfer1::DataType type) {
     switch (type) {
     case nvinfer1::DataType::kFLOAT:
@@ -74,7 +79,8 @@ public:
     Implementation(const std::string &enginePath, const int deviceId, const size_t maximumBatchSize,
                    const InferenceDimensions dimensions)
         : m_device(torch::Device(torch::kCUDA, deviceId)), m_dimensions(dimensions),
-          m_engineBytes(readEngine(enginePath)), m_runtime(nvinfer1::createInferRuntime(m_logger)) {
+          m_engineBytes(readEngine(enginePath)),
+          m_runtime(nvinfer1::createInferRuntime(tensorRtLogger())) {
         if (m_runtime == nullptr) {
             throw std::runtime_error("TensorRT runtime creation failed");
         }
@@ -139,7 +145,6 @@ private:
         void operator()(nvinfer1::IExecutionContext *context) const noexcept { delete context; }
     };
 
-    TensorRtLogger m_logger;
     torch::Device m_device;
     InferenceDimensions m_dimensions;
     std::vector<char> m_engineBytes;
