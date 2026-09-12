@@ -32,7 +32,7 @@ def exclusive_lock(path: Path) -> Iterator[None]:
 
 def engine_batch_size(engine: trt.ICudaEngine) -> int:
     shape = engine.get_tensor_shape(INPUT_NAME)
-    if shape.nbDims != 4 or shape[0] <= 0 or tuple(shape[1:]) != (52, 8, 8):
+    if len(shape) != 4 or shape[0] <= 0 or tuple(shape[1:]) != (52, 8, 8):
         raise ValueError(f'TensorRT template has incompatible input shape: {tuple(shape)}')
     return shape[0]
 
