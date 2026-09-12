@@ -958,7 +958,9 @@ class ScaledPostActivationResBlock(nn.Module):
 
     def forward(self, inputs: Tensor) -> Tensor:
         residual_branch = self.conv_block2(self.conv_block1(inputs))
-        return self.final_activation(inputs + self.branch_scale * residual_branch)
+        if self.branch_scale != 1.0:
+            residual_branch = self.branch_scale * residual_branch
+        return self.final_activation(inputs + residual_branch)
 
 
 def _bounded_relu(activation_cap: float) -> nn.Module:
@@ -1160,7 +1162,9 @@ class ScaledPostActivationGlobalPoolingResBlock(nn.Module):
         local_features = features[:, self.global_channels :]
         biased_features = self.global_pooling_bias(local_features, global_features)
         residual_branch = self.conv_block2(biased_features)
-        return self.final_activation(inputs + self.branch_scale * residual_branch)
+        if self.branch_scale != 1.0:
+            residual_branch = self.branch_scale * residual_branch
+        return self.final_activation(inputs + residual_branch)
 
 
 class ScaledPreActivationGlobalPoolingResBlock(nn.Module):

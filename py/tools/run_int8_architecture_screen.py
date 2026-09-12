@@ -177,7 +177,7 @@ class TensorRtMeasurement(FrozenModel):
 
 
 class ArchitectureScreenReport(FrozenModel):
-    schema_version: Literal[6] = 6
+    schema_version: Literal[7] = 7
     source_revision: SourceRevision
     cell: ScreenCell
     random_seed: int
@@ -188,6 +188,7 @@ class ArchitectureScreenReport(FrozenModel):
     quantized_convolutions: int = Field(ge=0)
     qat_activation_boundaries: Literal['convolution', 'residual_block'] | None
     folded_post_activation_batch_norm: bool
+    deployment_relu_after_scaled_residual: bool
     strongly_typed_tensorrt: bool
     constrained_tensorrt_float16_islands: bool
     model_cost: ModelCost
@@ -397,7 +398,7 @@ def _fold_convolution_batch_norm(block: nn.Sequential) -> None:
 
 def _fold_post_activation_batch_norm(model: Network) -> None:
     model.eval()
-    for block in model.backbone:
+    for block_index, block in enumerate(model.backbone):
         match block:
             case (
                 ResBlock()
@@ -416,6 +417,8 @@ def _fold_post_activation_batch_norm(model: Network) -> None:
                         second_batch_norm.weight.mul_(block.branch_scale)
                         second_batch_norm.bias.mul_(block.branch_scale)
                     block.branch_scale = 1.0
+                    if block_index + 1 < len(model.backbone):
+                        block.final_activation = nn.ReLU(inplace=True)
                 _fold_convolution_batch_norm(block.conv_block1)
                 _fold_convolution_batch_norm(block.conv_block2)
             case _:
@@ -987,6 +990,9 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 else None
             ),
             folded_post_activation_batch_norm=arguments.fold_post_activation_batch_norm,
+            deployment_relu_after_scaled_residual=(
+                arguments.fold_post_activation_batch_norm and arguments.cell == ScreenCell.POST_SCALED_QAT
+            ),
             strongly_typed_tensorrt=arguments.strongly_typed_tensorrt,
             constrained_tensorrt_float16_islands=arguments.constrain_tensorrt_float16_islands,
             model_cost=cost,
