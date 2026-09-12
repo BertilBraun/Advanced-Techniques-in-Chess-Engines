@@ -29,7 +29,8 @@ from src.util.atomic_file import write_bytes_atomically, write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
 from src.util.provenance import SourceRevision, read_source_revision
-from tensorrt_benchmark_metrics import (
+from tools.measure_inference_precision_agreement import load_positions
+from tools.tensorrt_benchmark_metrics import (
     FidelityLimits,
     FidelityMetrics,
     ModelOutputs,
@@ -39,7 +40,6 @@ from tensorrt_benchmark_metrics import (
     summarize_timings,
     validate_fidelity,
 )
-from tools.measure_inference_precision_agreement import load_positions
 from torch import Tensor, nn
 
 BATCH_SIZE = 320

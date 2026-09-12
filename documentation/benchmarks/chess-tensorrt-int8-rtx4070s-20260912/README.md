@@ -59,9 +59,9 @@ After the production run has stopped and its terminal checkpoint has been preser
 generation selected for this benchmark. Run from the exact benchmark source revision on the node:
 
 ```bash
-cd /workspace/alphazero-engine
+cd /workspace/alphazero-engine/py
 terminal_generation=TERMINAL_GENERATION_SELECTED_AFTER_STOP
-/workspace/alphazero-engine-venv/bin/python py/tools/benchmark_tensorrt_inference.py \
+/workspace/alphazero-engine-venv/bin/python -m tools.benchmark_tensorrt_inference \
   --configuration /workspace/run-control/configs/vast-chess-8gpu-integrated-v34-resume-g1702.yaml \
   --checkpoint-manifest "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/checkpoint_${terminal_generation}.json" \
   --checkpoint-generation "${terminal_generation}" \
