@@ -168,10 +168,13 @@ class TensorRtMeasurement(FrozenModel):
     onnx_fidelity_to_floating: FidelityMetrics
     onnx_fidelity_to_framework: FidelityMetrics
     tensorrt_fidelity_to_onnx: FidelityMetrics
+    onnx_export_seconds: float = Field(ge=0.0)
+    engine_build_seconds: float = Field(ge=0.0)
+    runner_initialization_seconds: float = Field(ge=0.0)
 
 
 class ArchitectureScreenReport(FrozenModel):
-    schema_version: Literal[4] = 4
+    schema_version: Literal[5] = 5
     source_revision: SourceRevision
     cell: ScreenCell
     random_seed: int
@@ -198,6 +201,8 @@ class ArchitectureScreenReport(FrozenModel):
     average_training_samples_per_second: float | None = Field(default=None, gt=0.0)
     qat_recalibration_interval: int | None = Field(default=None, gt=0)
     qat_calibration_positions: int | None = Field(default=None, gt=0)
+    initial_qat_calibration_seconds: float | None = Field(default=None, ge=0.0)
+    final_qat_calibration_seconds: float | None = Field(default=None, ge=0.0)
     activation_ranges: tuple[ActivationDistribution, ...]
     floating_held_out_loss: LossValues
     fake_quant_held_out_loss: LossValues | None
@@ -331,6 +336,15 @@ def _fold_post_activation_batch_norm(model: Network) -> None:
                 | ScaledPostActivationResBlock()
                 | ScaledPostActivationGlobalPoolingResBlock()
             ):
+                if isinstance(block, (ScaledPostActivationResBlock, ScaledPostActivationGlobalPoolingResBlock)):
+                    second_batch_norm = block.conv_block2[1]
+                    assert isinstance(second_batch_norm, nn.BatchNorm2d)
+                    assert second_batch_norm.weight is not None
+                    assert second_batch_norm.bias is not None
+                    with torch.no_grad():
+                        second_batch_norm.weight.mul_(block.branch_scale)
+                        second_batch_norm.bias.mul_(block.branch_scale)
+                    block.branch_scale = 1.0
                 _fold_convolution_batch_norm(block.conv_block1)
                 _fold_convolution_batch_norm(block.conv_block2)
             case _:
@@ -536,15 +550,21 @@ def _measure_tensorrt(
 ) -> TensorRtMeasurement:
     onnx_path = output / f'{name}.onnx'
     engine_path = output / f'{name}.engine'
+    export_started = time.perf_counter()
     _export_onnx(model, onnx_path, device)
+    onnx_export_seconds = time.perf_counter() - export_started
+    build_started = time.perf_counter()
     if strongly_typed and backend == Backend.TENSORRT_INT8:
         engine = _build_strongly_typed_engine(onnx_path, engine_path)
     elif constrain_float16_islands and backend == Backend.TENSORRT_INT8:
         engine = _build_precision_constrained_engine(onnx_path, engine_path)
     else:
         engine = _build_engine(onnx_path, engine_path, backend)[0]
+    engine_build_seconds = time.perf_counter() - build_started
     onnx_outputs = _onnx_outputs(onnx_path, fidelity_batches, device.index or 0)
+    runner_started = time.perf_counter()
     runner = _TensorRtCudaGraphRunner(engine_path, timing_states, device, 10)
+    runner_initialization_seconds = time.perf_counter() - runner_started
     candidate = _tensorrt_outputs(runner, fidelity_batches)
     timing = _measure_runner(runner, 10, 5, 100, device)
     return TensorRtMeasurement(
@@ -557,6 +577,9 @@ def _measure_tensorrt(
         onnx_fidelity_to_floating=measure_fidelity(reference, onnx_outputs, legal_mask),
         onnx_fidelity_to_framework=measure_fidelity(framework_outputs, onnx_outputs, legal_mask),
         tensorrt_fidelity_to_onnx=measure_fidelity(onnx_outputs, candidate, legal_mask),
+        onnx_export_seconds=onnx_export_seconds,
+        engine_build_seconds=engine_build_seconds,
+        runner_initialization_seconds=runner_initialization_seconds,
     )
 
 
@@ -682,7 +705,9 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 replace=False,
             )
         )
+        initial_qat_calibration_seconds: float | None = None
         if arguments.cell.uses_qat:
+            calibration_started = time.perf_counter()
             model = _configure_qat(
                 model,
                 opened,
@@ -693,6 +718,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 arguments.layers,
                 arguments.quantized_convolutions,
             )
+            initial_qat_calibration_seconds = time.perf_counter() - calibration_started
 
         optimizer = create_student_optimizer(model, OptimizerKind.ADAMW, arguments.learning_rate)
         objective = distillation_objective()
@@ -772,13 +798,16 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             activation_batch.states[:TENSORRT_BATCH_SIZE],
             device,
         )
+        final_qat_calibration_seconds: float | None = None
         if arguments.fold_post_activation_batch_norm:
+            calibration_started = time.perf_counter()
             _fold_post_activation_batch_norm(model)
             mtq.calibrate(
                 model,
                 'max',
                 _calibration_loop(opened, calibration_indices, arguments.batch_size, device),
             )
+            final_qat_calibration_seconds = time.perf_counter() - calibration_started
         state_path = arguments.output / 'final-state.pt'
         torch.save(model.state_dict(), state_path)
         activation_ranges = _activation_ranges(model, activation_batch, device)
@@ -872,6 +901,8 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             ),
             qat_recalibration_interval=QAT_RECALIBRATION_INTERVAL if arguments.cell.uses_qat else None,
             qat_calibration_positions=QAT_CALIBRATION_POSITIONS if arguments.cell.uses_qat else None,
+            initial_qat_calibration_seconds=initial_qat_calibration_seconds,
+            final_qat_calibration_seconds=final_qat_calibration_seconds,
             activation_ranges=activation_ranges,
             floating_held_out_loss=floating_loss,
             fake_quant_held_out_loss=fake_loss,
