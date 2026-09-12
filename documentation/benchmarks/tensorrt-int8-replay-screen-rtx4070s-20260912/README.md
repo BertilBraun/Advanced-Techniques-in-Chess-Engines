@@ -4,7 +4,7 @@ This experiment asked whether INT8 TensorRT inference could preserve the v34 lea
 
 ## Decision
 
-The strongest deployment graph is the production-sized 14x160 scaled post-activation model. Two 1,000-step QAT smokes reach 134,600–135,100 INT8 positions/s, versus 59,400–60,200 for TorchScript BF16 and 97,800–98,000 for TensorRT FP16. Their fake-quant replay loss differs from the quantizers-disabled model by only 0.00008–0.00133 total. End-to-end float-to-TensorRT fidelity is 96.54–96.93% policy top-1, policy KL 0.00061–0.00078, WDL MAE 0.00320–0.00513, and expected-value MAE 0.00802–0.01287. The fixed-overhead model projects this to about **1.7x end-to-end self-play throughput**. TensorRT refit reduces the recurring engine update itself to 0.156 seconds, making this practical per generation; calibration and ONNX export remain roughly two seconds combined.
+The strongest deployment graph is the production-sized 14x160 scaled post-activation model. A 1,000-step QAT model followed by BN folding and 5,000 replay steps in the exact deployment topology reaches 135,229 INT8 positions/s, versus 60,212 for TorchScript BF16 and 99,040 for TensorRT FP16. Its fake-quant replay loss is only 0.00069 above the quantizers-disabled model. End-to-end float-to-TensorRT fidelity is 96.12% policy top-1, policy KL 0.00141, WDL MAE 0.00445, and expected-value MAE 0.01096. Two independent 1,000-step smokes bracket the same throughput at 134,600–135,100 INT8 positions/s and show 96.54–96.93% policy agreement. The fixed-overhead model projects this to about **1.7x end-to-end self-play throughput**. TensorRT refit reduces the recurring engine update itself to 0.156 seconds, making this practical per generation; calibration and ONNX export remain roughly two seconds combined.
 
 The full 100,000-step architecture screen and deployment-form recovery used the smaller 12x128 model. This establishes that the architecture can learn the replay target, but it is not a fully trained 14x160 candidate. After a 5,000-step folded continuation the 12x128 model reaches 94.76% policy top-1 agreement, policy KL 0.00348, WDL MAE 0.00819, and expected-value MAE 0.02010 before export. A further 10,000-step continuation is worse: 93.85% top-1, KL 0.00449, WDL MAE 0.00960, and expected-value MAE 0.02355. The 5,000-step checkpoint is therefore the retained recovery result.
 
@@ -16,7 +16,7 @@ No chess match was run because native search currently loads TorchScript only. A
 
 - The original full-trunk PTQ graph reaches about 3.0x the TorchScript core rate, but its policy and WDL outputs are catastrophically wrong.
 - The pre-activation quantization-friendly graph learns the replay target normally, including under QAT, but its TensorRT output is catastrophically wrong and its graph contains hundreds of layers and reformats.
-- Scaled post-activation QAT learns normally and can be recovered after BN folding. Its explicit clipping and boundary conversions limit the INT8 advantage to roughly 1.09x over TensorRT FP16.
+- Scaled post-activation QAT learns normally and can be recovered after BN folding. At production size, explicit clipping and boundary conversions limit the INT8 advantage to 1.37x over TensorRT FP16; the smaller 12x128 graph reaches only roughly 1.09x because TensorRT FP16 uses that shape more efficiently.
 - Removing the residual multiply and final clip restores residual fusions but leaves fused second convolutions producing FP16, so throughput barely changes.
 - A single numerically shared residual-output scale produces faithful TensorRT output, but it is slower: 93,682 positions/s at 14x160, only 1.54x TorchScript and below the approximately 98,000 positions/s TensorRT FP16 control. Matching scales alone does not keep the residual path in INT8.
 
@@ -37,4 +37,4 @@ Loosening the AdamW-era gradient clip from 0.5 to 5.0 improves NAG's total loss 
 
 ## Evidence
 
-Machine-readable reports are under `raw/reports/`. The TensorRT update-cadence and refit evidence is under `raw/cadence/`. Failed and superseded smokes are identified under `raw/failures/`; they must not be mixed with completed screen arms.
+Machine-readable reports are under `raw/reports/`. The retained production-size deployment artifact archive is `.codex-diagnostics/int8-scaled-post-14x160-early-fold-5k-artifacts.tar.gz` (SHA-256 `e10004af66379eb47b5f5a31c36f68082da941d05ea51dc07b71ccfc59fccdf7`). The TensorRT update-cadence and refit evidence is under `raw/cadence/`. Failed and superseded smokes are identified under `raw/failures/`; they must not be mixed with completed screen arms.
