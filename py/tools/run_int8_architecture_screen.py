@@ -266,6 +266,13 @@ def _qat_configuration(cell: ScreenCell, layers: int, quantized_convolutions: in
                 enable=False,
             )
         )
+    if cell == ScreenCell.POST_QAT:
+        configuration.quant_cfg.append(
+            QuantizerCfgEntry(
+                quantizer_name='backbone.*.conv_block*.0.output_quantizer',
+                enable=False,
+            )
+        )
     return configuration
 
 
