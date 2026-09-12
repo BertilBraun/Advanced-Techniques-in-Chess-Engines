@@ -31,7 +31,7 @@ def test_warmup_scales_learning_rate_linearly_until_the_configured_step(
 @pytest.mark.parametrize(
     ('completed_optimizer_steps', 'model_generation', 'phase', 'expected'),
     (
-        (500, 1, QatCheckpointPhase.PRE_FOLD, 0.05),
+        (500, 1, QatCheckpointPhase.PRE_FOLD, 0.0501),
         (1_000, 2, QatCheckpointPhase.DEPLOYMENT, 0.02),
         (1_500, 3, QatCheckpointPhase.DEPLOYMENT, 0.02 - 0.01 / 998),
     ),
