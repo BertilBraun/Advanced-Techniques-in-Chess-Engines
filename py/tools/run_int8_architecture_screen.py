@@ -760,6 +760,18 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             torch.save({'step': step, 'model': model.state_dict(), 'optimizer': optimizer.state_dict()}, state_path)
 
         training_wall = time.perf_counter() - started
+        activation_batch = _replay_batch(
+            opened,
+            np.arange(split.held_out_start_row, split.held_out_start_row + arguments.batch_size, dtype=np.int64),
+            device,
+        )
+        torchscript_timing = _measure_torchscript_bfloat16(
+            model,
+            network_architecture,
+            arguments.output,
+            activation_batch.states[:TENSORRT_BATCH_SIZE],
+            device,
+        )
         if arguments.fold_post_activation_batch_norm:
             _fold_post_activation_batch_norm(model)
             mtq.calibrate(
@@ -769,24 +781,12 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             )
         state_path = arguments.output / 'final-state.pt'
         torch.save(model.state_dict(), state_path)
-        activation_batch = _replay_batch(
-            opened,
-            np.arange(split.held_out_start_row, split.held_out_start_row + arguments.batch_size, dtype=np.int64),
-            device,
-        )
         activation_ranges = _activation_ranges(model, activation_batch, device)
         fidelity_batches = _held_out_batches(
             opened,
             split.held_out_start_row,
             arguments.final_fidelity_positions,
             TENSORRT_BATCH_SIZE,
-            device,
-        )
-        torchscript_timing = _measure_torchscript_bfloat16(
-            model,
-            network_architecture,
-            arguments.output,
-            activation_batch.states[:TENSORRT_BATCH_SIZE],
             device,
         )
         if arguments.cell.uses_qat:
