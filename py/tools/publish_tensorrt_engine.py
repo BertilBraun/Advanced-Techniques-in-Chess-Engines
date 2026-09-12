@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import time
 from contextlib import contextmanager
@@ -77,11 +78,12 @@ def refit_engine(template_path: Path, onnx_path: Path, output_path: Path) -> Non
 def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str | int | float | bool]:
     if not template_paths:
         raise ValueError('At least one TensorRT template is required.')
-    engine_path = model_path.with_suffix('.trt.engine')
+    template_sha256s = tuple(file_sha256(template_path) for template_path in template_paths)
+    template_set_identity = hashlib.sha256('\0'.join(template_sha256s).encode('ascii')).hexdigest()[:16]
+    engine_path = model_path.with_suffix(f'.trt-{template_set_identity}.engine')
     metadata_path = engine_path.with_suffix('.json')
     lock_path = engine_path.with_suffix('.lock')
     source_sha256 = file_sha256(model_path)
-    template_sha256s = tuple(file_sha256(template_path) for template_path in template_paths)
     with exclusive_lock(lock_path):
         if engine_path.is_file() and metadata_path.is_file():
             metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
