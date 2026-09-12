@@ -163,7 +163,7 @@ def quantizers_disabled(model: Network) -> Iterator[None]:
                 quantizer.disable()
 
 
-def export_qat_onnx(model: Network, path: Path, example_states: Tensor) -> QatOnnxArtifact:
+def export_qat_onnx(model: nn.Module, path: Path, example_states: Tensor) -> QatOnnxArtifact:
     temporary_path = path.with_name(f'.{path.name}.tmp')
     was_training = model.training
     model.eval()
