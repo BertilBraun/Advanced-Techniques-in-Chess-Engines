@@ -21,7 +21,9 @@ pytest.importorskip('modelopt.torch.quantization')
 from src.training.quantization.runtime import (  # noqa: E402
     configure_qat,
     deployment_qat_state,
+    export_qat_onnx,
     fold_scaled_post_activation_batch_norm,
+    recalibrate_qat,
     restore_qat_model,
     save_qat_state,
 )
@@ -77,3 +79,15 @@ def test_qat_resume_reconstructs_checkpoint_topology(
     assert restored.phase is phase
     assert all(isinstance(block, ScaledPostActivationResBlock) for block in restored.model.backbone)
     assert all(isinstance(block.conv_block1[1], expected_batch_norm) for block in restored.model.backbone)
+
+
+@pytest.mark.integration
+def test_folded_qat_export_contains_explicit_quantization(tmp_path: Path) -> None:
+    model = configure_qat(_network(), _calibrate)
+    fold_scaled_post_activation_batch_norm(model)
+    recalibrate_qat(model, _calibrate)
+
+    artifact = export_qat_onnx(model, tmp_path / 'model.onnx', torch.randn((8, 8, 3, 3)))
+
+    assert artifact.quantize_linear_nodes > 0
+    assert artifact.dequantize_linear_nodes > 0
