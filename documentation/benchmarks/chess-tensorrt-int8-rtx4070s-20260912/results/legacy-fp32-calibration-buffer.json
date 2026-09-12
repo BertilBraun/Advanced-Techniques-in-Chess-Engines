@@ -1,0 +1,233 @@
+{
+  "schema_version": 4,
+  "source_revision": {
+    "commit": "042a7df2453b10a86c4159a9ab26194de896aa45",
+    "dirty": false
+  },
+  "experiment_configuration_path": "/workspace/run-control/configs/vast-chess-8gpu-integrated-v34-resume-g1702.yaml",
+  "experiment_configuration_sha256": "d485553069fa4660ce2dbd97c747da64e4ca67f6921889d0ec6c1664ea320c73",
+  "checkpoint_generation": 1785,
+  "model_id": "chess-cnn-14x160-fromto",
+  "checkpoint_manifest": {
+    "path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/checkpoint_1785.json",
+    "sha256": "618646b9e7b398a55702305722275fb507078579a590f043014472e4ee6b645f"
+  },
+  "inference_model": {
+    "path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/model_1785.jit.pt",
+    "sha256": "8899d1d4fedda4dc0faf85b54c2d433dde65d5953be0ae078ea69354ec01d4bf"
+  },
+  "benchmark_dataset": {
+    "data": {
+      "path": "/workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v33.bin",
+      "sha256": "147b525c430d2a677a6e1309ce60bf7bb22a4886726c5affae63a9f3349d96c8"
+    },
+    "manifest": {
+      "path": "/workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v33.bin.manifest.json",
+      "sha256": "d5f902b4283e223f5005860868e57be1971bb7216d9c265b408a3614c3f0a6a5"
+    },
+    "available_positions": 516,
+    "packed_payload_bytes": 332,
+    "representation_digest": "aa77cda28749d276e28fb3081cd9db924224bd002d0207401c78a72507c6ab4d",
+    "selected_positions": 320,
+    "selected_states_sha256": "90186855d1ab471583e0d4ae53294b4d549e8074e915c93b6b4d034cf03087d3",
+    "legal_action_mask_sha256": "a47162a0ecdd2736f353cc24b6acc19648c9c9e784433b43f5767e02ddf16e9b"
+  },
+  "calibration": {
+    "source": {
+      "kind": "replay",
+      "path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/replay.bin",
+      "file_size_bytes": 17300103168,
+      "header_sha256": "8be8c58121140900958be306704d2a272044daf8a0135e3c04e0318256eaa50a",
+      "layout_sha256": "3c5b6f6f2c68ff5c5525c308b41e3c0228537b75d1faf361e4a27156276849eb",
+      "available_positions": 10000000,
+      "selected_positions": 32000,
+      "random_seed": 20260912,
+      "excluded_fidelity_overlap_positions": 2,
+      "selected_logical_indices_sha256": "ff12aaba5ac04159d9f400208dcb60c368e9f152006e7868e476ae915595f987",
+      "selected_packed_states_sha256": "19ea95d4182dc3d5fe171d43e29efee6431bd4c77ad369aa34d12acc027ca316",
+      "selected_states_sha256": "afb79829e75d2a9f8ba860fe69447d803f197fa1a35c2b700ed906dae6ff051e"
+    },
+    "requested_positions": 32000,
+    "submitted_batches": 100,
+    "submitted_positions": 32000,
+    "benchmark_input_overlap_positions": 0,
+    "device_input_dtype": "float32",
+    "observed_maximum_absolute_input": 99.0,
+    "input_tensor_scale": 0.9971241354942322,
+    "calibration_cache": {
+      "path": "/workspace/tensorrt-v34-terminal-fp32-calibration/chess-cnn-14x160-fromto-batch320-int8.calibration",
+      "sha256": "7ea9b477f2e27f94e775d1c085042cefa733473a624dbd3e9b93e06d24ae6698"
+    },
+    "algorithm": "entropy_calibration_2"
+  },
+  "input_shape": [
+    320,
+    52,
+    8,
+    8
+  ],
+  "input_dtype": "int8_source_planes",
+  "warmup_iterations": 50,
+  "hardware": {
+    "gpu_id": 0,
+    "device_name": "NVIDIA GeForce RTX 4070 SUPER",
+    "compute_capability": [
+      8,
+      9
+    ],
+    "driver_version": "595.71.05",
+    "torch_version": "2.12.1+cu126",
+    "torch_cuda_version": "12.6",
+    "onnx_version": "1.22.0",
+    "tensorrt_version": "10.14.1.48.post1",
+    "tensorrt_fast_float16": true,
+    "tensorrt_bfloat16_builder_flag": true,
+    "tensorrt_fast_int8": true,
+    "selected_floating_precision": "float16",
+    "floating_precision_reason": "FP16 is the conversion baseline because TensorRT 10.14 supports fast FP16 on SM 8.9 and provides the fallback precision for calibrated INT8 layers. The INT8 arm uses a separate FP32 ONNX input because the legacy TensorRT calibrator consumes FP32 input buffers."
+  },
+  "float16_onnx_model": {
+    "path": "/workspace/tensorrt-v34-terminal-fp32-calibration/chess-cnn-14x160-fromto-batch320-fp16.onnx",
+    "sha256": "5fd7d8eeac468915e5edb5b4ef051620b57249ec0e2ea2fa83bd856c11f25188"
+  },
+  "int8_onnx_model": {
+    "path": "/workspace/tensorrt-v34-terminal-fp32-calibration/chess-cnn-14x160-fromto-batch320-fp32-for-int8.onnx",
+    "sha256": "830743feb246a3384428470400088f3e92dd2fa49953a62a68556caaa726eb9c"
+  },
+  "onnx_opset_version": 20,
+  "tensorrt_workspace_bytes": 4294967296,
+  "tensorrt_builder_optimization_level": 3,
+  "fidelity_limits": {
+    "minimum_policy_top1_agreement": 0.98,
+    "maximum_mean_policy_kl_divergence": 0.005,
+    "maximum_wdl_mean_absolute_error": 0.01,
+    "maximum_expected_value_mean_absolute_error": 0.015
+  },
+  "reference": {
+    "backend": "torchscript_bfloat16_channels_last",
+    "timing": {
+      "repetitions": 15,
+      "iterations_per_repetition": 100,
+      "batch_size": 320,
+      "repetition_seconds": [
+        0.5193612619768828,
+        0.5232225288636982,
+        0.5213827400002629,
+        0.5231335270218551,
+        0.5228442249353975,
+        0.5228843279182911,
+        0.5234310158994049,
+        0.5227961780037731,
+        0.5245489350054413,
+        0.5240125090349466,
+        0.5249218589160591,
+        0.5244892749469727,
+        0.5251582199707627,
+        0.5245764518622309,
+        0.5251327939331532
+      ],
+      "minimum_batch_milliseconds": 5.193612619768828,
+      "median_batch_milliseconds": 5.234310158994049,
+      "p95_batch_milliseconds": 5.25140421744436,
+      "maximum_batch_milliseconds": 5.251582199707627,
+      "median_positions_per_second": 61135.08567125088
+    }
+  },
+  "candidates": [
+    {
+      "backend": "tensorrt_float16",
+      "engine": {
+        "path": "/workspace/tensorrt-v34-terminal-fp32-calibration/chess-cnn-14x160-fromto-batch320-fp16.engine",
+        "sha256": "bcf5c2db2daf17142ed98055328612cd799970259bb5003b785a3416adafc357"
+      },
+      "timing": {
+        "repetitions": 15,
+        "iterations_per_repetition": 100,
+        "batch_size": 320,
+        "repetition_seconds": [
+          0.3161456410307437,
+          0.3159677858930081,
+          0.3162120939232409,
+          0.31599912606179714,
+          0.31611901498399675,
+          0.31606867210939527,
+          0.3161924888845533,
+          0.31606404203921556,
+          0.3161836958024651,
+          0.3162017499562353,
+          0.3163201629649848,
+          0.31629596394486725,
+          0.31640183506533504,
+          0.31638225889764726,
+          0.316354907117784
+        ],
+        "minimum_batch_milliseconds": 3.159677858930081,
+        "median_batch_milliseconds": 3.161924888845533,
+        "p95_batch_milliseconds": 3.163881317479536,
+        "maximum_batch_milliseconds": 3.1640183506533504,
+        "median_positions_per_second": 101204.17506718094
+      },
+      "fidelity": {
+        "positions": 320,
+        "policy_top1_agreement": 0.99375,
+        "mean_policy_kl_divergence": 0.0001918358916009819,
+        "maximum_policy_kl_divergence": 0.0016737318646744583,
+        "wdl_mean_absolute_error": 0.0009640256563822428,
+        "wdl_maximum_absolute_error": 0.01025390625,
+        "expected_value_mean_absolute_error": 0.002483266592025757,
+        "expected_value_maximum_absolute_error": 0.017578125
+      },
+      "fidelity_failures": []
+    },
+    {
+      "backend": "tensorrt_int8_calibrated",
+      "engine": {
+        "path": "/workspace/tensorrt-v34-terminal-fp32-calibration/chess-cnn-14x160-fromto-batch320-int8.engine",
+        "sha256": "d33e31f07d4f95e58cba7d95c172509f6194c3ea25c679a331e4ebc517cf3362"
+      },
+      "timing": {
+        "repetitions": 15,
+        "iterations_per_repetition": 100,
+        "batch_size": 320,
+        "repetition_seconds": [
+          0.1764858760870993,
+          0.1766930988524109,
+          0.17683044308796525,
+          0.17679896694608033,
+          0.17955895699560642,
+          0.1791128849145025,
+          0.1767934209201485,
+          0.176806973060593,
+          0.1767932779621333,
+          0.17807579413056374,
+          0.17887214897200465,
+          0.17798524303361773,
+          0.17676351685076952,
+          0.176837595179677,
+          0.17743527796119452
+        ],
+        "minimum_batch_milliseconds": 1.7648587608709931,
+        "median_batch_milliseconds": 1.7683044308796525,
+        "p95_batch_milliseconds": 1.792467065388337,
+        "maximum_batch_milliseconds": 1.7955895699560642,
+        "median_positions_per_second": 180964.3149742119
+      },
+      "fidelity": {
+        "positions": 320,
+        "policy_top1_agreement": 0.43125,
+        "mean_policy_kl_divergence": 0.9516804612852565,
+        "maximum_policy_kl_divergence": 10.574147683148531,
+        "wdl_mean_absolute_error": 0.044995416998426664,
+        "wdl_maximum_absolute_error": 0.4432143568992615,
+        "expected_value_mean_absolute_error": 0.11725971358682727,
+        "expected_value_maximum_absolute_error": 0.8203664571046829
+      },
+      "fidelity_failures": [
+        "policy top-1 agreement 0.43125 is below 0.98",
+        "mean policy KL 0.95168 exceeds 0.005",
+        "WDL mean absolute error 0.0449954 exceeds 0.01",
+        "expected-value mean absolute error 0.11726 exceeds 0.015"
+      ]
+    }
+  ]
+}

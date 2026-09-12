@@ -1,0 +1,243 @@
+{
+  "schema_version": 7,
+  "source_revision": {
+    "commit": "0d3d2c864c04d76a5d6fc8340419ff93d3f14b39",
+    "dirty": false
+  },
+  "experiment_configuration_path": "/workspace/run-control/configs/vast-chess-8gpu-integrated-v34-resume-g1702.yaml",
+  "experiment_configuration_sha256": "d485553069fa4660ce2dbd97c747da64e4ca67f6921889d0ec6c1664ea320c73",
+  "checkpoint_generation": 1785,
+  "model_id": "chess-cnn-14x160-fromto",
+  "checkpoint_manifest": {
+    "path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/checkpoint_1785.json",
+    "sha256": "618646b9e7b398a55702305722275fb507078579a590f043014472e4ee6b645f"
+  },
+  "inference_model": {
+    "path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/model_1785.jit.pt",
+    "sha256": "8899d1d4fedda4dc0faf85b54c2d433dde65d5953be0ae078ea69354ec01d4bf"
+  },
+  "benchmark_dataset": {
+    "data": {
+      "path": "/workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v33.bin",
+      "sha256": "147b525c430d2a677a6e1309ce60bf7bb22a4886726c5affae63a9f3349d96c8"
+    },
+    "manifest": {
+      "path": "/workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v33.bin.manifest.json",
+      "sha256": "d5f902b4283e223f5005860868e57be1971bb7216d9c265b408a3614c3f0a6a5"
+    },
+    "available_positions": 516,
+    "packed_payload_bytes": 332,
+    "representation_digest": "aa77cda28749d276e28fb3081cd9db924224bd002d0207401c78a72507c6ab4d",
+    "selected_positions": 320,
+    "selected_states_sha256": "90186855d1ab471583e0d4ae53294b4d549e8074e915c93b6b4d034cf03087d3",
+    "legal_action_mask_sha256": "a47162a0ecdd2736f353cc24b6acc19648c9c9e784433b43f5767e02ddf16e9b"
+  },
+  "calibration": {
+    "source": {
+      "kind": "replay",
+      "path": "/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34/replay.bin",
+      "file_size_bytes": 17300103168,
+      "header_sha256": "8be8c58121140900958be306704d2a272044daf8a0135e3c04e0318256eaa50a",
+      "layout_sha256": "3c5b6f6f2c68ff5c5525c308b41e3c0228537b75d1faf361e4a27156276849eb",
+      "available_positions": 10000000,
+      "selected_positions": 32000,
+      "random_seed": 20260912,
+      "excluded_fidelity_overlap_positions": 2,
+      "selected_logical_indices_sha256": "ff12aaba5ac04159d9f400208dcb60c368e9f152006e7868e476ae915595f987",
+      "selected_packed_states_sha256": "19ea95d4182dc3d5fe171d43e29efee6431bd4c77ad369aa34d12acc027ca316",
+      "selected_states_sha256": "afb79829e75d2a9f8ba860fe69447d803f197fa1a35c2b700ed906dae6ff051e"
+    },
+    "requested_positions": 32000,
+    "submitted_batches": 100,
+    "submitted_positions": 32000,
+    "benchmark_input_overlap_positions": 0,
+    "algorithm": "modelopt_onnx_ptq_max",
+    "tool_version": "0.46.1",
+    "quantized_operator_types": [
+      "Conv"
+    ],
+    "quantized_node_patterns": [
+      "/backbone\\.13/Conv$"
+    ],
+    "excluded_node_patterns": [
+      ".*policy_head.*",
+      ".*value_head.*"
+    ]
+  },
+  "input_shape": [
+    320,
+    52,
+    8,
+    8
+  ],
+  "input_dtype": "int8_source_planes",
+  "warmup_iterations": 50,
+  "hardware": {
+    "gpu_id": 0,
+    "device_name": "NVIDIA GeForce RTX 4070 SUPER",
+    "compute_capability": [
+      8,
+      9
+    ],
+    "driver_version": "595.71.05",
+    "torch_version": "2.12.1+cu126",
+    "torch_cuda_version": "12.6",
+    "onnx_version": "1.21.0",
+    "tensorrt_version": "10.14.1.48.post1",
+    "tensorrt_fast_float16": true,
+    "tensorrt_bfloat16_builder_flag": true,
+    "tensorrt_fast_int8": true,
+    "selected_floating_precision": "float16",
+    "floating_precision_reason": "FP16 is the conversion baseline because TensorRT 10.14 supports fast FP16 on SM 8.9 and provides the fallback precision around explicitly quantized INT8 convolution layers."
+  },
+  "float16_onnx_model": {
+    "path": "/workspace/tensorrt-v34-terminal-explicit-qdq-one-conv-v2/chess-cnn-14x160-fromto-batch320-fp16.onnx",
+    "sha256": "5fd7d8eeac468915e5edb5b4ef051620b57249ec0e2ea2fa83bd856c11f25188"
+  },
+  "int8_source_onnx_model": {
+    "path": "/workspace/tensorrt-v34-terminal-explicit-qdq-one-conv-v2/chess-cnn-14x160-fromto-batch320-fp32-for-int8.onnx",
+    "sha256": "830743feb246a3384428470400088f3e92dd2fa49953a62a68556caaa726eb9c"
+  },
+  "int8_qdq_onnx_model": {
+    "path": "/workspace/tensorrt-v34-terminal-explicit-qdq-one-conv-v2/chess-cnn-14x160-fromto-batch320-int8-qdq.onnx",
+    "sha256": "0e296f409b560062fb4ad99d21d25db179c66233a60f19adad14f89224d6373e"
+  },
+  "int8_quantize_linear_node_count": 2,
+  "int8_dequantize_linear_node_count": 2,
+  "onnx_opset_version": 20,
+  "tensorrt_workspace_bytes": 4294967296,
+  "tensorrt_builder_optimization_level": 3,
+  "fidelity_limits": {
+    "minimum_policy_top1_agreement": 0.98,
+    "maximum_mean_policy_kl_divergence": 0.005,
+    "maximum_wdl_mean_absolute_error": 0.01,
+    "maximum_expected_value_mean_absolute_error": 0.015
+  },
+  "reference": {
+    "backend": "torchscript_bfloat16_channels_last",
+    "timing": {
+      "repetitions": 15,
+      "iterations_per_repetition": 100,
+      "batch_size": 320,
+      "repetition_seconds": [
+        0.5160103731323034,
+        0.5184941068291664,
+        0.5183526631444693,
+        0.517830059165135,
+        0.5194048730190843,
+        0.5170953280758113,
+        0.5195421879179776,
+        0.5180234599392861,
+        0.5197270861826837,
+        0.5184887829236686,
+        0.5190327439922839,
+        0.519962830003351,
+        0.520474768942222,
+        0.518689134856686,
+        0.5205576252192259
+      ],
+      "minimum_batch_milliseconds": 5.160103731323034,
+      "median_batch_milliseconds": 5.18689134856686,
+      "p95_batch_milliseconds": 5.204996258253232,
+      "maximum_batch_milliseconds": 5.205576252192259,
+      "median_positions_per_second": 61693.98556775555
+    }
+  },
+  "candidates": [
+    {
+      "backend": "tensorrt_float16",
+      "engine": {
+        "path": "/workspace/tensorrt-v34-terminal-explicit-qdq-one-conv-v2/chess-cnn-14x160-fromto-batch320-fp16.engine",
+        "sha256": "7691cb909710ed92c47b5cd23d8e691947d97c0eebab10efc9004e656cae1a0b"
+      },
+      "timing": {
+        "repetitions": 15,
+        "iterations_per_repetition": 100,
+        "batch_size": 320,
+        "repetition_seconds": [
+          0.31719932705163956,
+          0.3183090209495276,
+          0.31947752996347845,
+          0.3174265939742327,
+          0.3182498069945723,
+          0.3192291047889739,
+          0.3175680588465184,
+          0.31846591806970537,
+          0.3192061888985336,
+          0.31783303315751255,
+          0.31876182090491056,
+          0.3194409008137882,
+          0.31796890893019736,
+          0.3187053569126874,
+          0.3197962560225278
+        ],
+        "minimum_batch_milliseconds": 3.1719932705163956,
+        "median_batch_milliseconds": 3.1846591806970537,
+        "p95_batch_milliseconds": 3.195731477811932,
+        "maximum_batch_milliseconds": 3.197962560225278,
+        "median_positions_per_second": 100481.70992349608
+      },
+      "fidelity": {
+        "positions": 320,
+        "policy_top1_agreement": 0.99375,
+        "mean_policy_kl_divergence": 0.0001918358916009819,
+        "maximum_policy_kl_divergence": 0.0016737318646744583,
+        "wdl_mean_absolute_error": 0.0009605507055918376,
+        "wdl_maximum_absolute_error": 0.01025390625,
+        "expected_value_mean_absolute_error": 0.002472031116485596,
+        "expected_value_maximum_absolute_error": 0.017578125
+      },
+      "fidelity_failures": []
+    },
+    {
+      "backend": "tensorrt_int8_calibrated",
+      "engine": {
+        "path": "/workspace/tensorrt-v34-terminal-explicit-qdq-one-conv-v2/chess-cnn-14x160-fromto-batch320-int8.engine",
+        "sha256": "d9810574cc06b5be3b16f59b1033168a7066ad02a318e506a66d80b0def3bbf4"
+      },
+      "timing": {
+        "repetitions": 15,
+        "iterations_per_repetition": 100,
+        "batch_size": 320,
+        "repetition_seconds": [
+          0.3151121959090233,
+          0.3165418650023639,
+          0.3172133930493146,
+          0.31525142095051706,
+          0.3160302008036524,
+          0.31694822083227336,
+          0.31554997409693897,
+          0.3160482819657773,
+          0.31727823591791093,
+          0.31588689610362053,
+          0.31616185512393713,
+          0.3173873049672693,
+          0.3154783099889755,
+          0.3159294640645385,
+          0.31739558605477214
+        ],
+        "minimum_batch_milliseconds": 3.151121959090233,
+        "median_batch_milliseconds": 3.160482819657773,
+        "p95_batch_milliseconds": 3.173897892935201,
+        "maximum_batch_milliseconds": 3.1739558605477214,
+        "median_positions_per_second": 101250.3526390473
+      },
+      "fidelity": {
+        "positions": 320,
+        "policy_top1_agreement": 0.2625,
+        "mean_policy_kl_divergence": 1.2777472891227581,
+        "maximum_policy_kl_divergence": 3.6116297619870807,
+        "wdl_mean_absolute_error": 0.2160952885945638,
+        "wdl_maximum_absolute_error": 0.7880859375,
+        "expected_value_mean_absolute_error": 0.5358232975006103,
+        "expected_value_maximum_absolute_error": 1.409393310546875
+      },
+      "fidelity_failures": [
+        "policy top-1 agreement 0.2625 is below 0.98",
+        "mean policy KL 1.27775 exceeds 0.005",
+        "WDL mean absolute error 0.216095 exceeds 0.01",
+        "expected-value mean absolute error 0.535823 exceeds 0.015"
+      ]
+    }
+  ]
+}
