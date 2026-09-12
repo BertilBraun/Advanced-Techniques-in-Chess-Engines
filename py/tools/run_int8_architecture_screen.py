@@ -91,6 +91,7 @@ ACTIVATION_RANGE_POSITIONS = 64
 class ScreenCell(str, Enum):
     POST_FLOAT = 'post_float'
     POST_QAT = 'post_qat'
+    POST_SHARED_QAT = 'post_shared_qat'
     POST_SCALED_FLOAT = 'post_scaled_float'
     POST_SCALED_QAT = 'post_scaled_qat'
     PRE_SCALED_FLOAT = 'pre_scaled_float'
@@ -111,7 +112,12 @@ class ScreenCell(str, Enum):
 
     @property
     def uses_qat(self) -> bool:
-        return self in (ScreenCell.POST_QAT, ScreenCell.POST_SCALED_QAT, ScreenCell.PRE_SCALED_QAT)
+        return self in (
+            ScreenCell.POST_QAT,
+            ScreenCell.POST_SHARED_QAT,
+            ScreenCell.POST_SCALED_QAT,
+            ScreenCell.PRE_SCALED_QAT,
+        )
 
 
 @dataclass(frozen=True)
@@ -237,7 +243,7 @@ def architecture(
     final_normalization: bool = False,
 ) -> NetworkParams:
     match cell:
-        case ScreenCell.POST_FLOAT | ScreenCell.POST_QAT:
+        case ScreenCell.POST_FLOAT | ScreenCell.POST_QAT | ScreenCell.POST_SHARED_QAT:
             residual_block = PostActivationResidualBlockConfiguration()
         case ScreenCell.POST_SCALED_FLOAT | ScreenCell.POST_SCALED_QAT:
             residual_block = ScaledPostActivationResidualBlockConfiguration(
@@ -287,7 +293,7 @@ def _qat_configuration(
                 enable=False,
             )
         )
-    if cell == ScreenCell.POST_QAT:
+    if cell in (ScreenCell.POST_QAT, ScreenCell.POST_SHARED_QAT):
         configuration.quant_cfg.extend(
             (
                 QuantizerCfgEntry(
@@ -373,6 +379,56 @@ class _BoundaryQuantizedPostActivationNetwork(Network):
         return self.finish_block(features)
 
 
+class _SharedBoundaryQuantizedResBlock(nn.Module):
+    def __init__(self, block: ResBlock) -> None:
+        super().__init__()
+        self.conv_block1 = block.conv_block1
+        self.conv_block2 = block.conv_block2
+        self.squeeze_excitation = block.squeeze_excitation
+        self.first_activation_quantizer = TensorQuantizer()
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        residual_branch = self.first_activation_quantizer(self.conv_block1(inputs))
+        residual_branch = self.squeeze_excitation(self.conv_block2(residual_branch))
+        return torch.relu(inputs + residual_branch)
+
+
+class _SharedBoundaryQuantizedGlobalPoolingResBlock(nn.Module):
+    def __init__(self, block: GlobalPoolingResBlock) -> None:
+        super().__init__()
+        self.global_channels = block.global_channels
+        self.conv_block1 = block.conv_block1
+        self.global_pooling_bias = block.global_pooling_bias
+        self.conv_block2 = block.conv_block2
+        self.first_activation_quantizer = TensorQuantizer()
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        features = self.first_activation_quantizer(self.conv_block1(inputs))
+        global_features = features[:, : self.global_channels]
+        local_features = features[:, self.global_channels :]
+        biased_features = self.global_pooling_bias(local_features, global_features)
+        residual_branch = self.conv_block2(biased_features)
+        return torch.relu(inputs + residual_branch)
+
+
+class _SharedBoundaryQuantizedPostActivationNetwork(Network):
+    def __init__(self, args: NetworkParams, device: torch.device) -> None:
+        super().__init__(args, device, CHESS_NETWORK_DIMENSIONS)
+        self.trunk_output_quantizer = TensorQuantizer()
+        self.backbone = nn.ModuleList(
+            _SharedBoundaryQuantizedGlobalPoolingResBlock(block)
+            if isinstance(block, GlobalPoolingResBlock)
+            else _SharedBoundaryQuantizedResBlock(block)
+            for block in self.backbone
+        )
+
+    def trunk_features(self, inputs: Tensor) -> Tensor:
+        features = self.trunk_output_quantizer(self.start_block(inputs))
+        for block in self.backbone:
+            features = self.trunk_output_quantizer(block(features))
+        return self.finish_block(features)
+
+
 def _replay_batch(dataset: OpenedProductionReplay, indices: np.ndarray, device: torch.device) -> TrainingBatch:
     return build_replay_training_batch(
         dataset.store.gather_logical(indices),
@@ -442,6 +498,8 @@ def _fold_post_activation_batch_norm(model: Network) -> None:
                 | ScaledPostActivationGlobalPoolingResBlock()
                 | _BoundaryQuantizedResBlock()
                 | _BoundaryQuantizedGlobalPoolingResBlock()
+                | _SharedBoundaryQuantizedResBlock()
+                | _SharedBoundaryQuantizedGlobalPoolingResBlock()
             ):
                 if isinstance(block, (ScaledPostActivationResBlock, ScaledPostActivationGlobalPoolingResBlock)):
                     second_batch_norm = block.conv_block2[1]
@@ -812,11 +870,13 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             arguments.hidden_size,
             arguments.final_normalization,
         )
-        model = (
-            _BoundaryQuantizedPostActivationNetwork(network_architecture, device)
-            if arguments.cell == ScreenCell.POST_QAT
-            else Network(network_architecture, device, CHESS_NETWORK_DIMENSIONS)
-        )
+        match arguments.cell:
+            case ScreenCell.POST_QAT:
+                model = _BoundaryQuantizedPostActivationNetwork(network_architecture, device)
+            case ScreenCell.POST_SHARED_QAT:
+                model = _SharedBoundaryQuantizedPostActivationNetwork(network_architecture, device)
+            case _:
+                model = Network(network_architecture, device, CHESS_NETWORK_DIMENSIONS)
         cost = measure_model_cost(model)
         if (
             arguments.layers == DEFAULT_LAYERS
@@ -1039,7 +1099,7 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             quantized_convolutions=arguments.quantized_convolutions if arguments.cell.uses_qat else 0,
             qat_activation_boundaries=(
                 'residual_block'
-                if arguments.cell == ScreenCell.POST_QAT
+                if arguments.cell in (ScreenCell.POST_QAT, ScreenCell.POST_SHARED_QAT)
                 else 'convolution'
                 if arguments.cell.uses_qat
                 else None
