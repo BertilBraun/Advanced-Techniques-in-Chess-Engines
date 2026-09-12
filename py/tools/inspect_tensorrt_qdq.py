@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -80,11 +81,12 @@ class TensorRtLayerDescription(FrozenModel):
 
 
 class TensorRtQdqInspection(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     onnx_path: str = Field(min_length=1)
     onnx_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     engine_path: str = Field(min_length=1)
     engine_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    diagnostic_engine_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     quantize_linear_nodes: tuple[QuantizeLinearDescription, ...]
     onnx_operator_counts: tuple[Count, ...]
     tensorrt_layer_type_counts: tuple[Count, ...]
@@ -124,13 +126,34 @@ def _quantize_linear_nodes(model: onnx.ModelProto) -> tuple[QuantizeLinearDescri
     return tuple(rows)
 
 
+def _build_detailed_engine(onnx_path: Path) -> tuple[trt.ICudaEngine, str]:
+    logger = trt.Logger(trt.Logger.WARNING)
+    builder = trt.Builder(logger)
+    explicit_batch = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    network = builder.create_network(explicit_batch)
+    parser = trt.OnnxParser(network, logger)
+    if not parser.parse_from_file(str(onnx_path)):
+        errors = tuple(str(parser.get_error(index)) for index in range(parser.num_errors))
+        raise ValueError(f'TensorRT ONNX conversion failed for {onnx_path}: {" | ".join(errors)}')
+    configuration = builder.create_builder_config()
+    configuration.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 * 1024**3)
+    configuration.builder_optimization_level = 3
+    configuration.profiling_verbosity = trt.ProfilingVerbosity.DETAILED
+    configuration.set_flag(trt.BuilderFlag.FP16)
+    serialized = builder.build_serialized_network(network, configuration)
+    if serialized is None:
+        raise ValueError(f'TensorRT failed to build the detailed diagnostic engine for {onnx_path}.')
+    serialized_bytes = bytes(serialized)
+    runtime = trt.Runtime(logger)
+    engine = runtime.deserialize_cuda_engine(serialized_bytes)
+    if engine is None:
+        raise ValueError(f'TensorRT could not deserialize the detailed diagnostic engine for {onnx_path}.')
+    return engine, hashlib.sha256(serialized_bytes).hexdigest()
+
+
 def inspect(onnx_path: Path, engine_path: Path) -> TensorRtQdqInspection:
     model = onnx.load(onnx_path)
-    logger = trt.Logger(trt.Logger.WARNING)
-    runtime = trt.Runtime(logger)
-    engine = runtime.deserialize_cuda_engine(engine_path.read_bytes())
-    if engine is None:
-        raise ValueError(f'TensorRT could not deserialize {engine_path}.')
+    engine, diagnostic_engine_sha256 = _build_detailed_engine(onnx_path)
     inspector = engine.create_engine_inspector()
     engine_information = json.loads(inspector.get_engine_information(trt.LayerInformationFormat.JSON))
     layers = tuple(TensorRtLayerDescription.model_validate(layer) for layer in engine_information['Layers'])
@@ -141,6 +164,7 @@ def inspect(onnx_path: Path, engine_path: Path) -> TensorRtQdqInspection:
         onnx_sha256=file_sha256(onnx_path),
         engine_path=str(engine_path),
         engine_sha256=file_sha256(engine_path),
+        diagnostic_engine_sha256=diagnostic_engine_sha256,
         quantize_linear_nodes=_quantize_linear_nodes(model),
         onnx_operator_counts=tuple(
             Count(name=name, count=count)
