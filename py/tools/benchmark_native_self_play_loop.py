@@ -201,28 +201,7 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
             game = games[index]
             visit_started = time.perf_counter()
             visits = list(result.search_visits)
-            policy_target = [(visit.action_id, visit.visit_count) for visit in result.policy_target_visits]
             visit_seconds += time.perf_counter() - visit_started
-            observation = (
-                game.ply,
-                policy_target,
-                result.root_value,
-                result.highest_visited_child_action_id,
-                result.highest_visited_child_visit_count,
-                result.highest_visited_child_q,
-                result.network_root_value,
-                result.policy_correction,
-                result.value_correction,
-                result.predicted_budget_curve[5],
-                float(result.selected_budget_index),
-                result.assigned_additional_visits,
-                result.parallel_searches,
-                result.spend_residual,
-                result.starting_visits,
-                result.final_visits,
-                result.stop_reason,
-            )
-            del observation
             action_id = select_action(visits, game.ply, arguments.greedy_after_ply, random)
             game.root = result.root
             game.root.play(action_id)
