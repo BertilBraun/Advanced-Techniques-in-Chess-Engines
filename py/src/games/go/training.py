@@ -109,7 +109,12 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
         search_type = GoSelfPlaySearch7 if self.state.board_size == 7 else GoSelfPlaySearch9
         self.validate_native_dimensions(search_type.inference_dimensions())
         return search_type(
-            self.native_inference_configuration(device_id, checkpoint.inference_model_path, inference),
+            self.native_inference_configuration(
+                device_id,
+                checkpoint.inference_model_path,
+                checkpoint.generation,
+                inference,
+            ),
             self.native_search_parameters(parameters),
             BatchedInferenceParameters(
                 inference.inference_workers,

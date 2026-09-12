@@ -42,13 +42,13 @@ def native_sdpa_backend(backend: SdpaBackend) -> NativeSdpaBackend:
             return NativeSdpaBackend.CUDNN
 
 
-def _uses_torchscript_bootstrap(model_path: Path, backend: TensorRtInferenceBackend) -> bool:
-    return backend.bootstrap_with_torchscript and model_path.name.endswith('.jit.pt')
+def _uses_torchscript_bootstrap(model_generation: int, backend: TensorRtInferenceBackend) -> bool:
+    return backend.bootstrap_with_torchscript and model_generation == 0
 
 
 def native_inference_backend(
     backend: InferenceBackendConfiguration,
-    model_path: Path,
+    model_generation: int,
 ) -> NativeInferenceBackend:
     from AlphaZeroCpp import InferenceBackend as NativeInferenceBackend
 
@@ -56,7 +56,7 @@ def native_inference_backend(
         case TorchScriptInferenceBackend():
             return NativeInferenceBackend.TORCHSCRIPT
         case TensorRtInferenceBackend() as tensor_rt_backend if _uses_torchscript_bootstrap(
-            model_path,
+            model_generation,
             tensor_rt_backend,
         ):
             return NativeInferenceBackend.TORCHSCRIPT
@@ -64,14 +64,20 @@ def native_inference_backend(
             return NativeInferenceBackend.TENSORRT
 
 
-def resolved_inference_model_path(model_path: Path, backend: InferenceBackendConfiguration) -> Path:
+def resolved_inference_model_path(
+    model_path: Path,
+    backend: InferenceBackendConfiguration,
+    model_generation: int,
+) -> Path:
     match backend:
         case TorchScriptInferenceBackend():
             return model_path
         case TensorRtInferenceBackend() as tensor_rt_backend if _uses_torchscript_bootstrap(
-            model_path,
+            model_generation,
             tensor_rt_backend,
         ):
+            if not model_path.name.endswith('.jit.pt'):
+                raise ValueError('The generation-0 TensorRT bootstrap artifact must be TorchScript.')
             log(f'Using TorchScript bootstrap inference artifact {model_path}.')
             return model_path
         case TensorRtInferenceBackend(template_engine_paths=template_engine_paths):

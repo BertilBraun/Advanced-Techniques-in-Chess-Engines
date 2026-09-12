@@ -25,6 +25,11 @@ from src.training.initialization_guard import (
     assert_healthy_policy_initialization,
     probe_policy_initialization,
 )
+from src.training.quantization.checkpoint import load_qat_model_and_optimizer
+from src.training.quantization.configuration import (
+    DisabledTrainingQuantization,
+    TensorRtInt8QatConfiguration,
+)
 from src.training.reporting import ReplayIngestionTelemetry, TrainingReporter
 from src.training.run_limits import RunLimitMonitor
 from src.training.self_play_group import SelfPlayGroup
@@ -198,13 +203,27 @@ class Coordinator:
 
     def _run_initialization_guard(self) -> None:
         training = self.configuration.training
-        model = load_model(
-            self.ledger.state.active_checkpoint.model_path,
-            training.initial_model.network,
-            torch.device('cpu'),
-            self.game.network_dimensions,
-            self.game.target_layout.auxiliary_heads,
-        )
+        checkpoint = self.ledger.state.active_checkpoint
+        match training.trainer.quantization:
+            case DisabledTrainingQuantization():
+                model = load_model(
+                    checkpoint.model_path,
+                    training.initial_model.network,
+                    torch.device('cpu'),
+                    self.game.network_dimensions,
+                    self.game.target_layout.auxiliary_heads,
+                )
+            case TensorRtInt8QatConfiguration() as quantization_configuration:
+                model, _, _ = load_qat_model_and_optimizer(
+                    checkpoint.generation,
+                    training.initial_model.network,
+                    training.trainer.optimizer,
+                    quantization_configuration,
+                    torch.device('cpu'),
+                    Path(training.save_path),
+                    self.game.network_dimensions,
+                    self.game.target_layout.auxiliary_heads,
+                )
         description = self.replay_manager.description()
         store = ReplayStore.open(description.path, description.layout, writable=False)
         try:

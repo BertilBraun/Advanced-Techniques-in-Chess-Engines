@@ -135,19 +135,20 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
         self,
         device_id: int,
         model_path: Path,
+        model_generation: int,
         inference: BatchedInferenceParams | None = None,
     ) -> InferenceConfiguration:
         from AlphaZeroCpp import InferenceConfiguration, InferenceDevice
 
         # Defaults to the self-play inference parameters; evaluation passes its own so backends can differ.
         effective = self.self_play_configuration.inference if inference is None else inference
-        resolved_model_path = resolved_inference_model_path(model_path, effective.backend)
+        resolved_model_path = resolved_inference_model_path(model_path, effective.backend, model_generation)
         return InferenceConfiguration(
             device_id=device_id,
             model_path=str(resolved_model_path),
             device=InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA,
             execution_options=native_execution_options(effective),
-            backend=native_inference_backend(effective.backend, model_path),
+            backend=native_inference_backend(effective.backend, model_generation),
         )
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:

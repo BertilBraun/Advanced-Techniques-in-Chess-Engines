@@ -139,7 +139,12 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         self.validate_native_dimensions(ChessSelfPlaySearch.inference_dimensions())
         started_at = time.perf_counter()
         search = ChessSelfPlaySearch(
-            self.native_inference_configuration(device_id, checkpoint.inference_model_path, inference),
+            self.native_inference_configuration(
+                device_id,
+                checkpoint.inference_model_path,
+                checkpoint.generation,
+                inference,
+            ),
             self.native_search_parameters(parameters),
             BatchedInferenceParameters(
                 inference.inference_workers,

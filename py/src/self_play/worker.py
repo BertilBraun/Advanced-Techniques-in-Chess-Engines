@@ -147,6 +147,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             inference_model_path = resolved_inference_model_path(
                 checkpoint.inference_model_path,
                 self.game.self_play_configuration.inference.backend,
+                checkpoint.generation,
             )
             self.search.refresh_model(checkpoint.generation, str(inference_model_path))
             capacity_changed = self.search.update_search_schedule(self.game.native_search_parameters(parameters))
