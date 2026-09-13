@@ -179,6 +179,22 @@ def test_v34_uses_the_primary_ladder_elo_candidate_start_policy() -> None:
     assert configuration.evaluation.openings.path == previous_configuration.evaluation.openings.path
 
 
+def test_v37_uses_one_short_warmup_and_twenty_minute_evaluations() -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-progressive-v37-int8.yaml'
+    )
+
+    trainer = configuration.training.trainer
+    assert trainer.warmup_optimizer_steps == 1_000
+    assert trainer.quantization.kind == 'tensorrt_int8_qat'
+    assert trainer.quantization.fold_after_optimizer_steps == 1_000
+    assert trainer.quantization.deployment_learning_rate == 'inherit'
+    assert trainer.quantization.deployment_warmup_optimizer_steps == 0
+    assert configuration.evaluation.cadence_seconds == 1_200
+    assert configuration.training.progressive_model_sizing.is_progressive
+    assert configuration.training.initial_model.model_id == 'chess-cnn-scaled-post-12x128-fromto-int8'
+
+
 def test_v34_ema_fix_resume_uses_the_stopped_checkpoint() -> None:
     configuration = load_chess_experiment_configuration(
         REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-ema-fix.yaml'
