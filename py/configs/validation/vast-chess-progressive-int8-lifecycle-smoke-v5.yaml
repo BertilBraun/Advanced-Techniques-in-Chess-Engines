@@ -1,0 +1,13 @@
+extends: vast-chess-progressive-int8-lifecycle-smoke-v4.yaml
+
+run:
+  run_name: vast-chess-progressive-int8-lifecycle-smoke-v5
+  tensorboard_run_directory: vast-chess-progressive-int8-lifecycle-smoke-v5
+
+training:
+  save_path: py/training_data/validation/vast-chess-progressive-int8-lifecycle-smoke-v5
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-progressive-int8-lifecycle-smoke-v5.stop
+  trainer:
+    quantization:
+      fold_after_optimizer_steps: 2
