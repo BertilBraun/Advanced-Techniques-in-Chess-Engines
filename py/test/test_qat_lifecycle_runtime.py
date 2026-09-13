@@ -184,7 +184,7 @@ def test_qat_resume_reconstructs_checkpoint_topology(
     restored = restore_qat_model(
         _network(),
         state,
-        TensorRtInt8QatConfiguration(deployment_learning_rate=0.02),
+        TensorRtInt8QatConfiguration(deployment_learning_rate=0.02, deployment_warmup_optimizer_steps=0),
     )
     restored.model.load_state_dict(weights)
 
@@ -227,7 +227,10 @@ def test_deployment_qat_checkpoint_round_trip(tmp_path: Path) -> None:
         generation=2,
         network_configuration=model.network_args,
         optimizer_configuration=optimizer_configuration,
-        quantization_configuration=TensorRtInt8QatConfiguration(deployment_learning_rate=0.02),
+        quantization_configuration=TensorRtInt8QatConfiguration(
+            deployment_learning_rate=0.02,
+            deployment_warmup_optimizer_steps=0,
+        ),
         device=torch.device('cpu'),
         save_folder=tmp_path,
         dimensions=NetworkDimensions(channels=8, rows=3, columns=3, actions=10),
@@ -263,7 +266,10 @@ def test_qat_checkpoint_load_normalizes_compiled_parameter_keys(tmp_path: Path) 
         generation=0,
         network_configuration=model.network_args,
         optimizer_configuration=optimizer_configuration,
-        quantization_configuration=TensorRtInt8QatConfiguration(deployment_learning_rate=0.02),
+        quantization_configuration=TensorRtInt8QatConfiguration(
+            deployment_learning_rate=0.02,
+            deployment_warmup_optimizer_steps=0,
+        ),
         device=torch.device('cpu'),
         save_folder=tmp_path,
         dimensions=NetworkDimensions(channels=8, rows=3, columns=3, actions=64),
