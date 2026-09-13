@@ -20,7 +20,7 @@ from src.self_play.completed_game import (
     TerminationReason,
     publish_completed_self_play_game,
 )
-from src.self_play.native_configuration import native_inference_backend, resolved_inference_model_path
+from src.self_play.native_configuration import native_inference_backend
 from src.self_play.native_search import NativeRequestT, NativeResultT, NativeRootT, NativeSearchT, PositionT
 from src.self_play.parameters import (
     RandomOpeningStartParameters,
@@ -144,11 +144,7 @@ class SelfPlayWorker(Generic[PositionT, NativeRootT, NativeRequestT, NativeResul
             self.search = self.game.create_native_search(self.device_id, checkpoint, parameters)
             capacity_changed = False
         else:
-            inference_model_path = resolved_inference_model_path(
-                checkpoint.inference_model_path,
-                self.game.self_play_configuration.inference.backend,
-                checkpoint.generation,
-            )
+            inference_model_path = self.game.resolved_inference_model_path(checkpoint)
             self.search.refresh_model(
                 checkpoint.generation,
                 str(inference_model_path),

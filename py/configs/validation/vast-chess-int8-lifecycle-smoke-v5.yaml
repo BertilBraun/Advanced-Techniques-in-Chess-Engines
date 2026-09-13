@@ -44,9 +44,15 @@ chess:
       backend:
         kind: tensorrt
         bootstrap_with_torchscript: true
-        template_engine_paths:
-        - /workspace/tensorrt/v35-int8-14x160-prefold-template.engine
-        - /workspace/tensorrt/v35-int8-14x160-deployment-trained-template.engine
+        templates:
+        - kind: qat
+          model_id: chess-cnn-scaled-post-14x160-fromto-int8
+          phase: pre_fold
+          engine_path: /workspace/tensorrt/v35-int8-14x160-prefold-template.engine
+        - kind: qat
+          model_id: chess-cnn-scaled-post-14x160-fromto-int8
+          phase: deployment
+          engine_path: /workspace/tensorrt/v35-int8-14x160-deployment-trained-template.engine
 
 evaluation:
   cadence_seconds: 1
@@ -73,6 +79,9 @@ evaluation:
         backend:
           kind: tensorrt
           bootstrap_with_torchscript: true
-          template_engine_paths:
-          - /workspace/tensorrt/v35-int8-14x160-deployment-trained-template.engine
+          templates:
+          - kind: qat
+            model_id: chess-cnn-scaled-post-14x160-fromto-int8
+            phase: deployment
+            engine_path: /workspace/tensorrt/v35-int8-14x160-deployment-trained-template.engine
         sdpa_backend: memory_efficient

@@ -20,6 +20,7 @@ from src.self_play.parameters import (
     ResolvedSelfPlayParameters,
     ZeroFirstPlayUrgencyParameters,
 )
+from src.training.checkpoint.contracts import CheckpointReference, read_checkpoint_manifest
 from src.training.configuration import TrainingArgs
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import TrainingTargetLayout
@@ -30,7 +31,6 @@ if TYPE_CHECKING:
     from src.evaluation.configuration import EvaluationSearchConfiguration, EvaluationTreeSearchOverrides
     from src.self_play.native_search import NativeSelfPlaySearch
     from src.self_play.resignation import CalibratedResignationConfiguration
-    from src.training.checkpoint import CheckpointReference
 
 
 def resolved_evaluation_parameters(
@@ -134,21 +134,43 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
     def native_inference_configuration(
         self,
         device_id: int,
-        model_path: Path,
-        model_generation: int,
+        checkpoint: CheckpointReference,
         inference: BatchedInferenceParams | None = None,
     ) -> InferenceConfiguration:
         from AlphaZeroCpp import InferenceConfiguration, InferenceDevice
 
         # Defaults to the self-play inference parameters; evaluation passes its own so backends can differ.
         effective = self.self_play_configuration.inference if inference is None else inference
-        resolved_model_path = resolved_inference_model_path(model_path, effective.backend, model_generation)
+        resolved_model_path = self.resolved_inference_model_path(checkpoint, effective)
         return InferenceConfiguration(
             device_id=device_id,
             model_path=str(resolved_model_path),
             device=InferenceDevice.CPU if self.training.topology.trainer.device_type == 'cpu' else InferenceDevice.CUDA,
             execution_options=native_execution_options(effective),
-            backend=native_inference_backend(effective.backend, model_generation),
+            backend=native_inference_backend(effective.backend, checkpoint.generation),
+        )
+
+    def resolved_inference_model_path(
+        self,
+        checkpoint: CheckpointReference,
+        inference: BatchedInferenceParams | None = None,
+    ) -> Path:
+        effective = self.self_play_configuration.inference if inference is None else inference
+        manifest = read_checkpoint_manifest(checkpoint.generation, checkpoint.manifest_path.parent)
+        model_ids = tuple(
+            model.model_id
+            for model in self.training.progressive_model_sizing.models
+            if model.network == manifest.network.architecture
+        )
+        if len(model_ids) != 1:
+            raise ValueError('Checkpoint architecture must identify exactly one configured model.')
+        qat_phase = None if checkpoint.qat_state is None else checkpoint.qat_state.phase
+        return resolved_inference_model_path(
+            checkpoint.inference_model_path,
+            effective.backend,
+            checkpoint.generation,
+            model_ids[0],
+            qat_phase,
         )
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:

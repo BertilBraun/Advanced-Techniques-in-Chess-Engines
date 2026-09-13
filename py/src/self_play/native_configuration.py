@@ -16,6 +16,7 @@ from src.self_play.configuration import (
     TensorRtInferenceBackend,
     TorchScriptInferenceBackend,
 )
+from src.training.quantization.configuration import QatCheckpointPhase
 from src.util.log import log
 
 if TYPE_CHECKING:
@@ -68,6 +69,8 @@ def resolved_inference_model_path(
     model_path: Path,
     backend: InferenceBackendConfiguration,
     model_generation: int,
+    model_id: str,
+    qat_phase: QatCheckpointPhase | None,
 ) -> Path:
     match backend:
         case TorchScriptInferenceBackend():
@@ -80,16 +83,12 @@ def resolved_inference_model_path(
                 raise ValueError('The generation-0 TensorRT bootstrap artifact must be TorchScript.')
             log(f'Using TorchScript bootstrap inference artifact {model_path}.')
             return model_path
-        case TensorRtInferenceBackend(template_engine_paths=template_engine_paths):
+        case TensorRtInferenceBackend() as tensor_rt_backend:
             started_at = time.perf_counter()
             if model_path.name.endswith('.engine'):
                 return model_path
+            template_engine_path = tensor_rt_backend.template_engine_path(model_id, qat_phase)
             publisher = Path(__file__).parents[2] / 'tools' / 'publish_tensorrt_engine.py'
-            template_arguments = tuple(
-                argument
-                for template_engine_path in template_engine_paths
-                for argument in ('--template-engine', str(template_engine_path))
-            )
             completed = subprocess.run(
                 (
                     sys.executable,
@@ -97,7 +96,8 @@ def resolved_inference_model_path(
                     'tools.publish_tensorrt_engine',
                     '--model',
                     str(model_path.resolve()),
-                    *template_arguments,
+                    '--template-engine',
+                    str(template_engine_path),
                 ),
                 check=True,
                 capture_output=True,

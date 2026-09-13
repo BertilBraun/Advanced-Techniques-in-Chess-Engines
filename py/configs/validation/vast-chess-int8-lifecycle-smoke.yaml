@@ -63,7 +63,13 @@ evaluation:
         outstanding_batches_per_worker: 1
         backend:
           kind: tensorrt
-          template_engine_paths:
-          - /workspace/tensorrt/v35-int8-14x160-prefold-eval-template.engine
-          - /workspace/tensorrt/v35-int8-14x160-deployment-eval-template.engine
+          templates:
+          - kind: qat
+            model_id: chess-cnn-scaled-post-14x160-fromto-int8
+            phase: pre_fold
+            engine_path: /workspace/tensorrt/v35-int8-14x160-prefold-eval-template.engine
+          - kind: qat
+            model_id: chess-cnn-scaled-post-14x160-fromto-int8
+            phase: deployment
+            engine_path: /workspace/tensorrt/v35-int8-14x160-deployment-eval-template.engine
         sdpa_backend: memory_efficient

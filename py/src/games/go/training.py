@@ -111,8 +111,7 @@ class GoImplementation(GameImplementation[NativeGoPosition, NativeSelfPlaySearch
         return search_type(
             self.native_inference_configuration(
                 device_id,
-                checkpoint.inference_model_path,
-                checkpoint.generation,
+                checkpoint,
                 inference,
             ),
             self.native_search_parameters(parameters),
