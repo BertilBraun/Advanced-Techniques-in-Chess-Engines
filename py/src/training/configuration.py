@@ -10,7 +10,6 @@ from src.training.network import NetworkParams, ScaledPostActivationResidualBloc
 from src.training.progressive import (
     SECONDS_PER_DAY,
     ElapsedCandidateStartConfiguration,
-    FixedModelSizingConfiguration,
     ModelSizingConfiguration,
     ProgressiveModelDefinition,
     ProgressiveModelSizingConfiguration,
@@ -242,15 +241,12 @@ class TrainingArgs(FrozenModel):
             case TensorRtInt8QatConfiguration(fold_after_optimizer_steps=fold_after_optimizer_steps):
                 if fold_after_optimizer_steps % credit.optimizer_steps_per_quantum:
                     raise ValueError('The QAT fold boundary must align with a complete training quantum.')
-                match self.progressive_model_sizing:
-                    case FixedModelSizingConfiguration(
-                        model=ProgressiveModelDefinition(
-                            network=NetworkParams(residual_block=ScaledPostActivationResidualBlockConfiguration())
-                        )
-                    ):
-                        pass
-                    case _:
-                        raise ValueError('TensorRT INT8 QAT requires one fixed scaled post-activation model.')
+                if any(
+                    not isinstance(model.network, NetworkParams)
+                    or not isinstance(model.network.residual_block, ScaledPostActivationResidualBlockConfiguration)
+                    for model in self.progressive_model_sizing.models
+                ):
+                    raise ValueError('TensorRT INT8 QAT requires scaled post-activation convolutional models.')
         maximum_wall_time = self.limits.maximum_wall_time_seconds
         match self.progressive_model_sizing:
             case ProgressiveModelSizingConfiguration(

@@ -519,10 +519,13 @@ def retain_progressive_candidate_checkpoints(run_path: Path, state: ProgressiveT
                     artifact.unlink()
 
 
-def _checkpoint_paths(checkpoint: CheckpointReference) -> tuple[Path, Path, Path, Path]:
-    return (
+def _checkpoint_paths(checkpoint: CheckpointReference) -> tuple[Path, ...]:
+    paths = (
         checkpoint.manifest_path,
         checkpoint.model_path,
         checkpoint.optimizer_path,
         checkpoint.inference_model_path,
     )
+    if checkpoint.qat_state is not None:
+        return (*paths, checkpoint.qat_state.path)
+    return paths
