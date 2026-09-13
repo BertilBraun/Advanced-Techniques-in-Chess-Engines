@@ -267,6 +267,7 @@ class ProgressiveTrainingSession(TrainingSession):
                 base_learning_rate=self._candidate_learning_rate(model_id, replay_source_progress.model_generation),
             )
         )
+        self._restart_trainer_after_qat_fold(model_id, definition.network, model_path, result)
         self.state.record_candidate(
             CompletedCandidateTraining(
                 model_id=model_id,
@@ -276,6 +277,29 @@ class ProgressiveTrainingSession(TrainingSession):
             )
         )
         return ModelTrainingResult(model_id=model_id, result=result)
+
+    def _restart_trainer_after_qat_fold(
+        self,
+        model_id: str,
+        network: NetworkConfiguration,
+        model_path: Path,
+        result: TrainingQuantumResult,
+    ) -> None:
+        match self.configuration.training.trainer.quantization:
+            case TensorRtInt8QatConfiguration(fold_after_optimizer_steps=fold_after_optimizer_steps) if (
+                result.completed_optimizer_steps == fold_after_optimizer_steps
+            ):
+                trainer = self.trainers.pop(model_id)
+                trainer.close()
+                self.trainers[model_id] = self.trainer_group_factory(
+                    self.configuration,
+                    self.game,
+                    TrainerStartup(
+                        network=network,
+                        save_path=model_path,
+                        starting_generation=result.checkpoint.generation,
+                    ),
+                )
 
     def _candidate_learning_rate(self, model_id: str, global_generation: int) -> float:
         if model_id == self.state.state.active_model_id:
