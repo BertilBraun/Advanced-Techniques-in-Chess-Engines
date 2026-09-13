@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "source_checkpoint_manifest": "/workspace/alphazero-engine-int8-validation/py/training_data/production/vast-chess-8gpu-progressive-v40-int8/checkpoint_48.json",
+  "checkpoint_model_sha256": "265d74b897f83402757552894a998ba9f5306dfb0c9544b68e7c73ca608d50df",
+  "checkpoint_onnx_sha256": "3bfbf139fdc6b34055b95953b86e0889cd5903146a2267b12a71210ecbc93d90",
+  "production_engine_sha256": "9aaa797a291532e9bb3b0a9f3f1ec954c80b432c12f471f02808ca5b27c906f1",
+  "replay_store_sha256": "d668a18e07be099538a79a70b2c65c275a724b7dba56eddeb5629d0a7df52a83",
+  "positions": 3200,
+  "batch_size": 320,
+  "framework_to_onnx": {
+    "positions": 3200,
+    "policy_top1_agreement": 0.9746875,
+    "mean_policy_kl_divergence": 0.0008921277276274442,
+    "maximum_policy_kl_divergence": 0.04792829827813971,
+    "wdl_mean_absolute_error": 0.004936848831906294,
+    "wdl_maximum_absolute_error": 0.12328630685806274,
+    "expected_value_mean_absolute_error": 0.012058453317731619,
+    "expected_value_maximum_absolute_error": 0.23535150289535522
+  },
+  "onnx_to_production_engine": {
+    "positions": 3200,
+    "policy_top1_agreement": 0.9803125,
+    "mean_policy_kl_divergence": 0.0006483733656379131,
+    "maximum_policy_kl_divergence": 0.05468944286741909,
+    "wdl_mean_absolute_error": 0.004482992783305235,
+    "wdl_maximum_absolute_error": 0.09273773431777954,
+    "expected_value_mean_absolute_error": 0.010976545548182913,
+    "expected_value_maximum_absolute_error": 0.1662611961364746
+  },
+  "framework_to_production_engine": {
+    "positions": 3200,
+    "policy_top1_agreement": 0.974375,
+    "mean_policy_kl_divergence": 0.0008460970009855221,
+    "maximum_policy_kl_divergence": 0.02442099656923972,
+    "wdl_mean_absolute_error": 0.004966495837046144,
+    "wdl_maximum_absolute_error": 0.12257042527198792,
+    "expected_value_mean_absolute_error": 0.012119372507440858,
+    "expected_value_maximum_absolute_error": 0.24177145957946777
+  }
+}
