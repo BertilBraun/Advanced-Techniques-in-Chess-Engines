@@ -206,6 +206,29 @@ def test_folded_qat_export_contains_explicit_quantization(tmp_path: Path) -> Non
 
 
 @pytest.mark.integration
+def test_qat_export_keeps_zero_and_nonzero_batch_norm_parameters(tmp_path: Path) -> None:
+    model = configure_qat(_network(), _calibrate)
+    batch_norm = model.backbone[0].conv_block2[1]
+    assert isinstance(batch_norm, nn.BatchNorm2d)
+    assert batch_norm.bias is not None
+    with torch.no_grad():
+        batch_norm.bias.zero_()
+    zero_path = tmp_path / 'zero.onnx'
+    export_qat_onnx(model, zero_path, torch.randn((8, 8, 3, 3)))
+
+    with torch.no_grad():
+        batch_norm.bias.fill_(0.03125)
+    nonzero_path = tmp_path / 'nonzero.onnx'
+    export_qat_onnx(model, nonzero_path, torch.randn((8, 8, 3, 3)))
+
+    zero_initializers = {initializer.name for initializer in onnx.load(zero_path).graph.initializer}
+    nonzero_initializers = {initializer.name for initializer in onnx.load(nonzero_path).graph.initializer}
+
+    assert zero_initializers == nonzero_initializers
+    assert 'backbone.0.conv_block2.1.bias' in zero_initializers
+
+
+@pytest.mark.integration
 def test_deployment_qat_checkpoint_round_trip(tmp_path: Path) -> None:
     model = configure_qat(_network(), _calibrate)
     pre_fold_state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 999)
