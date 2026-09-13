@@ -222,7 +222,7 @@ class BatchedInferenceParams(FrozenModel):
     def omit_unset_execution_knobs(
         self,
         serialize: SerializerFunctionWrapHandler,
-    ) -> dict[str, JsonValue | dict[str, str | bool | tuple[Path, ...]]]:
+    ) -> dict[str, JsonValue]:
         # A configuration that does not opt in must serialise, and therefore hash, exactly as it did
         # before these knobs existed, so no recorded experiment_configuration_sha256 moves.
         payload = serialize(self)

@@ -121,6 +121,7 @@ def test_tensorrt_template_selection_is_model_and_qat_phase_specific() -> None:
     assert backend.template_engine_path('small', QatCheckpointPhase.PRE_FOLD).name == 'small-pre-fold.engine'
     assert backend.template_engine_path('small', QatCheckpointPhase.DEPLOYMENT).name == 'small-deployment.engine'
     assert backend.template_engine_path('medium', QatCheckpointPhase.DEPLOYMENT).name == 'medium-deployment.engine'
+    assert backend.model_dump(mode='json')['templates'][0]['engine_path'] == 'small-float.engine'
     with pytest.raises(ValueError, match='medium.*pre_fold'):
         backend.template_engine_path('medium', QatCheckpointPhase.PRE_FOLD)
 

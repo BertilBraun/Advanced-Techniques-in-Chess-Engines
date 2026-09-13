@@ -19,7 +19,7 @@ from src.self_play.resignation import PublishedResignationPolicy
 from src.training.checkpoint import CheckpointReference
 from src.util.log import log, warn
 
-RESPONSE_TIMEOUT_SECONDS = 120.0
+RESPONSE_TIMEOUT_SECONDS = 300.0
 RESTART_HANDSHAKE_TIMEOUT_SECONDS = 600.0
 RESTART_BACKOFF_SECONDS = 120.0
 TERMINATION_JOIN_SECONDS = 5.0
