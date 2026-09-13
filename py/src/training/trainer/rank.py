@@ -497,7 +497,7 @@ def _save_rank_checkpoint(
             return CheckpointReference.load(runtime.save_path, generation)
         case TensorRtInt8QatConfiguration():
             assert runtime.qat_state is not None and runtime.qat_calibration_states is not None
-            return save_qat_model_and_optimizer(
+            checkpoint = save_qat_model_and_optimizer(
                 runtime.model,
                 runtime.optimizer,
                 generation,
@@ -509,6 +509,9 @@ def _save_rank_checkpoint(
                     runtime.game.self_play_configuration.inference.inference_batch_size,
                 ),
             )
+            assert checkpoint.qat_state is not None
+            runtime.qat_state = checkpoint.qat_state
+            return checkpoint
 
 
 def _prepare_qat_publication(

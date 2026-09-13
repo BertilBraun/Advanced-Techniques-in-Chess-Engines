@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -26,12 +27,46 @@ from src.training.checkpoint.persistence import create_optimizer, save_model_and
 from src.training.configuration import TrainingCompilation, TrainingPrecision
 from src.training.network import DensePolicyHeadConfiguration, Network
 from src.training.progress import TrainingProgress
+from src.training.quantization import QatCheckpointPhase, QatStateIdentity
 from src.training.trainer import TrainerGroup
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.training.trainer.rank import DistributedTrainingModel
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 from test_helpers.probe_states import bernoulli_probe_states
 from torch import nn
+
+
+def test_qat_checkpoint_save_refreshes_live_sidecar_identity(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    configuration = load_experiment_configuration(
+        Path(__file__).parents[1] / 'configs' / 'production' / 'vast-chess-8gpu-progressive-v36-int8.yaml'
+    )
+    source_state = QatStateIdentity(
+        phase=QatCheckpointPhase.DEPLOYMENT,
+        completed_optimizer_steps=2,
+        path=tmp_path / 'qat_state_1.pt',
+        sha256='1' * 64,
+    )
+    stored_state = source_state.validated_copy(update={'path': tmp_path / 'qat_state_2.pt', 'sha256': '2' * 64})
+    checkpoint = SimpleNamespace(qat_state=stored_state)
+    runtime = SimpleNamespace(
+        model=object(),
+        optimizer=object(),
+        save_path=tmp_path,
+        qat_state=source_state,
+        qat_calibration_states=torch.zeros((1, 52, 8, 8)),
+        game=SimpleNamespace(
+            self_play_configuration=SimpleNamespace(inference=SimpleNamespace(inference_batch_size=1))
+        ),
+    )
+    command = SimpleNamespace(
+        target_progress=TrainingProgress(completed_optimizer_steps=2, optimizer_steps_per_generation=1)
+    )
+    monkeypatch.setattr(trainer_rank, 'save_qat_model_and_optimizer', lambda *arguments: checkpoint)
+
+    result = trainer_rank._save_rank_checkpoint(0, configuration, runtime, command)
+
+    assert result is checkpoint
+    assert runtime.qat_state == stored_state
 
 
 def _configuration(tmp_path: Path) -> ChessExperimentConfiguration:
