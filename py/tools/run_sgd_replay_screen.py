@@ -24,7 +24,11 @@ from src.training.checkpoint.persistence import create_optimizer
 from src.training.configuration import SgdOptimizerConfiguration
 from src.training.network import Network
 from src.training.objective import ResolvedTrainingObjective, mask_policy_logits
-from src.training.quantization.runtime import configure_qat, fold_scaled_post_activation_batch_norm
+from src.training.quantization.runtime import (
+    configure_qat,
+    fold_scaled_post_activation_batch_norm,
+    recalibrate_qat,
+)
 from src.training.trainer.rank import DistributedTrainingModel
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -301,8 +305,8 @@ def run(arguments: Arguments) -> None:
             loss.total.backward()
             gradient_norm = float(torch.nn.utils.clip_grad_norm_(distributed_model.parameters(), 1.0))
             optimizer.step()
-            local_metrics = torch.tensor(
-                (float(loss.policy), float(loss.wdl), float(loss.total)), dtype=torch.float64, device=device
+            local_metrics = torch.stack((loss.policy.detach(), loss.wdl.detach(), loss.total.detach())).to(
+                dtype=torch.float64
             )
             distributed.all_reduce(local_metrics, op=distributed.ReduceOp.SUM)
             metrics = local_metrics.cpu().numpy() / world_size
@@ -319,6 +323,7 @@ def run(arguments: Arguments) -> None:
                 distributed.barrier()
                 del distributed_model
                 fold_scaled_post_activation_batch_norm(model)
+                recalibrate_qat(model, _calibration_loop(opened, calibration_indices, device))
                 optimizer = create_optimizer(model, optimizer_configuration)
                 distributed_model = DistributedDataParallel(
                     DistributedTrainingModel(model), device_ids=[device_id], broadcast_buffers=False
