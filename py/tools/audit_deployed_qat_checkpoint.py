@@ -7,7 +7,8 @@ from pathlib import Path
 import torch
 from pydantic import Field
 from src.experiment.configuration import load_experiment_configuration
-from src.training.checkpoint.contracts import CheckpointReference, load_checkpoint_manifest
+from src.training.checkpoint.contracts import CheckpointManifest, CheckpointReference, load_checkpoint_manifest
+from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.checkpoint.persistence import load_model_state_dict
 from src.training.network import Network
 from src.training.quantization.configuration import TensorRtInt8QatConfiguration
@@ -47,6 +48,7 @@ class Arguments:
     positions: int
     batch_size: int
     holdout_fraction: float
+    onnx_only: bool
 
 
 class DeploymentFidelityReport(FrozenModel):
@@ -58,9 +60,9 @@ class DeploymentFidelityReport(FrozenModel):
     replay_store_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     positions: int = Field(gt=0)
     batch_size: int = Field(gt=0)
-    framework_to_onnx: FidelityMetrics
+    framework_to_onnx: FidelityMetrics | None
     onnx_to_production_engine: FidelityMetrics
-    framework_to_production_engine: FidelityMetrics
+    framework_to_production_engine: FidelityMetrics | None
 
 
 def run(arguments: Arguments) -> DeploymentFidelityReport:
@@ -68,22 +70,28 @@ def run(arguments: Arguments) -> DeploymentFidelityReport:
     quantization = configuration.training.trainer.quantization
     if not isinstance(quantization, TensorRtInt8QatConfiguration):
         raise ValueError('Deployment fidelity audit requires a QAT experiment.')
-    manifest = load_checkpoint_manifest(arguments.generation, arguments.run_directory)
-    checkpoint = CheckpointReference.from_manifest(arguments.run_directory, manifest)
-    if checkpoint.qat_state is None:
-        raise ValueError('Deployment fidelity audit requires QAT checkpoint state.')
-
     device = torch.device('cuda', arguments.device_id)
     torch.cuda.set_device(device)
-    model = Network(
-        manifest.network.architecture,
-        device,
-        manifest.network.dimensions,
-        manifest.network.auxiliary_heads,
-    )
-    model = restore_qat_model(model, checkpoint.qat_state, quantization).model
-    weights = torch.load(checkpoint.model_path, map_location=device, weights_only=True)
-    load_model_state_dict(model, weights, checkpoint.model_path)
+    if arguments.onnx_only:
+        manifest_path = checkpoint_manifest_path(arguments.generation, arguments.run_directory)
+        manifest = CheckpointManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
+        checkpoint_onnx_path = arguments.run_directory / manifest.inference_model_path
+        model = None
+    else:
+        manifest = load_checkpoint_manifest(arguments.generation, arguments.run_directory)
+        checkpoint = CheckpointReference.from_manifest(arguments.run_directory, manifest)
+        if checkpoint.qat_state is None:
+            raise ValueError('Deployment fidelity audit requires QAT checkpoint state.')
+        checkpoint_onnx_path = checkpoint.inference_model_path
+        model = Network(
+            manifest.network.architecture,
+            device,
+            manifest.network.dimensions,
+            manifest.network.auxiliary_heads,
+        )
+        model = restore_qat_model(model, checkpoint.qat_state, quantization).model
+        weights = torch.load(checkpoint.model_path, map_location=device, weights_only=True)
+        load_model_state_dict(model, weights, checkpoint.model_path)
 
     dataset_input = ProductionReplayInput(
         kind='production_replay',
@@ -106,21 +114,25 @@ def run(arguments: Arguments) -> DeploymentFidelityReport:
             device,
         )
         legal_mask = torch.cat(tuple(_legal_action_mask(batch.policy_legal_action_ids) for batch in batches))
-        framework_outputs, _ = _model_outputs(model, batches, device)
-        onnx_outputs = _onnx_outputs(checkpoint.inference_model_path, batches, arguments.device_id)
+        framework_outputs = None if model is None else _model_outputs(model, batches, device)[0]
+        onnx_outputs = _onnx_outputs(checkpoint_onnx_path, batches, arguments.device_id)
         runner = _TensorRtCudaGraphRunner(arguments.engine, batches[0].states, device, 10)
         engine_outputs = _tensorrt_outputs(runner, batches)
         report = DeploymentFidelityReport(
-            source_checkpoint_manifest=str(checkpoint.manifest_path),
+            source_checkpoint_manifest=str(checkpoint_manifest_path(arguments.generation, arguments.run_directory)),
             checkpoint_model_sha256=manifest.model_sha256,
-            checkpoint_onnx_sha256=checkpoint.inference_model_sha256,
+            checkpoint_onnx_sha256=manifest.inference_model_sha256,
             production_engine_sha256=file_sha256(arguments.engine),
             replay_store_sha256=arguments.replay_sha256,
             positions=arguments.positions,
             batch_size=arguments.batch_size,
-            framework_to_onnx=measure_fidelity(framework_outputs, onnx_outputs, legal_mask),
+            framework_to_onnx=(
+                None if framework_outputs is None else measure_fidelity(framework_outputs, onnx_outputs, legal_mask)
+            ),
             onnx_to_production_engine=measure_fidelity(onnx_outputs, engine_outputs, legal_mask),
-            framework_to_production_engine=measure_fidelity(framework_outputs, engine_outputs, legal_mask),
+            framework_to_production_engine=(
+                None if framework_outputs is None else measure_fidelity(framework_outputs, engine_outputs, legal_mask)
+            ),
         )
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         write_text_atomically(arguments.output, report.model_dump_json(indent=2) + '\n')
@@ -143,6 +155,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--positions', default=3_200, type=int)
     parser.add_argument('--batch-size', default=320, type=int)
     parser.add_argument('--holdout-fraction', default=0.02, type=float)
+    parser.add_argument('--onnx-only', action='store_true')
     namespace = parser.parse_args()
     if namespace.generation <= 0 or namespace.device_id < 0:
         raise ValueError('Generation must be positive and device ID must be nonnegative.')
@@ -161,6 +174,7 @@ def parse_arguments() -> Arguments:
         positions=namespace.positions,
         batch_size=namespace.batch_size,
         holdout_fraction=namespace.holdout_fraction,
+        onnx_only=namespace.onnx_only,
     )
 
 
