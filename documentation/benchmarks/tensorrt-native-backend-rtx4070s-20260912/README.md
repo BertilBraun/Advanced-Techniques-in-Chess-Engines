@@ -47,4 +47,19 @@ predict a 2.42x production-training gain. The controlled incremental result is 1
 candidate's TensorRT FP16 engine. A production INT8 run still requires a well-trained QAT model and
 a higher-resolution strength gate.
 
+## Progressive 12x128 QAT throughput
+
+The production-geometry validation used the deployment-phase 12x128 QAT model, 400 active roots,
+250 visits per root, `parallel_searches: 4`, one inference worker, and a fixed batch cap of 320. Ten
+measured batches followed three warm-up batches. TensorRT processed 1,000,000 simulations in 7.782
+seconds, or **128,508 simulations/s**, with an average inference batch of 318.38. This is 30.6% more
+search throughput than the 14x160 INT8 candidate's 98,397 simulations/s under the earlier matched
+native geometry.
+
+The forced progressive lifecycle separately exercised TorchScript bootstrap, pre-fold INT8 refits,
+the small-model fold, Stockfish evaluation, medium-model candidate training and fold, promotion,
+post-promotion INT8 refits and evaluation, checkpoint-safe stop, and same-run resume. The resumed
+run continued the promoted 14x160 model from generation 28 through generation 40 before a second
+checkpoint-safe stop. These short matches validate system behavior rather than chess strength.
+
 Raw machine-readable results are in [`raw/`](raw/).

@@ -1,0 +1,41 @@
+{
+  "builder_optimization_level": 5,
+  "templates": [
+    {
+      "model_id": "chess-cnn-scaled-post-12x128-fromto-int8",
+      "phase": "pre_fold",
+      "batch_size": 320,
+      "sha256": "31d4b0719c9e89ab71be6a56c04ac537556281ec2727cbca7182b9d1a90a334e"
+    },
+    {
+      "model_id": "chess-cnn-scaled-post-12x128-fromto-int8",
+      "phase": "deployment",
+      "batch_size": 320,
+      "sha256": "34143e448527ee2b03988c3226333d0bf17a6354d7867e8b5d8a94b5e2d9124a"
+    },
+    {
+      "model_id": "chess-cnn-scaled-post-12x128-fromto-int8",
+      "phase": "deployment",
+      "batch_size": 64,
+      "sha256": "cc19c3f165401268a83af350e2e2b9e941070eb61c82389a85c4b6f3bef3e367"
+    },
+    {
+      "model_id": "chess-cnn-scaled-post-14x160-fromto-int8",
+      "phase": "pre_fold",
+      "batch_size": 320,
+      "sha256": "40c9d086b6300f563c74f3a310d9d5181d26b360bfe81406325ac2affd4278cf"
+    },
+    {
+      "model_id": "chess-cnn-scaled-post-14x160-fromto-int8",
+      "phase": "deployment",
+      "batch_size": 320,
+      "sha256": "f6c083535365d3d6bb53487d0d4c33dd8ae5d69e33766b3f74d742275fcda52e"
+    },
+    {
+      "model_id": "chess-cnn-scaled-post-14x160-fromto-int8",
+      "phase": "deployment",
+      "batch_size": 64,
+      "sha256": "e89029562c798d5e9e6887bb83eccd2890343c66b5d8e82da04c1135822507c1"
+    }
+  ]
+}
