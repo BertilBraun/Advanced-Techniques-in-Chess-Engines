@@ -1,0 +1,16 @@
+diff --git a/py/tools/benchmark_self_play_search.py b/py/tools/benchmark_self_play_search.py
+--- a/py/tools/benchmark_self_play_search.py
++++ b/py/tools/benchmark_self_play_search.py
+@@ -86,6 +86,12 @@ class BenchmarkResult:
+     inference_model_positions: int
+     inference_average_batch_size: float
+     inference_batch_size_distribution: tuple[BatchSizeCount, ...]
++    tree_selection_nanoseconds: int
++    board_encoding_nanoseconds: int
++    result_processing_nanoseconds: int
++    tree_backup_nanoseconds: int
++    inference_wait_nanoseconds: int
++    inference_nanoseconds: int
+ 
+ 
+ def _checkpoint(arguments: Arguments) -> CheckpointReference:

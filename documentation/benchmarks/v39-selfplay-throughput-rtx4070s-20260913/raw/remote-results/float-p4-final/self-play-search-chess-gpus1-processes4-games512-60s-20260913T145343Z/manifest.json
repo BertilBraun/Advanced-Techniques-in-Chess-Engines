@@ -1,0 +1,29 @@
+{
+  "timestamp_utc": "20260913T145343Z",
+  "source_revision": "b6b446989dbe7be933189eab5dcf5ea0f6391a6d",
+  "game": "chess",
+  "model": {
+    "path": "/workspace/selfplay-throughput-v39/model_18.float.jit.pt",
+    "sha256": "1c8b5da29c58097a28d2e83af3f73a7c6ad6795a488a348620719165fa65219e"
+  },
+  "run_config": "/workspace/alphazero-engine-int8-validation/py/configs/production/vast-chess-8gpu-progressive-v39-int8.yaml",
+  "checkpoint_manifest": "/workspace/alphazero-engine-int8-validation/py/training_data/production/vast-chess-8gpu-progressive-v39-int8/checkpoint_18.json",
+  "topology": {
+    "gpu_count": 1,
+    "processes_per_gpu": 4,
+    "parallel_games_per_process": 512,
+    "total_parallel_games": 2048,
+    "pin_workers_to_cpus": false,
+    "cpus_per_process": 4
+  },
+  "workload": {
+    "generation": 18,
+    "warmup_batches": 2,
+    "duration_seconds": 60
+  },
+  "inference_overrides": {
+    "precision": null,
+    "memory_format": null,
+    "cudnn_benchmark": null
+  }
+}
