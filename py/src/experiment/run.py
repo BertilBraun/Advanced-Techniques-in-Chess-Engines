@@ -236,6 +236,7 @@ def _save_random_initial_checkpoint(
     auxiliary_heads: tuple[AuxiliaryHeadLayout, ...],
 ) -> None:
     training = experiment.training
+    torch.manual_seed(training.random_seed)
     model = create_model(training.initial_model.network, device, experiment.network_dimensions, auxiliary_heads)
     match training.trainer.quantization:
         case DisabledTrainingQuantization():
