@@ -16,7 +16,7 @@ training:
     learning_rate:
       kind: linear
       start_generation: 0
-      end_generation: 1000
+      end_generation: 1200
       start_value: 0.1
       end_value: 0.01
       rounding: none
