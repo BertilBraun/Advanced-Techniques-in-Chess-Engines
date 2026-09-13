@@ -515,7 +515,7 @@ def retain_progressive_candidate_checkpoints(run_path: Path, state: ProgressiveT
             continue
         for artifact in model_path.iterdir():
             if artifact.is_file() and artifact not in retained_paths:
-                if artifact.name.startswith(('checkpoint_', 'model_', 'optimizer_')):
+                if artifact.name.startswith(('checkpoint_', 'model_', 'optimizer_', 'qat_state_')):
                     artifact.unlink()
 
 
