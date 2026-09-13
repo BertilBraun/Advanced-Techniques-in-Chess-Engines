@@ -179,13 +179,13 @@ def test_v34_uses_the_primary_ladder_elo_candidate_start_policy() -> None:
     assert configuration.evaluation.openings.path == previous_configuration.evaluation.openings.path
 
 
-def test_v37_uses_one_short_warmup_and_twenty_minute_evaluations() -> None:
+def test_v38_uses_no_warmup_and_twenty_minute_evaluations() -> None:
     configuration = load_chess_experiment_configuration(
-        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-progressive-v37-int8.yaml'
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-progressive-v38-int8.yaml'
     )
 
     trainer = configuration.training.trainer
-    assert trainer.warmup_optimizer_steps == 1_000
+    assert trainer.warmup_optimizer_steps == 0
     assert trainer.quantization.kind == 'tensorrt_int8_qat'
     assert trainer.quantization.fold_after_optimizer_steps == 1_000
     assert trainer.quantization.deployment_learning_rate == 'inherit'

@@ -1,13 +1,13 @@
 extends: vast-chess-8gpu-progressive-v36-int8.yaml
 
 run:
-  run_name: vast-chess-8gpu-progressive-v37-int8
-  tensorboard_run_directory: vast-chess-8gpu-progressive-v37-int8
+  run_name: vast-chess-8gpu-progressive-v38-int8
+  tensorboard_run_directory: vast-chess-8gpu-progressive-v38-int8
 
 training:
-  save_path: py/training_data/production/vast-chess-8gpu-progressive-v37-int8
+  save_path: py/training_data/production/vast-chess-8gpu-progressive-v38-int8
   trainer:
-    warmup_optimizer_steps: 1000
+    warmup_optimizer_steps: 0
     quantization:
       kind: tensorrt_int8_qat
       fold_after_optimizer_steps: 1000
@@ -16,7 +16,7 @@ training:
       deployment_learning_rate: inherit
       deployment_warmup_optimizer_steps: 0
   limits:
-    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v37-int8.stop
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v38-int8.stop
 
 evaluation:
   cadence_seconds: 1200
