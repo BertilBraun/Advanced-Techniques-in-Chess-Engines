@@ -1,0 +1,54 @@
+extends: vast-chess-progressive-int8-lifecycle-smoke.yaml
+
+run:
+  run_name: vast-chess-progressive-int8-lifecycle-smoke-v6
+  tensorboard_run_directory: vast-chess-progressive-int8-lifecycle-smoke-v6
+
+training:
+  save_path: py/training_data/validation/vast-chess-progressive-int8-lifecycle-smoke-v6
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-progressive-int8-lifecycle-smoke-v6.stop
+  trainer:
+    quantization:
+      fold_after_optimizer_steps: 3
+  progressive_model_sizing:
+    candidate_start:
+      kind: elapsed
+      start_days: [0.004]
+    promotion:
+      warmup_quanta: 3
+
+evaluation:
+  definitions:
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 1
+    maximum_game_plies: 20
+    first_generation: 3
+    final_generation: null
+    search:
+      searches_per_move: 1
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: true
+          templates:
+          - kind: qat
+            model_id: chess-cnn-scaled-post-12x128-fromto-int8
+            phase: deployment
+            engine_path: /workspace/tensorrt/v36-int8-12x128-deployment-trained-eval64-template.engine
+          - kind: qat
+            model_id: chess-cnn-scaled-post-14x160-fromto-int8
+            phase: deployment
+            engine_path: /workspace/tensorrt/v36-int8-14x160-deployment-trained-eval64-template.engine
+        sdpa_backend: memory_efficient
