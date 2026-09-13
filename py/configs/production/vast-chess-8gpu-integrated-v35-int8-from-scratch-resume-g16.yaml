@@ -1,0 +1,7 @@
+extends: vast-chess-8gpu-integrated-v35-int8-from-scratch.yaml
+
+run:
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-integrated-v35-int8-from-scratch/checkpoint_16.json
+    generation: 16
