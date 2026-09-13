@@ -8,6 +8,7 @@ fi
 
 model=$1
 run_config=$2
+checkpoint_manifest=${CHECKPOINT_MANIFEST:-}
 script_directory=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source_root=${3:-$(git -C "${script_directory}" rev-parse --show-toplevel)}
 python_root="${source_root}/py"
@@ -25,6 +26,8 @@ parallel_searches=${PARALLEL_SEARCHES:-}
 inference_workers=${INFERENCE_WORKERS:-}
 inference_batch_size=${INFERENCE_BATCH_SIZE:-}
 outstanding_batches_per_worker=${OUTSTANDING_BATCHES_PER_WORKER:-}
+backend=${INFERENCE_BACKEND:-}
+tensorrt_template_engine=${TENSORRT_TEMPLATE_ENGINE:-}
 precision=${INFERENCE_PRECISION:-}
 memory_format=${INFERENCE_MEMORY_FORMAT:-}
 cudnn_benchmark=${CUDNN_BENCHMARK:-}
@@ -51,8 +54,13 @@ if [[ ! -f "${model}" || ! -f "${run_config}" ]]; then
     echo "The benchmark model and run configuration must exist."
     exit 1
 fi
+if [[ -n "${checkpoint_manifest}" && ! -f "${checkpoint_manifest}" ]]; then
+    echo "The checkpoint manifest must exist when CHECKPOINT_MANIFEST is set."
+    exit 1
+fi
 model=$(realpath "${model}")
 run_config=$(realpath "${run_config}")
+[[ -n "${checkpoint_manifest}" ]] && checkpoint_manifest=$(realpath "${checkpoint_manifest}")
 if [[ "$(nvidia-smi --query-gpu=index --format=csv,noheader,nounits | wc -l)" -lt "${gpu_count}" ]]; then
     echo "The requested GPU count is not visible."
     exit 1
@@ -79,6 +87,7 @@ jq -n \
     --arg model "$(realpath "${model}")" \
     --arg model_sha256 "$(sha256sum "${model}" | awk '{print $1}')" \
     --arg run_config "$(realpath "${run_config}")" \
+    --arg checkpoint_manifest "${checkpoint_manifest}" \
     --arg game "${game}" \
     --arg precision "${precision}" \
     --arg memory_format "${memory_format}" \
@@ -97,6 +106,7 @@ jq -n \
         game: $game,
         model: {path: $model, sha256: $model_sha256},
         run_config: $run_config,
+        checkpoint_manifest: (if $checkpoint_manifest == "" then null else $checkpoint_manifest end),
         topology: {
             gpu_count: $gpu_count,
             processes_per_gpu: $processes_per_gpu,
@@ -127,10 +137,13 @@ for ((device = 0; device < gpu_count; device++)); do
         worker_command=(taskset --cpu-list "${first_cpu}-${last_cpu}" "${worker_command[@]}")
         fi
         benchmark_overrides=()
+        [[ -n "${checkpoint_manifest}" ]] && benchmark_overrides+=(--checkpoint-manifest "${checkpoint_manifest}")
         [[ -n "${parallel_searches}" ]] && benchmark_overrides+=(--parallel-searches "${parallel_searches}")
         [[ -n "${inference_workers}" ]] && benchmark_overrides+=(--inference-workers "${inference_workers}")
         [[ -n "${inference_batch_size}" ]] && benchmark_overrides+=(--inference-batch-size "${inference_batch_size}")
         [[ -n "${outstanding_batches_per_worker}" ]] && benchmark_overrides+=(--outstanding-batches-per-worker "${outstanding_batches_per_worker}")
+        [[ -n "${backend}" ]] && benchmark_overrides+=(--backend "${backend}")
+        [[ -n "${tensorrt_template_engine}" ]] && benchmark_overrides+=(--tensorrt-template-engine "${tensorrt_template_engine}")
         [[ -n "${precision}" ]] && benchmark_overrides+=(--precision "${precision}")
         [[ -n "${memory_format}" ]] && benchmark_overrides+=(--memory-format "${memory_format}")
         if [[ "${cudnn_benchmark}" == "1" ]]; then
@@ -207,13 +220,23 @@ jq -s \
     | (. | map(.searches_completed) | add) as $searches
     | (. | map(.inference_model_calls) | add) as $calls
     | (. | map(.inference_model_positions) | add) as $positions
+    | (. | map(.completed_games) | add) as $games
+    | (. | map(.completed_positions) | add) as $completed_positions
     | {
         manifest: $manifest[0],
         measurement: {
             makespan_seconds: $makespan,
             searches_completed: $searches,
             searches_per_second: ($searches / $makespan),
-            completed_games: (map(.completed_games) | add),
+            completed_games: $games,
+            completed_positions: $completed_positions,
+            completed_positions_per_second: ($completed_positions / $makespan),
+            completed_game_bytes: (map(.completed_game_bytes) | add),
+            average_game_plies: (
+                if $games == 0 then 0
+                else (map(.average_game_plies * .completed_games) | add) / $games
+                end
+            ),
             search_batches: (map(.search_batches) | add)
         },
         inference: {
@@ -221,6 +244,14 @@ jq -s \
             model_calls: $calls,
             model_positions: $positions,
             average_batch_size: (if $calls == 0 then 0 else $positions / $calls end)
+        },
+        search_thread_nanoseconds_per_simulation: {
+            tree_selection: ((map(.tree_selection_nanoseconds) | add) / $searches),
+            board_encoding: ((map(.board_encoding_nanoseconds) | add) / $searches),
+            result_processing: ((map(.result_processing_nanoseconds) | add) / $searches),
+            tree_backup: ((map(.tree_backup_nanoseconds) | add) / $searches),
+            inference_wait: ((map(.inference_wait_nanoseconds) | add) / $searches),
+            inference: ((map(.inference_nanoseconds) | add) / $searches)
         },
         resources: {
             aggregate_process_cpu_percent: (map(.process_cpu_percent) | add),

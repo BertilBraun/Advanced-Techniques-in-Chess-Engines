@@ -15,6 +15,7 @@ from src.experiment.configuration import experiment_configuration_sha256, load_e
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.composition import create_game_implementation
 from src.games.go.configuration import GoExperimentConfiguration
+from src.self_play.completed_game import CompletedSelfPlayGame
 from src.self_play.configuration import InferenceMemoryFormat, InferencePrecision
 from src.self_play.worker import SelfPlayWorker
 from src.training.checkpoint import CheckpointReference
@@ -25,6 +26,7 @@ from src.util.hashing import file_sha256
 class Arguments:
     run_config: Path
     model: Path
+    checkpoint_manifest: Path | None
     device: int
     worker_id: int
     inference_device: Literal['cpu', 'cuda']
@@ -74,6 +76,9 @@ class BenchmarkResult:
     searches_completed: int
     searches_per_second: float
     completed_games: int
+    completed_positions: int
+    completed_game_bytes: int
+    average_game_plies: float
     process_cpu_percent: float
     peak_rss_mib: float
     inference_evaluations: int
@@ -81,9 +86,28 @@ class BenchmarkResult:
     inference_model_positions: int
     inference_average_batch_size: float
     inference_batch_size_distribution: tuple[BatchSizeCount, ...]
+    tree_selection_nanoseconds: int
+    board_encoding_nanoseconds: int
+    result_processing_nanoseconds: int
+    tree_backup_nanoseconds: int
+    inference_wait_nanoseconds: int
+    inference_nanoseconds: int
 
 
 def _checkpoint(arguments: Arguments) -> CheckpointReference:
+    if arguments.checkpoint_manifest is not None:
+        checkpoint = CheckpointReference.load_for_inference(
+            arguments.checkpoint_manifest.parent,
+            arguments.generation,
+        )
+        if checkpoint.manifest_path.resolve() != arguments.checkpoint_manifest.resolve():
+            raise ValueError('Checkpoint manifest path does not match the requested generation.')
+        return checkpoint.validated_copy(
+            update={
+                'inference_model_path': arguments.model.resolve(),
+                'inference_model_sha256': file_sha256(arguments.model),
+            }
+        )
     return CheckpointReference(
         generation=arguments.generation,
         manifest_path=arguments.model.with_suffix('.benchmark-manifest.json'),
@@ -180,7 +204,8 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
     experiment = experiment.validated_copy(update={'training': training.model_dump(mode='json')})
     game = create_game_implementation(experiment)
     with tempfile.TemporaryDirectory(prefix='self-play-search-benchmark-') as temporary_directory:
-        inbox = Path(temporary_directory)
+        inbox = Path(temporary_directory) / 'inbox'
+        inbox.mkdir()
         worker = SelfPlayWorker(
             game=game,
             parallel_game_count=arguments.games,
@@ -192,7 +217,7 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         for _ in range(arguments.warmup_batches):
             worker.run_batch()
         initial = worker.snapshot_statistics()
-        initial_files = len(tuple(inbox.iterdir()))
+        initial_files = frozenset(inbox.iterdir())
         _wait_for_start(arguments)
 
         process_started_at = time.process_time()
@@ -204,7 +229,11 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         elapsed_seconds = time.perf_counter() - started_at
         process_seconds = time.process_time() - process_started_at
         final = worker.snapshot_statistics()
-        completed_games = len(tuple(inbox.iterdir())) - initial_files
+        completed_paths = tuple(path for path in inbox.iterdir() if path not in initial_files)
+        completed_game_records = tuple(
+            CompletedSelfPlayGame.model_validate_json(path.read_text(encoding='utf-8')) for path in completed_paths
+        )
+        completed_game_bytes = sum(path.stat().st_size for path in completed_paths)
 
     searches_completed = _difference(final.completed_searches, initial.completed_searches)
     evaluations = _difference(final.inference.evaluations, initial.inference.evaluations)
@@ -245,7 +274,14 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         search_batches=search_batches,
         searches_completed=searches_completed,
         searches_per_second=searches_completed / elapsed_seconds,
-        completed_games=completed_games,
+        completed_games=len(completed_game_records),
+        completed_positions=sum(len(game.observations) for game in completed_game_records),
+        completed_game_bytes=completed_game_bytes,
+        average_game_plies=(
+            sum(len(game.action_ids) for game in completed_game_records) / len(completed_game_records)
+            if completed_game_records
+            else 0.0
+        ),
         process_cpu_percent=100.0 * process_seconds / elapsed_seconds,
         peak_rss_mib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
         inference_evaluations=evaluations,
@@ -253,6 +289,30 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
         inference_model_positions=model_positions,
         inference_average_batch_size=model_positions / model_calls if model_calls else 0.0,
         inference_batch_size_distribution=batch_sizes,
+        tree_selection_nanoseconds=_difference(
+            final.inference.treeSelectionNanoseconds,
+            initial.inference.treeSelectionNanoseconds,
+        ),
+        board_encoding_nanoseconds=_difference(
+            final.inference.boardEncodingNanoseconds,
+            initial.inference.boardEncodingNanoseconds,
+        ),
+        result_processing_nanoseconds=_difference(
+            final.inference.resultProcessingNanoseconds,
+            initial.inference.resultProcessingNanoseconds,
+        ),
+        tree_backup_nanoseconds=_difference(
+            final.inference.treeBackupNanoseconds,
+            initial.inference.treeBackupNanoseconds,
+        ),
+        inference_wait_nanoseconds=_difference(
+            final.inference.treeOwnerWaitNanoseconds,
+            initial.inference.treeOwnerWaitNanoseconds,
+        ),
+        inference_nanoseconds=_difference(
+            final.inference.inferenceNanoseconds,
+            initial.inference.inferenceNanoseconds,
+        ),
     )
 
 
@@ -260,6 +320,7 @@ def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser(description='Benchmark the current production self-play search path.')
     parser.add_argument('--run-config', required=True, type=Path)
     parser.add_argument('--model', required=True, type=Path)
+    parser.add_argument('--checkpoint-manifest', type=Path)
     parser.add_argument('--device', required=True, type=int)
     parser.add_argument('--worker-id', required=True, type=int)
     parser.add_argument('--inference-device', choices=('cpu', 'cuda'), default='cuda')
@@ -281,6 +342,7 @@ def parse_arguments() -> Arguments:
     arguments = Arguments(
         run_config=namespace.run_config,
         model=namespace.model,
+        checkpoint_manifest=namespace.checkpoint_manifest,
         device=namespace.device,
         worker_id=namespace.worker_id,
         inference_device=namespace.inference_device,
@@ -301,6 +363,8 @@ def parse_arguments() -> Arguments:
     )
     if not arguments.model.is_file():
         raise ValueError(f'Benchmark model does not exist: {arguments.model}')
+    if arguments.checkpoint_manifest is not None and not arguments.checkpoint_manifest.is_file():
+        raise ValueError(f'Checkpoint manifest does not exist: {arguments.checkpoint_manifest}')
     if arguments.tensorrt_template_engine is not None and not arguments.tensorrt_template_engine.is_file():
         raise ValueError(f'TensorRT template does not exist: {arguments.tensorrt_template_engine}')
     if arguments.device < 0 or arguments.worker_id < 0 or arguments.generation < 0 or arguments.warmup_batches < 0:
