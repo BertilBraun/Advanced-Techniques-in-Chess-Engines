@@ -265,6 +265,9 @@ class FakeGame:
         del device_id, checkpoint, parameters
         return self.search
 
+    def resolved_inference_model_path(self, checkpoint: CheckpointReference) -> Path:
+        return checkpoint.inference_model_path
+
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> ResolvedSelfPlayParameters:
         return parameters
 
