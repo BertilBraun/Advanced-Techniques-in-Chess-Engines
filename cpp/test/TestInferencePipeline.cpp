@@ -116,7 +116,8 @@ void testRepeatedModelRefresh(const std::filesystem::path &modelPath, const Infe
 #endif
     for (const auto refresh : range(REFRESH_COUNT)) {
         static_cast<void>(refresh);
-        runner.commitModelRefresh(runner.prepareModelRefresh(modelPath.string()));
+        runner.commitModelRefresh(
+            runner.prepareModelRefresh(modelPath.string(), InferenceBackend::TorchScript));
         input.fill_(1);
         runner.forwardInto(input, 3, output);
         require(output.outcomes[0][0].item<float>() == 1.0F,
@@ -147,12 +148,14 @@ void testRefreshedWeightsAreServed(const std::filesystem::path &servingModelPath
 #ifdef USE_CUDA
     const size_t captures = runner.graphCaptureCount();
 #endif
-    runner.commitModelRefresh(runner.prepareModelRefresh(silencedModelPath.string()));
+    runner.commitModelRefresh(
+        runner.prepareModelRefresh(silencedModelPath.string(), InferenceBackend::TorchScript));
     runner.forwardInto(input, 3, output);
     require(output.outcomes[0][0].item<float>() == 0.0F,
             "model refresh did not change the weights the runner serves");
 
-    runner.commitModelRefresh(runner.prepareModelRefresh(servingModelPath.string()));
+    runner.commitModelRefresh(
+        runner.prepareModelRefresh(servingModelPath.string(), InferenceBackend::TorchScript));
     runner.forwardInto(input, 3, output);
     require(output.outcomes[0][0].item<float>() == 1.0F,
             "model refresh did not restore the original weights");
@@ -193,7 +196,8 @@ void testDisabledGraphsRefreshWithoutPool(const std::filesystem::path &modelPath
     try {
         InferenceRunner runner(modelPath.string(), InferenceDevice::Cuda, 0, 4, true,
                                ChessGame::Encoding::inferenceDimensions());
-        runner.commitModelRefresh(runner.prepareModelRefresh(modelPath.string()));
+        runner.commitModelRefresh(
+            runner.prepareModelRefresh(modelPath.string(), InferenceBackend::TorchScript));
         require(runner.capturedGraphCount() == 0, "disabled inference graphs were captured anyway");
         require(!runner.graphPool().has_value(),
                 "disabled inference graphs still claimed a memory pool");
