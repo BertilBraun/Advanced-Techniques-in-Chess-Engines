@@ -208,6 +208,7 @@ def _seed_batch_norm_tensors_for_onnx_export(
             qualified_name = f'{module_name}.{tensor_name}'
             if qualified_name not in tensor_names:
                 continue
+            unique_sentinel = sentinel + (len(seeded_tensors) + 1) / 4096
             seeded_tensors.append(
                 _SeededBatchNormTensor(
                     name=qualified_name,
@@ -215,7 +216,7 @@ def _seed_batch_norm_tensors_for_onnx_export(
                     original_value=tensor.detach().clone(),
                 )
             )
-            tensor.fill_(sentinel)
+            tensor.fill_(unique_sentinel)
     seeded_names = frozenset(seeded_tensor.name for seeded_tensor in seeded_tensors)
     if seeded_names != tensor_names:
         missing_names = sorted(tensor_names - seeded_names)
