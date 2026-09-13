@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, JsonValue, model_serializer, model_validator
-from pydantic.functional_serializers import SerializerFunctionWrapHandler
 from src.self_play.parameters import (
     ParentValueFirstPlayUrgencyParameters,
     RandomOpeningStartParameters,
@@ -218,23 +217,26 @@ class BatchedInferenceParams(FrozenModel):
             case BatchedInferenceParams():
                 return configuration
 
-    @model_serializer(mode='wrap')
-    def omit_unset_execution_knobs(
-        self,
-        serialize: SerializerFunctionWrapHandler,
-    ) -> dict[str, JsonValue]:
+    @model_serializer
+    def omit_unset_execution_knobs(self) -> dict[str, JsonValue]:
         # A configuration that does not opt in must serialise, and therefore hash, exactly as it did
         # before these knobs existed, so no recorded experiment_configuration_sha256 moves.
-        payload = serialize(self)
-        if isinstance(self.backend, TorchScriptInferenceBackend):
-            payload.pop('backend', None)
-        if (
+        payload: dict[str, JsonValue] = {
+            'inference_workers': self.inference_workers,
+            'inference_batch_size': self.inference_batch_size,
+            'outstanding_batches_per_worker': self.outstanding_batches_per_worker,
+            'sdpa_backend': self.sdpa_backend.value,
+        }
+        if isinstance(self.backend, TensorRtInferenceBackend):
+            payload['backend'] = self.backend.model_dump(mode='json')
+        if not (
             self.precision is InferencePrecision.BFLOAT16
             and self.memory_format is InferenceMemoryFormat.CONTIGUOUS
             and not self.cudnn_benchmark
         ):
-            for key in ('precision', 'memory_format', 'cudnn_benchmark'):
-                payload.pop(key, None)
+            payload['precision'] = self.precision.value
+            payload['memory_format'] = self.memory_format.value
+            payload['cudnn_benchmark'] = self.cudnn_benchmark
         return payload
 
 
