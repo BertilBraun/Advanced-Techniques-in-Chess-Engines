@@ -119,6 +119,7 @@ POLICY_PLANE_AUXILIARY_HIDDEN_CHANNELS = 32
 CHESS_POLICY_PLANE_COUNT = 76
 SMALL_OUTPUT_INITIALIZATION_STD = 0.01
 ATTENTION_LINEAR_INITIALIZATION_STD = 0.02
+_TRUNCATED_NORMAL_STANDARD_DEVIATION_FACTOR = 0.8796256610342398
 
 
 class NetworkHeadParams(FrozenModel):
@@ -322,12 +323,21 @@ class Network(nn.Module):
         for module in self.modules():
             match module:
                 case nn.Conv2d() | nn.Linear():
-                    nn.init.kaiming_normal_(module.weight, nonlinearity='relu')
+                    match args:
+                        case NetworkParams(residual_block=ScaledPostActivationResidualBlockConfiguration()):
+                            _initialize_relu_truncated_normal(module)
+                        case _:
+                            nn.init.kaiming_normal_(module.weight, nonlinearity='relu')
                     if module.bias is not None:
                         nn.init.zeros_(module.bias)
         match args:
             case AttentionNetworkParams(num_layers=num_layers):
                 _initialize_attention_trunk(self.start_block, self.backbone, num_layers)
+            case NetworkParams(
+                num_layers=num_layers,
+                residual_block=ScaledPostActivationResidualBlockConfiguration(),
+            ):
+                _initialize_scaled_post_activation_fixup(self.backbone, num_layers)
             case NetworkParams():
                 pass
         _initialize_small_policy_output(self.policy_head, args.policy_head)
@@ -892,6 +902,34 @@ def _initialize_small_projection(module: nn.Module) -> None:
     nn.init.normal_(module.weight, std=SMALL_OUTPUT_INITIALIZATION_STD)
     if module.bias is not None:
         nn.init.zeros_(module.bias)
+
+
+def _initialize_relu_truncated_normal(module: nn.Conv2d | nn.Linear, scale: float = 1.0) -> None:
+    fan_in = module.weight[0].numel()
+    standard_deviation = math.sqrt(2.0 / fan_in) * scale
+    untruncated_standard_deviation = standard_deviation / _TRUNCATED_NORMAL_STANDARD_DEVIATION_FACTOR
+    nn.init.trunc_normal_(
+        module.weight,
+        mean=0.0,
+        std=untruncated_standard_deviation,
+        a=-2.0 * untruncated_standard_deviation,
+        b=2.0 * untruncated_standard_deviation,
+    )
+
+
+def _initialize_scaled_post_activation_fixup(backbone: nn.ModuleList, num_layers: int) -> None:
+    residual_input_scale = num_layers**-0.5
+    for block in backbone:
+        match block:
+            case ScaledPostActivationResBlock() | ScaledPostActivationGlobalPoolingResBlock():
+                first_convolution = block.conv_block1[0]
+                final_convolution = block.conv_block2[0]
+                assert isinstance(first_convolution, nn.Conv2d)
+                assert isinstance(final_convolution, nn.Conv2d)
+                _initialize_relu_truncated_normal(first_convolution, residual_input_scale)
+                nn.init.zeros_(final_convolution.weight)
+            case _:
+                raise AssertionError('Scaled post-activation networks must contain only supported residual blocks.')
 
 
 def _build_scalar_auxiliary_head(
