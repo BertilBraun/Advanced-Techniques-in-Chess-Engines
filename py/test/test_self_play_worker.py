@@ -11,6 +11,7 @@ import pytest
 pytest.importorskip('AlphaZeroCpp')
 
 from AlphaZeroCpp import GameSearchVisit
+from AlphaZeroCpp import InferenceBackend as NativeInferenceBackend
 from AlphaZeroCpp import SearchStopReason as NativeSearchStopReason
 from src.games.contracts import TerminalOracle, WdlTarget
 from src.games.implementation import GameImplementation
@@ -22,6 +23,7 @@ from src.self_play.completed_game import (
     SearchVisitCounts,
     TerminationReason,
 )
+from src.self_play.configuration import BatchedInferenceParams
 from src.self_play.parameters import (
     RandomOpeningStartParameters,
     ResolvedSelfPlayParameters,
@@ -168,8 +170,14 @@ class FakeSearch:
             simulations_completed=len(requests) * 3,
         )
 
-    def refresh_model(self, model_generation: int, model_path: str) -> None:
+    def refresh_model(
+        self,
+        model_generation: int,
+        model_path: str,
+        backend: NativeInferenceBackend,
+    ) -> None:
         assert Path(model_path).suffixes == ['.jit', '.pt']
+        assert backend is NativeInferenceBackend.TORCHSCRIPT
         self.generations.append(model_generation)
 
     def update_search_schedule(self, search_parameters: ResolvedSelfPlayParameters) -> bool:
@@ -206,9 +214,19 @@ class FakeTraining:
     random_seed: int = 5
 
 
+@dataclass(frozen=True)
+class FakeSelfPlayConfiguration:
+    inference: BatchedInferenceParams = BatchedInferenceParams(
+        inference_workers=1,
+        inference_batch_size=2,
+        outstanding_batches_per_worker=1,
+    )
+
+
 class FakeGame:
     training = FakeTraining()
     state = FakeState()
+    self_play_configuration = FakeSelfPlayConfiguration()
 
     def __init__(
         self,
