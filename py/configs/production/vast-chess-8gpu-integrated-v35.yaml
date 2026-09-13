@@ -35,6 +35,10 @@ chess:
     inference:
       backend:
         kind: tensorrt
-        template_engine_paths:
-        - /workspace/tensorrt/v35-small-fp16-template.engine
-        - /workspace/tensorrt/v35-medium-fp16-template.engine
+        templates:
+        - kind: float
+          model_id: chess-cnn-12x128-fromto
+          engine_path: /workspace/tensorrt/v35-small-fp16-template.engine
+        - kind: float
+          model_id: chess-cnn-14x160-fromto
+          engine_path: /workspace/tensorrt/v35-medium-fp16-template.engine

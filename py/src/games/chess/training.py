@@ -151,8 +151,7 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         search = ChessSelfPlaySearch(
             self.native_inference_configuration(
                 device_id,
-                checkpoint.inference_model_path,
-                checkpoint.generation,
+                checkpoint,
                 inference,
             ),
             self.native_search_parameters(parameters),

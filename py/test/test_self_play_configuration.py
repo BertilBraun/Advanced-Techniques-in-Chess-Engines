@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
-from src.self_play.configuration import BatchedInferenceParams, SdpaBackend, SelfPlaySearchParams
+from src.self_play.configuration import (
+    BatchedInferenceParams,
+    SdpaBackend,
+    SelfPlaySearchParams,
+    TensorRtFloatTemplate,
+    TensorRtInferenceBackend,
+    TensorRtQatTemplate,
+)
+from src.training.quantization.configuration import QatCheckpointPhase
 
 
 def _search_params_payload() -> dict[str, object]:
@@ -85,3 +93,51 @@ def test_existing_inference_configuration_preserves_automatic_dispatch() -> None
 
     assert configuration.sdpa_backend is SdpaBackend.AUTOMATIC
     assert configuration.model_dump(exclude_unset=True) == configuration.model_dump()
+
+
+def test_tensorrt_template_selection_is_model_and_qat_phase_specific() -> None:
+    backend = TensorRtInferenceBackend(
+        templates=(
+            TensorRtFloatTemplate(model_id='small', engine_path='small-float.engine'),
+            TensorRtQatTemplate(
+                model_id='small',
+                phase=QatCheckpointPhase.PRE_FOLD,
+                engine_path='small-pre-fold.engine',
+            ),
+            TensorRtQatTemplate(
+                model_id='small',
+                phase=QatCheckpointPhase.DEPLOYMENT,
+                engine_path='small-deployment.engine',
+            ),
+            TensorRtQatTemplate(
+                model_id='medium',
+                phase=QatCheckpointPhase.DEPLOYMENT,
+                engine_path='medium-deployment.engine',
+            ),
+        )
+    )
+
+    assert backend.template_engine_path('small', None).name == 'small-float.engine'
+    assert backend.template_engine_path('small', QatCheckpointPhase.PRE_FOLD).name == 'small-pre-fold.engine'
+    assert backend.template_engine_path('small', QatCheckpointPhase.DEPLOYMENT).name == 'small-deployment.engine'
+    assert backend.template_engine_path('medium', QatCheckpointPhase.DEPLOYMENT).name == 'medium-deployment.engine'
+    with pytest.raises(ValueError, match='medium.*pre_fold'):
+        backend.template_engine_path('medium', QatCheckpointPhase.PRE_FOLD)
+
+
+def test_tensorrt_template_identities_must_be_unique() -> None:
+    with pytest.raises(ValidationError, match='identities must be unique'):
+        TensorRtInferenceBackend(
+            templates=(
+                TensorRtQatTemplate(
+                    model_id='small',
+                    phase=QatCheckpointPhase.DEPLOYMENT,
+                    engine_path='first.engine',
+                ),
+                TensorRtQatTemplate(
+                    model_id='small',
+                    phase=QatCheckpointPhase.DEPLOYMENT,
+                    engine_path='second.engine',
+                ),
+            )
+        )

@@ -15,6 +15,7 @@ from src.self_play.parameters import (
     RestartStateStartParameters,
     ZeroFirstPlayUrgencyParameters,
 )
+from src.training.quantization.configuration import QatCheckpointPhase
 from src.util.frozen_model import FrozenModel
 from src.util.generation_schedule import (
     FloatGenerationSchedule,
@@ -46,10 +47,51 @@ class TorchScriptInferenceBackend(FrozenModel):
     kind: Literal['torchscript'] = 'torchscript'
 
 
+class TensorRtFloatTemplate(FrozenModel):
+    kind: Literal['float'] = 'float'
+    model_id: str
+    engine_path: Path
+
+
+class TensorRtQatTemplate(FrozenModel):
+    kind: Literal['qat'] = 'qat'
+    model_id: str
+    phase: QatCheckpointPhase
+    engine_path: Path
+
+
+TensorRtTemplate: TypeAlias = Annotated[
+    TensorRtFloatTemplate | TensorRtQatTemplate,
+    Field(discriminator='kind'),
+]
+
+
 class TensorRtInferenceBackend(FrozenModel):
     kind: Literal['tensorrt'] = 'tensorrt'
-    template_engine_paths: tuple[Path, ...] = Field(min_length=1)
+    templates: tuple[TensorRtTemplate, ...] = Field(min_length=1)
     bootstrap_with_torchscript: bool = False
+
+    @model_validator(mode='after')
+    def validate_templates(self) -> TensorRtInferenceBackend:
+        identities = tuple(
+            (template.model_id, None if isinstance(template, TensorRtFloatTemplate) else template.phase)
+            for template in self.templates
+        )
+        if len(set(identities)) != len(identities):
+            raise ValueError('TensorRT template model and phase identities must be unique.')
+        return self
+
+    def template_engine_path(self, model_id: str, qat_phase: QatCheckpointPhase | None) -> Path:
+        for template in self.templates:
+            match template, qat_phase:
+                case TensorRtFloatTemplate(model_id=template_model_id), None if template_model_id == model_id:
+                    return template.engine_path
+                case TensorRtQatTemplate(model_id=template_model_id, phase=phase), candidate_phase if (
+                    template_model_id == model_id and phase is candidate_phase
+                ):
+                    return template.engine_path
+        phase_name = 'float' if qat_phase is None else qat_phase.value
+        raise ValueError(f'No TensorRT template is configured for model {model_id} in phase {phase_name}.')
 
 
 InferenceBackendConfiguration: TypeAlias = Annotated[
