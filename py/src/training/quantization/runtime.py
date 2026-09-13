@@ -47,6 +47,13 @@ class RestoredQatModel:
     phase: QatCheckpointPhase
 
 
+@dataclass(frozen=True)
+class _SeededBatchNormTensor:
+    name: str
+    tensor: Tensor
+    original_value: Tensor
+
+
 def fixed_batch_example_states(states: Tensor, batch_size: int) -> Tensor:
     if states.shape[0] <= 0:
         raise ValueError('QAT deployment export requires at least one calibration position.')
@@ -171,23 +178,70 @@ def quantizers_disabled(model: Network) -> Iterator[None]:
                 quantizer.disable()
 
 
+@contextmanager
+def _seed_batch_norm_tensors_for_onnx_export(model: nn.Module) -> Iterator[tuple[_SeededBatchNormTensor, ...]]:
+    seeded_tensors: list[_SeededBatchNormTensor] = []
+    for module_name, module in model.named_modules():
+        if not isinstance(module, nn.BatchNorm2d):
+            continue
+        if module.weight is None or module.bias is None or module.running_mean is None or module.running_var is None:
+            raise ValueError('QAT ONNX export requires affine BatchNorm2d modules with tracked running statistics.')
+        named_tensors = (
+            ('weight', module.weight, 0.875),
+            ('bias', module.bias, 0.03125),
+            ('running_mean', module.running_mean, 0.0625),
+            ('running_var', module.running_var, 1.125),
+        )
+        for tensor_name, tensor, sentinel in named_tensors:
+            seeded_tensors.append(
+                _SeededBatchNormTensor(
+                    name=f'{module_name}.{tensor_name}',
+                    tensor=tensor,
+                    original_value=tensor.detach().clone(),
+                )
+            )
+            tensor.fill_(sentinel)
+    try:
+        yield tuple(seeded_tensors)
+    finally:
+        for seeded_tensor in seeded_tensors:
+            seeded_tensor.tensor.copy_(seeded_tensor.original_value)
+
+
+def _restore_exported_batch_norm_tensors(
+    exported: onnx.ModelProto,
+    seeded_tensors: tuple[_SeededBatchNormTensor, ...],
+) -> None:
+    initializers = {initializer.name: initializer for initializer in exported.graph.initializer}
+    for seeded_tensor in seeded_tensors:
+        initializer = initializers.get(seeded_tensor.name)
+        if initializer is None:
+            raise ValueError(f'QAT ONNX export omitted BatchNorm tensor {seeded_tensor.name}.')
+        restored = np.ascontiguousarray(seeded_tensor.original_value.detach().cpu().numpy())
+        initializer.CopyFrom(onnx.numpy_helper.from_array(restored, name=seeded_tensor.name))
+
+
 def export_qat_onnx(model: nn.Module, path: Path, example_states: Tensor) -> QatOnnxArtifact:
     temporary_path = path.with_name(f'.{path.name}.tmp')
     was_training = model.training
     model.eval()
-    with torch.inference_mode():
-        torch.onnx.export(
-            model,
-            (example_states,),
-            str(temporary_path),
-            input_names=('states',),
-            output_names=('policy_logits', 'wdl_probabilities'),
-            opset_version=20,
-            do_constant_folding=False,
-            dynamo=False,
-        )
-    model.train(was_training)
+    try:
+        with torch.inference_mode(), _seed_batch_norm_tensors_for_onnx_export(model) as seeded_tensors:
+            torch.onnx.export(
+                model,
+                (example_states,),
+                str(temporary_path),
+                input_names=('states',),
+                output_names=('policy_logits', 'wdl_probabilities'),
+                opset_version=20,
+                do_constant_folding=True,
+                dynamo=False,
+            )
+    finally:
+        model.train(was_training)
     exported = onnx.load(temporary_path)
+    _restore_exported_batch_norm_tensors(exported, seeded_tensors)
+    onnx.save(exported, temporary_path)
     onnx.checker.check_model(exported, full_check=True)
     quantize_linear_nodes = sum(node.op_type == 'QuantizeLinear' for node in exported.graph.node)
     dequantize_linear_nodes = sum(node.op_type == 'DequantizeLinear' for node in exported.graph.node)

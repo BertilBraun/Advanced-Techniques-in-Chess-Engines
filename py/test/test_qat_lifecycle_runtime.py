@@ -215,17 +215,23 @@ def test_qat_export_keeps_zero_and_nonzero_batch_norm_parameters(tmp_path: Path)
         batch_norm.bias.zero_()
     zero_path = tmp_path / 'zero.onnx'
     export_qat_onnx(model, zero_path, torch.randn((8, 8, 3, 3)))
+    assert torch.count_nonzero(batch_norm.bias) == 0
 
     with torch.no_grad():
         batch_norm.bias.fill_(0.03125)
     nonzero_path = tmp_path / 'nonzero.onnx'
     export_qat_onnx(model, nonzero_path, torch.randn((8, 8, 3, 3)))
 
-    zero_initializers = {initializer.name for initializer in onnx.load(zero_path).graph.initializer}
-    nonzero_initializers = {initializer.name for initializer in onnx.load(nonzero_path).graph.initializer}
+    zero_initializers = {initializer.name: initializer for initializer in onnx.load(zero_path).graph.initializer}
+    nonzero_initializers = {initializer.name: initializer for initializer in onnx.load(nonzero_path).graph.initializer}
 
-    assert zero_initializers == nonzero_initializers
+    assert zero_initializers.keys() == nonzero_initializers.keys()
     assert 'backbone.0.conv_block2.1.bias' in zero_initializers
+    assert np.count_nonzero(numpy_helper.to_array(zero_initializers['backbone.0.conv_block2.1.bias'])) == 0
+    assert np.allclose(
+        numpy_helper.to_array(nonzero_initializers['backbone.0.conv_block2.1.bias']),
+        0.03125,
+    )
 
 
 @pytest.mark.integration
