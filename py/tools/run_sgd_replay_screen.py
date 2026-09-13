@@ -90,6 +90,8 @@ class ScreenReport(FrozenModel):
     world_size: Literal[2] = 2
     gpu_ids: tuple[int, int]
     random_seed: int = Field(ge=0)
+    layers: int = Field(gt=0)
+    hidden_size: int = Field(gt=0)
     replay_store: Path
     replay_store_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     replay_experiment: Path
@@ -126,6 +128,8 @@ class Arguments:
     output: Path
     gpu_ids: tuple[int, int]
     random_seed: int
+    layers: int
+    hidden_size: int
     time_budget_seconds: float
     maximum_optimizer_steps: int
     held_out_positions: int
@@ -240,7 +244,11 @@ def run(arguments: Arguments) -> None:
             raise ValueError('Requested held-out positions exceed the fixed replay tail.')
         torch.manual_seed(arguments.random_seed)
         torch.cuda.manual_seed_all(arguments.random_seed)
-        model = Network(architecture(ScreenCell.POST_SCALED_QAT), device, CHESS_NETWORK_DIMENSIONS)
+        model = Network(
+            architecture(ScreenCell.POST_SCALED_QAT, arguments.layers, arguments.hidden_size),
+            device,
+            CHESS_NETWORK_DIMENSIONS,
+        )
         calibration_generator = np.random.default_rng(arguments.random_seed + 10_000_000)
         calibration_indices = np.sort(calibration_generator.choice(split.training_row_count, size=256, replace=False))
         model = configure_qat(model, _calibration_loop(opened, calibration_indices, device))
@@ -399,6 +407,8 @@ def run(arguments: Arguments) -> None:
                 arm=arguments.arm,
                 gpu_ids=arguments.gpu_ids,
                 random_seed=arguments.random_seed,
+                layers=arguments.layers,
+                hidden_size=arguments.hidden_size,
                 replay_store=arguments.replay_store.resolve(),
                 replay_store_sha256=arguments.replay_sha256,
                 replay_experiment=arguments.replay_experiment.resolve(),
@@ -435,6 +445,8 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--gpu-ids', required=True, nargs=2, type=int)
     parser.add_argument('--random-seed', default=20260913, type=int)
+    parser.add_argument('--layers', default=12, type=int)
+    parser.add_argument('--hidden-size', default=128, type=int)
     parser.add_argument('--time-budget-seconds', default=1_200.0, type=float)
     parser.add_argument('--maximum-optimizer-steps', default=12_000, type=int)
     parser.add_argument('--held-out-positions', default=4_096, type=int)
@@ -445,6 +457,8 @@ def parse_arguments() -> Arguments:
         raise ValueError('The arm requires two distinct nonnegative GPU IDs.')
     if namespace.time_budget_seconds <= 0 or namespace.maximum_optimizer_steps <= 1_000:
         raise ValueError('The screen must run past the fold with a positive time budget.')
+    if namespace.layers <= 0 or namespace.hidden_size <= 0:
+        raise ValueError('The screen architecture dimensions must be positive.')
     return Arguments(
         arm=ScreenArm(namespace.arm),
         replay_store=namespace.replay_store,
@@ -453,6 +467,8 @@ def parse_arguments() -> Arguments:
         output=namespace.output,
         gpu_ids=gpu_ids,
         random_seed=namespace.random_seed,
+        layers=namespace.layers,
+        hidden_size=namespace.hidden_size,
         time_budget_seconds=namespace.time_budget_seconds,
         maximum_optimizer_steps=namespace.maximum_optimizer_steps,
         held_out_positions=namespace.held_out_positions,

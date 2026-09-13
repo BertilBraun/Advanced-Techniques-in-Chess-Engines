@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-if [[ $# -ne 4 ]]; then
-    echo "Usage: sgd_replay_screen_arm.sh ARM GPU_0 GPU_1 OUTPUT" >&2
+if [[ $# -ne 6 ]]; then
+    echo "Usage: sgd_replay_screen_arm.sh ARM GPU_0 GPU_1 OUTPUT LAYERS HIDDEN_SIZE" >&2
     exit 2
 fi
 
@@ -11,6 +11,8 @@ arm="$1"
 gpu_0="$2"
 gpu_1="$3"
 output="$4"
+layers="$5"
+hidden_size="$6"
 repository="/workspace/sgd-replay-screen-source"
 virtual_environment="/workspace/alphazero-engine-venv"
 replay_root="/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34"
@@ -34,6 +36,8 @@ exec "${virtual_environment}/bin/torchrun" --standalone --nproc-per-node=2 \
     --output "${output}" \
     --gpu-ids "${gpu_0}" "${gpu_1}" \
     --random-seed 20260913 \
+    --layers "${layers}" \
+    --hidden-size "${hidden_size}" \
     --time-budget-seconds 1200 \
     --maximum-optimizer-steps 12000 \
     --held-out-positions 4096 \
