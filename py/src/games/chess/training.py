@@ -4,7 +4,6 @@ import time
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-import torch
 from src.evaluation.configuration import EvaluationSearchConfiguration, EvaluationTreeSearchOverrides
 from src.games.chess.configuration import ChessExperimentConfiguration, ChessSelfPlayConfiguration
 from src.games.chess.contract import CHESS_STATE_CONTRACT, ChessPosition, ChessStateContract
@@ -111,16 +110,10 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         tree_search: EvaluationTreeSearchOverrides | None = None,
     ) -> ChessSelfPlaySearch:
         match configuration.inference.backend, self.configuration.training.trainer.quantization:
-            case TensorRtInferenceBackend(), TensorRtInt8QatConfiguration() as quantization_configuration:
+            case TensorRtInferenceBackend(), TensorRtInt8QatConfiguration():
                 checkpoint = qat_inference_checkpoint_for_batch(
                     checkpoint,
                     configuration.inference.inference_batch_size,
-                    self.configuration.training.initial_model.network,
-                    self.configuration.training.trainer.optimizer,
-                    quantization_configuration,
-                    torch.device('cuda', device_id),
-                    self.network_dimensions,
-                    self.target_layout.auxiliary_heads,
                 )
             case _:
                 pass
