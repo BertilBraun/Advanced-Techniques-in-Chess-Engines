@@ -326,12 +326,14 @@ def trainer_rank_main(
 
 def warmup_scaled_learning_rate(
     base_learning_rate: float,
+    start_learning_rate: float,
     warmup_optimizer_steps: int,
     completed_optimizer_steps: int,
 ) -> float:
     if warmup_optimizer_steps <= 0 or completed_optimizer_steps >= warmup_optimizer_steps:
         return base_learning_rate
-    return base_learning_rate * (completed_optimizer_steps + 1) / warmup_optimizer_steps
+    progress = (completed_optimizer_steps + 1) / warmup_optimizer_steps
+    return start_learning_rate + (base_learning_rate - start_learning_rate) * progress
 
 
 def qat_phase_learning_rate(
@@ -363,6 +365,7 @@ def _train_batches(
     source_generation: int,
     precision: TrainingPrecision,
     base_learning_rate: float,
+    warmup_start_learning_rate: float,
     warmup_optimizer_steps: int,
     completed_optimizer_steps: int,
     replay_prefetch_depth: int,
@@ -383,6 +386,7 @@ def _train_batches(
         for batch_index, batch in enumerate(prefetched_batches):
             learning_rate = warmup_scaled_learning_rate(
                 base_learning_rate,
+                warmup_start_learning_rate,
                 warmup_optimizer_steps,
                 completed_optimizer_steps + batch_index,
             )
@@ -606,6 +610,7 @@ def train_rank_quantum(
     )
     warmup = qat_phase_warmup_progress(
         configuration.training.trainer.warmup_optimizer_steps,
+        configuration.training.trainer.warmup_start_learning_rate,
         configuration.training.trainer.quantization,
         runtime.qat_state,
         command.source_progress.completed_optimizer_steps,
@@ -627,6 +632,7 @@ def train_rank_quantum(
             runtime.qat_state,
             command.source_progress.model_generation,
         ),
+        warmup_start_learning_rate=warmup.start_learning_rate,
         warmup_optimizer_steps=warmup.warmup_optimizer_steps,
         completed_optimizer_steps=warmup.completed_optimizer_steps,
         replay_prefetch_depth=configuration.training.trainer.replay_prefetch_depth,

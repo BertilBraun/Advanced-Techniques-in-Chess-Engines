@@ -20,6 +20,7 @@ class TensorRtInt8QatConfiguration(FrozenModel):
     recalibration_interval_generations: int = Field(default=1, gt=0)
     deployment_learning_rate: FloatGenerationSchedule | Literal['inherit']
     deployment_warmup_optimizer_steps: int = Field(ge=0)
+    deployment_warmup_start_learning_rate: float = Field(default=0.0, ge=0.0)
 
     @model_validator(mode='after')
     def validate_deployment_learning_rate(self) -> TensorRtInt8QatConfiguration:
@@ -52,10 +53,12 @@ class QatStateIdentity(FrozenModel):
 class LearningRateWarmupProgress:
     warmup_optimizer_steps: int
     completed_optimizer_steps: int
+    start_learning_rate: float
 
 
 def qat_phase_warmup_progress(
     initial_warmup_optimizer_steps: int,
+    initial_warmup_start_learning_rate: float,
     quantization: DisabledTrainingQuantization | TensorRtInt8QatConfiguration,
     qat_state: QatStateIdentity | None,
     completed_optimizer_steps: int,
@@ -63,18 +66,28 @@ def qat_phase_warmup_progress(
     match quantization:
         case DisabledTrainingQuantization():
             assert qat_state is None
-            return LearningRateWarmupProgress(initial_warmup_optimizer_steps, completed_optimizer_steps)
+            return LearningRateWarmupProgress(
+                initial_warmup_optimizer_steps,
+                completed_optimizer_steps,
+                initial_warmup_start_learning_rate,
+            )
         case TensorRtInt8QatConfiguration(
             fold_after_optimizer_steps=fold_after_optimizer_steps,
             deployment_warmup_optimizer_steps=deployment_warmup_optimizer_steps,
+            deployment_warmup_start_learning_rate=deployment_warmup_start_learning_rate,
         ):
             assert qat_state is not None
             if qat_state.phase is QatCheckpointPhase.PRE_FOLD:
-                return LearningRateWarmupProgress(initial_warmup_optimizer_steps, completed_optimizer_steps)
+                return LearningRateWarmupProgress(
+                    initial_warmup_optimizer_steps,
+                    completed_optimizer_steps,
+                    initial_warmup_start_learning_rate,
+                )
             assert completed_optimizer_steps >= fold_after_optimizer_steps
             return LearningRateWarmupProgress(
                 deployment_warmup_optimizer_steps,
                 completed_optimizer_steps - fold_after_optimizer_steps,
+                deployment_warmup_start_learning_rate,
             )
 
 

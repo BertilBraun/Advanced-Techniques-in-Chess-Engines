@@ -57,6 +57,7 @@ def test_qat_fold_starts_an_independent_deployment_warmup(
         fold_after_optimizer_steps=5_000,
         deployment_learning_rate='inherit',
         deployment_warmup_optimizer_steps=5_000,
+        deployment_warmup_start_learning_rate=0.002,
     )
     state = QatStateIdentity(
         phase=phase,
@@ -65,7 +66,8 @@ def test_qat_fold_starts_an_independent_deployment_warmup(
         sha256='0' * 64,
     )
 
-    progress = qat_phase_warmup_progress(5_000, configuration, state, completed_optimizer_steps)
+    progress = qat_phase_warmup_progress(5_000, 0.001, configuration, state, completed_optimizer_steps)
 
     assert progress.warmup_optimizer_steps == 5_000
     assert progress.completed_optimizer_steps == expected_completed_steps
+    assert progress.start_learning_rate == (0.001 if phase is QatCheckpointPhase.PRE_FOLD else 0.002)

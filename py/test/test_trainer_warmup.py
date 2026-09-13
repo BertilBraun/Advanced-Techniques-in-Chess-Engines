@@ -28,7 +28,7 @@ def test_warmup_scales_learning_rate_linearly_until_the_configured_step(
     completed_optimizer_steps: int,
     expected: float,
 ) -> None:
-    scaled = warmup_scaled_learning_rate(0.005, warmup_optimizer_steps, completed_optimizer_steps)
+    scaled = warmup_scaled_learning_rate(0.005, 0.0, warmup_optimizer_steps, completed_optimizer_steps)
 
     assert scaled == pytest.approx(expected)
 
@@ -66,7 +66,7 @@ def test_qat_deployment_learning_rate_replaces_prefold_warmup_after_optimizer_re
     )
     phase_rate = qat_phase_learning_rate(0.1, configuration, state, model_generation)
 
-    actual = warmup_scaled_learning_rate(phase_rate, 1_000, completed_optimizer_steps)
+    actual = warmup_scaled_learning_rate(phase_rate, 0.0, 1_000, completed_optimizer_steps)
 
     assert actual == pytest.approx(expected)
 
@@ -90,6 +90,7 @@ def test_qat_fold_starts_an_independent_deployment_warmup(
         fold_after_optimizer_steps=5_000,
         deployment_learning_rate='inherit',
         deployment_warmup_optimizer_steps=5_000,
+        deployment_warmup_start_learning_rate=0.002,
     )
     state = QatStateIdentity(
         phase=phase,
@@ -98,10 +99,21 @@ def test_qat_fold_starts_an_independent_deployment_warmup(
         sha256='0' * 64,
     )
 
-    progress = qat_phase_warmup_progress(5_000, configuration, state, completed_optimizer_steps)
+    progress = qat_phase_warmup_progress(5_000, 0.001, configuration, state, completed_optimizer_steps)
 
     assert progress.warmup_optimizer_steps == expected_warmup_steps
     assert progress.completed_optimizer_steps == expected_completed_steps
+    assert progress.start_learning_rate == (0.001 if phase is QatCheckpointPhase.PRE_FOLD else 0.002)
+
+
+def test_warmup_uses_a_nonzero_learning_rate_floor() -> None:
+    first = warmup_scaled_learning_rate(0.1, 0.001, 5_000, 0)
+    halfway = warmup_scaled_learning_rate(0.1, 0.001, 5_000, 2_499)
+    final = warmup_scaled_learning_rate(0.1, 0.001, 5_000, 4_999)
+
+    assert first == pytest.approx(0.001 + 0.099 / 5_000)
+    assert halfway == pytest.approx(0.0505)
+    assert final == pytest.approx(0.1)
 
 
 def test_inherited_deployment_learning_rate_preserves_the_session_rate() -> None:

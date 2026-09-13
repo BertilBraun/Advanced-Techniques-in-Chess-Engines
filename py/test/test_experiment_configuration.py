@@ -195,6 +195,22 @@ def test_v38_uses_no_warmup_and_twenty_minute_evaluations() -> None:
     assert configuration.training.initial_model.model_id == 'chess-cnn-scaled-post-12x128-fromto-int8'
 
 
+def test_v39_uses_floor_based_warmups_around_the_qat_fold() -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-progressive-v39-int8.yaml'
+    )
+
+    trainer = configuration.training.trainer
+    assert trainer.warmup_optimizer_steps == 5_000
+    assert trainer.warmup_start_learning_rate == pytest.approx(0.001)
+    assert trainer.quantization.kind == 'tensorrt_int8_qat'
+    assert trainer.quantization.fold_after_optimizer_steps == 10_000
+    assert trainer.quantization.deployment_learning_rate == 'inherit'
+    assert trainer.quantization.deployment_warmup_optimizer_steps == 5_000
+    assert trainer.quantization.deployment_warmup_start_learning_rate == pytest.approx(0.001)
+    assert configuration.evaluation.cadence_seconds == 1_200
+
+
 def test_v34_ema_fix_resume_uses_the_stopped_checkpoint() -> None:
     configuration = load_chess_experiment_configuration(
         REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-ema-fix.yaml'
