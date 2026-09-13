@@ -18,6 +18,8 @@ def build_template(
     channels: int,
     rows: int,
     columns: int,
+    optimization_level: int,
+    timing_cache_path: Path | None,
 ) -> None:
     onnx_path = output_path.with_suffix('.temporary.onnx')
     onnx_path.unlink(missing_ok=True)
@@ -35,13 +37,21 @@ def build_template(
             raise ValueError(f'TensorRT ONNX parsing failed: {errors}')
         configuration = builder.create_builder_config()
         configuration.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, WORKSPACE_BYTES)
-        configuration.builder_optimization_level = 5
+        configuration.builder_optimization_level = optimization_level
         configuration.set_flag(trt.BuilderFlag.FP16)
         configuration.set_flag(trt.BuilderFlag.REFIT)
+        timing_cache = (
+            b'' if timing_cache_path is None or not timing_cache_path.exists() else timing_cache_path.read_bytes()
+        )
+        cache = configuration.create_timing_cache(timing_cache)
+        if not configuration.set_timing_cache(cache, False):
+            raise ValueError('TensorRT rejected the serialized timing cache.')
         serialized = builder.build_serialized_network(network, configuration)
         if serialized is None:
             raise ValueError('TensorRT template build failed')
         write_bytes_atomically(output_path, bytes(serialized))
+        if timing_cache_path is not None:
+            write_bytes_atomically(timing_cache_path, bytes(configuration.get_timing_cache().serialize()))
     finally:
         onnx_path.unlink(missing_ok=True)
 
@@ -54,6 +64,8 @@ def main() -> None:
     parser.add_argument('--channels', type=int, default=52)
     parser.add_argument('--rows', type=int, default=8)
     parser.add_argument('--columns', type=int, default=8)
+    parser.add_argument('--optimization-level', type=int, default=5, choices=range(0, 6))
+    parser.add_argument('--timing-cache', type=Path)
     arguments = parser.parse_args()
     build_template(
         arguments.model,
@@ -62,6 +74,8 @@ def main() -> None:
         arguments.channels,
         arguments.rows,
         arguments.columns,
+        arguments.optimization_level,
+        arguments.timing_cache,
     )
 
 
