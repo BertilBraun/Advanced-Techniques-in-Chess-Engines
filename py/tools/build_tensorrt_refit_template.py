@@ -4,11 +4,24 @@ import argparse
 import shutil
 from pathlib import Path
 
+import onnx
 import tensorrt as trt
 from src.util.atomic_file import write_bytes_atomically
 from tools.publish_tensorrt_engine import export_onnx
 
 WORKSPACE_BYTES = 4 * 1024**3
+
+
+def _mark_onnx_weights_refittable(network: trt.INetworkDefinition, onnx_path: Path) -> int:
+    model = onnx.load(onnx_path, load_external_data=False)
+    candidate_names = {initializer.name for initializer in model.graph.initializer}
+    candidate_names.update(
+        output_name for node in model.graph.node if node.op_type == 'Constant' for output_name in node.output
+    )
+    marked = sum(network.mark_weights_refittable(name) for name in sorted(candidate_names))
+    if marked == 0:
+        raise ValueError('TensorRT did not recognize any ONNX weights as individually refittable.')
+    return marked
 
 
 def build_template(
@@ -35,11 +48,12 @@ def build_template(
         if not parser.parse_from_file(str(onnx_path)):
             errors = tuple(str(parser.get_error(index)) for index in range(parser.num_errors))
             raise ValueError(f'TensorRT ONNX parsing failed: {errors}')
+        _mark_onnx_weights_refittable(network, onnx_path)
         configuration = builder.create_builder_config()
         configuration.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, WORKSPACE_BYTES)
         configuration.builder_optimization_level = optimization_level
         configuration.set_flag(trt.BuilderFlag.FP16)
-        configuration.set_flag(trt.BuilderFlag.REFIT)
+        configuration.set_flag(trt.BuilderFlag.REFIT_INDIVIDUAL)
         timing_cache = (
             b'' if timing_cache_path is None or not timing_cache_path.exists() else timing_cache_path.read_bytes()
         )
