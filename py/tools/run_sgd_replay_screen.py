@@ -49,18 +49,21 @@ class ScreenArm(str, Enum):
     V35_CONTROL = 'v35_control'
     LR_004_WARM_2000 = 'lr_004_warm_2000'
     LR_006_WARM_3000 = 'lr_006_warm_3000'
+    LR_006_WARM_3000_MOMENTUM = 'lr_006_warm_3000_momentum'
 
 
 @dataclass(frozen=True)
 class ArmSchedule:
     deployment_learning_rate: float
     deployment_warmup_steps: int
+    nesterov: bool
 
 
 ARM_SCHEDULES = {
-    ScreenArm.V35_CONTROL: ArmSchedule(0.02, 0),
-    ScreenArm.LR_004_WARM_2000: ArmSchedule(0.04, 2_000),
-    ScreenArm.LR_006_WARM_3000: ArmSchedule(0.06, 3_000),
+    ScreenArm.V35_CONTROL: ArmSchedule(0.02, 0, True),
+    ScreenArm.LR_004_WARM_2000: ArmSchedule(0.04, 2_000, True),
+    ScreenArm.LR_006_WARM_3000: ArmSchedule(0.06, 3_000, True),
+    ScreenArm.LR_006_WARM_3000_MOMENTUM: ArmSchedule(0.06, 3_000, False),
 }
 
 
@@ -252,13 +255,17 @@ def run(arguments: Arguments) -> None:
         calibration_generator = np.random.default_rng(arguments.random_seed + 10_000_000)
         calibration_indices = np.sort(calibration_generator.choice(split.training_row_count, size=256, replace=False))
         model = configure_qat(model, _calibration_loop(opened, calibration_indices, device))
-        optimizer_configuration = SgdOptimizerConfiguration(momentum=0.9, weight_decay=0.0001, nesterov=True)
+        schedule = ARM_SCHEDULES[arguments.arm]
+        optimizer_configuration = SgdOptimizerConfiguration(
+            momentum=0.9,
+            weight_decay=0.0001,
+            nesterov=schedule.nesterov,
+        )
         optimizer = create_optimizer(model, optimizer_configuration)
         distributed_model = DistributedDataParallel(
             DistributedTrainingModel(model), device_ids=[device_id], broadcast_buffers=False
         )
         objective = distillation_objective()
-        schedule = ARM_SCHEDULES[arguments.arm]
         arguments.output.mkdir(parents=True, exist_ok=True)
         if rank == 0:
             initial_state_sha256 = _save_state(model, arguments.output / 'initial-state.pt')
