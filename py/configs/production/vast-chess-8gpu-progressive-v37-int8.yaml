@@ -15,9 +15,8 @@ training:
       recalibration_interval_generations: 1
       deployment_learning_rate: inherit
       deployment_warmup_optimizer_steps: 0
-  lifecycle:
-    limits:
-      manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v37-int8.stop
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v37-int8.stop
 
 evaluation:
   cadence_seconds: 1200
