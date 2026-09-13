@@ -14,6 +14,20 @@ from src.training.quantization.runtime import (
     fixed_batch_example_states,
     fold_scaled_post_activation_batch_norm,
 )
+from torch import nn
+
+
+def _seed_refittable_batch_norm_parameters(model: Network) -> None:
+    with torch.no_grad():
+        for module in model.modules():
+            if not isinstance(module, nn.BatchNorm2d):
+                continue
+            if module.weight is None or module.bias is None:
+                raise ValueError('TensorRT QAT template export requires affine BatchNorm parameters.')
+            module.weight.fill_(0.875)
+            module.bias.fill_(0.03125)
+            module.running_mean.fill_(0.0625)
+            module.running_var.fill_(1.125)
 
 
 def export_template(
@@ -38,6 +52,7 @@ def export_template(
 
     torch.manual_seed(configuration.training.random_seed)
     model = Network(matching_models[0].network, device, configuration.network_dimensions).to(device)
+    _seed_refittable_batch_norm_parameters(model)
     calibration_states = torch.randint(
         0,
         2,
