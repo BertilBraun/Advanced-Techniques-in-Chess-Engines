@@ -20,7 +20,8 @@ tool loads the manifest, verifies every recorded SHA-256, copies all four artifa
 checkpoint persistence code, rewrites paths relative to the destination, and refuses an existing non-matching seed:
 
 ```bash
-/workspace/alphazero-engine-venv/bin/python py/tools/copy_checkpoint.py \
+cd /workspace/chess-run-source/v35-code-v42-g0-ab/py
+/workspace/alphazero-engine-venv/bin/python -m tools.copy_checkpoint \
   --source-manifest /workspace/alphazero-engine-int8-validation/py/training_data/production/vast-chess-8gpu-fixed-medium-v42-int8/checkpoint_0.json \
   --generation 0 \
   --destination /workspace/controlled-initializations/v42-generation-0
