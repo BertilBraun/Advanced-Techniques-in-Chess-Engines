@@ -21,7 +21,7 @@ class WeightsOnlyResumeConfiguration(FrozenModel):
 class CheckpointResumeConfiguration(FrozenModel):
     mode: Literal['checkpoint']
     checkpoint_manifest_path: str
-    generation: int = Field(gt=0)
+    generation: int = Field(ge=0)
 
 
 class RandomInitializationResumeConfiguration(FrozenModel):
