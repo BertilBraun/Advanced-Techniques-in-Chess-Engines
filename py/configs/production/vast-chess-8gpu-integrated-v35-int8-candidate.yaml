@@ -15,6 +15,7 @@ training:
       fold_after_optimizer_steps: 1000
       calibration_positions: 256
       recalibration_interval_generations: 1
+      deployment_warmup_optimizer_steps: 0
       deployment_learning_rate:
         kind: linear
         start_generation: 2

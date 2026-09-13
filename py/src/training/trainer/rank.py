@@ -36,6 +36,7 @@ from src.training.quantization import (
     QatCheckpointPhase,
     QatStateIdentity,
     TensorRtInt8QatConfiguration,
+    qat_phase_warmup_progress,
 )
 from src.training.quantization.checkpoint import load_qat_model_and_optimizer, save_qat_model_and_optimizer
 from src.training.quantization.runtime import (
@@ -345,7 +346,7 @@ def qat_phase_learning_rate(
             return base_learning_rate
         case TensorRtInt8QatConfiguration(deployment_learning_rate=deployment_learning_rate):
             assert qat_state is not None
-            if qat_state.phase is QatCheckpointPhase.DEPLOYMENT:
+            if qat_state.phase is QatCheckpointPhase.DEPLOYMENT and deployment_learning_rate != 'inherit':
                 return deployment_learning_rate.value_at(model_generation)
             return base_learning_rate
 
@@ -600,6 +601,12 @@ def train_rank_quantum(
         sampling=configuration.training.lifecycle.replay.sampling,
         pin_memory=uses_cuda,
     )
+    warmup = qat_phase_warmup_progress(
+        configuration.training.trainer.warmup_optimizer_steps,
+        configuration.training.trainer.quantization,
+        runtime.qat_state,
+        command.source_progress.completed_optimizer_steps,
+    )
     training_result = _train_batches(
         loader,
         runtime.distributed_model,
@@ -617,8 +624,8 @@ def train_rank_quantum(
             runtime.qat_state,
             command.source_progress.model_generation,
         ),
-        warmup_optimizer_steps=configuration.training.trainer.warmup_optimizer_steps,
-        completed_optimizer_steps=command.source_progress.completed_optimizer_steps,
+        warmup_optimizer_steps=warmup.warmup_optimizer_steps,
+        completed_optimizer_steps=warmup.completed_optimizer_steps,
         replay_prefetch_depth=configuration.training.trainer.replay_prefetch_depth,
         gradient_probe_interval_steps=configuration.training.trainer.gradient_probe_interval_steps,
     )
