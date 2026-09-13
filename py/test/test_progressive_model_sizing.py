@@ -23,6 +23,7 @@ from src.training.network import (
     GoPointPassPolicyHeadConfiguration,
     NetworkDefinition,
     NetworkParams,
+    ScaledPostActivationResidualBlockConfiguration,
 )
 from src.training.progressive import (
     CompletedCandidateTraining,
@@ -35,9 +36,10 @@ from src.training.progressive import (
     TotalLossEmaPromotionConfiguration,
     retain_progressive_candidate_checkpoints,
 )
+from src.training.quantization.configuration import QatCheckpointPhase, QatStateIdentity, TensorRtInt8QatConfiguration
 from src.training.session import ProgressiveTrainingSession
 from src.training.targets import TrainingTargetLayout
-from src.training.trainer import TrainerGroup
+from src.training.trainer import TrainerGroup, TrainingQuantumResult
 from src.training.trainer.contracts import TrainerStartup
 from src.util.atomic_file import write_text_atomically
 from test_helpers.checkpoints import checkpoint_reference
@@ -459,8 +461,28 @@ def test_publication_relabels_private_candidate_generation_atomically(tmp_path: 
 
 def test_candidate_retention_keeps_only_exact_restart_state(tmp_path: Path) -> None:
     store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration())
-    retained = _checkpoint(tmp_path, 'small', 2)
-    obsolete = _checkpoint(tmp_path, 'small', 1)
+    retained_qat_path = tmp_path / 'models' / 'small' / 'qat_state_2.pt'
+    obsolete_qat_path = tmp_path / 'models' / 'small' / 'qat_state_1.pt'
+    retained = _checkpoint(tmp_path, 'small', 2).model_copy(
+        update={
+            'qat_state': QatStateIdentity(
+                phase=QatCheckpointPhase.DEPLOYMENT,
+                completed_optimizer_steps=1_000,
+                path=retained_qat_path,
+                sha256='2' * 64,
+            )
+        }
+    )
+    obsolete = _checkpoint(tmp_path, 'small', 1).model_copy(
+        update={
+            'qat_state': QatStateIdentity(
+                phase=QatCheckpointPhase.PRE_FOLD,
+                completed_optimizer_steps=500,
+                path=obsolete_qat_path,
+                sha256='1' * 64,
+            )
+        }
+    )
     for checkpoint in (retained, obsolete):
         checkpoint.manifest_path.parent.mkdir(parents=True, exist_ok=True)
         for path in (
@@ -468,6 +490,7 @@ def test_candidate_retention_keeps_only_exact_restart_state(tmp_path: Path) -> N
             checkpoint.model_path,
             checkpoint.optimizer_path,
             checkpoint.inference_model_path,
+            checkpoint.qat_state.path if checkpoint.qat_state is not None else checkpoint.manifest_path,
         ):
             path.write_bytes(b'x')
     store.initialize_candidate('small', 8, retained)
@@ -481,11 +504,13 @@ def test_candidate_retention_keeps_only_exact_restart_state(tmp_path: Path) -> N
             retained.model_path,
             retained.optimizer_path,
             retained.inference_model_path,
+            retained_qat_path,
         )
     )
     assert not obsolete.manifest_path.exists()
     assert not obsolete.model_path.exists()
     assert not obsolete.optimizer_path.exists()
+    assert not obsolete_qat_path.exists()
     assert not obsolete.inference_model_path.exists()
 
 
@@ -498,6 +523,12 @@ class _RecordingTrainerGroup:
 
     def close(self) -> None:
         self.closed = True
+
+
+@dataclass(frozen=True)
+class _FoldTrainingResult:
+    completed_optimizer_steps: int
+    checkpoint: CheckpointReference
 
 
 def test_progressive_trainer_groups_remain_alive_across_quanta(tmp_path: Path) -> None:
@@ -540,6 +571,74 @@ def test_progressive_trainer_groups_remain_alive_across_quanta(tmp_path: Path) -
     session.close()
     assert all(trainer.closed for trainer in created)
     assert session.trainers == {}
+
+
+def test_progressive_qat_restarts_only_the_model_crossing_its_fold_boundary(tmp_path: Path) -> None:
+    loaded = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    scaled_small = _network(8).model_copy(
+        update={
+            'residual_block': ScaledPostActivationResidualBlockConfiguration(
+                branch_scale=0.5,
+                activation_cap=6.0,
+            )
+        }
+    )
+    scaled_medium = scaled_small.model_copy(update={'hidden_size': 16})
+    progressive = _configuration().model_copy(
+        update={
+            'models': (
+                ProgressiveModelDefinition(model_id='small', network=scaled_small),
+                ProgressiveModelDefinition(model_id='medium', network=scaled_medium),
+            )
+        }
+    )
+    configuration = loaded.model_copy(
+        update={
+            'training': loaded.training.model_copy(
+                update={
+                    'save_path': str(tmp_path),
+                    'progressive_model_sizing': progressive,
+                    'trainer': loaded.training.trainer.model_copy(
+                        update={
+                            'quantization': TensorRtInt8QatConfiguration(
+                                fold_after_optimizer_steps=500,
+                                calibration_positions=256,
+                                recalibration_interval_generations=1,
+                                deployment_learning_rate='inherit',
+                                deployment_warmup_optimizer_steps=500,
+                            )
+                        }
+                    ),
+                }
+            )
+        }
+    )
+    created: list[_RecordingTrainerGroup] = []
+
+    def trainer_group_factory(
+        experiment: ExperimentConfiguration,
+        game: GameImplementation,
+        startup: TrainerStartup,
+    ) -> TrainerGroup:
+        trainer = _RecordingTrainerGroup(experiment, game, startup)
+        created.append(trainer)
+        return cast(TrainerGroup, trainer)
+
+    session = ProgressiveTrainingSession(configuration, cast(GameImplementation, object()), trainer_group_factory)
+    original = session._trainer_group('small', scaled_small, tmp_path / 'models' / 'small', 0)
+    result = _FoldTrainingResult(completed_optimizer_steps=500, checkpoint=_checkpoint(tmp_path, 'small', 1))
+
+    session._restart_trainer_after_qat_fold(
+        'small',
+        scaled_small,
+        tmp_path / 'models' / 'small',
+        cast(TrainingQuantumResult, result),
+    )
+
+    assert cast(_RecordingTrainerGroup, original).closed
+    replacement = cast(_RecordingTrainerGroup, session.trainers['small'])
+    assert replacement.startup.starting_generation == 1
+    assert len(created) == 2
 
 
 def test_progressive_learning_rate_uses_catchup_until_promotion(tmp_path: Path) -> None:

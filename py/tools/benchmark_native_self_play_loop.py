@@ -9,7 +9,7 @@ from pathlib import Path
 
 import AlphaZeroCpp as native
 import torch
-from src.self_play.configuration import TensorRtInferenceBackend
+from src.self_play.configuration import TensorRtFloatTemplate, TensorRtInferenceBackend
 from src.self_play.native_configuration import resolved_inference_model_path
 
 
@@ -170,12 +170,15 @@ def run(arguments: LoopArguments, model_path: Path) -> dict:
         'tensorrt': native.InferenceBackend.TENSORRT,
     }[arguments.inference_backend]
     if arguments.inference_backend == 'tensorrt' and arguments.tensorrt_template_engine is not None:
-        backend_configuration = TensorRtInferenceBackend(template_engine_paths=(arguments.tensorrt_template_engine,))
-        model_path = resolved_inference_model_path(model_path, backend_configuration, 1)
+        model_id = 'benchmark'
+        backend_configuration = TensorRtInferenceBackend(
+            templates=(TensorRtFloatTemplate(model_id=model_id, engine_path=arguments.tensorrt_template_engine),)
+        )
+        model_path = resolved_inference_model_path(model_path, backend_configuration, 1, model_id, None)
         refresh_model = (
             None
             if arguments.refresh_model is None
-            else resolved_inference_model_path(arguments.refresh_model, backend_configuration, 2)
+            else resolved_inference_model_path(arguments.refresh_model, backend_configuration, 2, model_id, None)
         )
     else:
         refresh_model = arguments.refresh_model
