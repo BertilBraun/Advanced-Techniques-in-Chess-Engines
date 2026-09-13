@@ -171,6 +171,27 @@ def quantizers_disabled(model: Network) -> Iterator[None]:
                 quantizer.disable()
 
 
+def _materialize_aliased_state_tensors(model: nn.Module, exported: onnx.ModelProto) -> None:
+    state_names = {name.removeprefix('_orig_mod.') for name in model.state_dict()}
+    resolved_tensors = {initializer.name: initializer for initializer in exported.graph.initializer}
+    aliased_nodes: list[onnx.NodeProto] = []
+    for node in exported.graph.node:
+        if node.op_type != 'Identity' or len(node.input) != 1 or len(node.output) != 1:
+            continue
+        output_name = node.output[0]
+        source = resolved_tensors.get(node.input[0])
+        if output_name not in state_names or source is None:
+            continue
+        materialized = onnx.TensorProto()
+        materialized.CopyFrom(source)
+        materialized.name = output_name
+        exported.graph.initializer.append(materialized)
+        resolved_tensors[output_name] = materialized
+        aliased_nodes.append(node)
+    for node in aliased_nodes:
+        exported.graph.node.remove(node)
+
+
 def export_qat_onnx(model: nn.Module, path: Path, example_states: Tensor) -> QatOnnxArtifact:
     temporary_path = path.with_name(f'.{path.name}.tmp')
     was_training = model.training
@@ -188,13 +209,15 @@ def export_qat_onnx(model: nn.Module, path: Path, example_states: Tensor) -> Qat
         )
     model.train(was_training)
     exported = onnx.load(temporary_path)
+    _materialize_aliased_state_tensors(model, exported)
     onnx.checker.check_model(exported, full_check=True)
     quantize_linear_nodes = sum(node.op_type == 'QuantizeLinear' for node in exported.graph.node)
     dequantize_linear_nodes = sum(node.op_type == 'DequantizeLinear' for node in exported.graph.node)
     if quantize_linear_nodes == 0 or dequantize_linear_nodes == 0:
         temporary_path.unlink()
         raise ValueError('QAT ONNX export contains no explicit Q/DQ nodes.')
-    temporary_path.replace(path)
+    write_bytes_atomically(path, exported.SerializeToString())
+    temporary_path.unlink()
     return QatOnnxArtifact(
         path=path,
         sha256=file_sha256(path),

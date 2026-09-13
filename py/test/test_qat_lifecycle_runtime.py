@@ -206,6 +206,34 @@ def test_folded_qat_export_contains_explicit_quantization(tmp_path: Path) -> Non
 
 
 @pytest.mark.integration
+def test_qat_export_materializes_equal_state_tensors_without_changing_graph(tmp_path: Path) -> None:
+    model = configure_qat(_network(), _calibrate)
+    batch_norm = model.backbone[1].conv_block2[1]
+    assert isinstance(batch_norm, nn.BatchNorm2d)
+    assert batch_norm.bias is not None
+    with torch.no_grad():
+        batch_norm.bias.zero_()
+    equal_path = tmp_path / 'equal.onnx'
+    export_qat_onnx(model, equal_path, torch.randn((8, 8, 3, 3)))
+
+    with torch.no_grad():
+        batch_norm.bias.fill_(0.03125)
+    distinct_path = tmp_path / 'distinct.onnx'
+    export_qat_onnx(model, distinct_path, torch.randn((8, 8, 3, 3)))
+
+    equal_export = onnx.load(equal_path)
+    distinct_export = onnx.load(distinct_path)
+    expected_bias_name = 'backbone.1.conv_block2.1.bias'
+    assert {initializer.name for initializer in equal_export.graph.initializer} == {
+        initializer.name for initializer in distinct_export.graph.initializer
+    }
+    assert expected_bias_name in {initializer.name for initializer in equal_export.graph.initializer}
+    assert tuple(
+        (node.op_type, node.name, tuple(node.input), tuple(node.output)) for node in equal_export.graph.node
+    ) == tuple((node.op_type, node.name, tuple(node.input), tuple(node.output)) for node in distinct_export.graph.node)
+
+
+@pytest.mark.integration
 def test_deployment_qat_checkpoint_round_trip(tmp_path: Path) -> None:
     model = configure_qat(_network(), _calibrate)
     pre_fold_state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 999)
