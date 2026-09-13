@@ -52,7 +52,6 @@ def export_template(
 
     torch.manual_seed(configuration.training.random_seed)
     model = Network(matching_models[0].network, device, configuration.network_dimensions).to(device)
-    _seed_refittable_batch_norm_parameters(model)
     calibration_states = torch.randint(
         0,
         2,
@@ -70,6 +69,7 @@ def export_template(
         candidate(calibration_states)
 
     model = configure_qat(model, calibrate)
+    _seed_refittable_batch_norm_parameters(model)
     if phase is QatCheckpointPhase.DEPLOYMENT:
         fold_scaled_post_activation_batch_norm(model)
     example_states = fixed_batch_example_states(calibration_states, batch_size)
