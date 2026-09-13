@@ -1,0 +1,14 @@
+extends: vast-chess-progressive-int8-lifecycle-smoke.yaml
+
+run:
+  run_name: vast-chess-progressive-int8-lifecycle-smoke-v4
+  tensorboard_run_directory: vast-chess-progressive-int8-lifecycle-smoke-v4
+
+training:
+  save_path: py/training_data/validation/vast-chess-progressive-int8-lifecycle-smoke-v4
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-progressive-int8-lifecycle-smoke-v4.stop
+  progressive_model_sizing:
+    candidate_start:
+      kind: elapsed
+      start_days: [0.0025]
