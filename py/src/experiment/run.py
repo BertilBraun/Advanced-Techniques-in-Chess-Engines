@@ -246,9 +246,7 @@ def _save_random_initial_checkpoint(
                 0,
                 output_path,
                 _bootstrap_probe_states(experiment),
-                bootstrap_policy_prior_target_top3_mass=(
-                    training.trainer.bootstrap_policy_prior_target_top3_mass
-                ),
+                bootstrap_policy_prior_target_top3_mass=(training.trainer.bootstrap_policy_prior_target_top3_mass),
             )
         case TensorRtInt8QatConfiguration(calibration_positions=calibration_positions):
             game = create_game_implementation(experiment)
@@ -278,9 +276,7 @@ def _save_random_initial_checkpoint(
                 qat_state,
                 fixed_batch_example_states(calibration_states, inference_batch_size),
                 bootstrap_probe_states,
-                bootstrap_policy_prior_target_top3_mass=(
-                    training.trainer.bootstrap_policy_prior_target_top3_mass
-                ),
+                bootstrap_policy_prior_target_top3_mass=(training.trainer.bootstrap_policy_prior_target_top3_mass),
             )
 
 
@@ -324,9 +320,7 @@ def _prepare_initial_checkpoint(
                     0,
                     output_path,
                     _bootstrap_probe_states(experiment),
-                    bootstrap_policy_prior_target_top3_mass=(
-                        training.trainer.bootstrap_policy_prior_target_top3_mass
-                    ),
+                    bootstrap_policy_prior_target_top3_mass=(training.trainer.bootstrap_policy_prior_target_top3_mass),
                 )
         case RandomInitializationResumeConfiguration():
             if checkpoint_path.exists() and not manifest_path.exists():

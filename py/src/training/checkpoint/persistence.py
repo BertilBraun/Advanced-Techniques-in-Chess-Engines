@@ -26,6 +26,7 @@ from src.training.configuration import (
     SgdOptimizerConfiguration,
 )
 from src.training.network import (
+    BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
     InferenceNetwork,
     Network,
     NetworkConfiguration,
