@@ -18,3 +18,25 @@ training:
       device_cycle: [2, 3]
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-v43-init-screen-kaiming-sharp-gpu23.stop
+
+chess:
+  self_play:
+    inference:
+      backend:
+        templates:
+        - kind: qat
+          model_id: chess-cnn-scaled-post-12x128-fromto-int8
+          phase: pre_fold
+          engine_path: /workspace/tensorrt/v43-kaiming-screen-prefold-template.engine
+        - kind: qat
+          model_id: chess-cnn-scaled-post-12x128-fromto-int8
+          phase: deployment
+          engine_path: /workspace/tensorrt/v36-int8-12x128-deployment-trained-template.engine
+        - kind: qat
+          model_id: chess-cnn-scaled-post-14x160-fromto-int8
+          phase: pre_fold
+          engine_path: /workspace/tensorrt/v36-int8-14x160-prefold-production-template.engine
+        - kind: qat
+          model_id: chess-cnn-scaled-post-14x160-fromto-int8
+          phase: deployment
+          engine_path: /workspace/tensorrt/v36-int8-14x160-deployment-trained-template.engine
