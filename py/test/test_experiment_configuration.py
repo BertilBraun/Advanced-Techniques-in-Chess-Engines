@@ -211,6 +211,35 @@ def test_v39_uses_floor_based_warmups_around_the_qat_fold() -> None:
     assert configuration.evaluation.cadence_seconds == 1_200
 
 
+def test_v44_combines_progressive_sizing_with_the_v35_training_recipe() -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-progressive-v44-v35-recipe-int8.yaml'
+    )
+
+    training = configuration.training
+    trainer = training.trainer
+    quantization = trainer.quantization
+    assert configuration.run.resume.mode == 'random_initialization'
+    assert training.progressive_model_sizing.is_progressive
+    assert tuple(model.network.num_layers for model in training.progressive_model_sizing.models) == (12, 14)
+    assert tuple(model.network.hidden_size for model in training.progressive_model_sizing.models) == (128, 160)
+    assert training.progressive_model_sizing.promotion.candidate_catchup_learning_rate == pytest.approx(0.1)
+    assert trainer.learning_rate.value_at(0) == pytest.approx(0.1)
+    assert trainer.learning_rate.value_at(1000) == pytest.approx(0.01)
+    assert trainer.warmup_optimizer_steps == 1_000
+    assert trainer.warmup_start_learning_rate == pytest.approx(0.0)
+    assert quantization.kind == 'tensorrt_int8_qat'
+    assert quantization.fold_after_optimizer_steps == 1_000
+    assert quantization.calibration_positions == 256
+    assert quantization.recalibration_interval_generations == 1
+    assert quantization.deployment_learning_rate.value_at(2) == pytest.approx(0.02)
+    assert quantization.deployment_learning_rate.value_at(1000) == pytest.approx(0.01)
+    assert quantization.deployment_warmup_optimizer_steps == 0
+    assert training.lifecycle.credit.replay_ratio == pytest.approx(6.25)
+    assert training.lifecycle.replay.maximum_capacity == 15_000_000
+    assert configuration.evaluation.cadence_seconds == 1_200
+
+
 def test_v34_ema_fix_resume_uses_the_stopped_checkpoint() -> None:
     configuration = load_chess_experiment_configuration(
         REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-ema-fix.yaml'

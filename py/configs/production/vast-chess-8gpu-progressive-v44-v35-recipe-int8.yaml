@@ -1,0 +1,45 @@
+extends: vast-chess-8gpu-progressive-v43-katago-init-int8-r3.yaml
+
+run:
+  run_name: vast-chess-8gpu-progressive-v44-v35-recipe-int8
+  tensorboard_run_directory: vast-chess-8gpu-progressive-v44-v35-recipe-int8
+  resume:
+    mode: random_initialization
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-progressive-v44-v35-recipe-int8
+  trainer:
+    learning_rate:
+      kind: linear
+      start_generation: 0
+      end_generation: 1000
+      start_value: 0.1
+      end_value: 0.01
+      rounding: none
+    warmup_optimizer_steps: 1000
+    warmup_start_learning_rate: 0.0
+    quantization:
+      kind: tensorrt_int8_qat
+      fold_after_optimizer_steps: 1000
+      calibration_positions: 256
+      recalibration_interval_generations: 1
+      deployment_learning_rate:
+        kind: linear
+        start_generation: 2
+        end_generation: 1000
+        start_value: 0.02
+        end_value: 0.01
+        rounding: none
+      deployment_warmup_optimizer_steps: 0
+      deployment_warmup_start_learning_rate: 0.0
+  lifecycle:
+    credit:
+      replay_ratio: 6.25
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v44-v35-recipe-int8.stop
+  progressive_model_sizing:
+    promotion:
+      candidate_catchup_learning_rate: 0.1
+
+evaluation:
+  cadence_seconds: 1200
