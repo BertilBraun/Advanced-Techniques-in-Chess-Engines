@@ -456,6 +456,13 @@ def calibrate_bootstrap_policy_prior(
 ) -> BootstrapPolicyPriorCalibration:
     subset_logits = _policy_prior_subset_logits(_probe_policy_logits(inference_model, probe_states))
     initial_shape = _policy_prior_shape(subset_logits)
+    if float(subset_logits.std()) == 0.0:
+        return BootstrapPolicyPriorCalibration(
+            initial_shape=initial_shape,
+            calibrated_shape=initial_shape,
+            applied_scale=1.0,
+            target_top3_mass=target_top3_mass,
+        )
     # Scaling the final projection's weight and bias scales the logits exactly, so the scale search
     # runs on the cached probe logits instead of re-running the network.
     applied_scale = _search_policy_prior_scale(subset_logits, target_top3_mass)
@@ -881,7 +888,11 @@ def _initialize_small_policy_output(module: nn.Module, configuration: PolicyHead
             assert isinstance(module, ChessFromToAttentionPolicyHead), (
                 'The from-to attention policy configuration must build a from-to attention head.'
             )
-            projections = (module.query_projection, module.promotion_projection)
+            for projection in (module.query_projection, module.promotion_projection):
+                nn.init.zeros_(projection.weight)
+                if projection.bias is not None:
+                    nn.init.zeros_(projection.bias)
+            return
         case DensePolicyHeadConfiguration(bottleneck_rank=bottleneck_rank):
             assert isinstance(module, nn.Sequential), 'The dense policy configuration must build a sequential head.'
             projections = (module[-1],) if bottleneck_rank is None else (module[-2], module[-1])

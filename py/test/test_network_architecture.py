@@ -19,6 +19,8 @@ from src.training.network import (
     AttentionEncoderBlock,
     AttentionNetworkParams,
     Chess76PlaneDirectPolicyHeadConfiguration,
+    ChessFromToAttentionPolicyHead,
+    ChessFromToAttentionPolicyHeadConfiguration,
     DensePolicyHeadConfiguration,
     DisabledResidualContext,
     GlobalPoolingBias,
@@ -467,6 +469,34 @@ def test_head_output_layers_use_small_initialization() -> None:
     length_output = network.auxiliary_head_modules[1][-1]
     assert isinstance(length_output, nn.Linear)
     assert float(length_output.weight.std()) == pytest.approx(0.01, rel=0.5)
+
+
+def test_from_to_policy_head_starts_with_uniform_logits() -> None:
+    network = Network(
+        NetworkParams(
+            num_layers=1,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=ChessFromToAttentionPolicyHeadConfiguration(key_size=16),
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+    )
+
+    assert isinstance(network.policy_head, ChessFromToAttentionPolicyHead)
+    policy_logits, _ = network.logit_forward(torch.randn((2, CHESS_NETWORK_DIMENSIONS.channels, 8, 8)))
+    assert torch.equal(policy_logits, torch.zeros_like(policy_logits))
+    assert torch.count_nonzero(network.policy_head.query_projection.weight).item() == 0
+    assert torch.count_nonzero(network.policy_head.promotion_projection.weight).item() == 0
+
+    calibration = calibrate_bootstrap_policy_prior(
+        _fused_export(network),
+        bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS),
+    )
+    assert calibration.applied_scale == 1.0
+    assert calibration.initial_shape == calibration.calibrated_shape
+    assert calibration.calibrated_shape.top1_mass == pytest.approx(1.0 / 32.0)
+    assert calibration.calibrated_shape.top3_mass == pytest.approx(3.0 / 32.0)
 
 
 def test_attention_trunk_normalizes_tokens_before_spatial_output() -> None:
