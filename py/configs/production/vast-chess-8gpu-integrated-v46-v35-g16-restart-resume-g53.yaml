@@ -9,4 +9,4 @@ run:
 training:
   limits:
     maximum_wall_time_seconds: null
-    minimum_free_disk_gib: 10.0
+    minimum_free_disk_gib: 5.0
