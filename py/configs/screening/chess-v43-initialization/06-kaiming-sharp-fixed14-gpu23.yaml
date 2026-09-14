@@ -1,0 +1,30 @@
+extends: 01-kaiming-sharp-gpu23.yaml
+
+run:
+  run_name: vast-chess-v43-training-screen-kaiming-fixed14-gpu23
+  tensorboard_run_directory: vast-chess-v43-training-screen-kaiming-fixed14-gpu23
+
+training:
+  save_path: py/training_data/screening/chess-v43-training/kaiming-fixed14-gpu23
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-v43-training-screen-kaiming-fixed14-gpu23.stop
+  progressive_model_sizing:
+    kind: fixed
+    model:
+      model_id: chess-cnn-scaled-post-14x160-fromto-int8
+      network:
+        kind: convolutional
+        num_layers: 14
+        hidden_size: 160
+        residual_block:
+          kind: scaled_post_activation
+          branch_scale: 0.2672612419124244
+          activation_cap: 6.0
+        residual_context:
+          kind: global_pooling
+          placement: every_second_block
+        policy_head:
+          kind: chess_from_to_attention_v1
+          key_size: 128
+        num_value_channels: 2
+        value_fc_size: 48
