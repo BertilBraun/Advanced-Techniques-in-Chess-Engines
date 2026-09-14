@@ -1,0 +1,7 @@
+extends: vast-chess-8gpu-integrated-v46-v35-g16-restart-resume-g53.yaml
+
+run:
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-integrated-v46-v35-g16-restart/checkpoint_55.json
+    generation: 55
