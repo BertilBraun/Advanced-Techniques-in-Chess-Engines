@@ -211,9 +211,9 @@ def test_v39_uses_floor_based_warmups_around_the_qat_fold() -> None:
     assert configuration.evaluation.cadence_seconds == 1_200
 
 
-def test_v44_combines_progressive_sizing_with_the_v35_training_recipe() -> None:
+def test_v44_uses_screened_fold_and_deployment_learning_rate() -> None:
     configuration = load_chess_experiment_configuration(
-        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-progressive-v44-v35-recipe-int8.yaml'
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-progressive-v44-fold3000-lr008-int8.yaml'
     )
 
     training = configuration.training
@@ -229,12 +229,13 @@ def test_v44_combines_progressive_sizing_with_the_v35_training_recipe() -> None:
     assert trainer.warmup_optimizer_steps == 1_000
     assert trainer.warmup_start_learning_rate == pytest.approx(0.0)
     assert quantization.kind == 'tensorrt_int8_qat'
-    assert quantization.fold_after_optimizer_steps == 1_000
+    assert quantization.fold_after_optimizer_steps == 3_000
     assert quantization.calibration_positions == 256
     assert quantization.recalibration_interval_generations == 1
-    assert quantization.deployment_learning_rate.value_at(2) == pytest.approx(0.02)
+    assert quantization.deployment_learning_rate.value_at(2) == pytest.approx(0.08)
     assert quantization.deployment_learning_rate.value_at(1000) == pytest.approx(0.01)
-    assert quantization.deployment_warmup_optimizer_steps == 0
+    assert quantization.deployment_warmup_optimizer_steps == 500
+    assert quantization.deployment_warmup_start_learning_rate == pytest.approx(0.02)
     assert training.lifecycle.credit.replay_ratio == pytest.approx(6.25)
     assert training.lifecycle.replay.maximum_capacity == 15_000_000
     assert configuration.evaluation.cadence_seconds == 1_200
