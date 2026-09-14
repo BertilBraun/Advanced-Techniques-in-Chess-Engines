@@ -72,6 +72,8 @@ import sys
 from pathlib import Path
 
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
+from src.games.chess.configuration import ChessExperimentConfiguration
+from src.self_play.configuration import TensorRtInferenceBackend
 
 experiment = load_experiment_configuration(Path(sys.argv[1]).resolve())
 training = experiment.training
@@ -84,6 +86,18 @@ print(f'STOP_FILE={training.limits.manual_stop_file}')
 print(f'RUNTIME_IMAGE={experiment.run.environment.runtime_image}')
 print(f'OPEN_FILE_SOFT_LIMIT={experiment.run.environment.minimum_open_file_soft_limit}')
 print(f'CONFIGURATION_SHA256={experiment_configuration_sha256(experiment)}')
+match experiment:
+    case ChessExperimentConfiguration(chess=chess):
+        match chess.self_play.inference.backend:
+            case TensorRtInferenceBackend(templates=templates):
+                print(f'TENSORRT_TEMPLATE_ENGINE={templates[0].engine_path}')
+                print(f'TENSORRT_BATCH_SIZE={chess.self_play.inference.inference_batch_size}')
+            case _:
+                print('TENSORRT_TEMPLATE_ENGINE=')
+                print('TENSORRT_BATCH_SIZE=')
+    case _:
+        print('TENSORRT_TEMPLATE_ENGINE=')
+        print('TENSORRT_BATCH_SIZE=')
 PYTHON
     )
 }
@@ -120,6 +134,7 @@ command_start() {
     local description
     description="$(describe_configuration "${config_path}")"
     local run_name tensorboard_run_directory save_path stop_file runtime_image configuration_sha256 open_file_soft_limit
+    local tensorrt_template_engine tensorrt_batch_size
     run_name="$(echo "${description}" | sed -n 's/^RUN_NAME=//p')"
     tensorboard_run_directory="$(echo "${description}" | sed -n 's/^TENSORBOARD_RUN_DIRECTORY=//p')"
     save_path="$(echo "${description}" | sed -n 's/^SAVE_PATH=//p')"
@@ -127,6 +142,8 @@ command_start() {
     runtime_image="$(echo "${description}" | sed -n 's/^RUNTIME_IMAGE=//p')"
     open_file_soft_limit="$(echo "${description}" | sed -n 's/^OPEN_FILE_SOFT_LIMIT=//p')"
     configuration_sha256="$(echo "${description}" | sed -n 's/^CONFIGURATION_SHA256=//p')"
+    tensorrt_template_engine="$(echo "${description}" | sed -n 's/^TENSORRT_TEMPLATE_ENGINE=//p')"
+    tensorrt_batch_size="$(echo "${description}" | sed -n 's/^TENSORRT_BATCH_SIZE=//p')"
     [[ -n "${run_name}" && -n "${configuration_sha256}" ]] || fail "could not resolve the run configuration"
     # The registry below single-quotes these values for later `source`; a quote would corrupt it.
     [[ "${run_name}${config_path}${save_path}${runtime_image}" != *"'"* ]] \
@@ -136,6 +153,15 @@ command_start() {
     local approval_file
     approval_file="${approval_directory}/$(basename "${config_path%.*}").json"
     validate_approval "${approval_file}" "${configuration_sha256}" "${source_revision}"
+
+    if [[ -n "${tensorrt_template_engine}" ]]; then
+        (
+            cd "${repository_directory}/py"
+            PYTHONPATH=. "$(venv_python)" -m tools.preflight_native_tensorrt \
+                --engine "${tensorrt_template_engine}" \
+                --batch-size "${tensorrt_batch_size}"
+        ) || fail "native TensorRT preflight failed"
+    fi
 
     [[ -e "${stop_file}" ]] && fail "stale manual stop file exists: ${stop_file} — inspect and remove it before starting"
 
