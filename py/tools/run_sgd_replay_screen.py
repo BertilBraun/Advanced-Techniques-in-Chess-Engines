@@ -241,18 +241,20 @@ def _evaluate(
 def _learning_rate(step: int, schedule: ArmSchedule) -> float:
     if step <= schedule.pre_fold_warmup_steps:
         progress = step / schedule.pre_fold_warmup_steps
-        return schedule.pre_fold_warmup_start_learning_rate + (
-            schedule.pre_fold_peak_learning_rate - schedule.pre_fold_warmup_start_learning_rate
-        ) * progress
+        return (
+            schedule.pre_fold_warmup_start_learning_rate
+            + (schedule.pre_fold_peak_learning_rate - schedule.pre_fold_warmup_start_learning_rate) * progress
+        )
     if step <= schedule.fold_after_optimizer_steps:
         return schedule.pre_fold_peak_learning_rate
     deployment_step = step - schedule.fold_after_optimizer_steps
     if schedule.deployment_warmup_steps == 0:
         return schedule.deployment_learning_rate
     progress = min(deployment_step / schedule.deployment_warmup_steps, 1.0)
-    return schedule.deployment_warmup_start_learning_rate + (
-        schedule.deployment_learning_rate - schedule.deployment_warmup_start_learning_rate
-    ) * progress
+    return (
+        schedule.deployment_warmup_start_learning_rate
+        + (schedule.deployment_learning_rate - schedule.deployment_warmup_start_learning_rate) * progress
+    )
 
 
 def _phase(step: int, schedule: ArmSchedule) -> Literal['pre_fold', 'deployment']:
