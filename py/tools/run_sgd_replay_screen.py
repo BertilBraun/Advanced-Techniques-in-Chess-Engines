@@ -16,6 +16,7 @@ from typing import Literal
 import numpy as np
 import torch
 import torch.distributed as distributed
+from modelopt.torch.quantization.nn import TensorQuantizer
 from pydantic import Field
 from src.distillation.dataset import build_replay_training_batch
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS, CHESS_STATE_CONTRACT
@@ -49,18 +50,31 @@ class ScreenArm(str, Enum):
     V35_CONTROL = 'v35_control'
     LR_004_WARM_2000 = 'lr_004_warm_2000'
     LR_006_WARM_3000 = 'lr_006_warm_3000'
+    HISTORICAL_FOLD_1000 = 'historical_fold_1000'
+    CONTINUOUS_FOLD_1000 = 'continuous_fold_1000'
+    HISTORICAL_FOLD_3000 = 'historical_fold_3000'
+    CONTINUOUS_FOLD_3000 = 'continuous_fold_3000'
 
 
 @dataclass(frozen=True)
 class ArmSchedule:
+    pre_fold_peak_learning_rate: float
+    pre_fold_warmup_start_learning_rate: float
+    pre_fold_warmup_steps: int
+    fold_after_optimizer_steps: int
     deployment_learning_rate: float
+    deployment_warmup_start_learning_rate: float
     deployment_warmup_steps: int
 
 
 ARM_SCHEDULES = {
-    ScreenArm.V35_CONTROL: ArmSchedule(0.02, 0),
-    ScreenArm.LR_004_WARM_2000: ArmSchedule(0.04, 2_000),
-    ScreenArm.LR_006_WARM_3000: ArmSchedule(0.06, 3_000),
+    ScreenArm.V35_CONTROL: ArmSchedule(0.1, 0.0, 1_000, 1_000, 0.02, 0.001, 0),
+    ScreenArm.LR_004_WARM_2000: ArmSchedule(0.1, 0.0, 1_000, 1_000, 0.04, 0.001, 2_000),
+    ScreenArm.LR_006_WARM_3000: ArmSchedule(0.1, 0.0, 1_000, 1_000, 0.06, 0.001, 3_000),
+    ScreenArm.HISTORICAL_FOLD_1000: ArmSchedule(0.1, 0.0, 1_000, 1_000, 0.02, 0.0, 0),
+    ScreenArm.CONTINUOUS_FOLD_1000: ArmSchedule(0.02, 0.0001, 1_000, 1_000, 0.02, 0.0, 0),
+    ScreenArm.HISTORICAL_FOLD_3000: ArmSchedule(0.1, 0.0, 1_000, 3_000, 0.02, 0.0, 0),
+    ScreenArm.CONTINUOUS_FOLD_3000: ArmSchedule(0.02, 0.0001, 1_000, 3_000, 0.02, 0.0, 0),
 }
 
 
@@ -68,6 +82,14 @@ class LossMetrics(FrozenModel):
     policy: float
     wdl: float
     total: float
+
+
+class QuantizerRangeMetrics(FrozenModel):
+    tensor_count: int = Field(gt=0)
+    minimum: float = Field(ge=0.0)
+    median: float = Field(ge=0.0)
+    p95: float = Field(ge=0.0)
+    maximum: float = Field(ge=0.0)
 
 
 class Observation(FrozenModel):
@@ -82,10 +104,12 @@ class Observation(FrozenModel):
     mean_gradient_norm: float | None = Field(default=None, ge=0.0)
     maximum_gradient_norm: float | None = Field(default=None, ge=0.0)
     clipped_step_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
+    activation_ranges: QuantizerRangeMetrics
+    weight_ranges: QuantizerRangeMetrics
 
 
 class ScreenReport(FrozenModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     arm: ScreenArm
     world_size: Literal[2] = 2
     gpu_ids: tuple[int, int]
@@ -105,11 +129,12 @@ class ScreenReport(FrozenModel):
     local_batch_size: Literal[1024] = 1024
     optimizer: SgdOptimizerConfiguration
     maximum_gradient_norm: Literal[1.0] = 1.0
-    pre_fold_peak_learning_rate: Literal[0.1] = 0.1
-    pre_fold_warmup_steps: Literal[1000] = 1_000
-    fold_after_optimizer_steps: Literal[1000] = 1_000
+    pre_fold_peak_learning_rate: float = Field(gt=0.0)
+    pre_fold_warmup_start_learning_rate: float = Field(ge=0.0)
+    pre_fold_warmup_steps: int = Field(gt=0)
+    fold_after_optimizer_steps: int = Field(gt=0)
     deployment_learning_rate: float = Field(gt=0.0)
-    deployment_warmup_start_learning_rate: Literal[0.001] = 0.001
+    deployment_warmup_start_learning_rate: float = Field(ge=0.0)
     deployment_warmup_steps: int = Field(ge=0)
     completed_optimizer_steps: int = Field(ge=0)
     wall_seconds: float = Field(ge=0.0)
@@ -156,6 +181,30 @@ def _loss_metrics(policy: float, wdl: float, total: float) -> LossMetrics:
     return LossMetrics(policy=policy, wdl=wdl, total=total)
 
 
+def _range_metrics(values: tuple[torch.Tensor, ...]) -> QuantizerRangeMetrics:
+    flattened = torch.cat(tuple(value.detach().float().flatten().cpu() for value in values))
+    return QuantizerRangeMetrics(
+        tensor_count=len(values),
+        minimum=float(flattened.min()),
+        median=float(torch.quantile(flattened, 0.5)),
+        p95=float(torch.quantile(flattened, 0.95)),
+        maximum=float(flattened.max()),
+    )
+
+
+def _quantizer_ranges(model: Network) -> tuple[QuantizerRangeMetrics, QuantizerRangeMetrics]:
+    activation_ranges: list[torch.Tensor] = []
+    weight_ranges: list[torch.Tensor] = []
+    for name, module in model.named_modules():
+        if not isinstance(module, TensorQuantizer) or not module.is_enabled:
+            continue
+        if name.endswith('weight_quantizer'):
+            weight_ranges.append(module.amax)
+        else:
+            activation_ranges.append(module.amax)
+    return _range_metrics(tuple(activation_ranges)), _range_metrics(tuple(weight_ranges))
+
+
 def _evaluate(
     model: Network,
     dataset: OpenedProductionReplay,
@@ -190,13 +239,24 @@ def _evaluate(
 
 
 def _learning_rate(step: int, schedule: ArmSchedule) -> float:
-    if step <= 1_000:
-        return 0.1 * step / 1_000
-    deployment_step = step - 1_000
+    if step <= schedule.pre_fold_warmup_steps:
+        progress = step / schedule.pre_fold_warmup_steps
+        return schedule.pre_fold_warmup_start_learning_rate + (
+            schedule.pre_fold_peak_learning_rate - schedule.pre_fold_warmup_start_learning_rate
+        ) * progress
+    if step <= schedule.fold_after_optimizer_steps:
+        return schedule.pre_fold_peak_learning_rate
+    deployment_step = step - schedule.fold_after_optimizer_steps
     if schedule.deployment_warmup_steps == 0:
         return schedule.deployment_learning_rate
     progress = min(deployment_step / schedule.deployment_warmup_steps, 1.0)
-    return 0.001 + (schedule.deployment_learning_rate - 0.001) * progress
+    return schedule.deployment_warmup_start_learning_rate + (
+        schedule.deployment_learning_rate - schedule.deployment_warmup_start_learning_rate
+    ) * progress
+
+
+def _phase(step: int, schedule: ArmSchedule) -> Literal['pre_fold', 'deployment']:
+    return 'pre_fold' if step < schedule.fold_after_optimizer_steps else 'deployment'
 
 
 def _save_state(model: Network, path: Path) -> str:
@@ -270,12 +330,22 @@ def run(arguments: Arguments) -> None:
         started = interval_started
         completed_steps = 0
         diverged = False
-        report_steps = {0, 500, 1_000, 1_500, 2_000, 3_000, 4_000, 6_000, 8_000, 10_000, 12_000}
+        report_steps = set(range(500, arguments.maximum_optimizer_steps + 1, 500))
+        report_steps.update(
+            step
+            for step in (
+                schedule.fold_after_optimizer_steps - 1,
+                schedule.fold_after_optimizer_steps,
+                schedule.fold_after_optimizer_steps + 1,
+            )
+            if step > 0
+        )
 
         if rank == 0:
             held_out, agreement = _evaluate(
                 model, opened, split.held_out_start_row, arguments.held_out_positions, objective, device
             )
+            activation_ranges, weight_ranges = _quantizer_ranges(model)
             observations.append(
                 Observation(
                     optimizer_step=0,
@@ -285,6 +355,8 @@ def run(arguments: Arguments) -> None:
                     held_out=held_out,
                     held_out_target_top_action_agreement=agreement,
                     training=None,
+                    activation_ranges=activation_ranges,
+                    weight_ranges=weight_ranges,
                 )
             )
         distributed.barrier()
@@ -319,7 +391,7 @@ def run(arguments: Arguments) -> None:
             if not all(math.isfinite(value) for value in (*metrics, gradient_norm)):
                 diverged = True
 
-            if step == 1_000:
+            if step == schedule.fold_after_optimizer_steps:
                 distributed.barrier()
                 del distributed_model
                 fold_scaled_post_activation_batch_norm(model)
@@ -328,6 +400,10 @@ def run(arguments: Arguments) -> None:
                 distributed_model = DistributedDataParallel(
                     DistributedTrainingModel(model), device_ids=[device_id], broadcast_buffers=False
                 )
+                distributed.barrier()
+            elif step % 500 == 0:
+                distributed.barrier()
+                recalibrate_qat(model, _calibration_loop(opened, calibration_indices, device))
                 distributed.barrier()
 
             should_report = step in report_steps or diverged
@@ -338,10 +414,11 @@ def run(arguments: Arguments) -> None:
                     held_out, agreement = _evaluate(
                         model, opened, split.held_out_start_row, arguments.held_out_positions, objective, device
                     )
+                    activation_ranges, weight_ranges = _quantizer_ranges(model)
                     observations.append(
                         Observation(
                             optimizer_step=step,
-                            phase='pre_fold' if step < 1_000 else 'deployment',
+                            phase=_phase(step, schedule),
                             actual_learning_rate=actual_learning_rate,
                             elapsed_seconds=now - started,
                             interval_samples_per_second=recent_steps * 2_048 / (now - interval_started),
@@ -351,6 +428,8 @@ def run(arguments: Arguments) -> None:
                             mean_gradient_norm=recent_gradient_total / recent_steps,
                             maximum_gradient_norm=recent_gradient_maximum,
                             clipped_step_fraction=recent_clipped_steps / recent_steps,
+                            activation_ranges=activation_ranges,
+                            weight_ranges=weight_ranges,
                         )
                     )
                     print(observations[-1].model_dump_json(), flush=True)
@@ -377,10 +456,11 @@ def run(arguments: Arguments) -> None:
                 held_out, agreement = _evaluate(
                     model, opened, split.held_out_start_row, arguments.held_out_positions, objective, device
                 )
+                activation_ranges, weight_ranges = _quantizer_ranges(model)
                 observations.append(
                     Observation(
                         optimizer_step=completed_steps,
-                        phase='pre_fold' if completed_steps < 1_000 else 'deployment',
+                        phase=_phase(completed_steps, schedule),
                         actual_learning_rate=_learning_rate(completed_steps, schedule),
                         elapsed_seconds=now - started,
                         interval_samples_per_second=(
@@ -392,6 +472,8 @@ def run(arguments: Arguments) -> None:
                         mean_gradient_norm=recent_gradient_total / recent_steps if recent_steps else None,
                         maximum_gradient_norm=recent_gradient_maximum if recent_steps else None,
                         clipped_step_fraction=recent_clipped_steps / recent_steps if recent_steps else None,
+                        activation_ranges=activation_ranges,
+                        weight_ranges=weight_ranges,
                     )
                 )
             final_state_sha256 = _save_state(model, arguments.output / 'final-state.pt')
@@ -411,7 +493,12 @@ def run(arguments: Arguments) -> None:
                 initial_state_sha256=initial_state_sha256,
                 final_state_sha256=final_state_sha256,
                 optimizer=optimizer_configuration,
+                pre_fold_peak_learning_rate=schedule.pre_fold_peak_learning_rate,
+                pre_fold_warmup_start_learning_rate=schedule.pre_fold_warmup_start_learning_rate,
+                pre_fold_warmup_steps=schedule.pre_fold_warmup_steps,
+                fold_after_optimizer_steps=schedule.fold_after_optimizer_steps,
                 deployment_learning_rate=schedule.deployment_learning_rate,
+                deployment_warmup_start_learning_rate=schedule.deployment_warmup_start_learning_rate,
                 deployment_warmup_steps=schedule.deployment_warmup_steps,
                 completed_optimizer_steps=completed_steps,
                 wall_seconds=time.perf_counter() - started,

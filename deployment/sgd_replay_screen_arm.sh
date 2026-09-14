@@ -11,9 +11,12 @@ arm="$1"
 gpu_0="$2"
 gpu_1="$3"
 output="$4"
-repository="/workspace/sgd-replay-screen-source"
+script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repository="${ENGINE_REPOSITORY_DIRECTORY:-$(cd "${script_directory}/.." && pwd)}"
 virtual_environment="/workspace/alphazero-engine-venv"
 replay_root="/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34"
+time_budget_seconds="${SGD_REPLAY_SCREEN_TIME_BUDGET_SECONDS:-1200}"
+maximum_optimizer_steps="${SGD_REPLAY_SCREEN_MAXIMUM_OPTIMIZER_STEPS:-12000}"
 python_nvidia_library_path="$(
     "${virtual_environment}/bin/python" -c \
         'from pathlib import Path; import site; root = Path(site.getsitepackages()[0]) / "nvidia"; print(":".join(str(path) for path in sorted(root.glob("*/lib")) if path.is_dir()))'
@@ -34,7 +37,7 @@ exec "${virtual_environment}/bin/torchrun" --standalone --nproc-per-node=2 \
     --output "${output}" \
     --gpu-ids "${gpu_0}" "${gpu_1}" \
     --random-seed 20260913 \
-    --time-budget-seconds 1200 \
-    --maximum-optimizer-steps 12000 \
+    --time-budget-seconds "${time_budget_seconds}" \
+    --maximum-optimizer-steps "${maximum_optimizer_steps}" \
     --held-out-positions 4096 \
     --holdout-fraction 0.02
