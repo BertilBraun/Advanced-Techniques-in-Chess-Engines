@@ -213,6 +213,9 @@ def _initialize_rank(
                         startup.starting_generation,
                         startup.save_path,
                         bootstrap_probe_states,
+                        bootstrap_policy_prior_target_top3_mass=(
+                            configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
+                        ),
                     )
                 case TensorRtInt8QatConfiguration():
                     assert qat_state is not None and qat_calibration_states is not None
@@ -228,6 +231,9 @@ def _initialize_rank(
                             game.self_play_configuration.inference.inference_batch_size,
                         ),
                         bootstrap_probe_states,
+                        bootstrap_policy_prior_target_top3_mass=(
+                            configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
+                        ),
                     )
         distributed.barrier()
     return _RankRuntime(

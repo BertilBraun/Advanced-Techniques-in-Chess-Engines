@@ -314,6 +314,7 @@ def test_generation_zero_qat_checkpoint_calibrates_only_inference_copy(tmp_path:
     optimizer_configuration = AdamWOptimizerConfiguration()
     policy_weights_before = model.policy_head[-1].weight.detach().clone()
 
+    target_top3_mass = 0.70
     reference = save_qat_model_and_optimizer(
         model,
         create_optimizer(model, optimizer_configuration),
@@ -323,8 +324,13 @@ def test_generation_zero_qat_checkpoint_calibrates_only_inference_copy(tmp_path:
         qat_state=state,
         example_states=torch.randn((8, 8, 3, 3)),
         bootstrap_probe_states=torch.randn((256, 8, 3, 3)),
+        bootstrap_policy_prior_target_top3_mass=target_top3_mass,
     )
 
     assert torch.equal(model.policy_head[-1].weight, policy_weights_before)
     assert reference.inference_model_path.name.endswith('.jit.pt')
+    calibration = reference.policy_prior_calibration
+    assert calibration is not None
+    assert calibration.target_top3_mass == target_top3_mass
+    assert calibration.calibrated_top3_mass == pytest.approx(target_top3_mass, abs=1e-6)
     torch.jit.load(str(reference.inference_model_path))

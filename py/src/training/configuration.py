@@ -155,6 +155,7 @@ class TrainingParams(FrozenModel):
     learning_rate: FloatGenerationSchedule
     warmup_optimizer_steps: int = Field(default=0, ge=0)
     warmup_start_learning_rate: float = Field(default=0.0, ge=0.0)
+    bootstrap_policy_prior_target_top3_mass: float = Field(default=0.95, gt=0.0, lt=1.0)
     # Every Nth optimizer step, measure how hard each loss term pulls on the shared trunk. Zero disables.
     gradient_probe_interval_steps: int = Field(default=100, ge=0)
     max_grad_norm: float = Field(default=0.5, gt=0.0)

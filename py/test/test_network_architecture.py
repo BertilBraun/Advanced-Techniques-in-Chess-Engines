@@ -619,13 +619,14 @@ def test_generation_zero_manifest_records_the_calibration_and_generation_one_doe
     probe_states = bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS)
     uncalibrated_shape = measure_policy_prior_shape(_fused_export(model), probe_states)
 
-    save_model_and_optimizer(model, optimizer, 0, tmp_path, probe_states)
+    target_top3_mass = 0.70
+    save_model_and_optimizer(model, optimizer, 0, tmp_path, probe_states, target_top3_mass)
     save_model_and_optimizer(model, optimizer, 1, tmp_path)
 
     record = read_checkpoint_manifest(0, tmp_path).policy_prior_calibration
     assert record is not None
-    assert record.target_top3_mass == BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS
-    assert record.calibrated_top3_mass == pytest.approx(BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=1e-6)
+    assert record.target_top3_mass == target_top3_mass
+    assert record.calibrated_top3_mass == pytest.approx(target_top3_mass, abs=1e-6)
     assert record.initial_top3_mass == pytest.approx(uncalibrated_shape.top3_mass, abs=1e-6)
     assert record.initial_top1_mass == pytest.approx(uncalibrated_shape.top1_mass, abs=1e-6)
     assert record.applied_scale > 0.0

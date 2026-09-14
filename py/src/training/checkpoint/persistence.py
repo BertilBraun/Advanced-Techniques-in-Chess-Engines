@@ -206,6 +206,7 @@ def save_model_and_optimizer(
     generation: int,
     save_folder: str | PathLike[str],
     bootstrap_probe_states: torch.Tensor | None = None,
+    bootstrap_policy_prior_target_top3_mass: float = BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
 ) -> None:
     raw_model_path = model_save_path(generation, save_folder)
     raw_optimizer_path = optimizer_save_path(generation, save_folder)
@@ -228,7 +229,11 @@ def save_model_and_optimizer(
                 'The generation-0 export requires real probe positions from the evaluation dataset '
                 'to calibrate the bootstrap policy prior.'
             )
-        calibration = calibrate_bootstrap_policy_prior(fused_model, bootstrap_probe_states)
+        calibration = calibrate_bootstrap_policy_prior(
+            fused_model,
+            bootstrap_probe_states,
+            bootstrap_policy_prior_target_top3_mass,
+        )
         log(
             f'Calibrated the generation-0 policy prior: top-1 mass '
             f'{calibration.initial_shape.top1_mass:.3f} -> {calibration.calibrated_shape.top1_mass:.3f}, '

@@ -241,6 +241,33 @@ def test_v44_uses_screened_fold_and_deployment_learning_rate() -> None:
     assert configuration.evaluation.cadence_seconds == 1_200
 
 
+def test_v45_softens_the_bootstrap_and_restores_replay_reuse_eight() -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-progressive-v45-uniform-reuse8-int8.yaml'
+    )
+
+    training = configuration.training
+    trainer = training.trainer
+    quantization = trainer.quantization
+    assert configuration.run.resume.mode == 'random_initialization'
+    assert training.progressive_model_sizing.is_progressive
+    assert tuple(model.network.num_layers for model in training.progressive_model_sizing.models) == (12, 14)
+    assert tuple(model.network.hidden_size for model in training.progressive_model_sizing.models) == (128, 160)
+    assert trainer.bootstrap_policy_prior_target_top3_mass == pytest.approx(0.70)
+    assert trainer.learning_rate.value_at(0) == pytest.approx(0.1)
+    assert trainer.warmup_optimizer_steps == 1_000
+    assert quantization.fold_after_optimizer_steps == 3_000
+    assert quantization.deployment_learning_rate.value_at(2) == pytest.approx(0.04)
+    assert quantization.deployment_learning_rate.value_at(1000) == pytest.approx(0.01)
+    assert quantization.deployment_warmup_optimizer_steps == 500
+    assert quantization.deployment_warmup_start_learning_rate == pytest.approx(0.02)
+    assert training.lifecycle.credit.replay_ratio == pytest.approx(8)
+    assert training.lifecycle.replay.capacity.value_at(0) == 300_000
+    assert training.lifecycle.replay.capacity.value_at(1_000) == 10_000_000
+    assert training.lifecycle.replay.maximum_capacity == 10_000_000
+    assert configuration.evaluation.cadence_seconds == 1_200
+
+
 def test_v34_ema_fix_resume_uses_the_stopped_checkpoint() -> None:
     configuration = load_chess_experiment_configuration(
         REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-ema-fix.yaml'

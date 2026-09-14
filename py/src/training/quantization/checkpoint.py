@@ -20,6 +20,7 @@ from src.training.checkpoint.paths import (
 from src.training.checkpoint.persistence import create_model, load_model_state_dict, load_optimizer
 from src.training.configuration import OptimizerConfiguration
 from src.training.network import (
+    BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
     InferenceNetwork,
     Network,
     NetworkConfiguration,
@@ -64,6 +65,7 @@ def save_qat_model_and_optimizer(
     qat_state: QatStateIdentity,
     example_states: torch.Tensor,
     bootstrap_probe_states: torch.Tensor | None = None,
+    bootstrap_policy_prior_target_top3_mass: float = BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
 ) -> CheckpointReference:
     if qat_state.completed_optimizer_steps != completed_optimizer_steps:
         raise ValueError('QAT state progress must match checkpoint optimizer progress.')
@@ -84,7 +86,11 @@ def save_qat_model_and_optimizer(
     if generation == 0:
         assert bootstrap_probe_states is not None
         inference_model = _bootstrap_inference_model(model)
-        calibration = calibrate_bootstrap_policy_prior(inference_model, bootstrap_probe_states)
+        calibration = calibrate_bootstrap_policy_prior(
+            inference_model,
+            bootstrap_probe_states,
+            bootstrap_policy_prior_target_top3_mass,
+        )
         policy_prior_calibration = BootstrapPolicyPriorRecord(
             initial_top1_mass=calibration.initial_shape.top1_mass,
             initial_top3_mass=calibration.initial_shape.top3_mass,
