@@ -54,6 +54,10 @@ class ScreenArm(str, Enum):
     CONTINUOUS_FOLD_1000 = 'continuous_fold_1000'
     HISTORICAL_FOLD_3000 = 'historical_fold_3000'
     CONTINUOUS_FOLD_3000 = 'continuous_fold_3000'
+    POST_FOLD_002 = 'post_fold_002'
+    POST_FOLD_004 = 'post_fold_004'
+    POST_FOLD_006 = 'post_fold_006'
+    POST_FOLD_008 = 'post_fold_008'
 
 
 @dataclass(frozen=True)
@@ -75,6 +79,10 @@ ARM_SCHEDULES = {
     ScreenArm.CONTINUOUS_FOLD_1000: ArmSchedule(0.02, 0.0001, 1_000, 1_000, 0.02, 0.0, 0),
     ScreenArm.HISTORICAL_FOLD_3000: ArmSchedule(0.1, 0.0, 1_000, 3_000, 0.02, 0.0, 0),
     ScreenArm.CONTINUOUS_FOLD_3000: ArmSchedule(0.02, 0.0001, 1_000, 3_000, 0.02, 0.0, 0),
+    ScreenArm.POST_FOLD_002: ArmSchedule(0.1, 0.0, 1_000, 3_000, 0.02, 0.02, 500),
+    ScreenArm.POST_FOLD_004: ArmSchedule(0.1, 0.0, 1_000, 3_000, 0.04, 0.02, 500),
+    ScreenArm.POST_FOLD_006: ArmSchedule(0.1, 0.0, 1_000, 3_000, 0.06, 0.02, 500),
+    ScreenArm.POST_FOLD_008: ArmSchedule(0.1, 0.0, 1_000, 3_000, 0.08, 0.02, 500),
 }
 
 
