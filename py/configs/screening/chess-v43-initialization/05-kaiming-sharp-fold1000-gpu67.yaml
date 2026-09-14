@@ -1,0 +1,29 @@
+extends: 01-kaiming-sharp-gpu23.yaml
+
+run:
+  run_name: vast-chess-v43-training-screen-kaiming-fold1000-gpu67
+  tensorboard_run_directory: vast-chess-v43-training-screen-kaiming-fold1000-gpu67
+
+training:
+  save_path: py/training_data/screening/chess-v43-training/kaiming-fold1000-gpu67
+  trainer:
+    warmup_optimizer_steps: 1000
+    quantization:
+      kind: tensorrt_int8_qat
+      fold_after_optimizer_steps: 1000
+      calibration_positions: 256
+      recalibration_interval_generations: 1
+      deployment_learning_rate: inherit
+      deployment_warmup_optimizer_steps: 0
+      deployment_warmup_start_learning_rate: 0.001
+  topology:
+    trainer:
+      rank_zero_device_id: 6
+      ddp_device_ids: [6, 7]
+    self_play:
+      device_ids: [6, 6, 6, 6, 7, 7, 7, 7]
+      node_ids_to_pause_during_training: [2, 3, 6, 7]
+    evaluation:
+      device_cycle: [6, 7]
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-v43-training-screen-kaiming-fold1000-gpu67.stop
