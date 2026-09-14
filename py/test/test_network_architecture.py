@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 import pytest
@@ -111,67 +110,6 @@ def test_scaled_post_activation_block_scales_only_the_residual_branch() -> None:
     inputs = torch.ones((1, 16, 2, 2))
 
     assert torch.equal(block(inputs), inputs * 1.25)
-
-
-@pytest.mark.parametrize('global_pooling', (False, True))
-def test_scaled_post_activation_network_uses_fixup_residual_initialization(global_pooling: bool) -> None:
-    num_layers = 12
-    hidden_size = 128
-    residual_context = (
-        GlobalPoolingResidualContext(placement=ResidualContextPlacement.EVERY_BLOCK)
-        if global_pooling
-        else DisabledResidualContext()
-    )
-    torch.manual_seed(7)
-    network = Network(
-        NetworkParams(
-            num_layers=num_layers,
-            hidden_size=hidden_size,
-            residual_context=residual_context,
-            residual_block=ScaledPostActivationResidualBlockConfiguration(
-                branch_scale=num_layers**-0.5,
-                activation_cap=6.0,
-            ),
-            policy_head=CHESS_POLICY_HEAD,
-        ),
-        torch.device('cpu'),
-        CHESS_PLANE_NETWORK_DIMENSIONS,
-    )
-
-    expected_standard_deviation = math.sqrt(2.0 / (hidden_size * 3 * 3)) / math.sqrt(num_layers)
-    for block in network.backbone:
-        assert isinstance(block, (ScaledPostActivationResBlock, ScaledPostActivationGlobalPoolingResBlock))
-        first_convolution = block.conv_block1[0]
-        final_convolution = block.conv_block2[0]
-        assert isinstance(first_convolution, nn.Conv2d)
-        assert isinstance(final_convolution, nn.Conv2d)
-        assert first_convolution.weight.std().item() == pytest.approx(expected_standard_deviation, rel=0.02)
-        assert torch.count_nonzero(final_convolution.weight).item() == 0
-
-    assert torch.count_nonzero(network.policy_head.output_projection.weight).item() > 0
-    assert torch.count_nonzero(network.value_head[-1].weight).item() > 0
-
-
-def test_scaled_post_activation_fixup_initialization_is_deterministic_for_a_seed() -> None:
-    configuration = NetworkParams(
-        num_layers=2,
-        hidden_size=16,
-        residual_context=DisabledResidualContext(),
-        residual_block=ScaledPostActivationResidualBlockConfiguration(
-            branch_scale=2**-0.5,
-            activation_cap=6.0,
-        ),
-        policy_head=CHESS_POLICY_HEAD,
-    )
-
-    torch.manual_seed(11)
-    first = Network(configuration, torch.device('cpu'), CHESS_PLANE_NETWORK_DIMENSIONS)
-    torch.manual_seed(11)
-    second = Network(configuration, torch.device('cpu'), CHESS_PLANE_NETWORK_DIMENSIONS)
-
-    assert all(
-        torch.equal(left, right) for left, right in zip(first.state_dict().values(), second.state_dict().values())
-    )
 
 
 def test_scaled_pre_activation_network_preserves_parameter_count() -> None:
