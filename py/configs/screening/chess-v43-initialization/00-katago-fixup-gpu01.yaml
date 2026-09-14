@@ -1,0 +1,51 @@
+# Initialization behavior is pinned by the source revision approved for this arm.
+extends: ../../production/vast-chess-8gpu-progressive-v43-katago-init-int8.yaml
+
+run:
+  run_name: vast-chess-v43-init-screen-katago-fixup-gpu01
+  tensorboard_run_directory: vast-chess-v43-init-screen-katago-fixup-gpu01
+
+training:
+  save_path: py/training_data/screening/chess-v43-initialization/katago-fixup-gpu01
+  trainer:
+    global_batch_size: 512
+    local_batch_size: 256
+  topology:
+    trainer:
+      rank_zero_device_id: 0
+      ddp_device_ids: [0, 1]
+    self_play:
+      device_ids: [0, 0, 0, 0, 1, 1, 1, 1]
+      node_ids_to_pause_during_training: [2, 3, 6, 7]
+    evaluation:
+      device_cycle: [0, 1]
+  lifecycle:
+    replay:
+      materialization_processes: 2
+  limits:
+    maximum_wall_time_seconds: 2700
+    manual_stop_file: /workspace/run-control/stop/vast-chess-v43-init-screen-katago-fixup-gpu01.stop
+
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: tensorrt
+        bootstrap_with_torchscript: true
+        templates:
+        - kind: qat
+          model_id: chess-cnn-scaled-post-12x128-fromto-int8
+          phase: pre_fold
+          engine_path: /workspace/tensorrt/v43-int8-12x128-prefold-production-template.engine
+        - kind: qat
+          model_id: chess-cnn-scaled-post-12x128-fromto-int8
+          phase: deployment
+          engine_path: /workspace/tensorrt/v36-int8-12x128-deployment-trained-template.engine
+        - kind: qat
+          model_id: chess-cnn-scaled-post-14x160-fromto-int8
+          phase: pre_fold
+          engine_path: /workspace/tensorrt/v36-int8-14x160-prefold-production-template.engine
+        - kind: qat
+          model_id: chess-cnn-scaled-post-14x160-fromto-int8
+          phase: deployment
+          engine_path: /workspace/tensorrt/v36-int8-14x160-deployment-trained-template.engine

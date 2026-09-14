@@ -1,0 +1,20 @@
+# Initialization behavior is pinned by the source revision approved for this arm.
+extends: 00-katago-fixup-gpu01.yaml
+
+run:
+  run_name: vast-chess-v43-init-screen-kaiming-sharp-gpu23
+  tensorboard_run_directory: vast-chess-v43-init-screen-kaiming-sharp-gpu23
+
+training:
+  save_path: py/training_data/screening/chess-v43-initialization/kaiming-sharp-gpu23
+  topology:
+    trainer:
+      rank_zero_device_id: 2
+      ddp_device_ids: [2, 3]
+    self_play:
+      device_ids: [2, 2, 2, 2, 3, 3, 3, 3]
+      node_ids_to_pause_during_training: [2, 3, 6, 7]
+    evaluation:
+      device_cycle: [2, 3]
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-v43-init-screen-kaiming-sharp-gpu23.stop
