@@ -28,3 +28,17 @@ training:
           key_size: 128
         num_value_channels: 2
         value_fc_size: 48
+
+chess:
+  self_play:
+    inference:
+      backend:
+        templates:
+        - kind: qat
+          model_id: chess-cnn-scaled-post-14x160-fromto-int8
+          phase: pre_fold
+          engine_path: /workspace/tensorrt/v43-kaiming-fixed14-prefold-template.engine
+        - kind: qat
+          model_id: chess-cnn-scaled-post-14x160-fromto-int8
+          phase: deployment
+          engine_path: /workspace/tensorrt/v36-int8-14x160-deployment-trained-template.engine
