@@ -692,8 +692,8 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
-    # Re-pinned 2026-09-13: learning-rate warmups now carry an explicit floor.
-    assert experiment_configuration_sha256(frozen) == '12bd5ea3aa78bf04476d1d39ab95050ae242b9cafcf84b9252170d4eee72152c'
+    # Re-pinned 2026-09-14: the bootstrap policy-prior target is now explicit.
+    assert experiment_configuration_sha256(frozen) == '0e5237e2fdb189629c919a3887f7e48a39c59f3cd0716b1bd1df085f91f8c543'
 
 
 @pytest.mark.parametrize(

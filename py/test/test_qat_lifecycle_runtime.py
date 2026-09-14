@@ -329,7 +329,7 @@ def test_generation_zero_qat_checkpoint_calibrates_only_inference_copy(tmp_path:
 
     assert torch.equal(model.policy_head[-1].weight, policy_weights_before)
     assert reference.inference_model_path.name.endswith('.jit.pt')
-    calibration = reference.policy_prior_calibration
+    calibration = read_checkpoint_manifest(0, tmp_path).policy_prior_calibration
     assert calibration is not None
     assert calibration.target_top3_mass == target_top3_mass
     assert calibration.calibrated_top3_mass == pytest.approx(target_top3_mass, abs=1e-6)
