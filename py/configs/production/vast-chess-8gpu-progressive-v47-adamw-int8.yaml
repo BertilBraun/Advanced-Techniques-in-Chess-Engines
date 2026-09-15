@@ -1,0 +1,45 @@
+extends: vast-chess-8gpu-progressive-v44-fold3000-lr008-int8.yaml
+
+run:
+  run_name: vast-chess-8gpu-progressive-v47-adamw-int8
+  tensorboard_run_directory: vast-chess-8gpu-progressive-v47-adamw-int8
+  resume:
+    mode: random_initialization
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-progressive-v47-adamw-int8
+  trainer:
+    optimizer:
+      kind: adamw
+    learning_rate:
+      kind: staged
+      stages:
+      - start_generation: 0
+        value: 0.008
+      - start_generation: 100
+        value: 0.006
+      - start_generation: 400
+        value: 0.004
+      - start_generation: 800
+        value: 0.003
+      - start_generation: 1200
+        value: 0.002
+    warmup_optimizer_steps: 1000
+    warmup_start_learning_rate: 0.0
+    max_grad_norm: 0.5
+    quantization:
+      kind: tensorrt_int8_qat
+      fold_after_optimizer_steps: 3000
+      calibration_positions: 256
+      recalibration_interval_generations: 1
+      deployment_learning_rate: inherit
+      deployment_warmup_optimizer_steps: 500
+      deployment_warmup_start_learning_rate: 0.001
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v47-adamw-int8.stop
+  progressive_model_sizing:
+    promotion:
+      candidate_catchup_learning_rate: 0.004
+
+evaluation:
+  cadence_seconds: 1200

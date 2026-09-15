@@ -268,6 +268,38 @@ def test_v45_softens_the_bootstrap_and_restores_replay_reuse_eight() -> None:
     assert configuration.evaluation.cadence_seconds == 1_200
 
 
+def test_v47_uses_progressive_int8_with_adamw() -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-progressive-v47-adamw-int8.yaml'
+    )
+
+    training = configuration.training
+    trainer = training.trainer
+    quantization = trainer.quantization
+    assert configuration.run.resume.mode == 'random_initialization'
+    assert training.progressive_model_sizing.is_progressive
+    assert tuple(model.network.num_layers for model in training.progressive_model_sizing.models) == (12, 14)
+    assert tuple(model.network.hidden_size for model in training.progressive_model_sizing.models) == (128, 160)
+    assert training.progressive_model_sizing.promotion.candidate_catchup_learning_rate == pytest.approx(0.004)
+    assert trainer.optimizer.kind == 'adamw'
+    assert trainer.learning_rate.value_at(0) == pytest.approx(0.008)
+    assert trainer.learning_rate.value_at(100) == pytest.approx(0.006)
+    assert trainer.learning_rate.value_at(400) == pytest.approx(0.004)
+    assert trainer.learning_rate.value_at(800) == pytest.approx(0.003)
+    assert trainer.learning_rate.value_at(1_200) == pytest.approx(0.002)
+    assert trainer.warmup_optimizer_steps == 1_000
+    assert trainer.warmup_start_learning_rate == pytest.approx(0.0)
+    assert trainer.max_grad_norm == pytest.approx(0.5)
+    assert quantization.kind == 'tensorrt_int8_qat'
+    assert quantization.fold_after_optimizer_steps == 3_000
+    assert quantization.deployment_learning_rate == 'inherit'
+    assert quantization.deployment_warmup_optimizer_steps == 500
+    assert quantization.deployment_warmup_start_learning_rate == pytest.approx(0.001)
+    assert training.lifecycle.credit.replay_ratio == pytest.approx(6.25)
+    assert training.lifecycle.replay.maximum_capacity == 15_000_000
+    assert configuration.evaluation.cadence_seconds == 1_200
+
+
 def test_v34_ema_fix_resume_uses_the_stopped_checkpoint() -> None:
     configuration = load_chess_experiment_configuration(
         REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-ema-fix.yaml'
