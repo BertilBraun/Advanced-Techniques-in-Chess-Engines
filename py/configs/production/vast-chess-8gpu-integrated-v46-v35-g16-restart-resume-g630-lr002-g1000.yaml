@@ -1,0 +1,18 @@
+extends: vast-chess-8gpu-integrated-v46-v35-g16-restart-resume-g350-lr002-g650.yaml
+
+run:
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-integrated-v46-v35-g16-restart/checkpoint_630.json
+    generation: 630
+
+training:
+  trainer:
+    quantization:
+      deployment_learning_rate:
+        kind: linear
+        start_generation: 2
+        end_generation: 1000
+        start_value: 0.02
+        end_value: 0.002
+        rounding: none
