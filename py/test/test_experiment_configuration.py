@@ -295,7 +295,7 @@ def test_v47_uses_progressive_int8_with_adamw() -> None:
     assert quantization.deployment_learning_rate == 'inherit'
     assert quantization.deployment_warmup_optimizer_steps == 500
     assert quantization.deployment_warmup_start_learning_rate == pytest.approx(0.001)
-    assert training.lifecycle.credit.replay_ratio == pytest.approx(6.25)
+    assert training.lifecycle.credit.replay_ratio == pytest.approx(8)
     assert training.lifecycle.replay.maximum_capacity == 15_000_000
     assert configuration.evaluation.cadence_seconds == 1_200
 

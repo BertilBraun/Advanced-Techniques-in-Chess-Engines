@@ -35,6 +35,9 @@ training:
       deployment_learning_rate: inherit
       deployment_warmup_optimizer_steps: 500
       deployment_warmup_start_learning_rate: 0.001
+  lifecycle:
+    credit:
+      replay_ratio: 8
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v47-adamw-int8.stop
   progressive_model_sizing:
