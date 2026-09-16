@@ -15,4 +15,4 @@ training:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v34-fp16-reproduction-control.stop
 
 evaluation:
-  cadence_seconds: 1200
+  cadence_seconds: 480
