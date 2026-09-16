@@ -21,8 +21,8 @@ from src.replay.contracts import (
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
-from src.self_play.configuration import TensorRtFloatTemplate, TensorRtInferenceBackend, TorchScriptInferenceBackend
 from src.self_play.completed_game import SearchVisitCounts
+from src.self_play.configuration import TensorRtFloatTemplate, TensorRtInferenceBackend, TorchScriptInferenceBackend
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
 from src.training.configuration import BootstrapPolicyScaleApplication, TrainingCompilation, TrainingPrecision
