@@ -1,13 +1,13 @@
 extends: vast-chess-8gpu-progressive-v49-inference-only-bootstrap.yaml
 
 run:
-  run_name: vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry3
-  tensorboard_run_directory: vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry3
+  run_name: vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry4
+  tensorboard_run_directory: vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry4
   resume:
     mode: random_initialization
 
 training:
-  save_path: py/training_data/production/vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry3
+  save_path: py/training_data/production/vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry4
   trainer:
     quantization:
       kind: disabled
@@ -15,7 +15,7 @@ training:
     maximum_cost: null
     maximum_wall_time_seconds: 6600
     minimum_free_disk_gib: 5.0
-    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry3.stop
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry4.stop
 
 chess:
   self_play:
@@ -29,6 +29,7 @@ chess:
         - {kind: float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b320.engine}
 
 evaluation:
+  cadence_seconds: 480
   definitions:
   - kind: stockfish_adaptive_nodes
     definition_id: stockfish-searched
