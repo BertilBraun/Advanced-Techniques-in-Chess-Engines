@@ -27,7 +27,6 @@ from src.training.bootstrap import select_bootstrap_model
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import model_save_path, qat_state_save_path
 from src.training.checkpoint.persistence import (
-    create_model,
     create_optimizer,
     import_checkpoint,
     load_model,
