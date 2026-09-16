@@ -1163,6 +1163,11 @@ def parse_arguments() -> Arguments:
             raise ValueError(f'{name} does not exist: {path}')
     if namespace.steps < 0 or namespace.batch_size <= 0 or namespace.evaluate_every <= 0:
         raise ValueError('Steps must be nonnegative; batch size and evaluation interval must be positive.')
+    if namespace.final_fidelity_positions <= 0 or namespace.final_fidelity_positions % TENSORRT_BATCH_SIZE != 0:
+        raise ValueError(
+            f'Final fidelity positions must be a positive multiple of the fixed TensorRT batch size '
+            f'{TENSORRT_BATCH_SIZE}.'
+        )
     if namespace.layers <= 0 or namespace.hidden_size <= 0:
         raise ValueError('Layers and hidden size must be positive.')
     if namespace.quantized_convolutions <= 0 or namespace.quantized_convolutions > namespace.layers * 2:

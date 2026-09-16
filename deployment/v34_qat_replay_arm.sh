@@ -19,7 +19,7 @@ initial_model="${V34_QAT_INITIAL_MODEL:?V34_QAT_INITIAL_MODEL must identify the 
 steps="${V34_QAT_STEPS:-2000}"
 learning_rate="${V34_QAT_LEARNING_RATE:-0.008}"
 warmup_steps="${V34_QAT_WARMUP_STEPS:-200}"
-final_fidelity_positions="${V34_QAT_FIDELITY_POSITIONS:-4096}"
+final_fidelity_positions="${V34_QAT_FIDELITY_POSITIONS:-3840}"
 
 python_nvidia_library_path="$(
     "${virtual_environment}/bin/python" -c \
