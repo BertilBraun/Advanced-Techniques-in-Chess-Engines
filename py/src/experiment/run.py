@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import math
 import multiprocessing
 import os
 import subprocess
@@ -24,7 +23,8 @@ from src.experiment.base_configuration import (
 from src.experiment.configuration import ExperimentConfiguration, experiment_configuration_sha256
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.composition import create_game_implementation
-from src.training.checkpoint import BootstrapPolicyPriorRecord, CheckpointReference
+from src.training.bootstrap import select_bootstrap_model
+from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import model_save_path, qat_state_save_path
 from src.training.checkpoint.persistence import (
     create_model,
@@ -32,13 +32,6 @@ from src.training.checkpoint.persistence import (
     import_checkpoint,
     load_model,
     save_model_and_optimizer,
-)
-from src.training.network import (
-    POLICY_PRIOR_PROBE_POSITIONS,
-    BootstrapCandidateMeasurement,
-    Network,
-    calibrate_bootstrap_policy_prior,
-    measure_bootstrap_candidate,
 )
 from src.training.quantization import (
     DisabledTrainingQuantization,
@@ -50,7 +43,6 @@ from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
-from src.util.log import log
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
 
@@ -80,12 +72,6 @@ class _ValidatedRunEnvironment:
     approval: ApprovalRecord
     source_revision: str
     open_file_soft_limit: int
-
-
-@dataclass(frozen=True)
-class _SelectedBootstrapModel:
-    model: Network
-    record: BootstrapPolicyPriorRecord
 
 
 def _git_output(arguments: list[str]) -> str:
@@ -239,96 +225,7 @@ def _bootstrap_probe_states(experiment: ExperimentConfiguration) -> torch.Tensor
     return load_dataset_probe_states(
         _resolve_source_path(experiment.evaluation.dataset.path),
         create_game_implementation(experiment).state,
-        POLICY_PRIOR_PROBE_POSITIONS,
-    )
-
-
-def _bootstrap_candidate_is_healthy(
-    experiment: ExperimentConfiguration,
-    measurement: BootstrapCandidateMeasurement,
-) -> bool:
-    constraints = experiment.training.trainer.bootstrap_initialization
-    return (
-        measurement.policy_shape.top1_mass <= constraints.maximum_initial_top1_mass
-        and measurement.mean_wdl_entropy_ratio >= constraints.minimum_wdl_entropy_ratio
-        and measurement.mean_absolute_expected_value <= constraints.maximum_absolute_expected_value
-        and constraints.minimum_policy_scale <= measurement.required_policy_scale <= constraints.maximum_policy_scale
-    )
-
-
-def _select_bootstrap_model(
-    experiment: ExperimentConfiguration,
-    device: torch.device,
-    auxiliary_heads: tuple[AuxiliaryHeadLayout, ...],
-    probe_states: torch.Tensor,
-) -> _SelectedBootstrapModel:
-    training = experiment.training
-    bootstrap = training.trainer.bootstrap_initialization
-    target_top3_mass = training.trainer.bootstrap_policy_prior_target_top3_mass
-    selected_index: int | None = None
-    selected_seed: int | None = None
-    selected_measurement: BootstrapCandidateMeasurement | None = None
-    selected_distance = math.inf
-    for candidate_index in range(bootstrap.candidate_count):
-        candidate_seed = training.random_seed + candidate_index
-        torch.manual_seed(candidate_seed)
-        candidate = create_model(
-            training.initial_model.network,
-            device,
-            experiment.network_dimensions,
-            auxiliary_heads,
-        )
-        measurement = measure_bootstrap_candidate(candidate, probe_states, target_top3_mass)
-        healthy = _bootstrap_candidate_is_healthy(experiment, measurement)
-        log(
-            f'Bootstrap candidate {candidate_index + 1}/{bootstrap.candidate_count} seed {candidate_seed}: '
-            f'top-1 {measurement.policy_shape.top1_mass:.4f}, '
-            f'top-3 {measurement.policy_shape.top3_mass:.4f}, '
-            f'policy scale {measurement.required_policy_scale:.4g}, '
-            f'WDL entropy ratio {measurement.mean_wdl_entropy_ratio:.4f}, '
-            f'absolute expected value {measurement.mean_absolute_expected_value:.4f}, '
-            f'{"healthy" if healthy else "rejected"}.'
-        )
-        if not healthy:
-            continue
-        distance = abs(math.log(measurement.required_policy_scale))
-        if distance < selected_distance:
-            selected_index = candidate_index
-            selected_seed = candidate_seed
-            selected_measurement = measurement
-            selected_distance = distance
-    if selected_index is None or selected_seed is None or selected_measurement is None:
-        raise ValueError(f'None of the {bootstrap.candidate_count} bootstrap initialization candidates was healthy.')
-
-    torch.manual_seed(selected_seed)
-    selected_model = create_model(
-        training.initial_model.network,
-        device,
-        experiment.network_dimensions,
-        auxiliary_heads,
-    )
-    calibration = calibrate_bootstrap_policy_prior(selected_model, probe_states, target_top3_mass)
-    if not math.isclose(calibration.applied_scale, selected_measurement.required_policy_scale, rel_tol=1e-9):
-        raise AssertionError('Recreated bootstrap candidate did not reproduce its measured policy scale.')
-    log(
-        f'Selected bootstrap candidate {selected_index + 1}/{bootstrap.candidate_count} seed {selected_seed} '
-        f'with policy scale {calibration.applied_scale:.4g}.'
-    )
-    return _SelectedBootstrapModel(
-        model=selected_model,
-        record=BootstrapPolicyPriorRecord(
-            candidate_count=bootstrap.candidate_count,
-            selected_candidate_index=selected_index,
-            selected_candidate_seed=selected_seed,
-            initial_top1_mass=calibration.initial_shape.top1_mass,
-            initial_top3_mass=calibration.initial_shape.top3_mass,
-            calibrated_top1_mass=calibration.calibrated_shape.top1_mass,
-            calibrated_top3_mass=calibration.calibrated_shape.top3_mass,
-            target_top3_mass=calibration.target_top3_mass,
-            applied_scale=calibration.applied_scale,
-            mean_wdl_entropy_ratio=selected_measurement.mean_wdl_entropy_ratio,
-            mean_absolute_expected_value=selected_measurement.mean_absolute_expected_value,
-        ),
+        experiment.training.trainer.bootstrap_probe_positions,
     )
 
 
@@ -340,7 +237,16 @@ def _save_random_initial_checkpoint(
 ) -> None:
     training = experiment.training
     bootstrap_probe_states = _bootstrap_probe_states(experiment)
-    selected = _select_bootstrap_model(experiment, device, auxiliary_heads, bootstrap_probe_states)
+    selected = select_bootstrap_model(
+        training.initial_model.network,
+        device,
+        experiment.network_dimensions,
+        auxiliary_heads,
+        bootstrap_probe_states,
+        training.trainer.bootstrap_initialization,
+        training.trainer.bootstrap_policy_prior_target_top3_mass,
+        training.random_seed,
+    )
     model = selected.model
     match training.trainer.quantization:
         case DisabledTrainingQuantization():

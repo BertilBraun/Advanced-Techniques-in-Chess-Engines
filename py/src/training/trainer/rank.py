@@ -16,10 +16,10 @@ from src.games.composition import create_game_implementation
 from src.games.implementation import GameImplementation
 from src.replay.batch_loader import MappedReplayBatchLoader
 from src.training.batch import TrainingModelOutput
+from src.training.bootstrap import select_bootstrap_model
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import checkpoint_manifest_path, qat_state_save_path
 from src.training.checkpoint.persistence import (
-    create_model,
     create_optimizer,
     load_model_and_optimizer,
     save_model_and_optimizer,
@@ -29,7 +29,7 @@ from src.training.distributions import (
     TrainingDistributionSnapshot,
     capture_training_distributions,
 )
-from src.training.network import POLICY_PRIOR_PROBE_POSITIONS, Network
+from src.training.network import Network
 from src.training.objective import ObjectiveLoss, ResolvedTrainingObjective
 from src.training.quantization import (
     DisabledTrainingQuantization,
@@ -135,19 +135,43 @@ def _initialize_rank(
     # network, so every run drew different initial weights and no run was reproducible.
     torch.manual_seed(configuration.training.random_seed)
     quantization_configuration = configuration.training.trainer.quantization
+    bootstrap_probe_states = None
+    bootstrap_policy_prior = None
+    if not initial_checkpoint_exists and startup.starting_generation == 0:
+        bootstrap_probe_states = load_dataset_probe_states(
+            resolve_project_path(configuration.evaluation.dataset.path),
+            game.state,
+            configuration.training.trainer.bootstrap_probe_positions,
+        )
     qat_state = None
     qat_calibration_states = None
     match quantization_configuration:
         case DisabledTrainingQuantization():
-            model, optimizer = load_model_and_optimizer(
-                startup.starting_generation,
-                startup.network,
-                device,
-                startup.save_path,
-                configuration.training.trainer.optimizer,
-                game.network_dimensions,
-                game.target_layout.auxiliary_heads,
-            )
+            if initial_checkpoint_exists:
+                model, optimizer = load_model_and_optimizer(
+                    startup.starting_generation,
+                    startup.network,
+                    device,
+                    startup.save_path,
+                    configuration.training.trainer.optimizer,
+                    game.network_dimensions,
+                    game.target_layout.auxiliary_heads,
+                )
+            else:
+                assert bootstrap_probe_states is not None
+                selected = select_bootstrap_model(
+                    startup.network,
+                    device,
+                    game.network_dimensions,
+                    game.target_layout.auxiliary_heads,
+                    bootstrap_probe_states,
+                    configuration.training.trainer.bootstrap_initialization,
+                    configuration.training.trainer.bootstrap_policy_prior_target_top3_mass,
+                    configuration.training.random_seed,
+                )
+                model = selected.model
+                bootstrap_policy_prior = selected.record
+                optimizer = create_optimizer(model, configuration.training.trainer.optimizer)
         case TensorRtInt8QatConfiguration(calibration_positions=calibration_positions):
             qat_calibration_states = load_dataset_probe_states(
                 resolve_project_path(configuration.evaluation.dataset.path),
@@ -166,12 +190,19 @@ def _initialize_rank(
                     game.target_layout.auxiliary_heads,
                 )
             else:
-                model = create_model(
+                assert bootstrap_probe_states is not None
+                selected = select_bootstrap_model(
                     startup.network,
                     device,
                     game.network_dimensions,
                     game.target_layout.auxiliary_heads,
+                    bootstrap_probe_states,
+                    configuration.training.trainer.bootstrap_initialization,
+                    configuration.training.trainer.bootstrap_policy_prior_target_top3_mass,
+                    configuration.training.random_seed,
                 )
+                model = selected.model
+                bootstrap_policy_prior = selected.record
                 model = configure_qat(
                     model,
                     _calibration_loop(
@@ -198,13 +229,6 @@ def _initialize_rank(
     )
     if not initial_checkpoint_exists:
         if rank == 0:
-            bootstrap_probe_states = None
-            if startup.starting_generation == 0:
-                bootstrap_probe_states = load_dataset_probe_states(
-                    resolve_project_path(configuration.evaluation.dataset.path),
-                    game.state,
-                    POLICY_PRIOR_PROBE_POSITIONS,
-                )
             match quantization_configuration:
                 case DisabledTrainingQuantization():
                     save_model_and_optimizer(
@@ -216,6 +240,7 @@ def _initialize_rank(
                         bootstrap_policy_prior_target_top3_mass=(
                             configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
                         ),
+                        bootstrap_policy_prior=bootstrap_policy_prior,
                     )
                 case TensorRtInt8QatConfiguration():
                     assert qat_state is not None and qat_calibration_states is not None
@@ -234,6 +259,7 @@ def _initialize_rank(
                         bootstrap_policy_prior_target_top3_mass=(
                             configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
                         ),
+                        bootstrap_policy_prior=bootstrap_policy_prior,
                         quantization_configuration=quantization_configuration,
                     )
         distributed.barrier()
