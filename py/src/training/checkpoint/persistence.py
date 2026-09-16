@@ -298,6 +298,17 @@ def _checkpoint_identity(
     )
 
 
+def _inference_artifact_suffix(manifest: CheckpointManifest) -> str:
+    artifact_name = Path(manifest.inference_model_path).name
+    generation_prefix = f'model_{manifest.generation}'
+    if not artifact_name.startswith(generation_prefix):
+        raise ValueError('Checkpoint inference artifact name does not match its generation.')
+    suffix = artifact_name.removeprefix(generation_prefix)
+    if suffix not in ('.jit.pt', '.fp16.onnx', '.int8.onnx'):
+        raise ValueError(f'Unsupported checkpoint inference artifact suffix: {suffix}')
+    return suffix
+
+
 def _copy_checkpoint(
     source_manifest: CheckpointManifest,
     source_paths: tuple[Path, Path, Path],
@@ -314,7 +325,7 @@ def _copy_checkpoint(
             raise ValueError(mismatch_message)
         return destination
 
-    inference_suffix = '.jit.pt' if source_manifest.qat is None or generation == 0 else '.int8.onnx'
+    inference_suffix = _inference_artifact_suffix(source_manifest)
     destination_paths = (
         model_save_path(generation, destination_folder),
         optimizer_save_path(generation, destination_folder),

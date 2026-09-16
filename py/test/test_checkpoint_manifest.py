@@ -78,12 +78,23 @@ def test_import_checkpoint_preserves_generation_optimizer_and_hashes(tmp_path: P
     assert load_checkpoint_manifest(2, destination) == load_checkpoint_manifest(2, source)
 
 
-def test_import_qat_checkpoint_preserves_onnx_inference_artifact_type(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ('inference_suffix', 'phase'),
+    (
+        ('.fp16.onnx', QatCheckpointPhase.PRE_FOLD),
+        ('.int8.onnx', QatCheckpointPhase.DEPLOYMENT),
+    ),
+)
+def test_import_qat_checkpoint_preserves_onnx_inference_artifact_type(
+    tmp_path: Path,
+    inference_suffix: str,
+    phase: QatCheckpointPhase,
+) -> None:
     source = tmp_path / 'source'
     source.mkdir()
     model_path = source / 'model_2.pt'
     optimizer_path = source / 'optimizer_2.pt'
-    inference_path = source / 'model_2.int8.onnx'
+    inference_path = source / f'model_2{inference_suffix}'
     qat_state_path = source / 'qat_state_2.pt'
     model_path.write_bytes(b'model')
     optimizer_path.write_bytes(b'optimizer')
@@ -99,7 +110,7 @@ def test_import_qat_checkpoint_preserves_onnx_inference_artifact_type(tmp_path: 
         inference_model_path=inference_path.name,
         inference_model_sha256=sha256(inference_path),
         qat=QatCheckpointRecord(
-            phase=QatCheckpointPhase.DEPLOYMENT,
+            phase=phase,
             completed_optimizer_steps=2,
             state_path=qat_state_path.name,
             state_sha256=sha256(qat_state_path),
@@ -110,7 +121,7 @@ def test_import_qat_checkpoint_preserves_onnx_inference_artifact_type(tmp_path: 
 
     imported = import_checkpoint(manifest_path, 2, tmp_path / 'destination')
 
-    assert imported.inference_model_path.name == 'model_2.int8.onnx'
+    assert imported.inference_model_path.name == f'model_2{inference_suffix}'
     assert imported.inference_model_path.read_bytes() == b'onnx'
 
 
