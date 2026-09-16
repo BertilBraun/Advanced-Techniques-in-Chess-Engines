@@ -724,8 +724,8 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     # serialisation changes and every recorded experiment_configuration_sha256 stops being reproducible.
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
-    # Re-pinned 2026-09-14: the bootstrap policy-prior target is now explicit.
-    assert experiment_configuration_sha256(frozen) == '0e5237e2fdb189629c919a3887f7e48a39c59f3cd0716b1bd1df085f91f8c543'
+    # Re-pinned 2026-09-16: bootstrap candidate health constraints are now part of the experiment identity.
+    assert experiment_configuration_sha256(frozen) == 'd079e87158465fb80a411b8b63cb26e01d51d865b8ae0ca10e685ee7ebe3dcae'
 
 
 @pytest.mark.parametrize(
