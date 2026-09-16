@@ -10,6 +10,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
+import torch
+
 from AlphaZeroCpp import search_parallelism
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
@@ -209,6 +211,8 @@ def _apply_self_play_overrides(
 
 
 def run_benchmark(arguments: Arguments) -> BenchmarkResult:
+    if arguments.inference_device == 'cuda':
+        torch.cuda.set_device(arguments.device)
     experiment = load_experiment_configuration(arguments.run_config)
     experiment = _apply_self_play_overrides(experiment, arguments)
     configuration_sha256 = experiment_configuration_sha256(experiment)
