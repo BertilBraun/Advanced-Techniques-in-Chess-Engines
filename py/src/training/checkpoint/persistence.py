@@ -208,6 +208,7 @@ def save_model_and_optimizer(
     save_folder: str | PathLike[str],
     bootstrap_probe_states: torch.Tensor | None = None,
     bootstrap_policy_prior_target_top3_mass: float = BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
+    bootstrap_policy_prior: BootstrapPolicyPriorRecord | None = None,
 ) -> None:
     raw_model_path = model_save_path(generation, save_folder)
     raw_optimizer_path = optimizer_save_path(generation, save_folder)
@@ -217,38 +218,43 @@ def save_model_and_optimizer(
     temporary_optimizer_path = _temporary_path(raw_optimizer_path)
     temporary_jit_path = _temporary_path(jit_model_path)
 
+    policy_prior_calibration = bootstrap_policy_prior
+    if generation == 0:
+        if policy_prior_calibration is None and bootstrap_probe_states is None:
+            raise ValueError(
+                'The generation-0 export requires real probe positions from the evaluation dataset '
+                'to calibrate the bootstrap policy prior.'
+            )
+        if policy_prior_calibration is None:
+            assert bootstrap_probe_states is not None
+            calibration = calibrate_bootstrap_policy_prior(
+                model,
+                bootstrap_probe_states,
+                bootstrap_policy_prior_target_top3_mass,
+            )
+            log(
+                f'Calibrated the trainable generation-0 policy prior: top-1 mass '
+                f'{calibration.initial_shape.top1_mass:.3f} -> {calibration.calibrated_shape.top1_mass:.3f}, '
+                f'top-3 mass {calibration.initial_shape.top3_mass:.3f} -> {calibration.calibrated_shape.top3_mass:.3f} '
+                f'(target {calibration.target_top3_mass}), applied scale {calibration.applied_scale:.4g}.'
+            )
+            policy_prior_calibration = BootstrapPolicyPriorRecord(
+                candidate_count=1,
+                selected_candidate_index=0,
+                initial_top1_mass=calibration.initial_shape.top1_mass,
+                initial_top3_mass=calibration.initial_shape.top3_mass,
+                calibrated_top1_mass=calibration.calibrated_shape.top1_mass,
+                calibrated_top3_mass=calibration.calibrated_shape.top3_mass,
+                target_top3_mass=calibration.target_top3_mass,
+                applied_scale=calibration.applied_scale,
+            )
+
     torch.save(model.state_dict(), temporary_model_path)
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
 
     fused_model = InferenceNetwork(model)
     fused_model.eval()
     fused_model.fuse_model()
-    policy_prior_calibration: BootstrapPolicyPriorRecord | None = None
-    if generation == 0:
-        if bootstrap_probe_states is None:
-            raise ValueError(
-                'The generation-0 export requires real probe positions from the evaluation dataset '
-                'to calibrate the bootstrap policy prior.'
-            )
-        calibration = calibrate_bootstrap_policy_prior(
-            fused_model,
-            bootstrap_probe_states,
-            bootstrap_policy_prior_target_top3_mass,
-        )
-        log(
-            f'Calibrated the generation-0 policy prior: top-1 mass '
-            f'{calibration.initial_shape.top1_mass:.3f} -> {calibration.calibrated_shape.top1_mass:.3f}, '
-            f'top-3 mass {calibration.initial_shape.top3_mass:.3f} -> {calibration.calibrated_shape.top3_mass:.3f} '
-            f'(target {calibration.target_top3_mass}), applied scale {calibration.applied_scale:.4g}.'
-        )
-        policy_prior_calibration = BootstrapPolicyPriorRecord(
-            initial_top1_mass=calibration.initial_shape.top1_mass,
-            initial_top3_mass=calibration.initial_shape.top3_mass,
-            calibrated_top1_mass=calibration.calibrated_shape.top1_mass,
-            calibrated_top3_mass=calibration.calibrated_shape.top3_mass,
-            target_top3_mass=calibration.target_top3_mass,
-            applied_scale=calibration.applied_scale,
-        )
 
     torch.jit.save(
         torch.jit.script(fused_model),

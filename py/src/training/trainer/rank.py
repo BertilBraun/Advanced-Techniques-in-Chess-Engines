@@ -234,6 +234,7 @@ def _initialize_rank(
                         bootstrap_policy_prior_target_top3_mass=(
                             configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
                         ),
+                        quantization_configuration=quantization_configuration,
                     )
         distributed.barrier()
     return _RankRuntime(
@@ -505,7 +506,7 @@ def _save_rank_checkpoint(
         case DisabledTrainingQuantization():
             save_model_and_optimizer(runtime.model, runtime.optimizer, generation, runtime.save_path)
             return CheckpointReference.load(runtime.save_path, generation)
-        case TensorRtInt8QatConfiguration():
+        case TensorRtInt8QatConfiguration() as quantization_configuration:
             assert runtime.qat_state is not None and runtime.qat_calibration_states is not None
             checkpoint = save_qat_model_and_optimizer(
                 runtime.model,
@@ -518,6 +519,7 @@ def _save_rank_checkpoint(
                     runtime.qat_calibration_states,
                     runtime.game.self_play_configuration.inference.inference_batch_size,
                 ),
+                quantization_configuration=quantization_configuration,
             )
             assert checkpoint.qat_state is not None
             runtime.qat_state = checkpoint.qat_state

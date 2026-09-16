@@ -270,6 +270,32 @@ def test_deployment_qat_checkpoint_round_trip(tmp_path: Path) -> None:
 
 
 @pytest.mark.integration
+def test_qat_checkpoint_uses_float_export_before_configured_int8_generation(tmp_path: Path) -> None:
+    model = configure_qat(_network(), _calibrate)
+    state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 500)
+    configuration = TensorRtInt8QatConfiguration(
+        int8_self_play_start_generation=10,
+        deployment_learning_rate=0.02,
+        deployment_warmup_optimizer_steps=0,
+    )
+
+    reference = save_qat_model_and_optimizer(
+        model,
+        create_optimizer(model, AdamWOptimizerConfiguration()),
+        generation=5,
+        completed_optimizer_steps=500,
+        save_folder=tmp_path,
+        qat_state=state,
+        example_states=torch.randn((8, 8, 3, 3)),
+        quantization_configuration=configuration,
+    )
+
+    assert reference.inference_model_path.name == 'model_5.fp16.onnx'
+    exported = onnx.load(reference.inference_model_path)
+    assert not any(node.op_type in ('QuantizeLinear', 'DequantizeLinear') for node in exported.graph.node)
+
+
+@pytest.mark.integration
 def test_qat_checkpoint_load_normalizes_compiled_parameter_keys(tmp_path: Path) -> None:
     model = configure_qat(_network(actions=64), _calibrate)
     pre_fold_state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 0)
@@ -308,7 +334,7 @@ def test_qat_checkpoint_load_normalizes_compiled_parameter_keys(tmp_path: Path) 
 
 
 @pytest.mark.integration
-def test_generation_zero_qat_checkpoint_calibrates_only_inference_copy(tmp_path: Path) -> None:
+def test_generation_zero_qat_checkpoint_calibrates_trainable_and_inference_weights(tmp_path: Path) -> None:
     model = configure_qat(_network(actions=64), _calibrate)
     state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 0)
     optimizer_configuration = AdamWOptimizerConfiguration()
@@ -327,10 +353,12 @@ def test_generation_zero_qat_checkpoint_calibrates_only_inference_copy(tmp_path:
         bootstrap_policy_prior_target_top3_mass=target_top3_mass,
     )
 
-    assert torch.equal(model.policy_head[-1].weight, policy_weights_before)
-    assert reference.inference_model_path.name.endswith('.jit.pt')
     calibration = read_checkpoint_manifest(0, tmp_path).policy_prior_calibration
     assert calibration is not None
+    assert torch.allclose(model.policy_head[-1].weight, policy_weights_before * calibration.applied_scale)
+    saved_weights = torch.load(reference.model_path, map_location='cpu', weights_only=True)
+    assert torch.equal(saved_weights['policy_head.4.weight'], model.policy_head[-1].weight)
+    assert reference.inference_model_path.name.endswith('.jit.pt')
     assert calibration.target_top3_mass == target_top3_mass
     assert calibration.calibrated_top3_mass == pytest.approx(target_top3_mass, abs=1e-6)
     torch.jit.load(str(reference.inference_model_path))

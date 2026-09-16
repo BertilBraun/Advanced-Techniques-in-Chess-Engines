@@ -144,6 +144,21 @@ class TrainingCompilation(str, Enum):
     DEFAULT = 'default'
 
 
+class BootstrapInitializationConfiguration(FrozenModel):
+    candidate_count: int = Field(ge=1)
+    maximum_initial_top1_mass: float = Field(gt=0.0, lt=1.0)
+    minimum_wdl_entropy_ratio: float = Field(gt=0.0, le=1.0)
+    maximum_absolute_expected_value: float = Field(ge=0.0, le=1.0)
+    minimum_policy_scale: float = Field(gt=0.0)
+    maximum_policy_scale: float = Field(gt=0.0)
+
+    @model_validator(mode='after')
+    def validate_policy_scale_range(self) -> BootstrapInitializationConfiguration:
+        if self.maximum_policy_scale < self.minimum_policy_scale:
+            raise ValueError('Maximum bootstrap policy scale must not be below the minimum.')
+        return self
+
+
 class TrainingParams(FrozenModel):
     global_batch_size: int = Field(gt=0)
     local_batch_size: int = Field(gt=0)
@@ -156,6 +171,14 @@ class TrainingParams(FrozenModel):
     warmup_optimizer_steps: int = Field(default=0, ge=0)
     warmup_start_learning_rate: float = Field(default=0.0, ge=0.0)
     bootstrap_policy_prior_target_top3_mass: float = Field(default=0.95, gt=0.0, lt=1.0)
+    bootstrap_initialization: BootstrapInitializationConfiguration = BootstrapInitializationConfiguration(
+        candidate_count=1,
+        maximum_initial_top1_mass=0.999,
+        minimum_wdl_entropy_ratio=0.001,
+        maximum_absolute_expected_value=1.0,
+        minimum_policy_scale=1e-6,
+        maximum_policy_scale=1e6,
+    )
     # Every Nth optimizer step, measure how hard each loss term pulls on the shared trunk. Zero disables.
     gradient_probe_interval_steps: int = Field(default=100, ge=0)
     max_grad_norm: float = Field(default=0.5, gt=0.0)

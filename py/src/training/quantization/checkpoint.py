@@ -27,7 +27,13 @@ from src.training.network import (
     calibrate_bootstrap_policy_prior,
 )
 from src.training.quantization.configuration import QatStateIdentity, TensorRtInt8QatConfiguration
-from src.training.quantization.runtime import export_qat_onnx, restore_qat_model, specialize_qat_onnx_batch
+from src.training.quantization.runtime import (
+    export_float_qat_onnx,
+    export_qat_onnx,
+    restore_qat_model,
+    specialize_float_onnx_batch,
+    specialize_qat_onnx_batch,
+)
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_bytes_atomically, write_text_atomically
 from src.util.hashing import file_sha256
@@ -39,6 +45,10 @@ def _temporary_path(path: Path) -> Path:
 
 def qat_inference_model_path(generation: int, save_folder: Path) -> Path:
     return save_folder / f'model_{generation}.int8.onnx'
+
+
+def float_qat_inference_model_path(generation: int, save_folder: Path) -> Path:
+    return save_folder / f'model_{generation}.fp16.onnx'
 
 
 def _bootstrap_inference_model(model: Network) -> InferenceNetwork:
@@ -66,44 +76,59 @@ def save_qat_model_and_optimizer(
     example_states: torch.Tensor,
     bootstrap_probe_states: torch.Tensor | None = None,
     bootstrap_policy_prior_target_top3_mass: float = BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
+    quantization_configuration: TensorRtInt8QatConfiguration | None = None,
+    bootstrap_policy_prior: BootstrapPolicyPriorRecord | None = None,
 ) -> CheckpointReference:
     if qat_state.completed_optimizer_steps != completed_optimizer_steps:
         raise ValueError('QAT state progress must match checkpoint optimizer progress.')
-    if generation == 0 and bootstrap_probe_states is None:
+    if generation == 0 and bootstrap_probe_states is None and bootstrap_policy_prior is None:
         raise ValueError('The generation-0 QAT export requires real bootstrap policy probe states.')
     raw_model_path = model_save_path(generation, save_folder)
     raw_optimizer_path = optimizer_save_path(generation, save_folder)
     stored_qat_state_path = qat_state_save_path(generation, save_folder)
-    inference_path = (
-        raw_model_path.with_suffix('.jit.pt') if generation == 0 else qat_inference_model_path(generation, save_folder)
+    int8_start_generation = (
+        1 if quantization_configuration is None else quantization_configuration.int8_self_play_start_generation
     )
+    if generation == 0 and int8_start_generation == 1:
+        inference_path = raw_model_path.with_suffix('.jit.pt')
+    elif generation < int8_start_generation:
+        inference_path = float_qat_inference_model_path(generation, save_folder)
+    else:
+        inference_path = qat_inference_model_path(generation, save_folder)
     temporary_model_path = _temporary_path(raw_model_path)
     temporary_optimizer_path = _temporary_path(raw_optimizer_path)
+    policy_prior_calibration = bootstrap_policy_prior
+    if generation == 0:
+        if policy_prior_calibration is None:
+            assert bootstrap_probe_states is not None
+            calibration = calibrate_bootstrap_policy_prior(
+                model,
+                bootstrap_probe_states,
+                bootstrap_policy_prior_target_top3_mass,
+            )
+            policy_prior_calibration = BootstrapPolicyPriorRecord(
+                candidate_count=1,
+                selected_candidate_index=0,
+                initial_top1_mass=calibration.initial_shape.top1_mass,
+                initial_top3_mass=calibration.initial_shape.top3_mass,
+                calibrated_top1_mass=calibration.calibrated_shape.top1_mass,
+                calibrated_top3_mass=calibration.calibrated_shape.top3_mass,
+                target_top3_mass=calibration.target_top3_mass,
+                applied_scale=calibration.applied_scale,
+            )
+
     torch.save(model.state_dict(), temporary_model_path)
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
     write_bytes_atomically(stored_qat_state_path, qat_state.path.read_bytes())
-    policy_prior_calibration = None
-    if generation == 0:
-        assert bootstrap_probe_states is not None
+    if generation == 0 and int8_start_generation == 1:
         inference_model = _bootstrap_inference_model(model)
-        calibration = calibrate_bootstrap_policy_prior(
-            inference_model,
-            bootstrap_probe_states,
-            bootstrap_policy_prior_target_top3_mass,
-        )
-        policy_prior_calibration = BootstrapPolicyPriorRecord(
-            initial_top1_mass=calibration.initial_shape.top1_mass,
-            initial_top3_mass=calibration.initial_shape.top3_mass,
-            calibrated_top1_mass=calibration.calibrated_shape.top1_mass,
-            calibrated_top3_mass=calibration.calibrated_shape.top3_mass,
-            target_top3_mass=calibration.target_top3_mass,
-            applied_scale=calibration.applied_scale,
-        )
         torch.jit.save(
             torch.jit.script(inference_model),
             str(inference_path),
             _extra_files={'network.json': inference_model.checkpoint_definition().model_dump_json()},
         )
+    elif generation < int8_start_generation:
+        export_float_qat_onnx(model, inference_path, example_states)
     else:
         export_qat_onnx(model, inference_path, example_states)
     temporary_model_path.replace(raw_model_path)
@@ -158,18 +183,22 @@ def qat_inference_checkpoint_for_batch(
     checkpoint: CheckpointReference,
     batch_size: int,
 ) -> CheckpointReference:
-    if checkpoint.generation == 0:
+    if checkpoint.generation == 0 and checkpoint.inference_model_path.name.endswith('.jit.pt'):
         raise ValueError('Generation-zero QAT inference uses the TorchScript bootstrap artifact.')
     if checkpoint.qat_state is None:
         raise ValueError('A batch-specific QAT inference artifact requires a QAT checkpoint.')
     checkpoint.validate_inference_model()
     if checkpoint.inference_model_path.suffix != '.onnx':
         raise ValueError('A batch-specific QAT inference artifact requires an ONNX inference model.')
+    precision = 'fp16' if checkpoint.inference_model_path.name.endswith('.fp16.onnx') else 'int8'
     artifact_path = checkpoint.manifest_path.parent / (
-        f'model_{checkpoint.generation}.int8-b{batch_size}-{checkpoint.inference_model_sha256[:16]}.onnx'
+        f'model_{checkpoint.generation}.{precision}-b{batch_size}-{checkpoint.inference_model_sha256[:16]}.onnx'
     )
     if not artifact_path.is_file():
-        specialize_qat_onnx_batch(checkpoint.inference_model_path, artifact_path, batch_size)
+        if precision == 'fp16':
+            specialize_float_onnx_batch(checkpoint.inference_model_path, artifact_path, batch_size)
+        else:
+            specialize_qat_onnx_batch(checkpoint.inference_model_path, artifact_path, batch_size)
     return checkpoint.model_copy(
         update={
             'inference_model_path': artifact_path,

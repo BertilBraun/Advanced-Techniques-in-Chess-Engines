@@ -12,12 +12,17 @@ from src.util.hashing import file_sha256
 
 
 class BootstrapPolicyPriorRecord(FrozenModel):
+    candidate_count: int | None = Field(default=None, ge=1)
+    selected_candidate_index: int | None = Field(default=None, ge=0)
+    selected_candidate_seed: int | None = None
     initial_top1_mass: float
     initial_top3_mass: float
     calibrated_top1_mass: float
     calibrated_top3_mass: float
     target_top3_mass: float
     applied_scale: float
+    mean_wdl_entropy_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    mean_absolute_expected_value: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class QatCheckpointRecord(FrozenModel):

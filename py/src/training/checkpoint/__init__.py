@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from src.training.checkpoint.contracts import CheckpointManifest, CheckpointReference
+from src.training.checkpoint.contracts import BootstrapPolicyPriorRecord, CheckpointManifest, CheckpointReference
 
-__all__ = ('CheckpointManifest', 'CheckpointReference')
+__all__ = ('BootstrapPolicyPriorRecord', 'CheckpointManifest', 'CheckpointReference')

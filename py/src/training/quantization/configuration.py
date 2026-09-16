@@ -18,6 +18,7 @@ class TensorRtInt8QatConfiguration(FrozenModel):
     fold_after_optimizer_steps: int = Field(default=1_000, gt=0)
     calibration_positions: int = Field(default=2_048, gt=0)
     recalibration_interval_generations: int = Field(default=1, gt=0)
+    int8_self_play_start_generation: int = Field(default=1, ge=1)
     deployment_learning_rate: FloatGenerationSchedule | Literal['inherit']
     deployment_warmup_optimizer_steps: int = Field(ge=0)
     deployment_warmup_start_learning_rate: float = Field(default=0.0, ge=0.0)

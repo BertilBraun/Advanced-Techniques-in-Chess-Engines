@@ -41,6 +41,11 @@ class QatOnnxArtifact(FrozenModel):
     dequantize_linear_nodes: int = Field(gt=0)
 
 
+class FloatOnnxArtifact(FrozenModel):
+    path: ConfigurationPath
+    sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
 @dataclass(frozen=True)
 class RestoredQatModel:
     model: Network
@@ -254,7 +259,7 @@ def _export_onnx_graph(model: nn.Module, path: Path, example_states: Tensor) -> 
     )
 
 
-def export_qat_onnx(model: nn.Module, path: Path, example_states: Tensor) -> QatOnnxArtifact:
+def _export_modelopt_onnx(model: nn.Module, path: Path, example_states: Tensor) -> onnx.ModelProto:
     temporary_path = path.with_name(f'.{path.name}.tmp')
     was_training = model.training
     model.eval()
@@ -275,12 +280,17 @@ def export_qat_onnx(model: nn.Module, path: Path, example_states: Tensor) -> Qat
     _restore_exported_batch_norm_tensors(exported, seeded_tensors)
     onnx.save(exported, temporary_path)
     onnx.checker.check_model(exported, full_check=True)
+    temporary_path.replace(path)
+    return exported
+
+
+def export_qat_onnx(model: nn.Module, path: Path, example_states: Tensor) -> QatOnnxArtifact:
+    exported = _export_modelopt_onnx(model, path, example_states)
     quantize_linear_nodes = sum(node.op_type == 'QuantizeLinear' for node in exported.graph.node)
     dequantize_linear_nodes = sum(node.op_type == 'DequantizeLinear' for node in exported.graph.node)
     if quantize_linear_nodes == 0 or dequantize_linear_nodes == 0:
-        temporary_path.unlink()
+        path.unlink()
         raise ValueError('QAT ONNX export contains no explicit Q/DQ nodes.')
-    temporary_path.replace(path)
     return QatOnnxArtifact(
         path=path,
         sha256=file_sha256(path),
@@ -289,7 +299,16 @@ def export_qat_onnx(model: nn.Module, path: Path, example_states: Tensor) -> Qat
     )
 
 
-def specialize_qat_onnx_batch(source_path: Path, destination_path: Path, batch_size: int) -> QatOnnxArtifact:
+def export_float_qat_onnx(model: Network, path: Path, example_states: Tensor) -> FloatOnnxArtifact:
+    with quantizers_disabled(model):
+        exported = _export_modelopt_onnx(model, path, example_states)
+    if any(node.op_type in ('QuantizeLinear', 'DequantizeLinear') for node in exported.graph.node):
+        path.unlink()
+        raise ValueError('Floating-point QAT deployment export unexpectedly contains Q/DQ nodes.')
+    return FloatOnnxArtifact(path=path, sha256=file_sha256(path))
+
+
+def _specialize_onnx_batch(source_path: Path, destination_path: Path, batch_size: int) -> onnx.ModelProto:
     if batch_size <= 0:
         raise ValueError('QAT deployment batch size must be positive.')
     exported = onnx.load(source_path)
@@ -337,14 +356,28 @@ def specialize_qat_onnx_batch(source_path: Path, destination_path: Path, batch_s
             dimensions[0].dim_value = batch_size
 
     onnx.checker.check_model(exported, full_check=True)
+    write_bytes_atomically(destination_path, exported.SerializeToString())
+    return exported
+
+
+def specialize_qat_onnx_batch(source_path: Path, destination_path: Path, batch_size: int) -> QatOnnxArtifact:
+    exported = _specialize_onnx_batch(source_path, destination_path, batch_size)
     quantize_linear_nodes = sum(node.op_type == 'QuantizeLinear' for node in exported.graph.node)
     dequantize_linear_nodes = sum(node.op_type == 'DequantizeLinear' for node in exported.graph.node)
     if quantize_linear_nodes == 0 or dequantize_linear_nodes == 0:
+        destination_path.unlink()
         raise ValueError('Specialized QAT ONNX artifact contains no explicit Q/DQ nodes.')
-    write_bytes_atomically(destination_path, exported.SerializeToString())
     return QatOnnxArtifact(
         path=destination_path,
         sha256=file_sha256(destination_path),
         quantize_linear_nodes=quantize_linear_nodes,
         dequantize_linear_nodes=dequantize_linear_nodes,
     )
+
+
+def specialize_float_onnx_batch(source_path: Path, destination_path: Path, batch_size: int) -> FloatOnnxArtifact:
+    exported = _specialize_onnx_batch(source_path, destination_path, batch_size)
+    if any(node.op_type in ('QuantizeLinear', 'DequantizeLinear') for node in exported.graph.node):
+        destination_path.unlink()
+        raise ValueError('Specialized floating-point ONNX artifact unexpectedly contains Q/DQ nodes.')
+    return FloatOnnxArtifact(path=destination_path, sha256=file_sha256(destination_path))

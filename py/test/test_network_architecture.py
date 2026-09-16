@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 import pytest
@@ -551,7 +552,7 @@ def test_generation_zero_calibration_hits_the_target_top3_mass(
     assert calibration.applied_scale > 0.0
 
 
-def test_calibration_is_deterministic_and_leaves_the_training_model_untouched() -> None:
+def test_calibration_is_deterministic_and_scales_the_trainable_policy_head() -> None:
     torch.manual_seed(23)
     model = Network(
         NetworkParams(
@@ -566,11 +567,20 @@ def test_calibration_is_deterministic_and_leaves_the_training_model_untouched() 
     training_weight_before = model.policy_head.output_projection.weight.clone()
     probe_states = bernoulli_probe_states(CHESS_PLANE_NETWORK_DIMENSIONS)
 
-    first = calibrate_bootstrap_policy_prior(_fused_export(model), probe_states)
-    second = calibrate_bootstrap_policy_prior(_fused_export(model), probe_states)
+    first_model = copy.deepcopy(model)
+    second_model = copy.deepcopy(model)
+    first = calibrate_bootstrap_policy_prior(first_model, probe_states)
+    second = calibrate_bootstrap_policy_prior(second_model, probe_states)
 
     assert first == second
-    assert torch.equal(model.policy_head.output_projection.weight, training_weight_before)
+    assert torch.allclose(
+        first_model.policy_head.output_projection.weight,
+        training_weight_before * first.applied_scale,
+    )
+    assert torch.equal(
+        first_model.policy_head.output_projection.weight,
+        second_model.policy_head.output_projection.weight,
+    )
 
 
 def test_generation_zero_checkpoint_export_is_calibrated_and_later_generations_are_not(tmp_path: Path) -> None:
@@ -587,8 +597,6 @@ def test_generation_zero_checkpoint_export_is_calibrated_and_later_generations_a
     )
     optimizer = create_optimizer(model, AdamWOptimizerConfiguration())
     probe_states = bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS)
-    uncalibrated_shape = measure_policy_prior_shape(_fused_export(model), probe_states)
-
     save_model_and_optimizer(model, optimizer, 0, tmp_path, probe_states)
     save_model_and_optimizer(model, optimizer, 1, tmp_path)
 
@@ -599,7 +607,7 @@ def test_generation_zero_checkpoint_export_is_calibrated_and_later_generations_a
         BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=0.01
     )
     assert measure_policy_prior_shape(generation_one, probe_states).top3_mass == pytest.approx(
-        uncalibrated_shape.top3_mass, abs=1e-5
+        BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS, abs=0.01
     )
 
 

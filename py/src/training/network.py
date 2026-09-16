@@ -416,7 +416,8 @@ class InferenceNetwork(nn.Module):
 # prior's softmax shape is fully determined by the logit scale; the export is scaled until the mean
 # top-3 mass over random legal-move-sized subsets of the probe positions hits the target. The probe
 # must be real encoded positions: structured inputs amplify CNN logits 6-9x over iid noise, and the
-# target sits on the steep part of the shape curve. The training model stays near-uniform.
+# target sits on the steep part of the shape curve. Calibration is applied to the trainable
+# policy projections so checkpoint-zero training and self-play use identical weights.
 BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS = 0.95
 POLICY_PRIOR_PROBE_POSITIONS = 256
 POLICY_PRIOR_SUBSET_SEED = 20260824
@@ -439,21 +440,26 @@ class BootstrapPolicyPriorCalibration:
     target_top3_mass: float
 
 
+@dataclass(frozen=True)
+class BootstrapCandidateMeasurement:
+    policy_shape: PolicyPriorShape
+    required_policy_scale: float
+    mean_wdl_entropy_ratio: float
+    mean_absolute_expected_value: float
+
+
 def calibrate_bootstrap_policy_prior(
-    inference_model: InferenceNetwork,
+    model: Network | InferenceNetwork,
     probe_states: Tensor,
     target_top3_mass: float = BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
 ) -> BootstrapPolicyPriorCalibration:
-    subset_logits = _policy_prior_subset_logits(_probe_policy_logits(inference_model, probe_states))
+    subset_logits, _ = _probe_outputs(model, probe_states)
+    subset_logits = _policy_prior_subset_logits(subset_logits)
     initial_shape = _policy_prior_shape(subset_logits)
     # Scaling the final projection's weight and bias scales the logits exactly, so the scale search
     # runs on the cached probe logits instead of re-running the network.
     applied_scale = _search_policy_prior_scale(subset_logits, target_top3_mass)
-    with torch.no_grad():
-        for projection in _final_policy_projections(inference_model.policy_head):
-            projection.weight.mul_(applied_scale)
-            if projection.bias is not None:
-                projection.bias.mul_(applied_scale)
+    apply_policy_prior_scale(model, applied_scale)
     return BootstrapPolicyPriorCalibration(
         initial_shape=initial_shape,
         calibrated_shape=_policy_prior_shape(subset_logits * applied_scale),
@@ -462,18 +468,48 @@ def calibrate_bootstrap_policy_prior(
     )
 
 
-def measure_policy_prior_shape(inference_model: InferenceNetwork, probe_states: Tensor) -> PolicyPriorShape:
-    return _policy_prior_shape(_policy_prior_subset_logits(_probe_policy_logits(inference_model, probe_states)))
-
-
-def _probe_policy_logits(inference_model: InferenceNetwork, probe_states: Tensor) -> Tensor:
-    device = next(inference_model.parameters()).device
-    was_training = inference_model.training
-    inference_model.eval()
+def apply_policy_prior_scale(model: Network | InferenceNetwork, scale: float) -> None:
+    if not math.isfinite(scale) or scale <= 0.0:
+        raise ValueError('Policy-prior scale must be finite and positive.')
     with torch.no_grad():
-        policy_logits, _ = inference_model(probe_states.to(device=device, dtype=torch.float32))
-    inference_model.train(was_training)
-    return policy_logits.double().cpu()
+        for projection in _final_policy_projections(model.policy_head):
+            projection.weight.mul_(scale)
+            if projection.bias is not None:
+                projection.bias.mul_(scale)
+
+
+def measure_bootstrap_candidate(
+    model: Network | InferenceNetwork,
+    probe_states: Tensor,
+    target_top3_mass: float,
+) -> BootstrapCandidateMeasurement:
+    policy_logits, wdl_probabilities = _probe_outputs(model, probe_states)
+    subset_logits = _policy_prior_subset_logits(policy_logits)
+    entropy = -(wdl_probabilities * wdl_probabilities.clamp_min(torch.finfo(torch.float64).tiny).log()).sum(dim=1)
+    outcome_count = wdl_probabilities.shape[1]
+    if outcome_count != 3:
+        raise ValueError(f'Bootstrap candidate selection requires three WDL outcomes, found {outcome_count}.')
+    return BootstrapCandidateMeasurement(
+        policy_shape=_policy_prior_shape(subset_logits),
+        required_policy_scale=_search_policy_prior_scale(subset_logits, target_top3_mass),
+        mean_wdl_entropy_ratio=float(entropy.mean() / math.log(outcome_count)),
+        mean_absolute_expected_value=float((wdl_probabilities[:, 0] - wdl_probabilities[:, 2]).abs().mean()),
+    )
+
+
+def measure_policy_prior_shape(inference_model: InferenceNetwork, probe_states: Tensor) -> PolicyPriorShape:
+    policy_logits, _ = _probe_outputs(inference_model, probe_states)
+    return _policy_prior_shape(_policy_prior_subset_logits(policy_logits))
+
+
+def _probe_outputs(model: Network | InferenceNetwork, probe_states: Tensor) -> tuple[Tensor, Tensor]:
+    device = next(model.parameters()).device
+    was_training = model.training
+    model.eval()
+    with torch.no_grad():
+        policy_logits, wdl_probabilities = model(probe_states.to(device=device, dtype=torch.float32))
+    model.train(was_training)
+    return policy_logits.double().cpu(), wdl_probabilities.double().cpu()
 
 
 def _policy_prior_subset_logits(policy_logits: Tensor) -> Tensor:
