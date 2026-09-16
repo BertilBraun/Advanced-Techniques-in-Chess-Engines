@@ -86,14 +86,15 @@ def _inference_only_policy_prior_record(
     fade_generations: int,
     bootstrap_record: BootstrapPolicyPriorRecord | None,
 ) -> BootstrapPolicyPriorRecord:
-    initial_record = bootstrap_record
-    if initial_record is None:
-        initial_record = load_checkpoint_manifest(0, save_folder).policy_prior_calibration
-    if initial_record is None:
-        raise ValueError('Inference-only policy scaling requires the generation-zero bootstrap record.')
     measurement = measure_bootstrap_candidate(model, probe_states, target_top3_mass)
+    initial_record = bootstrap_record
+    if initial_record is None and generation > 0:
+        initial_record = load_checkpoint_manifest(0, save_folder).policy_prior_calibration
+    if initial_record is None and generation > 0:
+        raise ValueError('Inference-only policy scaling requires the generation-zero bootstrap record.')
+    initial_scale = measurement.required_policy_scale if initial_record is None else initial_record.applied_scale
     scheduled_scale = _scheduled_inference_policy_scale(
-        initial_record.applied_scale,
+        initial_scale,
         generation,
         fade_generations,
     )
@@ -101,9 +102,13 @@ def _inference_only_policy_prior_record(
     with temporary_policy_prior_scale(model, applied_scale):
         calibrated_shape = measure_bootstrap_candidate(model, probe_states, target_top3_mass).policy_shape
     return BootstrapPolicyPriorRecord(
-        candidate_count=initial_record.candidate_count if generation == 0 else None,
-        selected_candidate_index=initial_record.selected_candidate_index if generation == 0 else None,
-        selected_candidate_seed=initial_record.selected_candidate_seed if generation == 0 else None,
+        candidate_count=initial_record.candidate_count if generation == 0 and initial_record is not None else None,
+        selected_candidate_index=(
+            initial_record.selected_candidate_index if generation == 0 and initial_record is not None else None
+        ),
+        selected_candidate_seed=(
+            initial_record.selected_candidate_seed if generation == 0 and initial_record is not None else None
+        ),
         initial_top1_mass=measurement.policy_shape.top1_mass,
         initial_top3_mass=measurement.policy_shape.top3_mass,
         calibrated_top1_mass=calibrated_shape.top1_mass,
