@@ -485,7 +485,7 @@ def test_staged_elo_plateau_resets_after_promotion_and_uses_next_threshold(tmp_p
             )
         )
     assert store.complete_quantum() == 'medium'
-    assert not store.state.state.candidate_start.latched
+    assert not store.state.candidate_start.latched
 
     updates = store.observe_primary_ladder_elos(
         (
