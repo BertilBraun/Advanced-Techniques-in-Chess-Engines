@@ -14,6 +14,7 @@ from src.self_play.configuration import (
     InferencePrecision,
     SdpaBackend,
     TensorRtInferenceBackend,
+    TensorRtTemplatePrecision,
     TorchScriptInferenceBackend,
 )
 from src.training.quantization.configuration import QatCheckpointPhase
@@ -87,8 +88,16 @@ def resolved_inference_model_path(
             started_at = time.perf_counter()
             if model_path.name.endswith('.engine'):
                 return model_path
-            deployment_phase = None if model_path.name.endswith('.fp16.onnx') else qat_phase
-            template_engine_path = tensor_rt_backend.template_engine_path(model_id, deployment_phase)
+            template_precision = (
+                TensorRtTemplatePrecision.FLOAT
+                if model_path.name.endswith('.fp16.onnx')
+                else TensorRtTemplatePrecision.INT8
+            )
+            template_engine_path = tensor_rt_backend.template_engine_path(
+                model_id,
+                template_precision,
+                qat_phase,
+            )
             publisher = Path(__file__).parents[2] / 'tools' / 'publish_tensorrt_engine.py'
             completed = subprocess.run(
                 (

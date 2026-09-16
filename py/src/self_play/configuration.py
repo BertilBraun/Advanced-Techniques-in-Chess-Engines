@@ -52,6 +52,13 @@ class TensorRtFloatTemplate(FrozenModel):
     engine_path: Path
 
 
+class TensorRtQatFloatTemplate(FrozenModel):
+    kind: Literal['qat_float'] = 'qat_float'
+    model_id: str
+    phase: QatCheckpointPhase
+    engine_path: Path
+
+
 class TensorRtQatTemplate(FrozenModel):
     kind: Literal['qat'] = 'qat'
     model_id: str
@@ -60,9 +67,14 @@ class TensorRtQatTemplate(FrozenModel):
 
 
 TensorRtTemplate: TypeAlias = Annotated[
-    TensorRtFloatTemplate | TensorRtQatTemplate,
+    TensorRtFloatTemplate | TensorRtQatFloatTemplate | TensorRtQatTemplate,
     Field(discriminator='kind'),
 ]
+
+
+class TensorRtTemplatePrecision(str, Enum):
+    FLOAT = 'float'
+    INT8 = 'int8'
 
 
 class TensorRtInferenceBackend(FrozenModel):
@@ -72,25 +84,49 @@ class TensorRtInferenceBackend(FrozenModel):
 
     @model_validator(mode='after')
     def validate_templates(self) -> TensorRtInferenceBackend:
-        identities = tuple(
-            (template.model_id, None if isinstance(template, TensorRtFloatTemplate) else template.phase)
-            for template in self.templates
-        )
+        identities: list[tuple[str, TensorRtTemplatePrecision, QatCheckpointPhase | None]] = []
+        for template in self.templates:
+            match template:
+                case TensorRtFloatTemplate(model_id=model_id):
+                    identities.append((model_id, TensorRtTemplatePrecision.FLOAT, None))
+                case TensorRtQatFloatTemplate(model_id=model_id, phase=phase):
+                    identities.append((model_id, TensorRtTemplatePrecision.FLOAT, phase))
+                case TensorRtQatTemplate(model_id=model_id, phase=phase):
+                    identities.append((model_id, TensorRtTemplatePrecision.INT8, phase))
         if len(set(identities)) != len(identities):
             raise ValueError('TensorRT template model and phase identities must be unique.')
         return self
 
-    def template_engine_path(self, model_id: str, qat_phase: QatCheckpointPhase | None) -> Path:
+    def template_engine_path(
+        self,
+        model_id: str,
+        precision: TensorRtTemplatePrecision,
+        qat_phase: QatCheckpointPhase | None,
+    ) -> Path:
         for template in self.templates:
-            match template, qat_phase:
-                case TensorRtFloatTemplate(model_id=template_model_id), None if template_model_id == model_id:
+            match template, precision, qat_phase:
+                case TensorRtFloatTemplate(model_id=template_model_id), TensorRtTemplatePrecision.FLOAT, None if (
+                    template_model_id == model_id
+                ):
                     return template.engine_path
-                case TensorRtQatTemplate(model_id=template_model_id, phase=phase), candidate_phase if (
+                case TensorRtQatFloatTemplate(
+                    model_id=template_model_id,
+                    phase=phase,
+                ), TensorRtTemplatePrecision.FLOAT, candidate_phase if (
                     template_model_id == model_id and phase is candidate_phase
                 ):
                     return template.engine_path
-        phase_name = 'float' if qat_phase is None else qat_phase.value
-        raise ValueError(f'No TensorRT template is configured for model {model_id} in phase {phase_name}.')
+                case TensorRtQatTemplate(
+                    model_id=template_model_id,
+                    phase=phase,
+                ), TensorRtTemplatePrecision.INT8, candidate_phase if (
+                    template_model_id == model_id and phase is candidate_phase
+                ):
+                    return template.engine_path
+        phase_name = 'unquantized' if qat_phase is None else qat_phase.value
+        raise ValueError(
+            f'No {precision.value} TensorRT template is configured for model {model_id} in phase {phase_name}.'
+        )
 
 
 InferenceBackendConfiguration: TypeAlias = Annotated[

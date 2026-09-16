@@ -85,14 +85,14 @@ chess:
         kind: tensorrt
         bootstrap_with_torchscript: false
         templates:
-        - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v48-12x128-fp16-b320.engine}
-        - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v43-int8-12x128-prefold-stable-c0c1f585.engine}
-        - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v36-int8-12x128-deployment-trained-template.engine}
-        - {kind: float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, engine_path: /workspace/tensorrt/v48-14x160-fp16-b320.engine}
-        - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v36-int8-14x160-prefold-production-template.engine}
-        - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v36-int8-14x160-deployment-trained-template.engine}
-        - {kind: float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, engine_path: /workspace/tensorrt/v48-19x176-fp16-b320.engine}
-        - {kind: qat, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-19x176-prefold-int8-b320.engine}
+        - {kind: qat_float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-12x128-prefold-fp16-b320.engine}
+        - {kind: qat_float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-12x128-deployment-fp16-b320.engine}
+        - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-12x128-deployment-int8-b320.engine}
+        - {kind: qat_float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-14x160-prefold-fp16-b320.engine}
+        - {kind: qat_float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-14x160-deployment-fp16-b320.engine}
+        - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-14x160-deployment-int8-b320.engine}
+        - {kind: qat_float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b320.engine}
+        - {kind: qat_float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-19x176-deployment-fp16-b320.engine}
         - {kind: qat, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-19x176-deployment-int8-b320.engine}
 
 evaluation:
@@ -122,14 +122,14 @@ evaluation:
           kind: tensorrt
           bootstrap_with_torchscript: false
           templates:
-          - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v48-12x128-fp16-b64.engine}
-          - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-12x128-prefold-int8-b64.engine}
-          - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v36-int8-12x128-deployment-trained-eval64-template.engine}
-          - {kind: float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, engine_path: /workspace/tensorrt/v48-14x160-fp16-b64.engine}
-          - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-14x160-prefold-int8-b64.engine}
-          - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v36-int8-14x160-deployment-trained-eval64-template.engine}
-          - {kind: float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, engine_path: /workspace/tensorrt/v48-19x176-fp16-b64.engine}
-          - {kind: qat, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-19x176-prefold-int8-b64.engine}
+          - {kind: qat_float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-12x128-prefold-fp16-b64.engine}
+          - {kind: qat_float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-12x128-deployment-fp16-b64.engine}
+          - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-12x128-deployment-int8-b64.engine}
+          - {kind: qat_float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-14x160-prefold-fp16-b64.engine}
+          - {kind: qat_float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-14x160-deployment-fp16-b64.engine}
+          - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-14x160-deployment-int8-b64.engine}
+          - {kind: qat_float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b64.engine}
+          - {kind: qat_float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-19x176-deployment-fp16-b64.engine}
           - {kind: qat, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-19x176-deployment-int8-b64.engine}
         sdpa_backend: memory_efficient
   - kind: stockfish_adaptive_nodes

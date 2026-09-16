@@ -5,9 +5,12 @@ from enum import StrEnum
 from pathlib import Path
 
 import torch
+from src.evaluation.dataset import load_dataset_probe_states
+from src.evaluation.process import resolve_project_path
 from src.experiment.configuration import load_experiment_configuration
+from src.games.composition import create_game_implementation
 from src.games.chess.configuration import ChessExperimentConfiguration
-from src.training.network import Network
+from src.training.bootstrap import select_bootstrap_model
 from src.training.quantization.configuration import TensorRtInt8QatConfiguration
 from src.training.quantization.runtime import (
     configure_qat,
@@ -19,9 +22,10 @@ from src.training.quantization.runtime import (
 
 
 class TemplateExportKind(StrEnum):
-    FLOAT = 'float'
-    PRE_FOLD = 'pre_fold'
-    DEPLOYMENT = 'deployment'
+    FLOAT_PRE_FOLD = 'float_pre_fold'
+    FLOAT_DEPLOYMENT = 'float_deployment'
+    INT8_PRE_FOLD = 'int8_pre_fold'
+    INT8_DEPLOYMENT = 'int8_deployment'
 
 
 def export_template(
@@ -44,30 +48,46 @@ def export_template(
     if len(matching_models) != 1:
         raise ValueError(f'Model ID must identify exactly one configured model: {model_id}')
 
-    torch.manual_seed(configuration.training.random_seed)
-    model = Network(matching_models[0].network, device, configuration.network_dimensions).to(device)
-    calibration_states = torch.randint(
-        0,
-        2,
-        (
-            quantization.calibration_positions,
-            configuration.network_dimensions.channels,
-            configuration.network_dimensions.rows,
-            configuration.network_dimensions.columns,
-        ),
+    game = create_game_implementation(configuration)
+    probe_states = load_dataset_probe_states(
+        resolve_project_path(configuration.evaluation.dataset.path),
+        game.state,
+        configuration.training.trainer.bootstrap_probe_positions,
+    ).to(device=device, dtype=torch.float32)
+    selected = select_bootstrap_model(
+        matching_models[0].network,
+        device,
+        game.network_dimensions,
+        game.target_layout.auxiliary_heads,
+        probe_states,
+        configuration.training.trainer.bootstrap_initialization,
+        configuration.training.trainer.bootstrap_policy_prior_target_top3_mass,
+        configuration.training.random_seed,
+    )
+    model = selected.model
+    calibration_states = load_dataset_probe_states(
+        resolve_project_path(configuration.evaluation.dataset.path),
+        game.state,
+        quantization.calibration_positions,
+    ).to(
         device=device,
         dtype=torch.float32,
     )
 
     def calibrate(candidate: torch.nn.Module) -> None:
-        candidate(calibration_states)
+        was_training = candidate.training
+        candidate.eval()
+        with torch.inference_mode():
+            for states in calibration_states.split(configuration.chess.self_play.inference.inference_batch_size):
+                candidate(states)
+        candidate.train(was_training)
 
     model = configure_qat(model, calibrate)
-    if export_kind is TemplateExportKind.DEPLOYMENT:
+    if export_kind in (TemplateExportKind.FLOAT_DEPLOYMENT, TemplateExportKind.INT8_DEPLOYMENT):
         fold_scaled_post_activation_batch_norm(model)
     example_states = fixed_batch_example_states(calibration_states, batch_size)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    if export_kind is TemplateExportKind.FLOAT:
+    if export_kind in (TemplateExportKind.FLOAT_PRE_FOLD, TemplateExportKind.FLOAT_DEPLOYMENT):
         export_float_qat_onnx(model, output_path, example_states)
     else:
         export_qat_onnx(model, output_path, example_states)

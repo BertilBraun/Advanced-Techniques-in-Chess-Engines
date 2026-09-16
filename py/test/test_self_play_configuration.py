@@ -8,7 +8,9 @@ from src.self_play.configuration import (
     SelfPlaySearchParams,
     TensorRtFloatTemplate,
     TensorRtInferenceBackend,
+    TensorRtQatFloatTemplate,
     TensorRtQatTemplate,
+    TensorRtTemplatePrecision,
 )
 from src.training.quantization.configuration import QatCheckpointPhase
 
@@ -99,6 +101,16 @@ def test_tensorrt_template_selection_is_model_and_qat_phase_specific() -> None:
     backend = TensorRtInferenceBackend(
         templates=(
             TensorRtFloatTemplate(model_id='small', engine_path='small-float.engine'),
+            TensorRtQatFloatTemplate(
+                model_id='small',
+                phase=QatCheckpointPhase.PRE_FOLD,
+                engine_path='small-pre-fold-float.engine',
+            ),
+            TensorRtQatFloatTemplate(
+                model_id='small',
+                phase=QatCheckpointPhase.DEPLOYMENT,
+                engine_path='small-deployment-float.engine',
+            ),
             TensorRtQatTemplate(
                 model_id='small',
                 phase=QatCheckpointPhase.PRE_FOLD,
@@ -117,13 +129,30 @@ def test_tensorrt_template_selection_is_model_and_qat_phase_specific() -> None:
         )
     )
 
-    assert backend.template_engine_path('small', None).name == 'small-float.engine'
-    assert backend.template_engine_path('small', QatCheckpointPhase.PRE_FOLD).name == 'small-pre-fold.engine'
-    assert backend.template_engine_path('small', QatCheckpointPhase.DEPLOYMENT).name == 'small-deployment.engine'
-    assert backend.template_engine_path('medium', QatCheckpointPhase.DEPLOYMENT).name == 'medium-deployment.engine'
+    assert backend.template_engine_path('small', TensorRtTemplatePrecision.FLOAT, None).name == 'small-float.engine'
+    assert (
+        backend.template_engine_path('small', TensorRtTemplatePrecision.FLOAT, QatCheckpointPhase.PRE_FOLD).name
+        == 'small-pre-fold-float.engine'
+    )
+    assert (
+        backend.template_engine_path('small', TensorRtTemplatePrecision.FLOAT, QatCheckpointPhase.DEPLOYMENT).name
+        == 'small-deployment-float.engine'
+    )
+    assert (
+        backend.template_engine_path('small', TensorRtTemplatePrecision.INT8, QatCheckpointPhase.PRE_FOLD).name
+        == 'small-pre-fold.engine'
+    )
+    assert (
+        backend.template_engine_path('small', TensorRtTemplatePrecision.INT8, QatCheckpointPhase.DEPLOYMENT).name
+        == 'small-deployment.engine'
+    )
+    assert (
+        backend.template_engine_path('medium', TensorRtTemplatePrecision.INT8, QatCheckpointPhase.DEPLOYMENT).name
+        == 'medium-deployment.engine'
+    )
     assert backend.model_dump(mode='json')['templates'][0]['engine_path'] == 'small-float.engine'
     with pytest.raises(ValueError, match='medium.*pre_fold'):
-        backend.template_engine_path('medium', QatCheckpointPhase.PRE_FOLD)
+        backend.template_engine_path('medium', TensorRtTemplatePrecision.INT8, QatCheckpointPhase.PRE_FOLD)
 
 
 def test_tensorrt_template_identities_must_be_unique() -> None:
