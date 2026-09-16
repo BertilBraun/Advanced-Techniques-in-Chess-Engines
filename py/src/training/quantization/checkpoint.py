@@ -216,7 +216,7 @@ def onnx_inference_checkpoint_for_batch(
         raise ValueError('A batch-specific inference artifact requires an ONNX inference model.')
     precision = 'fp16' if checkpoint.inference_model_path.name.endswith('.fp16.onnx') else 'int8'
     artifact_path = checkpoint.manifest_path.parent / (
-        f'model_{checkpoint.generation}.{precision}-b{batch_size}-{checkpoint.inference_model_sha256[:16]}.onnx'
+        f'model_{checkpoint.generation}.b{batch_size}-{checkpoint.inference_model_sha256[:16]}.{precision}.onnx'
     )
     if not artifact_path.is_file():
         if precision == 'fp16':

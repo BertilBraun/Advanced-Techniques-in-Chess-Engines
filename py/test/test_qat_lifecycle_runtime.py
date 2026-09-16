@@ -120,6 +120,7 @@ def test_inference_batch_specialization_uses_only_retained_onnx(tmp_path: Path) 
     specialized = onnx_inference_checkpoint_for_batch(checkpoint, 64)
 
     assert specialized.inference_model_path.is_file()
+    assert specialized.inference_model_path.name.endswith('.int8.onnx')
     model = onnx.load(specialized.inference_model_path)
     assert model.graph.input[0].type.tensor_type.shape.dim[0].dim_value == 64
     assert model.graph.output[0].type.tensor_type.shape.dim[0].dim_value == 64
