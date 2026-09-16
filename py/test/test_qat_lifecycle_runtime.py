@@ -9,6 +9,7 @@ import pytest
 import torch
 from onnx import TensorProto, helper, numpy_helper
 from src.games.representation import NetworkDimensions
+from src.self_play.tensorrt_refit import onnx_refit_contract
 from src.training.checkpoint.contracts import CheckpointReference, read_checkpoint_manifest
 from src.training.checkpoint.paths import checkpoint_manifest_path
 from src.training.checkpoint.persistence import create_optimizer
@@ -304,8 +305,11 @@ def test_qat_export_keeps_zero_and_nonzero_batch_norm_parameters(tmp_path: Path)
 
     zero_initializers = {initializer.name: initializer for initializer in onnx.load(zero_path).graph.initializer}
     nonzero_initializers = {initializer.name: initializer for initializer in onnx.load(nonzero_path).graph.initializer}
+    zero_contract = onnx_refit_contract(onnx.load(zero_path))
+    nonzero_contract = onnx_refit_contract(onnx.load(nonzero_path))
 
     assert zero_initializers.keys() == nonzero_initializers.keys()
+    assert zero_contract == nonzero_contract
     assert 'backbone.0.conv_block2.1.bias' in zero_initializers
     assert np.count_nonzero(numpy_helper.to_array(zero_initializers['backbone.0.conv_block2.1.bias'])) == 0
     assert np.allclose(
