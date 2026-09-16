@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Literal
 
 import torch
-
 from AlphaZeroCpp import search_parallelism
 from src.experiment.configuration import experiment_configuration_sha256, load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
