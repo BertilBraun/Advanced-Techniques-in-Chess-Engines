@@ -24,7 +24,6 @@ from src.training.network import (
     InferenceNetwork,
     Network,
     NetworkConfiguration,
-    apply_policy_prior_scale,
     calibrate_bootstrap_policy_prior,
     measure_bootstrap_candidate,
     temporary_policy_prior_scale,
