@@ -334,8 +334,30 @@ def _specialize_onnx_batch(source_path: Path, destination_path: Path, batch_size
         for input_index, input_name in enumerate(node.input):
             consumers.setdefault(input_name, []).append((node, input_index))
 
-    resized_batch_constants = 0
-    resized_reshape_constants = 0
+    resized_batch_tensors = 0
+
+    def specialize_tensor(value: np.ndarray, uses: list[tuple[onnx.NodeProto, int]]) -> np.ndarray | None:
+        nonlocal resized_batch_tensors
+        if uses and all(consumer.op_type == 'Reshape' and input_index == 1 for consumer, input_index in uses):
+            if value.ndim == 1 and value.size > 0 and value[0] == source_batch_size:
+                specialized_shape = value.copy()
+                specialized_shape[0] = batch_size
+                return specialized_shape
+            return None
+        if uses and all(consumer.op_type == 'ScatterElements' and input_index == 0 for consumer, input_index in uses):
+            if value.ndim > 0 and value.shape[0] == source_batch_size:
+                resized_batch_tensors += 1
+                return np.ascontiguousarray(value[:batch_size])
+        return None
+
+    for initializer in exported.graph.initializer:
+        specialized = specialize_tensor(
+            onnx.numpy_helper.to_array(initializer),
+            consumers.get(initializer.name, []),
+        )
+        if specialized is not None:
+            initializer.CopyFrom(onnx.numpy_helper.from_array(specialized, name=initializer.name))
+
     for node in exported.graph.node:
         if node.op_type != 'Constant' or len(node.output) != 1:
             continue
@@ -343,20 +365,11 @@ def _specialize_onnx_batch(source_path: Path, destination_path: Path, batch_size
         if value_attribute is None:
             continue
         uses = consumers.get(node.output[0], [])
-        value = onnx.numpy_helper.to_array(value_attribute.t)
-        if uses and all(consumer.op_type == 'Reshape' and input_index == 1 for consumer, input_index in uses):
-            if value.ndim == 1 and value.size > 0 and value[0] == source_batch_size:
-                specialized_shape = value.copy()
-                specialized_shape[0] = batch_size
-                value_attribute.t.CopyFrom(onnx.numpy_helper.from_array(specialized_shape))
-                resized_reshape_constants += 1
-            continue
-        if uses and all(consumer.op_type == 'ScatterElements' and input_index == 0 for consumer, input_index in uses):
-            if value.ndim > 0 and value.shape[0] == source_batch_size:
-                value_attribute.t.CopyFrom(onnx.numpy_helper.from_array(np.ascontiguousarray(value[:batch_size])))
-                resized_batch_constants += 1
+        specialized = specialize_tensor(onnx.numpy_helper.to_array(value_attribute.t), uses)
+        if specialized is not None:
+            value_attribute.t.CopyFrom(onnx.numpy_helper.from_array(specialized))
 
-    if resized_reshape_constants == 0 or resized_batch_constants == 0:
+    if resized_batch_tensors == 0:
         raise ValueError('QAT ONNX graph does not contain the expected fixed-batch policy-head constants.')
     for graph_value in (*exported.graph.input, *exported.graph.output):
         dimensions = graph_value.type.tensor_type.shape.dim

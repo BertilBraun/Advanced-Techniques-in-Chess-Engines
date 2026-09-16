@@ -106,6 +106,27 @@ def _fixed_batch_qat_onnx(path: Path, batch_size: int) -> None:
     onnx.save(helper.make_model(graph, opset_imports=(helper.make_opsetid('', 20),)), path)
 
 
+def _dynamic_reshape_qat_onnx(path: Path, batch_size: int) -> None:
+    shape = helper.make_node('Shape', ('states',), ('shape',))
+    reshape = helper.make_node('Reshape', ('states', 'shape'), ('reshaped',))
+    scale = helper.make_node('Constant', (), ('scale',), value=numpy_helper.from_array(np.array(0.1, dtype=np.float32)))
+    zero = helper.make_node('Constant', (), ('zero',), value=numpy_helper.from_array(np.array(0, dtype=np.int8)))
+    quantize = helper.make_node('QuantizeLinear', ('reshaped', 'scale', 'zero'), ('quantized',))
+    dequantize = helper.make_node('DequantizeLinear', ('quantized', 'scale', 'zero'), ('updates',))
+    scatter = helper.make_node('ScatterElements', ('scatter_data', 'indices', 'updates'), ('policy_logits',), axis=1)
+    graph = helper.make_graph(
+        (shape, reshape, scale, zero, quantize, dequantize, scatter),
+        'dynamic-reshape-qat',
+        (helper.make_tensor_value_info('states', TensorProto.FLOAT, (batch_size, 4)),),
+        (helper.make_tensor_value_info('policy_logits', TensorProto.FLOAT, (batch_size, 4)),),
+        initializer=(
+            numpy_helper.from_array(np.zeros((batch_size, 4), dtype=np.float32), name='scatter_data'),
+            numpy_helper.from_array(np.zeros((batch_size, 4), dtype=np.int64), name='indices'),
+        ),
+    )
+    onnx.save(helper.make_model(graph, opset_imports=(helper.make_opsetid('', 20),)), path)
+
+
 def test_inference_batch_specialization_uses_only_retained_onnx(tmp_path: Path) -> None:
     source_path = tmp_path / 'model_9.int8.onnx'
     _fixed_batch_qat_onnx(source_path, 320)
@@ -144,6 +165,21 @@ def test_qat_onnx_batch_specialization_rejects_enlargement(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match='cannot enlarge'):
         specialize_qat_onnx_batch(source_path, tmp_path / 'specialized.onnx', 320)
+
+
+def test_inference_batch_specialization_supports_dynamic_shapes_and_initializers(tmp_path: Path) -> None:
+    source_path = tmp_path / 'model.int8.onnx'
+    destination_path = tmp_path / 'model-b64.int8.onnx'
+    _dynamic_reshape_qat_onnx(source_path, 320)
+
+    specialize_qat_onnx_batch(source_path, destination_path, 64)
+
+    model = onnx.load(destination_path)
+    initializers = {initializer.name: numpy_helper.to_array(initializer) for initializer in model.graph.initializer}
+    assert model.graph.input[0].type.tensor_type.shape.dim[0].dim_value == 64
+    assert model.graph.output[0].type.tensor_type.shape.dim[0].dim_value == 64
+    assert initializers['scatter_data'].shape == (64, 4)
+    assert initializers['indices'].shape == (320, 4)
 
 
 def _network(actions: int = 10) -> Network:
