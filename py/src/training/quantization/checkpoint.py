@@ -89,10 +89,13 @@ def _inference_only_policy_prior_record(
     measurement = measure_bootstrap_candidate(model, probe_states, target_top3_mass)
     initial_record = bootstrap_record
     if initial_record is None and generation > 0:
-        initial_record = load_checkpoint_manifest(0, save_folder).policy_prior_calibration
+        initial_record = load_checkpoint_manifest(generation - 1, save_folder).policy_prior_calibration
     if initial_record is None and generation > 0:
-        raise ValueError('Inference-only policy scaling requires the generation-zero bootstrap record.')
-    initial_scale = measurement.required_policy_scale if initial_record is None else initial_record.applied_scale
+        raise ValueError('Inference-only policy scaling requires the previous checkpoint policy record.')
+    if initial_record is None:
+        initial_scale = measurement.required_policy_scale
+    else:
+        initial_scale = initial_record.initial_applied_scale or initial_record.applied_scale
     scheduled_scale = _scheduled_inference_policy_scale(
         initial_scale,
         generation,
@@ -115,6 +118,7 @@ def _inference_only_policy_prior_record(
         calibrated_top3_mass=calibrated_shape.top3_mass,
         target_top3_mass=target_top3_mass,
         applied_scale=applied_scale,
+        initial_applied_scale=initial_scale,
         mean_wdl_entropy_ratio=measurement.mean_wdl_entropy_ratio,
         mean_absolute_expected_value=measurement.mean_absolute_expected_value,
     )
@@ -183,6 +187,7 @@ def save_qat_model_and_optimizer(
                 calibrated_top3_mass=calibration.calibrated_shape.top3_mass,
                 target_top3_mass=calibration.target_top3_mass,
                 applied_scale=calibration.applied_scale,
+                initial_applied_scale=calibration.applied_scale,
             )
 
     torch.save(model.state_dict(), temporary_model_path)

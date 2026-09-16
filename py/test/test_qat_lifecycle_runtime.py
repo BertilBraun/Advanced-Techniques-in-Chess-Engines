@@ -410,3 +410,75 @@ def test_generation_zero_qat_checkpoint_can_scale_only_inference_weights(tmp_pat
     assert torch.equal(saved_weights['policy_head.4.weight'], policy_weights_before)
     assert reference.inference_model_path.name.endswith('.fp16.onnx')
     assert calibration.calibrated_top3_mass == pytest.approx(0.70, abs=1e-6)
+
+
+@pytest.mark.integration
+def test_inference_only_policy_fade_continues_inside_progressive_model_directory(tmp_path: Path) -> None:
+    model = configure_qat(_network(actions=64), _calibrate)
+    optimizer = create_optimizer(model, AdamWOptimizerConfiguration())
+    state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 0)
+    probe_states = torch.randn((256, 8, 3, 3))
+    configuration = TensorRtInt8QatConfiguration(
+        deployment_learning_rate=0.02,
+        deployment_warmup_optimizer_steps=0,
+        int8_self_play_start_generation=10,
+    )
+    root_reference = save_qat_model_and_optimizer(
+        model,
+        optimizer,
+        generation=0,
+        completed_optimizer_steps=0,
+        save_folder=tmp_path,
+        qat_state=state,
+        example_states=torch.randn((8, 8, 3, 3)),
+        bootstrap_probe_states=probe_states,
+        bootstrap_policy_prior_target_top3_mass=0.70,
+        quantization_configuration=configuration,
+        bootstrap_policy_scale_application=BootstrapPolicyScaleApplication.INFERENCE_ONLY,
+        bootstrap_policy_scale_fade_generations=10,
+    )
+    initial_record = read_checkpoint_manifest(0, tmp_path).policy_prior_calibration
+    assert initial_record is not None
+    progressive_directory = tmp_path / 'models' / 'stage-0'
+    progressive_directory.mkdir(parents=True)
+
+    save_qat_model_and_optimizer(
+        model,
+        optimizer,
+        generation=1,
+        completed_optimizer_steps=0,
+        save_folder=progressive_directory,
+        qat_state=state,
+        example_states=torch.randn((8, 8, 3, 3)),
+        bootstrap_probe_states=probe_states,
+        bootstrap_policy_prior_target_top3_mass=0.70,
+        quantization_configuration=configuration,
+        bootstrap_policy_prior=initial_record,
+        bootstrap_policy_scale_application=BootstrapPolicyScaleApplication.INFERENCE_ONLY,
+        bootstrap_policy_scale_fade_generations=10,
+    )
+    generation_one = read_checkpoint_manifest(1, progressive_directory).policy_prior_calibration
+    assert generation_one is not None
+
+    generation_two_reference = save_qat_model_and_optimizer(
+        model,
+        optimizer,
+        generation=2,
+        completed_optimizer_steps=0,
+        save_folder=progressive_directory,
+        qat_state=state,
+        example_states=torch.randn((8, 8, 3, 3)),
+        bootstrap_probe_states=probe_states,
+        bootstrap_policy_prior_target_top3_mass=0.70,
+        quantization_configuration=configuration,
+        bootstrap_policy_scale_application=BootstrapPolicyScaleApplication.INFERENCE_ONLY,
+        bootstrap_policy_scale_fade_generations=10,
+    )
+
+    generation_two = read_checkpoint_manifest(2, progressive_directory).policy_prior_calibration
+    assert generation_two is not None
+    assert generation_two_reference.inference_model_path.name.endswith('.fp16.onnx')
+    assert generation_one.initial_applied_scale == initial_record.applied_scale
+    assert generation_two.initial_applied_scale == initial_record.applied_scale
+    assert generation_two.applied_scale <= generation_one.applied_scale
+    assert root_reference.manifest_path.parent == tmp_path

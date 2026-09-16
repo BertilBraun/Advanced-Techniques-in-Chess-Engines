@@ -104,6 +104,7 @@ def select_bootstrap_model(
             calibrated_top3_mass=calibration.calibrated_shape.top3_mass,
             target_top3_mass=calibration.target_top3_mass,
             applied_scale=calibration.applied_scale,
+            initial_applied_scale=calibration.applied_scale,
             mean_wdl_entropy_ratio=selected_measurement.mean_wdl_entropy_ratio,
             mean_absolute_expected_value=selected_measurement.mean_absolute_expected_value,
         ),

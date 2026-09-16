@@ -21,6 +21,7 @@ class BootstrapPolicyPriorRecord(FrozenModel):
     calibrated_top3_mass: float
     target_top3_mass: float
     applied_scale: float
+    initial_applied_scale: float | None = Field(default=None, gt=0.0)
     mean_wdl_entropy_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
     mean_absolute_expected_value: float | None = Field(default=None, ge=0.0, le=1.0)
 
