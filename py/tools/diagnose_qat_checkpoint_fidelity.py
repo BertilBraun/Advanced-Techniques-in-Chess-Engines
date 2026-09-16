@@ -185,7 +185,7 @@ def _generation_report(
         original_onnx_artifact_available=original_onnx_artifact_available,
         outputs=tuple(
             BackendReport(name=name, output=_output_summary(outputs, legal_action_mask))
-            for name, outputs in named_outputs.items()
+            for name, outputs in named_outputs
         ),
         float_vs_fake_quant=(
             measure_fidelity(float_outputs, fake_quant_outputs, legal_action_mask)
