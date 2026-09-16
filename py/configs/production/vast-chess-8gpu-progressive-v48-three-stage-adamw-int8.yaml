@@ -83,7 +83,7 @@ chess:
     inference:
       backend:
         kind: tensorrt
-        bootstrap_with_torchscript: true
+        bootstrap_with_torchscript: false
         templates:
         - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v48-12x128-fp16-b320.engine}
         - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v43-int8-12x128-prefold-stable-c0c1f585.engine}
@@ -120,7 +120,7 @@ evaluation:
         outstanding_batches_per_worker: 1
         backend:
           kind: tensorrt
-          bootstrap_with_torchscript: true
+          bootstrap_with_torchscript: false
           templates:
           - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v48-12x128-fp16-b64.engine}
           - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-12x128-prefold-int8-b64.engine}
