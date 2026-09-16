@@ -6,7 +6,11 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 from src.replay.configuration import ReplayConfiguration
-from src.training.network import NetworkParams, ScaledPostActivationResidualBlockConfiguration
+from src.training.network import (
+    NetworkParams,
+    PostActivationResidualBlockConfiguration,
+    ScaledPostActivationResidualBlockConfiguration,
+)
 from src.training.progressive import (
     SECONDS_PER_DAY,
     ElapsedCandidateStartConfiguration,
@@ -286,10 +290,13 @@ class TrainingArgs(FrozenModel):
                     raise ValueError('The QAT fold boundary must align with a complete training quantum.')
                 if any(
                     not isinstance(model.network, NetworkParams)
-                    or not isinstance(model.network.residual_block, ScaledPostActivationResidualBlockConfiguration)
+                    or not isinstance(
+                        model.network.residual_block,
+                        PostActivationResidualBlockConfiguration | ScaledPostActivationResidualBlockConfiguration,
+                    )
                     for model in self.progressive_model_sizing.models
                 ):
-                    raise ValueError('TensorRT INT8 QAT requires scaled post-activation convolutional models.')
+                    raise ValueError('TensorRT INT8 QAT requires post-activation convolutional models.')
         maximum_wall_time = self.limits.maximum_wall_time_seconds
         match self.progressive_model_sizing:
             case ProgressiveModelSizingConfiguration(

@@ -17,7 +17,7 @@ from src.training.quantization.runtime import (
     export_float_qat_onnx,
     export_qat_onnx,
     fixed_batch_example_states,
-    fold_scaled_post_activation_batch_norm,
+    fold_post_activation_batch_norm,
 )
 
 
@@ -84,7 +84,7 @@ def export_template(
 
     model = configure_qat(model, calibrate)
     if export_kind in (TemplateExportKind.FLOAT_DEPLOYMENT, TemplateExportKind.INT8_DEPLOYMENT):
-        fold_scaled_post_activation_batch_norm(model)
+        fold_post_activation_batch_norm(model)
     example_states = fixed_batch_example_states(calibration_states, batch_size)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if export_kind in (TemplateExportKind.FLOAT_PRE_FOLD, TemplateExportKind.FLOAT_DEPLOYMENT):

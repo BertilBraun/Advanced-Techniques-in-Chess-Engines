@@ -6,7 +6,14 @@ from pathlib import Path
 
 import onnx
 import tensorrt as trt
-from src.util.atomic_file import write_bytes_atomically
+from src.self_play.tensorrt_refit import (
+    TensorRtRefitTemplateMetadata,
+    canonicalize_onnx_refit_names,
+    onnx_refit_contract,
+    template_metadata_path,
+)
+from src.util.atomic_file import write_bytes_atomically, write_text_atomically
+from src.util.hashing import file_sha256
 from tools.publish_tensorrt_engine import export_onnx
 
 WORKSPACE_BYTES = 4 * 1024**3
@@ -41,6 +48,10 @@ def build_template(
             shutil.copyfile(model_path, onnx_path)
         else:
             export_onnx(model_path, onnx_path, (batch_size, channels, rows, columns))
+        exported = onnx.load(onnx_path)
+        canonicalize_onnx_refit_names(exported)
+        onnx.save(exported, onnx_path)
+        refit_contract = onnx_refit_contract(exported)
         logger = trt.Logger(trt.Logger.WARNING)
         builder = trt.Builder(logger)
         network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
@@ -64,6 +75,11 @@ def build_template(
         if serialized is None:
             raise ValueError('TensorRT template build failed')
         write_bytes_atomically(output_path, bytes(serialized))
+        metadata = TensorRtRefitTemplateMetadata(
+            engine_sha256=file_sha256(output_path),
+            onnx_refit_contract=refit_contract,
+        )
+        write_text_atomically(template_metadata_path(output_path), metadata.model_dump_json(indent=2) + '\n')
         if timing_cache_path is not None:
             write_bytes_atomically(timing_cache_path, bytes(configuration.get_timing_cache().serialize()))
     finally:

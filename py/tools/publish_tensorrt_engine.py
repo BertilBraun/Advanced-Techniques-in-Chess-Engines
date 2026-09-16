@@ -4,6 +4,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import shutil
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -12,6 +13,12 @@ from typing import Iterator
 import onnx
 import tensorrt as trt
 import torch
+from src.self_play.tensorrt_refit import (
+    OnnxRefitContract,
+    canonicalize_onnx_refit_names,
+    load_template_metadata,
+    onnx_refit_contract,
+)
 from src.util.atomic_file import write_bytes_atomically, write_text_atomically
 from src.util.hashing import file_sha256
 
@@ -54,10 +61,23 @@ def export_onnx(model_path: Path, output_path: Path, input_shape: tuple[int, int
             dynamo=False,
         )
     exported = onnx.load(output_path)
+    canonicalize_onnx_refit_names(exported)
+    onnx.save(exported, output_path)
     onnx.checker.check_model(exported, full_check=True)
 
 
-def refit_engine(template_path: Path, onnx_path: Path, output_path: Path) -> None:
+def refit_engine(
+    template_path: Path,
+    onnx_path: Path,
+    output_path: Path,
+    candidate_contract: OnnxRefitContract,
+) -> None:
+    template_metadata = load_template_metadata(template_path)
+    if template_metadata.onnx_refit_contract != candidate_contract:
+        raise ValueError(
+            f'TensorRT template refit contract {template_metadata.onnx_refit_contract.sha256} '
+            f'does not match checkpoint contract {candidate_contract.sha256}.'
+        )
     logger = trt.Logger(trt.Logger.WARNING)
     runtime = trt.Runtime(logger)
     engine = runtime.deserialize_cuda_engine(template_path.read_bytes())
@@ -99,23 +119,26 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
         if template is None:
             raise ValueError(f'Could not deserialize TensorRT template: {template_paths[0]}')
         input_shape = engine_input_shape(template)
-        owns_onnx = model_path.suffix != '.onnx'
-        onnx_path = engine_path.with_suffix('.temporary.onnx') if owns_onnx else model_path
-        if owns_onnx:
-            onnx_path.unlink(missing_ok=True)
+        exports_onnx = model_path.suffix != '.onnx'
+        onnx_path = engine_path.with_suffix('.temporary.onnx')
+        onnx_path.unlink(missing_ok=True)
         try:
-            if owns_onnx:
+            if exports_onnx:
                 export_onnx(model_path, onnx_path, input_shape)
             else:
+                shutil.copyfile(model_path, onnx_path)
                 exported = onnx.load(onnx_path)
+                canonicalize_onnx_refit_names(exported)
+                onnx.save(exported, onnx_path)
                 onnx.checker.check_model(exported, full_check=True)
+            candidate_contract = onnx_refit_contract(onnx.load(onnx_path, load_external_data=False))
             selected_template_path: Path | None = None
             refit_seconds: float | None = None
             failures: list[str] = []
             for template_path in template_paths:
                 refit_started_at = time.perf_counter()
                 try:
-                    refit_engine(template_path, onnx_path, engine_path)
+                    refit_engine(template_path, onnx_path, engine_path, candidate_contract)
                 except (TypeError, ValueError) as error:
                     failures.append(f'{template_path}: {error}')
                     continue
@@ -126,8 +149,7 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
                 raise ValueError('No TensorRT template accepted the checkpoint:\n' + '\n'.join(failures))
             assert refit_seconds is not None
         finally:
-            if owns_onnx:
-                onnx_path.unlink(missing_ok=True)
+            onnx_path.unlink(missing_ok=True)
         template_sha256 = file_sha256(selected_template_path)
         metadata = {
             'engine_path': str(engine_path),

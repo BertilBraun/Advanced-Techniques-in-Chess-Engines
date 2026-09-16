@@ -15,8 +15,11 @@ import torch
 from modelopt.torch.quantization.config import QuantizeConfig, QuantizerCfgEntry
 from modelopt.torch.quantization.nn import TensorQuantizer
 from pydantic import Field
+from src.self_play.tensorrt_refit import canonicalize_onnx_refit_names
 from src.training.network import (
+    GlobalPoolingResBlock,
     Network,
+    ResBlock,
     ScaledPostActivationGlobalPoolingResBlock,
     ScaledPostActivationResBlock,
 )
@@ -99,20 +102,24 @@ def _fold_convolution_batch_norm(block: nn.Sequential) -> None:
     block[1] = nn.Identity()
 
 
-def fold_scaled_post_activation_batch_norm(model: Network) -> None:
+def fold_post_activation_batch_norm(model: Network) -> None:
     model.eval()
     for block in model.backbone:
-        if not isinstance(block, (ScaledPostActivationResBlock, ScaledPostActivationGlobalPoolingResBlock)):
-            raise ValueError('QAT deployment folding requires a scaled post-activation residual trunk.')
-        second_batch_norm = block.conv_block2[1]
-        if not isinstance(second_batch_norm, nn.BatchNorm2d):
-            raise ValueError('The scaled residual branch has already been folded.')
-        if second_batch_norm.weight is None or second_batch_norm.bias is None:
-            raise ValueError('The scaled residual BatchNorm must have affine parameters.')
-        with torch.no_grad():
-            second_batch_norm.weight.mul_(block.branch_scale)
-            second_batch_norm.bias.mul_(block.branch_scale)
-        block.branch_scale = 1.0
+        if not isinstance(
+            block,
+            (ResBlock, GlobalPoolingResBlock, ScaledPostActivationResBlock, ScaledPostActivationGlobalPoolingResBlock),
+        ):
+            raise ValueError('QAT deployment folding requires a post-activation residual trunk.')
+        if isinstance(block, (ScaledPostActivationResBlock, ScaledPostActivationGlobalPoolingResBlock)):
+            second_batch_norm = block.conv_block2[1]
+            if not isinstance(second_batch_norm, nn.BatchNorm2d):
+                raise ValueError('The scaled residual branch has already been folded.')
+            if second_batch_norm.weight is None or second_batch_norm.bias is None:
+                raise ValueError('The scaled residual BatchNorm must have affine parameters.')
+            with torch.no_grad():
+                second_batch_norm.weight.mul_(block.branch_scale)
+                second_batch_norm.bias.mul_(block.branch_scale)
+            block.branch_scale = 1.0
         _fold_convolution_batch_norm(block.conv_block1)
         _fold_convolution_batch_norm(block.conv_block2)
     model.train()
@@ -163,7 +170,7 @@ def restore_qat_model(
     if not isinstance(restored, Network):
         raise ValueError('ModelOpt restore did not preserve the training network contract.')
     if state.phase is QatCheckpointPhase.DEPLOYMENT:
-        fold_scaled_post_activation_batch_norm(restored)
+        fold_post_activation_batch_norm(restored)
     return RestoredQatModel(restored, state.phase)
 
 
@@ -278,6 +285,7 @@ def _export_modelopt_onnx(model: nn.Module, path: Path, example_states: Tensor) 
         model.train(was_training)
     exported = onnx.load(temporary_path)
     _restore_exported_batch_norm_tensors(exported, seeded_tensors)
+    canonicalize_onnx_refit_names(exported)
     onnx.save(exported, temporary_path)
     onnx.checker.check_model(exported, full_check=True)
     temporary_path.replace(path)

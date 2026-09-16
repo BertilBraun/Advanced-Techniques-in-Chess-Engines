@@ -144,6 +144,7 @@ class Arguments:
     strongly_typed_tensorrt: bool
     constrain_tensorrt_float16_islands: bool
     fixed_trunk_activation_amax: float | None
+    initial_model: Path | None
     resume_state: Path | None
     fold_before_training: bool
 
@@ -191,7 +192,7 @@ class TensorRtMeasurement(FrozenModel):
 
 
 class ArchitectureScreenReport(FrozenModel):
-    schema_version: Literal[7] = 7
+    schema_version: Literal[8] = 8
     source_revision: SourceRevision
     cell: ScreenCell
     random_seed: int
@@ -205,6 +206,8 @@ class ArchitectureScreenReport(FrozenModel):
     strongly_typed_tensorrt: bool
     constrained_tensorrt_float16_islands: bool
     fixed_trunk_activation_amax: float | None = Field(default=None, gt=0.0)
+    initial_model_path: str | None
+    initial_model_sha256: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
     resumed_state_path: str | None
     resumed_state_sha256: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
     folded_before_training: bool
@@ -437,6 +440,22 @@ def _configure_qat(
     )
     assert isinstance(quantized, Network)
     return quantized
+
+
+def _load_initial_model(model: Network, path: Path) -> None:
+    source = cast(dict[str, Tensor], torch.load(path, map_location=model.device, weights_only=True))
+    destination = model.state_dict()
+    compatible = {name: tensor for name, tensor in source.items() if name in destination}
+    missing = tuple(
+        sorted(
+            name
+            for name in destination
+            if name not in compatible and 'quantizer' not in name
+        )
+    )
+    if missing:
+        raise ValueError(f'Initial model is missing architecture tensors: {missing}')
+    model.load_state_dict(compatible, strict=False)
 
 
 def _fold_convolution_batch_norm(block: nn.Sequential) -> None:
@@ -836,6 +855,8 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
                 model = _SharedBoundaryQuantizedPostActivationNetwork(network_architecture, device)
             case _:
                 model = Network(network_architecture, device, CHESS_NETWORK_DIMENSIONS)
+        if arguments.initial_model is not None:
+            _load_initial_model(model, arguments.initial_model)
         cost = measure_model_cost(model)
         if (
             arguments.layers == DEFAULT_LAYERS
@@ -1075,6 +1096,8 @@ def run(arguments: Arguments) -> ArchitectureScreenReport:
             strongly_typed_tensorrt=arguments.strongly_typed_tensorrt,
             constrained_tensorrt_float16_islands=arguments.constrain_tensorrt_float16_islands,
             fixed_trunk_activation_amax=arguments.fixed_trunk_activation_amax,
+            initial_model_path=str(arguments.initial_model) if arguments.initial_model is not None else None,
+            initial_model_sha256=file_sha256(arguments.initial_model) if arguments.initial_model is not None else None,
             resumed_state_path=str(arguments.resume_state) if arguments.resume_state is not None else None,
             resumed_state_sha256=file_sha256(arguments.resume_state) if arguments.resume_state is not None else None,
             folded_before_training=arguments.fold_before_training,
@@ -1135,9 +1158,15 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--strongly-typed-tensorrt', action='store_true')
     parser.add_argument('--constrain-tensorrt-float16-islands', action='store_true')
     parser.add_argument('--fixed-trunk-activation-amax', type=float)
+    parser.add_argument('--initial-model', type=Path)
     parser.add_argument('--resume-state', type=Path)
     parser.add_argument('--fold-before-training', action='store_true')
     namespace = parser.parse_args()
+    if namespace.initial_model is not None and namespace.resume_state is not None:
+        raise ValueError('Initial-model and resume-state inputs are mutually exclusive.')
+    for path, name in ((namespace.initial_model, 'Initial model'), (namespace.resume_state, 'Resume state')):
+        if path is not None and not path.is_file():
+            raise ValueError(f'{name} does not exist: {path}')
     if namespace.steps < 0 or namespace.batch_size <= 0 or namespace.evaluate_every <= 0:
         raise ValueError('Steps must be nonnegative; batch size and evaluation interval must be positive.')
     if namespace.layers <= 0 or namespace.hidden_size <= 0:
@@ -1192,6 +1221,7 @@ def parse_arguments() -> Arguments:
         strongly_typed_tensorrt=namespace.strongly_typed_tensorrt,
         constrain_tensorrt_float16_islands=namespace.constrain_tensorrt_float16_islands,
         fixed_trunk_activation_amax=namespace.fixed_trunk_activation_amax,
+        initial_model=namespace.initial_model,
         resume_state=namespace.resume_state,
         fold_before_training=namespace.fold_before_training,
     )
