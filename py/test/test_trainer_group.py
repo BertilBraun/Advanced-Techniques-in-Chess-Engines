@@ -21,10 +21,11 @@ from src.replay.contracts import (
 from src.replay.description import ReplayDescription
 from src.replay.layout import ReplayLayout
 from src.replay.store import ReplayStore
+from src.self_play.configuration import TensorRtFloatTemplate, TensorRtInferenceBackend, TorchScriptInferenceBackend
 from src.self_play.completed_game import SearchVisitCounts
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
-from src.training.configuration import TrainingCompilation, TrainingPrecision
+from src.training.configuration import BootstrapPolicyScaleApplication, TrainingCompilation, TrainingPrecision
 from src.training.network import DensePolicyHeadConfiguration, Network
 from src.training.progress import TrainingProgress
 from src.training.quantization import QatCheckpointPhase, QatStateIdentity
@@ -34,6 +35,39 @@ from src.training.trainer.rank import DistributedTrainingModel
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 from test_helpers.probe_states import bernoulli_probe_states
 from torch import nn
+
+
+@pytest.mark.parametrize(
+    ('initial_checkpoint_exists', 'starting_generation', 'policy_scale_application', 'backend', 'expected'),
+    (
+        (True, 0, BootstrapPolicyScaleApplication.TRAINABLE, TorchScriptInferenceBackend(), False),
+        (False, 0, BootstrapPolicyScaleApplication.TRAINABLE, TorchScriptInferenceBackend(), True),
+        (True, 4, BootstrapPolicyScaleApplication.INFERENCE_ONLY, TorchScriptInferenceBackend(), True),
+        (
+            True,
+            0,
+            BootstrapPolicyScaleApplication.TRAINABLE,
+            TensorRtInferenceBackend(templates=(TensorRtFloatTemplate(model_id='small', engine_path='small.engine'),)),
+            True,
+        ),
+    ),
+)
+def test_bootstrap_probe_states_remain_available_for_checkpoint_publication(
+    initial_checkpoint_exists: bool,
+    starting_generation: int,
+    policy_scale_application: BootstrapPolicyScaleApplication,
+    backend: TorchScriptInferenceBackend | TensorRtInferenceBackend,
+    expected: bool,
+) -> None:
+    assert (
+        trainer_rank._requires_bootstrap_probe_states(
+            initial_checkpoint_exists,
+            starting_generation,
+            policy_scale_application,
+            backend,
+        )
+        is expected
+    )
 
 
 def test_qat_checkpoint_save_refreshes_live_sidecar_identity(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -15,7 +15,7 @@ from src.experiment.configuration import ExperimentConfiguration, load_experimen
 from src.games.composition import create_game_implementation
 from src.games.implementation import GameImplementation
 from src.replay.batch_loader import MappedReplayBatchLoader
-from src.self_play.configuration import TensorRtInferenceBackend
+from src.self_play.configuration import InferenceBackendConfiguration, TensorRtInferenceBackend
 from src.training.batch import TrainingModelOutput
 from src.training.bootstrap import select_bootstrap_model
 from src.training.checkpoint import CheckpointReference
@@ -116,6 +116,19 @@ class _TrainingBatchResult:
     distributions: TrainingDistributionSnapshot | None
 
 
+def _requires_bootstrap_probe_states(
+    initial_checkpoint_exists: bool,
+    starting_generation: int,
+    policy_scale_application: BootstrapPolicyScaleApplication,
+    inference_backend: InferenceBackendConfiguration,
+) -> bool:
+    return (
+        (not initial_checkpoint_exists and starting_generation == 0)
+        or policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
+        or isinstance(inference_backend, TensorRtInferenceBackend)
+    )
+
+
 def _initialize_rank(
     rank: int,
     world_size: int,
@@ -145,9 +158,12 @@ def _initialize_rank(
     bootstrap_probe_states = None
     bootstrap_policy_prior = None
     policy_scale_application = configuration.training.trainer.bootstrap_initialization.policy_scale_application
-    if (
-        not initial_checkpoint_exists and startup.starting_generation == 0
-    ) or policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY:
+    if _requires_bootstrap_probe_states(
+        initial_checkpoint_exists,
+        startup.starting_generation,
+        policy_scale_application,
+        game.self_play_configuration.inference.backend,
+    ):
         bootstrap_probe_states = load_dataset_probe_states(
             resolve_project_path(configuration.evaluation.dataset.path),
             game.state,
