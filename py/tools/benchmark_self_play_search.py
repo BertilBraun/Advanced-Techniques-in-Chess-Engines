@@ -150,9 +150,16 @@ def _apply_self_play_overrides(
     elif arguments.backend == 'tensorrt':
         if arguments.tensorrt_template_engine is None:
             raise ValueError('--tensorrt-template-engine is required for the TensorRT backend.')
+        model_id = experiment.training.initial_model.model_id
         backend_update = {
             'kind': 'tensorrt',
-            'template_engine_paths': [str(arguments.tensorrt_template_engine)],
+            'templates': [
+                {
+                    'kind': 'float',
+                    'model_id': model_id,
+                    'engine_path': str(arguments.tensorrt_template_engine),
+                }
+            ],
         }
     inference_update = {
         field_name: value

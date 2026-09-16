@@ -1,0 +1,16 @@
+extends: v48-initial-model-shapes.yaml
+
+training:
+  progressive_model_sizing:
+    kind: fixed
+    model:
+      model_id: chess-cnn-scaled-post-13x144-fromto-v48-benchmark
+      network:
+        kind: convolutional
+        num_layers: 13
+        hidden_size: 144
+        residual_block: {kind: scaled_post_activation, branch_scale: 0.2773500981126146, activation_cap: 6.0}
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+        num_value_channels: 2
+        value_fc_size: 48
