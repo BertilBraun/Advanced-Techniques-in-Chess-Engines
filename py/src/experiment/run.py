@@ -252,9 +252,7 @@ def _bootstrap_candidate_is_healthy(
         measurement.policy_shape.top1_mass <= constraints.maximum_initial_top1_mass
         and measurement.mean_wdl_entropy_ratio >= constraints.minimum_wdl_entropy_ratio
         and measurement.mean_absolute_expected_value <= constraints.maximum_absolute_expected_value
-        and constraints.minimum_policy_scale
-        <= measurement.required_policy_scale
-        <= constraints.maximum_policy_scale
+        and constraints.minimum_policy_scale <= measurement.required_policy_scale <= constraints.maximum_policy_scale
     )
 
 
