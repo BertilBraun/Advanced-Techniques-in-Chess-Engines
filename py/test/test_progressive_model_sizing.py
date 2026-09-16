@@ -33,6 +33,8 @@ from src.training.progressive import (
     ProgressiveModelDefinition,
     ProgressiveModelSizingConfiguration,
     ProgressiveTrainingStateStore,
+    EloPlateauStageConfiguration,
+    StagedEloPlateauCandidateStartConfiguration,
     TotalLossEmaPromotionConfiguration,
     retain_progressive_candidate_checkpoints,
 )
@@ -84,6 +86,26 @@ def _elapsed_configuration() -> ProgressiveModelSizingConfiguration:
             'candidate_start': ElapsedCandidateStartConfiguration(
                 kind='elapsed',
                 start_days=(0.75, 1.5),
+            ).model_dump(mode='json')
+        }
+    )
+
+
+def _staged_elo_configuration(warmup_quanta: int = 1) -> ProgressiveModelSizingConfiguration:
+    return _configuration(warmup_quanta).validated_copy(
+        update={
+            'candidate_start': StagedEloPlateauCandidateStartConfiguration(
+                kind='staged_elo_plateau',
+                stages=(
+                    EloPlateauStageConfiguration(
+                        candidate_model_id='medium',
+                        minimum_worthwhile_gain_per_hour=12.0,
+                    ),
+                    EloPlateauStageConfiguration(
+                        candidate_model_id='large',
+                        minimum_worthwhile_gain_per_hour=3.0,
+                    ),
+                ),
             ).model_dump(mode='json')
         }
     )
@@ -200,6 +222,23 @@ def test_elapsed_start_policy_requires_one_start_per_candidate() -> None:
                 'candidate_start': ElapsedCandidateStartConfiguration(
                     kind='elapsed',
                     start_days=(0.75,),
+                ).model_dump(mode='json')
+            }
+        )
+
+
+def test_staged_elo_policy_requires_exact_candidate_order() -> None:
+    with pytest.raises(ValueError, match='candidate model order exactly'):
+        _configuration().validated_copy(
+            update={
+                'candidate_start': StagedEloPlateauCandidateStartConfiguration(
+                    kind='staged_elo_plateau',
+                    stages=(
+                        EloPlateauStageConfiguration(
+                            candidate_model_id='large',
+                            minimum_worthwhile_gain_per_hour=3.0,
+                        ),
+                    ),
                 ).model_dump(mode='json')
             }
         )
@@ -424,6 +463,41 @@ def test_later_candidate_is_not_skipped_after_first_promotion(tmp_path: Path) ->
     pending = store.begin_quantum(0.0, replay, 4, 4)
 
     assert pending.required_model_ids == ('medium', 'large')
+
+
+def test_staged_elo_plateau_resets_after_promotion_and_uses_next_threshold(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _staged_elo_configuration())
+    replay = _replay(tmp_path)
+    store.observe_primary_ladder_elos(
+        (
+            PrimaryLadderEloObservation(boundary_seconds=3600, elo=11.9),
+            PrimaryLadderEloObservation(boundary_seconds=7200, elo=11.9),
+        )
+    )
+    assert store.begin_quantum(0.0, replay, 0, 4).required_model_ids == ('small', 'medium')
+    for model_id in ('small', 'medium'):
+        store.record_candidate(
+            CompletedCandidateTraining(
+                model_id=model_id,
+                completed_optimizer_steps=4,
+                checkpoint=_checkpoint(tmp_path, model_id, 1),
+                comparable_total_loss=1.0,
+            )
+        )
+    assert store.complete_quantum() == 'medium'
+    assert not store.state.state.candidate_start.latched
+
+    updates = store.observe_primary_ladder_elos(
+        (
+            PrimaryLadderEloObservation(boundary_seconds=10800, elo=14.0),
+            PrimaryLadderEloObservation(boundary_seconds=14400, elo=15.0),
+        )
+    )
+
+    assert updates[-1].instantaneous_ema_gain_per_hour is not None
+    assert updates[-1].instantaneous_ema_gain_per_hour < 3.0
+    assert updates[-1].latched
+    assert store.begin_quantum(0.0, replay, 4, 4).required_model_ids == ('medium', 'large')
 
 
 def test_publication_relabels_private_candidate_generation_atomically(tmp_path: Path) -> None:

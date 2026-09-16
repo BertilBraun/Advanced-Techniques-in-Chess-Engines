@@ -20,6 +20,8 @@ from src.training.progressive import (
     EloPlateauCandidateStartState,
     ProgressiveModelSizingConfiguration,
     ProgressiveTrainingStateStore,
+    StagedEloPlateauCandidateStartConfiguration,
+    StagedEloPlateauCandidateStartState,
     retain_progressive_candidate_checkpoints,
 )
 from src.training.quantization import TensorRtInt8QatConfiguration
@@ -170,7 +172,7 @@ class ProgressiveTrainingSession(TrainingSession):
         )
         self.trainers: dict[str, TrainerGroup] = {}
         match self.state.state.candidate_start:
-            case EloPlateauCandidateStartState() as candidate_start:
+            case (EloPlateauCandidateStartState() | StagedEloPlateauCandidateStartState()) as candidate_start:
                 self._record_candidate_start_state(candidate_start)
 
     @property
@@ -335,11 +337,19 @@ class ProgressiveTrainingSession(TrainingSession):
     def _model_index(self, model_id: str) -> int:
         return tuple(model.model_id for model in self.progressive_configuration.models).index(model_id)
 
-    def _record_candidate_start_state(self, state: EloPlateauCandidateStartState) -> None:
+    def _record_candidate_start_state(
+        self,
+        state: EloPlateauCandidateStartState | StagedEloPlateauCandidateStartState,
+    ) -> None:
         candidate_start = self.progressive_configuration.candidate_start
-        match candidate_start:
-            case EloPlateauCandidateStartConfiguration():
+        match candidate_start, state:
+            case EloPlateauCandidateStartConfiguration(), EloPlateauCandidateStartState():
                 threshold = candidate_start.minimum_worthwhile_gain_per_hour
+            case (
+                StagedEloPlateauCandidateStartConfiguration(),
+                StagedEloPlateauCandidateStartState(candidate_model_id=candidate_model_id),
+            ):
+                threshold = candidate_start.stage(candidate_model_id).minimum_worthwhile_gain_per_hour
             case _:
                 raise ValueError('Elo candidate-start state requires Elo candidate-start configuration.')
         step = state.latest_boundary_seconds

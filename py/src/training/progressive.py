@@ -28,6 +28,22 @@ class EloPlateauCandidateStartConfiguration(FrozenModel):
     minimum_worthwhile_gain_per_hour: float = Field(gt=0.0, allow_inf_nan=False)
 
 
+class EloPlateauStageConfiguration(FrozenModel):
+    candidate_model_id: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]*$')
+    minimum_worthwhile_gain_per_hour: float = Field(gt=0.0, allow_inf_nan=False)
+
+
+class StagedEloPlateauCandidateStartConfiguration(FrozenModel):
+    kind: Literal['staged_elo_plateau']
+    stages: tuple[EloPlateauStageConfiguration, ...] = Field(min_length=1)
+
+    def stage(self, candidate_model_id: str) -> EloPlateauStageConfiguration:
+        for stage in self.stages:
+            if stage.candidate_model_id == candidate_model_id:
+                return stage
+        raise ValueError(f'No Elo plateau stage is configured for candidate model: {candidate_model_id}')
+
+
 class ElapsedCandidateStartConfiguration(FrozenModel):
     kind: Literal['elapsed']
     start_days: tuple[Decimal, ...] = Field(min_length=1)
@@ -42,7 +58,9 @@ class ElapsedCandidateStartConfiguration(FrozenModel):
 
 
 CandidateStartConfiguration: TypeAlias = Annotated[
-    EloPlateauCandidateStartConfiguration | ElapsedCandidateStartConfiguration,
+    EloPlateauCandidateStartConfiguration
+    | StagedEloPlateauCandidateStartConfiguration
+    | ElapsedCandidateStartConfiguration,
     Field(discriminator='kind'),
 ]
 
@@ -82,6 +100,11 @@ class ProgressiveModelSizingConfiguration(FrozenModel):
             case ElapsedCandidateStartConfiguration(start_days=start_days):
                 if len(start_days) != len(self.models) - 1:
                     raise ValueError('Elapsed candidate starts must contain one entry per candidate model.')
+            case StagedEloPlateauCandidateStartConfiguration(stages=stages):
+                expected_candidate_ids = model_ids[1:]
+                actual_candidate_ids = tuple(stage.candidate_model_id for stage in stages)
+                if actual_candidate_ids != expected_candidate_ids:
+                    raise ValueError('Staged Elo plateau entries must match candidate model order exactly.')
             case EloPlateauCandidateStartConfiguration():
                 pass
         return self
@@ -161,12 +184,39 @@ class EloPlateauCandidateStartState(FrozenModel):
         return self
 
 
+class StagedEloPlateauCandidateStartState(FrozenModel):
+    kind: Literal['staged_elo_plateau']
+    candidate_model_id: str
+    latest_boundary_seconds: int = Field(ge=0)
+    ema_observations: int = Field(ge=0)
+    ema_elo: float = Field(ge=0.0, allow_inf_nan=False)
+    latest_observed_elo: float | None = Field(default=None, ge=0.0, allow_inf_nan=False)
+    instantaneous_ema_gain_per_hour: float | None = Field(default=None, allow_inf_nan=False)
+    consecutive_below_threshold_observations: int = Field(ge=0)
+    latched: bool
+
+    @model_validator(mode='after')
+    def validate_observation_state(self) -> StagedEloPlateauCandidateStartState:
+        if self.ema_observations == 0:
+            if self.latest_boundary_seconds != 0 or self.ema_elo != 0.0 or self.latest_observed_elo is not None:
+                raise ValueError('An empty staged Elo EMA must remain at its zero baseline.')
+            if self.instantaneous_ema_gain_per_hour is not None:
+                raise ValueError('An empty staged Elo EMA cannot have a gain rate.')
+            if self.consecutive_below_threshold_observations != 0:
+                raise ValueError('An empty staged Elo EMA cannot have below-threshold observations.')
+        elif self.latest_boundary_seconds == 0 or self.latest_observed_elo is None:
+            raise ValueError('An observed staged Elo EMA must retain its latest observation and boundary.')
+        if self.consecutive_below_threshold_observations > self.ema_observations:
+            raise ValueError('Below-threshold observations cannot exceed total Elo EMA observations.')
+        return self
+
+
 class ElapsedCandidateStartState(FrozenModel):
     kind: Literal['elapsed']
 
 
 CandidateStartState: TypeAlias = Annotated[
-    EloPlateauCandidateStartState | ElapsedCandidateStartState,
+    EloPlateauCandidateStartState | StagedEloPlateauCandidateStartState | ElapsedCandidateStartState,
     Field(discriminator='kind'),
 ]
 
@@ -229,11 +279,21 @@ class ProgressiveTrainingStateStore:
     def observe_primary_ladder_elos(
         self,
         observations: tuple[PrimaryLadderEloObservation, ...],
-    ) -> tuple[EloPlateauCandidateStartState, ...]:
-        updates: list[EloPlateauCandidateStartState] = []
+    ) -> tuple[EloPlateauCandidateStartState | StagedEloPlateauCandidateStartState, ...]:
+        updates: list[EloPlateauCandidateStartState | StagedEloPlateauCandidateStartState] = []
         match self.state.candidate_start, self.configuration.candidate_start:
             case EloPlateauCandidateStartState() as candidate_start, EloPlateauCandidateStartConfiguration() as start:
-                pass
+                threshold = start.minimum_worthwhile_gain_per_hour
+            case (
+                StagedEloPlateauCandidateStartState() as candidate_start,
+                StagedEloPlateauCandidateStartConfiguration() as start,
+            ):
+                successor = self.configuration.successor(self.state.active_model_id)
+                if successor is None:
+                    return ()
+                if candidate_start.candidate_model_id != successor.model_id:
+                    raise ValueError('Staged Elo plateau state does not target the active model successor.')
+                threshold = start.stage(successor.model_id).minimum_worthwhile_gain_per_hour
             case ElapsedCandidateStartState(), ElapsedCandidateStartConfiguration():
                 return ()
             case _:
@@ -251,21 +311,36 @@ class ProgressiveTrainingStateStore:
             gain_per_hour = (ema_elo - candidate_start.ema_elo) / elapsed_hours
             consecutive_below_threshold_observations = (
                 candidate_start.consecutive_below_threshold_observations + 1
-                if gain_per_hour < start.minimum_worthwhile_gain_per_hour
+                if gain_per_hour < threshold
                 else 0
             )
-            candidate_start = EloPlateauCandidateStartState(
-                kind='elo_plateau',
-                latest_boundary_seconds=observation.boundary_seconds,
-                ema_observations=ema_observations,
-                ema_elo=ema_elo,
-                instantaneous_ema_gain_per_hour=gain_per_hour,
-                consecutive_below_threshold_observations=consecutive_below_threshold_observations,
-                latched=(
-                    candidate_start.latched
-                    or consecutive_below_threshold_observations >= ELO_PLATEAU_CONFIRMATION_OBSERVATIONS
-                ),
+            latched = (
+                candidate_start.latched
+                or consecutive_below_threshold_observations >= ELO_PLATEAU_CONFIRMATION_OBSERVATIONS
             )
+            match candidate_start:
+                case EloPlateauCandidateStartState():
+                    candidate_start = EloPlateauCandidateStartState(
+                        kind='elo_plateau',
+                        latest_boundary_seconds=observation.boundary_seconds,
+                        ema_observations=ema_observations,
+                        ema_elo=ema_elo,
+                        instantaneous_ema_gain_per_hour=gain_per_hour,
+                        consecutive_below_threshold_observations=consecutive_below_threshold_observations,
+                        latched=latched,
+                    )
+                case StagedEloPlateauCandidateStartState(candidate_model_id=candidate_model_id):
+                    candidate_start = StagedEloPlateauCandidateStartState(
+                        kind='staged_elo_plateau',
+                        candidate_model_id=candidate_model_id,
+                        latest_boundary_seconds=observation.boundary_seconds,
+                        ema_observations=ema_observations,
+                        ema_elo=ema_elo,
+                        latest_observed_elo=observation.elo,
+                        instantaneous_ema_gain_per_hour=gain_per_hour,
+                        consecutive_below_threshold_observations=consecutive_below_threshold_observations,
+                        latched=latched,
+                    )
             updates.append(candidate_start)
         if updates:
             self.state = self.state.validated_copy(update={'candidate_start': candidate_start.model_dump(mode='json')})
@@ -343,10 +418,11 @@ class ProgressiveTrainingStateStore:
             raise ValueError('Every required progressive model must finish before completing the quantum.')
         candidates = self._completed_candidate_states(pending)
         active_model_id = self._promoted_model_id(candidates)
+        candidate_start = self._candidate_start_after_promotion(active_model_id)
         self.state = ProgressiveTrainingState(
             active_model_id=active_model_id,
             candidates=candidates,
-            candidate_start=self.state.candidate_start,
+            candidate_start=candidate_start,
         )
         self.save()
         return active_model_id
@@ -461,6 +537,14 @@ class ProgressiveTrainingStateStore:
             raise ValueError('Persisted active progressive model is not configured.')
         if state.candidate_start.kind != self.configuration.candidate_start.kind:
             raise ValueError('Persisted candidate-start policy does not match configuration.')
+        match state.candidate_start:
+            case StagedEloPlateauCandidateStartState(candidate_model_id=candidate_model_id):
+                successor = self.configuration.successor(state.active_model_id)
+                expected_candidate_id = state.active_model_id if successor is None else successor.model_id
+                if candidate_model_id != expected_candidate_id:
+                    raise ValueError('Persisted staged Elo plateau target does not match the active model successor.')
+            case _:
+                pass
 
     def _initial_candidate_start_state(self) -> CandidateStartState:
         match self.configuration.candidate_start:
@@ -473,14 +557,67 @@ class ProgressiveTrainingStateStore:
                     consecutive_below_threshold_observations=0,
                     latched=False,
                 )
+            case StagedEloPlateauCandidateStartConfiguration():
+                return StagedEloPlateauCandidateStartState(
+                    kind='staged_elo_plateau',
+                    candidate_model_id=self.configuration.models[1].model_id,
+                    latest_boundary_seconds=0,
+                    ema_observations=0,
+                    ema_elo=0.0,
+                    consecutive_below_threshold_observations=0,
+                    latched=False,
+                )
             case ElapsedCandidateStartConfiguration():
                 return ElapsedCandidateStartState(kind='elapsed')
+
+    def _candidate_start_after_promotion(self, active_model_id: str) -> CandidateStartState:
+        candidate_start = self.state.candidate_start
+        if active_model_id == self.state.active_model_id:
+            return candidate_start
+        match candidate_start:
+            case StagedEloPlateauCandidateStartState():
+                successor = self.configuration.successor(active_model_id)
+                if successor is None:
+                    return candidate_start.validated_copy(
+                        update={'candidate_model_id': active_model_id, 'latched': False}
+                    )
+                if candidate_start.latest_observed_elo is None:
+                    return StagedEloPlateauCandidateStartState(
+                        kind='staged_elo_plateau',
+                        candidate_model_id=successor.model_id,
+                        latest_boundary_seconds=0,
+                        ema_observations=0,
+                        ema_elo=0.0,
+                        consecutive_below_threshold_observations=0,
+                        latched=False,
+                    )
+                return StagedEloPlateauCandidateStartState(
+                    kind='staged_elo_plateau',
+                    candidate_model_id=successor.model_id,
+                    latest_boundary_seconds=candidate_start.latest_boundary_seconds,
+                    ema_observations=1,
+                    ema_elo=candidate_start.latest_observed_elo,
+                    latest_observed_elo=candidate_start.latest_observed_elo,
+                    consecutive_below_threshold_observations=0,
+                    latched=False,
+                )
+            case _:
+                return candidate_start
 
     def _required_model_ids(self, elapsed_seconds: float) -> tuple[str, ...]:
         if elapsed_seconds < 0.0:
             raise ValueError('Elapsed run time cannot be negative.')
         match self.configuration.candidate_start, self.state.candidate_start:
             case EloPlateauCandidateStartConfiguration(), EloPlateauCandidateStartState() as state:
+                required_model_ids = (self.state.active_model_id,)
+                successor = self.configuration.successor(self.state.active_model_id)
+                if state.latched and successor is not None:
+                    required_model_ids = (*required_model_ids, successor.model_id)
+                return required_model_ids
+            case (
+                StagedEloPlateauCandidateStartConfiguration(),
+                StagedEloPlateauCandidateStartState() as state,
+            ):
                 required_model_ids = (self.state.active_model_id,)
                 successor = self.configuration.successor(self.state.active_model_id)
                 if state.latched and successor is not None:
