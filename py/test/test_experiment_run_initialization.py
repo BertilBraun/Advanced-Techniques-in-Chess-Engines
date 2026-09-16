@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,9 @@ from src.training.configuration import BootstrapInitializationConfiguration
 from src.training.network import (
     ChessFromToAttentionPolicyHeadConfiguration,
     DisabledResidualContext,
+    Network,
     NetworkParams,
+    measure_bootstrap_candidate,
 )
 from src.training.progressive import FixedModelSizingConfiguration, ProgressiveModelDefinition
 from src.training.quantization import DisabledTrainingQuantization
@@ -95,13 +98,34 @@ def test_checkpoint_zero_selects_a_deterministic_candidate_and_records_its_ident
     probe_states = bernoulli_probe_states(CHESS_EXPERIMENT.network_dimensions, position_count=16)
     monkeypatch.setattr(run, '_bootstrap_probe_states', lambda _experiment: probe_states)
 
-    first_state, first_record = _save_checkpoint_zero(_experiment_with_seed(101, 4), tmp_path / 'first')
-    second_state, second_record = _save_checkpoint_zero(_experiment_with_seed(101, 4), tmp_path / 'second')
+    experiment = _experiment_with_seed(101, 4)
+    measurements = []
+    for candidate_index in range(4):
+        torch.manual_seed(101 + candidate_index)
+        candidate = Network(
+            experiment.training.initial_model.network,
+            torch.device('cpu'),
+            experiment.network_dimensions,
+        )
+        measurements.append(
+            measure_bootstrap_candidate(
+                candidate,
+                probe_states,
+                experiment.training.trainer.bootstrap_policy_prior_target_top3_mass,
+            )
+        )
+    expected_index = min(
+        range(4),
+        key=lambda index: abs(math.log(measurements[index].required_policy_scale)),
+    )
+
+    first_state, first_record = _save_checkpoint_zero(experiment, tmp_path / 'first')
+    second_state, second_record = _save_checkpoint_zero(experiment, tmp_path / 'second')
 
     assert _state_dicts_are_equal(first_state, second_state)
     assert first_record == second_record
     assert first_record.candidate_count == 4
-    assert first_record.selected_candidate_index is not None
+    assert first_record.selected_candidate_index == expected_index
     assert first_record.selected_candidate_seed == 101 + first_record.selected_candidate_index
     assert first_record.mean_wdl_entropy_ratio is not None
     assert first_record.mean_absolute_expected_value is not None
