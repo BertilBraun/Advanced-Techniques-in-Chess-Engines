@@ -23,7 +23,6 @@ from src.training.network import (
 )
 from src.training.quantization.configuration import (
     QatCheckpointPhase,
-    QatStateIdentity,
     TensorRtInt8QatConfiguration,
 )
 from src.util.hashing import file_sha256
