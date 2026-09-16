@@ -1,0 +1,148 @@
+extends: vast-chess-8gpu-progressive-v47-adamw-int8.yaml
+
+run:
+  run_name: vast-chess-8gpu-progressive-v48-three-stage-adamw-int8
+  tensorboard_run_directory: vast-chess-8gpu-progressive-v48-three-stage-adamw-int8
+  resume:
+    mode: random_initialization
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-progressive-v48-three-stage-adamw-int8
+  trainer:
+    bootstrap_probe_positions: 516
+    bootstrap_policy_prior_target_top3_mass: 0.95
+    bootstrap_initialization:
+      candidate_count: 20
+      maximum_initial_top1_mass: 0.8
+      minimum_wdl_entropy_ratio: 0.8
+      maximum_absolute_expected_value: 0.25
+      minimum_policy_scale: 0.01
+      maximum_policy_scale: 100.0
+    quantization:
+      kind: tensorrt_int8_qat
+      fold_after_optimizer_steps: 3000
+      calibration_positions: 516
+      recalibration_interval_generations: 1
+      int8_self_play_start_generation: 10
+      deployment_learning_rate: inherit
+      deployment_warmup_optimizer_steps: 500
+      deployment_warmup_start_learning_rate: 0.001
+  limits:
+    maximum_cost: null
+    maximum_wall_time_seconds: null
+    minimum_free_disk_gib: 5.0
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v48-three-stage-adamw-int8.stop
+  progressive_model_sizing:
+    kind: progressive
+    models:
+    - model_id: chess-cnn-scaled-post-12x128-fromto-int8
+      network:
+        kind: convolutional
+        num_layers: 12
+        hidden_size: 128
+        residual_block: {kind: scaled_post_activation, branch_scale: 0.2886751345948129, activation_cap: 6.0}
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+        num_value_channels: 2
+        value_fc_size: 48
+    - model_id: chess-cnn-scaled-post-14x160-fromto-int8
+      network:
+        kind: convolutional
+        num_layers: 14
+        hidden_size: 160
+        residual_block: {kind: scaled_post_activation, branch_scale: 0.2672612419124244, activation_cap: 6.0}
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+        num_value_channels: 2
+        value_fc_size: 48
+    - model_id: chess-cnn-scaled-post-19x176-fromto-int8
+      network:
+        kind: convolutional
+        num_layers: 19
+        hidden_size: 176
+        residual_block: {kind: scaled_post_activation, branch_scale: 0.22941573387056174, activation_cap: 6.0}
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+        num_value_channels: 2
+        value_fc_size: 48
+    candidate_start:
+      kind: staged_elo_plateau
+      stages:
+      - candidate_model_id: chess-cnn-scaled-post-14x160-fromto-int8
+        minimum_worthwhile_gain_per_hour: 12.0
+      - candidate_model_id: chess-cnn-scaled-post-19x176-fromto-int8
+        minimum_worthwhile_gain_per_hour: 3.0
+    promotion:
+      decay: 0.8
+      warmup_quanta: 10
+      maximum_relative_loss: 1.002
+      candidate_catchup_learning_rate: 0.004
+
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: tensorrt
+        bootstrap_with_torchscript: true
+        templates:
+        - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v48-12x128-fp16-b320.engine}
+        - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v43-int8-12x128-prefold-stable-c0c1f585.engine}
+        - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v36-int8-12x128-deployment-trained-template.engine}
+        - {kind: float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, engine_path: /workspace/tensorrt/v48-14x160-fp16-b320.engine}
+        - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v36-int8-14x160-prefold-production-template.engine}
+        - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v36-int8-14x160-deployment-trained-template.engine}
+        - {kind: float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, engine_path: /workspace/tensorrt/v48-19x176-fp16-b320.engine}
+        - {kind: qat, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-19x176-prefold-int8-b320.engine}
+        - {kind: qat, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-19x176-deployment-int8-b320.engine}
+
+evaluation:
+  cadence_seconds: 1200
+  maximum_concurrent_jobs: 1
+  definitions:
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 0
+    final_generation: null
+    search: &v48_evaluation_search
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: true
+          templates:
+          - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v48-12x128-fp16-b64.engine}
+          - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-12x128-prefold-int8-b64.engine}
+          - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v36-int8-12x128-deployment-trained-eval64-template.engine}
+          - {kind: float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, engine_path: /workspace/tensorrt/v48-14x160-fp16-b64.engine}
+          - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-14x160-prefold-int8-b64.engine}
+          - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v36-int8-14x160-deployment-trained-eval64-template.engine}
+          - {kind: float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, engine_path: /workspace/tensorrt/v48-19x176-fp16-b64.engine}
+          - {kind: qat, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-19x176-prefold-int8-b64.engine}
+          - {kind: qat, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: deployment, engine_path: /workspace/tensorrt/v48-19x176-deployment-int8-b64.engine}
+        sdpa_backend: memory_efficient
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-policy-only
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 0
+    final_generation: null
+    search:
+      <<: *v48_evaluation_search
+      searches_per_move: 1
