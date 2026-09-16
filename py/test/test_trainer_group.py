@@ -64,7 +64,7 @@ def test_qat_checkpoint_save_refreshes_live_sidecar_identity(monkeypatch: pytest
     monkeypatch.setattr(
         trainer_rank,
         'save_qat_model_and_optimizer',
-        lambda *arguments, quantization_configuration: checkpoint,
+        lambda *arguments, quantization_configuration, **keyword_arguments: checkpoint,
     )
 
     result = trainer_rank._save_rank_checkpoint(0, configuration, runtime, command)
