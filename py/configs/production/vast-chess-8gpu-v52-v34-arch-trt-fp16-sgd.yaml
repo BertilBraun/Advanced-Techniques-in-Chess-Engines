@@ -21,6 +21,7 @@ training:
       rounding: none
     max_grad_norm: 5.0
   limits:
+    maximum_wall_time_seconds: null
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v52-v34-arch-trt-fp16-sgd.stop
 
 chess:
