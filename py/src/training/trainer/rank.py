@@ -146,9 +146,8 @@ def _initialize_rank(
     bootstrap_policy_prior = None
     policy_scale_application = configuration.training.trainer.bootstrap_initialization.policy_scale_application
     if (
-        (not initial_checkpoint_exists and startup.starting_generation == 0)
-        or policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
-    ):
+        not initial_checkpoint_exists and startup.starting_generation == 0
+    ) or policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY:
         bootstrap_probe_states = load_dataset_probe_states(
             resolve_project_path(configuration.evaluation.dataset.path),
             game.state,
