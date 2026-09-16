@@ -31,8 +31,8 @@ from torch import nn
 
 pytest.importorskip('modelopt.torch.quantization')
 
+from src.training.policy_prior import scheduled_inference_policy_scale  # noqa: E402
 from src.training.quantization.checkpoint import (  # noqa: E402
-    _scheduled_inference_policy_scale,
     load_qat_model_and_optimizer,
     qat_inference_checkpoint_for_batch,
     save_qat_model_and_optimizer,
@@ -58,7 +58,7 @@ def test_inference_policy_scale_fades_geometrically(
     generation: int,
     expected_scale: float,
 ) -> None:
-    assert _scheduled_inference_policy_scale(8.0, generation, 10) == pytest.approx(expected_scale)
+    assert scheduled_inference_policy_scale(8.0, generation, 10) == pytest.approx(expected_scale)
 
 
 def test_fixed_batch_example_states_repeats_to_exact_deployment_batch() -> None:
