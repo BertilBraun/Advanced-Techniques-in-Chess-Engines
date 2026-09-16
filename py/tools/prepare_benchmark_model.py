@@ -14,6 +14,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--run-config', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--model-id')
     parser.add_argument('--zero-parameters', action='store_true')
     return parser.parse_args()
 
@@ -26,8 +27,16 @@ def main() -> None:
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     experiment = load_experiment_configuration(arguments.run_config)
     game = create_game_implementation(experiment)
+    configured_models = experiment.training.progressive_model_sizing.models
+    if arguments.model_id is None:
+        network_configuration = configured_models[0].network
+    else:
+        matching_models = tuple(model for model in configured_models if model.model_id == arguments.model_id)
+        if len(matching_models) != 1:
+            raise ValueError(f'Unknown benchmark model ID: {arguments.model_id}')
+        network_configuration = matching_models[0].network
     network = Network(
-        experiment.training.initial_model.network,
+        network_configuration,
         torch.device('cpu'),
         game.network_dimensions,
         game.target_layout.auxiliary_heads,
