@@ -15,6 +15,7 @@ from src.experiment.configuration import ExperimentConfiguration, load_experimen
 from src.games.composition import create_game_implementation
 from src.games.implementation import GameImplementation
 from src.replay.batch_loader import MappedReplayBatchLoader
+from src.self_play.configuration import TensorRtInferenceBackend
 from src.training.batch import TrainingModelOutput
 from src.training.bootstrap import select_bootstrap_model
 from src.training.checkpoint import CheckpointReference
@@ -24,7 +25,12 @@ from src.training.checkpoint.persistence import (
     load_model_and_optimizer,
     save_model_and_optimizer,
 )
-from src.training.configuration import TrainerTopologyParams, TrainingCompilation, TrainingPrecision
+from src.training.configuration import (
+    BootstrapPolicyScaleApplication,
+    TrainerTopologyParams,
+    TrainingCompilation,
+    TrainingPrecision,
+)
 from src.training.distributions import (
     TrainingDistributionSnapshot,
     capture_training_distributions,
@@ -80,6 +86,7 @@ class _RankRuntime:
     save_path: Path
     qat_state: QatStateIdentity | None
     qat_calibration_states: torch.Tensor | None
+    bootstrap_probe_states: torch.Tensor | None
 
 
 @dataclass(frozen=True)
@@ -137,7 +144,11 @@ def _initialize_rank(
     quantization_configuration = configuration.training.trainer.quantization
     bootstrap_probe_states = None
     bootstrap_policy_prior = None
-    if not initial_checkpoint_exists and startup.starting_generation == 0:
+    policy_scale_application = configuration.training.trainer.bootstrap_initialization.policy_scale_application
+    if (
+        (not initial_checkpoint_exists and startup.starting_generation == 0)
+        or policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
+    ):
         bootstrap_probe_states = load_dataset_probe_states(
             resolve_project_path(configuration.evaluation.dataset.path),
             game.state,
@@ -244,6 +255,20 @@ def _initialize_rank(
                         bootstrap_policy_scale_application=(
                             configuration.training.trainer.bootstrap_initialization.policy_scale_application
                         ),
+                        bootstrap_policy_scale_fade_generations=(
+                            configuration.training.trainer.bootstrap_initialization.policy_scale_fade_generations
+                        ),
+                        float_onnx_example_states=(
+                            fixed_batch_example_states(
+                                bootstrap_probe_states.to(device=device, dtype=torch.float32),
+                                game.self_play_configuration.inference.inference_batch_size,
+                            )
+                            if isinstance(
+                                game.self_play_configuration.inference.backend,
+                                TensorRtInferenceBackend,
+                            )
+                            else None
+                        ),
                     )
                 case TensorRtInt8QatConfiguration():
                     assert qat_state is not None and qat_calibration_states is not None
@@ -281,6 +306,7 @@ def _initialize_rank(
         startup.save_path,
         qat_state,
         qat_calibration_states,
+        bootstrap_probe_states,
     )
 
 
@@ -539,7 +565,34 @@ def _save_rank_checkpoint(
     generation = command.target_progress.model_generation
     match configuration.training.trainer.quantization:
         case DisabledTrainingQuantization():
-            save_model_and_optimizer(runtime.model, runtime.optimizer, generation, runtime.save_path)
+            save_model_and_optimizer(
+                runtime.model,
+                runtime.optimizer,
+                generation,
+                runtime.save_path,
+                runtime.bootstrap_probe_states,
+                bootstrap_policy_prior_target_top3_mass=(
+                    configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
+                ),
+                bootstrap_policy_scale_application=(
+                    configuration.training.trainer.bootstrap_initialization.policy_scale_application
+                ),
+                bootstrap_policy_scale_fade_generations=(
+                    configuration.training.trainer.bootstrap_initialization.policy_scale_fade_generations
+                ),
+                float_onnx_example_states=(
+                    fixed_batch_example_states(
+                        runtime.bootstrap_probe_states.to(device=runtime.device, dtype=torch.float32),
+                        runtime.game.self_play_configuration.inference.inference_batch_size,
+                    )
+                    if isinstance(
+                        runtime.game.self_play_configuration.inference.backend,
+                        TensorRtInferenceBackend,
+                    )
+                    and runtime.bootstrap_probe_states is not None
+                    else None
+                ),
+            )
             return CheckpointReference.load(runtime.save_path, generation)
         case TensorRtInt8QatConfiguration() as quantization_configuration:
             assert runtime.qat_state is not None and runtime.qat_calibration_states is not None

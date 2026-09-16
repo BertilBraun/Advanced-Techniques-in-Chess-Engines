@@ -10,7 +10,7 @@ from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint.contracts import read_checkpoint_manifest
 from src.training.checkpoint.persistence import create_optimizer, save_model_and_optimizer
-from src.training.configuration import AdamWOptimizerConfiguration
+from src.training.configuration import AdamWOptimizerConfiguration, BootstrapPolicyScaleApplication
 from src.training.network import (
     ATTENTION_LINEAR_INITIALIZATION_STD,
     BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
@@ -639,6 +639,62 @@ def test_generation_zero_manifest_records_the_calibration_and_generation_one_doe
     assert record.initial_top1_mass == pytest.approx(uncalibrated_shape.top1_mass, abs=1e-6)
     assert record.applied_scale > 0.0
     assert read_checkpoint_manifest(1, tmp_path).policy_prior_calibration is None
+
+
+@pytest.mark.integration
+def test_unquantized_float_onnx_checkpoint_carries_inference_only_policy_fade(tmp_path: Path) -> None:
+    torch.manual_seed(30)
+    model = Network(
+        NetworkParams(
+            num_layers=2,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            policy_head=DensePolicyHeadConfiguration(channels=4),
+        ),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
+    )
+    optimizer = create_optimizer(model, AdamWOptimizerConfiguration())
+    probe_states = bernoulli_probe_states(CHESS_NETWORK_DIMENSIONS)
+    policy_weights_before = model.policy_head[-1].weight.detach().clone()
+    example_states = probe_states[:8]
+
+    save_model_and_optimizer(
+        model,
+        optimizer,
+        0,
+        tmp_path,
+        probe_states,
+        bootstrap_policy_prior_target_top3_mass=0.70,
+        bootstrap_policy_scale_application=BootstrapPolicyScaleApplication.INFERENCE_ONLY,
+        bootstrap_policy_scale_fade_generations=10,
+        float_onnx_example_states=example_states,
+    )
+    save_model_and_optimizer(
+        model,
+        optimizer,
+        1,
+        tmp_path,
+        probe_states,
+        bootstrap_policy_prior_target_top3_mass=0.70,
+        bootstrap_policy_scale_application=BootstrapPolicyScaleApplication.INFERENCE_ONLY,
+        bootstrap_policy_scale_fade_generations=10,
+        float_onnx_example_states=example_states,
+    )
+
+    generation_zero = read_checkpoint_manifest(0, tmp_path)
+    generation_one = read_checkpoint_manifest(1, tmp_path)
+    assert generation_zero.inference_model_path == 'model_0.fp16.onnx'
+    assert generation_one.inference_model_path == 'model_1.fp16.onnx'
+    assert generation_zero.policy_prior_calibration is not None
+    assert generation_one.policy_prior_calibration is not None
+    assert generation_one.policy_prior_calibration.initial_applied_scale == pytest.approx(
+        generation_zero.policy_prior_calibration.initial_applied_scale
+    )
+    assert generation_one.policy_prior_calibration.applied_scale <= (
+        generation_zero.policy_prior_calibration.applied_scale
+    )
+    assert torch.equal(model.policy_head[-1].weight, policy_weights_before)
 
 
 def test_generation_zero_export_without_probe_states_fails(tmp_path: Path) -> None:

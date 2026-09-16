@@ -34,8 +34,11 @@ from src.training.network import (
     NetworkDefinition,
     apply_policy_prior_scale,
     calibrate_bootstrap_policy_prior,
+    temporary_policy_prior_scale,
 )
+from src.training.policy_prior import inference_only_policy_prior_record
 from src.training.quantization.configuration import QatCheckpointPhase
+from src.training.quantization.runtime import export_float_qat_onnx
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
@@ -212,16 +215,34 @@ def save_model_and_optimizer(
     bootstrap_policy_prior_target_top3_mass: float = BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
     bootstrap_policy_prior: BootstrapPolicyPriorRecord | None = None,
     bootstrap_policy_scale_application: BootstrapPolicyScaleApplication = BootstrapPolicyScaleApplication.TRAINABLE,
+    bootstrap_policy_scale_fade_generations: int = 0,
+    float_onnx_example_states: torch.Tensor | None = None,
 ) -> None:
     raw_model_path = model_save_path(generation, save_folder)
     raw_optimizer_path = optimizer_save_path(generation, save_folder)
-    jit_model_path = raw_model_path.with_suffix('.jit.pt')
+    inference_model_path = (
+        raw_model_path.with_suffix('.jit.pt')
+        if float_onnx_example_states is None
+        else raw_model_path.with_suffix('.fp16.onnx')
+    )
 
     temporary_model_path = _temporary_path(raw_model_path)
     temporary_optimizer_path = _temporary_path(raw_optimizer_path)
-    temporary_jit_path = _temporary_path(jit_model_path)
+    temporary_jit_path = _temporary_path(inference_model_path) if float_onnx_example_states is None else None
 
     policy_prior_calibration = bootstrap_policy_prior
+    if bootstrap_policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY:
+        if bootstrap_probe_states is None:
+            raise ValueError('Inference-only policy scaling requires policy probe states at every generation.')
+        policy_prior_calibration = inference_only_policy_prior_record(
+            model,
+            generation,
+            Path(save_folder),
+            bootstrap_probe_states,
+            bootstrap_policy_prior_target_top3_mass,
+            bootstrap_policy_scale_fade_generations,
+            bootstrap_policy_prior,
+        )
     if generation == 0:
         if policy_prior_calibration is None and bootstrap_probe_states is None:
             raise ValueError(
@@ -250,30 +271,40 @@ def save_model_and_optimizer(
                 calibrated_top3_mass=calibration.calibrated_shape.top3_mass,
                 target_top3_mass=calibration.target_top3_mass,
                 applied_scale=calibration.applied_scale,
+                initial_applied_scale=calibration.applied_scale,
             )
 
     torch.save(model.state_dict(), temporary_model_path)
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
 
-    fused_model = InferenceNetwork(model)
-    fused_model.eval()
-    fused_model.fuse_model()
-    if (
-        generation == 0
-        and bootstrap_policy_prior is not None
+    if float_onnx_example_states is None:
+        assert temporary_jit_path is not None
+        fused_model = InferenceNetwork(model)
+        fused_model.eval()
+        fused_model.fuse_model()
+        if (
+            policy_prior_calibration is not None
+            and bootstrap_policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
+        ):
+            apply_policy_prior_scale(fused_model, policy_prior_calibration.applied_scale)
+        torch.jit.save(
+            torch.jit.script(fused_model),
+            str(temporary_jit_path),
+            _extra_files={'network.json': fused_model.checkpoint_definition().model_dump_json()},
+        )
+    elif (
+        policy_prior_calibration is not None
         and bootstrap_policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
     ):
-        apply_policy_prior_scale(fused_model, bootstrap_policy_prior.applied_scale)
-
-    torch.jit.save(
-        torch.jit.script(fused_model),
-        str(temporary_jit_path),
-        _extra_files={'network.json': fused_model.checkpoint_definition().model_dump_json()},
-    )
+        with temporary_policy_prior_scale(model, policy_prior_calibration.applied_scale):
+            export_float_qat_onnx(model, inference_model_path, float_onnx_example_states)
+    else:
+        export_float_qat_onnx(model, inference_model_path, float_onnx_example_states)
 
     temporary_model_path.replace(raw_model_path)
     temporary_optimizer_path.replace(raw_optimizer_path)
-    temporary_jit_path.replace(jit_model_path)
+    if temporary_jit_path is not None:
+        temporary_jit_path.replace(inference_model_path)
 
     manifest = CheckpointManifest(
         generation=generation,
@@ -282,8 +313,8 @@ def save_model_and_optimizer(
         model_sha256=file_sha256(raw_model_path),
         optimizer_path=raw_optimizer_path.name,
         optimizer_sha256=file_sha256(raw_optimizer_path),
-        inference_model_path=jit_model_path.name,
-        inference_model_sha256=file_sha256(jit_model_path),
+        inference_model_path=inference_model_path.name,
+        inference_model_sha256=file_sha256(inference_model_path),
         policy_prior_calibration=policy_prior_calibration,
     )
     manifest_path = checkpoint_manifest_path(generation, save_folder)
