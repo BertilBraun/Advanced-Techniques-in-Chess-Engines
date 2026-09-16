@@ -184,6 +184,7 @@ def save_qat_model_and_optimizer(
     torch.save(model.state_dict(), temporary_model_path)
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
     write_bytes_atomically(stored_qat_state_path, qat_state.path.read_bytes())
+
     def export_inference_artifact() -> None:
         if generation == 0 and int8_start_generation == 1:
             inference_model = _bootstrap_inference_model(model)
