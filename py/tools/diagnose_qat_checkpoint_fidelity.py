@@ -97,7 +97,9 @@ def _output_summary(outputs: ModelOutputs, legal_action_mask: Tensor) -> OutputS
     legal_probabilities = legal_log_probabilities.exp()
     entropy = -(legal_probabilities * legal_log_probabilities.nan_to_num()).sum(dim=1)
     legal_counts = legal_action_mask.sum(dim=1).to(torch.float64)
-    entropy_ratio = entropy / legal_counts.log()
+    maximum_entropy = legal_counts.log()
+    entropy_ratio = torch.where(maximum_entropy > 0.0, entropy / maximum_entropy, torch.ones_like(entropy))
+    entropy_ratio = entropy_ratio.clamp(0.0, 1.0)
     top_probabilities = legal_probabilities.topk(3, dim=1).values
     expected_values = outputs.wdl_probabilities[:, 0] - outputs.wdl_probabilities[:, 2]
     mean_wdl = outputs.wdl_probabilities.to(torch.float64).mean(dim=0)
