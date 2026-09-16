@@ -12,7 +12,7 @@ from src.util.hashing import file_sha256
 
 class RefitTensorIdentity(FrozenModel):
     name: str = Field(min_length=1)
-    source: Literal['initializer', 'constant']
+    source: Literal['initializer']
     onnx_data_type: int | None = Field(default=None, ge=0)
     dimensions: tuple[int, ...]
 
@@ -76,20 +76,6 @@ def onnx_refit_contract(model: onnx.ModelProto) -> OnnxRefitContract:
                 source='initializer',
                 onnx_data_type=initializer.data_type,
                 dimensions=tuple(initializer.dims),
-            )
-        )
-    for node in model.graph.node:
-        if node.op_type != 'Constant':
-            continue
-        if len(node.output) != 1:
-            raise ValueError('Every TensorRT-refittable ONNX Constant must have exactly one output.')
-        value = next((attribute.t for attribute in node.attribute if attribute.name == 'value'), None)
-        identities.append(
-            RefitTensorIdentity(
-                name=node.output[0],
-                source='constant',
-                onnx_data_type=None if value is None else value.data_type,
-                dimensions=() if value is None else tuple(value.dims),
             )
         )
     identities.sort(key=lambda identity: (identity.source, identity.name))

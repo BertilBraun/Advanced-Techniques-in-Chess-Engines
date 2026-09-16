@@ -34,7 +34,7 @@ def _model(constant_name: str, weight_shape: tuple[int, ...] = (2, 2)) -> onnx.M
     return helper.make_model(graph, opset_imports=(helper.make_opsetid('', 20),))
 
 
-def test_refit_contract_canonicalizes_generated_constant_names() -> None:
+def test_refit_contract_ignores_non_refittable_generated_constants() -> None:
     first = _model('onnx::Shape_17')
     second = _model('onnx::Shape_91')
 
