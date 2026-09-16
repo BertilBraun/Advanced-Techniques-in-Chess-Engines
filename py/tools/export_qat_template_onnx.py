@@ -8,8 +8,8 @@ import torch
 from src.evaluation.dataset import load_dataset_probe_states
 from src.evaluation.process import resolve_project_path
 from src.experiment.configuration import load_experiment_configuration
-from src.games.composition import create_game_implementation
 from src.games.chess.configuration import ChessExperimentConfiguration
+from src.games.composition import create_game_implementation
 from src.training.bootstrap import select_bootstrap_model
 from src.training.quantization.configuration import TensorRtInt8QatConfiguration
 from src.training.quantization.runtime import (
