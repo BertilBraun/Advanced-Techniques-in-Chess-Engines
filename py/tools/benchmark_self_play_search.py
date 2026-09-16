@@ -18,7 +18,9 @@ from src.games.go.configuration import GoExperimentConfiguration
 from src.self_play.completed_game import CompletedSelfPlayGame
 from src.self_play.configuration import InferenceMemoryFormat, InferencePrecision
 from src.self_play.worker import SelfPlayWorker
-from src.training.checkpoint import CheckpointReference
+from src.training.checkpoint import CheckpointManifest, CheckpointReference
+from src.training.network import NetworkDefinition
+from src.util.atomic_file import write_text_atomically
 from src.util.hashing import file_sha256
 
 
@@ -94,7 +96,11 @@ class BenchmarkResult:
     inference_nanoseconds: int
 
 
-def _checkpoint(arguments: Arguments) -> CheckpointReference:
+def _checkpoint(
+    arguments: Arguments,
+    experiment: ChessExperimentConfiguration | GoExperimentConfiguration,
+    manifest_directory: Path,
+) -> CheckpointReference:
     if arguments.checkpoint_manifest is not None:
         checkpoint = CheckpointReference.load_for_inference(
             arguments.checkpoint_manifest.parent,
@@ -108,13 +114,30 @@ def _checkpoint(arguments: Arguments) -> CheckpointReference:
                 'inference_model_sha256': file_sha256(arguments.model),
             }
         )
+    model_sha256 = file_sha256(arguments.model)
+    manifest_path = manifest_directory / f'checkpoint_{arguments.generation}.json'
+    manifest = CheckpointManifest(
+        generation=arguments.generation,
+        network=NetworkDefinition(
+            architecture=experiment.training.initial_model.network,
+            dimensions=create_game_implementation(experiment).network_dimensions,
+            auxiliary_heads=create_game_implementation(experiment).target_layout.auxiliary_heads,
+        ),
+        model_path=arguments.model.name,
+        model_sha256=model_sha256,
+        optimizer_path=arguments.model.name,
+        optimizer_sha256=model_sha256,
+        inference_model_path=arguments.model.name,
+        inference_model_sha256=model_sha256,
+    )
+    write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')
     return CheckpointReference(
         generation=arguments.generation,
-        manifest_path=arguments.model.with_suffix('.benchmark-manifest.json'),
+        manifest_path=manifest_path,
         model_path=arguments.model,
         optimizer_path=arguments.model.with_suffix('.benchmark-optimizer.pt'),
         inference_model_path=arguments.model,
-        inference_model_sha256=file_sha256(arguments.model),
+        inference_model_sha256=model_sha256,
     )
 
 
@@ -220,7 +243,7 @@ def run_benchmark(arguments: Arguments) -> BenchmarkResult:
             device_id=arguments.device,
             inbox_path=inbox,
         )
-        worker.refresh_published_model(_checkpoint(arguments))
+        worker.refresh_published_model(_checkpoint(arguments, experiment, Path(temporary_directory)))
         for _ in range(arguments.warmup_batches):
             worker.run_batch()
         initial = worker.snapshot_statistics()
