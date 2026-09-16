@@ -446,13 +446,7 @@ def _load_initial_model(model: Network, path: Path) -> None:
     source = cast(dict[str, Tensor], torch.load(path, map_location=model.device, weights_only=True))
     destination = model.state_dict()
     compatible = {name: tensor for name, tensor in source.items() if name in destination}
-    missing = tuple(
-        sorted(
-            name
-            for name in destination
-            if name not in compatible and 'quantizer' not in name
-        )
-    )
+    missing = tuple(sorted(name for name in destination if name not in compatible and 'quantizer' not in name))
     if missing:
         raise ValueError(f'Initial model is missing architecture tensors: {missing}')
     model.load_state_dict(compatible, strict=False)

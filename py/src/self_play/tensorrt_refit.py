@@ -37,12 +37,7 @@ def template_metadata_path(engine_path: Path) -> Path:
 
 
 def canonicalize_onnx_refit_names(model: onnx.ModelProto) -> None:
-    occupied_names = {
-        name
-        for node in model.graph.node
-        for name in (*node.input, *node.output)
-        if name
-    }
+    occupied_names = {name for node in model.graph.node for name in (*node.input, *node.output) if name}
     occupied_names.update(initializer.name for initializer in model.graph.initializer if initializer.name)
     replacements: dict[str, str] = {}
     for node_index, node in enumerate(model.graph.node):
