@@ -1,0 +1,15 @@
+extends: vast-chess-8gpu-progressive-v48-three-stage-adamw-int8.yaml
+
+run:
+  run_name: vast-chess-8gpu-progressive-v49-inference-only-bootstrap
+  tensorboard_run_directory: vast-chess-8gpu-progressive-v49-inference-only-bootstrap
+  resume:
+    mode: random_initialization
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-progressive-v49-inference-only-bootstrap
+  trainer:
+    bootstrap_initialization:
+      policy_scale_application: inference_only
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v49-inference-only-bootstrap.stop

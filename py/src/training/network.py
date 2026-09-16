@@ -416,8 +416,8 @@ class InferenceNetwork(nn.Module):
 # prior's softmax shape is fully determined by the logit scale; the export is scaled until the mean
 # top-3 mass over random legal-move-sized subsets of the probe positions hits the target. The probe
 # must be real encoded positions: structured inputs amplify CNN logits 6-9x over iid noise, and the
-# target sits on the steep part of the shape curve. Calibration is applied to the trainable
-# policy projections so checkpoint-zero training and self-play use identical weights.
+# target sits on the steep part of the shape curve. The bootstrap configuration decides whether
+# calibration changes the trainable policy projections or only the generation-zero inference copy.
 BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS = 0.95
 POLICY_PRIOR_PROBE_POSITIONS = 256
 POLICY_PRIOR_SUBSET_SEED = 20260824

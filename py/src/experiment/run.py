@@ -256,6 +256,7 @@ def _save_random_initial_checkpoint(
                 output_path,
                 bootstrap_probe_states,
                 bootstrap_policy_prior=selected.record,
+                bootstrap_policy_scale_application=training.trainer.bootstrap_initialization.policy_scale_application,
             )
         case TensorRtInt8QatConfiguration(calibration_positions=calibration_positions):
             game = create_game_implementation(experiment)
@@ -286,6 +287,7 @@ def _save_random_initial_checkpoint(
                 bootstrap_probe_states,
                 quantization_configuration=training.trainer.quantization,
                 bootstrap_policy_prior=selected.record,
+                bootstrap_policy_scale_application=training.trainer.bootstrap_initialization.policy_scale_application,
             )
 
 

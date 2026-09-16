@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import math
 from dataclasses import dataclass
 
@@ -7,7 +8,7 @@ import torch
 from src.games.representation import NetworkDimensions
 from src.training.checkpoint import BootstrapPolicyPriorRecord
 from src.training.checkpoint.persistence import create_model
-from src.training.configuration import BootstrapInitializationConfiguration
+from src.training.configuration import BootstrapInitializationConfiguration, BootstrapPolicyScaleApplication
 from src.training.network import (
     BootstrapCandidateMeasurement,
     Network,
@@ -79,12 +80,17 @@ def select_bootstrap_model(
 
     torch.manual_seed(selected_seed)
     selected_model = create_model(network, device, dimensions, auxiliary_heads)
-    calibration = calibrate_bootstrap_policy_prior(selected_model, probe_states, target_top3_mass)
+    match constraints.policy_scale_application:
+        case BootstrapPolicyScaleApplication.TRAINABLE:
+            calibration_model = selected_model
+        case BootstrapPolicyScaleApplication.INFERENCE_ONLY:
+            calibration_model = copy.deepcopy(selected_model)
+    calibration = calibrate_bootstrap_policy_prior(calibration_model, probe_states, target_top3_mass)
     if not math.isclose(calibration.applied_scale, selected_measurement.required_policy_scale, rel_tol=1e-9):
         raise AssertionError('Recreated bootstrap candidate did not reproduce its measured policy scale.')
     log(
         f'Selected bootstrap candidate {selected_index + 1}/{constraints.candidate_count} seed {selected_seed} '
-        f'with policy scale {calibration.applied_scale:.4g}.'
+        f'with {constraints.policy_scale_application.value} policy scale {calibration.applied_scale:.4g}.'
     )
     return SelectedBootstrapModel(
         model=selected_model,

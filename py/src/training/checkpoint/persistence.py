@@ -22,6 +22,7 @@ from src.training.checkpoint.paths import (
 )
 from src.training.configuration import (
     AdamWOptimizerConfiguration,
+    BootstrapPolicyScaleApplication,
     OptimizerConfiguration,
     SgdOptimizerConfiguration,
 )
@@ -31,6 +32,7 @@ from src.training.network import (
     Network,
     NetworkConfiguration,
     NetworkDefinition,
+    apply_policy_prior_scale,
     calibrate_bootstrap_policy_prior,
 )
 from src.training.quantization.configuration import QatCheckpointPhase
@@ -209,6 +211,7 @@ def save_model_and_optimizer(
     bootstrap_probe_states: torch.Tensor | None = None,
     bootstrap_policy_prior_target_top3_mass: float = BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
     bootstrap_policy_prior: BootstrapPolicyPriorRecord | None = None,
+    bootstrap_policy_scale_application: BootstrapPolicyScaleApplication = BootstrapPolicyScaleApplication.TRAINABLE,
 ) -> None:
     raw_model_path = model_save_path(generation, save_folder)
     raw_optimizer_path = optimizer_save_path(generation, save_folder)
@@ -255,6 +258,12 @@ def save_model_and_optimizer(
     fused_model = InferenceNetwork(model)
     fused_model.eval()
     fused_model.fuse_model()
+    if (
+        generation == 0
+        and bootstrap_policy_prior is not None
+        and bootstrap_policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
+    ):
+        apply_policy_prior_scale(fused_model, bootstrap_policy_prior.applied_scale)
 
     torch.jit.save(
         torch.jit.script(fused_model),

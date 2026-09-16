@@ -144,6 +144,11 @@ class TrainingCompilation(str, Enum):
     DEFAULT = 'default'
 
 
+class BootstrapPolicyScaleApplication(str, Enum):
+    TRAINABLE = 'trainable'
+    INFERENCE_ONLY = 'inference_only'
+
+
 class BootstrapInitializationConfiguration(FrozenModel):
     candidate_count: int = Field(ge=1)
     maximum_initial_top1_mass: float = Field(gt=0.0, lt=1.0)
@@ -151,6 +156,7 @@ class BootstrapInitializationConfiguration(FrozenModel):
     maximum_absolute_expected_value: float = Field(ge=0.0, le=1.0)
     minimum_policy_scale: float = Field(gt=0.0)
     maximum_policy_scale: float = Field(gt=0.0)
+    policy_scale_application: BootstrapPolicyScaleApplication = BootstrapPolicyScaleApplication.TRAINABLE
 
     @model_validator(mode='after')
     def validate_policy_scale_range(self) -> BootstrapInitializationConfiguration:

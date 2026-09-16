@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 import torch
@@ -18,12 +19,13 @@ from src.training.checkpoint.paths import (
     qat_state_save_path,
 )
 from src.training.checkpoint.persistence import create_model, load_model_state_dict, load_optimizer
-from src.training.configuration import OptimizerConfiguration
+from src.training.configuration import BootstrapPolicyScaleApplication, OptimizerConfiguration
 from src.training.network import (
     BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
     InferenceNetwork,
     Network,
     NetworkConfiguration,
+    apply_policy_prior_scale,
     calibrate_bootstrap_policy_prior,
 )
 from src.training.quantization.configuration import QatStateIdentity, TensorRtInt8QatConfiguration
@@ -78,6 +80,7 @@ def save_qat_model_and_optimizer(
     bootstrap_policy_prior_target_top3_mass: float = BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
     quantization_configuration: TensorRtInt8QatConfiguration | None = None,
     bootstrap_policy_prior: BootstrapPolicyPriorRecord | None = None,
+    bootstrap_policy_scale_application: BootstrapPolicyScaleApplication = BootstrapPolicyScaleApplication.TRAINABLE,
 ) -> CheckpointReference:
     if qat_state.completed_optimizer_steps != completed_optimizer_steps:
         raise ValueError('QAT state progress must match checkpoint optimizer progress.')
@@ -120,15 +123,23 @@ def save_qat_model_and_optimizer(
     torch.save(model.state_dict(), temporary_model_path)
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
     write_bytes_atomically(stored_qat_state_path, qat_state.path.read_bytes())
+    inference_export_model = model
+    if (
+        generation == 0
+        and policy_prior_calibration is not None
+        and bootstrap_policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
+    ):
+        inference_export_model = copy.deepcopy(model)
+        apply_policy_prior_scale(inference_export_model, policy_prior_calibration.applied_scale)
     if generation == 0 and int8_start_generation == 1:
-        inference_model = _bootstrap_inference_model(model)
+        inference_model = _bootstrap_inference_model(inference_export_model)
         torch.jit.save(
             torch.jit.script(inference_model),
             str(inference_path),
             _extra_files={'network.json': inference_model.checkpoint_definition().model_dump_json()},
         )
     elif generation < int8_start_generation:
-        export_float_qat_onnx(model, inference_path, example_states)
+        export_float_qat_onnx(inference_export_model, inference_path, example_states)
     else:
         export_qat_onnx(model, inference_path, example_states)
     temporary_model_path.replace(raw_model_path)

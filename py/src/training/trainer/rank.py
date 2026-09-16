@@ -241,6 +241,9 @@ def _initialize_rank(
                             configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
                         ),
                         bootstrap_policy_prior=bootstrap_policy_prior,
+                        bootstrap_policy_scale_application=(
+                            configuration.training.trainer.bootstrap_initialization.policy_scale_application
+                        ),
                     )
                 case TensorRtInt8QatConfiguration():
                     assert qat_state is not None and qat_calibration_states is not None
@@ -260,6 +263,9 @@ def _initialize_rank(
                             configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
                         ),
                         bootstrap_policy_prior=bootstrap_policy_prior,
+                        bootstrap_policy_scale_application=(
+                            configuration.training.trainer.bootstrap_initialization.policy_scale_application
+                        ),
                         quantization_configuration=quantization_configuration,
                     )
         distributed.barrier()
