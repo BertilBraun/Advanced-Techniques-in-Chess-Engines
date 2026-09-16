@@ -266,6 +266,9 @@ def _initialize_rank(
                         bootstrap_policy_scale_application=(
                             configuration.training.trainer.bootstrap_initialization.policy_scale_application
                         ),
+                        bootstrap_policy_scale_fade_generations=(
+                            configuration.training.trainer.bootstrap_initialization.policy_scale_fade_generations
+                        ),
                         quantization_configuration=quantization_configuration,
                     )
         distributed.barrier()
@@ -551,7 +554,17 @@ def _save_rank_checkpoint(
                     runtime.qat_calibration_states,
                     runtime.game.self_play_configuration.inference.inference_batch_size,
                 ),
+                runtime.qat_calibration_states,
+                bootstrap_policy_prior_target_top3_mass=(
+                    configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
+                ),
                 quantization_configuration=quantization_configuration,
+                bootstrap_policy_scale_application=(
+                    configuration.training.trainer.bootstrap_initialization.policy_scale_application
+                ),
+                bootstrap_policy_scale_fade_generations=(
+                    configuration.training.trainer.bootstrap_initialization.policy_scale_fade_generations
+                ),
             )
             assert checkpoint.qat_state is not None
             runtime.qat_state = checkpoint.qat_state

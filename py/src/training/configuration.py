@@ -157,11 +157,22 @@ class BootstrapInitializationConfiguration(FrozenModel):
     minimum_policy_scale: float = Field(gt=0.0)
     maximum_policy_scale: float = Field(gt=0.0)
     policy_scale_application: BootstrapPolicyScaleApplication = BootstrapPolicyScaleApplication.TRAINABLE
+    policy_scale_fade_generations: int = Field(default=0, ge=0)
 
     @model_validator(mode='after')
     def validate_policy_scale_range(self) -> BootstrapInitializationConfiguration:
         if self.maximum_policy_scale < self.minimum_policy_scale:
             raise ValueError('Maximum bootstrap policy scale must not be below the minimum.')
+        if (
+            self.policy_scale_application is BootstrapPolicyScaleApplication.TRAINABLE
+            and self.policy_scale_fade_generations != 0
+        ):
+            raise ValueError('Trainable bootstrap policy scaling cannot configure an inference fade.')
+        if (
+            self.policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
+            and self.policy_scale_fade_generations == 0
+        ):
+            raise ValueError('Inference-only bootstrap policy scaling requires a positive fade duration.')
         return self
 
 

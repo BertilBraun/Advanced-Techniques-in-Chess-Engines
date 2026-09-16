@@ -288,6 +288,9 @@ def _save_random_initial_checkpoint(
                 quantization_configuration=training.trainer.quantization,
                 bootstrap_policy_prior=selected.record,
                 bootstrap_policy_scale_application=training.trainer.bootstrap_initialization.policy_scale_application,
+                bootstrap_policy_scale_fade_generations=(
+                    training.trainer.bootstrap_initialization.policy_scale_fade_generations
+                ),
             )
 
 

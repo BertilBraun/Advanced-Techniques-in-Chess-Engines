@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 from pathlib import Path
 
 import torch
@@ -27,6 +26,8 @@ from src.training.network import (
     NetworkConfiguration,
     apply_policy_prior_scale,
     calibrate_bootstrap_policy_prior,
+    measure_bootstrap_candidate,
+    temporary_policy_prior_scale,
 )
 from src.training.quantization.configuration import QatStateIdentity, TensorRtInt8QatConfiguration
 from src.training.quantization.runtime import (
@@ -68,6 +69,53 @@ def _bootstrap_inference_model(model: Network) -> InferenceNetwork:
     return inference_model
 
 
+def _scheduled_inference_policy_scale(initial_scale: float, generation: int, fade_generations: int) -> float:
+    if fade_generations <= 0:
+        raise ValueError('Inference-only policy scaling requires a positive fade duration.')
+    if generation >= fade_generations:
+        return 1.0
+    exponent = (fade_generations - generation) / fade_generations
+    return max(1.0, initial_scale) ** exponent
+
+
+def _inference_only_policy_prior_record(
+    model: Network,
+    generation: int,
+    save_folder: Path,
+    probe_states: torch.Tensor,
+    target_top3_mass: float,
+    fade_generations: int,
+    bootstrap_record: BootstrapPolicyPriorRecord | None,
+) -> BootstrapPolicyPriorRecord:
+    initial_record = bootstrap_record
+    if initial_record is None:
+        initial_record = load_checkpoint_manifest(0, save_folder).policy_prior_calibration
+    if initial_record is None:
+        raise ValueError('Inference-only policy scaling requires the generation-zero bootstrap record.')
+    measurement = measure_bootstrap_candidate(model, probe_states, target_top3_mass)
+    scheduled_scale = _scheduled_inference_policy_scale(
+        initial_record.applied_scale,
+        generation,
+        fade_generations,
+    )
+    applied_scale = min(scheduled_scale, max(1.0, measurement.required_policy_scale))
+    with temporary_policy_prior_scale(model, applied_scale):
+        calibrated_shape = measure_bootstrap_candidate(model, probe_states, target_top3_mass).policy_shape
+    return BootstrapPolicyPriorRecord(
+        candidate_count=initial_record.candidate_count if generation == 0 else None,
+        selected_candidate_index=initial_record.selected_candidate_index if generation == 0 else None,
+        selected_candidate_seed=initial_record.selected_candidate_seed if generation == 0 else None,
+        initial_top1_mass=measurement.policy_shape.top1_mass,
+        initial_top3_mass=measurement.policy_shape.top3_mass,
+        calibrated_top1_mass=calibrated_shape.top1_mass,
+        calibrated_top3_mass=calibrated_shape.top3_mass,
+        target_top3_mass=target_top3_mass,
+        applied_scale=applied_scale,
+        mean_wdl_entropy_ratio=measurement.mean_wdl_entropy_ratio,
+        mean_absolute_expected_value=measurement.mean_absolute_expected_value,
+    )
+
+
 def save_qat_model_and_optimizer(
     model: Network,
     optimizer: torch.optim.Optimizer,
@@ -81,6 +129,7 @@ def save_qat_model_and_optimizer(
     quantization_configuration: TensorRtInt8QatConfiguration | None = None,
     bootstrap_policy_prior: BootstrapPolicyPriorRecord | None = None,
     bootstrap_policy_scale_application: BootstrapPolicyScaleApplication = BootstrapPolicyScaleApplication.TRAINABLE,
+    bootstrap_policy_scale_fade_generations: int = 0,
 ) -> CheckpointReference:
     if qat_state.completed_optimizer_steps != completed_optimizer_steps:
         raise ValueError('QAT state progress must match checkpoint optimizer progress.')
@@ -101,6 +150,18 @@ def save_qat_model_and_optimizer(
     temporary_model_path = _temporary_path(raw_model_path)
     temporary_optimizer_path = _temporary_path(raw_optimizer_path)
     policy_prior_calibration = bootstrap_policy_prior
+    if bootstrap_policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY:
+        if bootstrap_probe_states is None:
+            raise ValueError('Inference-only policy scaling requires policy probe states at every generation.')
+        policy_prior_calibration = _inference_only_policy_prior_record(
+            model,
+            generation,
+            save_folder,
+            bootstrap_probe_states,
+            bootstrap_policy_prior_target_top3_mass,
+            bootstrap_policy_scale_fade_generations,
+            bootstrap_policy_prior,
+        )
     if generation == 0:
         if policy_prior_calibration is None:
             assert bootstrap_probe_states is not None
@@ -123,25 +184,27 @@ def save_qat_model_and_optimizer(
     torch.save(model.state_dict(), temporary_model_path)
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
     write_bytes_atomically(stored_qat_state_path, qat_state.path.read_bytes())
-    inference_export_model = model
+    def export_inference_artifact() -> None:
+        if generation == 0 and int8_start_generation == 1:
+            inference_model = _bootstrap_inference_model(model)
+            torch.jit.save(
+                torch.jit.script(inference_model),
+                str(inference_path),
+                _extra_files={'network.json': inference_model.checkpoint_definition().model_dump_json()},
+            )
+        elif generation < int8_start_generation:
+            export_float_qat_onnx(model, inference_path, example_states)
+        else:
+            export_qat_onnx(model, inference_path, example_states)
+
     if (
-        generation == 0
-        and policy_prior_calibration is not None
+        policy_prior_calibration is not None
         and bootstrap_policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
     ):
-        inference_export_model = copy.deepcopy(model)
-        apply_policy_prior_scale(inference_export_model, policy_prior_calibration.applied_scale)
-    if generation == 0 and int8_start_generation == 1:
-        inference_model = _bootstrap_inference_model(inference_export_model)
-        torch.jit.save(
-            torch.jit.script(inference_model),
-            str(inference_path),
-            _extra_files={'network.json': inference_model.checkpoint_definition().model_dump_json()},
-        )
-    elif generation < int8_start_generation:
-        export_float_qat_onnx(inference_export_model, inference_path, example_states)
+        with temporary_policy_prior_scale(model, policy_prior_calibration.applied_scale):
+            export_inference_artifact()
     else:
-        export_qat_onnx(model, inference_path, example_states)
+        export_inference_artifact()
     temporary_model_path.replace(raw_model_path)
     temporary_optimizer_path.replace(raw_optimizer_path)
     manifest = CheckpointManifest(

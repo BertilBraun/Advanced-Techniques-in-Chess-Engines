@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 import math
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from typing import Annotated, Literal, TypeAlias
@@ -476,6 +478,25 @@ def apply_policy_prior_scale(model: Network | InferenceNetwork, scale: float) ->
             projection.weight.mul_(scale)
             if projection.bias is not None:
                 projection.bias.mul_(scale)
+
+
+@contextmanager
+def temporary_policy_prior_scale(model: Network | InferenceNetwork, scale: float) -> Iterator[None]:
+    projections = _final_policy_projections(model.policy_head)
+    original_parameters = tuple(
+        (projection.weight.detach().clone(), None if projection.bias is None else projection.bias.detach().clone())
+        for projection in projections
+    )
+    apply_policy_prior_scale(model, scale)
+    try:
+        yield
+    finally:
+        with torch.no_grad():
+            for projection, (weight, bias) in zip(projections, original_parameters, strict=True):
+                projection.weight.copy_(weight)
+                if bias is not None:
+                    assert projection.bias is not None
+                    projection.bias.copy_(bias)
 
 
 def measure_bootstrap_candidate(

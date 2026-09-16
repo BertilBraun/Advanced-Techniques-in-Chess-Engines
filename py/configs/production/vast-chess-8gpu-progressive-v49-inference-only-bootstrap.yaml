@@ -10,6 +10,10 @@ training:
   save_path: py/training_data/production/vast-chess-8gpu-progressive-v49-inference-only-bootstrap
   trainer:
     bootstrap_initialization:
+      candidate_count: 64
+      minimum_wdl_entropy_ratio: 0.95
+      maximum_absolute_expected_value: 0.10
       policy_scale_application: inference_only
+      policy_scale_fade_generations: 10
   limits:
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v49-inference-only-bootstrap.stop

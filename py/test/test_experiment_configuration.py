@@ -725,7 +725,7 @@ def test_experiment_configuration_hash_matches_pinned_regression_value() -> None
     frozen = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'frozen-hash-pin.yaml')
 
     # Re-pinned 2026-09-16: bootstrap probe count and candidate health constraints are experiment identity.
-    assert experiment_configuration_sha256(frozen) == '35bc5f0c81c277ff5434f9e00e140985bd8a2083e6d6e1cbef8c4bc3265b6913'
+    assert experiment_configuration_sha256(frozen) == 'ab47066ed6a03e89b6f950ba8f46707e7927d1805f63546890edad0fbb55bfd2'
 
 
 @pytest.mark.parametrize(

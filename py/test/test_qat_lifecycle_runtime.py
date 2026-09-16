@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +32,7 @@ from torch import nn
 pytest.importorskip('modelopt.torch.quantization')
 
 from src.training.quantization.checkpoint import (  # noqa: E402
+    _scheduled_inference_policy_scale,
     load_qat_model_and_optimizer,
     qat_inference_checkpoint_for_batch,
     save_qat_model_and_optimizer,
@@ -46,6 +48,17 @@ from src.training.quantization.runtime import (  # noqa: E402
     save_qat_state,
     specialize_qat_onnx_batch,
 )
+
+
+@pytest.mark.parametrize(
+    ('generation', 'expected_scale'),
+    ((0, 8.0), (5, math.sqrt(8.0)), (10, 1.0), (20, 1.0)),
+)
+def test_inference_policy_scale_fades_geometrically(
+    generation: int,
+    expected_scale: float,
+) -> None:
+    assert _scheduled_inference_policy_scale(8.0, generation, 10) == pytest.approx(expected_scale)
 
 
 def test_fixed_batch_example_states_repeats_to_exact_deployment_batch() -> None:
@@ -387,6 +400,7 @@ def test_generation_zero_qat_checkpoint_can_scale_only_inference_weights(tmp_pat
             int8_self_play_start_generation=10,
         ),
         bootstrap_policy_scale_application=BootstrapPolicyScaleApplication.INFERENCE_ONLY,
+        bootstrap_policy_scale_fade_generations=10,
     )
 
     calibration = read_checkpoint_manifest(0, tmp_path).policy_prior_calibration
