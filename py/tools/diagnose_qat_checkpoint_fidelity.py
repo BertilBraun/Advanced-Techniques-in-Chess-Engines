@@ -9,13 +9,14 @@ import onnxruntime as ort
 import torch
 from pydantic import Field
 from src.experiment.configuration import load_chess_experiment_configuration
-from src.training.checkpoint.contracts import CheckpointReference
+from src.training.checkpoint.contracts import CheckpointReference, read_checkpoint_manifest
 from src.training.checkpoint.persistence import load_model_state_dict
 from src.training.network import Network
 from src.training.quantization.configuration import TensorRtInt8QatConfiguration
-from src.training.quantization.runtime import quantizers_disabled, restore_qat_model
+from src.training.quantization.runtime import export_qat_onnx, quantizers_disabled, restore_qat_model
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.hashing import file_sha256
 from tools.benchmark_tensorrt_inference import _TensorRtCudaGraphRunner
 from tools.measure_inference_precision_agreement import load_positions
 from tools.publish_tensorrt_engine import publish
@@ -56,12 +57,14 @@ class GenerationReport(FrozenModel):
     generation: int = Field(ge=0)
     qat_phase: str = Field(min_length=1)
     completed_optimizer_steps: int = Field(ge=0)
+    model_artifact_available: bool
+    original_onnx_artifact_available: bool
     outputs: tuple[BackendReport, ...]
-    float_vs_fake_quant: FidelityMetrics
-    fake_quant_vs_onnx: FidelityMetrics
+    float_vs_fake_quant: FidelityMetrics | None
+    fake_quant_vs_onnx: FidelityMetrics | None
     onnx_vs_tensorrt: FidelityMetrics
-    float_vs_onnx: FidelityMetrics
-    float_vs_tensorrt: FidelityMetrics
+    float_vs_onnx: FidelityMetrics | None
+    float_vs_tensorrt: FidelityMetrics | None
     diagnostic_onnx_path: str = Field(min_length=1)
     diagnostic_engine_path: str = Field(min_length=1)
 
@@ -122,26 +125,43 @@ def _generation_report(
     quantization = configuration.training.trainer.quantization
     if not isinstance(quantization, TensorRtInt8QatConfiguration):
         raise ValueError('The checkpoint fidelity diagnostic requires TensorRT INT8 QAT configuration.')
-    checkpoint = CheckpointReference.load(arguments.run_directory, generation)
+    manifest = read_checkpoint_manifest(generation, arguments.run_directory)
+    checkpoint = CheckpointReference.from_manifest(arguments.run_directory, manifest)
     if checkpoint.qat_state is None:
         raise ValueError(f'Generation {generation} is not a QAT checkpoint.')
     device = torch.device('cuda', arguments.device_id)
-    model = Network(
-        checkpoint.network.architecture,
-        device,
-        checkpoint.network.dimensions,
-        checkpoint.network.auxiliary_heads,
-    )
-    restored = restore_qat_model(model, checkpoint.qat_state, quantization).model
-    state_dict: dict[str, Tensor] = torch.load(checkpoint.model_path, map_location=device, weights_only=True)
-    load_model_state_dict(restored, state_dict, checkpoint.model_path)
-    restored.eval()
-    device_states = states.to(device=device, dtype=torch.float32)
-    fake_quant_outputs = _framework_outputs(restored, device_states)
-    with quantizers_disabled(restored):
-        float_outputs = _framework_outputs(restored, device_states)
+    model_artifact_available = checkpoint.model_path.is_file()
+    original_onnx_artifact_available = checkpoint.inference_model_path.is_file()
+    float_outputs: ModelOutputs | None = None
+    fake_quant_outputs: ModelOutputs | None = None
+    restored: Network | None = None
+    if model_artifact_available:
+        if file_sha256(checkpoint.model_path) != manifest.model_sha256:
+            raise ValueError(f'Checkpoint model hash does not match: {checkpoint.model_path}')
+        model = Network(
+            manifest.network.architecture,
+            device,
+            manifest.network.dimensions,
+            manifest.network.auxiliary_heads,
+        )
+        restored = restore_qat_model(model, checkpoint.qat_state, quantization).model
+        state_dict: dict[str, Tensor] = torch.load(checkpoint.model_path, map_location=device, weights_only=True)
+        load_model_state_dict(restored, state_dict, checkpoint.model_path)
+        restored.eval()
+        device_states = states.to(device=device, dtype=torch.float32)
+        fake_quant_outputs = _framework_outputs(restored, device_states)
+        with quantizers_disabled(restored):
+            float_outputs = _framework_outputs(restored, device_states)
 
-    diagnostic_onnx = _copy_onnx(checkpoint.inference_model_path, arguments.output_directory, generation)
+    diagnostic_onnx = arguments.output_directory / f'generation-{generation}.int8.onnx'
+    if original_onnx_artifact_available:
+        if file_sha256(checkpoint.inference_model_path) != manifest.inference_model_sha256:
+            raise ValueError(f'Checkpoint ONNX hash does not match: {checkpoint.inference_model_path}')
+        diagnostic_onnx = _copy_onnx(checkpoint.inference_model_path, arguments.output_directory, generation)
+    elif restored is not None:
+        export_qat_onnx(restored, diagnostic_onnx, states.to(device=device, dtype=torch.float32))
+    else:
+        raise ValueError(f'Generation {generation} retains neither its model nor its ONNX artifact.')
     onnx_outputs = _onnx_outputs(diagnostic_onnx, states)
     template = (
         arguments.pre_fold_template if checkpoint.qat_state.phase.value == 'pre_fold' else arguments.deployment_template
@@ -151,25 +171,39 @@ def _generation_report(
     runner = _TensorRtCudaGraphRunner(engine_path, states.to(device=device, dtype=torch.int8), device, 2)
     tensorrt_outputs = runner.outputs()
 
-    named_outputs = (
-        ('float_quantizers_disabled', float_outputs),
-        ('pytorch_fake_quant', fake_quant_outputs),
-        ('onnx_qdq', onnx_outputs),
-        ('tensorrt_int8', tensorrt_outputs),
-    )
+    named_outputs: list[tuple[str, ModelOutputs]] = []
+    if float_outputs is not None:
+        named_outputs.append(('float_quantizers_disabled', float_outputs))
+    if fake_quant_outputs is not None:
+        named_outputs.append(('pytorch_fake_quant', fake_quant_outputs))
+    named_outputs.extend((('onnx_qdq', onnx_outputs), ('tensorrt_int8', tensorrt_outputs)))
     return GenerationReport(
         generation=generation,
         qat_phase=checkpoint.qat_state.phase.value,
         completed_optimizer_steps=checkpoint.qat_state.completed_optimizer_steps,
+        model_artifact_available=model_artifact_available,
+        original_onnx_artifact_available=original_onnx_artifact_available,
         outputs=tuple(
             BackendReport(name=name, output=_output_summary(outputs, legal_action_mask))
             for name, outputs in named_outputs.items()
         ),
-        float_vs_fake_quant=measure_fidelity(float_outputs, fake_quant_outputs, legal_action_mask),
-        fake_quant_vs_onnx=measure_fidelity(fake_quant_outputs, onnx_outputs, legal_action_mask),
+        float_vs_fake_quant=(
+            measure_fidelity(float_outputs, fake_quant_outputs, legal_action_mask)
+            if float_outputs is not None and fake_quant_outputs is not None
+            else None
+        ),
+        fake_quant_vs_onnx=(
+            measure_fidelity(fake_quant_outputs, onnx_outputs, legal_action_mask)
+            if fake_quant_outputs is not None
+            else None
+        ),
         onnx_vs_tensorrt=measure_fidelity(onnx_outputs, tensorrt_outputs, legal_action_mask),
-        float_vs_onnx=measure_fidelity(float_outputs, onnx_outputs, legal_action_mask),
-        float_vs_tensorrt=measure_fidelity(float_outputs, tensorrt_outputs, legal_action_mask),
+        float_vs_onnx=(
+            measure_fidelity(float_outputs, onnx_outputs, legal_action_mask) if float_outputs is not None else None
+        ),
+        float_vs_tensorrt=(
+            measure_fidelity(float_outputs, tensorrt_outputs, legal_action_mask) if float_outputs is not None else None
+        ),
         diagnostic_onnx_path=str(diagnostic_onnx),
         diagnostic_engine_path=str(engine_path),
     )
