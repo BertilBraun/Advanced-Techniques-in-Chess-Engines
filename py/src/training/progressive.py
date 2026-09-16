@@ -310,9 +310,7 @@ class ProgressiveTrainingStateStore:
             ) / current_weight
             gain_per_hour = (ema_elo - candidate_start.ema_elo) / elapsed_hours
             consecutive_below_threshold_observations = (
-                candidate_start.consecutive_below_threshold_observations + 1
-                if gain_per_hour < threshold
-                else 0
+                candidate_start.consecutive_below_threshold_observations + 1 if gain_per_hour < threshold else 0
             )
             latched = (
                 candidate_start.latched
