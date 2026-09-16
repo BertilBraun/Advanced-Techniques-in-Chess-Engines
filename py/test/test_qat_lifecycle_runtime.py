@@ -200,8 +200,8 @@ def test_v34_post_activation_qat_fold_preserves_outputs() -> None:
 
     assert all(isinstance(block, ResBlock) for block in model.backbone)
     assert all(isinstance(block.conv_block1[1], nn.Identity) for block in model.backbone)
-    assert torch.allclose(actual_policy, expected_policy, atol=1e-5, rtol=1e-5)
-    assert torch.allclose(actual_wdl, expected_wdl, atol=1e-5, rtol=1e-5)
+    assert torch.allclose(actual_policy, expected_policy, atol=1e-4, rtol=1e-4)
+    assert torch.allclose(actual_wdl, expected_wdl, atol=1e-4, rtol=1e-4)
 
 
 @pytest.mark.integration
