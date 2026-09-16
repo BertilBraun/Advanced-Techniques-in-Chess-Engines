@@ -261,7 +261,7 @@ def _export_onnx_graph(model: nn.Module, path: Path, example_states: Tensor) -> 
         input_names=('states',),
         output_names=('policy_logits', 'wdl_probabilities'),
         opset_version=20,
-        do_constant_folding=True,
+        do_constant_folding=False,
         dynamo=False,
     )
 

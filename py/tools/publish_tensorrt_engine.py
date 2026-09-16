@@ -57,7 +57,7 @@ def export_onnx(model_path: Path, output_path: Path, input_shape: tuple[int, int
             input_names=(INPUT_NAME,),
             output_names=(POLICY_OUTPUT_NAME, WDL_OUTPUT_NAME),
             opset_version=ONNX_OPSET_VERSION,
-            do_constant_folding=True,
+            do_constant_folding=False,
             dynamo=False,
         )
     exported = onnx.load(output_path)
