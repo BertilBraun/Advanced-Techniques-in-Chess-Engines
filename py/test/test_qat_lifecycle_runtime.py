@@ -34,7 +34,7 @@ pytest.importorskip('modelopt.torch.quantization')
 from src.training.policy_prior import scheduled_inference_policy_scale  # noqa: E402
 from src.training.quantization.checkpoint import (  # noqa: E402
     load_qat_model_and_optimizer,
-    qat_inference_checkpoint_for_batch,
+    onnx_inference_checkpoint_for_batch,
     save_qat_model_and_optimizer,
 )
 from src.training.quantization.runtime import (  # noqa: E402
@@ -105,10 +105,9 @@ def _fixed_batch_qat_onnx(path: Path, batch_size: int) -> None:
     onnx.save(helper.make_model(graph, opset_imports=(helper.make_opsetid('', 20),)), path)
 
 
-def test_qat_inference_batch_specialization_uses_only_retained_onnx(tmp_path: Path) -> None:
+def test_inference_batch_specialization_uses_only_retained_onnx(tmp_path: Path) -> None:
     source_path = tmp_path / 'model_9.int8.onnx'
     _fixed_batch_qat_onnx(source_path, 320)
-    qat_state_path = tmp_path / 'missing-qat-state.pt'
     checkpoint = CheckpointReference(
         generation=9,
         manifest_path=tmp_path / 'checkpoint_9.json',
@@ -116,15 +115,10 @@ def test_qat_inference_batch_specialization_uses_only_retained_onnx(tmp_path: Pa
         optimizer_path=tmp_path / 'missing-optimizer.pt',
         inference_model_path=source_path,
         inference_model_sha256=file_sha256(source_path),
-        qat_state=QatStateIdentity(
-            phase=QatCheckpointPhase.DEPLOYMENT,
-            completed_optimizer_steps=4500,
-            path=qat_state_path,
-            sha256='0' * 64,
-        ),
+        qat_state=None,
     )
 
-    specialized = qat_inference_checkpoint_for_batch(checkpoint, 64)
+    specialized = onnx_inference_checkpoint_for_batch(checkpoint, 64)
 
     assert specialized.inference_model_path.is_file()
     model = onnx.load(specialized.inference_model_path)

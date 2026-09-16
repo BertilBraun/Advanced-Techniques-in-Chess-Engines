@@ -1,13 +1,13 @@
 extends: vast-chess-8gpu-progressive-v49-inference-only-bootstrap.yaml
 
 run:
-  run_name: vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry1
-  tensorboard_run_directory: vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry1
+  run_name: vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry2
+  tensorboard_run_directory: vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry2
   resume:
     mode: random_initialization
 
 training:
-  save_path: py/training_data/production/vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry1
+  save_path: py/training_data/production/vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry2
   trainer:
     quantization:
       kind: disabled
@@ -15,7 +15,7 @@ training:
     maximum_cost: null
     maximum_wall_time_seconds: 6600
     minimum_free_disk_gib: 5.0
-    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry1.stop
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-progressive-v50-current-arch-fp16-control-retry2.stop
 
 chess:
   self_play:
@@ -24,7 +24,7 @@ chess:
         kind: tensorrt
         bootstrap_with_torchscript: false
         templates:
-        - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v48-12x128-prefold-fp16-b320.engine}
+        - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v50-current-arch-12x128-plain-fp16-b320.engine}
         - {kind: float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, engine_path: /workspace/tensorrt/v48-14x160-prefold-fp16-b320.engine}
         - {kind: float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b320.engine}
 
@@ -53,7 +53,7 @@ evaluation:
           kind: tensorrt
           bootstrap_with_torchscript: false
           templates:
-          - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v48-12x128-prefold-fp16-b64.engine}
+          - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v50-current-arch-12x128-plain-fp16-b64.engine}
           - {kind: float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, engine_path: /workspace/tensorrt/v48-14x160-prefold-fp16-b64.engine}
           - {kind: float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b64.engine}
         sdpa_backend: memory_efficient

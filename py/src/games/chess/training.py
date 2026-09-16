@@ -17,8 +17,7 @@ from src.self_play.parameters import (
 from src.self_play.resignation import CalibratedResignationConfiguration
 from src.training.checkpoint import CheckpointReference
 from src.training.objective import ResolvedTrainingObjective, resolve_auxiliary_losses
-from src.training.quantization.checkpoint import qat_inference_checkpoint_for_batch
-from src.training.quantization.configuration import TensorRtInt8QatConfiguration
+from src.training.quantization.checkpoint import onnx_inference_checkpoint_for_batch
 from src.training.targets import TrainingTargetLayout, build_training_target_layout
 from src.util.generation_schedule import FloatGenerationSchedule
 from src.util.log import log
@@ -110,8 +109,8 @@ class ChessImplementation(GameImplementation[ChessPosition, NativeSelfPlaySearch
         tree_search: EvaluationTreeSearchOverrides | None = None,
     ) -> ChessSelfPlaySearch:
         match configuration.inference.backend, self.configuration.training.trainer.quantization:
-            case TensorRtInferenceBackend(), TensorRtInt8QatConfiguration():
-                checkpoint = qat_inference_checkpoint_for_batch(
+            case TensorRtInferenceBackend(), _ if checkpoint.inference_model_path.suffix == '.onnx':
+                checkpoint = onnx_inference_checkpoint_for_batch(
                     checkpoint,
                     configuration.inference.inference_batch_size,
                 )

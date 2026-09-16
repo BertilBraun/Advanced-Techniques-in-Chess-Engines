@@ -207,17 +207,13 @@ def load_qat_model_and_optimizer(
     return restored.model, optimizer, reference.qat_state
 
 
-def qat_inference_checkpoint_for_batch(
+def onnx_inference_checkpoint_for_batch(
     checkpoint: CheckpointReference,
     batch_size: int,
 ) -> CheckpointReference:
-    if checkpoint.generation == 0 and checkpoint.inference_model_path.name.endswith('.jit.pt'):
-        raise ValueError('Generation-zero QAT inference uses the TorchScript bootstrap artifact.')
-    if checkpoint.qat_state is None:
-        raise ValueError('A batch-specific QAT inference artifact requires a QAT checkpoint.')
     checkpoint.validate_inference_model()
     if checkpoint.inference_model_path.suffix != '.onnx':
-        raise ValueError('A batch-specific QAT inference artifact requires an ONNX inference model.')
+        raise ValueError('A batch-specific inference artifact requires an ONNX inference model.')
     precision = 'fp16' if checkpoint.inference_model_path.name.endswith('.fp16.onnx') else 'int8'
     artifact_path = checkpoint.manifest_path.parent / (
         f'model_{checkpoint.generation}.{precision}-b{batch_size}-{checkpoint.inference_model_sha256[:16]}.onnx'
