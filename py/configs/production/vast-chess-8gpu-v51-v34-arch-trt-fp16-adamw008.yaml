@@ -1,14 +1,14 @@
 extends: vast-chess-8gpu-integrated-v34.yaml
 
 run:
-  run_name: vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008-retry2
-  tensorboard_run_directory: vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008-retry2
+  run_name: vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008-retry3
+  tensorboard_run_directory: vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008-retry3
   resume:
     mode: weights_only
     model_path: /workspace/chess-run-source/v34-fp16-reproduction/py/training_data/production/vast-chess-8gpu-v34-fp16-reproduction-control/model_0.pt
 
 training:
-  save_path: py/training_data/production/vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008-retry2
+  save_path: py/training_data/production/vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008-retry3
   trainer:
     learning_rate:
       kind: staged
@@ -21,7 +21,7 @@ training:
     maximum_cost: null
     maximum_wall_time_seconds: 3000
     minimum_free_disk_gib: 5.0
-    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008-retry2.stop
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008-retry3.stop
 
 chess:
   self_play:
