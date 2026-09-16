@@ -23,6 +23,7 @@ from src.experiment.base_configuration import (
 from src.experiment.configuration import ExperimentConfiguration, experiment_configuration_sha256
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.composition import create_game_implementation
+from src.self_play.configuration import TensorRtInferenceBackend
 from src.training.bootstrap import select_bootstrap_model
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import model_save_path, qat_state_save_path
@@ -228,6 +229,20 @@ def _bootstrap_probe_states(experiment: ExperimentConfiguration) -> torch.Tensor
     )
 
 
+def _float_onnx_example_states(
+    experiment: ExperimentConfiguration,
+    probe_states: torch.Tensor,
+    device: torch.device,
+) -> torch.Tensor | None:
+    inference = create_game_implementation(experiment).self_play_configuration.inference
+    if not isinstance(inference.backend, TensorRtInferenceBackend):
+        return None
+    return fixed_batch_example_states(
+        probe_states.to(device=device, dtype=torch.float32),
+        inference.inference_batch_size,
+    )
+
+
 def _save_random_initial_checkpoint(
     experiment: ExperimentConfiguration,
     output_path: Path,
@@ -257,6 +272,14 @@ def _save_random_initial_checkpoint(
                 bootstrap_probe_states,
                 bootstrap_policy_prior=selected.record,
                 bootstrap_policy_scale_application=training.trainer.bootstrap_initialization.policy_scale_application,
+                bootstrap_policy_scale_fade_generations=(
+                    training.trainer.bootstrap_initialization.policy_scale_fade_generations
+                ),
+                float_onnx_example_states=_float_onnx_example_states(
+                    experiment,
+                    bootstrap_probe_states,
+                    device,
+                ),
             )
         case TensorRtInt8QatConfiguration(calibration_positions=calibration_positions):
             game = create_game_implementation(experiment)
@@ -328,13 +351,25 @@ def _prepare_initial_checkpoint(
                     experiment.network_dimensions,
                     auxiliary_heads,
                 )
+                bootstrap_probe_states = _bootstrap_probe_states(experiment)
                 save_model_and_optimizer(
                     model,
                     create_optimizer(model, training.trainer.optimizer),
                     0,
                     output_path,
-                    _bootstrap_probe_states(experiment),
+                    bootstrap_probe_states,
                     bootstrap_policy_prior_target_top3_mass=(training.trainer.bootstrap_policy_prior_target_top3_mass),
+                    bootstrap_policy_scale_application=(
+                        training.trainer.bootstrap_initialization.policy_scale_application
+                    ),
+                    bootstrap_policy_scale_fade_generations=(
+                        training.trainer.bootstrap_initialization.policy_scale_fade_generations
+                    ),
+                    float_onnx_example_states=_float_onnx_example_states(
+                        experiment,
+                        bootstrap_probe_states,
+                        device,
+                    ),
                 )
         case RandomInitializationResumeConfiguration():
             if checkpoint_path.exists() and not manifest_path.exists():
