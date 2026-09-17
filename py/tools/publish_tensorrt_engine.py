@@ -109,7 +109,9 @@ def refit_engine(template_path: Path, onnx_path: Path, output_path: Path) -> Non
     write_bytes_atomically(output_path, bytes(engine.serialize()))
 
 
-def _automatic_template_path(configured_template_path: Path, input_shape: tuple[int, int, int, int], signature: str) -> Path:
+def _automatic_template_path(
+    configured_template_path: Path, input_shape: tuple[int, int, int, int], signature: str
+) -> Path:
     return configured_template_path.parent / 'automatic-refit' / f'b{input_shape[0]}-{signature}.engine'
 
 
