@@ -97,7 +97,7 @@ def _folded_deployment_copy(model: Network, example_states: torch.Tensor) -> Net
             calibration_model.train(was_training)
 
     calibration_started_at = time.perf_counter()
-    recalibrate_qat(deployment_model, calibration_loop)
+    recalibrate_qat(deployment_model, calibration_loop, distributed_sync=False)
     calibration_seconds = time.perf_counter() - calibration_started_at
     log(
         'Prepared folded QAT deployment copy: '

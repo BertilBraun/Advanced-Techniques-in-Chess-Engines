@@ -12,7 +12,7 @@ import modelopt.torch.quantization as quantization
 import numpy as np
 import onnx
 import torch
-from modelopt.torch.quantization.config import QuantizeConfig, QuantizerCfgEntry
+from modelopt.torch.quantization.config import MaxCalibConfig, QuantizeConfig, QuantizerCfgEntry
 from modelopt.torch.quantization.nn import TensorQuantizer
 from pydantic import Field
 from src.training.network import (
@@ -89,8 +89,17 @@ def configure_qat(model: Network, calibration_loop: CalibrationLoop) -> Network:
     return configured
 
 
-def recalibrate_qat(model: Network, calibration_loop: CalibrationLoop) -> None:
-    quantization.calibrate(model, 'max', calibration_loop)
+def recalibrate_qat(
+    model: Network,
+    calibration_loop: CalibrationLoop,
+    *,
+    distributed_sync: bool = True,
+) -> None:
+    quantization.calibrate(
+        model,
+        MaxCalibConfig(distributed_sync=distributed_sync),
+        calibration_loop,
+    )
 
 
 def _fold_convolution_batch_norm(block: nn.Sequential) -> None:
