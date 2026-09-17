@@ -76,6 +76,7 @@ def save_qat_model_and_optimizer(
     save_folder: Path,
     qat_state: QatStateIdentity,
     example_states: torch.Tensor,
+    bootstrap_with_torchscript: bool = False,
     bootstrap_probe_states: torch.Tensor | None = None,
     bootstrap_policy_prior_target_top3_mass: float = BOOTSTRAP_POLICY_PRIOR_TARGET_TOP3_MASS,
     quantization_configuration: TensorRtInt8QatConfiguration | None = None,
@@ -93,7 +94,7 @@ def save_qat_model_and_optimizer(
     int8_start_generation = (
         1 if quantization_configuration is None else quantization_configuration.int8_self_play_start_generation
     )
-    if generation == 0 and int8_start_generation == 1:
+    if generation == 0 and bootstrap_with_torchscript:
         inference_path = raw_model_path.with_suffix('.jit.pt')
     elif generation < int8_start_generation:
         inference_path = float_qat_inference_model_path(generation, save_folder)
@@ -139,7 +140,7 @@ def save_qat_model_and_optimizer(
     write_bytes_atomically(stored_qat_state_path, qat_state.path.read_bytes())
 
     def export_inference_artifact() -> None:
-        if generation == 0 and int8_start_generation == 1:
+        if generation == 0 and bootstrap_with_torchscript:
             inference_model = _bootstrap_inference_model(model)
             torch.jit.save(
                 torch.jit.script(inference_model),

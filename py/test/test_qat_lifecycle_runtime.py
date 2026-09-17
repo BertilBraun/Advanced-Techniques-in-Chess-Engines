@@ -356,6 +356,7 @@ def test_generation_zero_qat_checkpoint_calibrates_trainable_and_inference_weigh
         save_folder=tmp_path,
         qat_state=state,
         example_states=torch.randn((8, 8, 3, 3)),
+        bootstrap_with_torchscript=True,
         bootstrap_probe_states=torch.randn((256, 8, 3, 3)),
         bootstrap_policy_prior_target_top3_mass=target_top3_mass,
     )

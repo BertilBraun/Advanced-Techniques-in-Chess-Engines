@@ -303,7 +303,11 @@ def _initialize_rank(
                             qat_calibration_states,
                             game.self_play_configuration.inference.inference_batch_size,
                         ),
-                        bootstrap_probe_states,
+                        bootstrap_with_torchscript=uses_torchscript_bootstrap(
+                            startup.starting_generation,
+                            game.self_play_configuration.inference.backend,
+                        ),
+                        bootstrap_probe_states=bootstrap_probe_states,
                         bootstrap_policy_prior_target_top3_mass=(
                             configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
                         ),
@@ -631,7 +635,11 @@ def _save_rank_checkpoint(
                     runtime.qat_calibration_states,
                     runtime.game.self_play_configuration.inference.inference_batch_size,
                 ),
-                runtime.qat_calibration_states,
+                bootstrap_with_torchscript=uses_torchscript_bootstrap(
+                    generation,
+                    runtime.game.self_play_configuration.inference.backend,
+                ),
+                bootstrap_probe_states=runtime.qat_calibration_states,
                 bootstrap_policy_prior_target_top3_mass=(
                     configuration.training.trainer.bootstrap_policy_prior_target_top3_mass
                 ),

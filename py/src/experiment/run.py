@@ -311,7 +311,11 @@ def _save_random_initial_checkpoint(
                 output_path,
                 qat_state,
                 fixed_batch_example_states(calibration_states, inference_batch_size),
-                bootstrap_probe_states,
+                bootstrap_with_torchscript=uses_torchscript_bootstrap(
+                    0,
+                    game.self_play_configuration.inference.backend,
+                ),
+                bootstrap_probe_states=bootstrap_probe_states,
                 quantization_configuration=training.trainer.quantization,
                 bootstrap_policy_prior=selected.record,
                 bootstrap_policy_scale_application=training.trainer.bootstrap_initialization.policy_scale_application,
