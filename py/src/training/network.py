@@ -757,6 +757,9 @@ class ChessFromToAttentionPolicyHead(nn.Module):
         self.register_buffer(
             'promotion_offset_indices', torch.from_numpy(table.promotion_offset_indices), persistent=False
         )
+        promotion_offset_actions = torch.zeros((len(table.promotion_action_ids), table.action_count))
+        promotion_offset_actions[torch.arange(len(table.promotion_action_ids)), table.promotion_action_ids] = 1.0
+        self.register_buffer('promotion_offset_actions', promotion_offset_actions, persistent=False)
 
     def forward(self, features: Tensor) -> Tensor:
         batch_size = features.shape[0]
@@ -772,7 +775,7 @@ class ChessFromToAttentionPolicyHead(nn.Module):
         knight_scores = promotion_scores[:, :, self.knight_promotion_index : self.knight_promotion_index + 1]
         promotion_offsets = promotion_scores - knight_scores
         gathered = promotion_offsets.reshape(batch_size, -1).index_select(1, self.promotion_offset_indices)
-        return logits.index_add(1, self.promotion_action_ids, gathered)
+        return logits + torch.matmul(gathered, self.promotion_offset_actions)
 
 
 class GoPointPassPolicyHead(nn.Module):
