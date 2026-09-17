@@ -236,6 +236,7 @@ def _harness(
     coordinator.configuration = _Configuration()  # type: ignore[assignment]
     coordinator.ledger = ledger  # type: ignore[assignment]
     coordinator.replay_manager = replay_manager  # type: ignore[assignment]
+    coordinator.self_play_checkpoint = checkpoint
     coordinator.self_play_group = self_play_group  # type: ignore[assignment]
     coordinator.self_play_health = SelfPlayHealthMonitor(WORKER_COUNT, grace_seconds=grace_seconds)
     coordinator.evaluation_manager = _EvaluationManager()  # type: ignore[assignment]

@@ -8,12 +8,25 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
+import numpy as np
 import onnx
+import onnxruntime as ort
 import tensorrt as trt
 import torch
+from AlphaZeroCpp import (
+    InferenceBackend,
+    InferenceDevice,
+    InferenceDimensions,
+    InferenceExecutionOptions,
+    InferenceMemoryFormat,
+    InferencePrecision,
+    InferenceRunner,
+    SdpaBackend,
+)
 from src.util.atomic_file import write_bytes_atomically, write_text_atomically
 from src.util.hashing import file_sha256
 
@@ -21,6 +34,18 @@ INPUT_NAME = 'states'
 POLICY_OUTPUT_NAME = 'policy_logits'
 WDL_OUTPUT_NAME = 'wdl_probabilities'
 ONNX_OPSET_VERSION = 18
+VERIFICATION_BATCH_SIZE = 64
+MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR = 0.01
+MAXIMUM_OUTPUT_ABSOLUTE_ERROR = 0.1
+
+
+@dataclass(frozen=True)
+class TensorRtVerification:
+    batch_size: int
+    policy_mean_absolute_error: float
+    policy_maximum_absolute_error: float
+    wdl_mean_absolute_error: float
+    wdl_maximum_absolute_error: float
 
 
 def onnx_graph_signature(path: Path) -> str:
@@ -109,6 +134,99 @@ def refit_engine(template_path: Path, onnx_path: Path, output_path: Path) -> Non
     write_bytes_atomically(output_path, bytes(engine.serialize()))
 
 
+def _onnx_output_width(model: onnx.ModelProto, name: str) -> int:
+    matching = tuple(output for output in model.graph.output if output.name == name)
+    if len(matching) != 1:
+        raise ValueError(f'ONNX graph must have exactly one output named {name}.')
+    dimensions = matching[0].type.tensor_type.shape.dim
+    if len(dimensions) != 2 or not dimensions[1].HasField('dim_value') or dimensions[1].dim_value <= 0:
+        raise ValueError(f'ONNX output {name} must have a static positive width.')
+    return dimensions[1].dim_value
+
+
+def _onnx_outputs(onnx_path: Path, states: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    providers: list[str | tuple[str, dict[str, str]]] = [
+        ('CUDAExecutionProvider', {'device_id': '0'}),
+        'CPUExecutionProvider',
+    ]
+    session = ort.InferenceSession(str(onnx_path), providers=providers)
+    input_metadata = session.get_inputs()
+    if len(input_metadata) != 1 or input_metadata[0].name != INPUT_NAME:
+        raise ValueError('The deployed ONNX graph must have exactly one input named states.')
+    match input_metadata[0].type:
+        case 'tensor(float)':
+            onnx_states = states.astype(np.float32)
+        case 'tensor(float16)':
+            onnx_states = states.astype(np.float16)
+        case input_type:
+            raise ValueError(f'Unsupported deployed ONNX input type: {input_type}.')
+    policy_logits, wdl_probabilities = session.run(
+        (POLICY_OUTPUT_NAME, WDL_OUTPUT_NAME),
+        {INPUT_NAME: onnx_states},
+    )
+    return policy_logits.astype(np.float32), wdl_probabilities.astype(np.float32)
+
+
+def _output_errors(reference: np.ndarray, candidate: np.ndarray) -> tuple[float, float]:
+    if reference.shape != candidate.shape:
+        raise ValueError(f'TensorRT output shape {candidate.shape} does not match ONNX shape {reference.shape}.')
+    if not np.isfinite(reference).all() or not np.isfinite(candidate).all():
+        raise ValueError('ONNX and TensorRT verification outputs must be finite.')
+    errors = np.abs(reference - candidate)
+    return float(errors.mean()), float(errors.max())
+
+
+def verify_engine(onnx_path: Path, engine_path: Path, input_shape: tuple[int, int, int, int]) -> TensorRtVerification:
+    batch_size = min(input_shape[0], VERIFICATION_BATCH_SIZE)
+    generator = np.random.default_rng(0)
+    states = generator.integers(0, 2, size=(batch_size, *input_shape[1:]), dtype=np.int8)
+    onnx_policy, onnx_wdl = _onnx_outputs(onnx_path, states)
+    model = onnx.load(onnx_path, load_external_data=False)
+    dimensions = InferenceDimensions(
+        input_shape[1],
+        input_shape[2],
+        input_shape[3],
+        _onnx_output_width(model, POLICY_OUTPUT_NAME),
+        _onnx_output_width(model, WDL_OUTPUT_NAME),
+    )
+    runner = InferenceRunner(
+        model_path=str(engine_path),
+        device=InferenceDevice.CUDA,
+        device_id=0,
+        maximum_batch_size=input_shape[0],
+        use_dedicated_cuda_stream=True,
+        dimensions=dimensions,
+        execution_options=InferenceExecutionOptions(
+            sdpa_backend=SdpaBackend.AUTOMATIC,
+            precision=InferencePrecision.FLOAT16,
+            memory_format=InferenceMemoryFormat.CONTIGUOUS,
+            cudnn_benchmark=False,
+        ),
+        backend=InferenceBackend.TENSORRT,
+    )
+    tensor_rt_policy, tensor_rt_wdl = runner.forward(states)
+    policy_mean_error, policy_maximum_error = _output_errors(onnx_policy, tensor_rt_policy)
+    wdl_mean_error, wdl_maximum_error = _output_errors(onnx_wdl, tensor_rt_wdl)
+    if (
+        policy_mean_error > MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR
+        or policy_maximum_error > MAXIMUM_OUTPUT_ABSOLUTE_ERROR
+        or wdl_mean_error > MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR
+        or wdl_maximum_error > MAXIMUM_OUTPUT_ABSOLUTE_ERROR
+    ):
+        raise ValueError(
+            'TensorRT verification failed: '
+            f'policy mean/max={policy_mean_error:.6f}/{policy_maximum_error:.6f}, '
+            f'WDL mean/max={wdl_mean_error:.6f}/{wdl_maximum_error:.6f}.'
+        )
+    return TensorRtVerification(
+        batch_size=batch_size,
+        policy_mean_absolute_error=policy_mean_error,
+        policy_maximum_absolute_error=policy_maximum_error,
+        wdl_mean_absolute_error=wdl_mean_error,
+        wdl_maximum_absolute_error=wdl_maximum_error,
+    )
+
+
 def _automatic_template_path(
     configured_template_path: Path, input_shape: tuple[int, int, int, int], signature: str
 ) -> Path:
@@ -193,6 +311,7 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
             refit_started_at = time.perf_counter()
             refit_engine(selected_template_path, onnx_path, engine_path)
             refit_seconds = time.perf_counter() - refit_started_at
+            verification = verify_engine(onnx_path, engine_path, input_shape)
             metadata = {
                 'engine_path': str(engine_path),
                 'engine_sha256': file_sha256(engine_path),
@@ -202,6 +321,11 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
                 'template_path': str(selected_template_path),
                 'batch_size': input_shape[0],
                 'refit_seconds': refit_seconds,
+                'verification_batch_size': verification.batch_size,
+                'policy_mean_absolute_error': verification.policy_mean_absolute_error,
+                'policy_maximum_absolute_error': verification.policy_maximum_absolute_error,
+                'wdl_mean_absolute_error': verification.wdl_mean_absolute_error,
+                'wdl_maximum_absolute_error': verification.wdl_maximum_absolute_error,
                 'cached': False,
             }
             write_text_atomically(metadata_path, json.dumps(metadata, indent=2, sort_keys=True) + '\n')
