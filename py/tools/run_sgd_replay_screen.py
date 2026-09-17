@@ -27,7 +27,7 @@ from src.training.network import Network
 from src.training.objective import ResolvedTrainingObjective, mask_policy_logits
 from src.training.quantization.runtime import (
     configure_qat,
-    fold_scaled_post_activation_batch_norm,
+    fold_post_activation_batch_norm,
     recalibrate_qat,
 )
 from src.training.trainer.rank import DistributedTrainingModel
@@ -404,7 +404,7 @@ def run(arguments: Arguments) -> None:
             if step == schedule.fold_after_optimizer_steps:
                 distributed.barrier()
                 del distributed_model
-                fold_scaled_post_activation_batch_norm(model)
+                fold_post_activation_batch_norm(model)
                 recalibrate_qat(model, _calibration_loop(opened, calibration_indices, device))
                 optimizer = create_optimizer(model, optimizer_configuration)
                 distributed_model = DistributedDataParallel(

@@ -18,6 +18,8 @@ from src.training.network import (
     DisabledResidualContext,
     Network,
     NetworkParams,
+    PostActivationResidualBlockConfiguration,
+    ResBlock,
     ScaledPostActivationResBlock,
     ScaledPostActivationResidualBlockConfiguration,
 )
@@ -41,7 +43,7 @@ from src.training.quantization.runtime import (  # noqa: E402
     deployment_qat_state,
     export_qat_onnx,
     fixed_batch_example_states,
-    fold_scaled_post_activation_batch_norm,
+    fold_post_activation_batch_norm,
     recalibrate_qat,
     restore_qat_model,
     save_qat_state,
@@ -163,6 +165,41 @@ def _network(actions: int = 10) -> Network:
     )
 
 
+def _unscaled_network(actions: int = 10) -> Network:
+    return Network(
+        NetworkParams(
+            num_layers=2,
+            hidden_size=16,
+            residual_context=DisabledResidualContext(),
+            residual_block=PostActivationResidualBlockConfiguration(),
+            policy_head=DensePolicyHeadConfiguration(channels=2),
+            num_value_channels=2,
+            value_fc_size=16,
+        ),
+        torch.device('cpu'),
+        NetworkDimensions(channels=8, rows=3, columns=3, actions=actions),
+    )
+
+
+@pytest.mark.integration
+def test_unscaled_post_activation_qat_folds_batch_norm_without_changing_outputs() -> None:
+    model = configure_qat(_unscaled_network(), _calibrate)
+    inputs = torch.randn((8, 8, 3, 3))
+    model.eval()
+    with torch.inference_mode():
+        expected = model(inputs)
+
+    fold_post_activation_batch_norm(model)
+    model.eval()
+    with torch.inference_mode():
+        actual = model(inputs)
+
+    assert all(isinstance(block, ResBlock) for block in model.backbone)
+    assert all(isinstance(block.conv_block1[1], nn.Identity) for block in model.backbone)
+    assert torch.allclose(actual[0], expected[0], rtol=1e-4, atol=1e-5)
+    assert torch.allclose(actual[1], expected[1], rtol=1e-4, atol=1e-5)
+
+
 def _calibrate(model: nn.Module) -> None:
     model(torch.randn((8, 8, 3, 3)))
 
@@ -184,7 +221,7 @@ def test_qat_resume_reconstructs_checkpoint_topology(
     configured = configure_qat(_network(), _calibrate)
     state = save_qat_state(configured, tmp_path / 'modelopt-state.pt', min(completed_optimizer_steps, 999))
     if phase is QatCheckpointPhase.DEPLOYMENT:
-        fold_scaled_post_activation_batch_norm(configured)
+        fold_post_activation_batch_norm(configured)
         state = deployment_qat_state(state, completed_optimizer_steps)
     weights = configured.state_dict()
 
@@ -203,7 +240,7 @@ def test_qat_resume_reconstructs_checkpoint_topology(
 @pytest.mark.integration
 def test_folded_qat_export_contains_explicit_quantization(tmp_path: Path) -> None:
     model = configure_qat(_network(), _calibrate)
-    fold_scaled_post_activation_batch_norm(model)
+    fold_post_activation_batch_norm(model)
     recalibrate_qat(model, _calibrate)
 
     artifact = export_qat_onnx(model, tmp_path / 'model.onnx', torch.randn((8, 8, 3, 3)))
@@ -245,7 +282,7 @@ def test_qat_export_keeps_zero_and_nonzero_batch_norm_parameters(tmp_path: Path)
 def test_deployment_qat_checkpoint_round_trip(tmp_path: Path) -> None:
     model = configure_qat(_network(), _calibrate)
     pre_fold_state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 999)
-    fold_scaled_post_activation_batch_norm(model)
+    fold_post_activation_batch_norm(model)
     recalibrate_qat(model, _calibrate)
     deployment_state = deployment_qat_state(pre_fold_state, 1_000)
     optimizer_configuration = AdamWOptimizerConfiguration()

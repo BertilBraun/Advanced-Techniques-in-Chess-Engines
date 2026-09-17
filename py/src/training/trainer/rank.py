@@ -50,7 +50,7 @@ from src.training.quantization.runtime import (
     configure_qat,
     deployment_qat_state,
     fixed_batch_example_states,
-    fold_scaled_post_activation_batch_norm,
+    fold_post_activation_batch_norm,
     recalibrate_qat,
     save_qat_state,
 )
@@ -687,7 +687,7 @@ def _prepare_qat_publication(
             path=conversion_path,
             sha256=file_sha256(conversion_path),
         )
-        fold_scaled_post_activation_batch_norm(runtime.model)
+        fold_post_activation_batch_norm(runtime.model)
         runtime.optimizer = create_optimizer(runtime.model, configuration.training.trainer.optimizer)
         device_id = runtime.device.index
         assert device_id is not None, 'TensorRT INT8 QAT requires a CUDA training device.'
