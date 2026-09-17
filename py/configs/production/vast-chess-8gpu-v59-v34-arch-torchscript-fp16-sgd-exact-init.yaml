@@ -1,11 +1,14 @@
 extends: vast-chess-8gpu-v58-v34-arch-torchscript-fp16-exact-init.yaml
 
 run:
-  run_name: vast-chess-8gpu-v59-v34-arch-torchscript-fp16-sgd-exact-init
-  tensorboard_run_directory: vast-chess-8gpu-v59-v34-arch-torchscript-fp16-sgd-exact-init
+  run_name: vast-chess-8gpu-v59-v34-arch-torchscript-fp16-sgd-exact-init-retry2
+  tensorboard_run_directory: vast-chess-8gpu-v59-v34-arch-torchscript-fp16-sgd-exact-init-retry2
+  resume:
+    mode: weights_only
+    model_path: /workspace/chess-run-source/v34-fp16-reproduction/py/training_data/production/vast-chess-8gpu-v34-fp16-reproduction-control/model_0.pt
 
 training:
-  save_path: py/training_data/production/vast-chess-8gpu-v59-v34-arch-torchscript-fp16-sgd-exact-init
+  save_path: py/training_data/production/vast-chess-8gpu-v59-v34-arch-torchscript-fp16-sgd-exact-init-retry2
   trainer:
     optimizer:
       kind: sgd
@@ -22,4 +25,4 @@ training:
     max_grad_norm: 5.0
   limits:
     maximum_wall_time_seconds: 3000
-    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v59-v34-arch-torchscript-fp16-sgd-exact-init.stop
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v59-v34-arch-torchscript-fp16-sgd-exact-init-retry2.stop
