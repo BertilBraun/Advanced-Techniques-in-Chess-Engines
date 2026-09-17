@@ -55,6 +55,26 @@ class TensorRtVerification:
 
 def onnx_graph_signature(path: Path) -> str:
     model = onnx.load(path, load_external_data=False)
+    consumers: dict[str, list[tuple[str, int]]] = {}
+    for node in model.graph.node:
+        for input_index, input_name in enumerate(node.input):
+            consumers.setdefault(input_name, []).append((node.op_type, input_index))
+
+    def attribute_signature(attribute: onnx.AttributeProto, normalize_tensor_value: bool) -> tuple[str, int, str]:
+        if normalize_tensor_value and attribute.type == onnx.AttributeProto.TENSOR:
+            tensor_shape = (attribute.t.data_type, tuple(attribute.t.dims))
+            return attribute.name, attribute.type, json.dumps(tensor_shape, separators=(',', ':'))
+        return attribute.name, attribute.type, attribute.SerializeToString().hex()
+
+    def is_quantization_parameter_constant(node: onnx.NodeProto) -> bool:
+        if node.op_type != 'Constant' or not node.output:
+            return False
+        uses = tuple(use for output_name in node.output for use in consumers.get(output_name, ()))
+        return bool(uses) and all(
+            consumer_type in ('QuantizeLinear', 'DequantizeLinear') and input_index in (1, 2)
+            for consumer_type, input_index in uses
+        )
+
     initializers = tuple(
         (initializer.name, initializer.data_type, tuple(initializer.dims))
         for initializer in sorted(model.graph.initializer, key=lambda item: item.name)
@@ -66,7 +86,7 @@ def onnx_graph_signature(path: Path) -> str:
             tuple(node.input),
             tuple(node.output),
             tuple(
-                (attribute.name, attribute.type, attribute.SerializeToString().hex())
+                attribute_signature(attribute, is_quantization_parameter_constant(node))
                 for attribute in sorted(node.attribute, key=lambda item: item.name)
             ),
         )
