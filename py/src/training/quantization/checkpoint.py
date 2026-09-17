@@ -147,7 +147,12 @@ def save_qat_model_and_optimizer(
                 _extra_files={'network.json': inference_model.checkpoint_definition().model_dump_json()},
             )
         elif generation < int8_start_generation:
-            export_float_qat_onnx(model, inference_path, example_states)
+            export_float_qat_onnx(
+                model,
+                inference_path,
+                example_states,
+                constant_folding=True,
+            )
         else:
             export_qat_onnx(model, inference_path, example_states)
 

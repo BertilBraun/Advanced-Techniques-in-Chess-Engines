@@ -297,9 +297,19 @@ def save_model_and_optimizer(
         and bootstrap_policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
     ):
         with temporary_policy_prior_scale(model, policy_prior_calibration.applied_scale):
-            export_float_qat_onnx(model, inference_model_path, float_onnx_example_states)
+            export_float_qat_onnx(
+                model,
+                inference_model_path,
+                float_onnx_example_states,
+                constant_folding=True,
+            )
     else:
-        export_float_qat_onnx(model, inference_model_path, float_onnx_example_states)
+        export_float_qat_onnx(
+            model,
+            inference_model_path,
+            float_onnx_example_states,
+            constant_folding=True,
+        )
 
     temporary_model_path.replace(raw_model_path)
     temporary_optimizer_path.replace(raw_optimizer_path)

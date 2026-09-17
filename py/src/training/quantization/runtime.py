@@ -246,7 +246,12 @@ def _restore_exported_batch_norm_tensors(
         initializer.CopyFrom(onnx.numpy_helper.from_array(restored, name=seeded_tensor.name))
 
 
-def _export_onnx_graph(model: nn.Module, path: Path, example_states: Tensor) -> None:
+def _export_onnx_graph(
+    model: nn.Module,
+    path: Path,
+    example_states: Tensor,
+    constant_folding: bool,
+) -> None:
     torch.onnx.export(
         model,
         (example_states,),
@@ -254,26 +259,31 @@ def _export_onnx_graph(model: nn.Module, path: Path, example_states: Tensor) -> 
         input_names=('states',),
         output_names=('policy_logits', 'wdl_probabilities'),
         opset_version=20,
-        do_constant_folding=True,
+        do_constant_folding=constant_folding,
         dynamo=False,
     )
 
 
-def _export_modelopt_onnx(model: nn.Module, path: Path, example_states: Tensor) -> onnx.ModelProto:
+def _export_modelopt_onnx(
+    model: nn.Module,
+    path: Path,
+    example_states: Tensor,
+    constant_folding: bool,
+) -> onnx.ModelProto:
     temporary_path = path.with_name(f'.{path.name}.tmp')
     was_training = model.training
     model.eval()
     seeded_tensors: tuple[_SeededBatchNormTensor, ...] = ()
     try:
         with torch.inference_mode():
-            _export_onnx_graph(model, temporary_path, example_states)
+            _export_onnx_graph(model, temporary_path, example_states, constant_folding)
             probe = onnx.load(temporary_path)
             explicit_batch_norm_tensor_names = _explicit_batch_norm_tensor_names(probe)
             if explicit_batch_norm_tensor_names:
                 with _seed_batch_norm_tensors_for_onnx_export(
                     model, explicit_batch_norm_tensor_names
                 ) as seeded_tensors:
-                    _export_onnx_graph(model, temporary_path, example_states)
+                    _export_onnx_graph(model, temporary_path, example_states, constant_folding)
     finally:
         model.train(was_training)
     exported = onnx.load(temporary_path)
@@ -285,7 +295,7 @@ def _export_modelopt_onnx(model: nn.Module, path: Path, example_states: Tensor) 
 
 
 def export_qat_onnx(model: nn.Module, path: Path, example_states: Tensor) -> QatOnnxArtifact:
-    exported = _export_modelopt_onnx(model, path, example_states)
+    exported = _export_modelopt_onnx(model, path, example_states, True)
     quantize_linear_nodes = sum(node.op_type == 'QuantizeLinear' for node in exported.graph.node)
     dequantize_linear_nodes = sum(node.op_type == 'DequantizeLinear' for node in exported.graph.node)
     if quantize_linear_nodes == 0 or dequantize_linear_nodes == 0:
@@ -299,9 +309,14 @@ def export_qat_onnx(model: nn.Module, path: Path, example_states: Tensor) -> Qat
     )
 
 
-def export_float_qat_onnx(model: Network, path: Path, example_states: Tensor) -> FloatOnnxArtifact:
+def export_float_qat_onnx(
+    model: Network,
+    path: Path,
+    example_states: Tensor,
+    constant_folding: bool,
+) -> FloatOnnxArtifact:
     with quantizers_disabled(model):
-        exported = _export_modelopt_onnx(model, path, example_states)
+        exported = _export_modelopt_onnx(model, path, example_states, constant_folding)
     if any(node.op_type in ('QuantizeLinear', 'DequantizeLinear') for node in exported.graph.node):
         path.unlink()
         raise ValueError('Floating-point QAT deployment export unexpectedly contains Q/DQ nodes.')

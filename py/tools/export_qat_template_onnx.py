@@ -88,7 +88,12 @@ def export_template(
     example_states = fixed_batch_example_states(calibration_states, batch_size)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if export_kind in (TemplateExportKind.FLOAT_PRE_FOLD, TemplateExportKind.FLOAT_DEPLOYMENT):
-        export_float_qat_onnx(model, output_path, example_states)
+        export_float_qat_onnx(
+            model,
+            output_path,
+            example_states,
+            constant_folding=True,
+        )
     else:
         export_qat_onnx(model, output_path, example_states)
 

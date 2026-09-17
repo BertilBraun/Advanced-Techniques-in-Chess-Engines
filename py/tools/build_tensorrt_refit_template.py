@@ -14,11 +14,10 @@ WORKSPACE_BYTES = 4 * 1024**3
 
 def _mark_onnx_weights_refittable(network: trt.INetworkDefinition, onnx_path: Path) -> int:
     model = onnx.load(onnx_path, load_external_data=False)
-    candidate_names = {initializer.name for initializer in model.graph.initializer}
-    candidate_names.update(
-        output_name for node in model.graph.node if node.op_type == 'Constant' for output_name in node.output
+    marked = sum(
+        network.mark_weights_refittable(initializer.name)
+        for initializer in sorted(model.graph.initializer, key=lambda initializer: initializer.name)
     )
-    marked = sum(network.mark_weights_refittable(name) for name in sorted(candidate_names))
     if marked == 0:
         raise ValueError('TensorRT did not recognize any ONNX weights as individually refittable.')
     return marked
