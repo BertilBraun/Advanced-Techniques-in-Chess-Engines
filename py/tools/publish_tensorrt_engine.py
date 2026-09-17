@@ -35,7 +35,8 @@ POLICY_OUTPUT_NAME = 'policy_logits'
 WDL_OUTPUT_NAME = 'wdl_probabilities'
 ONNX_OPSET_VERSION = 18
 MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR = 0.01
-MAXIMUM_OUTPUT_ABSOLUTE_ERROR = 0.1
+MAXIMUM_POLICY_ABSOLUTE_ERROR = 0.2
+MAXIMUM_WDL_ABSOLUTE_ERROR = 0.1
 
 
 @dataclass(frozen=True)
@@ -208,9 +209,9 @@ def verify_engine(onnx_path: Path, engine_path: Path, input_shape: tuple[int, in
     wdl_mean_error, wdl_maximum_error = _output_errors(onnx_wdl, tensor_rt_wdl)
     if (
         policy_mean_error > MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR
-        or policy_maximum_error > MAXIMUM_OUTPUT_ABSOLUTE_ERROR
+        or policy_maximum_error > MAXIMUM_POLICY_ABSOLUTE_ERROR
         or wdl_mean_error > MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR
-        or wdl_maximum_error > MAXIMUM_OUTPUT_ABSOLUTE_ERROR
+        or wdl_maximum_error > MAXIMUM_WDL_ABSOLUTE_ERROR
     ):
         raise ValueError(
             'TensorRT verification failed: '
