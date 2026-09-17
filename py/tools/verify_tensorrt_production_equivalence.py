@@ -182,9 +182,12 @@ def run(arguments: Arguments) -> ProductionEquivalenceReport:
         raise ValueError(f'Requested batch {max(arguments.batch_sizes)} exceeds production batch {maximum_batch_size}.')
     arguments.artifact_directory.mkdir(parents=True, exist_ok=True)
     torch.cuda.set_device(arguments.gpu_id)
-    states, legal_action_mask = load_positions(arguments.dataset_path, maximum_batch_size)
-    if states.dtype != torch.int8:
-        raise ValueError(f'Production encoded states must be int8, found {states.dtype}.')
+    decoded_states, legal_action_mask = load_positions(arguments.dataset_path, maximum_batch_size)
+    if not torch.equal(decoded_states, decoded_states.round()):
+        raise ValueError('Decoded evaluation states contain non-integral plane values.')
+    if decoded_states.min() < -128 or decoded_states.max() > 127:
+        raise ValueError('Decoded evaluation states exceed the production int8 input range.')
+    states = decoded_states.to(dtype=torch.int8)
 
     reference_path = arguments.artifact_directory / f'model-{arguments.checkpoint_generation}.reference.jit.pt'
     export_float_inference(checkpoint.manifest_path, checkpoint.generation, reference_path)
