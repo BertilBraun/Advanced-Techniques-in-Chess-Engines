@@ -89,7 +89,9 @@ def test_qat_checkpoint_save_refreshes_live_sidecar_identity(monkeypatch: pytest
         qat_state=source_state,
         qat_calibration_states=torch.zeros((1, 52, 8, 8)),
         game=SimpleNamespace(
-            self_play_configuration=SimpleNamespace(inference=SimpleNamespace(inference_batch_size=1))
+            self_play_configuration=SimpleNamespace(
+                inference=SimpleNamespace(inference_batch_size=1, backend=object())
+            )
         ),
     )
     command = SimpleNamespace(
