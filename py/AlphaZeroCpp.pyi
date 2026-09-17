@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import typing
 
+import torch
+
 __all__: list[str] = [
     'ActionAnalysisCandidate',
     'AdditionalSearchLimit',
@@ -54,6 +56,7 @@ __all__: list[str] = [
     'InferenceConfiguration',
     'InferenceDevice',
     'InferenceDimensions',
+    'InferenceRunner',
     'InferenceExecutionOptions',
     'InferenceMemoryFormat',
     'InferencePrecision',
@@ -1016,6 +1019,20 @@ class InferenceDimensions:
     def outcomes(self) -> int: ...
     @property
     def rows(self) -> int: ...
+
+class InferenceRunner:
+    def __init__(
+        self,
+        model_path: str,
+        device: InferenceDevice,
+        device_id: int,
+        maximum_batch_size: int,
+        use_dedicated_cuda_stream: bool,
+        dimensions: InferenceDimensions,
+        execution_options: InferenceExecutionOptions = ...,
+        backend: InferenceBackend = ...,
+    ) -> None: ...
+    def forward(self, encoded_boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]: ...
 
 class InferenceExecutionOptions:
     cudnn_benchmark: bool

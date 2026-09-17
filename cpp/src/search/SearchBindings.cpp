@@ -2,6 +2,7 @@
 
 #include "search/Analysis.hpp"
 #include "search/InferenceConfiguration.hpp"
+#include "search/InferencePipeline.hpp"
 #include "search/SearchTypes.hpp"
 #include "search/SelfPlay.hpp"
 #include "util/Timing.hpp"
@@ -106,6 +107,29 @@ void bind_search(py::module_ &module) {
         .def_readonly("actions", &InferenceDimensions::actions)
         .def_readonly("outcomes", &InferenceDimensions::outcomes)
         .def(py::self == py::self);
+
+    py::class_<InferenceRunner>(module, "InferenceRunner")
+        .def(py::init<const std::string &, InferenceDevice, int, std::size_t, bool,
+                      InferenceDimensions, InferenceExecutionOptions, InferenceBackend>(),
+             py::arg("model_path"), py::arg("device"), py::arg("device_id"),
+             py::arg("maximum_batch_size"), py::arg("use_dedicated_cuda_stream"),
+             py::arg("dimensions"),
+             py::arg("execution_options") = InferenceExecutionOptions{},
+             py::arg("backend") = InferenceBackend::TorchScript)
+        .def(
+            "forward",
+            [](InferenceRunner &runner, const torch::Tensor &encodedBoards) {
+                if (encodedBoards.dim() != 4) {
+                    throw std::invalid_argument("Inference input must be a four-dimensional tensor");
+                }
+                const std::size_t batchSize = static_cast<std::size_t>(encodedBoards.size(0));
+                InferenceOutput output = runner.createOutputBuffer();
+                runner.forwardInto(encodedBoards, batchSize, output);
+                const std::int64_t rows = static_cast<std::int64_t>(batchSize);
+                return py::make_tuple(output.policies.narrow(0, 0, rows).clone(),
+                                      output.outcomes.narrow(0, 0, rows).clone());
+            },
+            py::arg("encoded_boards"));
 
     py::class_<InferenceStatistics>(module, "InferenceStatistics")
         .def(py::init<>())
