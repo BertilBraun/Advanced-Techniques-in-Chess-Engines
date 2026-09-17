@@ -315,6 +315,33 @@ def test_v56_supports_qat_on_the_v34_post_activation_architecture() -> None:
     assert training.trainer.quantization.fold_after_optimizer_steps == 3_000
 
 
+@pytest.mark.parametrize(
+    ('configuration_name', 'residual_block_kind'),
+    (
+        ('vast-chess-8gpu-v63-v34-arch-qat-fp16-adamw008.yaml', 'post_activation'),
+        ('vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008.yaml', 'scaled_post_activation'),
+    ),
+)
+def test_qat_architecture_controls_keep_self_play_float_until_diagnostics_complete(
+    configuration_name: str,
+    residual_block_kind: str,
+) -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / configuration_name
+    )
+
+    training = configuration.training
+    quantization = training.trainer.quantization
+
+    assert configuration.run.resume.mode == 'random_initialization'
+    assert training.initial_model.network.residual_block.kind == residual_block_kind
+    assert training.trainer.learning_rate.value_at(0) == pytest.approx(0.008)
+    assert quantization.kind == 'tensorrt_int8_qat'
+    assert quantization.fold_after_optimizer_steps == 3_000
+    assert quantization.int8_self_play_start_generation == 1_000_000
+    assert configuration.evaluation.cadence_seconds == 480
+
+
 def test_v34_ema_fix_resume_uses_the_stopped_checkpoint() -> None:
     configuration = load_chess_experiment_configuration(
         REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-ema-fix.yaml'
