@@ -365,9 +365,7 @@ def _generation_report(
     float_onnx_path = _copy_float_onnx(checkpoint.inference_model_path, arguments.output_directory, generation)
     float_onnx_outputs = _onnx_outputs(float_onnx_path, states)
     template = (
-        arguments.pre_fold_template
-        if checkpoint.qat_state.phase.value == 'pre_fold'
-        else arguments.deployment_template
+        arguments.pre_fold_template if checkpoint.qat_state.phase.value == 'pre_fold' else arguments.deployment_template
     )
     tensorrt_fp16_engine_path = _diagnostic_engine(float_onnx_path, template)
     tensorrt_fp16_outputs = _TensorRtCudaGraphRunner(
@@ -436,9 +434,7 @@ def _generation_report(
         float_onnx_path=str(float_onnx_path),
         tensorrt_fp16_engine_path=str(tensorrt_fp16_engine_path),
         qdq_onnx_path=None if qdq_onnx_path is None else str(qdq_onnx_path),
-        tensorrt_int8_engine_path=(
-            None if tensorrt_int8_engine_path is None else str(tensorrt_int8_engine_path)
-        ),
+        tensorrt_int8_engine_path=(None if tensorrt_int8_engine_path is None else str(tensorrt_int8_engine_path)),
     )
 
 
@@ -449,8 +445,7 @@ def run(arguments: Arguments) -> DiagnosticReport:
     torch.cuda.set_device(arguments.device_id)
     states, legal_action_mask = load_positions(arguments.dataset, arguments.positions)
     reports = tuple(
-        _generation_report(arguments, states, legal_action_mask, generation)
-        for generation in arguments.generations
+        _generation_report(arguments, states, legal_action_mask, generation) for generation in arguments.generations
     )
     report = DiagnosticReport(
         configuration=str(arguments.configuration),
