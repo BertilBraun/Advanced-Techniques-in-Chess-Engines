@@ -559,6 +559,38 @@ def test_experiment_configuration_extends_and_deeply_overrides_a_base(tmp_path: 
     assert configuration.go.representation.board_size == 7
 
 
+def test_experiment_configuration_replaces_a_changed_mode_variant(tmp_path: Path) -> None:
+    base_path = tmp_path / 'base.yaml'
+    source = (TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml').read_text(encoding='utf-8')
+    base_path.write_text(
+        source.replace(
+            'resume:\n    mode: random_initialization',
+            'resume:\n    mode: weights_only\n    model_path: source-model.pt',
+        ),
+        encoding='utf-8',
+    )
+    override_path = tmp_path / 'override.yaml'
+    override_path.write_text(
+        '\n'.join(
+            (
+                'extends: base.yaml',
+                'run:',
+                '  resume:',
+                '    mode: checkpoint',
+                '    checkpoint_manifest_path: checkpoint_0.json',
+                '    generation: 0',
+            )
+        )
+        + '\n',
+        encoding='utf-8',
+    )
+
+    configuration = load_experiment_configuration(override_path)
+
+    assert configuration.run.resume.mode == 'checkpoint'
+    assert configuration.run.resume.generation == 0
+
+
 def test_experiment_configuration_hash_includes_resolved_base_content(tmp_path: Path) -> None:
     base_path = tmp_path / 'base.yaml'
     source = (TEST_CONFIG_DIRECTORY / 'go-7x7-experiment.yaml').read_text(encoding='utf-8')

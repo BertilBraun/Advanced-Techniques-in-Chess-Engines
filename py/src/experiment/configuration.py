@@ -71,11 +71,9 @@ def _merge_experiment_mappings(
     merged = dict(base)
     for key, override_value in override.items():
         base_value = merged.get(key)
-        discriminator_changed = (
-            isinstance(base_value, dict)
-            and isinstance(override_value, dict)
-            and 'kind' in override_value
-            and base_value.get('kind') != override_value['kind']
+        discriminator_changed = isinstance(base_value, dict) and isinstance(override_value, dict) and any(
+            discriminator in override_value and base_value.get(discriminator) != override_value[discriminator]
+            for discriminator in ('kind', 'mode')
         )
         if isinstance(base_value, dict) and isinstance(override_value, dict) and not discriminator_changed:
             merged[key] = _merge_experiment_mappings(base_value, override_value)
