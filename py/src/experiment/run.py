@@ -346,8 +346,6 @@ def _prepare_initial_checkpoint(
                 output_path,
             )
         case WeightsOnlyResumeConfiguration(model_path=model_path):
-            if not isinstance(training.trainer.quantization, DisabledTrainingQuantization):
-                raise ValueError('QAT training cannot initialize from a float weights-only checkpoint.')
             initial_model_path = _resolve_source_path(model_path)
             if not initial_model_path.is_file():
                 raise ValueError(f'Initial model does not exist: {initial_model_path}')
@@ -360,25 +358,71 @@ def _prepare_initial_checkpoint(
                     auxiliary_heads,
                 )
                 bootstrap_probe_states = _bootstrap_probe_states(experiment)
-                save_model_and_optimizer(
-                    model,
-                    create_optimizer(model, training.trainer.optimizer),
-                    0,
-                    output_path,
-                    bootstrap_probe_states,
-                    bootstrap_policy_prior_target_top3_mass=(training.trainer.bootstrap_policy_prior_target_top3_mass),
-                    bootstrap_policy_scale_application=(
-                        training.trainer.bootstrap_initialization.policy_scale_application
-                    ),
-                    bootstrap_policy_scale_fade_generations=(
-                        training.trainer.bootstrap_initialization.policy_scale_fade_generations
-                    ),
-                    float_onnx_example_states=_float_onnx_example_states(
-                        experiment,
-                        bootstrap_probe_states,
-                        device,
-                    ),
-                )
+                match training.trainer.quantization:
+                    case DisabledTrainingQuantization():
+                        save_model_and_optimizer(
+                            model,
+                            create_optimizer(model, training.trainer.optimizer),
+                            0,
+                            output_path,
+                            bootstrap_probe_states,
+                            bootstrap_policy_prior_target_top3_mass=(
+                                training.trainer.bootstrap_policy_prior_target_top3_mass
+                            ),
+                            bootstrap_policy_scale_application=(
+                                training.trainer.bootstrap_initialization.policy_scale_application
+                            ),
+                            bootstrap_policy_scale_fade_generations=(
+                                training.trainer.bootstrap_initialization.policy_scale_fade_generations
+                            ),
+                            float_onnx_example_states=_float_onnx_example_states(
+                                experiment,
+                                bootstrap_probe_states,
+                                device,
+                            ),
+                        )
+                    case TensorRtInt8QatConfiguration(calibration_positions=calibration_positions) as quantization:
+                        calibration_states = bootstrap_probe_states[:calibration_positions].to(
+                            device=device,
+                            dtype=torch.float32,
+                        )
+                        game = create_game_implementation(experiment)
+                        inference_batch_size = game.self_play_configuration.inference.inference_batch_size
+
+                        def calibrate(calibration_model: torch.nn.Module) -> None:
+                            was_training = calibration_model.training
+                            calibration_model.eval()
+                            with torch.inference_mode():
+                                for states in calibration_states.split(inference_batch_size):
+                                    calibration_model(states)
+                            calibration_model.train(was_training)
+
+                        model = configure_qat(model, calibrate)
+                        qat_state = save_qat_state(model, qat_state_save_path(0, output_path), 0)
+                        save_qat_model_and_optimizer(
+                            model,
+                            create_optimizer(model, training.trainer.optimizer),
+                            0,
+                            0,
+                            output_path,
+                            qat_state,
+                            fixed_batch_example_states(calibration_states, inference_batch_size),
+                            bootstrap_with_torchscript=uses_torchscript_bootstrap(
+                                0,
+                                game.self_play_configuration.inference.backend,
+                            ),
+                            bootstrap_probe_states=bootstrap_probe_states,
+                            bootstrap_policy_prior_target_top3_mass=(
+                                training.trainer.bootstrap_policy_prior_target_top3_mass
+                            ),
+                            quantization_configuration=quantization,
+                            bootstrap_policy_scale_application=(
+                                training.trainer.bootstrap_initialization.policy_scale_application
+                            ),
+                            bootstrap_policy_scale_fade_generations=(
+                                training.trainer.bootstrap_initialization.policy_scale_fade_generations
+                            ),
+                        )
         case RandomInitializationResumeConfiguration():
             if checkpoint_path.exists() and not manifest_path.exists():
                 raise ValueError(f'Random checkpoint exists without a run manifest: {checkpoint_path}')

@@ -316,22 +316,27 @@ def test_v56_supports_qat_on_the_v34_post_activation_architecture() -> None:
 
 
 @pytest.mark.parametrize(
-    ('configuration_name', 'residual_block_kind'),
+    ('configuration_name', 'residual_block_kind', 'resume_mode'),
     (
-        ('vast-chess-8gpu-v63-v34-arch-qat-fp16-adamw008.yaml', 'post_activation'),
-        ('vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008.yaml', 'scaled_post_activation'),
+        ('vast-chess-8gpu-v63-v34-arch-qat-fp16-adamw008.yaml', 'post_activation', 'weights_only'),
+        (
+            'vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008.yaml',
+            'scaled_post_activation',
+            'random_initialization',
+        ),
     ),
 )
 def test_qat_architecture_controls_keep_self_play_float_until_diagnostics_complete(
     configuration_name: str,
     residual_block_kind: str,
+    resume_mode: str,
 ) -> None:
     configuration = load_chess_experiment_configuration(REPOSITORY_CONFIG_DIRECTORY / 'production' / configuration_name)
 
     training = configuration.training
     quantization = training.trainer.quantization
 
-    assert configuration.run.resume.mode == 'random_initialization'
+    assert configuration.run.resume.mode == resume_mode
     assert training.initial_model.network.residual_block.kind == residual_block_kind
     assert training.trainer.learning_rate.value_at(0) == pytest.approx(0.008)
     assert quantization.kind == 'tensorrt_int8_qat'
