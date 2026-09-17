@@ -105,6 +105,7 @@ class QuantizerGroupSummary(FrozenModel):
 class QuantizerReport(FrozenModel):
     activation: QuantizerGroupSummary
     weight: QuantizerGroupSummary
+    dynamic_quantizer_names: tuple[str, ...]
 
 
 class GenerationReport(FrozenModel):
@@ -266,17 +267,19 @@ def _diagnostic_engine(onnx_path: Path, configured_template_path: Path) -> Path:
     return engine_path
 
 
-def _quantizer_observations(model: Network) -> tuple[_QuantizerObservation, ...]:
+def _quantizer_observations(model: Network) -> tuple[tuple[_QuantizerObservation, ...], tuple[str, ...]]:
     observations: list[_QuantizerObservation] = []
+    dynamic_quantizer_names: list[str] = []
     for name, module in model.named_modules():
         if not isinstance(module, TensorQuantizer) or not module.is_enabled:
             continue
         amax = module.amax
         if amax is None:
-            raise ValueError(f'Enabled quantizer {name} has no calibrated amax.')
+            dynamic_quantizer_names.append(name)
+            continue
         kind: Literal['activation', 'weight'] = 'weight' if 'weight_quantizer' in name else 'activation'
         observations.append(_QuantizerObservation(name=name, kind=kind, amax=amax.detach()))
-    return tuple(observations)
+    return tuple(observations), tuple(dynamic_quantizer_names)
 
 
 def _group_quantizers(
@@ -301,7 +304,7 @@ def _group_quantizers(
 
 
 def _fake_quant_outputs_and_report(model: Network, states: Tensor) -> tuple[ModelOutputs, QuantizerReport]:
-    observations = _quantizer_observations(model)
+    observations, dynamic_quantizer_names = _quantizer_observations(model)
     handles: list[RemovableHandle] = []
     observation_by_name = {observation.name: observation for observation in observations}
     for name, module in model.named_modules():
@@ -316,6 +319,7 @@ def _fake_quant_outputs_and_report(model: Network, states: Tensor) -> tuple[Mode
     return outputs, QuantizerReport(
         activation=_group_quantizers(observations, 'activation'),
         weight=_group_quantizers(observations, 'weight'),
+        dynamic_quantizer_names=dynamic_quantizer_names,
     )
 
 
