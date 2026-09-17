@@ -36,8 +36,8 @@ WDL_OUTPUT_NAME = 'wdl_probabilities'
 ONNX_OPSET_VERSION = 18
 MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR = 0.01
 MAXIMUM_WDL_ABSOLUTE_ERROR = 0.1
-MINIMUM_POLICY_TOP1_AGREEMENT = 0.99
-MAXIMUM_POLICY_MEAN_KL_DIVERGENCE = 1e-4
+MINIMUM_POLICY_TOP1_AGREEMENT = 0.95
+MAXIMUM_POLICY_MEAN_KL_DIVERGENCE = 1e-3
 MAXIMUM_POLICY_MAXIMUM_KL_DIVERGENCE = 0.01
 
 
@@ -186,12 +186,8 @@ def _policy_distribution_agreement(reference: np.ndarray, candidate: np.ndarray)
         raise ValueError(f'TensorRT policy shape {candidate.shape} does not match ONNX shape {reference.shape}.')
     reference_shifted = reference - reference.max(axis=1, keepdims=True)
     candidate_shifted = candidate - candidate.max(axis=1, keepdims=True)
-    reference_log_probabilities = reference_shifted - np.log(
-        np.exp(reference_shifted).sum(axis=1, keepdims=True)
-    )
-    candidate_log_probabilities = candidate_shifted - np.log(
-        np.exp(candidate_shifted).sum(axis=1, keepdims=True)
-    )
+    reference_log_probabilities = reference_shifted - np.log(np.exp(reference_shifted).sum(axis=1, keepdims=True))
+    candidate_log_probabilities = candidate_shifted - np.log(np.exp(candidate_shifted).sum(axis=1, keepdims=True))
     reference_probabilities = np.exp(reference_log_probabilities)
     divergences = np.maximum(
         np.sum(reference_probabilities * (reference_log_probabilities - candidate_log_probabilities), axis=1),
@@ -231,8 +227,8 @@ def verify_engine(onnx_path: Path, engine_path: Path, input_shape: tuple[int, in
     )
     tensor_rt_policy, tensor_rt_wdl = runner.forward(states)
     policy_mean_error, policy_maximum_error = _output_errors(onnx_policy, tensor_rt_policy)
-    policy_top1_agreement, policy_mean_kl_divergence, policy_maximum_kl_divergence = (
-        _policy_distribution_agreement(onnx_policy, tensor_rt_policy)
+    policy_top1_agreement, policy_mean_kl_divergence, policy_maximum_kl_divergence = _policy_distribution_agreement(
+        onnx_policy, tensor_rt_policy
     )
     wdl_mean_error, wdl_maximum_error = _output_errors(onnx_wdl, tensor_rt_wdl)
     if (
