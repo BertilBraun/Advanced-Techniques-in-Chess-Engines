@@ -78,7 +78,7 @@ def _bootstrap_inference_model(model: Network) -> InferenceNetwork:
     return inference_model
 
 
-def _folded_deployment_copy(model: Network, example_states: torch.Tensor) -> Network:
+def folded_qat_deployment_copy(model: Network, example_states: torch.Tensor) -> Network:
     copy_started_at = time.perf_counter()
     deployment_model = copy.deepcopy(model)
     copy_seconds = time.perf_counter() - copy_started_at
@@ -183,7 +183,7 @@ def save_qat_model_and_optimizer(
         and quantization_configuration.folding_mode is QatFoldingMode.DEPLOYMENT_COPY
         and qat_state.phase is QatCheckpointPhase.DEPLOYMENT
     ):
-        export_model = _folded_deployment_copy(model, example_states)
+        export_model = folded_qat_deployment_copy(model, example_states)
 
     def export_inference_artifact() -> None:
         if generation == 0 and bootstrap_with_torchscript:

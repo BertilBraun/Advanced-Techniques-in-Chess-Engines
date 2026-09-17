@@ -15,8 +15,18 @@ from src.experiment.configuration import load_chess_experiment_configuration
 from src.training.checkpoint.contracts import CheckpointReference, read_checkpoint_manifest
 from src.training.checkpoint.persistence import load_model_state_dict
 from src.training.network import Network
-from src.training.quantization.configuration import TensorRtInt8QatConfiguration
-from src.training.quantization.runtime import export_qat_onnx, quantizers_disabled, restore_qat_model
+from src.training.quantization.checkpoint import folded_qat_deployment_copy
+from src.training.quantization.configuration import (
+    QatCheckpointPhase,
+    QatFoldingMode,
+    TensorRtInt8QatConfiguration,
+)
+from src.training.quantization.runtime import (
+    export_float_qat_onnx,
+    export_qat_onnx,
+    quantizers_disabled,
+    restore_qat_model,
+)
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
@@ -240,8 +250,7 @@ def _compare_outputs(
     return SuccessfulFidelityComparison(metrics=measure_fidelity(reference, candidate, legal_action_mask))
 
 
-def _copy_float_onnx(source: Path, output_directory: Path, generation: int) -> Path:
-    destination = output_directory / f'generation-{generation}.fp16.onnx'
+def _copy_onnx(source: Path, destination: Path) -> Path:
     shutil.copy2(source, destination)
     return destination
 
@@ -363,10 +372,29 @@ def _generation_report(
             float_outputs = _framework_outputs(restored, device_states)
 
     if not original_onnx_artifact_available:
-        raise ValueError(f'Generation {generation} does not retain its floating-point ONNX artifact.')
+        raise ValueError(f'Generation {generation} does not retain its ONNX inference artifact.')
     if file_sha256(checkpoint.inference_model_path) != manifest.inference_model_sha256:
         raise ValueError(f'Checkpoint ONNX hash does not match: {checkpoint.inference_model_path}')
-    float_onnx_path = _copy_float_onnx(checkpoint.inference_model_path, arguments.output_directory, generation)
+    deployment_model = restored
+    if (
+        restored is not None
+        and quantization.folding_mode is QatFoldingMode.DEPLOYMENT_COPY
+        and checkpoint.qat_state.phase is QatCheckpointPhase.DEPLOYMENT
+    ):
+        deployment_model = folded_qat_deployment_copy(restored, device_states)
+
+    float_onnx_path = arguments.output_directory / f'generation-{generation}.fp16.onnx'
+    if checkpoint.inference_model_path.name.endswith('.fp16.onnx'):
+        _copy_onnx(checkpoint.inference_model_path, float_onnx_path)
+    elif deployment_model is not None:
+        export_float_qat_onnx(
+            deployment_model,
+            float_onnx_path,
+            device_states,
+            constant_folding=True,
+        )
+    else:
+        raise ValueError(f'Generation {generation} cannot regenerate its floating-point ONNX artifact.')
     float_onnx_outputs = _onnx_outputs(float_onnx_path, states)
     template = (
         arguments.pre_fold_template if checkpoint.qat_state.phase.value == 'pre_fold' else arguments.deployment_template
@@ -383,9 +411,12 @@ def _generation_report(
     tensorrt_int8_engine_path: Path | None = None
     qdq_onnx_outputs: ModelOutputs | None = None
     tensorrt_int8_outputs: ModelOutputs | None = None
-    if restored is not None:
+    if deployment_model is not None:
         qdq_onnx_path = arguments.output_directory / f'generation-{generation}.int8.onnx'
-        export_qat_onnx(restored, qdq_onnx_path, device_states)
+        if checkpoint.inference_model_path.name.endswith('.int8.onnx'):
+            _copy_onnx(checkpoint.inference_model_path, qdq_onnx_path)
+        else:
+            export_qat_onnx(deployment_model, qdq_onnx_path, device_states)
         qdq_onnx_outputs = _onnx_outputs(qdq_onnx_path, states)
         tensorrt_int8_engine_path = _diagnostic_engine(qdq_onnx_path, template)
         tensorrt_int8_outputs = _TensorRtCudaGraphRunner(
