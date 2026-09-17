@@ -116,7 +116,10 @@ class TrainingThroughputBenchmarkResult(FrozenModel):
 def _stage_checkpoint(source: CheckpointReference, destination: Path) -> CheckpointReference:
     destination.mkdir(parents=True, exist_ok=False)
     manifest = read_checkpoint_manifest(source.generation, source.manifest_path.parent)
-    for source_path in (source.model_path, source.optimizer_path, source.inference_model_path):
+    artifact_paths = [source.model_path, source.optimizer_path, source.inference_model_path]
+    if source.qat_state is not None:
+        artifact_paths.append(source.qat_state.path)
+    for source_path in artifact_paths:
         shutil.copy2(source_path, destination / source_path.name)
     shutil.copy2(source.manifest_path, destination / source.manifest_path.name)
     staged = CheckpointReference.load(destination, manifest.generation)
