@@ -187,12 +187,12 @@ def test_unscaled_post_activation_qat_folds_batch_norm_without_changing_outputs(
     model = configure_qat(_unscaled_network(), _calibrate)
     inputs = torch.randn((8, 8, 3, 3))
     model.eval()
-    with torch.inference_mode():
+    with quantizers_disabled(model), torch.inference_mode():
         expected = model(inputs)
 
     fold_post_activation_batch_norm(model)
     model.eval()
-    with torch.inference_mode():
+    with quantizers_disabled(model), torch.inference_mode():
         actual = model(inputs)
 
     assert all(isinstance(block, ResBlock) for block in model.backbone)
@@ -215,9 +215,7 @@ def test_scaled_post_activation_qat_fold_preserves_outputs_and_parameter_trainab
         actual = model(inputs)
 
     convolutions = tuple(
-        convolution
-        for block in model.backbone
-        for convolution in (block.conv_block1[0], block.conv_block2[0])
+        convolution for block in model.backbone for convolution in (block.conv_block1[0], block.conv_block2[0])
     )
     assert all(isinstance(block, ScaledPostActivationResBlock) for block in model.backbone)
     assert all(isinstance(block.conv_block1[1], nn.Identity) for block in model.backbone)
