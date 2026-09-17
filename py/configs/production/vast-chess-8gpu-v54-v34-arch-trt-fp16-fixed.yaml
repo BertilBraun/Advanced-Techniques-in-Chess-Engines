@@ -1,0 +1,77 @@
+extends: vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008.yaml
+
+run:
+  run_name: vast-chess-8gpu-v54-v34-arch-trt-fp16-fixed
+  tensorboard_run_directory: vast-chess-8gpu-v54-v34-arch-trt-fp16-fixed
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v54-v34-arch-trt-fp16-fixed
+  trainer:
+    learning_rate:
+      kind: staged
+      stages:
+      - {start_generation: 0, value: 0.005}
+      - {start_generation: 100, value: 0.004}
+      - {start_generation: 800, value: 0.003}
+      - {start_generation: 1200, value: 0.002}
+  limits:
+    maximum_wall_time_seconds: 3000
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v54-v34-arch-trt-fp16-fixed.stop
+
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: tensorrt
+        bootstrap_with_torchscript: true
+        templates:
+        - kind: float
+          model_id: chess-cnn-12x128-fromto
+          engine_path: /workspace/tensorrt/v51-v34-arch-exact-fp16-b320.engine
+        - kind: float
+          model_id: chess-cnn-14x160-fromto
+          engine_path: /workspace/tensorrt/v35-medium-fp16-template.engine
+
+evaluation:
+  definitions:
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 0
+    final_generation: null
+    search: &v54_evaluation_search
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: true
+          templates:
+          - kind: float
+            model_id: chess-cnn-12x128-fromto
+            engine_path: /workspace/tensorrt/v51-v34-arch-exact-fp16-b64.engine
+        sdpa_backend: memory_efficient
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-policy-only
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 0
+    final_generation: null
+    search:
+      <<: *v54_evaluation_search
+      searches_per_move: 1
