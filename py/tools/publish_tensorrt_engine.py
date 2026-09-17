@@ -306,6 +306,7 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
                     and metadata.get('graph_signature') == graph_signature
                     and metadata.get('template_sha256') == template_sha256
                     and metadata.get('engine_sha256') == file_sha256(engine_path)
+                    and metadata.get('verification_batch_size') == min(input_shape[0], VERIFICATION_BATCH_SIZE)
                 ):
                     return {**metadata, 'cached': True}
             refit_started_at = time.perf_counter()
