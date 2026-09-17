@@ -139,10 +139,7 @@ def _output_health(outputs: ModelOutputs) -> InferenceOutputHealth:
 
 
 def _outputs_are_finite(health: InferenceOutputHealth) -> bool:
-    return (
-        health.finite_policy_elements == health.policy_elements
-        and health.finite_wdl_elements == health.wdl_elements
-    )
+    return health.finite_policy_elements == health.policy_elements and health.finite_wdl_elements == health.wdl_elements
 
 
 def _example_export_comparison(
