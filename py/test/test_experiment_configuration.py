@@ -300,6 +300,21 @@ def test_v47_uses_progressive_int8_with_adamw() -> None:
     assert configuration.evaluation.cadence_seconds == 1_200
 
 
+def test_v56_supports_qat_on_the_v34_post_activation_architecture() -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-v56-v34-arch-adamw-int8-qat.yaml'
+    )
+
+    training = configuration.training
+
+    assert tuple(model.network.residual_block.kind for model in training.progressive_model_sizing.models) == (
+        'post_activation',
+        'post_activation',
+    )
+    assert training.trainer.quantization.kind == 'tensorrt_int8_qat'
+    assert training.trainer.quantization.fold_after_optimizer_steps == 3_000
+
+
 def test_v34_ema_fix_resume_uses_the_stopped_checkpoint() -> None:
     configuration = load_chess_experiment_configuration(
         REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-ema-fix.yaml'
