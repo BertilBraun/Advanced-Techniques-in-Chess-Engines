@@ -6,7 +6,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import numpy as np
 import onnx
@@ -72,6 +72,34 @@ class ArtifactIdentity(FrozenModel):
     sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
+class InferenceOutputHealth(FrozenModel):
+    policy_elements: int = Field(gt=0)
+    finite_policy_elements: int = Field(ge=0)
+    nan_policy_elements: int = Field(ge=0)
+    infinite_policy_elements: int = Field(ge=0)
+    wdl_elements: int = Field(gt=0)
+    finite_wdl_elements: int = Field(ge=0)
+    nan_wdl_elements: int = Field(ge=0)
+    infinite_wdl_elements: int = Field(ge=0)
+
+
+class FiniteExampleExportComparison(FrozenModel):
+    kind: Literal['finite'] = 'finite'
+    metrics: FidelityMetrics
+
+
+class NonFiniteExampleExportComparison(FrozenModel):
+    kind: Literal['non_finite'] = 'non_finite'
+    zero_example: InferenceOutputHealth
+    real_example: InferenceOutputHealth
+
+
+ExampleExportComparison = Annotated[
+    FiniteExampleExportComparison | NonFiniteExampleExportComparison,
+    Field(discriminator='kind'),
+]
+
+
 class ProductionEquivalenceReport(FrozenModel):
     schema_version: Literal[1] = 1
     configuration_path: str = Field(min_length=1)
@@ -84,7 +112,7 @@ class ProductionEquivalenceReport(FrozenModel):
     zero_example_onnx: ArtifactIdentity
     real_example_onnx: ArtifactIdentity
     example_export_graphs_match: bool
-    zero_vs_real_example_export: FidelityMetrics
+    example_export_comparison: ExampleExportComparison
     fresh_tensorrt_engine: ArtifactIdentity
     production_refitted_engine: ArtifactIdentity
     batches: tuple[BatchReport, ...] = Field(min_length=1)
@@ -93,6 +121,45 @@ class ProductionEquivalenceReport(FrozenModel):
 
 def _artifact(path: Path) -> ArtifactIdentity:
     return ArtifactIdentity(path=str(path), sha256=file_sha256(path))
+
+
+def _output_health(outputs: ModelOutputs) -> InferenceOutputHealth:
+    policy_finite = torch.isfinite(outputs.policy_logits)
+    wdl_finite = torch.isfinite(outputs.wdl_probabilities)
+    return InferenceOutputHealth(
+        policy_elements=outputs.policy_logits.numel(),
+        finite_policy_elements=int(policy_finite.sum()),
+        nan_policy_elements=int(torch.isnan(outputs.policy_logits).sum()),
+        infinite_policy_elements=int(torch.isinf(outputs.policy_logits).sum()),
+        wdl_elements=outputs.wdl_probabilities.numel(),
+        finite_wdl_elements=int(wdl_finite.sum()),
+        nan_wdl_elements=int(torch.isnan(outputs.wdl_probabilities).sum()),
+        infinite_wdl_elements=int(torch.isinf(outputs.wdl_probabilities).sum()),
+    )
+
+
+def _outputs_are_finite(health: InferenceOutputHealth) -> bool:
+    return (
+        health.finite_policy_elements == health.policy_elements
+        and health.finite_wdl_elements == health.wdl_elements
+    )
+
+
+def _example_export_comparison(
+    zero_example: ModelOutputs,
+    real_example: ModelOutputs,
+    legal_action_mask: Tensor,
+) -> ExampleExportComparison:
+    zero_health = _output_health(zero_example)
+    real_health = _output_health(real_example)
+    if not _outputs_are_finite(zero_health) or not _outputs_are_finite(real_health):
+        return NonFiniteExampleExportComparison(
+            zero_example=zero_health,
+            real_example=real_health,
+        )
+    return FiniteExampleExportComparison(
+        metrics=measure_fidelity(zero_example, real_example, legal_action_mask),
+    )
 
 
 def _onnx_outputs(path: Path, states: Tensor, gpu_id: int) -> ModelOutputs:
@@ -300,6 +367,20 @@ def run(arguments: Arguments) -> ProductionEquivalenceReport:
             )
         )
 
+    example_export_graphs_match = _onnx_graph_signature(zero_example_onnx_path) == _onnx_graph_signature(
+        real_example_onnx_path
+    )
+    example_export_comparison = _example_export_comparison(
+        zero_example_outputs,
+        real_example_outputs,
+        legal_action_mask,
+    )
+    match example_export_comparison:
+        case FiniteExampleExportComparison(metrics=metrics):
+            example_export_passed = not fidelity_failures(metrics, arguments.limits)
+        case NonFiniteExampleExportComparison():
+            example_export_passed = False
+
     report = ProductionEquivalenceReport(
         configuration_path=str(arguments.configuration_path),
         checkpoint_generation=checkpoint.generation,
@@ -310,23 +391,14 @@ def run(arguments: Arguments) -> ProductionEquivalenceReport:
         reference_torchscript=_artifact(reference_path),
         zero_example_onnx=_artifact(zero_example_onnx_path),
         real_example_onnx=_artifact(real_example_onnx_path),
-        example_export_graphs_match=(
-            _onnx_graph_signature(zero_example_onnx_path) == _onnx_graph_signature(real_example_onnx_path)
-        ),
-        zero_vs_real_example_export=measure_fidelity(
-            zero_example_outputs,
-            real_example_outputs,
-            legal_action_mask,
-        ),
+        example_export_graphs_match=example_export_graphs_match,
+        example_export_comparison=example_export_comparison,
         fresh_tensorrt_engine=_artifact(fresh_engine_path),
         production_refitted_engine=_artifact(production_engine_path),
         batches=tuple(batch_reports),
         passed=(
-            _onnx_graph_signature(zero_example_onnx_path) == _onnx_graph_signature(real_example_onnx_path)
-            and not fidelity_failures(
-                measure_fidelity(zero_example_outputs, real_example_outputs, legal_action_mask),
-                arguments.limits,
-            )
+            example_export_graphs_match
+            and example_export_passed
             and all(not comparison.failures for batch in batch_reports for comparison in batch.comparisons)
         ),
     )
