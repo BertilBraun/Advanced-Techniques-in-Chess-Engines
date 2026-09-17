@@ -54,6 +54,7 @@ class Arguments:
     generations: tuple[int, ...]
     pre_fold_template: Path
     deployment_template: Path
+    deployment_int8_template: Path
     positions: int
     device_id: int
 
@@ -418,13 +419,17 @@ def _generation_report(
         else:
             export_qat_onnx(deployment_model, qdq_onnx_path, device_states)
         qdq_onnx_outputs = _onnx_outputs(qdq_onnx_path, states)
-        tensorrt_int8_engine_path = _diagnostic_engine(qdq_onnx_path, template)
-        tensorrt_int8_outputs = _TensorRtCudaGraphRunner(
-            tensorrt_int8_engine_path,
-            states.to(device=device, dtype=torch.int8),
-            device,
-            2,
-        ).outputs()
+        if checkpoint.qat_state.phase is QatCheckpointPhase.DEPLOYMENT:
+            tensorrt_int8_engine_path = _diagnostic_engine(
+                qdq_onnx_path,
+                arguments.deployment_int8_template,
+            )
+            tensorrt_int8_outputs = _TensorRtCudaGraphRunner(
+                tensorrt_int8_engine_path,
+                states.to(device=device, dtype=torch.int8),
+                device,
+                2,
+            ).outputs()
 
     named_outputs: list[tuple[str, ModelOutputs]] = []
     if float_outputs is not None:
@@ -504,6 +509,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--generation', required=True, action='append', type=int)
     parser.add_argument('--pre-fold-template', required=True, type=Path)
     parser.add_argument('--deployment-template', required=True, type=Path)
+    parser.add_argument('--deployment-int8-template', required=True, type=Path)
     parser.add_argument('--positions', default=320, type=int)
     parser.add_argument('--device-id', default=7, type=int)
     namespace = parser.parse_args()
@@ -516,6 +522,7 @@ def parse_arguments() -> Arguments:
         generations=tuple(namespace.generation),
         pre_fold_template=namespace.pre_fold_template,
         deployment_template=namespace.deployment_template,
+        deployment_int8_template=namespace.deployment_int8_template,
         positions=namespace.positions,
         device_id=namespace.device_id,
     )
