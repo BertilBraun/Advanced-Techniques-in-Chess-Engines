@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
+from enum import StrEnum
 from pathlib import Path
 
 import onnx
@@ -10,6 +11,11 @@ from src.util.atomic_file import write_bytes_atomically
 from tools.publish_tensorrt_engine import export_onnx
 
 WORKSPACE_BYTES = 4 * 1024**3
+
+
+class RefitMode(StrEnum):
+    ALL = 'all'
+    INDIVIDUAL = 'individual'
 
 
 def _mark_onnx_weights_refittable(network: trt.INetworkDefinition, onnx_path: Path) -> int:
@@ -32,6 +38,7 @@ def build_template(
     columns: int,
     optimization_level: int,
     timing_cache_path: Path | None,
+    refit_mode: RefitMode,
 ) -> None:
     onnx_path = output_path.with_suffix('.temporary.onnx')
     onnx_path.unlink(missing_ok=True)
@@ -47,12 +54,16 @@ def build_template(
         if not parser.parse_from_file(str(onnx_path)):
             errors = tuple(str(parser.get_error(index)) for index in range(parser.num_errors))
             raise ValueError(f'TensorRT ONNX parsing failed: {errors}')
-        _mark_onnx_weights_refittable(network, onnx_path)
         configuration = builder.create_builder_config()
         configuration.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, WORKSPACE_BYTES)
         configuration.builder_optimization_level = optimization_level
         configuration.set_flag(trt.BuilderFlag.FP16)
-        configuration.set_flag(trt.BuilderFlag.REFIT_INDIVIDUAL)
+        match refit_mode:
+            case RefitMode.ALL:
+                configuration.set_flag(trt.BuilderFlag.REFIT)
+            case RefitMode.INDIVIDUAL:
+                _mark_onnx_weights_refittable(network, onnx_path)
+                configuration.set_flag(trt.BuilderFlag.REFIT_INDIVIDUAL)
         timing_cache = (
             b'' if timing_cache_path is None or not timing_cache_path.exists() else timing_cache_path.read_bytes()
         )
@@ -79,6 +90,7 @@ def main() -> None:
     parser.add_argument('--columns', type=int, default=8)
     parser.add_argument('--optimization-level', type=int, default=5, choices=range(0, 6))
     parser.add_argument('--timing-cache', type=Path)
+    parser.add_argument('--refit-mode', type=RefitMode, choices=tuple(RefitMode), default=RefitMode.ALL)
     arguments = parser.parse_args()
     build_template(
         arguments.model,
@@ -89,6 +101,7 @@ def main() -> None:
         arguments.columns,
         arguments.optimization_level,
         arguments.timing_cache,
+        arguments.refit_mode,
     )
 
 

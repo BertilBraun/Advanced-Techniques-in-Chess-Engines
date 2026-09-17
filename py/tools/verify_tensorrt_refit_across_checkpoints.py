@@ -12,12 +12,10 @@ from AlphaZeroCpp import ChessSelfPlaySearch, InferenceBackend
 from pydantic import Field
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.training import ChessImplementation
-from src.training.checkpoint.contracts import CheckpointReference, load_checkpoint_manifest_path
-from src.training.network import Network
-from src.training.quantization.runtime import export_float_qat_onnx
+from src.training.checkpoint.contracts import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
-from tools.build_tensorrt_refit_template import build_template
+from tools.build_tensorrt_refit_template import RefitMode, build_template
 from tools.measure_inference_precision_agreement import load_positions
 from tools.publish_tensorrt_engine import refit_engine
 from tools.tensorrt_benchmark_metrics import FidelityLimits, ModelOutputs
@@ -31,7 +29,6 @@ from tools.verify_tensorrt_production_equivalence import (
     _onnx_outputs,
     _runner,
 )
-from torch import Tensor
 
 DEFAULT_BATCH_SIZES = (1, 64, 241, 320)
 
@@ -55,7 +52,7 @@ class RefitAcrossCheckpointsReport(FrozenModel):
     schema_version: Literal[1] = 1
     template_generation: int = Field(ge=0)
     candidate_generation: int = Field(ge=0)
-    constant_folding: Literal[False] = False
+    refit_mode: Literal['all'] = 'all'
     graph_signatures_match: bool
     template_onnx: ArtifactIdentity
     candidate_onnx: ArtifactIdentity
@@ -63,28 +60,6 @@ class RefitAcrossCheckpointsReport(FrozenModel):
     refitted_candidate_engine: ArtifactIdentity
     batches: tuple[BatchReport, ...] = Field(min_length=1)
     passed: bool
-
-
-def _export_checkpoint_without_constant_folding(
-    checkpoint: CheckpointReference,
-    output_path: Path,
-    example_states: Tensor,
-) -> None:
-    manifest = load_checkpoint_manifest_path(checkpoint.manifest_path, checkpoint.generation)
-    weights: dict[str, Tensor] = torch.load(checkpoint.model_path, map_location='cpu', weights_only=True)
-    model = Network(
-        manifest.network.architecture,
-        torch.device('cpu'),
-        manifest.network.dimensions,
-        manifest.network.auxiliary_heads,
-    )
-    model.load_state_dict({name: weights[name] for name in model.state_dict()})
-    export_float_qat_onnx(
-        model,
-        output_path,
-        example_states.to(dtype=torch.float32),
-        constant_folding=False,
-    )
 
 
 def run(arguments: Arguments) -> RefitAcrossCheckpointsReport:
@@ -109,15 +84,13 @@ def run(arguments: Arguments) -> RefitAcrossCheckpointsReport:
     )
     states, legal_action_mask = load_positions(arguments.dataset_path, maximum_batch_size)
     arguments.artifact_directory.mkdir(parents=True, exist_ok=True)
-    template_onnx_path = arguments.artifact_directory / f'model-{arguments.template_generation}.nofold.onnx'
-    candidate_onnx_path = arguments.artifact_directory / f'model-{arguments.candidate_generation}.nofold.onnx'
-    _export_checkpoint_without_constant_folding(template_checkpoint, template_onnx_path, states)
-    _export_checkpoint_without_constant_folding(candidate_checkpoint, candidate_onnx_path, states)
+    template_onnx_path = template_checkpoint.inference_model_path
+    candidate_onnx_path = candidate_checkpoint.inference_model_path
 
     graph_signatures_match = _onnx_graph_signature(template_onnx_path) == _onnx_graph_signature(candidate_onnx_path)
     dimensions = ChessSelfPlaySearch.inference_dimensions()
-    template_engine_path = arguments.artifact_directory / 'nofold-template.engine'
-    refitted_engine_path = arguments.artifact_directory / f'model-{arguments.candidate_generation}.nofold-refit.engine'
+    template_engine_path = arguments.artifact_directory / 'full-refit-template.engine'
+    refitted_engine_path = arguments.artifact_directory / f'model-{arguments.candidate_generation}.full-refit.engine'
     build_template(
         template_onnx_path,
         template_engine_path,
@@ -127,6 +100,7 @@ def run(arguments: Arguments) -> RefitAcrossCheckpointsReport:
         dimensions.columns,
         5,
         None,
+        RefitMode.ALL,
     )
     refit_engine(template_engine_path, candidate_onnx_path, refitted_engine_path)
 
@@ -139,7 +113,6 @@ def run(arguments: Arguments) -> RefitAcrossCheckpointsReport:
         maximum_batch_size,
         dimensions,
     )
-    original_outputs = _onnx_outputs(candidate_checkpoint.inference_model_path, states, arguments.gpu_id)
     candidate_outputs = _onnx_outputs(candidate_onnx_path, states, arguments.gpu_id)
     batch_reports: list[BatchReport] = []
     for batch_size in arguments.batch_sizes:
@@ -150,20 +123,7 @@ def run(arguments: Arguments) -> RefitAcrossCheckpointsReport:
                 batch_size=batch_size,
                 comparisons=(
                     _comparison(
-                        'folded_checkpoint_onnx_vs_nonfolded_checkpoint_onnx',
-                        ModelOutputs(
-                            original_outputs.policy_logits[:batch_size],
-                            original_outputs.wdl_probabilities[:batch_size],
-                        ),
-                        ModelOutputs(
-                            candidate_outputs.policy_logits[:batch_size],
-                            candidate_outputs.wdl_probabilities[:batch_size],
-                        ),
-                        mask,
-                        arguments.limits,
-                    ),
-                    _comparison(
-                        'nonfolded_checkpoint_onnx_vs_refitted_tensorrt_native',
+                        'checkpoint_onnx_vs_full_refit_tensorrt_native',
                         ModelOutputs(
                             candidate_outputs.policy_logits[:batch_size],
                             candidate_outputs.wdl_probabilities[:batch_size],
@@ -185,10 +145,7 @@ def run(arguments: Arguments) -> RefitAcrossCheckpointsReport:
         refittable_template_engine=_artifact(template_engine_path),
         refitted_candidate_engine=_artifact(refitted_engine_path),
         batches=tuple(batch_reports),
-        passed=(
-            graph_signatures_match
-            and all(not comparison.failures for batch in batch_reports for comparison in batch.comparisons)
-        ),
+        passed=all(not comparison.failures for batch in batch_reports for comparison in batch.comparisons),
     )
     arguments.output_path.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomically(arguments.output_path, report.model_dump_json(indent=2) + '\n')

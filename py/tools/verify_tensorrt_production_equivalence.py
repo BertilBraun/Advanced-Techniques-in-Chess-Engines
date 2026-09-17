@@ -26,7 +26,7 @@ from src.training.checkpoint.contracts import CheckpointReference
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
-from tools.build_tensorrt_refit_template import build_template
+from tools.build_tensorrt_refit_template import RefitMode, build_template
 from tools.export_checkpoint_float_inference import export_float_inference
 from tools.measure_inference_precision_agreement import load_positions
 from tools.publish_tensorrt_engine import export_onnx, export_onnx_with_example
@@ -289,6 +289,7 @@ def run(arguments: Arguments) -> ProductionEquivalenceReport:
         dimensions.columns,
         5,
         None,
+        RefitMode.ALL,
     )
 
     onnx_outputs = _onnx_outputs(checkpoint.inference_model_path, states, arguments.gpu_id)
