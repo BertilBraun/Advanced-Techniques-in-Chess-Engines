@@ -326,9 +326,7 @@ def test_qat_architecture_controls_keep_self_play_float_until_diagnostics_comple
     configuration_name: str,
     residual_block_kind: str,
 ) -> None:
-    configuration = load_chess_experiment_configuration(
-        REPOSITORY_CONFIG_DIRECTORY / 'production' / configuration_name
-    )
+    configuration = load_chess_experiment_configuration(REPOSITORY_CONFIG_DIRECTORY / 'production' / configuration_name)
 
     training = configuration.training
     quantization = training.trainer.quantization
