@@ -9,6 +9,7 @@ run:
 training:
   save_path: py/training_data/production/vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008
   trainer:
+    compilation: disabled
     learning_rate:
       kind: staged
       stages:
