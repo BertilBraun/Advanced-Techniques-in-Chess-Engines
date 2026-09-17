@@ -39,9 +39,8 @@ def engine_input_shape(engine: trt.ICudaEngine) -> tuple[int, int, int, int]:
     return tuple(shape)
 
 
-def export_onnx(model_path: Path, output_path: Path, input_shape: tuple[int, int, int, int]) -> None:
+def export_onnx_with_example(model_path: Path, output_path: Path, example: torch.Tensor) -> None:
     model = torch.jit.load(str(model_path), map_location='cpu').to(dtype=torch.float16).eval()
-    example = torch.zeros(input_shape, dtype=torch.float16)
     with torch.inference_mode():
         torch.onnx.export(
             model,
@@ -55,6 +54,10 @@ def export_onnx(model_path: Path, output_path: Path, input_shape: tuple[int, int
         )
     exported = onnx.load(output_path)
     onnx.checker.check_model(exported, full_check=True)
+
+
+def export_onnx(model_path: Path, output_path: Path, input_shape: tuple[int, int, int, int]) -> None:
+    export_onnx_with_example(model_path, output_path, torch.zeros(input_shape, dtype=torch.float16))
 
 
 def refit_engine(template_path: Path, onnx_path: Path, output_path: Path) -> None:
