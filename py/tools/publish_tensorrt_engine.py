@@ -4,6 +4,8 @@ import argparse
 import fcntl
 import hashlib
 import json
+import subprocess
+import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -19,6 +21,35 @@ INPUT_NAME = 'states'
 POLICY_OUTPUT_NAME = 'policy_logits'
 WDL_OUTPUT_NAME = 'wdl_probabilities'
 ONNX_OPSET_VERSION = 18
+
+
+def onnx_graph_signature(path: Path) -> str:
+    model = onnx.load(path, load_external_data=False)
+    initializers = tuple(
+        (initializer.name, initializer.data_type, tuple(initializer.dims))
+        for initializer in sorted(model.graph.initializer, key=lambda item: item.name)
+    )
+    nodes = tuple(
+        (
+            node.domain,
+            node.op_type,
+            tuple(node.input),
+            tuple(node.output),
+            tuple(
+                (attribute.name, attribute.type, attribute.SerializeToString().hex())
+                for attribute in sorted(node.attribute, key=lambda item: item.name)
+            ),
+        )
+        for node in model.graph.node
+    )
+    graph_inputs = tuple((value.name, value.type.SerializeToString().hex()) for value in model.graph.input)
+    graph_outputs = tuple((value.name, value.type.SerializeToString().hex()) for value in model.graph.output)
+    opsets = tuple(sorted((opset.domain, opset.version) for opset in model.opset_import))
+    payload = json.dumps(
+        (opsets, graph_inputs, graph_outputs, nodes, initializers),
+        separators=(',', ':'),
+    ).encode('utf-8')
+    return hashlib.sha256(payload).hexdigest()
 
 
 @contextmanager
@@ -78,71 +109,104 @@ def refit_engine(template_path: Path, onnx_path: Path, output_path: Path) -> Non
     write_bytes_atomically(output_path, bytes(engine.serialize()))
 
 
+def _automatic_template_path(configured_template_path: Path, input_shape: tuple[int, int, int, int], signature: str) -> Path:
+    return configured_template_path.parent / 'automatic-refit' / f'b{input_shape[0]}-{signature}.engine'
+
+
+def _build_automatic_template(
+    onnx_path: Path,
+    configured_template_path: Path,
+    input_shape: tuple[int, int, int, int],
+    signature: str,
+) -> Path:
+    template_path = _automatic_template_path(configured_template_path, input_shape, signature)
+    lock_path = template_path.with_suffix('.lock')
+    with exclusive_lock(lock_path):
+        if template_path.is_file():
+            return template_path
+        template_path.parent.mkdir(parents=True, exist_ok=True)
+        command = (
+            sys.executable,
+            '-m',
+            'tools.build_tensorrt_refit_template',
+            '--model',
+            str(onnx_path),
+            '--output',
+            str(template_path),
+            '--batch-size',
+            str(input_shape[0]),
+            '--channels',
+            str(input_shape[1]),
+            '--rows',
+            str(input_shape[2]),
+            '--columns',
+            str(input_shape[3]),
+            '--refit-mode',
+            'all',
+        )
+        subprocess.run(command, check=True, cwd=Path(__file__).parents[1])
+    return template_path
+
+
 def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str | int | float | bool]:
     if not template_paths:
         raise ValueError('At least one TensorRT template is required.')
-    template_sha256s = tuple(file_sha256(template_path) for template_path in template_paths)
-    template_set_identity = hashlib.sha256('\0'.join(template_sha256s).encode('ascii')).hexdigest()[:16]
-    engine_path = model_path.with_suffix(f'.trt-{template_set_identity}.engine')
-    metadata_path = engine_path.with_suffix('.json')
-    lock_path = engine_path.with_suffix('.lock')
     source_sha256 = file_sha256(model_path)
-    with exclusive_lock(lock_path):
-        if engine_path.is_file() and metadata_path.is_file():
-            metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
-            if (
-                metadata.get('source_sha256') == source_sha256
-                and metadata.get('template_sha256') in template_sha256s
-                and metadata.get('engine_sha256') == file_sha256(engine_path)
-            ):
-                return {**metadata, 'cached': True}
-        logger = trt.Logger(trt.Logger.ERROR)
-        runtime = trt.Runtime(logger)
-        template = runtime.deserialize_cuda_engine(template_paths[0].read_bytes())
-        if template is None:
-            raise ValueError(f'Could not deserialize TensorRT template: {template_paths[0]}')
-        input_shape = engine_input_shape(template)
-        owns_onnx = model_path.suffix != '.onnx'
-        onnx_path = engine_path.with_suffix('.temporary.onnx') if owns_onnx else model_path
-        if owns_onnx:
-            onnx_path.unlink(missing_ok=True)
-        try:
-            if owns_onnx:
-                export_onnx(model_path, onnx_path, input_shape)
-            else:
-                exported = onnx.load(onnx_path)
-                onnx.checker.check_model(exported, full_check=True)
-            selected_template_path: Path | None = None
-            refit_seconds: float | None = None
-            failures: list[str] = []
-            for template_path in template_paths:
-                refit_started_at = time.perf_counter()
-                try:
-                    refit_engine(template_path, onnx_path, engine_path)
-                except (TypeError, ValueError) as error:
-                    failures.append(f'{template_path}: {error}')
-                    continue
-                selected_template_path = template_path
-                refit_seconds = time.perf_counter() - refit_started_at
-                break
-            if selected_template_path is None:
-                raise ValueError('No TensorRT template accepted the checkpoint:\n' + '\n'.join(failures))
-            assert refit_seconds is not None
-        finally:
-            if owns_onnx:
-                onnx_path.unlink(missing_ok=True)
+    logger = trt.Logger(trt.Logger.ERROR)
+    runtime = trt.Runtime(logger)
+    configured_template = runtime.deserialize_cuda_engine(template_paths[0].read_bytes())
+    if configured_template is None:
+        raise ValueError(f'Could not deserialize TensorRT template: {template_paths[0]}')
+    input_shape = engine_input_shape(configured_template)
+    temporary_onnx_path = model_path.with_suffix('.publication.temporary.onnx')
+    owns_onnx = model_path.suffix != '.onnx'
+    onnx_path = temporary_onnx_path if owns_onnx else model_path
+    if owns_onnx:
+        temporary_onnx_path.unlink(missing_ok=True)
+        export_onnx(model_path, temporary_onnx_path, input_shape)
+    try:
+        exported = onnx.load(onnx_path)
+        onnx.checker.check_model(exported, full_check=True)
+        graph_signature = onnx_graph_signature(onnx_path)
+        selected_template_path = _build_automatic_template(
+            onnx_path,
+            template_paths[0],
+            input_shape,
+            graph_signature,
+        )
         template_sha256 = file_sha256(selected_template_path)
-        metadata = {
-            'engine_path': str(engine_path),
-            'engine_sha256': file_sha256(engine_path),
-            'source_sha256': source_sha256,
-            'template_sha256': template_sha256,
-            'batch_size': input_shape[0],
-            'refit_seconds': refit_seconds,
-            'cached': False,
-        }
-        write_text_atomically(metadata_path, json.dumps(metadata, indent=2, sort_keys=True) + '\n')
-        return metadata
+        engine_path = model_path.with_suffix(f'.trt-{template_sha256[:16]}.engine')
+        metadata_path = engine_path.with_suffix('.json')
+        lock_path = engine_path.with_suffix('.lock')
+        with exclusive_lock(lock_path):
+            if engine_path.is_file() and metadata_path.is_file():
+                metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+                if (
+                    metadata.get('source_sha256') == source_sha256
+                    and metadata.get('graph_signature') == graph_signature
+                    and metadata.get('template_sha256') == template_sha256
+                    and metadata.get('engine_sha256') == file_sha256(engine_path)
+                ):
+                    return {**metadata, 'cached': True}
+            refit_started_at = time.perf_counter()
+            refit_engine(selected_template_path, onnx_path, engine_path)
+            refit_seconds = time.perf_counter() - refit_started_at
+            metadata = {
+                'engine_path': str(engine_path),
+                'engine_sha256': file_sha256(engine_path),
+                'source_sha256': source_sha256,
+                'graph_signature': graph_signature,
+                'template_sha256': template_sha256,
+                'template_path': str(selected_template_path),
+                'batch_size': input_shape[0],
+                'refit_seconds': refit_seconds,
+                'cached': False,
+            }
+            write_text_atomically(metadata_path, json.dumps(metadata, indent=2, sort_keys=True) + '\n')
+            return metadata
+    finally:
+        if owns_onnx:
+            temporary_onnx_path.unlink(missing_ok=True)
 
 
 def main() -> None:

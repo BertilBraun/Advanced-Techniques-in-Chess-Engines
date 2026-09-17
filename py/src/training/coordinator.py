@@ -100,6 +100,7 @@ class Coordinator:
         )
         # Durable replay state is the credit ground truth across callbacks and restarts.
         self.ledger.reconcile_materialized_samples(self.replay_manager.total_materialized_samples())
+        self.self_play_checkpoint = self.game.deployment_checkpoint(self.ledger.state.active_checkpoint)
         self.self_play_group = SelfPlayGroup(game)
         self.self_play_health = SelfPlayHealthMonitor(self.self_play_group.worker_count)
         self.evaluation_manager = EvaluationManager(self.configuration, self.ledger.state.active_checkpoint)
@@ -153,7 +154,7 @@ class Coordinator:
             self.ledger.save()
 
     def _start_self_play(self) -> None:
-        checkpoint = self.ledger.state.active_checkpoint
+        checkpoint = self.self_play_checkpoint
         responses = self.self_play_group.apply(
             tuple(
                 RunningSelfPlayState(
@@ -175,7 +176,7 @@ class Coordinator:
 
     def _supervise_self_play(self) -> None:
         supervision = self.self_play_group.supervise(
-            self.ledger.state.active_checkpoint,
+            self.self_play_checkpoint,
             self._resignation_policy(),
         )
         for worker_id in supervision.restarted_worker_ids:
@@ -263,6 +264,7 @@ class Coordinator:
             )
         publication = outcome.publication
         self.ledger.commit_checkpoint(publication.completed_optimizer_steps, publication.checkpoint)
+        self.self_play_checkpoint = self.game.deployment_checkpoint(publication.checkpoint)
         self.latest_completed_model_version = self.ledger.model_generation
         if self.resignation_calibrator is not None:
             self.resignation_calibrator.advance_generation(self.ledger.model_generation)
@@ -271,7 +273,7 @@ class Coordinator:
             detailed_workers = self._detailed_statistics_workers()
             desired_states = tuple(
                 RunningSelfPlayState(
-                    checkpoint=publication.checkpoint,
+                    checkpoint=self.self_play_checkpoint,
                     resignation_policy=self._resignation_policy(),
                     completed_generation_statistics=(
                         StatisticsLevel.DETAILED if worker_id < detailed_workers else StatisticsLevel.BASIC
@@ -333,7 +335,7 @@ class Coordinator:
             self._resume_backpressure_paused_workers()
 
     def _resume_backpressure_paused_workers(self) -> None:
-        checkpoint = self.ledger.state.active_checkpoint
+        checkpoint = self.self_play_checkpoint
         state = RunningSelfPlayState(
             checkpoint=checkpoint,
             resignation_policy=self._resignation_policy(),

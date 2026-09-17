@@ -25,6 +25,7 @@ from src.training.configuration import TrainingArgs
 from src.training.objective import ResolvedTrainingObjective
 from src.training.targets import TrainingTargetLayout
 from src.util.generation_schedule import FloatGenerationSchedule
+from src.util.hashing import file_sha256
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import InferenceConfiguration, SelfPlaySearchParameters
@@ -171,6 +172,21 @@ class GameImplementation(ABC, Generic[PositionT, NativeSearchT]):
             checkpoint.generation,
             model_ids[0],
             qat_phase,
+        )
+
+    def deployment_checkpoint(
+        self,
+        checkpoint: CheckpointReference,
+        inference: BatchedInferenceParams | None = None,
+    ) -> CheckpointReference:
+        inference_model_path = self.resolved_inference_model_path(checkpoint, inference)
+        if inference_model_path == checkpoint.inference_model_path:
+            return checkpoint
+        return checkpoint.model_copy(
+            update={
+                'inference_model_path': inference_model_path,
+                'inference_model_sha256': file_sha256(inference_model_path),
+            }
         )
 
     def native_search_parameters(self, parameters: ResolvedSelfPlayParameters) -> SelfPlaySearchParameters:
