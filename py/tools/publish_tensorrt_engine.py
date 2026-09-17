@@ -35,8 +35,10 @@ POLICY_OUTPUT_NAME = 'policy_logits'
 WDL_OUTPUT_NAME = 'wdl_probabilities'
 ONNX_OPSET_VERSION = 18
 MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR = 0.01
-MAXIMUM_POLICY_ABSOLUTE_ERROR = 0.2
 MAXIMUM_WDL_ABSOLUTE_ERROR = 0.1
+MINIMUM_POLICY_TOP1_AGREEMENT = 0.99
+MAXIMUM_POLICY_MEAN_KL_DIVERGENCE = 1e-4
+MAXIMUM_POLICY_MAXIMUM_KL_DIVERGENCE = 0.01
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,9 @@ class TensorRtVerification:
     batch_size: int
     policy_mean_absolute_error: float
     policy_maximum_absolute_error: float
+    policy_top1_agreement: float
+    policy_mean_kl_divergence: float
+    policy_maximum_kl_divergence: float
     wdl_mean_absolute_error: float
     wdl_maximum_absolute_error: float
 
@@ -176,6 +181,26 @@ def _output_errors(reference: np.ndarray, candidate: np.ndarray) -> tuple[float,
     return float(errors.mean()), float(errors.max())
 
 
+def _policy_distribution_agreement(reference: np.ndarray, candidate: np.ndarray) -> tuple[float, float, float]:
+    if reference.shape != candidate.shape:
+        raise ValueError(f'TensorRT policy shape {candidate.shape} does not match ONNX shape {reference.shape}.')
+    reference_shifted = reference - reference.max(axis=1, keepdims=True)
+    candidate_shifted = candidate - candidate.max(axis=1, keepdims=True)
+    reference_log_probabilities = reference_shifted - np.log(
+        np.exp(reference_shifted).sum(axis=1, keepdims=True)
+    )
+    candidate_log_probabilities = candidate_shifted - np.log(
+        np.exp(candidate_shifted).sum(axis=1, keepdims=True)
+    )
+    reference_probabilities = np.exp(reference_log_probabilities)
+    divergences = np.maximum(
+        np.sum(reference_probabilities * (reference_log_probabilities - candidate_log_probabilities), axis=1),
+        0.0,
+    )
+    top1_agreement = np.mean(reference.argmax(axis=1) == candidate.argmax(axis=1))
+    return float(top1_agreement), float(divergences.mean()), float(divergences.max())
+
+
 def verify_engine(onnx_path: Path, engine_path: Path, input_shape: tuple[int, int, int, int]) -> TensorRtVerification:
     batch_size = input_shape[0]
     generator = np.random.default_rng(0)
@@ -206,22 +231,31 @@ def verify_engine(onnx_path: Path, engine_path: Path, input_shape: tuple[int, in
     )
     tensor_rt_policy, tensor_rt_wdl = runner.forward(states)
     policy_mean_error, policy_maximum_error = _output_errors(onnx_policy, tensor_rt_policy)
+    policy_top1_agreement, policy_mean_kl_divergence, policy_maximum_kl_divergence = (
+        _policy_distribution_agreement(onnx_policy, tensor_rt_policy)
+    )
     wdl_mean_error, wdl_maximum_error = _output_errors(onnx_wdl, tensor_rt_wdl)
     if (
-        policy_mean_error > MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR
-        or policy_maximum_error > MAXIMUM_POLICY_ABSOLUTE_ERROR
+        policy_top1_agreement < MINIMUM_POLICY_TOP1_AGREEMENT
+        or policy_mean_kl_divergence > MAXIMUM_POLICY_MEAN_KL_DIVERGENCE
+        or policy_maximum_kl_divergence > MAXIMUM_POLICY_MAXIMUM_KL_DIVERGENCE
         or wdl_mean_error > MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR
         or wdl_maximum_error > MAXIMUM_WDL_ABSOLUTE_ERROR
     ):
         raise ValueError(
             'TensorRT verification failed: '
             f'policy mean/max={policy_mean_error:.6f}/{policy_maximum_error:.6f}, '
+            f'policy top1/KL mean/max={policy_top1_agreement:.6f}/'
+            f'{policy_mean_kl_divergence:.6f}/{policy_maximum_kl_divergence:.6f}, '
             f'WDL mean/max={wdl_mean_error:.6f}/{wdl_maximum_error:.6f}.'
         )
     return TensorRtVerification(
         batch_size=batch_size,
         policy_mean_absolute_error=policy_mean_error,
         policy_maximum_absolute_error=policy_maximum_error,
+        policy_top1_agreement=policy_top1_agreement,
+        policy_mean_kl_divergence=policy_mean_kl_divergence,
+        policy_maximum_kl_divergence=policy_maximum_kl_divergence,
         wdl_mean_absolute_error=wdl_mean_error,
         wdl_maximum_absolute_error=wdl_maximum_error,
     )
@@ -325,6 +359,9 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
                 'verification_batch_size': verification.batch_size,
                 'policy_mean_absolute_error': verification.policy_mean_absolute_error,
                 'policy_maximum_absolute_error': verification.policy_maximum_absolute_error,
+                'policy_top1_agreement': verification.policy_top1_agreement,
+                'policy_mean_kl_divergence': verification.policy_mean_kl_divergence,
+                'policy_maximum_kl_divergence': verification.policy_maximum_kl_divergence,
                 'wdl_mean_absolute_error': verification.wdl_mean_absolute_error,
                 'wdl_maximum_absolute_error': verification.wdl_maximum_absolute_error,
                 'cached': False,
