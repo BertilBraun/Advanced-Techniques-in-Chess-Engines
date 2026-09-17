@@ -129,8 +129,11 @@ def _onnx_graph_signature(path: Path) -> tuple[tuple[str, ...], tuple[tuple[str,
 
 
 def _native_outputs(runner: InferenceRunner, states: Tensor, batch_size: int) -> ModelOutputs:
-    policy_logits, wdl_probabilities = runner.forward(states[:batch_size].contiguous())
-    return ModelOutputs(policy_logits=policy_logits, wdl_probabilities=wdl_probabilities)
+    policy_logits, wdl_probabilities = runner.forward(states[:batch_size].contiguous().numpy())
+    return ModelOutputs(
+        policy_logits=torch.from_numpy(policy_logits),
+        wdl_probabilities=torch.from_numpy(wdl_probabilities),
+    )
 
 
 def _comparison(

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import typing
 
+import numpy
 import torch
 
 __all__: list[str] = [
@@ -1032,7 +1033,12 @@ class InferenceRunner:
         execution_options: InferenceExecutionOptions = ...,
         backend: InferenceBackend = ...,
     ) -> None: ...
-    def forward(self, encoded_boards: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]: ...
+    def forward(
+        self, encoded_boards: numpy.ndarray[typing.Any, numpy.dtype[numpy.int8]]
+    ) -> tuple[
+        numpy.ndarray[typing.Any, numpy.dtype[numpy.float32]],
+        numpy.ndarray[typing.Any, numpy.dtype[numpy.float32]],
+    ]: ...
 
 class InferenceExecutionOptions:
     cudnn_benchmark: bool

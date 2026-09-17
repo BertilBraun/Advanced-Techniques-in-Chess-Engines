@@ -6,9 +6,10 @@
 #include "search/SearchTypes.hpp"
 #include "search/SelfPlay.hpp"
 #include "util/Timing.hpp"
+#include <cstring>
+#include <pybind11/numpy.h>
 #include <pybind11/operators.h>
 #include <pybind11/stl.h>
-#include <torch/extension.h>
 
 namespace py = pybind11;
 
@@ -119,16 +120,30 @@ void bind_search(py::module_ &module) {
              py::arg("backend") = InferenceBackend::TorchScript)
         .def(
             "forward",
-            [](InferenceRunner &runner, const torch::Tensor &encodedBoards) {
-                if (encodedBoards.dim() != 4) {
+            [](InferenceRunner &runner,
+               const py::array_t<std::int8_t, py::array::c_style | py::array::forcecast>
+                   &encodedBoards) {
+                const py::buffer_info input = encodedBoards.request();
+                if (input.ndim != 4) {
                     throw std::invalid_argument("Inference input must be a four-dimensional tensor");
                 }
-                const std::size_t batchSize = static_cast<std::size_t>(encodedBoards.size(0));
+                const std::size_t batchSize = static_cast<std::size_t>(input.shape[0]);
+                const torch::Tensor inputTensor = torch::from_blob(
+                    input.ptr,
+                    {input.shape[0], input.shape[1], input.shape[2], input.shape[3]},
+                    torch::TensorOptions().device(torch::kCPU).dtype(torch::kInt8));
                 InferenceOutput output = runner.createOutputBuffer();
-                runner.forwardInto(encodedBoards, batchSize, output);
+                runner.forwardInto(inputTensor, batchSize, output);
                 const std::int64_t rows = static_cast<std::int64_t>(batchSize);
-                return py::make_tuple(output.policies.narrow(0, 0, rows).clone(),
-                                      output.outcomes.narrow(0, 0, rows).clone());
+                const torch::Tensor policies = output.policies.narrow(0, 0, rows).contiguous();
+                const torch::Tensor outcomes = output.outcomes.narrow(0, 0, rows).contiguous();
+                py::array_t<float> policyArray({rows, policies.size(1)});
+                py::array_t<float> outcomeArray({rows, outcomes.size(1)});
+                std::memcpy(policyArray.mutable_data(), policies.const_data_ptr<float>(),
+                            policies.numel() * sizeof(float));
+                std::memcpy(outcomeArray.mutable_data(), outcomes.const_data_ptr<float>(),
+                            outcomes.numel() * sizeof(float));
+                return py::make_tuple(std::move(policyArray), std::move(outcomeArray));
             },
             py::arg("encoded_boards"));
 
