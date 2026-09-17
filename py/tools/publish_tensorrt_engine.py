@@ -34,7 +34,6 @@ INPUT_NAME = 'states'
 POLICY_OUTPUT_NAME = 'policy_logits'
 WDL_OUTPUT_NAME = 'wdl_probabilities'
 ONNX_OPSET_VERSION = 18
-VERIFICATION_BATCH_SIZE = 64
 MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR = 0.01
 MAXIMUM_OUTPUT_ABSOLUTE_ERROR = 0.1
 
@@ -177,7 +176,7 @@ def _output_errors(reference: np.ndarray, candidate: np.ndarray) -> tuple[float,
 
 
 def verify_engine(onnx_path: Path, engine_path: Path, input_shape: tuple[int, int, int, int]) -> TensorRtVerification:
-    batch_size = min(input_shape[0], VERIFICATION_BATCH_SIZE)
+    batch_size = input_shape[0]
     generator = np.random.default_rng(0)
     states = generator.integers(0, 2, size=(batch_size, *input_shape[1:]), dtype=np.int8)
     onnx_policy, onnx_wdl = _onnx_outputs(onnx_path, states)
@@ -306,7 +305,7 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
                     and metadata.get('graph_signature') == graph_signature
                     and metadata.get('template_sha256') == template_sha256
                     and metadata.get('engine_sha256') == file_sha256(engine_path)
-                    and metadata.get('verification_batch_size') == min(input_shape[0], VERIFICATION_BATCH_SIZE)
+                    and metadata.get('verification_batch_size') == input_shape[0]
                 ):
                     return {**metadata, 'cached': True}
             refit_started_at = time.perf_counter()
