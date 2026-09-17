@@ -1,0 +1,11 @@
+extends: vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008.yaml
+
+run:
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008/checkpoint_19.json
+    generation: 19
+
+training:
+  limits:
+    maximum_wall_time_seconds: 3600

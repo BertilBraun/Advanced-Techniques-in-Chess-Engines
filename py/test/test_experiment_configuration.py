@@ -345,6 +345,19 @@ def test_qat_architecture_controls_keep_self_play_float_until_diagnostics_comple
     assert configuration.evaluation.cadence_seconds == 480
 
 
+def test_v64_resume_extends_the_observation_window_from_generation_19() -> None:
+    configuration = load_chess_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY
+        / 'production'
+        / 'vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008-resume-g19.yaml'
+    )
+
+    assert configuration.run.resume.mode == 'checkpoint'
+    assert configuration.run.resume.generation == 19
+    assert configuration.run.resume.checkpoint_manifest_path.endswith('checkpoint_19.json')
+    assert configuration.training.limits.maximum_wall_time_seconds == pytest.approx(3_600)
+
+
 def test_v34_ema_fix_resume_uses_the_stopped_checkpoint() -> None:
     configuration = load_chess_experiment_configuration(
         REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v34-resume-ema-fix.yaml'
