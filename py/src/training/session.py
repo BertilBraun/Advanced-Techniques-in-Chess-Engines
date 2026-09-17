@@ -24,7 +24,7 @@ from src.training.progressive import (
     StagedEloPlateauCandidateStartState,
     retain_progressive_candidate_checkpoints,
 )
-from src.training.quantization import TensorRtInt8QatConfiguration
+from src.training.quantization import QatFoldingMode, TensorRtInt8QatConfiguration
 from src.training.trainer import TrainerGroup, TrainingQuantumResult, TrainingStatistics
 from src.training.trainer.contracts import TrainerQuantum, TrainerStartup
 from src.util.tensorboard import log_scalar
@@ -119,9 +119,10 @@ class FixedTrainingSession(TrainingSession):
             )
         )
         match self.configuration.training.trainer.quantization:
-            case TensorRtInt8QatConfiguration(fold_after_optimizer_steps=fold_after_optimizer_steps) if (
-                result.completed_optimizer_steps == fold_after_optimizer_steps
-            ):
+            case TensorRtInt8QatConfiguration(
+                fold_after_optimizer_steps=fold_after_optimizer_steps,
+                folding_mode=QatFoldingMode.IN_PLACE,
+            ) if result.completed_optimizer_steps == fold_after_optimizer_steps:
                 self.trainer.close()
                 self.trainer = TrainerGroup(
                     self.configuration,

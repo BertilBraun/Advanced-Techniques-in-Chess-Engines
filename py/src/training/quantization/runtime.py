@@ -24,6 +24,7 @@ from src.training.network import (
 )
 from src.training.quantization.configuration import (
     QatCheckpointPhase,
+    QatFoldingMode,
     QatStateIdentity,
     TensorRtInt8QatConfiguration,
     expected_qat_phase,
@@ -178,7 +179,7 @@ def restore_qat_model(
     restored = modelopt.restore_from_modelopt_state(model, modelopt_state_path=state.path)
     if not isinstance(restored, Network):
         raise ValueError('ModelOpt restore did not preserve the training network contract.')
-    if state.phase is QatCheckpointPhase.DEPLOYMENT:
+    if state.phase is QatCheckpointPhase.DEPLOYMENT and configuration.folding_mode is QatFoldingMode.IN_PLACE:
         fold_post_activation_batch_norm(restored)
     return RestoredQatModel(restored, state.phase)
 

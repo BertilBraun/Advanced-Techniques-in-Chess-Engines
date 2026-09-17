@@ -13,6 +13,11 @@ class DisabledTrainingQuantization(FrozenModel):
     kind: Literal['disabled'] = 'disabled'
 
 
+class QatFoldingMode(str, Enum):
+    IN_PLACE = 'in_place'
+    DEPLOYMENT_COPY = 'deployment_copy'
+
+
 class TensorRtInt8QatConfiguration(FrozenModel):
     kind: Literal['tensorrt_int8_qat'] = 'tensorrt_int8_qat'
     fold_after_optimizer_steps: int = Field(default=1_000, gt=0)
@@ -22,6 +27,7 @@ class TensorRtInt8QatConfiguration(FrozenModel):
     deployment_learning_rate: FloatGenerationSchedule | Literal['inherit']
     deployment_warmup_optimizer_steps: int = Field(ge=0)
     deployment_warmup_start_learning_rate: float = Field(default=0.0, ge=0.0)
+    folding_mode: QatFoldingMode = QatFoldingMode.IN_PLACE
 
     @model_validator(mode='after')
     def validate_deployment_learning_rate(self) -> TensorRtInt8QatConfiguration:
@@ -76,9 +82,10 @@ def qat_phase_warmup_progress(
             fold_after_optimizer_steps=fold_after_optimizer_steps,
             deployment_warmup_optimizer_steps=deployment_warmup_optimizer_steps,
             deployment_warmup_start_learning_rate=deployment_warmup_start_learning_rate,
+            folding_mode=folding_mode,
         ):
             assert qat_state is not None
-            if qat_state.phase is QatCheckpointPhase.PRE_FOLD:
+            if qat_state.phase is QatCheckpointPhase.PRE_FOLD or folding_mode is QatFoldingMode.DEPLOYMENT_COPY:
                 return LearningRateWarmupProgress(
                     initial_warmup_optimizer_steps,
                     completed_optimizer_steps,

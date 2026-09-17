@@ -41,6 +41,7 @@ from src.training.objective import ObjectiveLoss, ResolvedTrainingObjective
 from src.training.quantization import (
     DisabledTrainingQuantization,
     QatCheckpointPhase,
+    QatFoldingMode,
     QatStateIdentity,
     TensorRtInt8QatConfiguration,
     qat_phase_warmup_progress,
@@ -438,9 +439,16 @@ def qat_phase_learning_rate(
         case DisabledTrainingQuantization():
             assert qat_state is None
             return base_learning_rate
-        case TensorRtInt8QatConfiguration(deployment_learning_rate=deployment_learning_rate):
+        case TensorRtInt8QatConfiguration(
+            deployment_learning_rate=deployment_learning_rate,
+            folding_mode=folding_mode,
+        ):
             assert qat_state is not None
-            if qat_state.phase is QatCheckpointPhase.DEPLOYMENT and deployment_learning_rate != 'inherit':
+            if (
+                qat_state.phase is QatCheckpointPhase.DEPLOYMENT
+                and folding_mode is QatFoldingMode.IN_PLACE
+                and deployment_learning_rate != 'inherit'
+            ):
                 return deployment_learning_rate.value_at(model_generation)
             return base_learning_rate
 
@@ -687,17 +695,18 @@ def _prepare_qat_publication(
             path=conversion_path,
             sha256=file_sha256(conversion_path),
         )
-        fold_post_activation_batch_norm(runtime.model)
-        runtime.optimizer = create_optimizer(runtime.model, configuration.training.trainer.optimizer)
-        device_id = runtime.device.index
-        assert device_id is not None, 'TensorRT INT8 QAT requires a CUDA training device.'
-        del runtime.distributed_model
-        runtime.distributed_model = _create_distributed_model(
-            runtime.model,
-            configuration.training.topology.trainer,
-            configuration.training.trainer.compilation,
-            device_id,
-        )
+        if configuration.training.trainer.quantization.folding_mode is QatFoldingMode.IN_PLACE:
+            fold_post_activation_batch_norm(runtime.model)
+            runtime.optimizer = create_optimizer(runtime.model, configuration.training.trainer.optimizer)
+            device_id = runtime.device.index
+            assert device_id is not None, 'TensorRT INT8 QAT requires a CUDA training device.'
+            del runtime.distributed_model
+            runtime.distributed_model = _create_distributed_model(
+                runtime.model,
+                configuration.training.topology.trainer,
+                configuration.training.trainer.compilation,
+                device_id,
+            )
         runtime.qat_state = deployment_qat_state(pre_fold_state, target_steps)
     elif runtime.qat_state.phase is QatCheckpointPhase.PRE_FOLD:
         state_path = qat_state_save_path(command.target_progress.model_generation, runtime.save_path)

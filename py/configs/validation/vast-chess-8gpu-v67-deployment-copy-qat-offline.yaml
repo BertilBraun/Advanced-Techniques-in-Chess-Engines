@@ -1,0 +1,14 @@
+extends: ../production/vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008.yaml
+
+run:
+  run_name: vast-chess-8gpu-v67-deployment-copy-qat-offline
+  tensorboard_run_directory: vast-chess-8gpu-v67-deployment-copy-qat-offline
+
+training:
+  save_path: py/training_data/validation/vast-chess-8gpu-v67-deployment-copy-qat-offline
+  trainer:
+    quantization:
+      folding_mode: deployment_copy
+      int8_self_play_start_generation: 6
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v67-deployment-copy-qat-offline.stop

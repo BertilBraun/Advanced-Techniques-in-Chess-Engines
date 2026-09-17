@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from src.training.quantization.configuration import (
     QatCheckpointPhase,
+    QatFoldingMode,
     QatStateIdentity,
     TensorRtInt8QatConfiguration,
     qat_phase_warmup_progress,
@@ -130,3 +131,26 @@ def test_inherited_deployment_learning_rate_preserves_the_session_rate() -> None
     )
 
     assert qat_phase_learning_rate(0.073, configuration, state, model_generation=500) == pytest.approx(0.073)
+
+
+def test_deployment_copy_folding_preserves_the_training_schedule() -> None:
+    configuration = TensorRtInt8QatConfiguration(
+        fold_after_optimizer_steps=5_000,
+        deployment_learning_rate=0.02,
+        deployment_warmup_optimizer_steps=5_000,
+        deployment_warmup_start_learning_rate=0.002,
+        folding_mode=QatFoldingMode.DEPLOYMENT_COPY,
+    )
+    state = QatStateIdentity(
+        phase=QatCheckpointPhase.DEPLOYMENT,
+        completed_optimizer_steps=7_500,
+        path='qat-state.pt',
+        sha256='0' * 64,
+    )
+
+    progress = qat_phase_warmup_progress(1_000, 0.001, configuration, state, 7_500)
+
+    assert qat_phase_learning_rate(0.008, configuration, state, model_generation=15) == pytest.approx(0.008)
+    assert progress.warmup_optimizer_steps == 1_000
+    assert progress.completed_optimizer_steps == 7_500
+    assert progress.start_learning_rate == pytest.approx(0.001)

@@ -25,6 +25,7 @@ from src.training.network import (
 )
 from src.training.quantization.configuration import (
     QatCheckpointPhase,
+    QatFoldingMode,
     TensorRtInt8QatConfiguration,
 )
 from src.util.hashing import file_sha256
@@ -337,6 +338,50 @@ def test_deployment_qat_checkpoint_round_trip(tmp_path: Path) -> None:
 
     assert loaded_state.phase is QatCheckpointPhase.DEPLOYMENT
     assert all(isinstance(block.conv_block1[1], nn.Identity) for block in loaded.backbone)
+
+
+@pytest.mark.integration
+def test_deployment_copy_qat_checkpoint_keeps_training_model_unfolded(tmp_path: Path) -> None:
+    model = configure_qat(_network(), _calibrate)
+    pre_fold_state = save_qat_state(model, tmp_path / 'modelopt-state.pt', 999)
+    deployment_state = deployment_qat_state(pre_fold_state, 1_000)
+    configuration = TensorRtInt8QatConfiguration(
+        fold_after_optimizer_steps=1_000,
+        int8_self_play_start_generation=10,
+        deployment_learning_rate='inherit',
+        deployment_warmup_optimizer_steps=0,
+        folding_mode=QatFoldingMode.DEPLOYMENT_COPY,
+    )
+    original_state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
+
+    checkpoint = save_qat_model_and_optimizer(
+        model,
+        create_optimizer(model, AdamWOptimizerConfiguration()),
+        generation=2,
+        completed_optimizer_steps=1_000,
+        save_folder=tmp_path,
+        qat_state=deployment_state,
+        example_states=torch.randn((8, 8, 3, 3)),
+        quantization_configuration=configuration,
+    )
+
+    assert all(isinstance(block.conv_block1[1], nn.BatchNorm2d) for block in model.backbone)
+    assert all(torch.equal(model.state_dict()[name], tensor) for name, tensor in original_state.items())
+    exported = onnx.load(checkpoint.inference_model_path)
+    assert all(node.op_type != 'BatchNormalization' for node in exported.graph.node)
+
+    loaded, _, loaded_state = load_qat_model_and_optimizer(
+        generation=2,
+        network_configuration=model.network_args,
+        optimizer_configuration=AdamWOptimizerConfiguration(),
+        quantization_configuration=configuration,
+        device=torch.device('cpu'),
+        save_folder=tmp_path,
+        dimensions=NetworkDimensions(channels=8, rows=3, columns=3, actions=10),
+    )
+
+    assert loaded_state.phase is QatCheckpointPhase.DEPLOYMENT
+    assert all(isinstance(block.conv_block1[1], nn.BatchNorm2d) for block in loaded.backbone)
 
 
 @pytest.mark.integration

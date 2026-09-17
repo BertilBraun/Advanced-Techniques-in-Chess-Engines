@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import time
 from pathlib import Path
 
 import torch
@@ -28,10 +30,17 @@ from src.training.network import (
     temporary_policy_prior_scale,
 )
 from src.training.policy_prior import inference_only_policy_prior_record
-from src.training.quantization.configuration import QatStateIdentity, TensorRtInt8QatConfiguration
+from src.training.quantization.configuration import (
+    QatCheckpointPhase,
+    QatFoldingMode,
+    QatStateIdentity,
+    TensorRtInt8QatConfiguration,
+)
 from src.training.quantization.runtime import (
     export_float_qat_onnx,
     export_qat_onnx,
+    fold_post_activation_batch_norm,
+    recalibrate_qat,
     restore_qat_model,
     specialize_float_onnx_batch,
     specialize_qat_onnx_batch,
@@ -39,6 +48,7 @@ from src.training.quantization.runtime import (
 from src.training.targets import AuxiliaryHeadLayout
 from src.util.atomic_file import write_bytes_atomically, write_text_atomically
 from src.util.hashing import file_sha256
+from src.util.log import log
 
 
 def _temporary_path(path: Path) -> Path:
@@ -66,6 +76,34 @@ def _bootstrap_inference_model(model: Network) -> InferenceNetwork:
     inference_model.eval()
     inference_model.fuse_model()
     return inference_model
+
+
+def _folded_deployment_copy(model: Network, example_states: torch.Tensor) -> Network:
+    copy_started_at = time.perf_counter()
+    deployment_model = copy.deepcopy(model)
+    copy_seconds = time.perf_counter() - copy_started_at
+
+    fold_started_at = time.perf_counter()
+    fold_post_activation_batch_norm(deployment_model)
+    fold_seconds = time.perf_counter() - fold_started_at
+
+    def calibration_loop(calibration_model: torch.nn.Module) -> None:
+        was_training = calibration_model.training
+        calibration_model.eval()
+        try:
+            with torch.inference_mode():
+                calibration_model(example_states)
+        finally:
+            calibration_model.train(was_training)
+
+    calibration_started_at = time.perf_counter()
+    recalibrate_qat(deployment_model, calibration_loop)
+    calibration_seconds = time.perf_counter() - calibration_started_at
+    log(
+        'Prepared folded QAT deployment copy: '
+        f'copy={copy_seconds:.3f}s, fold={fold_seconds:.3f}s, recalibration={calibration_seconds:.3f}s.'
+    )
+    return deployment_model
 
 
 def save_qat_model_and_optimizer(
@@ -139,9 +177,17 @@ def save_qat_model_and_optimizer(
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
     write_bytes_atomically(stored_qat_state_path, qat_state.path.read_bytes())
 
+    export_model = model
+    if (
+        quantization_configuration is not None
+        and quantization_configuration.folding_mode is QatFoldingMode.DEPLOYMENT_COPY
+        and qat_state.phase is QatCheckpointPhase.DEPLOYMENT
+    ):
+        export_model = _folded_deployment_copy(model, example_states)
+
     def export_inference_artifact() -> None:
         if generation == 0 and bootstrap_with_torchscript:
-            inference_model = _bootstrap_inference_model(model)
+            inference_model = _bootstrap_inference_model(export_model)
             torch.jit.save(
                 torch.jit.script(inference_model),
                 str(inference_path),
@@ -149,19 +195,19 @@ def save_qat_model_and_optimizer(
             )
         elif generation < int8_start_generation:
             export_float_qat_onnx(
-                model,
+                export_model,
                 inference_path,
                 example_states,
                 constant_folding=True,
             )
         else:
-            export_qat_onnx(model, inference_path, example_states)
+            export_qat_onnx(export_model, inference_path, example_states)
 
     if (
         policy_prior_calibration is not None
         and bootstrap_policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
     ):
-        with temporary_policy_prior_scale(model, policy_prior_calibration.applied_scale):
+            with temporary_policy_prior_scale(export_model, policy_prior_calibration.applied_scale):
             export_inference_artifact()
     else:
         export_inference_artifact()
