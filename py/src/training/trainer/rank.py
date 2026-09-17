@@ -16,6 +16,7 @@ from src.games.composition import create_game_implementation
 from src.games.implementation import GameImplementation
 from src.replay.batch_loader import MappedReplayBatchLoader
 from src.self_play.configuration import InferenceBackendConfiguration, TensorRtInferenceBackend
+from src.self_play.native_configuration import uses_torchscript_bootstrap
 from src.training.batch import TrainingModelOutput
 from src.training.bootstrap import select_bootstrap_model
 from src.training.checkpoint import CheckpointReference
@@ -281,6 +282,10 @@ def _initialize_rank(
                             if isinstance(
                                 game.self_play_configuration.inference.backend,
                                 TensorRtInferenceBackend,
+                            )
+                            and not uses_torchscript_bootstrap(
+                                startup.starting_generation,
+                                game.self_play_configuration.inference.backend,
                             )
                             else None
                         ),
@@ -603,6 +608,10 @@ def _save_rank_checkpoint(
                     if isinstance(
                         runtime.game.self_play_configuration.inference.backend,
                         TensorRtInferenceBackend,
+                    )
+                    and not uses_torchscript_bootstrap(
+                        generation,
+                        runtime.game.self_play_configuration.inference.backend,
                     )
                     and runtime.bootstrap_probe_states is not None
                     else None

@@ -24,6 +24,7 @@ from src.experiment.configuration import ExperimentConfiguration, experiment_con
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.composition import create_game_implementation
 from src.self_play.configuration import TensorRtInferenceBackend
+from src.self_play.native_configuration import uses_torchscript_bootstrap
 from src.training.bootstrap import select_bootstrap_model
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import model_save_path, qat_state_save_path
@@ -235,8 +236,11 @@ def _float_onnx_example_states(
     device: torch.device,
 ) -> torch.Tensor | None:
     inference = create_game_implementation(experiment).self_play_configuration.inference
-    if not isinstance(inference.backend, TensorRtInferenceBackend):
-        return None
+    match inference.backend:
+        case TensorRtInferenceBackend() as backend if not uses_torchscript_bootstrap(0, backend):
+            pass
+        case _:
+            return None
     return fixed_batch_example_states(
         probe_states.to(device=device, dtype=torch.float32),
         inference.inference_batch_size,

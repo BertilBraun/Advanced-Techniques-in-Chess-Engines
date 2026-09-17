@@ -44,7 +44,7 @@ def native_sdpa_backend(backend: SdpaBackend) -> NativeSdpaBackend:
             return NativeSdpaBackend.CUDNN
 
 
-def _uses_torchscript_bootstrap(model_generation: int, backend: TensorRtInferenceBackend) -> bool:
+def uses_torchscript_bootstrap(model_generation: int, backend: TensorRtInferenceBackend) -> bool:
     return backend.bootstrap_with_torchscript and model_generation == 0
 
 
@@ -57,7 +57,7 @@ def native_inference_backend(
     match backend:
         case TorchScriptInferenceBackend():
             return NativeInferenceBackend.TORCHSCRIPT
-        case TensorRtInferenceBackend() as tensor_rt_backend if _uses_torchscript_bootstrap(
+        case TensorRtInferenceBackend() as tensor_rt_backend if uses_torchscript_bootstrap(
             model_generation,
             tensor_rt_backend,
         ):
@@ -76,7 +76,7 @@ def resolved_inference_model_path(
     match backend:
         case TorchScriptInferenceBackend():
             return model_path
-        case TensorRtInferenceBackend() as tensor_rt_backend if _uses_torchscript_bootstrap(
+        case TensorRtInferenceBackend() as tensor_rt_backend if uses_torchscript_bootstrap(
             model_generation,
             tensor_rt_backend,
         ):
