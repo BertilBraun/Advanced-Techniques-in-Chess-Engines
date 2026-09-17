@@ -1,0 +1,18 @@
+extends: vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008.yaml
+
+run:
+  run_name: vast-chess-8gpu-v65-scaled-post-qat-foldfix-fp16-adamw008
+  tensorboard_run_directory: vast-chess-8gpu-v65-scaled-post-qat-foldfix-fp16-adamw008
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: /workspace/alphazero-engine-v64-scaled-post/.codex-diagnostics/v64-fidelity-inputs/checkpoint_6.json
+    generation: 6
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v65-scaled-post-qat-foldfix-fp16-adamw008
+  limits:
+    maximum_wall_time_seconds: 900
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v65-scaled-post-qat-foldfix-fp16-adamw008.stop
+
+evaluation:
+  cadence_seconds: 240
