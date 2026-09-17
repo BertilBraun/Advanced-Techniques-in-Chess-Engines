@@ -1,0 +1,14 @@
+extends: vast-chess-8gpu-v65-scaled-post-qat-foldfix-fp16-adamw008.yaml
+
+run:
+  run_name: vast-chess-8gpu-v66-scaled-post-qat-foldfix-fp16-adamw001
+  tensorboard_run_directory: vast-chess-8gpu-v66-scaled-post-qat-foldfix-fp16-adamw001
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v66-scaled-post-qat-foldfix-fp16-adamw001
+  trainer:
+    quantization:
+      deployment_learning_rate: 0.001
+      deployment_warmup_optimizer_steps: 0
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v66-scaled-post-qat-foldfix-fp16-adamw001.stop
