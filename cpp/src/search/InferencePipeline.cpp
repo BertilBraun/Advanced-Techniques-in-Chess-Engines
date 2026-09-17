@@ -372,6 +372,9 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
 
 size_t InferenceRunner::capturedBatchSize(const size_t batchSize) const noexcept {
 #ifdef USE_CUDA
+    if (m_backend != InferenceBackend::TorchScript) {
+        return 0;
+    }
     for (const CapturedInferenceGraph &captured : m_batchGraphs) {
         if (captured.batch_size >= batchSize) {
             return captured.batch_size;
@@ -675,6 +678,13 @@ bool InferenceRunner::adoptWeightsInPlace(const torch::jit::script::Module &upda
 void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
     if (std::holds_alternative<TensorRtModel>(updatedModel)) {
         assert(std::get<TensorRtModel>(updatedModel) != nullptr);
+#ifdef USE_CUDA
+        // A generation-zero TorchScript bootstrap may have captured graphs that still point at
+        // its frozen module. They must be gone before TensorRT becomes authoritative, otherwise
+        // forwardInto keeps replaying the stale bootstrap graph instead of calling TensorRT.
+        const std::lock_guard<std::mutex> serialized(graphSerializationMutex());
+        releaseBatchGraphs();
+#endif
         m_model.swap(updatedModel);
         m_backend = InferenceBackend::TensorRt;
         return;
@@ -682,6 +692,7 @@ void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) no
     if (m_backend == InferenceBackend::TensorRt) {
         m_model.swap(updatedModel);
         m_backend = InferenceBackend::TorchScript;
+        captureBatchGraphs();
         return;
     }
     TorchScriptInferenceModel &current = std::get<TorchScriptInferenceModel>(m_model);
