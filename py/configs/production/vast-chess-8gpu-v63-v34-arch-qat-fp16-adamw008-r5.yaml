@@ -1,0 +1,10 @@
+extends: vast-chess-8gpu-v63-v34-arch-qat-fp16-adamw008-r4.yaml
+
+run:
+  run_name: vast-chess-8gpu-v63-v34-arch-qat-fp16-adamw008-r5
+  tensorboard_run_directory: vast-chess-8gpu-v63-v34-arch-qat-fp16-adamw008-r5
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v63-v34-arch-qat-fp16-adamw008-r5
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v63-v34-arch-qat-fp16-adamw008-r5.stop
