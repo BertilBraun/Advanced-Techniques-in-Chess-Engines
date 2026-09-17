@@ -74,11 +74,11 @@ def run(arguments: Arguments) -> RefitAcrossCheckpointsReport:
     maximum_batch_size = configuration.chess.self_play.inference.inference_batch_size
     if max(arguments.batch_sizes) > maximum_batch_size:
         raise ValueError(f'Requested batch {max(arguments.batch_sizes)} exceeds production batch {maximum_batch_size}.')
-    template_checkpoint = CheckpointReference.load(
+    template_checkpoint = CheckpointReference.load_for_inference(
         arguments.checkpoint_directory,
         arguments.template_generation,
     )
-    candidate_checkpoint = CheckpointReference.load(
+    candidate_checkpoint = CheckpointReference.load_for_inference(
         arguments.checkpoint_directory,
         arguments.candidate_generation,
     )
