@@ -208,7 +208,7 @@ def run(arguments: Arguments) -> ProductionEquivalenceReport:
 
     native_configuration = game.native_inference_configuration(arguments.gpu_id, checkpoint)
     production_engine_path = Path(native_configuration.model_path)
-    if native_configuration.backend is not InferenceBackend.TENSORRT:
+    if native_configuration.backend != InferenceBackend.TENSORRT:
         raise ValueError('The supplied production configuration did not resolve to TensorRT.')
 
     dimensions = ChessSelfPlaySearch.inference_dimensions()
