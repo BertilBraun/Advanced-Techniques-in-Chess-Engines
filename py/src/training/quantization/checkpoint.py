@@ -207,7 +207,7 @@ def save_qat_model_and_optimizer(
         policy_prior_calibration is not None
         and bootstrap_policy_scale_application is BootstrapPolicyScaleApplication.INFERENCE_ONLY
     ):
-            with temporary_policy_prior_scale(export_model, policy_prior_calibration.applied_scale):
+        with temporary_policy_prior_scale(export_model, policy_prior_calibration.applied_scale):
             export_inference_artifact()
     else:
         export_inference_artifact()
