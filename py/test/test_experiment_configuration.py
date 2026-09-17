@@ -347,9 +347,7 @@ def test_qat_architecture_controls_keep_self_play_float_until_diagnostics_comple
 
 def test_v64_resume_extends_the_observation_window_from_generation_19() -> None:
     configuration = load_chess_experiment_configuration(
-        REPOSITORY_CONFIG_DIRECTORY
-        / 'production'
-        / 'vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008-resume-g19.yaml'
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-v64-scaled-post-qat-fp16-adamw008-resume-g19.yaml'
     )
 
     assert configuration.run.resume.mode == 'checkpoint'
