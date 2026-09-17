@@ -124,9 +124,7 @@ def _onnx_outputs(path: Path, states: Tensor, gpu_id: int) -> ModelOutputs:
 def _onnx_graph_signature(path: Path) -> tuple[tuple[str, ...], tuple[tuple[str, tuple[int, ...]], ...]]:
     model = onnx.load(path, load_external_data=False)
     operations = tuple(node.op_type for node in model.graph.node)
-    initializers = tuple(
-        sorted((initializer.name, tuple(initializer.dims)) for initializer in model.graph.initializer)
-    )
+    initializers = tuple(sorted((initializer.name, tuple(initializer.dims)) for initializer in model.graph.initializer))
     return operations, initializers
 
 
