@@ -97,7 +97,17 @@ def _fold_convolution_batch_norm(block: nn.Sequential) -> None:
     batch_norm = block[1]
     if not isinstance(convolution, nn.Conv2d) or not isinstance(batch_norm, nn.BatchNorm2d):
         raise ValueError('QAT deployment folding requires Conv2d-BatchNorm2d residual branches.')
-    block[0] = torch.nn.utils.fusion.fuse_conv_bn_eval(convolution, batch_norm)
+    weight_requires_grad = convolution.weight.requires_grad or (
+        batch_norm.weight is not None and batch_norm.weight.requires_grad
+    )
+    bias_requires_grad = (convolution.bias is not None and convolution.bias.requires_grad) or (
+        batch_norm.bias is not None and batch_norm.bias.requires_grad
+    )
+    fused_convolution = torch.nn.utils.fusion.fuse_conv_bn_eval(convolution, batch_norm)
+    fused_convolution.weight.requires_grad_(weight_requires_grad)
+    assert fused_convolution.bias is not None
+    fused_convolution.bias.requires_grad_(bias_requires_grad)
+    block[0] = fused_convolution
     block[1] = nn.Identity()
 
 

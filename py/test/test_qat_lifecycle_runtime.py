@@ -44,6 +44,7 @@ from src.training.quantization.runtime import (  # noqa: E402
     export_qat_onnx,
     fixed_batch_example_states,
     fold_post_activation_batch_norm,
+    quantizers_disabled,
     recalibrate_qat,
     restore_qat_model,
     save_qat_state,
@@ -196,6 +197,33 @@ def test_unscaled_post_activation_qat_folds_batch_norm_without_changing_outputs(
 
     assert all(isinstance(block, ResBlock) for block in model.backbone)
     assert all(isinstance(block.conv_block1[1], nn.Identity) for block in model.backbone)
+    assert torch.allclose(actual[0], expected[0], rtol=1e-4, atol=1e-5)
+    assert torch.allclose(actual[1], expected[1], rtol=1e-4, atol=1e-5)
+
+
+@pytest.mark.integration
+def test_scaled_post_activation_qat_fold_preserves_outputs_and_parameter_trainability() -> None:
+    model = configure_qat(_network(), _calibrate)
+    inputs = torch.randn((8, 8, 3, 3))
+    model.eval()
+    with quantizers_disabled(model), torch.inference_mode():
+        expected = model(inputs)
+
+    fold_post_activation_batch_norm(model)
+    model.eval()
+    with quantizers_disabled(model), torch.inference_mode():
+        actual = model(inputs)
+
+    convolutions = tuple(
+        convolution
+        for block in model.backbone
+        for convolution in (block.conv_block1[0], block.conv_block2[0])
+    )
+    assert all(isinstance(block, ScaledPostActivationResBlock) for block in model.backbone)
+    assert all(isinstance(block.conv_block1[1], nn.Identity) for block in model.backbone)
+    assert all(isinstance(block.conv_block2[1], nn.Identity) for block in model.backbone)
+    assert all(convolution.weight.requires_grad for convolution in convolutions)
+    assert all(convolution.bias is not None and convolution.bias.requires_grad for convolution in convolutions)
     assert torch.allclose(actual[0], expected[0], rtol=1e-4, atol=1e-5)
     assert torch.allclose(actual[1], expected[1], rtol=1e-4, atol=1e-5)
 
