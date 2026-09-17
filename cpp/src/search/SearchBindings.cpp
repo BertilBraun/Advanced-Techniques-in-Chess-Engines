@@ -8,6 +8,7 @@
 #include "util/Timing.hpp"
 #include <pybind11/operators.h>
 #include <pybind11/stl.h>
+#include <torch/extension.h>
 
 namespace py = pybind11;
 
