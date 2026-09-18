@@ -18,10 +18,16 @@ class QatFoldingMode(str, Enum):
     DEPLOYMENT_COPY = 'deployment_copy'
 
 
+class QatCalibrationSource(str, Enum):
+    EVALUATION_DATASET = 'evaluation_dataset'
+    REPLAY = 'replay'
+
+
 class TensorRtInt8QatConfiguration(FrozenModel):
     kind: Literal['tensorrt_int8_qat'] = 'tensorrt_int8_qat'
     fold_after_optimizer_steps: int = Field(default=1_000, gt=0)
     calibration_positions: int = Field(default=2_048, gt=0)
+    calibration_source: QatCalibrationSource = QatCalibrationSource.EVALUATION_DATASET
     recalibration_interval_generations: int = Field(default=1, gt=0)
     int8_self_play_start_generation: int = Field(default=1, ge=1)
     deployment_learning_rate: FloatGenerationSchedule | Literal['inherit']

@@ -15,6 +15,7 @@ from src.experiment.configuration import ExperimentConfiguration, load_experimen
 from src.games.composition import create_game_implementation
 from src.games.implementation import GameImplementation
 from src.replay.batch_loader import MappedReplayBatchLoader
+from src.replay.configuration import UniformReplaySamplingConfiguration
 from src.self_play.configuration import InferenceBackendConfiguration, TensorRtInferenceBackend
 from src.self_play.native_configuration import uses_torchscript_bootstrap
 from src.training.batch import TrainingModelOutput
@@ -40,6 +41,7 @@ from src.training.network import Network
 from src.training.objective import ObjectiveLoss, ResolvedTrainingObjective
 from src.training.quantization import (
     DisabledTrainingQuantization,
+    QatCalibrationSource,
     QatCheckpointPhase,
     QatFoldingMode,
     QatStateIdentity,
@@ -666,6 +668,7 @@ def _save_rank_checkpoint(
 
 def _prepare_qat_publication(
     rank: int,
+    world_size: int,
     configuration: ExperimentConfiguration,
     runtime: _RankRuntime,
     command: TrainQuantumCommand,
@@ -674,6 +677,8 @@ def _prepare_qat_publication(
         case DisabledTrainingQuantization():
             return
         case TensorRtInt8QatConfiguration(
+            calibration_positions=calibration_positions,
+            calibration_source=calibration_source,
             fold_after_optimizer_steps=fold_after_optimizer_steps,
             recalibration_interval_generations=recalibration_interval_generations,
         ):
@@ -722,10 +727,30 @@ def _prepare_qat_publication(
     else:
         runtime.qat_state = runtime.qat_state.validated_copy(update={'completed_optimizer_steps': target_steps})
     if not command.target_progress.model_generation % recalibration_interval_generations:
+        calibration_states = runtime.qat_calibration_states
+        if calibration_source is QatCalibrationSource.REPLAY:
+            calibration_loader = MappedReplayBatchLoader(
+                replay=command.replay,
+                state=runtime.game.state,
+                source_optimizer_step=command.target_progress.completed_optimizer_steps,
+                optimizer_steps=1,
+                global_batch_size=calibration_positions,
+                world_size=world_size,
+                rank=rank,
+                sampler_seed=configuration.training.random_seed,
+                sampling=UniformReplaySamplingConfiguration(kind='uniform'),
+                pin_memory=False,
+            )
+            calibration_batches = tuple(calibration_loader)
+            assert len(calibration_batches) == 1
+            calibration_states = calibration_batches[0].states.to(
+                device=runtime.device,
+                dtype=torch.float32,
+            )
         recalibrate_qat(
             runtime.model,
             _calibration_loop(
-                runtime.qat_calibration_states,
+                calibration_states,
                 runtime.game.self_play_configuration.inference.inference_batch_size,
             ),
         )
@@ -786,7 +811,7 @@ def train_rank_quantum(
         gradient_probe_interval_steps=configuration.training.trainer.gradient_probe_interval_steps,
     )
     totals = _resolve_loss_totals(training_result.totals)
-    _prepare_qat_publication(rank, configuration, runtime, command)
+    _prepare_qat_publication(rank, world_size, configuration, runtime, command)
     checkpoint = _save_rank_checkpoint(rank, configuration, runtime, command)
     distributed.barrier()
     divisor = float(optimizer_steps)

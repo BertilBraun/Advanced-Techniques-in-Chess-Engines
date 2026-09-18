@@ -3,6 +3,7 @@ from __future__ import annotations
 from src.training.quantization.configuration import (
     DisabledTrainingQuantization,
     LearningRateWarmupProgress,
+    QatCalibrationSource,
     QatCheckpointPhase,
     QatFoldingMode,
     QatStateIdentity,
@@ -15,6 +16,7 @@ from src.training.quantization.configuration import (
 __all__ = [
     'DisabledTrainingQuantization',
     'LearningRateWarmupProgress',
+    'QatCalibrationSource',
     'QatCheckpointPhase',
     'QatFoldingMode',
     'QatStateIdentity',

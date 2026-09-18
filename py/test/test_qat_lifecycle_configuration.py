@@ -2,12 +2,27 @@ from __future__ import annotations
 
 import pytest
 from src.training.quantization.configuration import (
+    QatCalibrationSource,
     QatCheckpointPhase,
     QatStateIdentity,
     TensorRtInt8QatConfiguration,
     expected_qat_phase,
     qat_phase_warmup_progress,
 )
+
+
+def test_qat_replay_calibration_source_is_explicit() -> None:
+    configuration = TensorRtInt8QatConfiguration(
+        calibration_source=QatCalibrationSource.REPLAY,
+        calibration_positions=10_000,
+        recalibration_interval_generations=5,
+        deployment_learning_rate='inherit',
+        deployment_warmup_optimizer_steps=0,
+    )
+
+    assert configuration.calibration_source is QatCalibrationSource.REPLAY
+    assert configuration.calibration_positions == 10_000
+    assert configuration.recalibration_interval_generations == 5
 
 
 @pytest.mark.parametrize(
