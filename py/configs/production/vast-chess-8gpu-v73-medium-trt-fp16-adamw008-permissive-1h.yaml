@@ -1,0 +1,18 @@
+extends: vast-chess-8gpu-v71-medium-trt-fp16-adamw008-1h.yaml
+
+run:
+  run_name: vast-chess-8gpu-v73-medium-trt-fp16-adamw008-permissive-1h
+  tensorboard_run_directory: vast-chess-8gpu-v73-medium-trt-fp16-adamw008-permissive-1h
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v73-medium-trt-fp16-adamw008-permissive-1h
+  trainer:
+    bootstrap_initialization:
+      candidate_count: 20
+      maximum_initial_top1_mass: 0.999999999
+      minimum_wdl_entropy_ratio: 0.000000001
+      maximum_absolute_expected_value: 1.0
+      minimum_policy_scale: 0.000000001
+      maximum_policy_scale: 1000000000.0
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v73-medium-trt-fp16-adamw008-permissive-1h.stop
