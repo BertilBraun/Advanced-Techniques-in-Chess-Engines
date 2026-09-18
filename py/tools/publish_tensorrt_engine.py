@@ -321,6 +321,8 @@ def _build_automatic_template(
 def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str | int | float | bool]:
     if not template_paths:
         raise ValueError('At least one TensorRT template is required.')
+    model_path = model_path.resolve()
+    template_paths = tuple(path.resolve() for path in template_paths)
     source_sha256 = file_sha256(model_path)
     logger = trt.Logger(trt.Logger.ERROR)
     runtime = trt.Runtime(logger)
@@ -358,7 +360,12 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
                     and metadata.get('engine_sha256') == file_sha256(engine_path)
                     and metadata.get('verification_batch_size') == input_shape[0]
                 ):
-                    return {**metadata, 'cached': True}
+                    return {
+                        **metadata,
+                        'engine_path': str(engine_path),
+                        'template_path': str(selected_template_path),
+                        'cached': True,
+                    }
             refit_started_at = time.perf_counter()
             refit_engine(selected_template_path, onnx_path, engine_path)
             refit_seconds = time.perf_counter() - refit_started_at
