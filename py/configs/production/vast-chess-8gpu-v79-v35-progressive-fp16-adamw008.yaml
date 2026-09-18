@@ -23,6 +23,7 @@ chess:
       backend:
         kind: tensorrt
         bootstrap_with_torchscript: true
+        allow_fidelity_deviation: true
         templates:
         - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v48-12x128-fp16-b320.engine}
         - {kind: float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, engine_path: /workspace/tensorrt/v48-14x160-fp16-b320.engine}
@@ -54,6 +55,7 @@ evaluation:
         backend:
           kind: tensorrt
           bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
           templates:
           - {kind: float, model_id: chess-cnn-scaled-post-12x128-fromto-int8, engine_path: /workspace/tensorrt/v48-12x128-fp16-b64.engine}
           - {kind: float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, engine_path: /workspace/tensorrt/v48-14x160-fp16-b64.engine}
