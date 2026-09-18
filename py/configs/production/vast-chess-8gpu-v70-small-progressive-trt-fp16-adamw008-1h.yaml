@@ -1,4 +1,4 @@
-extends: vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008.yaml
+extends: vast-chess-8gpu-v60-v34-arch-trt-fp16-transition-fixed.yaml
 
 run:
   run_name: vast-chess-8gpu-v70-small-progressive-trt-fp16-adamw008-1h
