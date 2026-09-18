@@ -1,0 +1,15 @@
+extends: ../production/vast-chess-8gpu-v69-v35-unfolded-int8-adamw008.yaml
+
+chess:
+  self_play:
+    search:
+      baseline_visits: 400
+    inference:
+      backend:
+        kind: tensorrt
+        bootstrap_with_torchscript: false
+        templates:
+        - kind: qat_float
+          model_id: chess-cnn-scaled-post-14x160-fromto-int8
+          phase: pre_fold
+          engine_path: /workspace/tensorrt/v48-14x160-prefold-fp16-b320.engine

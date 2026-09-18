@@ -1,0 +1,6 @@
+extends: ../production/vast-chess-8gpu-v69-v35-unfolded-int8-adamw008.yaml
+
+chess:
+  self_play:
+    search:
+      baseline_visits: 400
