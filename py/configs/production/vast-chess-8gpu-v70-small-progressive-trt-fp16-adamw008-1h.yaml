@@ -20,7 +20,7 @@ training:
   progressive_model_sizing:
     candidate_start:
       kind: elapsed
-      start_days: [0.041666666666666664]
+      start_days: [0.04]
   limits:
     maximum_wall_time_seconds: 3600
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v70-small-progressive-trt-fp16-adamw008-1h.stop
