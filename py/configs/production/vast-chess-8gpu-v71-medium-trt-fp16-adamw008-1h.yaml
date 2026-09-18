@@ -3,6 +3,8 @@ extends: vast-chess-8gpu-v70-small-progressive-trt-fp16-adamw008-1h.yaml
 run:
   run_name: vast-chess-8gpu-v71-medium-trt-fp16-adamw008-1h
   tensorboard_run_directory: vast-chess-8gpu-v71-medium-trt-fp16-adamw008-1h
+  resume:
+    mode: random_initialization
 
 training:
   save_path: py/training_data/production/vast-chess-8gpu-v71-medium-trt-fp16-adamw008-1h
