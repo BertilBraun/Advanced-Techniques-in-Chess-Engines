@@ -75,7 +75,7 @@ evaluation:
           - kind: qat
             model_id: chess-cnn-scaled-post-12x128-fromto-int8
             phase: pre_fold
-            engine_path: /workspace/tensorrt/v43-int8-12x128-prefold-eval64-template.engine
+            engine_path: /workspace/tensorrt/v75-int8-12x128-prefold-eval64-template.engine
         sdpa_backend: memory_efficient
   - kind: stockfish_adaptive_nodes
     definition_id: stockfish-policy-only
