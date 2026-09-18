@@ -1,0 +1,70 @@
+extends: vast-chess-8gpu-v70-small-progressive-trt-fp16-adamw008-1h.yaml
+
+run:
+  run_name: vast-chess-8gpu-v71-medium-trt-fp16-adamw008-1h
+  tensorboard_run_directory: vast-chess-8gpu-v71-medium-trt-fp16-adamw008-1h
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v71-medium-trt-fp16-adamw008-1h
+  progressive_model_sizing:
+    kind: fixed
+    model:
+      model_id: chess-cnn-14x160-fromto
+      network:
+        kind: convolutional
+        num_layers: 14
+        hidden_size: 160
+        residual_context:
+          kind: global_pooling
+          placement: every_second_block
+        policy_head:
+          kind: chess_from_to_attention_v1
+          key_size: 128
+        num_value_channels: 2
+        value_fc_size: 48
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v71-medium-trt-fp16-adamw008-1h.stop
+
+evaluation:
+  definitions:
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 0
+    final_generation: null
+    search: &v71_evaluation_search
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: false
+          templates:
+          - kind: float
+            model_id: chess-cnn-14x160-fromto
+            engine_path: /workspace/tensorrt/v71-v34-medium-fp16-b64.engine
+        sdpa_backend: memory_efficient
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-policy-only
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 0
+    final_generation: null
+    search:
+      <<: *v71_evaluation_search
+      searches_per_move: 1

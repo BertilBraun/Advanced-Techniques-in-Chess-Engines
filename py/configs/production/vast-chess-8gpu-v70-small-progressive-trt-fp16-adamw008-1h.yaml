@@ -1,0 +1,29 @@
+extends: vast-chess-8gpu-v51-v34-arch-trt-fp16-adamw008.yaml
+
+run:
+  run_name: vast-chess-8gpu-v70-small-progressive-trt-fp16-adamw008-1h
+  tensorboard_run_directory: vast-chess-8gpu-v70-small-progressive-trt-fp16-adamw008-1h
+  resume:
+    mode: random_initialization
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v70-small-progressive-trt-fp16-adamw008-1h
+  trainer:
+    learning_rate:
+      kind: staged
+      stages:
+      - {start_generation: 0, value: 0.008}
+      - {start_generation: 100, value: 0.006}
+      - {start_generation: 400, value: 0.004}
+      - {start_generation: 800, value: 0.003}
+      - {start_generation: 1200, value: 0.002}
+  progressive_model_sizing:
+    candidate_start:
+      kind: elapsed
+      start_days: [2.0]
+  limits:
+    maximum_wall_time_seconds: 3600
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v70-small-progressive-trt-fp16-adamw008-1h.stop
+
+evaluation:
+  cadence_seconds: 480
