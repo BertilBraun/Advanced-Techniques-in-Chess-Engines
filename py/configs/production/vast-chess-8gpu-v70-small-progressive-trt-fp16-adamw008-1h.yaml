@@ -9,6 +9,15 @@ run:
 training:
   save_path: py/training_data/production/vast-chess-8gpu-v70-small-progressive-trt-fp16-adamw008-1h
   trainer:
+    bootstrap_probe_positions: 516
+    bootstrap_policy_prior_target_top3_mass: 0.95
+    bootstrap_initialization:
+      candidate_count: 20
+      maximum_initial_top1_mass: 0.8
+      minimum_wdl_entropy_ratio: 0.8
+      maximum_absolute_expected_value: 0.25
+      minimum_policy_scale: 0.01
+      maximum_policy_scale: 100.0
     learning_rate:
       kind: staged
       stages:
