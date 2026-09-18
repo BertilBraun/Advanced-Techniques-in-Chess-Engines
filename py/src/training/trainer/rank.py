@@ -120,6 +120,15 @@ class _TrainingBatchResult:
     distributions: TrainingDistributionSnapshot | None
 
 
+def _fixed_qat_probe_position_count(
+    quantization_configuration: TensorRtInt8QatConfiguration,
+    bootstrap_probe_positions: int,
+) -> int:
+    if quantization_configuration.calibration_source is QatCalibrationSource.REPLAY:
+        return bootstrap_probe_positions
+    return quantization_configuration.calibration_positions
+
+
 def _requires_bootstrap_probe_states(
     initial_checkpoint_exists: bool,
     starting_generation: int,
@@ -202,11 +211,14 @@ def _initialize_rank(
                 model = selected.model
                 bootstrap_policy_prior = selected.record
                 optimizer = create_optimizer(model, configuration.training.trainer.optimizer)
-        case TensorRtInt8QatConfiguration(calibration_positions=calibration_positions):
+        case TensorRtInt8QatConfiguration():
             qat_calibration_states = load_dataset_probe_states(
                 resolve_project_path(configuration.evaluation.dataset.path),
                 game.state,
-                calibration_positions,
+                _fixed_qat_probe_position_count(
+                    quantization_configuration,
+                    configuration.training.trainer.bootstrap_probe_positions,
+                ),
             ).to(device=device, dtype=torch.float32)
             if initial_checkpoint_exists:
                 model, optimizer, qat_state = load_qat_model_and_optimizer(

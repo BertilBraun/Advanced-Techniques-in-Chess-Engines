@@ -24,6 +24,7 @@ from src.training.network import (
     ScaledPostActivationResidualBlockConfiguration,
 )
 from src.training.quantization.configuration import (
+    QatCalibrationSource,
     QatCheckpointPhase,
     QatFoldingMode,
     TensorRtInt8QatConfiguration,
@@ -51,6 +52,7 @@ from src.training.quantization.runtime import (  # noqa: E402
     save_qat_state,
     specialize_qat_onnx_batch,
 )
+from src.training.trainer.rank import _fixed_qat_probe_position_count  # noqa: E402
 
 
 @pytest.mark.parametrize(
@@ -72,6 +74,25 @@ def test_fixed_batch_example_states_repeats_to_exact_deployment_batch() -> None:
     assert result.shape == (5, 2, 2, 2)
     assert torch.equal(result[:3], states)
     assert torch.equal(result[3:], states[:2])
+
+
+@pytest.mark.parametrize(
+    ('calibration_source', 'expected_positions'),
+    (
+        (QatCalibrationSource.EVALUATION_DATASET, 10_000),
+        (QatCalibrationSource.REPLAY, 516),
+    ),
+)
+def test_fixed_qat_probe_positions_are_independent_from_replay_calibration_size(
+    calibration_source: QatCalibrationSource,
+    expected_positions: int,
+) -> None:
+    configuration = TensorRtInt8QatConfiguration(
+        calibration_positions=10_000,
+        calibration_source=calibration_source,
+    )
+
+    assert _fixed_qat_probe_position_count(configuration, 516) == expected_positions
 
 
 def _fixed_batch_qat_onnx(path: Path, batch_size: int) -> None:
