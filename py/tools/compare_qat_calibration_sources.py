@@ -139,7 +139,9 @@ def _load_replay_samples(
         calibration_columns = store.gather_logical(calibration_indices)
     finally:
         store.close()
-    fidelity_states = torch.from_numpy(decode_states(fidelity_columns.encoded_state, CHESS_STATE_CONTRACT).astype(np.int8))
+    fidelity_states = torch.from_numpy(
+        decode_states(fidelity_columns.encoded_state, CHESS_STATE_CONTRACT).astype(np.int8)
+    )
     calibration_states = torch.from_numpy(
         decode_states(calibration_columns.encoded_state, CHESS_STATE_CONTRACT).astype(np.int8)
     )
