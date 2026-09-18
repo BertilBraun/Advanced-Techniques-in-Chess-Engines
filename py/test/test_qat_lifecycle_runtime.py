@@ -90,6 +90,8 @@ def test_fixed_qat_probe_positions_are_independent_from_replay_calibration_size(
     configuration = TensorRtInt8QatConfiguration(
         calibration_positions=10_000,
         calibration_source=calibration_source,
+        deployment_learning_rate='inherit',
+        deployment_warmup_optimizer_steps=0,
     )
 
     assert _fixed_qat_probe_position_count(configuration, 516) == expected_positions
