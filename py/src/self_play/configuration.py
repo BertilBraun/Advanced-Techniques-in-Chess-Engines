@@ -81,6 +81,7 @@ class TensorRtInferenceBackend(FrozenModel):
     kind: Literal['tensorrt'] = 'tensorrt'
     templates: tuple[TensorRtTemplate, ...] = Field(min_length=1)
     bootstrap_with_torchscript: bool = False
+    allow_fidelity_deviation: bool = False
 
     @model_validator(mode='after')
     def validate_templates(self) -> TensorRtInferenceBackend:

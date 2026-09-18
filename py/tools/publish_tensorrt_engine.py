@@ -51,6 +51,7 @@ class TensorRtVerification:
     policy_maximum_kl_divergence: float
     wdl_mean_absolute_error: float
     wdl_maximum_absolute_error: float
+    fidelity_limits_passed: bool
 
 
 def onnx_graph_signature(path: Path) -> str:
@@ -217,7 +218,12 @@ def _policy_distribution_agreement(reference: np.ndarray, candidate: np.ndarray)
     return float(top1_agreement), float(divergences.mean()), float(divergences.max())
 
 
-def verify_engine(onnx_path: Path, engine_path: Path, input_shape: tuple[int, int, int, int]) -> TensorRtVerification:
+def verify_engine(
+    onnx_path: Path,
+    engine_path: Path,
+    input_shape: tuple[int, int, int, int],
+    allow_fidelity_deviation: bool,
+) -> TensorRtVerification:
     batch_size = input_shape[0]
     generator = np.random.default_rng(0)
     states = generator.integers(0, 2, size=(batch_size, *input_shape[1:]), dtype=np.int8)
@@ -251,13 +257,14 @@ def verify_engine(onnx_path: Path, engine_path: Path, input_shape: tuple[int, in
         onnx_policy, tensor_rt_policy
     )
     wdl_mean_error, wdl_maximum_error = _output_errors(onnx_wdl, tensor_rt_wdl)
-    if (
+    fidelity_limits_passed = not (
         policy_top1_agreement < MINIMUM_POLICY_TOP1_AGREEMENT
         or policy_mean_kl_divergence > MAXIMUM_POLICY_MEAN_KL_DIVERGENCE
         or policy_maximum_kl_divergence > MAXIMUM_POLICY_MAXIMUM_KL_DIVERGENCE
         or wdl_mean_error > MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR
         or wdl_maximum_error > MAXIMUM_WDL_ABSOLUTE_ERROR
-    ):
+    )
+    if not fidelity_limits_passed and not allow_fidelity_deviation:
         raise ValueError(
             'TensorRT verification failed: '
             f'policy mean/max={policy_mean_error:.6f}/{policy_maximum_error:.6f}, '
@@ -274,6 +281,7 @@ def verify_engine(onnx_path: Path, engine_path: Path, input_shape: tuple[int, in
         policy_maximum_kl_divergence=policy_maximum_kl_divergence,
         wdl_mean_absolute_error=wdl_mean_error,
         wdl_maximum_absolute_error=wdl_maximum_error,
+        fidelity_limits_passed=fidelity_limits_passed,
     )
 
 
@@ -318,7 +326,11 @@ def _build_automatic_template(
     return template_path
 
 
-def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str | int | float | bool]:
+def publish(
+    model_path: Path,
+    template_paths: tuple[Path, ...],
+    allow_fidelity_deviation: bool,
+) -> dict[str, str | int | float | bool]:
     if not template_paths:
         raise ValueError('At least one TensorRT template is required.')
     model_path = model_path.resolve()
@@ -359,6 +371,7 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
                     and metadata.get('template_sha256') == template_sha256
                     and metadata.get('engine_sha256') == file_sha256(engine_path)
                     and metadata.get('verification_batch_size') == input_shape[0]
+                    and (allow_fidelity_deviation or metadata.get('fidelity_limits_passed', True))
                 ):
                     return {
                         **metadata,
@@ -369,7 +382,7 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
             refit_started_at = time.perf_counter()
             refit_engine(selected_template_path, onnx_path, engine_path)
             refit_seconds = time.perf_counter() - refit_started_at
-            verification = verify_engine(onnx_path, engine_path, input_shape)
+            verification = verify_engine(onnx_path, engine_path, input_shape, allow_fidelity_deviation)
             metadata = {
                 'engine_path': str(engine_path),
                 'engine_sha256': file_sha256(engine_path),
@@ -387,6 +400,7 @@ def publish(model_path: Path, template_paths: tuple[Path, ...]) -> dict[str, str
                 'policy_maximum_kl_divergence': verification.policy_maximum_kl_divergence,
                 'wdl_mean_absolute_error': verification.wdl_mean_absolute_error,
                 'wdl_maximum_absolute_error': verification.wdl_maximum_absolute_error,
+                'fidelity_limits_passed': verification.fidelity_limits_passed,
                 'cached': False,
             }
             write_text_atomically(metadata_path, json.dumps(metadata, indent=2, sort_keys=True) + '\n')
@@ -400,8 +414,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Atomically refit a TensorRT template for one checkpoint.')
     parser.add_argument('--model', type=Path, required=True)
     parser.add_argument('--template-engine', type=Path, required=True, action='append')
+    parser.add_argument('--allow-fidelity-deviation', action='store_true')
     arguments = parser.parse_args()
-    print(json.dumps(publish(arguments.model, tuple(arguments.template_engine)), sort_keys=True))
+    print(
+        json.dumps(
+            publish(
+                arguments.model,
+                tuple(arguments.template_engine),
+                arguments.allow_fidelity_deviation,
+            ),
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == '__main__':

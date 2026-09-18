@@ -1,0 +1,85 @@
+extends: vast-chess-8gpu-progressive-v48-three-stage-adamw-int8.yaml
+
+run:
+  run_name: vast-chess-8gpu-v77-v35-progressive-prefold-int8-adamw008
+  tensorboard_run_directory: vast-chess-8gpu-v77-v35-progressive-prefold-int8-adamw008
+  resume:
+    mode: random_initialization
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v77-v35-progressive-prefold-int8-adamw008
+  trainer:
+    quantization:
+      kind: tensorrt_int8_qat
+      fold_after_optimizer_steps: 1000000
+      calibration_positions: 516
+      recalibration_interval_generations: 1
+      int8_self_play_start_generation: 1
+      deployment_learning_rate: inherit
+      deployment_warmup_optimizer_steps: 500
+      deployment_warmup_start_learning_rate: 0.001
+      folding_mode: deployment_copy
+  limits:
+    maximum_cost: null
+    maximum_wall_time_seconds: null
+    minimum_free_disk_gib: 5.0
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v77-v35-progressive-prefold-int8-adamw008.stop
+
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: tensorrt
+        bootstrap_with_torchscript: true
+        allow_fidelity_deviation: true
+        templates:
+        - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v43-int8-12x128-prefold-stable-c0c1f585.engine}
+        - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v35-int8-14x160-prefold-production-template.engine}
+        - {kind: qat, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b320.engine}
+
+evaluation:
+  cadence_seconds: 1200
+  maximum_concurrent_jobs: 1
+  definitions:
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    search: &v77_evaluation_search
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+          templates:
+          - {kind: qat, model_id: chess-cnn-scaled-post-12x128-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v75-int8-12x128-prefold-eval64-template.engine}
+          - {kind: qat, model_id: chess-cnn-scaled-post-14x160-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v35-int8-14x160-prefold-eval-template.engine}
+          - {kind: qat, model_id: chess-cnn-scaled-post-19x176-fromto-int8, phase: pre_fold, engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b64.engine}
+        sdpa_backend: memory_efficient
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-policy-only
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    search:
+      <<: *v77_evaluation_search
+      searches_per_move: 1

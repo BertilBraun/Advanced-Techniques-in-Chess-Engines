@@ -103,16 +103,19 @@ def resolved_inference_model_path(
                 qat_phase,
             )
             publisher = Path(__file__).parents[2] / 'tools' / 'publish_tensorrt_engine.py'
+            command = (
+                sys.executable,
+                '-m',
+                'tools.publish_tensorrt_engine',
+                '--model',
+                str(model_path.resolve()),
+                '--template-engine',
+                str(template_engine_path),
+            )
+            if tensor_rt_backend.allow_fidelity_deviation:
+                command += ('--allow-fidelity-deviation',)
             completed = subprocess.run(
-                (
-                    sys.executable,
-                    '-m',
-                    'tools.publish_tensorrt_engine',
-                    '--model',
-                    str(model_path.resolve()),
-                    '--template-engine',
-                    str(template_engine_path),
-                ),
+                command,
                 check=True,
                 capture_output=True,
                 text=True,
@@ -123,6 +126,15 @@ def resolved_inference_model_path(
                 f'Published TensorRT inference artifact for {model_path.name} in '
                 f'{time.perf_counter() - started_at:.3f}s.'
             )
+            if not payload.get('fidelity_limits_passed', True):
+                log(
+                    f'TensorRT fidelity warning for {model_path.name}: '
+                    f'policy top1/KL mean/max={payload["policy_top1_agreement"]:.6f}/'
+                    f'{payload["policy_mean_kl_divergence"]:.6f}/'
+                    f'{payload["policy_maximum_kl_divergence"]:.6f}, '
+                    f'WDL mean/max={payload["wdl_mean_absolute_error"]:.6f}/'
+                    f'{payload["wdl_maximum_absolute_error"]:.6f}.'
+                )
             return Path(payload['engine_path'])
 
 

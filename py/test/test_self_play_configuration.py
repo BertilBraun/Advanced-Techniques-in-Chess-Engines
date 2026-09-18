@@ -151,8 +151,19 @@ def test_tensorrt_template_selection_is_model_and_qat_phase_specific() -> None:
         == 'medium-deployment.engine'
     )
     assert backend.model_dump(mode='json')['templates'][0]['engine_path'] == 'small-float.engine'
+    assert backend.model_dump(mode='json')['allow_fidelity_deviation'] is False
     with pytest.raises(ValueError, match='medium.*pre_fold'):
         backend.template_engine_path('medium', TensorRtTemplatePrecision.INT8, QatCheckpointPhase.PRE_FOLD)
+
+
+def test_tensorrt_fidelity_deviation_can_be_nonfatal() -> None:
+    backend = TensorRtInferenceBackend(
+        templates=(TensorRtFloatTemplate(model_id='small', engine_path='small-float.engine'),),
+        allow_fidelity_deviation=True,
+    )
+
+    assert backend.allow_fidelity_deviation
+    assert backend.model_dump(mode='json')['allow_fidelity_deviation'] is True
 
 
 def test_tensorrt_template_identities_must_be_unique() -> None:
