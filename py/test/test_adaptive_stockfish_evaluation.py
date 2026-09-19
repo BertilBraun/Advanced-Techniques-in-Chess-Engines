@@ -22,6 +22,7 @@ from src.evaluation.contracts import (
 )
 from src.evaluation.manager import EvaluationManager, EvaluationManagerState
 from src.evaluation.process import write_evaluation_result
+from src.evaluation.scheduling import AdaptiveStockfishRungState, adaptive_bracket_nodes
 from src.experiment.configuration import load_experiment_configuration
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.training.checkpoint import CheckpointReference
@@ -365,3 +366,63 @@ def test_adaptive_stockfish_logs_selected_and_next_nodes_per_mode(
     assert named[('evaluation_metadata/stockfish-policy-only/next_stockfish_nodes', 20)] == 30
     assert ('evaluation/ladder_elo_64', 20) in named
     assert ('evaluation/ladder_elo_1', 20) in named
+
+
+def _bracket_definition(
+    bracket_rungs: int, initial_nodes: int, ladder: tuple[int, ...]
+) -> StockfishAdaptiveNodesEvaluationDefinition:
+    experiment = load_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v33.yaml'
+    )
+    definition = next(
+        item
+        for item in experiment.evaluation.definitions
+        if isinstance(item, StockfishAdaptiveNodesEvaluationDefinition)
+    )
+    return definition.model_copy(
+        update={'node_ladder': ladder, 'initial_nodes': initial_nodes, 'bracket_rungs': bracket_rungs}
+    )
+
+
+def _rung_state(definition_id: str, selected_nodes: int) -> AdaptiveStockfishRungState:
+    return AdaptiveStockfishRungState(
+        definition_id=definition_id,
+        selected_nodes=selected_nodes,
+        last_completed_boundary_seconds=None,
+    )
+
+
+@pytest.mark.parametrize(
+    ('bracket_rungs', 'selected_nodes', 'expected'),
+    [
+        (1, 1000, (1000,)),
+        (3, 1000, (300, 1000, 2000)),
+        (3, 30, (30, 100, 300)),
+        (3, 10000, (3000, 5000, 10000)),
+        (5, 1000, (100, 300, 1000, 2000, 3000)),
+    ],
+)
+def test_adaptive_bracket_straddles_the_selected_rung_and_clamps_at_the_ladder_ends(
+    bracket_rungs: int,
+    selected_nodes: int,
+    expected: tuple[int, ...],
+) -> None:
+    ladder = (30, 100, 300, 1000, 2000, 3000, 5000, 10000)
+    definition = _bracket_definition(bracket_rungs, selected_nodes, ladder)
+    rungs = (_rung_state(definition.definition_id, selected_nodes),)
+    assert adaptive_bracket_nodes(definition, rungs) == expected
+
+
+def test_a_bracket_wider_than_the_ladder_is_rejected() -> None:
+    experiment = load_experiment_configuration(
+        REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-integrated-v33.yaml'
+    )
+    definition = next(
+        item
+        for item in experiment.evaluation.definitions
+        if isinstance(item, StockfishAdaptiveNodesEvaluationDefinition)
+    )
+    with pytest.raises(ValueError, match='bracket cannot span more rungs'):
+        StockfishAdaptiveNodesEvaluationDefinition.model_validate(
+            definition.model_dump() | {'node_ladder': (30, 100), 'initial_nodes': 30, 'bracket_rungs': 3}
+        )

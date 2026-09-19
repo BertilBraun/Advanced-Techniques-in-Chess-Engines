@@ -217,6 +217,9 @@ class StockfishAdaptiveNodesEvaluationDefinition(PairedMatchEvaluationDefinition
     initial_nodes: int = Field(gt=0)
     retreat_score_threshold: float = Field(ge=0.0, le=1.0)
     advance_score_threshold: float = Field(ge=0.0, le=1.0)
+    # A single rung makes the ladder fit extrapolate from one point onto one anchor, so the reported
+    # Elo steps whenever the rung moves. A bracket spanning several rungs constrains the fit instead.
+    bracket_rungs: int = Field(default=1, ge=1)
     engine_executable_path: str | None = None
     search: EvaluationSearchConfiguration
 
@@ -228,6 +231,8 @@ class StockfishAdaptiveNodesEvaluationDefinition(PairedMatchEvaluationDefinition
             raise ValueError('Adaptive Stockfish initial nodes must be a configured ladder rung.')
         if not self.retreat_score_threshold < 0.5 < self.advance_score_threshold:
             raise ValueError('Adaptive Stockfish thresholds must define a deadband around an even score.')
+        if self.bracket_rungs > len(self.node_ladder):
+            raise ValueError('Adaptive Stockfish bracket cannot span more rungs than the ladder has.')
         return self
 
 

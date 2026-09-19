@@ -355,6 +355,10 @@ class EvaluationManager:
         current = next(
             rung for rung in self._state.adaptive_stockfish_rungs if rung.definition_id == definition.definition_id
         )
+        # A bracket reports every rung at the same boundary; only the centre rung the controller
+        # actually selected may move it, or the off-centre scores would advance or retreat it too.
+        if result.job.opponent.nodes != current.selected_nodes:
+            return
         if (
             current.last_completed_boundary_seconds is not None
             and result.job.boundary_seconds <= current.last_completed_boundary_seconds

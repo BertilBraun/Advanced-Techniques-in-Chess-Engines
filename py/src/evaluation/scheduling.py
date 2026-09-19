@@ -132,6 +132,18 @@ def _match_job(
     )
 
 
+def adaptive_bracket_nodes(
+    definition: StockfishAdaptiveNodesEvaluationDefinition,
+    adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...],
+) -> tuple[int, ...]:
+    rung = next(rung for rung in adaptive_stockfish_rungs if rung.definition_id == definition.definition_id)
+    ladder = definition.node_ladder
+    centre = ladder.index(rung.selected_nodes)
+    width = min(definition.bracket_rungs, len(ladder))
+    start = min(max(centre - (width - 1) // 2, 0), len(ladder) - width)
+    return ladder[start : start + width]
+
+
 def _job_for_definition(
     definition: EvaluationDefinition,
     configuration: EvaluationConfiguration,
@@ -139,6 +151,7 @@ def _job_for_definition(
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...],
     context: _EvaluationJobContext,
     adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...],
+    adaptive_nodes: int | None,
 ) -> EvaluationJob | None:
     match definition:
         case FixedDatasetEvaluationDefinition():
@@ -195,12 +208,12 @@ def _job_for_definition(
                 context,
             )
         case StockfishAdaptiveNodesEvaluationDefinition(engine_executable_path=engine_executable_path):
-            rung = next(rung for rung in adaptive_stockfish_rungs if rung.definition_id == definition.definition_id)
+            assert adaptive_nodes is not None
             return _match_job(
                 definition,
                 StockfishFixedNodesOpponent(
                     kind='stockfish_fixed_nodes',
-                    nodes=rung.selected_nodes,
+                    nodes=adaptive_nodes,
                     engine_executable_path=engine_executable_path,
                 ),
                 context,
@@ -231,33 +244,41 @@ def jobs_for_suite(
             suite.checkpoint.generation
         ):
             continue
-        device_id = device_cycle[device_index % len(device_cycle)]
-        job_id = f'{suite.boundary_seconds:010d}-{definition.definition_id}-g{suite.checkpoint.generation}'
-        context = _EvaluationJobContext(
-            job_id=job_id,
-            boundary_seconds=suite.boundary_seconds,
-            candidate=suite.checkpoint,
-            device_id=device_id,
-            deadline_seconds=configuration.job_timeout_seconds,
-            random_seed=_job_seed(
-                experiment.training.random_seed,
-                suite.boundary_seconds,
-                definition.definition_id,
-            ),
-            result_path=result_directory / f'{job_id}.json',
-        )
-        job = _job_for_definition(
-            definition,
-            configuration,
-            suite,
-            scheduled_suites,
-            context,
-            adaptive_stockfish_rungs,
-        )
-        if job is None:
-            continue
-        jobs.append(job)
-        device_index += 1
+        bracket: tuple[int | None, ...] = (None,)
+        if isinstance(definition, StockfishAdaptiveNodesEvaluationDefinition):
+            bracket = adaptive_bracket_nodes(definition, adaptive_stockfish_rungs)
+        for adaptive_nodes in bracket:
+            device_id = device_cycle[device_index % len(device_cycle)]
+            # Every rung of a bracket reports separately, so the job identity carries the rung. A
+            # single-rung bracket keeps the unsuffixed identity so existing runs resume unchanged.
+            suffix = '' if adaptive_nodes is None or len(bracket) == 1 else f'-n{adaptive_nodes}'
+            job_id = f'{suite.boundary_seconds:010d}-{definition.definition_id}-g{suite.checkpoint.generation}{suffix}'
+            context = _EvaluationJobContext(
+                job_id=job_id,
+                boundary_seconds=suite.boundary_seconds,
+                candidate=suite.checkpoint,
+                device_id=device_id,
+                deadline_seconds=configuration.job_timeout_seconds,
+                random_seed=_job_seed(
+                    experiment.training.random_seed,
+                    suite.boundary_seconds,
+                    f'{definition.definition_id}{suffix}',
+                ),
+                result_path=result_directory / f'{job_id}.json',
+            )
+            job = _job_for_definition(
+                definition,
+                configuration,
+                suite,
+                scheduled_suites,
+                context,
+                adaptive_stockfish_rungs,
+                adaptive_nodes,
+            )
+            if job is None:
+                continue
+            jobs.append(job)
+            device_index += 1
     return tuple(jobs), device_index
 
 
