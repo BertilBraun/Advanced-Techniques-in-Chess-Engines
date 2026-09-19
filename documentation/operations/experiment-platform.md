@@ -33,6 +33,12 @@ replay-ratio-8, and constant-LR-0.007 runs complete the authored twelve-run camp
 
 ## Training and evaluation lifecycle
 
+New adaptive Stockfish evaluation configurations use `bracket_rungs: 3` on every adaptive definition and
+`maximum_concurrent_jobs: 16`. This preserves the selected-rung legacy series while also fitting the bracketed
+ladder series. Historical experiment files remain unchanged: enabling the bracket explicitly changes the resolved
+configuration hash and therefore requires a fresh revision-bound approval. Compare legacy ladder Elo only at a
+matched selected rung; otherwise compare raw score at the same rung or use the bracketed ladder series.
+
 The model schedule is documented in [Progressive model sizing](../architecture/progressive-model-sizing.md). Every
 experiment declares a non-empty tuple of complete model definitions; one definition uses ordinary fixed-model
 training, while multiple definitions enable progressive sizing. Progressive sizing obeys the configured self-play
