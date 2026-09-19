@@ -510,10 +510,11 @@ def measure_bootstrap_candidate(
     outcome_count = wdl_probabilities.shape[1]
     if outcome_count != 3:
         raise ValueError(f'Bootstrap candidate selection requires three WDL outcomes, found {outcome_count}.')
+    mean_wdl_entropy_ratio = float(entropy.mean() / math.log(outcome_count))
     return BootstrapCandidateMeasurement(
         policy_shape=_policy_prior_shape(subset_logits),
         required_policy_scale=_search_policy_prior_scale(subset_logits, target_top3_mass),
-        mean_wdl_entropy_ratio=float(entropy.mean() / math.log(outcome_count)),
+        mean_wdl_entropy_ratio=min(1.0, max(0.0, mean_wdl_entropy_ratio)),
         mean_absolute_expected_value=float((wdl_probabilities[:, 0] - wdl_probabilities[:, 2]).abs().mean()),
     )
 

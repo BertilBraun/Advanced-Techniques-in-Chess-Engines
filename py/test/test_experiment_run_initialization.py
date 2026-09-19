@@ -128,4 +128,5 @@ def test_checkpoint_zero_selects_a_deterministic_candidate_and_records_its_ident
     assert first_record.selected_candidate_index == expected_index
     assert first_record.selected_candidate_seed == 101 + first_record.selected_candidate_index
     assert first_record.mean_wdl_entropy_ratio is not None
+    assert 0.0 <= first_record.mean_wdl_entropy_ratio <= 1.0
     assert first_record.mean_absolute_expected_value is not None
