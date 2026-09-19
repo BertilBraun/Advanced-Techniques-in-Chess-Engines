@@ -1,0 +1,41 @@
+extends: vast-chess-8gpu-v87-v35-progressive-int8-sgd-reuse4-ladder.yaml
+
+run:
+  run_name: vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
+  tensorboard_run_directory: vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
+  resume:
+    mode: random_initialization
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
+  lifecycle:
+    replay:
+      # Reuse 4 consumes fresh games faster than reuse 8, so the buffer spans less history at the
+      # same capacity. Scaled by a third to keep comparable sampling error per optimizer step.
+      capacity:
+        kind: staged
+        stages:
+        - {start_generation: 0, value: 600000}
+        - {start_generation: 5, value: 1200000}
+        - {start_generation: 10, value: 2000000}
+        - {start_generation: 20, value: 2800000}
+        - {start_generation: 40, value: 4000000}
+        - {start_generation: 70, value: 6000000}
+        - {start_generation: 100, value: 8000000}
+        - {start_generation: 400, value: 12000000}
+        - {start_generation: 700, value: 16000000}
+        - {start_generation: 1000, value: 20000000}
+      maximum_capacity: 20000000
+  progressive_model_sizing:
+    candidate_start:
+      kind: staged_elo_plateau
+      stages:
+      - candidate_model_id: chess-cnn-scaled-post-14x160-fromto-int8
+        minimum_worthwhile_gain_per_hour: 12.0
+      - candidate_model_id: chess-cnn-scaled-post-19x176-fromto-int8
+        minimum_worthwhile_gain_per_hour: 3.0
+  limits:
+    maximum_cost: null
+    maximum_wall_time_seconds: null
+    minimum_free_disk_gib: 5.0
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau.stop
