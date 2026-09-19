@@ -132,6 +132,19 @@ def _match_job(
     )
 
 
+def ladder_job_id(
+    boundary_seconds: int,
+    definition_id: str,
+    generation: int,
+    adaptive_nodes: int | None = None,
+    bracket_width: int = 1,
+) -> str:
+    # A single-rung bracket keeps the unsuffixed identity so runs in flight resume unchanged. The
+    # scheduler and the ladder reader must agree on this, so both go through here.
+    suffix = '' if adaptive_nodes is None or bracket_width == 1 else f'-n{adaptive_nodes}'
+    return f'{boundary_seconds:010d}-{definition_id}-g{generation}{suffix}'
+
+
 def adaptive_bracket_nodes(
     definition: StockfishAdaptiveNodesEvaluationDefinition,
     adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...],
@@ -249,10 +262,13 @@ def jobs_for_suite(
             bracket = adaptive_bracket_nodes(definition, adaptive_stockfish_rungs)
         for adaptive_nodes in bracket:
             device_id = device_cycle[device_index % len(device_cycle)]
-            # Every rung of a bracket reports separately, so the job identity carries the rung. A
-            # single-rung bracket keeps the unsuffixed identity so existing runs resume unchanged.
-            suffix = '' if adaptive_nodes is None or len(bracket) == 1 else f'-n{adaptive_nodes}'
-            job_id = f'{suite.boundary_seconds:010d}-{definition.definition_id}-g{suite.checkpoint.generation}{suffix}'
+            job_id = ladder_job_id(
+                suite.boundary_seconds,
+                definition.definition_id,
+                suite.checkpoint.generation,
+                adaptive_nodes,
+                len(bracket),
+            )
             context = _EvaluationJobContext(
                 job_id=job_id,
                 boundary_seconds=suite.boundary_seconds,
@@ -262,7 +278,7 @@ def jobs_for_suite(
                 random_seed=_job_seed(
                     experiment.training.random_seed,
                     suite.boundary_seconds,
-                    f'{definition.definition_id}{suffix}',
+                    job_id,
                 ),
                 result_path=result_directory / f'{job_id}.json',
             )

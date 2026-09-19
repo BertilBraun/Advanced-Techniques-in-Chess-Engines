@@ -39,8 +39,10 @@ from src.evaluation.scheduling import (
     AdaptiveStockfishRungState,
     CheckpointPublication,
     ScheduledEvaluationSuite,
+    adaptive_bracket_nodes,
     checkpoint_at,
     jobs_for_suite,
+    ladder_job_id,
     required_checkpoint_generations,
 )
 from src.evaluation.tensorboard import evaluation_tensorboard_categories
@@ -52,6 +54,15 @@ from src.util.log import log
 from src.util.tensorboard import log_custom_scalar_layout, log_scalar, log_text
 
 
+class ScheduledLadderRung(FrozenModel):
+    # The rung the adaptive controller had selected when a boundary was scheduled. The controller
+    # advances as soon as a result lands, which is before the ladder is published, so the played
+    # bracket cannot be re-derived from live state afterwards.
+    boundary_seconds: int = Field(ge=0)
+    definition_id: str = Field(min_length=1)
+    selected_nodes: int = Field(gt=0)
+
+
 class EvaluationManagerState(FrozenModel):
     schema_version: Literal[3] = 3
     accumulated_elapsed_seconds: float = Field(ge=0.0)
@@ -60,6 +71,7 @@ class EvaluationManagerState(FrozenModel):
     scheduled_suites: tuple[ScheduledEvaluationSuite, ...]
     pending_jobs: tuple[EvaluationJob, ...]
     adaptive_stockfish_rungs: tuple[AdaptiveStockfishRungState, ...]
+    scheduled_ladder_rungs: tuple[ScheduledLadderRung, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -67,6 +79,9 @@ class _LadderEloFit:
     searches_per_move: int
     elo: float
     rung_count: int
+    # The selected rung alone, fitted the way a one-rung ladder did before bracketing, so a bracketed
+    # run stays comparable with the recorded single-rung history.
+    single_rung_elo: float | None
 
 
 def _initial_adaptive_stockfish_rungs(
@@ -217,11 +232,20 @@ class EvaluationManager:
                 self._state.next_device_index,
                 self._state.adaptive_stockfish_rungs,
             )
+            scheduled_rungs = tuple(
+                ScheduledLadderRung(
+                    boundary_seconds=boundary_seconds,
+                    definition_id=rung.definition_id,
+                    selected_nodes=rung.selected_nodes,
+                )
+                for rung in self._state.adaptive_stockfish_rungs
+            )
             self._state = self._state.model_copy(
                 update={
                     'next_device_index': next_device_index,
                     'scheduled_suites': (*self._state.scheduled_suites, suite),
                     'pending_jobs': (*self._state.pending_jobs, *jobs),
+                    'scheduled_ladder_rungs': (*self._state.scheduled_ladder_rungs, *scheduled_rungs),
                 }
             )
             self._save_state()
@@ -575,9 +599,21 @@ class EvaluationManager:
             log_scalar(f'evaluation/ladder_elo_{fit.searches_per_move}', fit.elo, boundary_seconds)
             if fit.searches_per_move == primary_search_budget:
                 log_scalar('evaluation/ladder_elo', fit.elo, boundary_seconds)
+            # The selected rung on its own, published alongside the bracketed fit so a bracketed run
+            # can still be read against the recorded single-rung history, which carries the anchor
+            # step at every rung change.
+            if fit.single_rung_elo is not None:
+                log_scalar(
+                    f'evaluation/ladder_elo_single_rung_{fit.searches_per_move}',
+                    fit.single_rung_elo,
+                    boundary_seconds,
+                )
+                if fit.searches_per_move == primary_search_budget:
+                    log_scalar('evaluation/ladder_elo_single_rung', fit.single_rung_elo, boundary_seconds)
+            single_rung = '' if fit.single_rung_elo is None else f', selected rung {fit.single_rung_elo:.0f}'
             log(
                 f'Evaluation ladder Elo at {boundary_seconds}s: {fit.elo:.0f} '
-                f'over {fit.rung_count} rungs at {fit.searches_per_move} searches'
+                f'over {fit.rung_count} rungs at {fit.searches_per_move} searches{single_rung}'
             )
 
     def _ladder_elos_at(self, boundary_seconds: int) -> tuple[_LadderEloFit, ...] | None:
@@ -586,6 +622,7 @@ class EvaluationManager:
         # into a single fit reads as weakness rather than as two different things being measured.
         suite = next(suite for suite in self._state.scheduled_suites if suite.boundary_seconds == boundary_seconds)
         by_budget: dict[int, list[LadderRungObservation]] = {}
+        selected_by_budget: dict[int, list[LadderRungObservation]] = {}
         for definition in self.configuration.definitions:
             if not isinstance(
                 definition,
@@ -594,31 +631,71 @@ class EvaluationManager:
                 continue
             if not definition.is_active_at(suite.checkpoint.generation):
                 continue
-            job_id = f'{boundary_seconds:010d}-{definition.definition_id}-g{suite.checkpoint.generation}'
-            result_path = self.result_directory / f'{job_id}.json'
-            if not result_path.is_file():
-                # A rung outside its generation window never reports, so waiting on it would suppress
-                # the ladder for the whole run; only an active rung that has yet to finish should wait.
-                return
-            result = TypeAdapter(EvaluationResult).validate_json(result_path.read_text(encoding='utf-8'))
-            if not isinstance(result, MatchEvaluationResult) or not isinstance(
-                result.job.opponent, StockfishFixedNodesOpponent
-            ):
-                continue
-            anchor_elo = STOCKFISH_FIXED_NODES_ANCHOR_ELO.get(result.job.opponent.nodes)
-            if anchor_elo is None:
-                continue
-            observation = ladder_rung_observation(anchor_elo, result.games)
-            if observation is None:
-                continue
-            by_budget.setdefault(definition.search.searches_per_move, []).append(observation)
+            bracket: tuple[int | None, ...] = (None,)
+            selected_nodes: int | None = None
+            if isinstance(definition, StockfishAdaptiveNodesEvaluationDefinition):
+                selected_nodes = self._scheduled_ladder_nodes(boundary_seconds, definition.definition_id)
+                if selected_nodes is None:
+                    continue
+                bracket = adaptive_bracket_nodes(
+                    definition,
+                    (
+                        AdaptiveStockfishRungState(
+                            definition_id=definition.definition_id,
+                            selected_nodes=selected_nodes,
+                            last_completed_boundary_seconds=None,
+                        ),
+                    ),
+                )
+            for adaptive_nodes in bracket:
+                job_id = ladder_job_id(
+                    boundary_seconds,
+                    definition.definition_id,
+                    suite.checkpoint.generation,
+                    adaptive_nodes,
+                    len(bracket),
+                )
+                result_path = self.result_directory / f'{job_id}.json'
+                if not result_path.is_file():
+                    # A rung outside its generation window never reports, so waiting on it would
+                    # suppress the ladder for the whole run; only an active rung that has yet to
+                    # finish should wait.
+                    return
+                result = TypeAdapter(EvaluationResult).validate_json(result_path.read_text(encoding='utf-8'))
+                if not isinstance(result, MatchEvaluationResult) or not isinstance(
+                    result.job.opponent, StockfishFixedNodesOpponent
+                ):
+                    continue
+                anchor_elo = STOCKFISH_FIXED_NODES_ANCHOR_ELO.get(result.job.opponent.nodes)
+                if anchor_elo is None:
+                    continue
+                observation = ladder_rung_observation(anchor_elo, result.games)
+                if observation is None:
+                    continue
+                budget = definition.search.searches_per_move
+                by_budget.setdefault(budget, []).append(observation)
+                if selected_nodes is None or result.job.opponent.nodes == selected_nodes:
+                    selected_by_budget.setdefault(budget, []).append(observation)
         return tuple(
             _LadderEloFit(
                 searches_per_move=budget,
                 elo=fit_ladder_elo(tuple(observations)),
                 rung_count=len(observations),
+                single_rung_elo=(
+                    fit_ladder_elo(tuple(selected_by_budget[budget])) if selected_by_budget.get(budget) else None
+                ),
             )
             for budget, observations in sorted(by_budget.items())
+        )
+
+    def _scheduled_ladder_nodes(self, boundary_seconds: int, definition_id: str) -> int | None:
+        return next(
+            (
+                rung.selected_nodes
+                for rung in self._state.scheduled_ladder_rungs
+                if rung.boundary_seconds == boundary_seconds and rung.definition_id == definition_id
+            ),
+            None,
         )
 
     def _primary_ladder_search_budget(self, suite: ScheduledEvaluationSuite) -> int | None:

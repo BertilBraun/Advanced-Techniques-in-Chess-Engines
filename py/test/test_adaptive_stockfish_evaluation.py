@@ -366,6 +366,10 @@ def test_adaptive_stockfish_logs_selected_and_next_nodes_per_mode(
     assert named[('evaluation_metadata/stockfish-policy-only/next_stockfish_nodes', 20)] == 30
     assert ('evaluation/ladder_elo_64', 20) in named
     assert ('evaluation/ladder_elo_1', 20) in named
+    # An unbracketed ladder fits the selected rung alone, so both tracks must carry the same value.
+    assert named[('evaluation/ladder_elo_single_rung_64', 20)] == named[('evaluation/ladder_elo_64', 20)]
+    assert named[('evaluation/ladder_elo_single_rung_1', 20)] == named[('evaluation/ladder_elo_1', 20)]
+    assert named[('evaluation/ladder_elo_single_rung', 20)] == named[('evaluation/ladder_elo', 20)]
 
 
 def _bracket_definition(
