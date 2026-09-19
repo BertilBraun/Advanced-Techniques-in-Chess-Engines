@@ -360,7 +360,9 @@ def test_candidate_start_recovers_and_ignores_duplicate_or_older_boundaries(tmp_
 
     assert tuple(update.latest_boundary_seconds for update in updates) == (7200,)
     assert restarted.state.candidate_start.ema_observations == 2
-    assert restarted.state.candidate_start.ema_elo == pytest.approx(146.15384615384616)
+    rate = 1.0 - ELO_EMA_DECAY
+    expected_ema = (rate * 190.0 + ELO_EMA_DECAY * rate * 100.0) / (1.0 - ELO_EMA_DECAY**2)
+    assert restarted.state.candidate_start.ema_elo == pytest.approx(expected_ema)
     assert restarted.state.candidate_start.latest_boundary_seconds == 7200
     assert not restarted.state.candidate_start.latched
 
