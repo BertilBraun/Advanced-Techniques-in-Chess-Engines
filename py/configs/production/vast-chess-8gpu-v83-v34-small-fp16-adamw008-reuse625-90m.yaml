@@ -10,7 +10,7 @@ training:
   save_path: py/training_data/production/vast-chess-8gpu-v83-v34-small-fp16-adamw008-reuse625-90m-r3
   trainer:
     bootstrap_initialization:
-      maximum_initial_top1_mass: 1.0
+      maximum_initial_top1_mass: 0.9999999999999999
       minimum_policy_scale: 0.000001
   lifecycle:
     credit:
