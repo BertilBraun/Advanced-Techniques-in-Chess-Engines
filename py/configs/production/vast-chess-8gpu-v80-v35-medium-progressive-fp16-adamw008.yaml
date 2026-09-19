@@ -1,0 +1,97 @@
+extends: vast-chess-8gpu-v79-v35-progressive-fp16-adamw008.yaml
+
+run:
+  run_name: vast-chess-8gpu-v80-v35-medium-progressive-fp16-adamw008
+  tensorboard_run_directory: vast-chess-8gpu-v80-v35-medium-progressive-fp16-adamw008
+  resume:
+    mode: random_initialization
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v80-v35-medium-progressive-fp16-adamw008
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v80-v35-medium-progressive-fp16-adamw008.stop
+  progressive_model_sizing:
+    kind: progressive
+    models:
+    - model_id: chess-cnn-scaled-post-14x160-fromto-int8
+      network:
+        kind: convolutional
+        num_layers: 14
+        hidden_size: 160
+        residual_block: {kind: scaled_post_activation, branch_scale: 0.2672612419124244, activation_cap: 6.0}
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+        num_value_channels: 2
+        value_fc_size: 48
+    - model_id: chess-cnn-scaled-post-19x176-fromto-int8
+      network:
+        kind: convolutional
+        num_layers: 19
+        hidden_size: 176
+        residual_block: {kind: scaled_post_activation, branch_scale: 0.22941573387056174, activation_cap: 6.0}
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+        num_value_channels: 2
+        value_fc_size: 48
+    candidate_start:
+      kind: staged_elo_plateau
+      stages:
+      - candidate_model_id: chess-cnn-scaled-post-19x176-fromto-int8
+        minimum_worthwhile_gain_per_hour: 3.0
+
+chess:
+  self_play:
+    inference:
+      backend:
+        kind: tensorrt
+        bootstrap_with_torchscript: true
+        allow_fidelity_deviation: true
+        templates:
+        - {kind: float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, engine_path: /workspace/tensorrt/v48-14x160-fp16-b320.engine}
+        - {kind: float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, engine_path: /workspace/tensorrt/v48-19x176-fp16-b320.engine}
+
+evaluation:
+  cadence_seconds: 1200
+  maximum_concurrent_jobs: 1
+  definitions:
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    search: &v80_evaluation_search
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        backend:
+          kind: tensorrt
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+          templates:
+          - {kind: float, model_id: chess-cnn-scaled-post-14x160-fromto-int8, engine_path: /workspace/tensorrt/v48-14x160-fp16-b64.engine}
+          - {kind: float, model_id: chess-cnn-scaled-post-19x176-fromto-int8, engine_path: /workspace/tensorrt/v48-19x176-fp16-b64.engine}
+        sdpa_backend: memory_efficient
+  - kind: stockfish_adaptive_nodes
+    definition_id: stockfish-policy-only
+    node_ladder: [30, 100, 300, 1000, 2000, 3000, 5000, 10000]
+    initial_nodes: 30
+    retreat_score_threshold: 0.30
+    advance_score_threshold: 0.70
+    engine_executable_path: engines/stockfish-13
+    opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    search:
+      <<: *v80_evaluation_search
+      searches_per_move: 1
