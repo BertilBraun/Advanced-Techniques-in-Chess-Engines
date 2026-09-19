@@ -1,0 +1,22 @@
+extends: vast-chess-8gpu-v81-v35-medium-progressive-fp16-sgd.yaml
+
+run:
+  run_name: vast-chess-8gpu-v88-v35-medium-progressive-fp16-sgd02
+  tensorboard_run_directory: vast-chess-8gpu-v88-v35-medium-progressive-fp16-sgd02
+  resume:
+    mode: random_initialization
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v88-v35-medium-progressive-fp16-sgd02
+  trainer:
+    learning_rate:
+      kind: linear
+      start_generation: 0
+      end_generation: 1000
+      start_value: 0.2
+      end_value: 0.02
+      rounding: none
+  limits:
+    # V81 and V85 both have points at the 3600s boundary; the surplus lets it evaluate before exit.
+    maximum_wall_time_seconds: 4000
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v88-v35-medium-progressive-fp16-sgd02.stop
