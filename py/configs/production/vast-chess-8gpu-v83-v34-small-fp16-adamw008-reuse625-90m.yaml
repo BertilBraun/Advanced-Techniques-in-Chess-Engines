@@ -10,9 +10,17 @@ training:
     credit:
       replay_ratio: 6.25
   progressive_model_sizing:
-    candidate_start:
-      kind: elapsed
-      start_days: [1000.0]
+    kind: fixed
+    model:
+      model_id: chess-cnn-12x128-fromto
+      network:
+        kind: convolutional
+        num_layers: 12
+        hidden_size: 128
+        residual_context: {kind: global_pooling, placement: every_second_block}
+        policy_head: {kind: chess_from_to_attention_v1, key_size: 128}
+        num_value_channels: 2
+        value_fc_size: 48
   limits:
     maximum_wall_time_seconds: 5400
     manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v83-v34-small-fp16-adamw008-reuse625-90m.stop
