@@ -26,6 +26,7 @@ from src.training.network import (
     ScaledPostActivationResidualBlockConfiguration,
 )
 from src.training.progressive import (
+    ELO_EMA_DECAY,
     CompletedCandidateTraining,
     ElapsedCandidateStartConfiguration,
     EloPlateauCandidateStartConfiguration,
@@ -320,10 +321,12 @@ def test_candidate_start_ema_matches_tensorboard_bias_correction(tmp_path: Path)
         )
     )
 
-    raw_ema = 0.05 * 1200.0 + 0.95 * (0.05 * 1000.0 + 0.95 * 0.05 * 800.0)
-    expected_ema = raw_ema / (1.0 - 0.95**3)
-    previous_raw_ema = 0.05 * 1000.0 + 0.95 * 0.05 * 800.0
-    previous_ema = previous_raw_ema / (1.0 - 0.95**2)
+    decay = ELO_EMA_DECAY
+    rate = 1.0 - decay
+    raw_ema = rate * 1200.0 + decay * (rate * 1000.0 + decay * rate * 800.0)
+    expected_ema = raw_ema / (1.0 - decay**3)
+    previous_raw_ema = rate * 1000.0 + decay * rate * 800.0
+    previous_ema = previous_raw_ema / (1.0 - decay**2)
 
     assert updates[-1].ema_observations == 3
     assert updates[-1].ema_elo == pytest.approx(expected_ema)
