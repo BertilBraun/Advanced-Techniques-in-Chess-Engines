@@ -1,0 +1,16 @@
+extends: vast-chess-8gpu-v83-v34-small-fp16-adamw008-reuse625-90m.yaml
+
+run:
+  run_name: vast-chess-8gpu-v84-v34-small-fp16-adamw008-reuse4-60m
+  tensorboard_run_directory: vast-chess-8gpu-v84-v34-small-fp16-adamw008-reuse4-60m
+
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-v84-v34-small-fp16-adamw008-reuse4-60m
+  lifecycle:
+    credit:
+      replay_ratio: 4
+  limits:
+    # Training stops after the 3600s boundary; the surplus lets that boundary's evaluation finish
+    # rather than being cancelled at shutdown. Bracketed evaluation lags its boundary by minutes.
+    maximum_wall_time_seconds: 4000
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v84-v34-small-fp16-adamw008-reuse4-60m.stop
