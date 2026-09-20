@@ -5,10 +5,11 @@ run:
   tensorboard_run_directory: vast-chess-8gpu-v91-resume-recalibrated-int8
   resume:
     mode: checkpoint
-    # 481 is the promotion generation: the 14x160 became active here, and every later generation was
-    # both trained and played through the miscalibrated INT8 engine.
-    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau/checkpoint_481.json
-    generation: 481
+    # Root weights survive only every six generations, and 486 is the newest: it holds the 14x160
+    # itself, byte-identical to the models/ checkpoint the candidate would resume from anyway. 481
+    # kept only its manifest, and 480 is the 12x128, which would not match the active model.
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau/checkpoint_486.json
+    generation: 486
 
 training:
   # Deliberately V89's own save path: the replay buffer, the models/ tree and the progressive state
