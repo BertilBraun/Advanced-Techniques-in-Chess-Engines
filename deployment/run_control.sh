@@ -23,7 +23,11 @@ set -euo pipefail
 
 script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 repository_directory="${ENGINE_REPOSITORY_DIRECTORY:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-virtual_environment="${ENGINE_VIRTUAL_ENVIRONMENT:-${repository_directory}-venv}"
+# Checkouts share one interpreter. The per-checkout default almost never exists, and every start
+# that forgot to override it failed on a missing venv, so fall back to the shared one.
+default_virtual_environment="${repository_directory}-venv"
+[[ -x "${default_virtual_environment}/bin/python" ]] || default_virtual_environment=/workspace/alphazero-engine-venv
+virtual_environment="${ENGINE_VIRTUAL_ENVIRONMENT:-${default_virtual_environment}}"
 run_control_root="${RUN_CONTROL_ROOT:-/workspace/run-control}"
 approval_directory="${RUN_CONTROL_APPROVAL_DIRECTORY:-/workspace/approvals}"
 tensorboard_root="${RUN_CONTROL_TENSORBOARD_ROOT:-/workspace/tensorboard}"
@@ -34,7 +38,8 @@ stop_timeout_seconds="${RUN_CONTROL_STOP_TIMEOUT_SECONDS:-1800}"
 registry_directory="${run_control_root}/runs"
 
 usage() {
-    echo "Usage: run_control.sh start <config.yaml> | stop <run-name> | status <run-name>" >&2
+    echo "Usage: run_control.sh prepare <branch> <revision> <config.yaml>" >&2
+    echo "                      | start <config.yaml> | stop <run-name> | status <run-name>" >&2
     echo "                      | preserve <run-name> | fetch <run-name> <local-dir>" >&2
     exit 2
 }
@@ -548,12 +553,130 @@ command_fetch() {
     done
 }
 
+# --------------------------------------------------------------- prepare ----
+
+ensure_runtime() {
+    # The interpreter and the extension must match the checkout before a run is approved, but a
+    # rebuild costs minutes, so both are only redone when they are actually absent or stale.
+    local python="${virtual_environment}/bin/python"
+    if [[ ! -x "${python}" ]]; then
+        fail "no interpreter at ${python}; provision the node with deployment/setup_remote.sh first"
+    fi
+    if ! "${python}" -c 'import torch, pydantic, yaml' >/dev/null 2>&1; then
+        echo "run_control: syncing locked dependencies"
+        "${python}" -m pip install --disable-pip-version-check --quiet "uv==0.9.2" || fail "could not install uv"
+        UV_PROJECT_ENVIRONMENT="${virtual_environment}" "${virtual_environment}/bin/uv"             sync --locked --project "${repository_directory}" --extra tensorrt || fail "dependency sync failed"
+    fi
+
+    local stamp_file tree_hash
+    stamp_file="${repository_directory}/cpp/.run-control-build-stamp"
+    tree_hash="$(git -C "${repository_directory}" rev-parse HEAD:cpp 2>/dev/null || echo unknown)"
+    local extension_ok=1
+    ( cd "${repository_directory}/py" && PYTHONPATH=. "${python}" -c 'import AlphaZeroCpp' >/dev/null 2>&1 ) || extension_ok=0
+    if [[ "${extension_ok}" == 1 && -f "${stamp_file}" && "$(cat "${stamp_file}")" == "${tree_hash}" ]]; then
+        echo "run_control: native extension current (cpp tree ${tree_hash:0:12})"
+        return
+    fi
+    echo "run_control: building native extension (cpp tree ${tree_hash:0:12})"
+    cmake -S "${repository_directory}/cpp" -B "${repository_directory}/cpp/build"         -DCMAKE_BUILD_TYPE=Release -DENABLE_TENSORRT=ON -DPython3_EXECUTABLE="${python}"         || fail "cmake configure failed"
+    cmake --build "${repository_directory}/cpp/build" --parallel || fail "native build failed"
+    ENGINE_SOURCE_ROOT="${repository_directory}" ENGINE_TRUST_EXISTING_NATIVE_BUILD=1         "${repository_directory}/deployment/prepare_experiment_worktree.sh" || fail "could not stage the native extension"
+    ( cd "${repository_directory}/py" && PYTHONPATH=. "${python}" -c 'import AlphaZeroCpp' >/dev/null 2>&1 )         || fail "native extension still not importable after building"
+    printf '%s' "${tree_hash}" > "${stamp_file}"
+}
+
+
+running_runs_here() {
+    local name state
+    for path in "${registry_directory}"/*.env; do
+        [[ -f "${path}" ]] || continue
+        # shellcheck source=/dev/null
+        ( source "${path}"
+          [[ "${RUN_CONFIG}" == "${repository_directory}/"* ]] || exit 1
+          state="$(supervisorctl status "${RUN_NAME}" 2>/dev/null | awk '{print $2}')"
+          [[ "${state}" == RUNNING || "${state}" == STARTING ]] || exit 1
+          echo "${RUN_NAME}" ) || true
+    done
+}
+
+command_prepare() {
+    local branch="$1" revision="$2" config_argument="$3"
+
+    command -v git >/dev/null || fail "git is not installed on this node"
+    # A linked worktree stores .git as a file, so ask git rather than stat the path.
+    git -C "${repository_directory}" rev-parse --git-dir >/dev/null 2>&1 || fail "not a git checkout"
+
+    # Swapping revisions under a live run rewrites the very script its supervisor is executing.
+    local live
+    live="$(running_runs_here | tr '
+' ' ')"
+    [[ -z "${live// /}" ]] || fail "refusing to prepare while these runs execute from this checkout: ${live}"
+
+    local head
+    head="$(git -C "${repository_directory}" rev-parse HEAD)"
+    if [[ "${head}" == "${revision}"* ]]; then
+        echo "run_control: already at ${head}"
+    else
+        echo "run_control: fetching ${branch}"
+        git -C "${repository_directory}" fetch -q origin "${branch}" || fail "could not fetch ${branch}"
+        git -C "${repository_directory}" checkout -q "${revision}" || fail "could not check out ${revision}"
+        head="$(git -C "${repository_directory}" rev-parse HEAD)"
+        echo "run_control: checked out ${head}"
+    fi
+    [[ -z "$(git -C "${repository_directory}" status --porcelain)" ]]         || fail "working tree is dirty: $(git -C "${repository_directory}" status --short | head -3)"
+
+    ensure_runtime
+
+    local config_path
+    config_path="$(cd "$(dirname "${config_argument}")" && pwd)/$(basename "${config_argument}")"
+    [[ -f "${config_path}" ]] || fail "run configuration does not exist: ${config_path}"
+
+    local description configuration_sha256 run_name
+    description="$(describe_configuration "${config_path}")"
+    configuration_sha256="$(echo "${description}" | sed -n 's/^CONFIGURATION_SHA256=//p')"
+    run_name="$(echo "${description}" | sed -n 's/^RUN_NAME=//p')"
+    [[ -n "${configuration_sha256}" ]] || fail "could not resolve the run configuration"
+
+    local approval_file
+    approval_file="${approval_directory}/$(basename "${config_path%.*}").json"
+    mkdir -p "${approval_directory}"
+    if [[ -f "${approval_file}" ]]; then
+        # Rewriting an approval that already matches would only move its timestamp; one that does
+        # not match is a real disagreement about what was approved, so say so instead of papering.
+        validate_approval "${approval_file}" "${configuration_sha256}" "${head}"             && echo "run_control: approval already matches (${approval_file})"             || fail "approval exists but does not match; delete it to re-approve: ${approval_file}"
+    else
+        "$(venv_python)" - "${approval_file}" "${configuration_sha256}" "${head}" <<'PYTHON'
+import json
+import sys
+from datetime import datetime, timezone
+
+path, configuration_sha256, source_revision = sys.argv[1:4]
+approval = {
+    'approved_by': 'run_control prepare',
+    'approved_at_utc': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+    'source_revision': source_revision,
+    'configuration_sha256': configuration_sha256,
+    'maximum_cost': None,
+}
+with open(path, 'w', encoding='utf-8') as handle:
+    json.dump(approval, handle)
+PYTHON
+        echo "run_control: wrote approval ${approval_file}"
+    fi
+
+    echo "run_control: prepared ${run_name}"
+    echo "  revision:      ${head}"
+    echo "  configuration: ${configuration_sha256}"
+    echo "  start with:    bash ${script_path} start ${config_argument}"
+}
+
 # ----------------------------------------------------------------- main ----
 
 [[ $# -ge 1 ]] || usage
 command="$1"
 shift
 case "${command}" in
+    prepare) [[ $# -eq 3 ]] || usage; command_prepare "$1" "$2" "$3" ;;
     start) [[ $# -eq 1 ]] || usage; command_start "$1" ;;
     stop) [[ $# -eq 1 ]] || usage; command_stop "$1" ;;
     status) [[ $# -eq 1 ]] || usage; command_status "$1" ;;
