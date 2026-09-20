@@ -1,0 +1,27 @@
+extends: vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau.yaml
+
+run:
+  run_name: vast-chess-8gpu-v91-resume-recalibrated-int8
+  tensorboard_run_directory: vast-chess-8gpu-v91-resume-recalibrated-int8
+  resume:
+    mode: checkpoint
+    # 481 is the promotion generation: the 14x160 became active here, and every later generation was
+    # both trained and played through the miscalibrated INT8 engine.
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau/checkpoint_481.json
+    generation: 481
+
+training:
+  # Deliberately V89's own save path: the replay buffer, the models/ tree and the progressive state
+  # live here, and reusing them is what carries the promoted 14x160 across.
+  save_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
+  progressive_model_sizing:
+    promotion:
+      candidate_catchup_learning_rate:
+        kind: linear
+        start_generation: 0
+        end_generation: 200
+        start_value: 0.1
+        end_value: 0.01
+        rounding: none
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v91-resume-recalibrated-int8.stop
