@@ -23,6 +23,7 @@ graph*
 
 cpp/src/json.hpp
 cpp/build/**
+cpp/.run-control-build-stamp
 cpp/libtorch**/**
 
 **/.cache/**
