@@ -12,11 +12,14 @@ from src.training.network import NetworkConfiguration
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 
-# A 0.95 decay smooths over roughly twenty boundaries, which at a twenty-minute cadence is nearly
-# seven hours: the average is still climbing towards a curve that has already flattened, so the
-# measured gain stays high and the plateau is never detected. V79 reported 30 Elo per hour while its
-# curve was actually gaining 15.5. A 0.80 decay spans about five boundaries and tracks the curve.
-ELO_EMA_DECAY = 0.80
+# The decay trades detecting a plateau late against mistaking a lull for one. At 0.95 the average
+# spans roughly twenty boundaries, nearly seven hours at a twenty-minute cadence, and is still
+# climbing towards a curve that has already flattened, so no run ever detected a plateau: V79
+# reported 30 Elo per hour while its curve gained 15.5. At 0.80 it spans about five boundaries and
+# opened V89's candidate during a flat stretch that turned out to be noise rather than a ceiling.
+# 0.90 spans about ten. The stage thresholds are raised alongside it, because a longer average lags
+# further behind a flattening curve and so reports a higher gain for the same plateau.
+ELO_EMA_DECAY = 0.90
 ELO_PLATEAU_CONFIRMATION_OBSERVATIONS = 2
 SECONDS_PER_HOUR = 3_600.0
 SECONDS_PER_DAY = 86_400.0
