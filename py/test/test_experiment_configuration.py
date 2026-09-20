@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 from pydantic import ValidationError
-from src.experiment.base_configuration import BaseExperimentConfiguration
+from src.experiment.base_configuration import BaseExperimentConfiguration, CheckpointResumeConfiguration
 from src.experiment.configuration import (
     experiment_configuration_sha256,
     load_chess_experiment_configuration,
@@ -41,6 +41,52 @@ from test_helpers.chess_configuration import (
 from test_helpers.configuration_paths import REPOSITORY_CONFIG_DIRECTORY, TEST_CONFIG_DIRECTORY
 
 OPTIMAL_CHESS_EXPERIMENT_PATH = REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-optimal.yaml'
+V35_CODE_V42_GENERATION_ZERO_AB_PATH = (
+    REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-v35-code-v42-g0-ab.yaml'
+)
+V35_CODE_V42_GENERATION_ZERO_AB_R2_PATH = (
+    REPOSITORY_CONFIG_DIRECTORY / 'production' / 'vast-chess-8gpu-v35-code-v42-g0-ab-r2.yaml'
+)
+
+
+def test_checkpoint_resume_accepts_generation_zero() -> None:
+    resume = CheckpointResumeConfiguration(
+        mode='checkpoint',
+        checkpoint_manifest_path='/workspace/seed/checkpoint_0.json',
+        generation=0,
+    )
+
+    assert resume.generation == 0
+
+
+def test_v35_code_v42_generation_zero_ab_is_isolated_and_fixed_size() -> None:
+    configuration = load_chess_experiment_configuration(V35_CODE_V42_GENERATION_ZERO_AB_PATH)
+
+    assert configuration.run.resume.mode == 'checkpoint'
+    assert configuration.run.resume.generation == 0
+    assert configuration.run.resume.checkpoint_manifest_path.endswith('v42-generation-0/checkpoint_0.json')
+    assert configuration.training.save_path.endswith('vast-chess-8gpu-v35-code-v42-g0-ab')
+    assert not configuration.training.progressive_model_sizing.is_progressive
+    assert configuration.training.initial_model.model_id == 'chess-cnn-scaled-post-14x160-fromto-int8'
+    assert configuration.training.lifecycle.credit.replay_ratio == 6.25
+    assert configuration.training.lifecycle.replay.maximum_capacity == 15_000_000
+    assert configuration.evaluation.cadence_seconds == 1_200
+    assert tuple(
+        (definition.definition_id, definition.first_generation, definition.search.searches_per_move)
+        for definition in configuration.evaluation.definitions
+    ) == (('stockfish-searched', 2, 64), ('stockfish-policy-only', 2, 1))
+
+
+def test_v35_code_v42_generation_zero_ab_r2_has_fresh_runtime_paths() -> None:
+    configuration = load_chess_experiment_configuration(V35_CODE_V42_GENERATION_ZERO_AB_R2_PATH)
+
+    assert configuration.run.run_name == 'vast-chess-8gpu-v35-code-v42-g0-ab-r2'
+    assert configuration.run.tensorboard_run_directory == 'vast-chess-8gpu-v35-code-v42-g0-ab-r2'
+    assert configuration.training.save_path.endswith('vast-chess-8gpu-v35-code-v42-g0-ab-r2')
+    assert configuration.training.limits.manual_stop_file.name == 'vast-chess-8gpu-v35-code-v42-g0-ab-r2.stop'
+    assert configuration.run.resume.mode == 'checkpoint'
+    assert configuration.run.resume.generation == 0
+    assert configuration.evaluation.cadence_seconds == 1_200
 
 
 def test_experiment_fixtures_use_the_current_contract_and_dependency_lock() -> None:

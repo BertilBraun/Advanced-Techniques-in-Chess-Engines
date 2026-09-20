@@ -1,0 +1,17 @@
+extends: vast-chess-8gpu-integrated-v35-int8-from-scratch.yaml
+
+run:
+  run_name: vast-chess-8gpu-v35-code-v42-g0-ab
+  tensorboard_run_directory: vast-chess-8gpu-v35-code-v42-g0-ab
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: /workspace/controlled-initializations/v42-generation-0/checkpoint_0.json
+    generation: 0
+
+training:
+  save_path: py/training_data/validation/vast-chess-8gpu-v35-code-v42-g0-ab
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v35-code-v42-g0-ab.stop
+
+evaluation:
+  cadence_seconds: 1200
