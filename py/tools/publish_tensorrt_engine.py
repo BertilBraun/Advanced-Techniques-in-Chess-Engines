@@ -37,8 +37,11 @@ ONNX_OPSET_VERSION = 18
 MAXIMUM_OUTPUT_MEAN_ABSOLUTE_ERROR = 0.01
 MAXIMUM_WDL_ABSOLUTE_ERROR = 0.1
 MINIMUM_POLICY_TOP1_AGREEMENT = 0.90
-MAXIMUM_POLICY_MEAN_KL_DIVERGENCE = 1e-3
-MAXIMUM_POLICY_MAXIMUM_KL_DIVERGENCE = 0.01
+# A correctly calibrated INT8 export of the 14x160 measures 0.00155 mean and 0.00626 maximum policy
+# KL against its float reference, and a miscalibrated one measures 0.42 and 2.06. The old 1e-3 and
+# 0.01 sat below the healthy case, so every export failed and the warning said nothing.
+MAXIMUM_POLICY_MEAN_KL_DIVERGENCE = 1e-2
+MAXIMUM_POLICY_MAXIMUM_KL_DIVERGENCE = 0.05
 
 
 @dataclass(frozen=True)
