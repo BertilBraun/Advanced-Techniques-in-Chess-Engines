@@ -31,9 +31,9 @@ training:
       kind: staged_elo_plateau
       stages:
       - candidate_model_id: chess-cnn-scaled-post-14x160-fromto-int8
-        minimum_worthwhile_gain_per_hour: 12.0
+        minimum_worthwhile_gain_per_hour: 15.0
       - candidate_model_id: chess-cnn-scaled-post-19x176-fromto-int8
-        minimum_worthwhile_gain_per_hour: 3.0
+        minimum_worthwhile_gain_per_hour: 5.0
   limits:
     maximum_cost: null
     maximum_wall_time_seconds: null
