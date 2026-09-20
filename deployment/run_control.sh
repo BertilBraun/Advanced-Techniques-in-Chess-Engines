@@ -375,6 +375,53 @@ PYTHON
     echo "== gpus =="
     nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total --format=csv,noheader 2>/dev/null \
         || echo "nvidia-smi unavailable"
+
+    echo "== health =="
+    local unhealthy=0
+
+    local state
+    state="$(supervisorctl status "${run_name}" 2>/dev/null | awk '{print $2}' || true)"
+    case "${state}" in
+        RUNNING|STARTING) echo "supervisor:            ${state}" ;;
+        "") echo "supervisor:            unknown to supervisor"; unhealthy=1 ;;
+        *) echo "supervisor:            ${state}"; unhealthy=1 ;;
+    esac
+
+    # The newest log is usually supervisor-stdout.log, which interleaves every attempt at this run.
+    # The largest is the runner's own log and is the one that carries the failure.
+    local log_file
+    log_file="$(ls -S "${run_control_root}/logs/${run_name}"/log_*.log 2>/dev/null | sed -n 1p || true)"
+    if [[ -z "${log_file}" ]]; then
+        echo "log:                   none found"
+        unhealthy=1
+    else
+        local failures last_write age
+        failures="$(grep -cE 'Traceback|CalledProcessError|CUDA error|out of memory|FATAL' "${log_file}" 2>/dev/null || true)"
+        echo "log:                   $(basename "${log_file}")"
+        echo "failure lines:         ${failures}"
+        [[ "${failures}" == 0 ]] || unhealthy=1
+        last_write="$(stat -c %Y "${log_file}" 2>/dev/null || echo 0)"
+        age=$(( $(date +%s) - last_write ))
+        echo "last log write:        ${age}s ago"
+        # Generations take minutes, so a quarter hour of silence means wedged rather than busy.
+        if [[ "${state}" == RUNNING && "${age}" -gt 900 ]]; then
+            unhealthy=1
+        fi
+    fi
+
+    local free_gib
+    free_gib="$(df -BG --output=avail /workspace 2>/dev/null | tail -1 | tr -dc '0-9' || true)"
+    if [[ -n "${free_gib}" ]]; then
+        echo "free disk:             ${free_gib} GiB"
+        [[ "${free_gib}" -gt 10 ]] || unhealthy=1
+    fi
+
+    if [[ "${unhealthy}" == 0 ]]; then
+        echo "verdict:               healthy"
+    else
+        echo "verdict:               UNHEALTHY"
+    fi
+    return "${unhealthy}"
 }
 
 # ------------------------------------------------------------- preserve ----
