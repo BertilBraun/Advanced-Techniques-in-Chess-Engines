@@ -6,7 +6,12 @@ import numpy as np
 import onnx
 import pytest
 from onnx import TensorProto, helper, numpy_helper
-from tools.publish_tensorrt_engine import _policy_distribution_agreement, onnx_graph_signature
+from tools.publish_tensorrt_engine import (
+    _automatic_template_path,
+    _policy_distribution_agreement,
+    _recalibrated_template_path,
+    onnx_graph_signature,
+)
 
 
 def _write_constant_graph(path: Path, value: np.ndarray, consumer: str) -> None:
@@ -67,3 +72,33 @@ def test_graph_signature_preserves_structural_constant_values(tmp_path: Path) ->
     _write_constant_graph(second, np.array((2, 2), dtype=np.int64), 'Reshape')
 
     assert onnx_graph_signature(first) != onnx_graph_signature(second)
+
+
+def test_recalibrated_template_path_separates_checkpoints_sharing_a_signature() -> None:
+    configured = Path('/templates/configured.engine')
+    shape = (320, 52, 8, 8)
+
+    first = _recalibrated_template_path(configured, shape, 'signature', 'a' * 64)
+    second = _recalibrated_template_path(configured, shape, 'signature', 'b' * 64)
+
+    assert first != second
+    assert first.parent == second.parent == configured.parent / 'automatic-refit'
+
+
+def test_recalibrated_template_path_differs_from_the_shared_automatic_template() -> None:
+    configured = Path('/templates/configured.engine')
+    shape = (320, 52, 8, 8)
+
+    shared = _automatic_template_path(configured, shape, 'signature')
+    recalibrated = _recalibrated_template_path(configured, shape, 'signature', 'c' * 64)
+
+    assert shared != recalibrated
+
+
+def test_recalibrated_template_path_separates_batch_sizes() -> None:
+    configured = Path('/templates/configured.engine')
+
+    production = _recalibrated_template_path(configured, (320, 52, 8, 8), 'signature', 'd' * 64)
+    evaluation = _recalibrated_template_path(configured, (64, 52, 8, 8), 'signature', 'd' * 64)
+
+    assert production != evaluation
