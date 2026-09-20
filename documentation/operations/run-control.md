@@ -16,7 +16,7 @@ All paths are overridable; defaults target the standard Vast.ai node layout.
 | variable | default | meaning |
 |---|---|---|
 | `ENGINE_REPOSITORY_DIRECTORY` | script's parent repository | repository root |
-| `ENGINE_VIRTUAL_ENVIRONMENT` | `<repository>-venv` | locked venv from `setup_remote.sh` |
+| `ENGINE_VIRTUAL_ENVIRONMENT` | `<repository>-venv`, else `/workspace/alphazero-engine-venv` | locked venv from `setup_remote.sh`; checkouts share one interpreter, so the shared path is used when the per-checkout one is absent |
 | `RUN_CONTROL_ROOT` | `/workspace/run-control` | registry, stop files, per-run logs |
 | `RUN_CONTROL_APPROVAL_DIRECTORY` | `/workspace/approvals` | approval JSONs, outside Git |
 | `RUN_CONTROL_TENSORBOARD_ROOT` | `/workspace/tensorboard` | curated TensorBoard root the node service watches |
@@ -48,6 +48,30 @@ configuration hash already pins the run name, hardware offer, price and wall-tim
 carried separately. Approval files written before this change are invalid and must be re-issued.
 
 ## Commands
+
+### `run_control.sh prepare <branch> <revision> <config.yaml>`
+
+Brings a checkout to the point where `start` will succeed, in one step: fetches the branch, checks out the
+revision, verifies the working tree is clean, brings the interpreter and native extension up to that revision,
+resolves the configuration hash **on the node**, and writes the approval.
+
+It is idempotent. The fetch is skipped when the checkout already sits at the revision, and an approval that
+already matches is left alone rather than rewritten, so repeating it does not move `approved_at_utc`. An approval
+that exists but does **not** match is a disagreement about what was approved, so `prepare` stops and says so
+instead of overwriting it; delete the file to re-approve deliberately.
+
+`prepare` writes the approval and `start` validates it. Keeping them as two acts is the point: a single command
+that both wrote and checked the approval would only be validating itself.
+
+It refuses while a run from the same checkout is live. The supervisor executes this script *from* the checkout and
+bash reads a script as it runs, so swapping revisions underneath a running run can corrupt it mid-execution.
+
+The configuration hash must be computed on the node. Paths serialise differently on other platforms, so a hash
+produced on a workstation will not match the one `start` resolves.
+
+Dependencies and the native extension are only brought up when absent or stale — the extension is stamped with the
+`cpp` tree hash — so a `prepare` that changes nothing costs seconds rather than a rebuild.
+
 
 ### `run_control.sh start <config.yaml>`
 
@@ -87,6 +111,17 @@ place as evidence; `start` refuses to reuse it, so remove it deliberately before
 Prints: the supervisor state line, last generation and optimizer steps (from `credit-ledger.json`), available
 credits, the run outcome if terminal, the newest evaluation result (definition, generation, score or accuracy),
 inbox/staging depth under `completed-games/`, and per-GPU utilisation/memory from `nvidia-smi`.
+
+It then judges the run and **exits non-zero when unhealthy**, so the same command serves as the health check a
+monitor calls. A run is unhealthy when the supervisor does not report it running, when the runner's log contains a
+traceback, a `CalledProcessError`, a CUDA error, an out-of-memory or a `FATAL`, when a running run has not written
+to its log for fifteen minutes, or when free disk has fallen to ten GiB.
+
+Two details matter when reading it by hand. The report uses the *largest* log under
+`<run-control-root>/logs/<run-name>/`, not the newest: the newest is usually `supervisor-stdout.log`, which
+interleaves every attempt at the run, while the largest is the runner's own log and carries the failure. And
+silence is the symptom that matters most — generations complete in minutes, so a run that has stopped writing is
+wedged rather than busy, even while the supervisor still calls it `RUNNING`.
 
 ### `run_control.sh preserve <run-name>`
 
