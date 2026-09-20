@@ -5,8 +5,8 @@ run:
   tensorboard_run_directory: vast-chess-8gpu-v90-resume-catchup-schedule
   resume:
     mode: checkpoint
-    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau/checkpoint_479.json
-    generation: 479
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau/checkpoint_480.json
+    generation: 480
 
 training:
   # Deliberately V89's own save path: the replay buffer, the models/ tree and the progressive state
