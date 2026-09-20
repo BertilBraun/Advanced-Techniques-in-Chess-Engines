@@ -1,0 +1,28 @@
+extends: vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau.yaml
+
+run:
+  run_name: vast-chess-8gpu-v90-resume-catchup-schedule
+  tensorboard_run_directory: vast-chess-8gpu-v90-resume-catchup-schedule
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau/checkpoint_479.json
+    generation: 479
+
+training:
+  # Deliberately V89's own save path: the replay buffer, the models/ tree and the progressive state
+  # live here, and reusing them is what carries the candidate's 123,000 optimizer steps across.
+  save_path: py/training_data/production/vast-chess-8gpu-v89-v35-progressive-int8-sgd-reuse4-plateau
+  progressive_model_sizing:
+    promotion:
+      # The candidate has trained 246 generations at a flat 0.1 while the active model decayed to
+      # 0.057, and its loss has stayed too noisy to come within the two per mille it needs. This
+      # schedule is already past its end at 246, so the candidate steps straight down to 0.01.
+      candidate_catchup_learning_rate:
+        kind: linear
+        start_generation: 0
+        end_generation: 200
+        start_value: 0.1
+        end_value: 0.01
+        rounding: none
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v90-resume-catchup-schedule.stop
