@@ -11,6 +11,7 @@ from src.training.checkpoint import CheckpointReference
 from src.training.network import NetworkConfiguration
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
+from src.util.generation_schedule import FloatGenerationSchedule
 
 # The decay trades detecting a plateau late against mistaking a lull for one. At 0.95 the average
 # spans roughly twenty boundaries, nearly seven hours at a twenty-minute cadence, and is still
@@ -76,7 +77,9 @@ class TotalLossEmaPromotionConfiguration(FrozenModel):
     decay: float = Field(gt=0.0, lt=1.0, allow_inf_nan=False)
     warmup_quanta: int = Field(gt=0)
     maximum_relative_loss: float = Field(default=1.01, ge=1.0, allow_inf_nan=False)
-    candidate_catchup_learning_rate: float = Field(gt=0.0, allow_inf_nan=False)
+    # A schedule here runs on the candidate's own clock: its generation zero is the quantum it began
+    # training, not the run's. A bare number is still accepted and stays constant, as before.
+    candidate_catchup_learning_rate: FloatGenerationSchedule
 
 
 class FixedModelSizingConfiguration(FrozenModel):

@@ -307,7 +307,17 @@ class ProgressiveTrainingSession(TrainingSession):
     def _candidate_learning_rate(self, model_id: str, global_generation: int) -> float:
         if model_id == self.state.state.active_model_id:
             return self.configuration.training.trainer.learning_rate.value_at(global_generation)
-        return self.progressive_configuration.promotion.candidate_catchup_learning_rate
+        # A candidate starts long after the run did, so its catch-up schedule is read at the
+        # generation it has itself trained for. Reading it at the run's generation would start every
+        # candidate at the decayed end of its own schedule.
+        candidate = next(
+            (item for item in self.state.state.candidates if item.model_id == model_id),
+            None,
+        )
+        completed_steps = 0 if candidate is None else candidate.completed_optimizer_steps
+        return self.progressive_configuration.promotion.candidate_catchup_learning_rate.value_at(
+            completed_steps // self.optimizer_steps_per_quantum
+        )
 
     def _trainer_group(
         self,

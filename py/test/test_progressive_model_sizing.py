@@ -45,6 +45,7 @@ from src.training.targets import TrainingTargetLayout
 from src.training.trainer import TrainerGroup, TrainingQuantumResult
 from src.training.trainer.contracts import TrainerStartup
 from src.util.atomic_file import write_text_atomically
+from src.util.generation_schedule import LinearSchedule, ScheduleRounding
 from test_helpers.checkpoints import checkpoint_reference
 from test_helpers.configuration_paths import TEST_CONFIG_DIRECTORY
 
@@ -737,3 +738,48 @@ def test_progressive_learning_rate_uses_catchup_until_promotion(tmp_path: Path) 
     assert session._candidate_learning_rate('large', 500) == pytest.approx(0.005)
     session.state.state = session.state.state.validated_copy(update={'active_model_id': 'large'})
     assert session._candidate_learning_rate('large', 500) == pytest.approx(0.002)
+
+
+def test_candidate_catchup_schedule_runs_on_the_candidate_clock(tmp_path: Path) -> None:
+    loaded = load_experiment_configuration(TEST_CONFIG_DIRECTORY / 'chess-experiment.yaml')
+    sizing = _configuration()
+    promotion = sizing.promotion.model_copy(
+        update={
+            'candidate_catchup_learning_rate': LinearSchedule[float](
+                kind='linear',
+                start_generation=0,
+                end_generation=200,
+                start_value=0.1,
+                end_value=0.01,
+                rounding=ScheduleRounding.NONE,
+            )
+        }
+    )
+    configuration = loaded.model_copy(
+        update={
+            'training': loaded.training.model_copy(
+                update={
+                    'save_path': str(tmp_path),
+                    'progressive_model_sizing': sizing.model_copy(update={'promotion': promotion}),
+                }
+            )
+        }
+    )
+    session = ProgressiveTrainingSession(configuration, cast(GameImplementation, object()))
+    steps_per_quantum = configuration.training.lifecycle.credit.optimizer_steps_per_quantum
+
+    # The run is far along, but the candidate has trained for nothing, so it starts at the top of
+    # its own schedule rather than the decayed end of the run's.
+    assert session._candidate_learning_rate('large', 900) == pytest.approx(0.1)
+
+    candidates = tuple(
+        candidate.validated_copy(update={'completed_optimizer_steps': 100 * steps_per_quantum})
+        if candidate.model_id == 'large'
+        else candidate
+        for candidate in session.state.state.candidates
+    )
+    session.state.state = session.state.state.validated_copy(update={'candidates': candidates})
+
+    # Halfway through its own two hundred generations, regardless of the run's generation.
+    assert session._candidate_learning_rate('large', 900) == pytest.approx(0.055)
+    assert session._candidate_learning_rate('large', 10) == pytest.approx(0.055)
