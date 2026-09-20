@@ -1,0 +1,19 @@
+extends: vast-chess-8gpu-fixed-medium-v42-int8.yaml
+
+run:
+  run_name: vast-chess-8gpu-v42-g0-warmup-floor-001-ab
+  tensorboard_run_directory: vast-chess-8gpu-v42-g0-warmup-floor-001-ab
+  resume:
+    mode: checkpoint
+    checkpoint_manifest_path: /workspace/controlled-initializations/v42-generation-0/checkpoint_0.json
+    generation: 0
+
+training:
+  save_path: py/training_data/validation/vast-chess-8gpu-v42-g0-warmup-floor-001-ab
+  trainer:
+    warmup_start_learning_rate: 0.001
+  limits:
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-v42-g0-warmup-floor-001-ab.stop
+
+evaluation:
+  cadence_seconds: 1200
