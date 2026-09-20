@@ -1,0 +1,528 @@
+# The configuration the chess work settled on, written out in full.
+#
+# Every other production configuration reaches its values through a chain of `extends`, which makes the
+# recipe that actually ran hard to read. This one inherits nothing: what is written here is what runs.
+#
+# It is V89 with its run identity renamed. The recipe is SGD at 0.1 with nesterov momentum, pre-fold INT8
+# quantization, replay reuse 4, and the three-stage model ladder gated on an Elo plateau. Evaluation
+# brackets three rungs so the ladder fit is constrained rather than extrapolated from one score, and
+# fidelity deviation warns instead of ending the run, which INT8 requires.
+run:
+  run_name: vast-chess-8gpu-final
+  tensorboard_run_directory: vast-chess-8gpu-final
+  stage: clean_retrain
+  requires_explicit_approval: true
+  resume:
+    mode: random_initialization
+  hardware:
+    provider_name: vast.ai
+    offer_id: '48571853'
+    gpu_model: NVIDIA GeForce RTX 4070 SUPER
+    gpu_count: 8
+    logical_cpu_count: 80
+    minimum_ram_gib: 200
+    minimum_disk_gib: 5
+  environment:
+    runtime_image: vastai/pytorch:cuda-12.8.1-auto
+    python_version: '3.12'
+    torch_version: 2.12.1+cu126
+    cuda_version: '12.6'
+    dependency_lock_path: uv.lock
+    dependency_lock_sha256: 16fb0d1dbc876aecba7245b5e5a65451331ea7fcd5a147f83fb7caeffad188f1
+    minimum_open_file_soft_limit: 65536
+training:
+  save_path: py/training_data/production/vast-chess-8gpu-final
+  trainer:
+    global_batch_size: 2048
+    local_batch_size: 256
+    replay_prefetch_depth: 4
+    optimizer:
+      kind: sgd
+      momentum: 0.9
+      weight_decay: 0.0001
+      nesterov: true
+    quantization:
+      kind: tensorrt_int8_qat
+      fold_after_optimizer_steps: 1000000
+      calibration_positions: 516
+      calibration_source: evaluation_dataset
+      recalibration_interval_generations: 1
+      int8_self_play_start_generation: 1
+      deployment_learning_rate: inherit
+      deployment_warmup_optimizer_steps: 500
+      deployment_warmup_start_learning_rate: 0.001
+      folding_mode: deployment_copy
+    precision: bfloat16
+    compilation: disabled
+    learning_rate:
+      kind: linear
+      start_generation: 0
+      end_generation: 1000
+      start_value: 0.1
+      end_value: 0.01
+      rounding: none
+    warmup_optimizer_steps: 1000
+    warmup_start_learning_rate: 0.0
+    bootstrap_probe_positions: 516
+    bootstrap_policy_prior_target_top3_mass: 0.95
+    bootstrap_initialization:
+      candidate_count: 20
+      maximum_initial_top1_mass: 0.8
+      minimum_wdl_entropy_ratio: 0.8
+      maximum_absolute_expected_value: 0.25
+      minimum_policy_scale: 0.01
+      maximum_policy_scale: 100.0
+      policy_scale_application: trainable
+      policy_scale_fade_generations: 0
+    gradient_probe_interval_steps: 0
+    max_grad_norm: 1.0
+    duplicate_multiplicity_weight_cap: null
+  topology:
+    trainer:
+      device_type: cuda
+      process_group_backend: nccl
+      rank_zero_device_id: 0
+      ddp_device_ids:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      cpu_threads: 4
+      interop_threads: 1
+    self_play:
+      device_ids:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 1
+      - 1
+      - 1
+      - 2
+      - 2
+      - 2
+      - 2
+      - 3
+      - 3
+      - 3
+      - 3
+      - 4
+      - 4
+      - 4
+      - 4
+      - 5
+      - 5
+      - 5
+      - 5
+      - 6
+      - 6
+      - 6
+      - 6
+      - 7
+      - 7
+      - 7
+      - 7
+      parallel_games_per_process: 512
+      tensorboard_processes: 1
+      node_ids_to_pause_during_training:
+      - 2
+      - 3
+      - 6
+      - 7
+      - 10
+      - 11
+      - 14
+      - 15
+      - 18
+      - 19
+      - 22
+      - 23
+      - 26
+      - 27
+      - 30
+      - 31
+    evaluation:
+      device_cycle:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+  lifecycle:
+    replay:
+      capacity:
+        kind: staged
+        stages:
+        - start_generation: 0
+          value: 600000
+        - start_generation: 5
+          value: 1200000
+        - start_generation: 10
+          value: 2000000
+        - start_generation: 20
+          value: 2800000
+        - start_generation: 40
+          value: 4000000
+        - start_generation: 70
+          value: 6000000
+        - start_generation: 100
+          value: 8000000
+        - start_generation: 400
+          value: 12000000
+        - start_generation: 700
+          value: 16000000
+        - start_generation: 1000
+          value: 20000000
+      maximum_capacity: 20000000
+      maximum_policy_entries: 60
+      sampling:
+        kind: policy_surprise
+        uniform_probability: 0.3
+        maximum_surprise: 2.0
+      materialization_processes: 8
+      materialization_shard_maximum_games: 32
+      materialization_shard_target_source_bytes: 16777216
+      materialization_staging_shard_limit: 96
+      materialization_inbox_rename_cap: 4096
+      materialization_rejection_window_games: 512
+      materialization_rejection_rate_ceiling: 0.05
+    credit:
+      replay_ratio: '4'
+      optimizer_steps_per_quantum: 500
+      maximum_optimizer_steps: null
+      retained_checkpoint_interval_generations: 6
+      self_play_backpressure_quanta: 5
+    inference_retention:
+      recent_checkpoint_count: 22
+      milestone_interval: 20
+  limits:
+    hourly_price: 0.72
+    maximum_cost: null
+    maximum_wall_time_seconds: null
+    manual_stop_file: /workspace/run-control/stop/vast-chess-8gpu-final.stop
+    maximum_open_file_count: 49152
+    maximum_host_ram_percent: 92.0
+    minimum_free_disk_gib: 5.0
+    resource_telemetry_interval_seconds: 5.0
+  random_seed: 20260811
+  progressive_model_sizing:
+    kind: progressive
+    models:
+    - model_id: chess-cnn-scaled-post-12x128-fromto-int8
+      network:
+        policy_head:
+          kind: chess_from_to_attention_v1
+          key_size: 128
+        num_value_channels: 2
+        value_fc_size: 48
+        kind: convolutional
+        num_layers: 12
+        hidden_size: 128
+        residual_context:
+          kind: global_pooling
+          placement: every_second_block
+        residual_block:
+          kind: scaled_post_activation
+          branch_scale: 0.2886751345948129
+          activation_cap: 6.0
+    - model_id: chess-cnn-scaled-post-14x160-fromto-int8
+      network:
+        policy_head:
+          kind: chess_from_to_attention_v1
+          key_size: 128
+        num_value_channels: 2
+        value_fc_size: 48
+        kind: convolutional
+        num_layers: 14
+        hidden_size: 160
+        residual_context:
+          kind: global_pooling
+          placement: every_second_block
+        residual_block:
+          kind: scaled_post_activation
+          branch_scale: 0.2672612419124244
+          activation_cap: 6.0
+    - model_id: chess-cnn-scaled-post-19x176-fromto-int8
+      network:
+        policy_head:
+          kind: chess_from_to_attention_v1
+          key_size: 128
+        num_value_channels: 2
+        value_fc_size: 48
+        kind: convolutional
+        num_layers: 19
+        hidden_size: 176
+        residual_context:
+          kind: global_pooling
+          placement: every_second_block
+        residual_block:
+          kind: scaled_post_activation
+          branch_scale: 0.22941573387056174
+          activation_cap: 6.0
+    candidate_start:
+      kind: staged_elo_plateau
+      stages:
+      - candidate_model_id: chess-cnn-scaled-post-14x160-fromto-int8
+        minimum_worthwhile_gain_per_hour: 12.0
+      - candidate_model_id: chess-cnn-scaled-post-19x176-fromto-int8
+        minimum_worthwhile_gain_per_hour: 3.0
+    promotion:
+      decay: 0.8
+      warmup_quanta: 10
+      maximum_relative_loss: 1.002
+      candidate_catchup_learning_rate: 0.1
+evaluation:
+  cadence_seconds: 1200
+  job_timeout_seconds: 1800.0
+  shutdown_grace_seconds: 30.0
+  bootstrap_samples: 10000
+  maximum_concurrent_jobs: 16
+  dataset:
+    path: /workspace/evaluation-artifacts/chess/chess-stockfish-evaluation-v33.bin
+    source:
+      kind: engine_self_play
+      random_seed: 20260811
+      move_sampling_temperature: 1.0
+  openings:
+    path: /workspace/evaluation-artifacts/chess/chess-stockfish-8moves-v3-openings-v33.json
+    opening_count: 50
+    source:
+      kind: chess_book
+      selection_path: py/reference/chess-stockfish-8moves-v3-openings-50.tsv
+      selection_sha256: ec0fe73449d7ec6ff58db6b060d4c2535afef1d2cfdac098fb44b0cff22735b2
+  engine:
+    kind: stockfish
+    executable_path: engines/stockfish
+    label_nodes: 10000
+    match_nodes: 1000
+    threads: 1
+    hash_mib: 1024
+    multi_pv: 8
+    policy_softmax_temperature: 0.15
+  definitions:
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: stockfish_adaptive_nodes
+    definition_id: stockfish-searched
+    node_ladder:
+    - 30
+    - 100
+    - 300
+    - 1000
+    - 2000
+    - 3000
+    - 5000
+    - 10000
+    initial_nodes: 30
+    retreat_score_threshold: 0.3
+    advance_score_threshold: 0.7
+    bracket_rungs: 3
+    engine_executable_path: engines/stockfish-13
+    search:
+      searches_per_move: 64
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        sdpa_backend: memory_efficient
+        backend:
+          kind: tensorrt
+          templates:
+          - kind: qat
+            model_id: chess-cnn-scaled-post-12x128-fromto-int8
+            phase: pre_fold
+            engine_path: \workspace\tensorrt\v75-int8-12x128-prefold-eval64-template.engine
+          - kind: qat
+            model_id: chess-cnn-scaled-post-14x160-fromto-int8
+            phase: pre_fold
+            engine_path: \workspace\tensorrt\v35-int8-14x160-prefold-eval-template.engine
+          - kind: qat
+            model_id: chess-cnn-scaled-post-19x176-fromto-int8
+            phase: pre_fold
+            engine_path: \workspace\tensorrt\v48-19x176-prefold-fp16-b64.engine
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+  - opening_pair_count: 50
+    maximum_game_plies: 300
+    first_generation: 1
+    final_generation: null
+    kind: stockfish_adaptive_nodes
+    definition_id: stockfish-policy-only
+    node_ladder:
+    - 30
+    - 100
+    - 300
+    - 1000
+    - 2000
+    - 3000
+    - 5000
+    - 10000
+    initial_nodes: 30
+    retreat_score_threshold: 0.3
+    advance_score_threshold: 0.7
+    bracket_rungs: 3
+    engine_executable_path: engines/stockfish-13
+    search:
+      searches_per_move: 1
+      parallel_searches: 1
+      exploration_constant: auto
+      inference:
+        inference_workers: 1
+        inference_batch_size: 64
+        outstanding_batches_per_worker: 1
+        sdpa_backend: memory_efficient
+        backend:
+          kind: tensorrt
+          templates:
+          - kind: qat
+            model_id: chess-cnn-scaled-post-12x128-fromto-int8
+            phase: pre_fold
+            engine_path: \workspace\tensorrt\v75-int8-12x128-prefold-eval64-template.engine
+          - kind: qat
+            model_id: chess-cnn-scaled-post-14x160-fromto-int8
+            phase: pre_fold
+            engine_path: \workspace\tensorrt\v35-int8-14x160-prefold-eval-template.engine
+          - kind: qat
+            model_id: chess-cnn-scaled-post-19x176-fromto-int8
+            phase: pre_fold
+            engine_path: \workspace\tensorrt\v48-19x176-prefold-fp16-b64.engine
+          bootstrap_with_torchscript: true
+          allow_fidelity_deviation: true
+game: chess
+chess:
+  self_play:
+    search:
+      baseline_visits:
+        kind: staged
+        stages:
+        - start_generation: 0
+          value: 300
+        - start_generation: 10
+          value: 400
+        - start_generation: 50
+          value: 500
+        - start_generation: 90
+          value: 600
+        - start_generation: 1000
+          value: 800
+      virtual_loss_weight: 1.0
+      dirichlet_epsilon: 0.25
+      dirichlet_alpha: 0.3
+      exploration_constant: 1.5
+      first_play_urgency:
+        kind: reduced_parent_value
+        reduction: 0.2
+      forced_playouts:
+        kind: enabled
+        coefficient: 1.5
+    inference:
+      inference_workers: 1
+      inference_batch_size: 320
+      outstanding_batches_per_worker: 2
+      sdpa_backend: memory_efficient
+      backend:
+        kind: tensorrt
+        templates:
+        - kind: qat
+          model_id: chess-cnn-scaled-post-12x128-fromto-int8
+          phase: pre_fold
+          engine_path: \workspace\tensorrt\v43-int8-12x128-prefold-stable-c0c1f585.engine
+        - kind: qat
+          model_id: chess-cnn-scaled-post-14x160-fromto-int8
+          phase: pre_fold
+          engine_path: \workspace\tensorrt\v35-int8-14x160-prefold-production-template.engine
+        - kind: qat
+          model_id: chess-cnn-scaled-post-19x176-fromto-int8
+          phase: pre_fold
+          engine_path: \workspace\tensorrt\v48-19x176-prefold-fp16-b320.engine
+        bootstrap_with_torchscript: true
+        allow_fidelity_deviation: true
+      precision: bfloat16
+      memory_format: channels_last
+      cudnn_benchmark: true
+    start_position:
+      kind: restart_state
+      standard_start_probability: 0.0
+      random_start_probability: 0.5
+      restart_start_probability: 0.5
+      maximum_random_opening_plies: 8
+      uniform_restart_probability: 0.3
+      candidate_visit_mass: 0.85
+      minimum_candidates: 2
+      maximum_candidates: 3
+      maximum_absolute_root_value: 0.8
+      minimum_remaining_plies: 15
+      maximum_archive_positions: 50000
+      maximum_age_generations: 40
+    retained_root_visit_fraction: 0.6
+    greedy_after_ply:
+      kind: staged
+      stages:
+      - start_generation: 0
+        value: 60
+      - start_generation: 110
+        value: 80
+    starting_temperature: 1.3
+    final_temperature: 0.1
+    primary_sample_weight: 1.0
+    detailed_statistics_workers: 1
+    maximum_game_plies: null
+    early_termination:
+      maximum_game_plies:
+        kind: staged
+        stages:
+        - start_generation: 0
+          value: 150
+        - start_generation: 50
+          value: 160
+        - start_generation: 80
+          value: 180
+        - start_generation: 110
+          value: 200
+        - start_generation: 140
+          value: 250
+      censor_remaining_game_length_target: true
+      value_target: search_root_value
+    resignation:
+      kind: calibrated
+      first_production_generation: 70
+      false_nonloss_rate_ceiling: 0.025
+      continuation_game_probability: 0.2
+      triggered_game_window: 2000
+      candidate_threshold_minimum: -0.99
+      candidate_threshold_maximum: -0.7
+      candidate_threshold_step: 0.01
+      minimum_evidence_trigger_count: 100
+      confidence_level: 0.95
+      maximum_relaxation_per_generation: 0.01
+  objective:
+    policy_loss_weight: 1.0
+    value_loss_weight: 1.0
+    root_value_blend:
+      kind: linear
+      start_generation: 50
+      end_generation: 110
+      start_value: 0.0
+      end_value: 0.1
+      rounding: none
+    value_discount_per_ply: 0.998
+    search_value_discount_per_ply: 0.99
+    auxiliary_targets:
+    - kind: next_policy
+      ply_offset: 1
+      loss_weight: 0.15
+    - kind: remaining_game_length
+      loss_weight: 0.1
+      normalization_scale: 400.0
