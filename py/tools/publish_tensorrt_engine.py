@@ -291,24 +291,13 @@ def _automatic_template_path(
     return configured_template_path.parent / 'automatic-refit' / f'b{input_shape[0]}-{signature}.engine'
 
 
-def _recalibrated_template_path(
+def _build_automatic_template(
+    onnx_path: Path,
     configured_template_path: Path,
     input_shape: tuple[int, int, int, int],
     signature: str,
-    source_sha256: str,
 ) -> Path:
-    return (
-        configured_template_path.parent
-        / 'automatic-refit'
-        / f'b{input_shape[0]}-{signature}-{source_sha256[:16]}.engine'
-    )
-
-
-def _build_automatic_template(
-    onnx_path: Path,
-    template_path: Path,
-    input_shape: tuple[int, int, int, int],
-) -> Path:
+    template_path = _automatic_template_path(configured_template_path, input_shape, signature)
     lock_path = template_path.with_suffix('.lock')
     with exclusive_lock(lock_path):
         if template_path.is_file():
@@ -363,82 +352,59 @@ def publish(
         exported = onnx.load(onnx_path)
         onnx.checker.check_model(exported, full_check=True)
         graph_signature = onnx_graph_signature(onnx_path)
-
-        def publish_from_template(
-            selected_template_path: Path, tolerate_deviation: bool
-        ) -> dict[str, str | int | float | bool]:
-            template_sha256 = file_sha256(selected_template_path)
-            engine_path = model_path.with_suffix(f'.trt-{template_sha256[:16]}.engine')
-            metadata_path = engine_path.with_suffix('.json')
-            lock_path = engine_path.with_suffix('.lock')
-            with exclusive_lock(lock_path):
-                if engine_path.is_file() and metadata_path.is_file():
-                    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
-                    if (
-                        metadata.get('source_sha256') == source_sha256
-                        and metadata.get('graph_signature') == graph_signature
-                        and metadata.get('template_sha256') == template_sha256
-                        and metadata.get('engine_sha256') == file_sha256(engine_path)
-                        and metadata.get('verification_batch_size') == input_shape[0]
-                        and (tolerate_deviation or metadata.get('fidelity_limits_passed', True))
-                    ):
-                        return {
-                            **metadata,
-                            'engine_path': str(engine_path),
-                            'template_path': str(selected_template_path),
-                            'cached': True,
-                        }
-                refit_started_at = time.perf_counter()
-                refit_engine(selected_template_path, onnx_path, engine_path)
-                refit_seconds = time.perf_counter() - refit_started_at
-                verification = verify_engine(onnx_path, engine_path, input_shape, tolerate_deviation)
-                metadata = {
-                    'engine_path': str(engine_path),
-                    'engine_sha256': file_sha256(engine_path),
-                    'source_sha256': source_sha256,
-                    'graph_signature': graph_signature,
-                    'template_sha256': template_sha256,
-                    'template_path': str(selected_template_path),
-                    'batch_size': input_shape[0],
-                    'refit_seconds': refit_seconds,
-                    'verification_batch_size': verification.batch_size,
-                    'policy_mean_absolute_error': verification.policy_mean_absolute_error,
-                    'policy_maximum_absolute_error': verification.policy_maximum_absolute_error,
-                    'policy_top1_agreement': verification.policy_top1_agreement,
-                    'policy_mean_kl_divergence': verification.policy_mean_kl_divergence,
-                    'policy_maximum_kl_divergence': verification.policy_maximum_kl_divergence,
-                    'wdl_mean_absolute_error': verification.wdl_mean_absolute_error,
-                    'wdl_maximum_absolute_error': verification.wdl_maximum_absolute_error,
-                    'fidelity_limits_passed': verification.fidelity_limits_passed,
-                    'cached': False,
-                }
-                write_text_atomically(metadata_path, json.dumps(metadata, indent=2, sort_keys=True) + '\n')
-                return metadata
-
-        published = publish_from_template(
-            _build_automatic_template(
-                onnx_path,
-                _automatic_template_path(template_paths[0], input_shape, graph_signature),
-                input_shape,
-            ),
-            tolerate_deviation=True,
+        selected_template_path = _build_automatic_template(
+            onnx_path,
+            template_paths[0],
+            input_shape,
+            graph_signature,
         )
-        if published['fidelity_limits_passed']:
-            return published
-        # A template bakes its quantisation scales in at build time and refit only replaces weights,
-        # so fidelity decays as a checkpoint drifts away from whichever one the template was built
-        # from. Rebuild against this checkpoint before reporting the deviation.
-        recalibrated = publish_from_template(
-            _build_automatic_template(
-                onnx_path,
-                _recalibrated_template_path(template_paths[0], input_shape, graph_signature, source_sha256),
-                input_shape,
-            ),
-            tolerate_deviation=allow_fidelity_deviation,
-        )
-        if recalibrated['policy_top1_agreement'] > published['policy_top1_agreement']:
-            return recalibrated
-        return published
+        template_sha256 = file_sha256(selected_template_path)
+        engine_path = model_path.with_suffix(f'.trt-{template_sha256[:16]}.engine')
+        metadata_path = engine_path.with_suffix('.json')
+        lock_path = engine_path.with_suffix('.lock')
+        with exclusive_lock(lock_path):
+            if engine_path.is_file() and metadata_path.is_file():
+                metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+                if (
+                    metadata.get('source_sha256') == source_sha256
+                    and metadata.get('graph_signature') == graph_signature
+                    and metadata.get('template_sha256') == template_sha256
+                    and metadata.get('engine_sha256') == file_sha256(engine_path)
+                    and metadata.get('verification_batch_size') == input_shape[0]
+                    and (allow_fidelity_deviation or metadata.get('fidelity_limits_passed', True))
+                ):
+                    return {
+                        **metadata,
+                        'engine_path': str(engine_path),
+                        'template_path': str(selected_template_path),
+                        'cached': True,
+                    }
+            refit_started_at = time.perf_counter()
+            refit_engine(selected_template_path, onnx_path, engine_path)
+            refit_seconds = time.perf_counter() - refit_started_at
+            verification = verify_engine(onnx_path, engine_path, input_shape, allow_fidelity_deviation)
+            metadata = {
+                'engine_path': str(engine_path),
+                'engine_sha256': file_sha256(engine_path),
+                'source_sha256': source_sha256,
+                'graph_signature': graph_signature,
+                'template_sha256': template_sha256,
+                'template_path': str(selected_template_path),
+                'batch_size': input_shape[0],
+                'refit_seconds': refit_seconds,
+                'verification_batch_size': verification.batch_size,
+                'policy_mean_absolute_error': verification.policy_mean_absolute_error,
+                'policy_maximum_absolute_error': verification.policy_maximum_absolute_error,
+                'policy_top1_agreement': verification.policy_top1_agreement,
+                'policy_mean_kl_divergence': verification.policy_mean_kl_divergence,
+                'policy_maximum_kl_divergence': verification.policy_maximum_kl_divergence,
+                'wdl_mean_absolute_error': verification.wdl_mean_absolute_error,
+                'wdl_maximum_absolute_error': verification.wdl_maximum_absolute_error,
+                'fidelity_limits_passed': verification.fidelity_limits_passed,
+                'cached': False,
+            }
+            write_text_atomically(metadata_path, json.dumps(metadata, indent=2, sort_keys=True) + '\n')
+            return metadata
     finally:
         if owns_onnx:
             temporary_onnx_path.unlink(missing_ok=True)
