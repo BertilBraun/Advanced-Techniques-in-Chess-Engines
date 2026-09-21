@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     from AlphaZeroCpp import SdpaBackend as NativeSdpaBackend
 
 
+FIDELITY_PROBE_FILE_NAME = 'fidelity-probe.npz'
+
+
 def native_sdpa_backend(backend: SdpaBackend) -> NativeSdpaBackend:
     from AlphaZeroCpp import SdpaBackend as NativeSdpaBackend
 
@@ -114,6 +117,9 @@ def resolved_inference_model_path(
             )
             if tensor_rt_backend.allow_fidelity_deviation:
                 command += ('--allow-fidelity-deviation',)
+            probe_path = model_path.parent / FIDELITY_PROBE_FILE_NAME
+            if probe_path.is_file():
+                command += ('--probe-states', str(probe_path.resolve()))
             completed = subprocess.run(
                 command,
                 check=True,

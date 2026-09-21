@@ -210,9 +210,18 @@ def _output_errors(reference: np.ndarray, candidate: np.ndarray) -> tuple[float,
     return float(errors.mean()), float(errors.max())
 
 
-def _policy_distribution_agreement(reference: np.ndarray, candidate: np.ndarray) -> tuple[float, float, float]:
+def _policy_distribution_agreement(
+    reference: np.ndarray,
+    candidate: np.ndarray,
+    legal_mask: np.ndarray | None = None,
+) -> tuple[float, float, float]:
     if reference.shape != candidate.shape:
         raise ValueError(f'TensorRT policy shape {candidate.shape} does not match ONNX shape {reference.shape}.')
+    if legal_mask is not None:
+        # Illegal-move logits are never trained, so an unmasked softmax over all actions is close to
+        # uniform and its argmax is decided by ties rather than by the engine.
+        reference = np.where(legal_mask, reference, -np.inf)
+        candidate = np.where(legal_mask, candidate, -np.inf)
     reference_shifted = reference - reference.max(axis=1, keepdims=True)
     candidate_shifted = candidate - candidate.max(axis=1, keepdims=True)
     reference_log_probabilities = reference_shifted - np.log(np.exp(reference_shifted).sum(axis=1, keepdims=True))
@@ -226,15 +235,37 @@ def _policy_distribution_agreement(reference: np.ndarray, candidate: np.ndarray)
     return float(top1_agreement), float(divergences.mean()), float(divergences.max())
 
 
+def _load_fidelity_probe(
+    probe_path: Path, input_shape: tuple[int, int, int, int], action_size: int
+) -> tuple[np.ndarray, np.ndarray]:
+    batch_size = input_shape[0]
+    with np.load(probe_path) as probe:
+        states = probe['states'][:batch_size]
+        legal_action_ids = probe['legal_action_ids'][:batch_size]
+        legal_count = probe['legal_count'][:batch_size]
+    if states.shape[0] < batch_size:
+        raise ValueError(f'Fidelity probe holds {states.shape[0]} positions, fewer than the {batch_size} required.')
+    legal_mask = np.zeros((batch_size, action_size), dtype=bool)
+    for row, count in enumerate(legal_count):
+        legal_mask[row, legal_action_ids[row, :count].astype(np.int64)] = True
+    return states.astype(np.float32), legal_mask
+
+
 def verify_engine(
     onnx_path: Path,
     engine_path: Path,
     input_shape: tuple[int, int, int, int],
     allow_fidelity_deviation: bool,
+    probe_path: Path | None = None,
 ) -> TensorRtVerification:
     batch_size = input_shape[0]
-    generator = np.random.default_rng(0)
-    states = generator.integers(0, 2, size=(batch_size, *input_shape[1:]), dtype=np.int8)
+    legal_mask = None
+    if probe_path is None:
+        generator = np.random.default_rng(0)
+        states = generator.integers(0, 2, size=(batch_size, *input_shape[1:]), dtype=np.int8)
+    else:
+        action_size = _onnx_output_width(onnx.load(onnx_path, load_external_data=False), POLICY_OUTPUT_NAME)
+        states, legal_mask = _load_fidelity_probe(probe_path, input_shape, action_size)
     onnx_policy, onnx_wdl = _onnx_outputs(onnx_path, states)
     model = onnx.load(onnx_path, load_external_data=False)
     dimensions = InferenceDimensions(
@@ -262,7 +293,7 @@ def verify_engine(
     tensor_rt_policy, tensor_rt_wdl = runner.forward(states)
     policy_mean_error, policy_maximum_error = _output_errors(onnx_policy, tensor_rt_policy)
     policy_top1_agreement, policy_mean_kl_divergence, policy_maximum_kl_divergence = _policy_distribution_agreement(
-        onnx_policy, tensor_rt_policy
+        onnx_policy, tensor_rt_policy, legal_mask
     )
     wdl_mean_error, wdl_maximum_error = _output_errors(onnx_wdl, tensor_rt_wdl)
     fidelity_limits_passed = not (
@@ -338,6 +369,7 @@ def publish(
     model_path: Path,
     template_paths: tuple[Path, ...],
     allow_fidelity_deviation: bool,
+    probe_path: Path | None = None,
 ) -> dict[str, str | int | float | bool]:
     if not template_paths:
         raise ValueError('At least one TensorRT template is required.')
@@ -390,7 +422,7 @@ def publish(
             refit_started_at = time.perf_counter()
             refit_engine(selected_template_path, onnx_path, engine_path)
             refit_seconds = time.perf_counter() - refit_started_at
-            verification = verify_engine(onnx_path, engine_path, input_shape, allow_fidelity_deviation)
+            verification = verify_engine(onnx_path, engine_path, input_shape, allow_fidelity_deviation, probe_path)
             metadata = {
                 'engine_path': str(engine_path),
                 'engine_sha256': file_sha256(engine_path),
@@ -423,6 +455,7 @@ def main() -> None:
     parser.add_argument('--model', type=Path, required=True)
     parser.add_argument('--template-engine', type=Path, required=True, action='append')
     parser.add_argument('--allow-fidelity-deviation', action='store_true')
+    parser.add_argument('--probe-states', type=Path)
     arguments = parser.parse_args()
     print(
         json.dumps(
@@ -430,6 +463,7 @@ def main() -> None:
                 arguments.model,
                 tuple(arguments.template_engine),
                 arguments.allow_fidelity_deviation,
+                arguments.probe_states,
             ),
             sort_keys=True,
         )

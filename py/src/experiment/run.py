@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import multiprocessing
 import os
 import subprocess
@@ -10,10 +11,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import psutil
 import torch
 from src.evaluation.configuration import KataGoEngineConfiguration, StockfishEngineConfiguration
-from src.evaluation.dataset import load_dataset_probe_states
+from src.evaluation.dataset import load_dataset_probe_legality, load_dataset_probe_states
 from src.evaluation.preparation import PreparedEvaluationArtifacts, prepare_evaluation_artifacts
 from src.experiment.base_configuration import (
     CheckpointResumeConfiguration,
@@ -24,7 +26,7 @@ from src.experiment.configuration import ExperimentConfiguration, experiment_con
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.games.composition import create_game_implementation
 from src.self_play.configuration import TensorRtInferenceBackend
-from src.self_play.native_configuration import uses_torchscript_bootstrap
+from src.self_play.native_configuration import FIDELITY_PROBE_FILE_NAME, uses_torchscript_bootstrap
 from src.training.bootstrap import select_bootstrap_model
 from src.training.checkpoint import CheckpointReference
 from src.training.checkpoint.paths import model_save_path, qat_state_save_path
@@ -41,7 +43,7 @@ from src.training.quantization import (
 from src.training.quantization.checkpoint import save_qat_model_and_optimizer
 from src.training.quantization.runtime import configure_qat, fixed_batch_example_states, save_qat_state
 from src.training.targets import AuxiliaryHeadLayout
-from src.util.atomic_file import write_text_atomically
+from src.util.atomic_file import write_bytes_atomically, write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.hashing import file_sha256
 
@@ -470,6 +472,27 @@ def _evaluation_engine_artifact_sha256(experiment: ExperimentConfiguration) -> t
     return tuple(file_sha256(_resolve_source_path(path)) for path in paths)
 
 
+def _write_fidelity_probe(experiment: ExperimentConfiguration, output_path: Path) -> None:
+    """Freeze the positions the TensorRT fidelity check probes with.
+
+    Random planes are not positions, so the check used to score argmax agreement over a near-uniform
+    1880-way distribution dominated by untrained illegal-move logits. Holding the evaluation
+    dataset's own positions fixed also makes the numbers comparable across generations and runs.
+    """
+    position_count = experiment.training.trainer.bootstrap_probe_positions
+    dataset_path = _resolve_source_path(experiment.evaluation.dataset.path)
+    states = load_dataset_probe_states(dataset_path, create_game_implementation(experiment).state, position_count)
+    legal_action_ids, legal_count = load_dataset_probe_legality(dataset_path, position_count)
+    buffer = io.BytesIO()
+    np.savez(
+        buffer,
+        states=states.numpy().astype(np.float32),
+        legal_action_ids=legal_action_ids,
+        legal_count=legal_count,
+    )
+    write_bytes_atomically(output_path / FIDELITY_PROBE_FILE_NAME, buffer.getvalue())
+
+
 def prepare_experiment_training_run(
     experiment: ExperimentConfiguration,
     expected_source_revision: str,
@@ -484,6 +507,7 @@ def prepare_experiment_training_run(
     )
     output_path = Path(experiment.training.save_path)
     manifest_path = output_path / 'run_manifest.json'
+    _write_fidelity_probe(experiment, output_path)
     initial_checkpoint = _prepare_initial_checkpoint(experiment, output_path, manifest_path)
     return _write_manifest(
         manifest_path,

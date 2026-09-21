@@ -456,6 +456,20 @@ def load_dataset_probe_states(
     return torch.from_numpy(decode_packed_inputs(state, packed_states))
 
 
+def load_dataset_probe_legality(
+    path: Path,
+    position_count: int,
+) -> tuple[npt.NDArray[np.uint16], npt.NDArray[np.uint8]]:
+    """Return the padded legal action ids and their counts for the first probe positions."""
+    manifest_path = dataset_manifest_path(path)
+    manifest = EVALUATION_DATASET_MANIFEST_ADAPTER.validate_json(manifest_path.read_text(encoding='utf-8'))
+    data = load_evaluation_dataset(path, manifest)[:position_count]
+    return (
+        np.ascontiguousarray(data['legal_action_ids'].astype(np.uint16)),
+        np.ascontiguousarray(data['legal_count'].astype(np.uint8)),
+    )
+
+
 def evaluate_fixed_dataset(
     job: FixedDatasetEvaluationJob,
     state: GameStateContract[PositionT],
