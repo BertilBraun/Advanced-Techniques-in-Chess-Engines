@@ -172,7 +172,8 @@ model is not mistaken for the currently served model.
 
 Every accepted benchmark records its source revision, hardware, resolved configuration SHA-256, and raw results.
 The [documentation index](documentation/README.md) explains which documents are current authority and which are
-historical evidence. `THINGS_TO_TRY.md` is an idea backlog and does not authorize experiments.
+historical evidence. The [historical research backlog](documentation/history/historical-research-backlog-20260822.md)
+is an idea ledger and does not authorize experiments.
 
 This repository currently has no top-level software or model license. Inspect that status before redistributing or
 building on the code or weights.

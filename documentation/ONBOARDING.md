@@ -42,18 +42,28 @@ authorised. Do not push to `master`; one branch per work unit.
 
 ## Conventions in ten lines
 
-Python 3.12 · `from __future__ import annotations` · full type hints · frozen dataclasses for values ·
-pydantic configs with no implicit defaults · atomic writes via `src/util/atomic_file.py` · logging via
-`src/util/log.py` · no Python MCTS (search/rules/encoding are native) · C++20, clang-format style, single
-`NativeTests` executable · comments only where a deliberate choice or boundary is non-obvious — one short
-line explaining the why · commit subjects imperative, ≤ 60 chars.
+- Use Python 3.12.
+- Add `from __future__ import annotations`.
+- Fully annotate functions and values.
+- Use frozen dataclasses for value types.
+- Define Pydantic configuration models without implicit defaults.
+- Make atomic writes through `src/util/atomic_file.py`.
+- Use `src/util/log.py` for logging.
+- Keep MCTS, rules, and encoding native; do not add a Python MCTS path.
+- Use C++20, clang-format style, and the single `NativeTests` executable.
+- Comment only where a deliberate choice or boundary is non-obvious, and use imperative commit subjects of at
+  most 60 characters.
 
 ## Glossary
 
-**WP** — work package in the recovery plan. **Generation** — 500 optimizer steps at batch 2048.
-**Quantum** — one funded training slice between checkpoint publishes. **Credit** — replay-sample budget that
-funds a quantum at the configured replay ratio. **Replay ratio** — samples ingested per sample trained on.
-**Yardstick** — the per-generation pass/fail table from the four-day run. **r3/r4** — the four-day run's
-config revisions (tag `four-day-baseline`). **Freeze** — the archived evidence bundle of that run.
-**`extends`** — config inheritance; lists replace wholesale. **Progressive sizing** — staged model growth
-during a run (`architecture/progressive-model-sizing.md`).
+- **WP** — work package in the recovery plan.
+- **Generation** — 500 optimizer steps at batch 2048.
+- **Quantum** — one funded training slice between checkpoint publishes.
+- **Credit** — replay-sample budget that funds a quantum at the configured replay ratio.
+- **Replay ratio** — samples ingested per sample trained on.
+- **Yardstick** — the per-generation pass/fail table from the four-day run.
+- **r3/r4** — the four-day run's config revisions (tag `four-day-baseline`).
+- **Freeze** — the archived evidence bundle of that run.
+- **`extends`** — configuration inheritance; lists replace wholesale.
+- **Progressive sizing** — staged model growth during a run
+  ([architecture guide](architecture/progressive-model-sizing.md)).

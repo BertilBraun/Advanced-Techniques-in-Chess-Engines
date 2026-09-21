@@ -24,8 +24,8 @@ budget, hardware allocation, and run duration. The user decides which results
 justify another run, progression to 9x9, integration into chess, or adoption as
 a new standard.
 
-`THINGS_TO_TRY.md` is the experiment backlog. This document defines the
-platform work needed to run and compare those experiments.
+The [historical research backlog](../history/historical-research-backlog-20260822.md) records the experiment ideas.
+This document defines the platform work needed to run and compare those experiments.
 
 ## Implementation workflow
 
@@ -895,7 +895,8 @@ Deliverables:
   replay behavior, evaluation overhead, memory, and strength over time;
 - select the standard six-hour screening configuration;
 - verify that the selected configuration produces a useful learning curve;
-- run an initial queued comparison from `THINGS_TO_TRY.md`;
+- run an initial queued comparison from the
+  [historical research backlog](../history/historical-research-backlog-20260822.md);
 - promote results through 9x9 Go and chess according to the progression in
   this plan.
 

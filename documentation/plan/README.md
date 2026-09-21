@@ -49,5 +49,6 @@ The following designs were implemented or evaluated and then retired. Their conc
 - [Run 2 versus r3](run2-r3-diff.md)
 
 Older preparation plans with explicit supersession banners live under [`archive/`](archive/). The
-[experiment backlog](../../THINGS_TO_TRY.md) is a historical research ledger rather than current authority, and
+[historical research backlog](../history/historical-research-backlog-20260822.md) is a research ledger rather than
+current authority, and
 [references](../references.md) lists papers and external resources.
