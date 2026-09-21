@@ -269,7 +269,7 @@ def test_v44_uses_screened_fold_and_deployment_learning_rate() -> None:
     assert training.progressive_model_sizing.is_progressive
     assert tuple(model.network.num_layers for model in training.progressive_model_sizing.models) == (12, 14)
     assert tuple(model.network.hidden_size for model in training.progressive_model_sizing.models) == (128, 160)
-    assert training.progressive_model_sizing.promotion.candidate_catchup_learning_rate == pytest.approx(0.1)
+    assert training.progressive_model_sizing.promotion.candidate_catchup_learning_rate.value_at(0) == pytest.approx(0.1)
     assert trainer.learning_rate.value_at(0) == pytest.approx(0.1)
     assert trainer.learning_rate.value_at(1000) == pytest.approx(0.01)
     assert trainer.warmup_optimizer_steps == 1_000
@@ -326,7 +326,9 @@ def test_v47_uses_progressive_int8_with_adamw() -> None:
     assert training.progressive_model_sizing.is_progressive
     assert tuple(model.network.num_layers for model in training.progressive_model_sizing.models) == (12, 14)
     assert tuple(model.network.hidden_size for model in training.progressive_model_sizing.models) == (128, 160)
-    assert training.progressive_model_sizing.promotion.candidate_catchup_learning_rate == pytest.approx(0.004)
+    assert training.progressive_model_sizing.promotion.candidate_catchup_learning_rate.value_at(0) == pytest.approx(
+        0.004
+    )
     assert trainer.optimizer.kind == 'adamw'
     assert trainer.learning_rate.value_at(0) == pytest.approx(0.008)
     assert trainer.learning_rate.value_at(100) == pytest.approx(0.006)
