@@ -11,8 +11,10 @@ not make it current guidance.
 3. Read the [current system guide](system/README.md) for the implemented end-to-end design and final recipe.
 4. Read the [experiment ledger](experiments/README.md) for what was retained, rejected, inconclusive, or never run.
 5. Read the [technical report](report/README.md) for the long-form research narrative.
-6. Read the [Python](../py/README.md) or [C++](../cpp/README.md) guide before changing that runtime.
-7. Read [Run control](operations/run-control.md) and the
+6. Use the [bibliography and citation plan](report/bibliography.md) for primary research and versioned external
+   documentation; [research references](references.md) preserves the wider reading trail.
+7. Read the [Python](../py/README.md) or [C++](../cpp/README.md) guide before changing that runtime.
+8. Read [Run control](operations/run-control.md) and the
    [experiment platform](operations/experiment-platform.md) before touching a run or rented node.
 
 ## Results
@@ -79,7 +81,10 @@ that were subsequently replaced.
 ## Research narrative
 
 For the maintained synthesis, start with the [experiment ledger](experiments/README.md) or the
-[technical report](report/README.md). The chronological path through the older compute-poor chess work is:
+[technical report](report/README.md). External research claims should use the
+[report bibliography](report/bibliography.md); the broader [research-reference page](references.md) keeps
+historical tutorials and implementation pointers visibly separate from primary sources. The chronological path
+through the older compute-poor chess work is:
 
 1. [Post-four-day regression analysis](plan/chess-post-four-day-regression-analysis-20260820.md) identifies why
    earlier rework stopped learning.
