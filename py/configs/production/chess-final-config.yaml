@@ -349,15 +349,15 @@ evaluation:
           - kind: qat
             model_id: chess-cnn-scaled-post-12x128-fromto-int8
             phase: pre_fold
-            engine_path: \workspace\tensorrt\v75-int8-12x128-prefold-eval64-template.engine
+            engine_path: /workspace/tensorrt/v75-int8-12x128-prefold-eval64-template.engine
           - kind: qat
             model_id: chess-cnn-scaled-post-14x160-fromto-int8
             phase: pre_fold
-            engine_path: \workspace\tensorrt\v35-int8-14x160-prefold-eval-template.engine
+            engine_path: /workspace/tensorrt/v35-int8-14x160-prefold-eval-template.engine
           - kind: qat
             model_id: chess-cnn-scaled-post-19x176-fromto-int8
             phase: pre_fold
-            engine_path: \workspace\tensorrt\v48-19x176-prefold-fp16-b64.engine
+            engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b64.engine
           bootstrap_with_torchscript: true
           allow_fidelity_deviation: true
   - opening_pair_count: 50
@@ -395,15 +395,15 @@ evaluation:
           - kind: qat
             model_id: chess-cnn-scaled-post-12x128-fromto-int8
             phase: pre_fold
-            engine_path: \workspace\tensorrt\v75-int8-12x128-prefold-eval64-template.engine
+            engine_path: /workspace/tensorrt/v75-int8-12x128-prefold-eval64-template.engine
           - kind: qat
             model_id: chess-cnn-scaled-post-14x160-fromto-int8
             phase: pre_fold
-            engine_path: \workspace\tensorrt\v35-int8-14x160-prefold-eval-template.engine
+            engine_path: /workspace/tensorrt/v35-int8-14x160-prefold-eval-template.engine
           - kind: qat
             model_id: chess-cnn-scaled-post-19x176-fromto-int8
             phase: pre_fold
-            engine_path: \workspace\tensorrt\v48-19x176-prefold-fp16-b64.engine
+            engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b64.engine
           bootstrap_with_torchscript: true
           allow_fidelity_deviation: true
 game: chess
@@ -444,15 +444,15 @@ chess:
         - kind: qat
           model_id: chess-cnn-scaled-post-12x128-fromto-int8
           phase: pre_fold
-          engine_path: \workspace\tensorrt\v43-int8-12x128-prefold-stable-c0c1f585.engine
+          engine_path: /workspace/tensorrt/v43-int8-12x128-prefold-stable-c0c1f585.engine
         - kind: qat
           model_id: chess-cnn-scaled-post-14x160-fromto-int8
           phase: pre_fold
-          engine_path: \workspace\tensorrt\v35-int8-14x160-prefold-production-template.engine
+          engine_path: /workspace/tensorrt/v35-int8-14x160-prefold-production-template.engine
         - kind: qat
           model_id: chess-cnn-scaled-post-19x176-fromto-int8
           phase: pre_fold
-          engine_path: \workspace\tensorrt\v48-19x176-prefold-fp16-b320.engine
+          engine_path: /workspace/tensorrt/v48-19x176-prefold-fp16-b320.engine
         bootstrap_with_torchscript: true
         allow_fidelity_deviation: true
       precision: bfloat16
