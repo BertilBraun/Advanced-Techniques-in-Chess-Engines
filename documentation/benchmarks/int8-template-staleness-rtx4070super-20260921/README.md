@@ -86,9 +86,82 @@ and the warning carried no information: the 0.42/2.06 collapse logged the same l
 export. Limits are now 1e-2 and 0.05, six times above the healthy case and an order of magnitude
 below the broken one.
 
+## The fidelity metric measures the wrong thing
+
+Investigated on the node against TensorRT 10.14.1.48, onnxruntime 1.24.4, modelopt 0.46.1.
+
+`verify_engine` probes with `rng.integers(0, 2, size=(batch, 52, 8, 8))` - **random binary planes,
+not chess positions** - and softmaxes over all 1880 actions with **no legality mask**. Illegal-move
+logits are untrained, so the reference distribution is near-uniform (entropy 6.85 of a possible
+7.54) and argmax agreement is dominated by ties.
+
+Measured on generation 491, same checkpoint throughout:
+
+| probe | reference entropy | median top1-top2 gap | top1 |
+|---|---|---|---|
+| random inputs, unmasked (the production metric) | 6.68 | 0.21 | 0.866 |
+| real positions, unmasked | 6.85 | 0.13 | 0.922 |
+| real positions, legal-masked | 2.11 | 0.48 | **0.973** |
+| pure FP16 engine, no INT8 at all, real positions, legal-masked | | | **0.994** |
+
+So ~0.99 is not achievable even without quantisation: fp16 rounding alone flips 1-2% of argmaxes on
+this head. A healthy INT8 engine is ~0.96-0.97 legal-masked, and the production number of 0.90
+corresponds to that. The genuine INT8 cost on real positions is small: legal KL 0.0010, total
+variation 0.015, 0.1% of policy mass lost at the argmax, WDL mean absolute error 0.0024, and
+Stockfish top-move accuracy 0.436 float against 0.438 for the TensorRT engine (n=516, noise +-0.02).
+
+Only the 28 backbone convolutions are INT8; QAT excludes the policy head, value head, `nn.Linear`
+and the start block (`_qat_configuration()` in `py/src/training/quantization/runtime.py`).
+
+## Refit does update quantisation scales
+
+An earlier conclusion recorded here in error - that per-generation recalibration never reaches the
+engine - is **wrong**. Measured: `refitter.get_all_weights()` lists all 56 scale constants and
+`get_named_weights` returns the new values after `refit_from_file`. A template built from an ONNX
+with every scale doubled, then refit with the genuine ONNX, lands at legal KL 0.00101 against
+0.00103 for a direct build, at optimization levels 0 through 4 and on the production level-5
+templates for both the 14x160 and the 12x128. Cross-lineage refit also works: a template built from
+a different run's 14x160 (scale ratios 0.0 to 8.2x) refit with generation 486 gives 0.00123 against
+0.00117 direct.
+
+TensorRT's explicit-quantization documentation agrees: refitting a refittable engine may assign new
+values to Q/DQ scales.
+
+So template staleness alone does not explain the collapse. Refitting generation 486 into the
+quarantined 17 September template reproduces the broken engine bit-for-bit (max policy difference
+0), yet that engine lists 188 refittable weights including all 56 scales, and perturbing its
+activation scales does take effect. Same-lineage staleness was measured at only +18% relative KL
+over 240,000 steps, with no measurable Stockfish effect.
+
+The leading hypothesis is **template provenance**, not age: TensorRT under `kREFIT` can fold away a
+weight that is exactly zero at build time (the documented case is a GEMM bias "dropped and treated
+as zero"), after which it is not exposed to refit. `refit_from_file` silently skips tensors the
+engine does not list, and `get_missing_weights()` stays empty. A template built from a freshly grown
+progressive 14x160, whose new blocks are still zero, would then freeze those tensors at zero for
+every later checkpoint. That is a progressive-model-sizing landmine and is under test.
+
+## Build cost
+
+On GPU 0 while self-play ran on the same GPU, so inflated. b320, REFIT+FP16, fresh timing cache:
+
+| optimization level | build |
+|---|---|
+| 0 | 49 s |
+| 1 | 91 s |
+| 2 | 105 s |
+| 3 | 190 s |
+| 4 | 422 s |
+| 5 | 737 s |
+| 5, warm timing cache | **102 s** |
+
+Fidelity is identical within noise across levels 0 to 4 (legal KL 0.00101 to 0.00103). Rebuilding is
+therefore cheap, and a cadence of every 50 to 100 generations is affordable insurance - but it is
+insurance, not the fix.
+
 ## Open
 
-Top1 of 0.88 to 0.93 is itself low for INT8 against a float reference; ~0.99 would be expected unless
-the probe positions have flat policies where argmax is noise-dominated. Whether that is genuine
-quantisation error or an artifact of the metric is under investigation, as is the rebuild cadence:
-top1 fell from 0.934 at generation 489 to 0.878 at 493 on a template built at 482.
+- Root cause of the 17 September template: the zero-folding test is still running.
+- The `.engine` files are never pruned: one exists for every generation from 1 to 506 (4.7 GB),
+  while `model_*.pt` is correctly pruned to 87. `inference_retention` does not cover built engines.
+- `REFIT_INDIVIDUAL` with the current initializer-only marking leaves 0 of 56 scales refittable and
+  collapses to KL 1.1. Production uses `'all'`, so this is a trap rather than an active bug.
