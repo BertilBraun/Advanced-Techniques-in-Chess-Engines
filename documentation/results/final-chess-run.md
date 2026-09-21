@@ -76,9 +76,33 @@ existing reporting policy is documented in
 [What the v34 Elo numbers mean](../analysis/chess-elo-scale-and-reporting-20260911.md); the final evaluation must
 either reuse that calibration exactly or document a revised scale.
 
+## Headline cross-lineage figure
+
+The root README and technical report should share one publication-quality plot of 64-search ladder Elo over
+effective training time for the major chess lineages:
+
+- v9;
+- v29;
+- v34;
+- the v46/v48-era successor; the archive audit must resolve the exact lineage label before publication;
+- the final V89–V93 continuation, presented as one continuous learning lineage with visible resume markers.
+
+Use `evaluation/ladder_elo_64` wherever that budget-specific series exists. Older logs that expose only
+`evaluation/ladder_elo` require a configuration and evaluator audit proving that 64 searches was the primary budget;
+do not infer equivalence from the tag name or the shape of the curve. Preserve raw observations in a committed table
+and show a documented smoothing line only as an overlay. The x-axis must be effective elapsed training time derived
+from the recorded boundary seconds, with downtime excluded consistently. V89–V93 offsets must come from manifests
+and event metadata, not visual alignment, and their boundaries must remain visible.
+
+The caption should report the exact start-to-final improvement only after the final point is frozen. Approximate
+live impressions such as a 350–450 Elo gain are hypotheses for the final audit, not publishable measurements. A
+companion optimizer-step view is useful if schedule efficiency needs explanation, but it must not replace the
+wall-clock comparison that demonstrates engineering progress.
+
 ## Required figures
 
-- benchmark Elo and match score versus effective training time;
+- the headline cross-lineage 64-search ladder-Elo figure specified above;
+- final-run benchmark Elo and match score versus effective training time;
 - policy, WDL, auxiliary, and total training losses;
 - learning rate, gradient norm, and clipped-step fraction;
 - optimizer steps, self-play games, and fresh positions versus effective time;

@@ -74,14 +74,17 @@ matched protocols or explicitly identify differences.
 
 ## Figures to generate from the archive
 
-1. Total, policy, WDL, and auxiliary losses against wall-clock and optimizer step.
-2. Learning rate, gradient norm, and clipping fraction.
-3. Policy-only and searched ladder Elo against wall-clock, with uncertainty and model-promotion annotations.
-4. Generations, games, fresh positions, and training presentations against wall-clock.
-5. Self-play and trainer throughput, including pause and visit-stage changes.
-6. Replay occupancy, age distribution, and sampling mixture over time.
-7. INT8 legal-policy fidelity over time, with engine-template rebuilds and model transitions.
-8. Cost/strength comparison with the v34 result under matched definitions.
+1. The headline 64-search ladder-Elo progression across v9, v29, v34, the audited v46/v48-era successor, and the
+   stitched V89–V93 final lineage. Follow the source, timing, resume-boundary, smoothing, and label requirements in
+   the [final-run result contract](../results/final-chess-run.md#headline-cross-lineage-figure).
+2. Total, policy, WDL, and auxiliary losses against wall-clock and optimizer step.
+3. Learning rate, gradient norm, and clipping fraction.
+4. Policy-only and searched final-run ladder Elo against wall-clock, with uncertainty and model-promotion annotations.
+5. Generations, games, fresh positions, and training presentations against wall-clock.
+6. Self-play and trainer throughput, including pause and visit-stage changes.
+7. Replay occupancy, age distribution, and sampling mixture over time.
+8. INT8 legal-policy fidelity over time, with engine-template rebuilds and model transitions.
+9. Cost/strength comparison with the v34 result under matched definitions.
 
 Figures must be generated from archived machine-readable evidence, record their source files, and avoid hand-entered
 curves.
@@ -91,6 +94,7 @@ curves.
 The completed discussion should answer:
 
 - How much stronger was the selected model than v34 under identical search and opponent conditions?
+- How much 64-search ladder strength was gained from v9 to the final checkpoint under a genuinely matched protocol?
 - Did progress continue after reaching v34 strength, and at what marginal Elo per additional wall-clock day?
 - Which model and visit transitions changed throughput or learning slope?
 - Did policy-only strength and searched strength improve together?

@@ -21,6 +21,7 @@ complete.
 | Policy-only and 64-search strength | **Pending terminal evaluation** |
 | 10,000-search strength | **Pending terminal evaluation** |
 | High-search / approximately five-second strength | **Pending terminal evaluation** |
+| Cross-lineage 64-search progress figure | **Pending final V89–V93 archive** |
 
 ## Previous verified result: v34
 
@@ -72,6 +73,11 @@ million positions, policy-surprise sampling, value-disagreement-guided restart p
 features, SGD with Nesterov momentum, and QAT-backed TensorRT INT8 self-play. The negative results are retained too:
 adaptive search budgeting and learned early stopping were implemented, measured, and removed when they failed to
 earn their compute cost.
+
+The final publication will lead with one matched 64-search ladder-Elo plot spanning the major training lineages from
+v9 through v29, v34, the v46/v48-era successor, and the final V89–V93 continuation. That figure is intentionally
+deferred until the active run is complete: its curves will be regenerated from archived scalar data, the V89–V93
+segments will be joined on effective elapsed time, and every protocol transition will be marked rather than hidden.
 
 ![Playing strength over the v34 training run](documentation/benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/artifacts/elo-vs-hours.png)
 
