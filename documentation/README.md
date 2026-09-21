@@ -56,6 +56,7 @@ recommended public language.
 | [`history/`](history/README.md) | Pre-rework and superseded material | Archival and non-normative |
 | [`report/`](report/README.md) | Long-form technical report | Draft until the final result gate passes |
 | [`results/`](results/README.md) | Run-level publication summaries | Final only after the page's evidence gate passes |
+| [`showcase/`](showcase/README.md) | Rendered strength and loss figures | Regenerated from a fetched archive; check the run it was rendered from |
 | [`system/`](system/README.md) | Current end-to-end implementation | Current descriptive guide; code and config remain authoritative |
 
 The [benchmark template](benchmarks/TEMPLATE.md) defines the evidence expected for new measurements. Large fetched
