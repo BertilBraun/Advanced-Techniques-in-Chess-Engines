@@ -1,12 +1,32 @@
-# AlphaZero chess for $52
+# AlphaZero chess on consumer GPUs
 
-This project trained a superhuman AlphaZero-style chess model from scratch through self-play, without human games
-or pretrained chess data. Eight consumer GPUs were shared between self-play and learning for three days, at a
-rounded training-node cost of **$52**.
+This project trains AlphaZero-style chess models from scratch through self-play, without human games or pretrained
+chess data. Eight consumer GPUs are shared between self-play, learning, and evaluation, with every major design
+decision judged by playing strength per wall-clock hour.
+
+The final training run is in progress. Its recipe is written out in full in
+[`chess-final-config.yaml`](py/configs/production/chess-final-config.yaml); terminal strength, training volume,
+effective duration, and cost will be published after the run is preserved and the final evaluation protocol is
+complete.
 
 [Play against the model](https://chess.bertil-braun.de/) ·
 [Download the weights](https://huggingface.co/BertilBraun/alphazero-chess) ·
-[Read the benchmark](documentation/benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md)
+[Follow the final result](documentation/results/final-chess-run.md)
+
+| Final-run result | Status |
+| --- | --- |
+| Selected checkpoint and model size | **Pending** |
+| Effective training time and cost | **Pending** |
+| Optimizer steps, games, and fresh positions | **Pending** |
+| Policy-only and 64-search strength | **Pending terminal evaluation** |
+| 10,000-search strength | **Pending terminal evaluation** |
+| High-search / approximately five-second strength | **Pending terminal evaluation** |
+| Cross-lineage 64-search progress figure | **Pending final V89–V93 archive** |
+
+## Previous verified result: v34
+
+The previous completed public checkpoint trained for about three days at a rounded training-node cost of **$52**.
+Its terminal benchmark remains the verified reference until the active final run is archived and evaluated.
 
 | Search per move | Direct opponent | Score | Benchmark Elo (95% CI) |
 | ---: | --- | ---: | ---: |
@@ -18,13 +38,13 @@ Each row is a 400-game match over 200 balanced opening pairs. The numbers use th
 SSDF-derived Stockfish-node calibration; they are benchmark Elo rather than FIDE ratings. The complete benchmark
 contains every game, artifact hash, confidence interval, and exact search configuration.
 
-The production checkpoint is internally identified as v34 generation 1465. It is a 14-block, 160-channel residual
+The v34 checkpoint is internally identified as generation 1465. It is a 14-block, 160-channel residual
 network with 6,256,365 inference parameters.
 
 The [rating-scale note](documentation/analysis/chess-elo-scale-and-reporting-20260911.md) explains the SSDF-derived
 Stockfish-node anchors and recommends language for public reporting.
 
-## Superhuman Playing Strength
+### Superhuman playing strength
 
 At 80,000 MCTS searches per move, the saved generation-1465 model scored **59.50%** against Stockfish 13 limited
 to 100,000 nodes per move: 143 wins, 190 draws, and 67 losses across 400 games. This gives **3,167 SSDF-calibrated
@@ -42,16 +62,22 @@ teacher by 166 Elo under the measured, saturated equal-time serving workload. It
 match evidence, and limitations are published in the
 [replay-compression benchmark](documentation/benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md).
 
-## Why this result matters
+## Why the project matters
 
 AlphaZero research normally assumes large fleets dedicated separately to self-play and training. This project used
 8x RTX 4070 SUPER GPUs shared by both jobs. The central engineering question was how to reach useful strength when
 fresh self-play data, evaluation resolution, and wall-clock throughput are all scarce.
 
-The final recipe combines a native batched tree search, progressive model sizing, a bounded 10-million-position
-replay, policy-surprise replay sampling, regret-guided restart positions, richer chess history features, and a
-staged AdamW schedule. The negative results are retained too: adaptive search budgeting and learned early stopping
-were implemented, measured, and removed when they failed to earn their compute cost.
+The final recipe combines native batched tree search, progressive model sizing, a replay buffer growing to 20
+million positions, policy-surprise sampling, value-disagreement-guided restart positions, richer chess history
+features, SGD with Nesterov momentum, and QAT-backed TensorRT INT8 self-play. The negative results are retained too:
+adaptive search budgeting and learned early stopping were implemented, measured, and removed when they failed to
+earn their compute cost.
+
+The final publication will lead with one matched 64-search ladder-Elo plot spanning the major training lineages from
+v9 through v29, v34, the v46/v48-era successor, and the final V89–V93 continuation. That figure is intentionally
+deferred until the active run is complete: its curves will be regenerated from archived scalar data, the V89–V93
+segments will be joined on effective elapsed time, and every protocol transition will be marked rather than hidden.
 
 ![Playing strength over the v34 training run](documentation/benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/artifacts/elo-vs-hours.png)
 
@@ -63,6 +89,11 @@ playbook for scaling beyond one eight-GPU node.
 
 For the evidence trail, start with:
 
+- [Final chess run](documentation/results/final-chess-run.md) for the active result contract and pending fields;
+- [Technical report](documentation/report/README.md) for the detailed methods, experiments, systems work, and
+  limitations;
+- [Experiment ledger](documentation/experiments/README.md) for every retained, rejected, inconclusive, superseded,
+  or proposed technique and its primary evidence;
 - [Current state](documentation/CURRENT-STATE.md) for the precise status of the run and publication work;
 - [v34 terminal strength](documentation/benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md)
   for final-match evidence at policy-only, 64, 10,000, and 80,000 searches;
@@ -99,6 +130,10 @@ The runtime has one implementation of game rules and search:
   deployment.
 - [`documentation/`](documentation/README.md) separates current guidance, accepted architecture, reproducible
   operations, benchmark evidence, plans, and history.
+
+The [current-system guide](documentation/system/README.md) follows the implemented training path from native search
+through replay, distributed training, TensorRT publication, and evaluation without requiring readers to reconstruct
+it from historical rework plans.
 
 Chess is the active research result. The same runtime also supports Go on 7x7 and 9x9 boards, but the Go work has
 not received an equivalent final training campaign.
@@ -137,7 +172,8 @@ model is not mistaken for the currently served model.
 
 Every accepted benchmark records its source revision, hardware, resolved configuration SHA-256, and raw results.
 The [documentation index](documentation/README.md) explains which documents are current authority and which are
-historical evidence. `THINGS_TO_TRY.md` is an idea backlog and does not authorize experiments.
+historical evidence. The [historical research backlog](documentation/history/historical-research-backlog-20260822.md)
+is an idea ledger and does not authorize experiments.
 
 This repository currently has no top-level software or model license. Inspect that status before redistributing or
 building on the code or weights.

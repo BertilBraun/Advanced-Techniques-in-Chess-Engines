@@ -31,11 +31,11 @@ from tools.benchmark_tensorrt_inference import (
 from tools.tensorrt_benchmark_metrics import FidelityLimits, ModelOutputs, measure_fidelity
 
 CONFIGURATION = Path('/workspace/run-control/configs/vast-chess-8gpu-integrated-v34-resume-g1702.yaml')
-RUN = Path(
-    '/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34'
-)
+RUN = Path('/workspace/alphazero-engine-v34-lr-001/py/training_data/production/vast-chess-8gpu-integrated-v34')
 REPLAY = RUN / 'replay.bin'
 MANIFEST = RUN / 'checkpoint_1785.json'
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--partition', choices=('early8', 'full'), required=True)
@@ -89,7 +89,9 @@ def outputs(model: torch.nn.Module, states: torch.Tensor, data_type: torch.dtype
     values: list[torch.Tensor] = []
     with torch.inference_mode():
         for start in range(0, len(states), BATCH_SIZE):
-            batch = states[start : start + BATCH_SIZE].to(device=device, dtype=data_type, memory_format=torch.channels_last)
+            batch = states[start : start + BATCH_SIZE].to(
+                device=device, dtype=data_type, memory_format=torch.channels_last
+            )
             policy, value = model(batch)
             policies.append(policy.float().cpu())
             values.append(value.float().cpu())
@@ -139,9 +141,7 @@ def main() -> None:
         )
     )
     if arguments.per_channel_activation:
-        configuration['quant_cfg'].append(
-            {'quantizer_name': '*input_quantizer', 'cfg': {'num_bits': 8, 'axis': 1}}
-        )
+        configuration['quant_cfg'].append({'quantizer_name': '*input_quantizer', 'cfg': {'num_bits': 8, 'axis': 1}})
     if arguments.weight_only:
         configuration['quant_cfg'].append({'quantizer_name': '*input_quantizer', 'enable': False})
     if arguments.partition == 'early8':
@@ -192,9 +192,7 @@ def main() -> None:
             teacher_policy, teacher_wdl = teacher(batch_states.to(dtype=torch.bfloat16))
         student_policy, student_wdl = student(batch_states)
         teacher_probability = torch.softmax(teacher_policy.float().masked_fill(~batch_mask, -10_000.0), dim=1)
-        student_log_probability = torch.log_softmax(
-            student_policy.float().masked_fill(~batch_mask, -10_000.0), dim=1
-        )
+        student_log_probability = torch.log_softmax(student_policy.float().masked_fill(~batch_mask, -10_000.0), dim=1)
         policy_loss = -(teacher_probability * student_log_probability).sum(dim=1).mean()
         value_loss = functional.mse_loss(student_wdl.float(), teacher_wdl.float())
         loss = value_loss if arguments.value_channels == 32 else policy_loss + value_loss

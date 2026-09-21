@@ -110,11 +110,13 @@ The system maintains MCTS trees between moves through:
 Search budget scales with training progress:
 
 ```python
-self.num_searches_per_turn = int(lerp(
-    self.args.mcts.num_searches_per_turn / 2,
-    self.args.mcts.num_searches_per_turn,
-    clamp(iteration * 20 / TRAINING_ARGS.num_iterations, 0.0, 1.0)
-))
+self.num_searches_per_turn = int(
+    lerp(
+        self.args.mcts.num_searches_per_turn / 2,
+        self.args.mcts.num_searches_per_turn,
+        clamp(iteration * 20 / TRAINING_ARGS.num_iterations, 0.0, 1.0),
+    )
+)
 ```
 
 ### Benefits
@@ -224,11 +226,7 @@ def _sample_from_probabilities(action_probabilities: np.ndarray, temperature: fl
 ### Progressive Temperature Scaling
 
 ```python
-temperature = lerp(
-    self.args.starting_temperature, 
-    self.args.final_temperature, 
-    game_progress
-)
+temperature = lerp(self.args.starting_temperature, self.args.final_temperature, game_progress)
 ```
 
 ### Benefits

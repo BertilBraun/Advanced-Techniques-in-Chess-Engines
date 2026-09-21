@@ -1,4 +1,14 @@
-### Experiment status
+# Historical experiment backlog
+
+> **Superseded as a status tracker.** This backlog reflects the programme as of 2026-08-22. Its checkboxes were not
+> maintained through the later chess, TensorRT, quantization, optimizer, replay, and final-run work, so unchecked
+> items do not imply that a feature is absent. Use the current
+> [experiment catalog](../experiments/README.md) for what was attempted, retained, rejected, or left as a
+> proposal, and [`chess-final-config.yaml`](../../py/configs/production/chess-final-config.yaml) for the settled
+> recipe.
+> The material below is retained as historical research input.
+
+### Experiment status at the time
 
 Every method has three checkboxes:
 
@@ -10,8 +20,9 @@ Leave `validated` unchecked until a four-hour run reaches the difficult part of 
 If a completed experiment does not improve the baseline, replace `validated [ ]` with `validated [✗]` and retain the
 result rather than removing the method from the history.
 
-Current programme (2026-08-22): **chess recovery Phase A/B** per
-`documentation/plan/chess-recovery-plan-20260820.md`; the Go 7x7/9x9 screening described below is **paused**.
+Current programme (2026-08-22): **chess recovery Phase A/B** per the
+[dated recovery plan](../plan/chess-recovery-plan-20260820.md); the Go 7x7/9x9 screening described below is
+**paused**.
 Screening policy, retained for when a screen resumes:
 
 * Compare one method at a time against the same baseline before combining accepted improvements.
@@ -53,7 +64,7 @@ Screening policy, retained for when a screen resumes:
   * Written games lack temporal search traces, so safe stopping points and late leader changes are not identifiable.
   * The modest opportunity does not currently justify instrumentation, implementation complexity, or degradation of
     policy and next-policy targets. Revisit only if search becomes a dominant bottleneck.
-  * [Audit and reproducible methodology](documentation/benchmarks/adaptive-search-termination-r3-20260813/README.md).
+  * [Audit and reproducible methodology](../benchmarks/adaptive-search-termination-r3-20260813/README.md).
 
 * **Progressive model scaling** - implemented [ ] experimenting [ ] validated [ ]
 
@@ -542,7 +553,7 @@ Written games hold only final visit distributions, so no safe stopping point can
 would also alter policy and next-policy targets and interacts with temperature, root-value blending, resignation,
 batching and the staged scheduler. Do not implement or instrument now; revisit only if search becomes a dominant
 bottleneck, and then only with bounded shadow traces plus an equal-wall-time test measuring target divergence. See
-the [R3 audit](documentation/benchmarks/adaptive-search-termination-r3-20260813/README.md).
+the [R3 audit](../benchmarks/adaptive-search-termination-r3-20260813/README.md).
 
 **Resignation calibration method** (for any new board size/game — do not transfer thresholds): audit late
 completed games by threshold, generation and ply; record first trigger, eventual result, remaining plies and

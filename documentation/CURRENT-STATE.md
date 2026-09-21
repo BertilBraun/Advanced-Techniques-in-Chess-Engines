@@ -1,19 +1,25 @@
 # Current state
 
-As of **2026-09-11**. This file distinguishes verified artifacts from live or provisional claims.
+As of **2026-09-21**. This file distinguishes verified artifacts from live or provisional claims.
 
 ## Project status
 
-The compute-poor chess training campaign is approaching completion. The main publication checkpoint is v34
-generation 1465, retained at about three days of wall-clock training on 8x RTX 4070 SUPER GPUs. Training was allowed
-to continue after that snapshot to test the tail, but the three-day checkpoint currently gives the clearest
-time/cost/strength result.
+The final chess training lineage is active. Its effective recipe is written out in full in
+[`py/configs/production/chess-final-config.yaml`](../py/configs/production/chess-final-config.yaml), which is the
+living reproduction entry point. Operational continuations from V89 through V93 preserve the same run directory and
+checkpoint lineage while repairing deployment fidelity and progressive-promotion control. The completed publication
+must pin the exact source revision, resolved configuration hash, checkpoint, and fetched archive in addition to
+linking the living recipe.
 
-The rental cost through that checkpoint was **$52**, rounded from three days at the node's billed rate of $17.36
-per day. This excludes separate evaluation nodes and abandoned or restarted run segments, so it is a
-training-checkpoint cost rather than a complete project invoice.
+No terminal number from the active lineage is final yet. The required measurements and publication gate are in the
+[final-run result record](results/final-chess-run.md).
 
-## Result status
+The latest completed public checkpoint remains v34 generation 1465, retained at about three days of effective
+training on 8x RTX 4070 SUPER GPUs. Its rounded training-node cost was **$52**. This excludes separate evaluation
+nodes and abandoned or restarted run segments, so it is a training-checkpoint cost rather than a complete project
+invoice.
+
+## Verified reference result
 
 | Claim | Status | Evidence or remaining gate |
 | --- | --- | --- |
@@ -28,6 +34,24 @@ training-checkpoint cost rather than a complete project invoice.
 Absolute engine Elo here is a Stockfish-node calibration. It is not directly a human FIDE rating or a rating from
 another engine list. The repository should keep node count, search configuration, calibration source, match score,
 and confidence interval beside every absolute number.
+
+## Active final recipe
+
+The readable final configuration currently specifies:
+
+- progressive 12x128, 14x160, and 19x176 convolutional models with Elo-plateau candidate starts;
+- global-pooling context every second residual block and a chess from-to policy head;
+- SGD with Nesterov momentum and a linearly decaying learning rate;
+- pre-fold quantization-aware training with TensorRT INT8 self-play after generation zero;
+- self-play visits staged from 300 through 800, reduced-parent FPU, forced playouts, and retained trees;
+- a replay buffer growing to 20 million rows, replay reuse four, and policy-surprise sampling;
+- randomized openings and restart states selected from a bounded recent archive;
+- calibrated resignation with permanent continuation games;
+- next-policy and remaining-game-length auxiliary targets;
+- bracketed policy-only and 64-search Stockfish evaluations every 20 minutes.
+
+This is a configuration summary, not evidence that each treatment independently improved strength. The experiment
+catalog and technical report distinguish retained engineering choices from causally validated improvements.
 
 ## What v34 tested
 
@@ -64,8 +88,12 @@ for the archived configuration.
 
 ## Work still open
 
-- Stop and preserve the final live continuation only on explicit user instruction; fetch and verify its archive.
-- Decide whether to write a formal technical report after the repository and public pages are coherent.
+- Continue the live final lineage until the user explicitly decides to stop it.
+- Preserve, fetch, and verify the final archive before releasing the node.
+- Derive the final training volume, effective duration, cost, model-stage history, and throughput statistics.
+- Complete the terminal policy-only, 64-search, 10,000-search, and selected high-search evaluations.
+- Replace the pending fields in the root README and technical report with evidence-backed final results.
+- Complete the documentation refactor and formal technical report.
 - Add an explicit code and model license. Until then, redistribution terms are unspecified.
 
 ## Operational state
@@ -79,4 +107,5 @@ launch, stop, rental, or deletion.
 
 Use the [documentation index](README.md) for current architecture and operations. The old recovery work packages,
 v-series decision plans, and adaptive-search plans remain useful as a research ledger, but they no longer describe
-the active phase.
+the active phase. Use [`chess-final-config.yaml`](../py/configs/production/chess-final-config.yaml) for the readable
+current recipe and the future frozen final-result record for the exact published experiment.

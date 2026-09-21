@@ -38,6 +38,11 @@ class CheckpointRetention:
             if generation not in full_checkpoints:
                 (self.run_path / manifest.model_path).unlink(missing_ok=True)
                 (self.run_path / manifest.optimizer_path).unlink(missing_ok=True)
+                # The QAT state resumes training alongside the model and optimizer and is useless
+                # without them, but it was never removed with them: V93 had accumulated 813 of them
+                # against 137 resumable checkpoints, 9.6 GB, at about 27 MB a generation.
+                if manifest.qat is not None:
+                    (self.run_path / manifest.qat.state_path).unlink(missing_ok=True)
             if generation not in inference_checkpoints:
                 (self.run_path / manifest.inference_model_path).unlink(missing_ok=True)
 

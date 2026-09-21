@@ -101,9 +101,10 @@ policy. The Elo policy starts the immediate successor when the primary searched 
 strictly below its configured rate. The fixed model or first progressive definition is the sole initial-network
 configuration. See
 [`configs/research/go-9x9-progressive-model-sizing.yaml`](configs/research/go-9x9-progressive-model-sizing.yaml) for
-the elapsed variant, [`configs/production/vast-chess-8gpu-integrated-v34.yaml`](configs/production/vast-chess-8gpu-integrated-v34.yaml)
-for the Elo variant, and [Progressive model sizing](../documentation/architecture/progressive-model-sizing.md) for
-training, promotion, restart, retention, and publication semantics.
+the elapsed variant, [`configs/production/chess-final-config.yaml`](configs/production/chess-final-config.yaml) for
+the staged Elo-plateau variant and complete current chess recipe, and
+[Progressive model sizing](../documentation/architecture/progressive-model-sizing.md) for training, promotion,
+restart, retention, and publication semantics.
 
 ## Experiment queue
 
@@ -241,7 +242,11 @@ exact runner command and independently resolved canonical configuration hash. Th
 polling interval, and empty-wait control may change at runtime. Deleting the summary intentionally creates a fresh
 queue and will make every configured experiment eligible to run again.
 
-## Terminal chess evaluation and replay compression
+## Historical v34 terminal evaluation and replay compression
+
+The commands in this section record the v34 closing protocol. They remain useful as reproducible tooling examples,
+but they do not define the active final run's terminal evaluation. That protocol and its selected checkpoint must be
+frozen in the [final-run result record](../documentation/results/final-chess-run.md) before execution.
 
 After the v34 run has stopped cleanly and all GPUs are idle, run the two opponent-selection ladders from `py`.
 This command does not fetch the run archive; start the manual `run_control.sh fetch` separately.

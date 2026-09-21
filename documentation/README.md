@@ -8,17 +8,28 @@ not make it current guidance.
 
 1. Read the [root README](../README.md) for the result and system overview.
 2. Read [Current state](CURRENT-STATE.md) for what is final, provisional, active, and still missing.
-3. Read the [Python](../py/README.md) or [C++](../cpp/README.md) guide before changing that runtime.
-4. Read [Run control](operations/run-control.md) and the
+3. Read the [current system guide](system/README.md) for the implemented end-to-end design and final recipe.
+4. Read the [experiment ledger](experiments/README.md) for what was retained, rejected, inconclusive, or never run.
+5. Read the [technical report](report/README.md) for the long-form research narrative.
+6. Use the [bibliography and citation plan](report/bibliography.md) for primary research and versioned external
+   documentation; [research references](references.md) preserves the wider reading trail.
+7. Read the [Python](../py/README.md) or [C++](../cpp/README.md) guide before changing that runtime.
+8. Read [Run control](operations/run-control.md) and the
    [experiment platform](operations/experiment-platform.md) before touching a run or rented node.
 
 ## Results
 
-The retained v34 three-day checkpoint is the project’s main chess result. It reached 3,037 benchmark Elo at 10,000
-searches and 3,167 at 80,000 searches on the project’s SSDF-derived Stockfish 13 fixed-node ladder.
+The final chess training lineage is active and its terminal measurements are pending. The complete readable recipe
+is [`chess-final-config.yaml`](../py/configs/production/chess-final-config.yaml); the
+[final-run result record](results/final-chess-run.md) defines the frozen identity, statistics, evaluations, and plots
+required before publication.
+
+The retained v34 three-day checkpoint remains the latest completed public chess result. It reached 3,037 benchmark
+Elo at 10,000 searches and 3,167 at 80,000 searches on the project’s SSDF-derived Stockfish 13 fixed-node ladder.
 
 | Result | Status | Evidence |
 | --- | --- | --- |
+| Final chess training lineage | **Active; terminal result pending** | [Result contract and publication gate](results/final-chess-run.md) |
 | v34 training dynamics and scaling | **Final through generation 1702** | [Hourly curves, throughput, and outscaling playbook](benchmarks/chess-v34-training-dynamics-rtx4070s-20260912/README.md) |
 | v34 generation 1465 replay compression | **Final** | [13.20x smaller student and match artifacts](benchmarks/chess-replay-distillation-v34-rtx4070s-20260911/README.md) |
 | v34 generation 1465 terminal strength | **Final** | [3,037 at 10k and 3,167 at 80k](benchmarks/chess-terminal-v34-generation1465-rtx4070s-20260911/README.md) |
@@ -39,9 +50,13 @@ recommended public language.
 | [`architecture/`](architecture/README.md) | Accepted designs and implementation records | Current only where the file’s banner says so |
 | [`benchmarks/`](benchmarks/README.md) | Raw measurements and run-specific reports | Authoritative for that exact revision and configuration |
 | [`evidence/`](evidence/README.md) | Frozen run and node records | Immutable evidence, never operating guidance |
+| [`experiments/`](experiments/README.md) | Cross-project technique and evidence ledger | Synthesis; follow its links to primary evidence |
 | [`operations/`](operations/README.md) | Procedures intended to be run again | Current operational guidance |
 | [`plan/`](plan/README.md) | Active and completed experiment plans | Planning record; does not itself authorize compute |
 | [`history/`](history/README.md) | Pre-rework and superseded material | Archival and non-normative |
+| [`report/`](report/README.md) | Long-form technical report | Draft until the final result gate passes |
+| [`results/`](results/README.md) | Run-level publication summaries | Final only after the page's evidence gate passes |
+| [`system/`](system/README.md) | Current end-to-end implementation | Current descriptive guide; code and config remain authoritative |
 
 The [benchmark template](benchmarks/TEMPLATE.md) defines the evidence expected for new measurements. Large fetched
 archives live under the gitignored `.codex-diagnostics/`; compact results and hashes belong in `benchmarks/` or
@@ -49,6 +64,8 @@ archives live under the gitignored `.codex-diagnostics/`; compact results and ha
 
 ## Current technical guides
 
+- [Current system overview](system/README.md)
+- [Final chess recipe](../py/configs/production/chess-final-config.yaml)
 - [Python runtime architecture](architecture/python-runtime-rework.md)
 - [Replay pipeline](architecture/replay-pipeline-rework.md)
 - [Progressive model sizing](architecture/progressive-model-sizing.md)
@@ -63,7 +80,11 @@ that were subsequently replaced.
 
 ## Research narrative
 
-For the shortest path through the compute-poor chess work:
+For the maintained synthesis, start with the [experiment ledger](experiments/README.md) or the
+[technical report](report/README.md). External research claims should use the
+[report bibliography](report/bibliography.md); the broader [research-reference page](references.md) keeps
+historical tutorials and implementation pointers visibly separate from primary sources. The chronological path
+through the older compute-poor chess work is:
 
 1. [Post-four-day regression analysis](plan/chess-post-four-day-regression-analysis-20260820.md) identifies why
    earlier rework stopped learning.
@@ -80,9 +101,13 @@ For the shortest path through the compute-poor chess work:
 ## Document lifecycle
 
 - Put reproducible procedures in `operations/`.
+- Put the implemented end-to-end description in `system/`; code and the final configuration remain authoritative.
 - Put accepted component designs in `architecture/`.
 - Put dated measurements in `benchmarks/<topic>-<hardware>-<date>/`.
 - Put investigations and literature synthesis in `analysis/`.
+- Put cross-experiment classifications and evidence links in `experiments/`.
+- Put run-level publication facts in `results/` only after their evidence gate passes.
+- Put the long-form narrative in `report/`, with unfinished measurements centralized in its results chapter.
 - Put experiment decisions in `plan/`, with a status at the top.
 - Keep superseded material only when it explains a decision or preserves evidence; mark it clearly and index it as
   historical.
