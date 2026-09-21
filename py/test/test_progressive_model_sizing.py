@@ -287,25 +287,46 @@ def test_candidate_start_ema_has_a_persisted_zero_baseline(tmp_path: Path) -> No
     assert json.loads(state_path.read_text(encoding='utf-8'))['schema_version'] == 4
 
 
-def test_a_gain_exactly_at_the_threshold_does_not_start_a_candidate(tmp_path: Path) -> None:
-    exact = ProgressiveTrainingStateStore(tmp_path / 'exact.json', _configuration())
-    exact_updates = exact.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=5.0),))
+def test_a_gain_above_the_threshold_does_not_start_a_candidate(tmp_path: Path) -> None:
+    rising = ProgressiveTrainingStateStore(tmp_path / 'rising.json', _configuration())
+    updates = rising.observe_primary_ladder_elos(
+        tuple(
+            PrimaryLadderEloObservation(boundary_seconds=3600 * (index + 1), elo=100.0 * (index + 1))
+            for index in range(LATCHING_OBSERVATIONS)
+        )
+    )
 
-    assert exact_updates[0].instantaneous_ema_gain_per_hour == pytest.approx(5.0)
-    assert not exact.state.candidate_start.latched
-    assert exact.begin_quantum(100_000.0, _replay(tmp_path), 0, 4).required_model_ids == ('small',)
+    assert updates[-1].instantaneous_ema_gain_per_hour is not None
+    assert updates[-1].instantaneous_ema_gain_per_hour > 5.0
+    assert not rising.state.candidate_start.latched
+    assert rising.begin_quantum(100_000.0, _replay(tmp_path), 0, 4).required_model_ids == ('small',)
+
+
+def test_no_gain_is_reported_until_the_window_is_full(tmp_path: Path) -> None:
+    store = ProgressiveTrainingStateStore(tmp_path / 'partial.json', _configuration())
+    updates = store.observe_primary_ladder_elos(
+        tuple(
+            PrimaryLadderEloObservation(boundary_seconds=3600 * (index + 1), elo=4.9)
+            for index in range(ELO_PLATEAU_WINDOW_OBSERVATIONS)
+        )
+    )
+
+    assert all(update.instantaneous_ema_gain_per_hour is None for update in updates)
+    assert store.state.candidate_start.consecutive_below_threshold_observations == 0
+    assert not store.state.candidate_start.latched
 
 
 def test_candidate_starts_only_after_the_confirmation_count_is_reached(tmp_path: Path) -> None:
     below = ProgressiveTrainingStateStore(tmp_path / 'below.json', _configuration())
 
-    for index in range(ELO_PLATEAU_CONFIRMATION_OBSERVATIONS - 1):
+    for index in range(LATCHING_OBSERVATIONS - 1):
         below.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600 * (index + 1), elo=4.9),))
-        assert below.state.candidate_start.consecutive_below_threshold_observations == index + 1
+        confirmed = max(0, index + 1 - ELO_PLATEAU_WINDOW_OBSERVATIONS)
+        assert below.state.candidate_start.consecutive_below_threshold_observations == confirmed
         assert not below.state.candidate_start.latched
 
     below.observe_primary_ladder_elos(
-        (PrimaryLadderEloObservation(boundary_seconds=3600 * ELO_PLATEAU_CONFIRMATION_OBSERVATIONS, elo=4.9),)
+        (PrimaryLadderEloObservation(boundary_seconds=3600 * LATCHING_OBSERVATIONS, elo=4.9),)
     )
 
     assert below.state.candidate_start.consecutive_below_threshold_observations == ELO_PLATEAU_CONFIRMATION_OBSERVATIONS
@@ -342,14 +363,15 @@ def test_candidate_start_ema_matches_tensorboard_bias_correction(tmp_path: Path)
 
     assert updates[-1].ema_observations == 3
     assert updates[-1].ema_elo == pytest.approx(expected_ema)
-    assert updates[-1].instantaneous_ema_gain_per_hour == pytest.approx((expected_ema - previous_ema) / 0.5)
+    assert previous_ema < expected_ema
+    assert updates[-1].instantaneous_ema_gain_per_hour is None
 
 
 def test_candidate_start_latch_never_clears(tmp_path: Path) -> None:
     store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration())
     _latch_candidate_start(store)
     store.observe_primary_ladder_elos(
-        (PrimaryLadderEloObservation(boundary_seconds=3600 * (ELO_PLATEAU_CONFIRMATION_OBSERVATIONS + 1), elo=5000.0),)
+        (PrimaryLadderEloObservation(boundary_seconds=3600 * (LATCHING_OBSERVATIONS + 1), elo=5000.0),)
     )
 
     assert store.state.candidate_start.instantaneous_ema_gain_per_hour is not None
@@ -490,7 +512,7 @@ def test_staged_elo_plateau_resets_after_promotion_and_uses_next_threshold(tmp_p
     store.observe_primary_ladder_elos(
         tuple(
             PrimaryLadderEloObservation(boundary_seconds=3600 * (index + 1), elo=11.9)
-            for index in range(ELO_PLATEAU_CONFIRMATION_OBSERVATIONS)
+            for index in range(LATCHING_OBSERVATIONS)
         )
     )
     assert store.begin_quantum(0.0, replay, 0, 4).required_model_ids == ('small', 'medium')
@@ -506,11 +528,12 @@ def test_staged_elo_plateau_resets_after_promotion_and_uses_next_threshold(tmp_p
     assert store.complete_quantum() == 'medium'
     assert not store.state.candidate_start.latched
 
-    first_stage_boundaries = ELO_PLATEAU_CONFIRMATION_OBSERVATIONS
     updates = store.observe_primary_ladder_elos(
         tuple(
-            PrimaryLadderEloObservation(boundary_seconds=3600 * (first_stage_boundaries + index + 1), elo=14.0 + index)
-            for index in range(ELO_PLATEAU_CONFIRMATION_OBSERVATIONS)
+            PrimaryLadderEloObservation(
+                boundary_seconds=3600 * (LATCHING_OBSERVATIONS + index + 1), elo=14.0 + index * 0.1
+            )
+            for index in range(LATCHING_OBSERVATIONS)
         )
     )
 
