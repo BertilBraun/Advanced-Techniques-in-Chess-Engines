@@ -25,13 +25,13 @@ image = (
     )
     .entrypoint([])
     .apt_install('build-essential', 'cmake', 'git')
-    .pip_install_from_pyproject(
-        str(_REPOSITORY_ROOT / 'pyproject.toml'),
-        optional_dependencies=['web', 'tensorrt'],
-    )
     .pip_install(
         'torch==2.12.1',
         index_url='https://download.pytorch.org/whl/cu126',
+    )
+    .pip_install_from_pyproject(
+        str(_REPOSITORY_ROOT / 'pyproject.toml'),
+        optional_dependencies=['web', 'tensorrt'],
     )
     .pip_install('ruff==0.16.4')
     .add_local_dir(
