@@ -27,6 +27,7 @@ from src.training.network import (
 )
 from src.training.progressive import (
     ELO_EMA_DECAY,
+    ELO_PLATEAU_CONFIRMATION_OBSERVATIONS,
     CompletedCandidateTraining,
     ElapsedCandidateStartConfiguration,
     EloPlateauCandidateStartConfiguration,
@@ -150,9 +151,9 @@ def _checkpoint(tmp_path: Path, model_id: str, generation: int) -> CheckpointRef
 
 def _latch_candidate_start(store: ProgressiveTrainingStateStore) -> None:
     store.observe_primary_ladder_elos(
-        (
-            PrimaryLadderEloObservation(boundary_seconds=3600, elo=4.9),
-            PrimaryLadderEloObservation(boundary_seconds=7200, elo=4.9),
+        tuple(
+            PrimaryLadderEloObservation(boundary_seconds=3600 * (index + 1), elo=4.9)
+            for index in range(ELO_PLATEAU_CONFIRMATION_OBSERVATIONS)
         )
     )
 
@@ -282,7 +283,7 @@ def test_candidate_start_ema_has_a_persisted_zero_baseline(tmp_path: Path) -> No
     assert json.loads(state_path.read_text(encoding='utf-8'))['schema_version'] == 4
 
 
-def test_candidate_starts_only_after_two_consecutive_observations_below_the_gain_threshold(tmp_path: Path) -> None:
+def test_a_gain_exactly_at_the_threshold_does_not_start_a_candidate(tmp_path: Path) -> None:
     exact = ProgressiveTrainingStateStore(tmp_path / 'exact.json', _configuration())
     exact_updates = exact.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=5.0),))
 
@@ -290,14 +291,20 @@ def test_candidate_starts_only_after_two_consecutive_observations_below_the_gain
     assert not exact.state.candidate_start.latched
     assert exact.begin_quantum(100_000.0, _replay(tmp_path), 0, 4).required_model_ids == ('small',)
 
+
+def test_candidate_starts_only_after_the_confirmation_count_is_reached(tmp_path: Path) -> None:
     below = ProgressiveTrainingStateStore(tmp_path / 'below.json', _configuration())
-    below.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600, elo=4.9),))
 
-    assert below.state.candidate_start.consecutive_below_threshold_observations == 1
-    assert not below.state.candidate_start.latched
-    below.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=7200, elo=4.9),))
+    for index in range(ELO_PLATEAU_CONFIRMATION_OBSERVATIONS - 1):
+        below.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=3600 * (index + 1), elo=4.9),))
+        assert below.state.candidate_start.consecutive_below_threshold_observations == index + 1
+        assert not below.state.candidate_start.latched
 
-    assert below.state.candidate_start.consecutive_below_threshold_observations == 2
+    below.observe_primary_ladder_elos(
+        (PrimaryLadderEloObservation(boundary_seconds=3600 * ELO_PLATEAU_CONFIRMATION_OBSERVATIONS, elo=4.9),)
+    )
+
+    assert below.state.candidate_start.consecutive_below_threshold_observations == ELO_PLATEAU_CONFIRMATION_OBSERVATIONS
     assert below.state.candidate_start.latched
     assert below.begin_quantum(0.0, _replay(tmp_path), 0, 4).required_model_ids == ('small', 'medium')
 
@@ -337,7 +344,9 @@ def test_candidate_start_ema_matches_tensorboard_bias_correction(tmp_path: Path)
 def test_candidate_start_latch_never_clears(tmp_path: Path) -> None:
     store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _configuration())
     _latch_candidate_start(store)
-    store.observe_primary_ladder_elos((PrimaryLadderEloObservation(boundary_seconds=10800, elo=5000.0),))
+    store.observe_primary_ladder_elos(
+        (PrimaryLadderEloObservation(boundary_seconds=3600 * (ELO_PLATEAU_CONFIRMATION_OBSERVATIONS + 1), elo=5000.0),)
+    )
 
     assert store.state.candidate_start.instantaneous_ema_gain_per_hour is not None
     assert store.state.candidate_start.instantaneous_ema_gain_per_hour > 5.0
@@ -475,9 +484,9 @@ def test_staged_elo_plateau_resets_after_promotion_and_uses_next_threshold(tmp_p
     store = ProgressiveTrainingStateStore(tmp_path / 'state.json', _staged_elo_configuration())
     replay = _replay(tmp_path)
     store.observe_primary_ladder_elos(
-        (
-            PrimaryLadderEloObservation(boundary_seconds=3600, elo=11.9),
-            PrimaryLadderEloObservation(boundary_seconds=7200, elo=11.9),
+        tuple(
+            PrimaryLadderEloObservation(boundary_seconds=3600 * (index + 1), elo=11.9)
+            for index in range(ELO_PLATEAU_CONFIRMATION_OBSERVATIONS)
         )
     )
     assert store.begin_quantum(0.0, replay, 0, 4).required_model_ids == ('small', 'medium')
@@ -493,10 +502,11 @@ def test_staged_elo_plateau_resets_after_promotion_and_uses_next_threshold(tmp_p
     assert store.complete_quantum() == 'medium'
     assert not store.state.candidate_start.latched
 
+    first_stage_boundaries = ELO_PLATEAU_CONFIRMATION_OBSERVATIONS
     updates = store.observe_primary_ladder_elos(
-        (
-            PrimaryLadderEloObservation(boundary_seconds=10800, elo=14.0),
-            PrimaryLadderEloObservation(boundary_seconds=14400, elo=15.0),
+        tuple(
+            PrimaryLadderEloObservation(boundary_seconds=3600 * (first_stage_boundaries + index + 1), elo=14.0 + index)
+            for index in range(ELO_PLATEAU_CONFIRMATION_OBSERVATIONS)
         )
     )
 
