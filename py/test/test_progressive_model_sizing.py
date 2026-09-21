@@ -28,6 +28,7 @@ from src.training.network import (
 from src.training.progressive import (
     ELO_EMA_DECAY,
     ELO_PLATEAU_CONFIRMATION_OBSERVATIONS,
+    ELO_PLATEAU_WINDOW_OBSERVATIONS,
     CompletedCandidateTraining,
     ElapsedCandidateStartConfiguration,
     EloPlateauCandidateStartConfiguration,
@@ -149,11 +150,14 @@ def _checkpoint(tmp_path: Path, model_id: str, generation: int) -> CheckpointRef
     return checkpoint_reference(tmp_path / 'models' / model_id, generation)
 
 
+LATCHING_OBSERVATIONS = ELO_PLATEAU_WINDOW_OBSERVATIONS + ELO_PLATEAU_CONFIRMATION_OBSERVATIONS
+
+
 def _latch_candidate_start(store: ProgressiveTrainingStateStore) -> None:
     store.observe_primary_ladder_elos(
         tuple(
             PrimaryLadderEloObservation(boundary_seconds=3600 * (index + 1), elo=4.9)
-            for index in range(ELO_PLATEAU_CONFIRMATION_OBSERVATIONS)
+            for index in range(LATCHING_OBSERVATIONS)
         )
     )
 

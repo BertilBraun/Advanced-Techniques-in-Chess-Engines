@@ -21,13 +21,14 @@ from src.util.generation_schedule import FloatGenerationSchedule
 # 0.90 spans about ten. The stage thresholds are raised alongside it, because a longer average lags
 # further behind a flattening curve and so reports a higher gain for the same plateau.
 ELO_EMA_DECAY = 0.90
-# Two observations is forty minutes, and a healthy climb dips below the threshold that often on
-# evaluation noise alone: V91 latched the 19x176 during ordinary wobble while it was still gaining
-# nineteen Elo per hour against a five Elo threshold. Five spans a hundred minutes, which the
-# decay's own three-hour average has to agree with before the latch closes. The decay stays at
-# 0.90: it measures the curve, and lengthening it as well would bring back the 0.95 behaviour of
-# never detecting a plateau at all.
-ELO_PLATEAU_CONFIRMATION_OBSERVATIONS = 5
+# The gain is measured across a window of the bias-corrected Elo EMA rather than between
+# consecutive boundaries. A single step of the EMA moves one or two Elo, which at a twenty-minute
+# cadence is three to six Elo per hour, so the per-step slope straddles any sensible threshold and
+# changes sign every few observations; V93 never held a run of five below five Elo per hour even
+# while its curve was flat for ten hours. Over six observations the noise averages out: the same
+# stretch stayed inside a couple of Elo per two hours without a single crossing.
+ELO_PLATEAU_WINDOW_OBSERVATIONS = 6
+ELO_PLATEAU_CONFIRMATION_OBSERVATIONS = 2
 SECONDS_PER_HOUR = 3_600.0
 SECONDS_PER_DAY = 86_400.0
 
@@ -175,12 +176,18 @@ class ProgressiveCandidateState(FrozenModel):
     promotion_comparison: PromotionLossComparison | None = None
 
 
+class EloEmaSample(FrozenModel):
+    boundary_seconds: int = Field(ge=0)
+    ema_elo: float = Field(ge=0.0, allow_inf_nan=False)
+
+
 class EloPlateauCandidateStartState(FrozenModel):
     kind: Literal['elo_plateau']
     latest_boundary_seconds: int = Field(ge=0)
     ema_observations: int = Field(ge=0)
     ema_elo: float = Field(ge=0.0, allow_inf_nan=False)
     instantaneous_ema_gain_per_hour: float | None = Field(default=None, allow_inf_nan=False)
+    recent_ema_samples: tuple[EloEmaSample, ...] = ()
     consecutive_below_threshold_observations: int = Field(ge=0)
     latched: bool
 
@@ -208,6 +215,7 @@ class StagedEloPlateauCandidateStartState(FrozenModel):
     ema_elo: float = Field(ge=0.0, allow_inf_nan=False)
     latest_observed_elo: float | None = Field(default=None, ge=0.0, allow_inf_nan=False)
     instantaneous_ema_gain_per_hour: float | None = Field(default=None, allow_inf_nan=False)
+    recent_ema_samples: tuple[EloEmaSample, ...] = ()
     consecutive_below_threshold_observations: int = Field(ge=0)
     latched: bool
 
@@ -317,16 +325,25 @@ class ProgressiveTrainingStateStore:
         for observation in sorted(observations, key=lambda item: item.boundary_seconds):
             if observation.boundary_seconds <= candidate_start.latest_boundary_seconds:
                 continue
-            elapsed_hours = (observation.boundary_seconds - candidate_start.latest_boundary_seconds) / SECONDS_PER_HOUR
             ema_observations = candidate_start.ema_observations + 1
             previous_weight = 1.0 - ELO_EMA_DECAY**candidate_start.ema_observations
             current_weight = 1.0 - ELO_EMA_DECAY**ema_observations
             ema_elo = (
                 ELO_EMA_DECAY * candidate_start.ema_elo * previous_weight + (1.0 - ELO_EMA_DECAY) * observation.elo
             ) / current_weight
-            gain_per_hour = (ema_elo - candidate_start.ema_elo) / elapsed_hours
+            recent_ema_samples = (
+                *candidate_start.recent_ema_samples,
+                EloEmaSample(boundary_seconds=observation.boundary_seconds, ema_elo=ema_elo),
+            )[-(ELO_PLATEAU_WINDOW_OBSERVATIONS + 1) :]
+            gain_per_hour = None
+            if len(recent_ema_samples) > ELO_PLATEAU_WINDOW_OBSERVATIONS:
+                oldest = recent_ema_samples[0]
+                window_hours = (observation.boundary_seconds - oldest.boundary_seconds) / SECONDS_PER_HOUR
+                gain_per_hour = (ema_elo - oldest.ema_elo) / window_hours
             consecutive_below_threshold_observations = (
-                candidate_start.consecutive_below_threshold_observations + 1 if gain_per_hour < threshold else 0
+                candidate_start.consecutive_below_threshold_observations + 1
+                if gain_per_hour is not None and gain_per_hour < threshold
+                else 0
             )
             latched = (
                 candidate_start.latched
@@ -340,6 +357,7 @@ class ProgressiveTrainingStateStore:
                         ema_observations=ema_observations,
                         ema_elo=ema_elo,
                         instantaneous_ema_gain_per_hour=gain_per_hour,
+                        recent_ema_samples=recent_ema_samples,
                         consecutive_below_threshold_observations=consecutive_below_threshold_observations,
                         latched=latched,
                     )
@@ -352,6 +370,7 @@ class ProgressiveTrainingStateStore:
                         ema_elo=ema_elo,
                         latest_observed_elo=observation.elo,
                         instantaneous_ema_gain_per_hour=gain_per_hour,
+                        recent_ema_samples=recent_ema_samples,
                         consecutive_below_threshold_observations=consecutive_below_threshold_observations,
                         latched=latched,
                     )

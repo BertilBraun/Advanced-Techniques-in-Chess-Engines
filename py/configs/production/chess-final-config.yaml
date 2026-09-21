@@ -273,7 +273,7 @@ training:
       - candidate_model_id: chess-cnn-scaled-post-14x160-fromto-int8
         minimum_worthwhile_gain_per_hour: 15.0
       - candidate_model_id: chess-cnn-scaled-post-19x176-fromto-int8
-        minimum_worthwhile_gain_per_hour: 5.0
+        minimum_worthwhile_gain_per_hour: 4.0
     promotion:
       decay: 0.8
       warmup_quanta: 10
